@@ -2,7 +2,7 @@ local metalanguage = require 'metalanguage'
 local format = require 'temp-format'
 
 local function syntax_convert(tree)
-  if tree.kind == list then
+  if tree.kind == "list" then
     local res = metalanguage.nilval
     for i = #tree.elements, 1, -1 do
       res = metalanguage.pair(syntax_convert(tree.elements[i]), res)
@@ -12,7 +12,8 @@ local function syntax_convert(tree)
     return metalanguage.symbol(tree.str)
   elseif tree.kind == "literal" then
     if tree.literaltype == "f64" then
-      error "syntax contains a number literal which should be accepted but is NYI"
+      return metalanguage.value(tree.val)
+      -- error "syntax contains a number literal which should be accepted but is NYI"
     else
       error "syntax contains a literal of a type other than the basic number"
     end
@@ -24,7 +25,7 @@ local function syntax_convert(tree)
 end
 
 local function read(text, source)
-  local buffer = grammar.parse(text, source)
+  local buffer = format.parse(text, source)
   return syntax_convert(buffer)
 end
 

@@ -1,5 +1,6 @@
 
 local lang = require "./metalanguage"
+local format = require "./temp-format-adapter"
 
 -- for k, v in pairs(lang) do print(k, v) end
 
@@ -14,7 +15,9 @@ local code =
   )
 --]]
 
-local code =
+local src = "do (val x = 6) (+ x 3)"
+
+local code_orig =
   list(
     symbol "do",
     list(
@@ -24,6 +27,10 @@ local code =
       symbol "+", symbol "x", value(3)
     )
   )
+
+local code = format.read(src, "inline")
+
+-- assert code and code_orig are equal?
 
 local function do_block_pair_handler(env, a, b)
   local ok, val, newenv =

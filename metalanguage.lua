@@ -108,6 +108,7 @@ local syntax_error_mt = {
     message = message .. table.concat(options, ", ")
     message = message .. "\nbut was rejected"
     if self.cause then
+      --FIXME: self.cause is a table and we just print table: ...
       message = message .. " because:\n" .. tostring(self.cause)
     end
     return message
