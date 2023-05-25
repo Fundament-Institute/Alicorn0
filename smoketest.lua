@@ -16,21 +16,7 @@ local code =
 --]]
 
 local src = "do (val x = 6) (+ x 3)"
-
-local code_orig =
-  list(
-    symbol "do",
-    list(
-      symbol "val", symbol "x", symbol "=", value(6)
-    ),
-    list(
-      symbol "+", symbol "x", value(3)
-    )
-  )
-
 local code = format.read(src, "inline")
-
--- assert code and code_orig are equal?
 
 local function do_block_pair_handler(env, a, b)
   local ok, val, newenv =
