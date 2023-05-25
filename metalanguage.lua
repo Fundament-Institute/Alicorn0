@@ -108,7 +108,6 @@ local syntax_error_mt = {
     message = message .. table.concat(options, ", ")
     message = message .. "\nbut was rejected"
     if self.cause then
-      --FIXME: self.cause is a table and we just print table: ...
       message = message .. " because:\n" .. tostring(self.cause)
     end
     return message
@@ -146,7 +145,7 @@ local constructed_syntax_mt = {
             return matcher.handler(extra, table.unpack(res, 2))
           end
           --print("rejected syntax reduction")
-          lasterr = res
+          lasterr = res[2]
         end
         --print("rejected syntax kind", matcher.kind)
       end
