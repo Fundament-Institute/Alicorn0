@@ -1,5 +1,6 @@
 
 local lang = require "./metalanguage"
+local format = require "./temp-format-adapter"
 
 -- for k, v in pairs(lang) do print(k, v) end
 
@@ -14,16 +15,8 @@ local code =
   )
 --]]
 
-local code =
-  list(
-    symbol "do",
-    list(
-      symbol "val", symbol "x", symbol "=", value(6)
-    ),
-    list(
-      symbol "+", symbol "x", value(3)
-    )
-  )
+local src = "do (val x = 6) (+ x 3)"
+local code = format.read(src, "inline")
 
 local function do_block_pair_handler(env, a, b)
   local ok, val, newenv =

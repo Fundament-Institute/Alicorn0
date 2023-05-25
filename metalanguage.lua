@@ -145,7 +145,7 @@ local constructed_syntax_mt = {
             return matcher.handler(extra, table.unpack(res, 2))
           end
           --print("rejected syntax reduction")
-          lasterr = res
+          lasterr = res[2]
         end
         --print("rejected syntax kind", matcher.kind)
       end
