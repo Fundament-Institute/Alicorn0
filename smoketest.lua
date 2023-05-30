@@ -1,10 +1,11 @@
 
-local lang = require "./metalanguage"
+local metalang = require "./metalanguage"
+local testlang = require "./testlanguage"
 local format = require "./temp-format-adapter"
 
 -- for k, v in pairs(lang) do print(k, v) end
 
-local symbol, value, list = lang.symbol, lang.value, lang.list
+local symbol, value, list = metalang.symbol, metalang.value, metalang.list
 
 --[[
 local code =
@@ -22,13 +23,9 @@ local function do_block_pair_handler(env, a, b)
   local ok, val, newenv =
     a:match(
       {
-        {
-          kind = "Eval",
-          env,
-          handler = lang.accept_handler
-        }
+        testlang.evaluates(metalang.accept_handler, env)
       },
-      lang.failure_handler,
+      metalang.failure_handler,
       nil
     )
   if not ok then return false, val end
@@ -47,16 +44,10 @@ local function do_block(syntax, env)
     ok, ispair, val, newenv, tail =
       syntax:match(
         {
-          {
-            kind = "Pair",
-            handler = do_block_pair_handler
-          },
-          {
-            kind = "Nil",
-            handler = do_block_nil_handler
-          }
+          metalang.ispair(do_block_pair_handler),
+          metalang.isnil(do_block_nil_handler)
         },
-        lang.failure_handler,
+        metalang.failure_handler,
         newenv
       )
     --print("do block", ok, ispair, val, newenv, tail)
@@ -73,26 +64,14 @@ local function val_bind(syntax, env)
   local ok, name, val =
     syntax:match(
       {
-        {
-          kind = "ListMatch",
-          {
-            kind = "Symbol",
-            handler = lang.accept_handler
-          },
-          {
-            kind = "SymbolExact",
-            "=",
-            handler = lang.accept_handler
-          },
-          {
-            kind = "Eval",
-            env,
-            handler = lang.accept_handler
-          },
-          handler = lang.accept_handler
-        }
+        metalang.listmatch(
+          metalang.accept_handler,
+          metalang.issymbol(metalang.accept_handler),
+          metalang.symbol_exact(metalang.accept_handler),
+          testlang.evaluates(metalang.accept_handler)
+        )
       },
-      lang.failure_handler,
+      metalang.failure_handler,
       nil
     )
   --print("val bind", ok, name, _, val)
@@ -101,13 +80,13 @@ local function val_bind(syntax, env)
 end
 
 local env =
-  lang.newenv {
-    ["+"] = lang.primitive_applicative(function(a, b) return a + b end),
-    ["do"] = lang.primitive_operative(do_block),
-    val = lang.primitive_operative(val_bind)
+  testlang.newenv {
+    ["+"] = testlang.primitive_applicative(function(a, b) return a + b end),
+    ["do"] = testlang.primitive_operative(do_block),
+    val = testlang.primitive_operative(val_bind)
   }
 
-local ok, res = lang.eval(code, env)
+local ok, res = testlang.eval(code, env)
 
 print(ok, res)
 
