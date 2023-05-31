@@ -1,6 +1,6 @@
 
 local metalanguage = require './metalanguage'
-local conexpr = require './contextual-exprs.lua'
+local conexpr = require './contextual-exprs'
 
 local evaluates
 
