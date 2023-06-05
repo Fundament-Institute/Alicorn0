@@ -1,0 +1,37 @@
+
+fn add
+   	from x : i32 y : i32
+	to i32
+	+ x y
+
+fn ex1
+	from x : i32
+	to i32
+	val y = (* x 2)
+	val z =
+		if (x < 5)
+		   x / 2
+		   x
+	+ y z
+	# variables can remain in scope past a conditional
+
+fn ex2
+   	from x : i32
+	to i32
+	if (x < 5)
+		val y = (* x 2)
+		val y = x
+	+ x y
+	# if a variable is declared in all branches of a conditional with compatible types, it can exit the conditional via the distributive law
+
+fn ex3
+	from x : i32
+	to i32
+	val y = (* x 2)
+	if (x < 5)
+		do
+			val y = x
+   	  		;
+		;
+	+ x y
+	# as a consequence, if a variable is shadowed with the same type in one branch a conditional, then it may exit the conditional with a rebound value
