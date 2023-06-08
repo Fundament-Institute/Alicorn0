@@ -1,6 +1,7 @@
 local types = require 'basic-types'
 local utils = require 'utils'
 
+-- Nothing outside the definition of the IR should have access to these tokens.
 local tokens = {
   -- category ops for func
   identity = {}, -- func(a, a)
