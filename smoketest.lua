@@ -1,7 +1,7 @@
 
-local metalang = require "./metalanguage"
-local testlang = require "./testlanguage"
-local format = require "./temp-format-adapter"
+local metalang = require "metalanguage"
+local testlang = require "testlanguage"
+local format = require "temp-format-adapter"
 
 -- for k, v in pairs(lang) do print(k, v) end
 
@@ -67,8 +67,8 @@ local function val_bind(syntax, env)
         metalang.listmatch(
           metalang.accept_handler,
           metalang.issymbol(metalang.accept_handler),
-          metalang.symbol_exact(metalang.accept_handler),
-          testlang.evaluates(metalang.accept_handler)
+          metalang.symbol_exact(metalang.accept_handler, "="),
+          testlang.evaluates(metalang.accept_handler, env)
         )
       },
       metalang.failure_handler,
@@ -76,11 +76,11 @@ local function val_bind(syntax, env)
     )
   --print("val bind", ok, name, _, val)
   if not ok then return false, name end
-  return true, value(nil), env + lang.newenv{[name] = val}
+  return true, value(nil), env + metalang.newenv{[name] = val}
 end
 
 local env =
-  testlang.newenv {
+  metalang.newenv {
     ["+"] = testlang.primitive_applicative(function(a, b) return a + b end),
     ["do"] = testlang.primitive_operative(do_block),
     val = testlang.primitive_operative(val_bind)
