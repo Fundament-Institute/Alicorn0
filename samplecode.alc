@@ -10,8 +10,8 @@ fn ex1
 	val y = (* x 2)
 	val z =
 		if (x < 5)
-		   x / 2
-		   x
+		   / x 2
+		   + x y
 	+ y z
 	# variables can remain in scope past a conditional
 
@@ -35,3 +35,17 @@ fn ex3
 		;
 	+ x y
 	# as a consequence, if a variable is shadowed with the same type in one branch a conditional, then it may exit the conditional with a rebound value
+
+
+cond
+    (== x 1)
+        foo bar
+    (== x 2)
+        foo baz
+    true
+        "default"
+
+if ( == x 2 )
+   foo bar
+else
+    foo baz
