@@ -7,12 +7,12 @@ local function new_memo()
 end
 
 local function get_memo_cell(memo, args)
-  for i = 1, #args do
-    if memo.follows[args[i]] then
-      memo = memo.follows[args[i]]
+  for _, v in ipairs(args) do
+    if memo.follows[v] then
+      memo = memo.follows[v]
     else
-      memo.follows[args[i]] = new_memo()
-      memo = memo.follows[args[i]]
+      memo.follows[v] = new_memo()
+      memo = memo.follows[v]
     end
   end
   return memo

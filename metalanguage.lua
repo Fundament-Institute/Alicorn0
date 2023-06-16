@@ -1,4 +1,30 @@
+local function issymbol(handler)
+  return {
+    kind = "Symbol",
+    handler = handler,
+  }
+end
 
+local function ispair(handler)
+  return {
+    kind = "Pair",
+    handler = handler
+  }
+end
+
+local function isnil(handler)
+  return {
+    kind = "Nil",
+    handler = handler
+  }
+end
+
+local function isvalue(handler)
+  return {
+    kind = "Value",
+    handler = handler
+  }
+end
 
 local env_mt
 env_mt = {
@@ -44,8 +70,6 @@ local function newenv(dict)
   return setmetatable({dict = dict}, env_mt)
 end
 
-local syntax_check_reductions = {}
-
 local function symbolenvhandler(env, name)
   --print("symbolenvhandler(", name, env, ")")
   local res = env:get(name)
@@ -71,31 +95,46 @@ local function failure_handler(data, exception)
   return false, exception
 end
 
-function syntax_check_reductions.SymbolInEnvironment(syntax, matcher)
+local function SymbolInEnvironment(syntax, matcher)
   --print("in symbol in environment reducer", matcher.kind, matcher[1], matcher)
   return syntax:match(
     {
-      {
-        kind = "Symbol",
-        handler = symbolenvhandler
-      },
+      issymbol(symbolenvhandler)
     },
     failure_handler,
-    matcher[1]
+    matcher.environment
   )
 end
 
-function syntax_check_reductions.SymbolExact(syntax, matcher)
+local function SymbolExact(syntax, matcher)
   return syntax:match(
     {
-      {
-        kind = "Symbol",
-        handler = symbolexacthandler
-      }
+      issymbol(symbolexacthandler)
     },
     failure_handler,
-    matcher[1]
+    matcher.symbol
   )
+end
+
+
+local function symbol_in_environment(handler, env)
+  return {
+    comment = "symbol in env",
+    kind = "Reducible",
+    reducible = SymbolInEnvironment,
+    environment = env,
+    handler = handler
+  }
+end
+
+local function symbol_exact(handler, symbol)
+  return {
+    comment = "symbolexact",
+    kind = "Reducible",
+    reducible = SymbolExact,
+    symbol = symbol,
+    handler = handler,
+  }
 end
 
 local syntax_error_mt = {
@@ -132,17 +171,17 @@ local constructed_syntax_mt = {
       local lasterr = nil
       for _, matcher in ipairs(matchers) do
         if self.accepters[matcher.kind] then
-          --print("accepting primitive handler on kind", matcher.kind)
+          -- print("accepting primitive handler on kind", matcher.kind)
           return self.accepters[matcher.kind](self, matcher, extra)
-        elseif syntax_check_reductions[matcher.kind] then
-          --print("trying syntax reduction on kind", matcher.kind)
-          local res = {syntax_check_reductions[matcher.kind](self, matcher)}
+        elseif matcher.kind == "Reducible" then
+          -- print("trying syntax reduction on kind", matcher.kind)
+          local res = {matcher.reducible(self, matcher)}
           if res[1] then
             --print("accepted syntax reduction")
             if not matcher.handler then
               print("missing handler for ", matcher.kind, debug.traceback())
             end
-            return matcher.handler(extra, table.unpack(res, 2))
+            return matcher.handler(extra, unpack(res, 2))
           end
           --print("rejected syntax reduction")
           lasterr = res[2]
@@ -219,113 +258,6 @@ local vau_mt = {
   }
 }
 
-local eval
-
-local function eval_passhandler(env, val)
-  --print("eval pass handler", val, env)
-  return true, val, env
-end
-
-local function eval_pairhandler(env, a, b)
-  --print("in eval pairhandler", a, b, env)
-  local ok, combiner, _ =
-    a:match(
-      {
-        {
-          kind = "Eval",
-          env,
-          handler = eval_passhandler
-        },
-      },
-      failure_handler,
-      env
-    )
-  if not ok then return false, combiner end
-  local ok, val, newenv = combiner:apply(b, env)
-  --print("eval pair", ok, val, newenv)
-  return ok, val, newenv
-end
-
-function eval(syntax, environment)
-  return syntax:match(
-    {
-      {
-        kind = "SymbolInEnvironment",
-        environment,
-        handler = eval_passhandler
-      },
-      {
-        kind = "Value",
-        handler = eval_passhandler
-      },
-      {
-        kind = "Pair",
-        handler = eval_pairhandler
-      }
-    },
-    failure_handler,
-    environment
-  )
-end
-
-function syntax_check_reductions.Eval(syntax, matcher)
-  return eval(syntax, matcher[1])
-end
-
-
-local function syntax_args_val_handler(_, val, newenv)
-  return true, val, newenv
-end
-
-local function syntax_args_pair_handler(env, a, b)
-  local ok, val, _ =
-    a:match(
-      {
-        {
-          kind = "Eval",
-          env,
-          handler = syntax_args_val_handler
-        },
-      },
-      failure_handler,
-      nil
-    )
-  --print("args pair handler", ok, val, _, b)
-  return true, true, val, b
-end
-
-local function syntax_args_nil_handler(data)
-  return true, false
-end
-
-function syntax_check_reductions.EvalArgs(syntax, matcher)
-  local args = {}
-  local ok, ispair, val, tail = true, true, nil, nil
-  while ok and ispair do
-    ok, ispair, val, tail =
-      syntax:match(
-        {
-          {
-            kind = "Pair",
-            handler = syntax_args_pair_handler
-          },
-          {
-            kind = "Nil",
-            handler = syntax_args_nil_handler
-          }
-        },
-        failure_handler,
-        matcher[1]
-      )
-    if not ok then return false, ispair end
-    if ispair then
-      args[#args + 1] = val
-      syntax = tail
-    end
-  end
-  return true, args
-end
-
 
 local function list_match_pair_handler(rule, a, b)
   --print("list pair handler", a, b, rule)
@@ -334,17 +266,14 @@ local function list_match_pair_handler(rule, a, b)
 end
 
 
-function syntax_check_reductions.ListMatch(syntax, matcher)
+local function ListMatch(syntax, matcher)
   local args = {}
-  local ok, val, tail = true, true, nil
-  for i, rule in ipairs(matcher) do
+  local ok, err, val, tail = true, nil, true, nil
+  for i, rule in ipairs(matcher.rules) do
     ok, val, tail =
       syntax:match(
         {
-          {
-            kind = "Pair",
-            handler = list_match_pair_handler,
-          }
+          ispair(list_match_pair_handler)
         },
         failure_handler,
         rule
@@ -357,65 +286,39 @@ function syntax_check_reductions.ListMatch(syntax, matcher)
   ok, err =
     syntax:match(
       {
-        {
-          kind = "Nil",
-          handler = accept_handler
-        }
+        isnil(accept_handler)
       },
       failure_handler,
       nil
     )
   if not ok then return false, err end
-  return true, table.unpack(args)
+  return true, unpack(args)
 end
 
-local primitive_applicative_mt = {
-  __index = {
-    apply = function(self, ops, env)
-      local ok, args =
-        ops:match(
-          {
-            {
-              kind = "EvalArgs",
-              env,
-              handler = accept_handler
-            }
-          },
-          failure_handler,
-          nil
-        )
-      local res = self.fn(table.unpack(args))
-      return true, value(res), env
-    end
+local function listmatch(handler, ...)
+  return {
+    comment = "list",
+    kind = "Reducible",
+    reducible = ListMatch,
+    rules = {...},
+    handler = handler
   }
-}
-
-local function primitive_applicative(fn)
-  return setmetatable({fn = fn}, primitive_applicative_mt)
-end
-
-local primitive_operative_mt = {
-  __index = {
-    apply = function(self, ops, env)
-      return self.fn(ops, env)
-    end
-  }
-}
-
-local function primitive_operative(fn)
-  return setmetatable({fn = fn}, primitive_operative_mt)
 end
 
 return {
   newenv = newenv,
   accept_handler = accept_handler,
   failure_handler = failure_handler,
-  pair = pair,
-  symbol = symbol,
+  ispair = ispair,
+  issymbol = issymbol,
+  isvalue = isvalue,
   value = value,
-  list = list,
+  listmatch = listmatch,
+  isnil = isnil,
   nilval = nilval,
-  eval = eval,
-  primitive_applicative = primitive_applicative,
-  primitive_operative = primitive_operative
+  symbol_exact = symbol_exact,
+  pair = pair,
+  list = list,
+  symbol = symbol,
+  symbol_in_environment = symbol_in_environment,
 }

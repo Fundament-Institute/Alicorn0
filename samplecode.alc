@@ -1,6 +1,6 @@
 
 fn add
-   	from x : i32 y : i32
+	from x : i32 y : i32
 	to i32
 	+ x y
 
@@ -31,7 +31,7 @@ fn ex3
 	if (x < 5)
 		do
 			val y = x
-   	  		;
+			;
 		;
 	+ x y
 	# as a consequence, if a variable is shadowed with the same type in one branch a conditional, then it may exit the conditional with a rebound value
