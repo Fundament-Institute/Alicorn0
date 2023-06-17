@@ -14,13 +14,7 @@ local function Eval(syntax, matcher)
 end
 
 local function evaluates(handler, env)
-  return {
-    kind = "Reducible",
-    reducible = Eval,
-    environment = env,
-    handler = handler,
-    comment = "evaluates",
-  }
+  return metalang.reducible(handler, "evaluates", Eval, { environment = env })
 end
 
 local function eval_pairhandler(env, a, b)
@@ -74,7 +68,6 @@ local function syntax_args_pair_handler(env, a, b)
 end
 
 
-
 local function EvalArgs(syntax, matcher)
   local args = {}
   local ok, ispair, val, tail = true, true, nil, nil
@@ -98,13 +91,7 @@ local function EvalArgs(syntax, matcher)
 end
 
 local function evalargs(handler, env)
-  return {
-    kind = "Reducible",
-    reducible = EvalArgs,
-    environment = env,
-    handler = handler,
-    comment = "evalargs",
-  }
+  return metalang.reducible(handler, "evalargs", EvalArgs, { environment = env })
 end
 
 local primitive_applicative_mt = {

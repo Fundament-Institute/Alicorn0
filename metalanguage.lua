@@ -26,6 +26,22 @@ local function isvalue(handler)
   }
 end
 
+
+local function reducible(handler, name, func, userdata)
+  local reducible = {
+    kind = "Reducible",
+    name = name,
+    handler = handler,
+    reducible = func,
+  }
+
+  for k, v in pairs(userdata) do
+    reducible[k] = v
+  end
+
+  return reducible
+end
+
 local env_mt
 env_mt = {
   __add = function(self, other)
@@ -118,23 +134,11 @@ end
 
 
 local function symbol_in_environment(handler, env)
-  return {
-    comment = "symbol in env",
-    kind = "Reducible",
-    reducible = SymbolInEnvironment,
-    environment = env,
-    handler = handler
-  }
+  return reducible(handler, "symbol in env", SymbolInEnvironment, { environment = env })
 end
 
 local function symbol_exact(handler, symbol)
-  return {
-    comment = "symbolexact",
-    kind = "Reducible",
-    reducible = SymbolExact,
-    symbol = symbol,
-    handler = handler,
-  }
+  return reducible(handler, "symbol exact", SymbolExact, { symbol = symbol })
 end
 
 local syntax_error_mt = {
@@ -142,7 +146,11 @@ local syntax_error_mt = {
     local message = "Syntax error at anchor " .. (self.anchor or "<unknown position>") .. " must be acceptable for one of:\n"
     local options = {}
     for k, v in ipairs(self.matchers) do
-      options[k] = v.kind
+        if v.kind == "Reducible" then
+          options[k] = v.kind .. ": " .. v.name
+        else
+          options[k] = v.kind
+        end
     end
     message = message .. table.concat(options, ", ")
     message = message .. "\nbut was rejected"
@@ -296,13 +304,7 @@ local function ListMatch(syntax, matcher)
 end
 
 local function listmatch(handler, ...)
-  return {
-    comment = "list",
-    kind = "Reducible",
-    reducible = ListMatch,
-    rules = {...},
-    handler = handler
-  }
+  return reducible(handler, "list", ListMatch, { rules = {...} })
 end
 
 return {
@@ -314,6 +316,7 @@ return {
   isvalue = isvalue,
   value = value,
   listmatch = listmatch,
+  reducible = reducible,
   isnil = isnil,
   nilval = nilval,
   symbol_exact = symbol_exact,
