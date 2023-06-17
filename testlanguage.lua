@@ -9,13 +9,11 @@ end
 
 local eval
 
-local function Eval(syntax, matcher)
-  return eval(syntax, matcher.environment)
+local function Eval(syntax, matcher, environment)
+  return eval(syntax, environment)
 end
 
-local function evaluates(handler, env)
-  return metalang.reducible(handler, "evaluates", Eval, { environment = env })
-end
+local evaluates = metalang.reducer(Eval, "evaluates")
 
 local function eval_pairhandler(env, a, b)
   --print("in eval pairhandler", a, b, env)
@@ -68,7 +66,7 @@ local function syntax_args_pair_handler(env, a, b)
 end
 
 
-local function EvalArgs(syntax, matcher)
+local function EvalArgs(syntax, matcher, environment)
   local args = {}
   local ok, ispair, val, tail = true, true, nil, nil
   while ok and ispair do
@@ -79,7 +77,7 @@ local function EvalArgs(syntax, matcher)
           metalang.isnil(syntax_args_nil_handler)
         },
         metalang.failure_handler,
-        matcher.environment
+        environment
       )
     if not ok then return false, ispair end
     if ispair then
@@ -90,9 +88,7 @@ local function EvalArgs(syntax, matcher)
   return true, args
 end
 
-local function evalargs(handler, env)
-  return metalang.reducible(handler, "evalargs", EvalArgs, { environment = env })
-end
+local evalargs = metalang.reducer(EvalArgs, "evalargs")
 
 local primitive_applicative_mt = {
   __index = {
