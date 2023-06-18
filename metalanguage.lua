@@ -26,6 +26,66 @@ local function isvalue(handler)
   }
 end
 
+local function get_reducer(reducible)
+  return getmetatable(reducible.reducible).reducer
+end
+
+local function dispatch_reducer(handler_mapping, default, matcher)
+  if matcher.kind == "Reducible" then 
+    if handler_mapping[get_reducer(matcher)] then
+      return handler_mapping[get_reducer(matcher)](matcher)
+    else 
+      return default(matcher)
+    end
+  else 
+    default(matcher)
+  end
+end
+
+local function create_reducible(self, handler, ...)
+  local funcnew = {
+    ...
+  }
+
+  setmetatable(funcnew, self.mt)
+
+  local reducible = {
+    kind = "Reducible",
+    handler = handler,
+    reducible = funcnew,
+  }
+
+  return reducible
+end
+
+local reducible_mt = { __call = create_reducible }
+
+local function reducer(func, name)
+
+  local function funcwrapper(syntax, matcher)
+    return func(syntax, matcher, unpack(matcher.reducible))
+  end
+
+  local reducer = {
+    wrapper = funcwrapper,
+    create_reducible = create_reducible
+  }
+
+  local funcnew_mt = {
+    name = name,
+    __index = {
+      reduce = funcwrapper,
+    },
+    reducer = reducer
+  }
+
+  reducer.mt = funcnew_mt
+
+  setmetatable(reducer, reducible_mt)
+
+  return reducer
+end
+
 local env_mt
 env_mt = {
   __add = function(self, other)
@@ -95,54 +155,41 @@ local function failure_handler(data, exception)
   return false, exception
 end
 
-local function SymbolInEnvironment(syntax, matcher)
+local function SymbolInEnvironment(syntax, matcher, environment)
   --print("in symbol in environment reducer", matcher.kind, matcher[1], matcher)
   return syntax:match(
     {
       issymbol(symbolenvhandler)
     },
     failure_handler,
-    matcher.environment
+    environment
   )
 end
 
-local function SymbolExact(syntax, matcher)
+local function SymbolExact(syntax, matcher, symbol)
   return syntax:match(
     {
       issymbol(symbolexacthandler)
     },
     failure_handler,
-    matcher.symbol
+    symbol
   )
 end
 
+local symbol_in_environment = reducer(SymbolInEnvironment, "symbol in env")
 
-local function symbol_in_environment(handler, env)
-  return {
-    comment = "symbol in env",
-    kind = "Reducible",
-    reducible = SymbolInEnvironment,
-    environment = env,
-    handler = handler
-  }
-end
-
-local function symbol_exact(handler, symbol)
-  return {
-    comment = "symbolexact",
-    kind = "Reducible",
-    reducible = SymbolExact,
-    symbol = symbol,
-    handler = handler,
-  }
-end
+local symbol_exact = reducer(SymbolExact, "symbol exact")
 
 local syntax_error_mt = {
   __tostring = function(self)
     local message = "Syntax error at anchor " .. (self.anchor or "<unknown position>") .. " must be acceptable for one of:\n"
     local options = {}
     for k, v in ipairs(self.matchers) do
-      options[k] = v.kind
+        if v.kind == "Reducible" then
+          options[k] = v.kind .. ": " .. getmetatable(v.reducible).name
+        else
+          options[k] = v.kind
+        end
     end
     message = message .. table.concat(options, ", ")
     message = message .. "\nbut was rejected"
@@ -175,7 +222,7 @@ local constructed_syntax_mt = {
           return self.accepters[matcher.kind](self, matcher, extra)
         elseif matcher.kind == "Reducible" then
           -- print("trying syntax reduction on kind", matcher.kind)
-          local res = {matcher.reducible(self, matcher)}
+          local res = {matcher.reducible.reduce(self, matcher)}
           if res[1] then
             --print("accepted syntax reduction")
             if not matcher.handler then
@@ -266,10 +313,10 @@ local function list_match_pair_handler(rule, a, b)
 end
 
 
-local function ListMatch(syntax, matcher)
+local function ListMatch(syntax, matcher, ...)
   local args = {}
   local ok, err, val, tail = true, nil, true, nil
-  for i, rule in ipairs(matcher.rules) do
+  for i, rule in ipairs({...}) do
     ok, val, tail =
       syntax:match(
         {
@@ -295,15 +342,7 @@ local function ListMatch(syntax, matcher)
   return true, unpack(args)
 end
 
-local function listmatch(handler, ...)
-  return {
-    comment = "list",
-    kind = "Reducible",
-    reducible = ListMatch,
-    rules = {...},
-    handler = handler
-  }
-end
+local listmatch = reducer(ListMatch, "list")
 
 return {
   newenv = newenv,
@@ -314,6 +353,8 @@ return {
   isvalue = isvalue,
   value = value,
   listmatch = listmatch,
+  reducible = reducible,
+  reducer = reducer,
   isnil = isnil,
   nilval = nilval,
   symbol_exact = symbol_exact,
