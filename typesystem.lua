@@ -1,36 +1,25 @@
 
 
-local function identity_handler(syntax, environment)
-  local ok, object =
-    syntax:match(
-      {
-        kind = "ListMatch",
-        {
-          kind = "ConstantAs",
-          environment,
-          typeT,
-          handler = accept_handler
-        },
-        handler = accept_handler
-      },
-      failure_handler,
-      nil
-    )
-  if not ok then return false, object end
-  return true, Syntax.Value(identity(object), ExprT(UnitT, object))
-end
-
-local function compose_handler(syntax, environment)
-  local ok, components =
-    syntax:match(
-      {
-        kind = ""
-      }
-    )
-end
-
--- toy type system has the following types: syntax, number, a -> b, list t, tupleT (ts : list type), enumT (ts : list type), newtype t
+-- typeclass : tuple a -> constraint
 --
+
+-- indexed sum type
+-- parameters may appear in fields that don't
+-- indexed product type
+-- indexed codata type
+--
+--
+
+-- A type must be one of
+-- - A parameterized kind
+-- - A type family invocation
+-- - A recursion operator
+--
+-- A parameterized kind is represented
+
+
+local hasfixedlayout = {}
+
 local typeerror = {
   kind_mismatch = function(a, b)
     return {
@@ -120,60 +109,19 @@ local function realize_trait(trait, subject)
   end
 end
 
-local compose = primitive_applicative(function(args) return function(x) return args[2](args[1](x)) end end,
-  {typeT, typeT, typeT},
-  {
-    kind = "prod",
-    params = {
-      {
-        kind = "pattern",
-        pat = {
-          kind = "expr",
-          params = {
-                        {
-              kind = "variable",
-              idx = 1
-            },
-            {
-              kind = "variable",
-              idx = 2
-            }
-          }
-        }
-      },
-      {
-        kind = "pattern",
-        pat = {
-          kind = "expr",
-          params = {
-                        {
-              kind = "variable",
-              idx = 2
-            },
-            {
-              kind = "variable",
-              idx = 3
-            }
-          }
-        }
-      }
-    }
-  },
-  {
-    kind = "expr",
-    params = {
-      {
-        kind = "variable",
-        idx = 1
-      },
-      {
-        kind = "variable",
-        idx = 3
-      }
-    }
-  }
-)
 
-local function make_app(syntax, env)
-
+local number = {kind = "number", params = {}}
+local string = {kind = "string", params = {}}
+local function primap(arg, res)
+  return {kind = "primap", params = {arg, res}}
 end
+
+return {
+  number = number,
+  string = string,
+  primap = primap,
+  typeident = typeident,
+  typepat = typepat,
+  realize_typepat = realize_typepat,
+  typematch_args = typematch_args
+}

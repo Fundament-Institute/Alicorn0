@@ -1,18 +1,30 @@
 
 local metalanguage = require './metalanguage'
 local conexpr = require './contextual-exprs'
+local types = require './type-system'
+
 
 local evaluates
 
 local function evaluate_pairhandler(a, b, env)
-  local ok, combiner = a:match({evaluates(metalanguage.accept_handler)}, metalanguage.failure_handler, nil)
+  local ok, combiner, env = a:match({evaluates(metalanguage.accept_handler, env)}, metalanguage.failure_handler, nil)
   if not ok then return false, combiner end
-  error "NYI evaluating a pair"
-  if combiner.kind == "" then
-  end
+  combiner:apply(b, env)
 end
 local function evaluate_symbolhandler(name, env)
-  return env:get(name)
+  local binding = env:get(name)
+  if binding == nil then
+    return false, "symbol " .. name .. " is not in scope"
+  end
+  if binding.kind == "used" then
+    return false, "symbol " .. name .. " was in scope but is a linear value that was already used"
+  end
+  local val = binding.val
+  if binding.kind = "useonce" then
+    binding.kind = "used"
+    binding.val = nil
+  end
+  return true, val, env
 end
 local function evaluate_valuehandler(val, env)
   return true, val
@@ -33,18 +45,78 @@ evaluates =
     end
   )
 
-local constexpr =
-  metalanguage.reducer(
-    function(syntax, environment)
-      local ok, val =
-        syntax:match({evaluates(metalanguage.accept_handler, environment)}, metalanguage.failure_handler, nil)
-      if not ok then return false, val end
-      return val:asconstant()
-    end
-  )
+-- local constexpr =
+--   metalanguage.reducer(
+--     function(syntax, environment)
+--       local ok, val =
+--         syntax:match({evaluates(metalanguage.accept_handler, environment)}, metalanguage.failure_handler, nil)
+--       if not ok then return false, val end
+--       return val:asconstant()
+--     enfoundendd
+--   )
 
+
+local function primitive_operative(fn)
+  return {
+    type = types.primop,
+    apply = fn
+  }
+end
+
+local function collect_tuple_pair_handler(a, b, env)
+  local ok, val, env = a:match({evaluates(metalanguage.accept_handler, env)}, metalanguage.failure_handler, nil)
+  return true, true, val, b, env
+end
+
+local function collect_tuple_nil_handler(env) return true, false, nil, env end
+
+local collect_tuple = metalanguage.reducible(function(syntax, env)
+    local vals = {}
+    local ok, continue = true, true
+    while ok and continue do
+      ok, continue, vals[#vals], env = syntax:match(
+        {
+          metalanguage.ispair(collect_tuple_pair_handler),
+          metalanguage.isnil(collect_tuple_nil_handler)
+        },
+        metalanguage.failure_handler,
+        env
+      )
+    end
+    if not ok then return false, continue end
+    local tuple_val, tuple_t_args = {}, {}
+    for i, v in ipairs(vals) do
+      tuple_val[i] = v.val
+      tuple_t_args[i] = v.type
+    end
+    local tuple_t = types.tuple(tuple_t_args)
+    return true, {val = tuple_val, type = tuple_t}, env
+end)
+
+local function primitive_apply(self, operands, environment)
+  local ok, args, env = operands:match(
+    {
+      collect_tuple(metalanguage.accept_handler)
+    },
+    metalanguage.failure_handler,
+    environment
+  )
+  if not ok then return false, args end
+  local ok, err = types.typeident(self.type.params[1], args.type)
+  if not ok then return false, err end
+  local res = self.fn(args.val)
+  return {val = res, type = self.type.params[2]}
+end
+
+
+local function primitive_applicative(fn, params, results)
+  return {type = types.primap(params, results), fn = fn, apply = primitive_apply}
+end
 
 return {
   evaluates = evaluates,
-  constexpr = constexpr
+  -- constexpr = constexpr
+  primitive_operative = primitive_operative,
+  primitive_applicative = primitive_applicative,
+  collect_tuple = collect_tuple
 }
