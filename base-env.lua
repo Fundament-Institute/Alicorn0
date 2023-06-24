@@ -1,23 +1,8 @@
+local env = require './environment'
+local treemap = require './lazy-prefix-tree'
+local evaluator = require './alicorn-evaluator'
+local types = require './typesystem'
 
-local metalang = require "metalanguage"
-local testlang = require "testlanguage"
-local format = require "temp-format-adapter"
-
--- for k, v in pairs(lang) do print(k, v) end
-
-local symbol, value, list = metalang.symbol, metalang.value, metalang.list
-
---[[
-local code =
-  list(
-    symbol "+",
-    value(1),
-    value(2)
-  )
---]]
-
-local src = "do (val x = 6) (+ x 3)"
-local code = format.read(src, "inline")
 
 local function do_block_pair_handler(env, a, b)
   local ok, val, newenv =
@@ -34,12 +19,12 @@ local function do_block_pair_handler(env, a, b)
 end
 
 local function do_block_nil_handler(env)
-  return true, false
+  return true, false, nil, env
 end
 
 local function do_block(syntax, env)
   local res = nil
-  local ok, ispair, val, newenv, tail = true, true, nil, env, nil
+  local ok, ispair, val, newenv, tail = true, true, nil, env:child_scope(), nil
   while ok and ispair do
     ok, ispair, val, newenv, tail =
       syntax:match(
@@ -57,7 +42,7 @@ local function do_block(syntax, env)
       syntax = tail
     end
   end
-  return true, res, env
+  return true, res, env:exit_child_scope(newenv)
 end
 
 local function val_bind(syntax, env)
@@ -79,15 +64,30 @@ local function val_bind(syntax, env)
   return true, value(nil), env + metalang.newenv{[name] = val}
 end
 
-local env =
-  metalang.newenv {
-    ["+"] = testlang.primitive_applicative(function(a, b) return a + b end),
-    ["do"] = testlang.primitive_operative(do_block),
-    val = testlang.primitive_operative(val_bind)
+local core_operations = {
+  ["+"] = evaluator.primitive_applicative(function(args) return args[1] + args[2] end, types.tuple {types.number, types.number}, types.number),
+  ["-"] = evaluator.primitive_applicative(function(args) return args[1] - args[2] end, types.tuple {types.number, types.number}, types.number),
+  ["*"] = evaluator.primitive_applicative(function(args) return args[1] * args[2] end, types.tuple {types.number, types.number}, types.number),
+  ["/"] = evaluator.primitive_applicative(function(args) return args[1] / args[2] end, types.tuple {types.number, types.number}, types.number),
+  neg = evaluator.primitive_applicative(function(args) return -args[1] end, types.tuple {types.number}, types.number),
+
+  ["do"] = evaluator.primitive_operative(do_block),
+  val = evaluator.primitive_operative(val_bind),
+}
+
+local wrapped = {}
+for k, v in pairs(core_operations) do
+  wrapped[k] = {kind = "reusable", val = v}
+end
+
+local tree = treemap.build(wrapped)
+
+local function create()
+  return env.new_env {
+    nonlocals = tree
   }
+end
 
-local ok, res = testlang.eval(code, env)
-
-print(ok, res)
-
-print(res[1])
+return {
+  create = create
+}

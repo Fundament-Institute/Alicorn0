@@ -1,7 +1,7 @@
 
 local metalanguage = require './metalanguage'
-local conexpr = require './contextual-exprs'
-local types = require './type-system'
+-- local conexpr = require './contextual-exprs'
+local types = require './typesystem'
 
 
 local evaluates
@@ -9,30 +9,20 @@ local evaluates
 local function evaluate_pairhandler(a, b, env)
   local ok, combiner, env = a:match({evaluates(metalanguage.accept_handler, env)}, metalanguage.failure_handler, nil)
   if not ok then return false, combiner end
-  combiner:apply(b, env)
+  return combiner:apply(b, env)
 end
 local function evaluate_symbolhandler(name, env)
-  local binding = env:get(name)
-  if binding == nil then
-    return false, "symbol " .. name .. " is not in scope"
-  end
-  if binding.kind == "used" then
-    return false, "symbol " .. name .. " was in scope but is a linear value that was already used"
-  end
-  local val = binding.val
-  if binding.kind = "useonce" then
-    binding.kind = "used"
-    binding.val = nil
-  end
-  return true, val, env
+  local ok, val = env:get(name)
+  return ok, val, env
 end
 local function evaluate_valuehandler(val, env)
-  return true, val
+  return true, val, env
 end
 
 evaluates =
   metalanguage.reducer(
     function(syntax, environment)
+      print('trying to evaluate', syntax)
       return syntax:match(
         {
           metalanguage.ispair(evaluate_pairhandler),
@@ -70,7 +60,7 @@ end
 
 local function collect_tuple_nil_handler(env) return true, false, nil, env end
 
-local collect_tuple = metalanguage.reducible(function(syntax, env)
+local collect_tuple = metalanguage.reducer(function(syntax, env)
     local vals = {}
     local ok, continue = true, true
     while ok and continue do
@@ -113,10 +103,16 @@ local function primitive_applicative(fn, params, results)
   return {type = types.primap(params, results), fn = fn, apply = primitive_apply}
 end
 
+
+local function eval(syntax, environment)
+  return syntax:match({evaluates(metalanguage.accept_handler, environment)}, metalanguage.failure_handler, nil)
+end
+
 return {
   evaluates = evaluates,
   -- constexpr = constexpr
   primitive_operative = primitive_operative,
   primitive_applicative = primitive_applicative,
-  collect_tuple = collect_tuple
+  collect_tuple = collect_tuple,
+  eval = eval
 }

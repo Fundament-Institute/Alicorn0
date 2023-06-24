@@ -97,7 +97,7 @@ end
 local function typematch_args(quantifications, inputpattern, subject, outputpattern)
   local quantmatch = {}
   local ok, err = typepat(quantmatch, inputpattern, subject)
-  if not ok, then return false, err end
+  if not ok then return false, err end
   return true, realize_typepat(quantmatch, outputpattern)
 end
 
@@ -109,17 +109,48 @@ local function realize_trait(trait, subject)
   end
 end
 
+-- TODO: extend the kind system to have wrapper types and computed properties
 
 local number = {kind = "number", params = {}}
 local string = {kind = "string", params = {}}
 local function primap(arg, res)
   return {kind = "primap", params = {arg, res}}
 end
+local function tuple(fields)
+  return {kind = "tuple", params = {fields}}
+end
+local primop = {kind = "primop", params = {}}
+
+local environment = {kind = "environment", params = {}}
+local anyval = {kind = "anyval", params = {}}
+
+--TODO: fix type in type bug
+local type = {kind = "type", params = {}}
+
+local nonlinear_kinds = {
+  number = true,
+  string = true,
+  primap = true,
+  tuple = true,
+  primop = true,
+  environment = false,
+  anyval = false,
+  type = true,
+}
+local function is_linear(t)
+  return not nonlinear_kinds[t.kind]
+end
 
 return {
   number = number,
   string = string,
   primap = primap,
+  primop = primop,
+  tuple = tuple,
+  environment = environment,
+  anyval = anyval,
+  type = type,
+  is_linear = is_linear,
   typeident = typeident,
   typepat = typepat,
   realize_typepat = realize_typepat,
