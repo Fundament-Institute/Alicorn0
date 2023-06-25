@@ -2,13 +2,15 @@ local env = require './environment'
 local treemap = require './lazy-prefix-tree'
 local evaluator = require './alicorn-evaluator'
 local types = require './typesystem'
+local metalang = require './metalanguage'
 
+local p = require 'pretty-print'.prettyPrint
 
 local function do_block_pair_handler(env, a, b)
   local ok, val, newenv =
     a:match(
       {
-        testlang.evaluates(metalang.accept_handler, env)
+        evaluator.evaluates(metalang.accept_handler, env)
       },
       metalang.failure_handler,
       nil
@@ -25,6 +27,8 @@ end
 local function do_block(syntax, env)
   local res = nil
   local ok, ispair, val, newenv, tail = true, true, nil, env:child_scope(), nil
+  -- print "starting do block"
+  -- p(newenv)
   while ok and ispair do
     ok, ispair, val, newenv, tail =
       syntax:match(
@@ -35,6 +39,8 @@ local function do_block(syntax, env)
         metalang.failure_handler,
         newenv
       )
+    -- print "finished one expr in do block"
+    -- p(newenv)
     --print("do block", ok, ispair, val, newenv, tail)
     if not ok then return false, ispair end
     if ispair then
@@ -53,7 +59,7 @@ local function val_bind(syntax, env)
           metalang.accept_handler,
           metalang.issymbol(metalang.accept_handler),
           metalang.symbol_exact(metalang.accept_handler, "="),
-          testlang.evaluates(metalang.accept_handler, env)
+          evaluator.evaluates(metalang.accept_handler, env)
         )
       },
       metalang.failure_handler,
@@ -61,7 +67,7 @@ local function val_bind(syntax, env)
     )
   --print("val bind", ok, name, _, val)
   if not ok then return false, name end
-  return true, value(nil), env + metalang.newenv{[name] = val}
+  return true, metalang.value(nil), env:bind_local(name, val)
 end
 
 local core_operations = {
@@ -81,6 +87,9 @@ for k, v in pairs(core_operations) do
 end
 
 local tree = treemap.build(wrapped)
+
+
+-- p(tree)
 
 local function create()
   return env.new_env {

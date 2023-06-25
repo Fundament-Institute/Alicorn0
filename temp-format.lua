@@ -155,7 +155,7 @@ grammar.tokens = P{
 local function recursive_descent(stream, stream_index, indentation_level, indent_applies)
     -- returns: anything it's constructed, where it left off
 
-    print(stream_index, " ", indentation_level, " ", indent_applies)
+    -- print(stream_index, " ", indentation_level, " ", indent_applies)
 
     -- after you see a newline, check indentation level. begin transforming things here
     -- turn indentations into lists
@@ -178,12 +178,12 @@ local function recursive_descent(stream, stream_index, indentation_level, indent
 
     local index = stream_index
     while index < #stream do
-        print("index before: ", index, " indent applies: ", indent_applies)
+        -- print("index before: ", index, " indent applies: ", indent_applies)
 
         local element = stream[index]
 
         if stream[index]["kind"] == token_raw.newline and indent_applies then
-            print("hione", index)
+            -- print("hione", index)
             if element["indent_level"] >= indentation_level then
 
                 local result, newindex = recursive_descent(stream, index+1, element["indent_level"], true)
@@ -192,7 +192,7 @@ local function recursive_descent(stream, stream_index, indentation_level, indent
                 index = newindex
 
             elseif element["indent_level"] < indentation_level then
-                print(inspect(element["anchor"]))
+                -- print(inspect(element["anchor"]))
                 construction["endpos"] = element["anchor"]
                 return construction, (index+1) -- potential issue? incremented here, and at the end
             end
@@ -216,7 +216,7 @@ local function recursive_descent(stream, stream_index, indentation_level, indent
                 local element = stream[index]
                 if (element["kind"] == token_raw.newline) then
                     if (element["indent_level"] <= indentation_level) then
-                        print(element)
+                        -- print(element)
                         break
                     else
                         index = index + 1
@@ -230,7 +230,7 @@ local function recursive_descent(stream, stream_index, indentation_level, indent
             index = index + 1
         end
 
-        print("index after: ", index)
+        -- print("index after: ", index)
     end
 
     construction["endpos"] = stream[#stream]["anchor"]
@@ -245,7 +245,7 @@ function grammar.parse(input, filename)
 
     local list = grammar.correct_anchors(list, filename)
 
-    print("streamlen: ", #list)
+    -- print("streamlen: ", #list)
     local result, index = recursive_descent(list, position, indentation_level, true)
 
     result["anchor"] = { sourceid = filename, line = 0, char = 0 }

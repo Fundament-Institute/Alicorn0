@@ -17,8 +17,19 @@
 --
 -- A parameterized kind is represented
 
+local p = require 'pretty-print'.prettyPrint
 
 local hasfixedlayout = {}
+
+local typeerror_mt = {
+  __tostring = function(self)
+    local message = self.text
+    if self.cause then
+      message = message .. " because:\n" .. tostring(self.cause)
+    end
+    return message
+  end
+}
 
 local typeerror = {
   kind_mismatch = function(a, b)
@@ -27,9 +38,15 @@ local typeerror = {
       cause = nil
     }
   end,
-  param_notidentical = function(idx, cause)
+  param_notidentical = function(kind, idx, cause)
     return {
-      text = "parameters weren't identical at position " .. idx,
+      text = "parameters of " .. kind .. " weren't identical at position " .. idx,
+      cause = cause
+    }
+  end,
+  param_length = function(kind, len_a, len_b, cause)
+    return {
+      text = "parameters of " .. kind .. " were of different lengths " .. len_a .. " and " .. len_b,
       cause = cause
     }
   end,
@@ -46,17 +63,26 @@ local typeerror = {
   end
 }
 
+for k, v in pairs(typeerror) do
+  typeerror[k] = function(...) return setmetatable(v(...), typeerror_mt) end
+end
+
 local function typeident(a, b)
+  -- print "checking type identity"
+  -- p(a)
+  -- p(b)
   if a.kind ~= b.kind then
     return false, typeerror.kind_mismatch(a.kind, b.kind)
   end
   if #a.params ~= #b.params then
-    error "two types were provided different length parameterizations, which is illegal"
+    -- error "two types were provided different length parameterizations, which is illegal"
+    -- TODO: make this properly typed again; temporary workaround for tuples until indexed types can be reintroduced
+    return false, typeerror.param_length(a.kind, #a.params, #b.params)
   end
   for i = 1, #a.params do
     local ok, err = typeident(a.params[i], b.params[i])
     if not ok then
-      return false, typeerror.param_notidentical(i, err)
+      return false, typeerror.param_notidentical(a.kind, i, err)
     end
   end
   return true
@@ -117,7 +143,8 @@ local function primap(arg, res)
   return {kind = "primap", params = {arg, res}}
 end
 local function tuple(fields)
-  return {kind = "tuple", params = {fields}}
+  return {kind = "tuple", params = fields}
+  --TODO: make this store types as an immutable sequence type
 end
 local primop = {kind = "primop", params = {}}
 

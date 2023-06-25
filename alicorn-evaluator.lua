@@ -3,26 +3,52 @@ local metalanguage = require './metalanguage'
 -- local conexpr = require './contextual-exprs'
 local types = require './typesystem'
 
+local p = require 'pretty-print'.prettyPrint
+
+local semantic_error_mt = {
+  __tostring = function(self)
+    local message = self.text
+    if self.cause then
+      message = message .. " because:\n" .. tostring(self.cause)
+    end
+    return message
+  end
+}
+
+local semantic_error = {
+  function_args_mismatch = function(cause)
+    return {
+      text = "function args mismatch",
+      cause = cause
+    }
+  end
+}
+
+for k, v in pairs(semantic_error) do
+  semantic_error[k] = function(...) return setmetatable(v(...), semantic_error_mt) end
+end
 
 local evaluates
 
-local function evaluate_pairhandler(a, b, env)
+local function evaluate_pairhandler(env, a, b)
   local ok, combiner, env = a:match({evaluates(metalanguage.accept_handler, env)}, metalanguage.failure_handler, nil)
   if not ok then return false, combiner end
   return combiner:apply(b, env)
 end
-local function evaluate_symbolhandler(name, env)
+local function evaluate_symbolhandler(env, name)
+  --print("looking up symbol", name)
+  --p(env)
   local ok, val = env:get(name)
   return ok, val, env
 end
-local function evaluate_valuehandler(val, env)
+local function evaluate_valuehandler(env, val)
   return true, val, env
 end
 
 evaluates =
   metalanguage.reducer(
-    function(syntax, environment)
-      print('trying to evaluate', syntax)
+    function(syntax, _, environment)
+      -- print('trying to evaluate', syntax)
       return syntax:match(
         {
           metalanguage.ispair(evaluate_pairhandler),
@@ -32,7 +58,8 @@ evaluates =
         metalanguage.failure_handler,
         environment
       )
-    end
+    end,
+    "evaluates"
   )
 
 -- local constexpr =
@@ -49,22 +76,22 @@ evaluates =
 local function primitive_operative(fn)
   return {
     type = types.primop,
-    apply = fn
+    apply = function(self, ops, env) return fn(ops, env) end
   }
 end
 
-local function collect_tuple_pair_handler(a, b, env)
+local function collect_tuple_pair_handler(env, a, b)
   local ok, val, env = a:match({evaluates(metalanguage.accept_handler, env)}, metalanguage.failure_handler, nil)
   return true, true, val, b, env
 end
 
-local function collect_tuple_nil_handler(env) return true, false, nil, env end
+local function collect_tuple_nil_handler(env) return true, false, nil, nil, env end
 
-local collect_tuple = metalanguage.reducer(function(syntax, env)
+local collect_tuple = metalanguage.reducer(function(syntax, _, env)
     local vals = {}
     local ok, continue = true, true
     while ok and continue do
-      ok, continue, vals[#vals], env = syntax:match(
+      ok, continue, vals[#vals + 1], syntax, env = syntax:match(
         {
           metalanguage.ispair(collect_tuple_pair_handler),
           metalanguage.isnil(collect_tuple_nil_handler)
@@ -86,16 +113,16 @@ end)
 local function primitive_apply(self, operands, environment)
   local ok, args, env = operands:match(
     {
-      collect_tuple(metalanguage.accept_handler)
+      collect_tuple(metalanguage.accept_handler, environment)
     },
     metalanguage.failure_handler,
-    environment
+    nil
   )
   if not ok then return false, args end
   local ok, err = types.typeident(self.type.params[1], args.type)
-  if not ok then return false, err end
+  if not ok then return false, semantic_error.function_args_mismatch(err) end
   local res = self.fn(args.val)
-  return {val = res, type = self.type.params[2]}
+  return true, {val = res, type = self.type.params[2]}, env
 end
 
 

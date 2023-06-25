@@ -14,7 +14,7 @@ local function syntax_convert(tree)
   elseif tree.kind == "literal" then
     if tree.literaltype == "f64" then
       -- metalanguage.value use here is only correct for smoketest language and will need changed in future
-      return metalanguage.value({type = types.number, tree.val})
+      return metalanguage.value({type = types.number, val = tree.val})
     else
       error "syntax contains a literal of a type other than the basic number"
     end

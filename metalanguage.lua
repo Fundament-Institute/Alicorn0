@@ -191,7 +191,7 @@ local syntax_error_mt = {
           options[k] = v.kind
         end
     end
-    message = message .. table.concat(options, ", ")
+    message = message .. "[ " ..  table.concat(options, ", ") .. " ]"
     message = message .. "\nbut was rejected"
     if self.cause then
       message = message .. " because:\n" .. tostring(self.cause)

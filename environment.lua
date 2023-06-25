@@ -1,10 +1,11 @@
 local trie = require './lazy-prefix-tree'
+local types = require './typesystem'
 
 local new_env
 
 local function new_store(val)
   local store = {val = val}
-  if is_linear(val.type) then
+  if types.is_linear(val.type) then
     store.kind = "useonce"
   else
     store.kind = "reusable"
@@ -15,9 +16,10 @@ end
 local environment_mt = {
   __index = {
     get = function(self, name)
-      local binding = self.bindings:get(name)
+      local present, binding = self.bindings:get(name)
+      if not present then return false, "symbol \"" .. name .. "\" is not in scope" end
       if binding == nil then
-        return false, "symbol " .. name .. " is not in scope"
+        return false, "symbol \"" .. name .. "\" is marked as present but with no data; this indicates a bug in the environment or something violating encapsulation"
       end
       if binding.kind == "used" then
         return false, "symbol " .. name .. " was in scope but is a linear value that was already used"

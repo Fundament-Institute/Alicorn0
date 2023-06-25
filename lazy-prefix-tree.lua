@@ -1,6 +1,7 @@
 
 
 local prefix_tree_mt
+local empty
 prefix_tree_mt = {
   __index = {
     get = function(self, key, offset)
@@ -57,15 +58,17 @@ prefix_tree_mt = {
       self:force()
       local res = {}
       for k, v in pairs(self) do res[k] = v end
+      local children = {}
+      for k, v in pairs(self.children) do children[k] = v end
+      res.children = children
       if offset >= #key+1 then
         res.hasfinish = true
         res.finish = value
         return setmetatable(res, prefix_tree_mt)
       end
       local c = key:sub(offset, offset)
-      if self[c] then
-        res[c] = self[c]:put(key, value, offset+1)
-      end
+      if not self.children[c] then res.children[c] = empty end
+      res.children[c] = res.children[c]:put(key, value, offset+1)
       return setmetatable(res, prefix_tree_mt)
     end,
     remove = function(self, key, offset)
@@ -87,7 +90,7 @@ prefix_tree_mt = {
   }
 }
 
-local empty = setmetatable({kind = "ready", hasfinish = false}, prefix_tree_mt)
+empty = setmetatable({kind = "ready", hasfinish = false, children = {}}, prefix_tree_mt)
 
 local function build(tab)
   local res = empty
