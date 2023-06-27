@@ -135,38 +135,109 @@ local function realize_trait(trait, subject)
   end
 end
 
+local function type_name(t) return t.kind.type_name(t.params) end
+local function is_duplicable(t) return t.kind.duplicable(t.params) end
+local function is_discardable(t) return t.kind.discardable(t.params) end
+
 -- TODO: extend the kind system to have wrapper types and computed properties
 
-local number = {kind = "number", params = {}}
-local string = {kind = "string", params = {}}
+local number = {
+  kind = {
+    kind_name = "number_kind",
+    type_name = function() return "number" end,
+    duplicable = function() return true end,
+    discardable = function() return true end,
+  },
+  params = {}
+}
+local string = {
+  kind = {
+    kind_name = "string_kind",
+    type_name = function() return "string" end,
+    duplicable = function() return true end,
+    discardable = function() return true end,
+  },
+  params = {}
+}
+
+local primap_kind = {
+  kind_name = "primap",
+  type_name = function(params) return "(primap "..type_name(params[1]).." "..type_name(params[2])..")" end,
+  duplicable = function(params) return true end,
+  discardable = function(params) return true end,
+}
 local function primap(arg, res)
-  return {kind = "primap", params = {arg, res}}
+  return {kind = primap_kind, params = {arg, res}}
 end
+local tuple_kind = {
+  kind_name = "tuple",
+  type_name = function(params)
+    local names = {}
+    for i, v in ipairs(params) do
+      names[i] = type_name(v)
+    end
+    return "(tuple" .. table.concat(names, " ") .. ")"
+  end,
+  duplicable = function(params)
+    for i, v in ipairs(params) do
+      if not is_duplicable(v) then
+        return false
+      end
+    end
+    return true
+  end,
+  discardable = function(params)
+    for i, v in ipairs(params) do
+      if not is_discardable(v) then
+        return false
+      end
+    end
+    return true
+  end,
+}
 local function tuple(fields)
-  return {kind = "tuple", params = fields}
+  return {kind = tuple_kind, params = fields}
   --TODO: make this store types as an immutable sequence type
 end
-local primop = {kind = "primop", params = {}}
+local primop = {
+  kind = {
+    kind_name = "primop_kind",
+    type_name = function() return "primop" end,
+    duplicable = function() return true end,
+    discardable = function() return true end,
+  },
+  params = {}
+}
 
-local environment = {kind = "environment", params = {}}
-local anyval = {kind = "anyval", params = {}}
+local environment = {
+  kind = {
+    kind_name = "environment_kind",
+    type_name = function() return "environment" end,
+    duplicable = function() return false end,
+    discardable = function() return false end,
+  },
+  params = {}
+}
+local anyval = {
+  kind = {
+    kind_name = "anyval_kind",
+    type_name = function() return "anyval" end,
+    duplicable = function() return false end,
+    discardable = function() return false end,
+  },
+  params = {}
+}
 
 --TODO: fix type in type bug
-local type = {kind = "type", params = {}}
-
-local nonlinear_kinds = {
-  number = true,
-  string = true,
-  primap = true,
-  tuple = true,
-  primop = true,
-  environment = false,
-  anyval = false,
-  type = true,
+local type = {
+  kind = {
+    kind_name = "type_kind",
+    type_name = function() return "type" end,
+    duplicable = function() return true end,
+    discardable = function() return true end,
+  },
+  params = {}
 }
-local function is_linear(t)
-  return not nonlinear_kinds[t.kind]
-end
 
 return {
   number = number,
@@ -177,7 +248,9 @@ return {
   environment = environment,
   anyval = anyval,
   type = type,
-  is_linear = is_linear,
+  type_name = type_name,
+  is_duplicable = is_duplicable,
+  is_discardable = is_discardable,
   typeident = typeident,
   typepat = typepat,
   realize_typepat = realize_typepat,

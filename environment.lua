@@ -5,7 +5,7 @@ local new_env
 
 local function new_store(val)
   local store = {val = val}
-  if types.is_linear(val.type) then
+  if types.is_duplicable(val.type) then
     store.kind = "useonce"
   else
     store.kind = "reusable"
