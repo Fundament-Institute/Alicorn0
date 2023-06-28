@@ -182,7 +182,7 @@ local symbol_exact = reducer(SymbolExact, "symbol exact")
 
 local syntax_error_mt = {
   __tostring = function(self)
-    local message = "Syntax error at anchor " .. (self.anchor or "<unknown position>") .. " must be acceptable for one of:\n"
+    local message = "Syntax error at anchor " .. (self.anchor and tostring(self.anchor) or "<unknown position>") .. " must be acceptable for one of:\n"
     local options = {}
     for k, v in ipairs(self.matchers) do
         if v.kind == "Reducible" then
@@ -239,8 +239,8 @@ local constructed_syntax_mt = {
     end
   }
 }
-local function cons_syntax(accepters, ...)
-  return setmetatable({accepters = accepters, ...}, constructed_syntax_mt)
+local function cons_syntax(accepters, anchor, ...)
+  return setmetatable({accepters = accepters, anchor = anchor, ...}, constructed_syntax_mt)
 end
 
 local pair_accepters = {
@@ -249,8 +249,8 @@ local pair_accepters = {
   end
 }
 
-local function pair(a, b)
-  return cons_syntax(pair_accepters, a, b)
+local function pair(anchor, a, b)
+  return cons_syntax(pair_accepters, anchor, a, b)
 end
 
 local symbol_accepters = {
@@ -259,8 +259,8 @@ local symbol_accepters = {
   end
 }
 
-local function symbol(name)
-  return cons_syntax(symbol_accepters, name)
+local function symbol(anchor, name)
+  return cons_syntax(symbol_accepters, anchor, name)
 end
 
 local value_accepters = {
@@ -269,8 +269,8 @@ local value_accepters = {
   end
 }
 
-local function value(val)
-  return cons_syntax(value_accepters, val)
+local function value(anchor, val)
+  return cons_syntax(value_accepters, anchor, val)
 end
 
 local nil_accepters = {
