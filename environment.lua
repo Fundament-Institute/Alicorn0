@@ -5,7 +5,7 @@ local new_env
 
 local function new_store(val)
   local store = {val = val}
-  if types.is_duplicable(val.type) then
+  if not types.is_duplicable(val.type) then
     store.kind = "useonce"
   else
     store.kind = "reusable"
@@ -90,6 +90,14 @@ function new_env(opts)
   return setmetatable(self, environment_mt)
 end
 
+local function dump_env(env)
+  return "Environment"
+    .. "\nlocals: " .. trie.dump_map(env.locals)
+    .. "\nnonlocals: " .. trie.dump_map(env.nonlocals)
+    .. "\ncarrier: " .. tostring(env.carrier)
+end
+
 return {
-  new_env = new_env
+  new_env = new_env,
+  dump_env = dump_env,
 }

@@ -31,22 +31,26 @@ local typeerror_mt = {
   end
 }
 
+local function type_name(t) return t.kind.type_name(t.params) end
+local function is_duplicable(t) return t.kind.duplicable(t.params) end
+local function is_discardable(t) return t.kind.discardable(t.params) end
+
 local typeerror = {
   kind_mismatch = function(a, b)
     return {
-      text = "kind " .. a .. " doesn't match kind " .. b,
+      text = "kind " .. a .. " ("..a.kind_name..")" .. " doesn't match kind " .. b .. " ("..a.kind_name..")",
       cause = nil
     }
   end,
   param_notidentical = function(kind, idx, cause)
     return {
-      text = "parameters of " .. kind .. " weren't identical at position " .. idx,
+      text = "parameters of " .. kind.kind_name .. " weren't identical at position " .. idx,
       cause = cause
     }
   end,
   param_length = function(kind, len_a, len_b, cause)
     return {
-      text = "parameters of " .. kind .. " were of different lengths " .. len_a .. " and " .. len_b,
+      text = "parameters of " .. kind.kind_name .. " were of different lengths " .. len_a .. " and " .. len_b,
       cause = cause
     }
   end,
@@ -135,9 +139,6 @@ local function realize_trait(trait, subject)
   end
 end
 
-local function type_name(t) return t.kind.type_name(t.params) end
-local function is_duplicable(t) return t.kind.duplicable(t.params) end
-local function is_discardable(t) return t.kind.discardable(t.params) end
 
 -- TODO: extend the kind system to have wrapper types and computed properties
 
@@ -199,6 +200,36 @@ local function tuple(fields)
   return {kind = tuple_kind, params = fields}
   --TODO: make this store types as an immutable sequence type
 end
+local cotuple_kind = {
+  kind_name = "cotuple",
+  type_name = function(params)
+    local names = {}
+    for i, v in ipairs(params) do
+      names[i] = type_name(v)
+    end
+    return "(cotuple" .. table.concat(names, " ") .. ")"
+  end,
+  duplicable = function(params)
+    for i, v in ipairs(params) do
+      if not is_duplicable(v) then
+        return false
+      end
+    end
+    return true
+  end,
+  discardable = function(params)
+    for i, v in ipairs(params) do
+      if not is_discardable(v) then
+        return false
+      end
+    end
+    return true
+  end,
+}
+local function cotuple(fields)
+  return {kind = enum_kind, params = fields}
+  --TODO: make this store types as an immutable sequence type
+end
 local primop = {
   kind = {
     kind_name = "primop_kind",
@@ -239,15 +270,23 @@ local type = {
   params = {}
 }
 
+local unit = tuple{}
+local unit_val = {type = unit, val = nil}
+
 return {
   number = number,
   string = string,
   primap = primap,
+  primap_kind = primap_kind,
   primop = primop,
+  primop_kind = primop.kind,
   tuple = tuple,
+  cotuple = cotuple,
   environment = environment,
   anyval = anyval,
   type = type,
+  unit = unit,
+  unit_val = unit_val,
   type_name = type_name,
   is_duplicable = is_duplicable,
   is_discardable = is_discardable,

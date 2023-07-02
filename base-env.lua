@@ -1,4 +1,4 @@
-local env = require './environment'
+local environment = require './environment'
 local treemap = require './lazy-prefix-tree'
 local evaluator = require './alicorn-evaluator'
 local types = require './typesystem'
@@ -25,33 +25,19 @@ local function do_block_nil_handler(env)
 end
 
 local function do_block(syntax, env)
-  local res = nil
-  local ok, ispair, val, newenv, tail = true, true, nil, env:child_scope(), nil
-  -- print "starting do block"
-  -- p(newenv)
-  while ok and ispair do
-    ok, ispair, val, newenv, tail =
-      syntax:match(
-        {
-          metalang.ispair(do_block_pair_handler),
-          metalang.isnil(do_block_nil_handler)
-        },
-        metalang.failure_handler,
-        newenv
-      )
-    -- print "finished one expr in do block"
-    -- p(newenv)
-    --print("do block", ok, ispair, val, newenv, tail)
-    if not ok then return false, ispair end
-    if ispair then
-      res = val
-      syntax = tail
-    end
-  end
-  return true, res, env:exit_child_scope(newenv)
+  local newenv = env:child_scope()
+  local ok, val, newenv = syntax:match(
+    {
+      evaluator.block(metalang.accept_handler, newenv)
+    },
+    metalang.failure_handler,
+    nil
+  )
+  if not ok then return ok, val end
+  return ok, val, env:exit_child_scope(newenv)
 end
 
-local function val_bind(syntax, env)
+local function let_bind(syntax, env)
   local ok, name, val =
     syntax:match(
       {
@@ -67,8 +53,9 @@ local function val_bind(syntax, env)
     )
   --print("val bind", ok, name, _, val)
   if not ok then return false, name end
-  return true, metalang.value(nil), env:bind_local(name, val)
+  return true, types.unit_val, env:bind_local(name, val)
 end
+
 
 local core_operations = {
   ["+"] = evaluator.primitive_applicative(function(args) return args[1] + args[2] end, types.tuple {types.number, types.number}, types.number),
@@ -78,7 +65,8 @@ local core_operations = {
   neg = evaluator.primitive_applicative(function(args) return -args[1] end, types.tuple {types.number}, types.number),
 
   ["do"] = evaluator.primitive_operative(do_block),
-  val = evaluator.primitive_operative(val_bind),
+  let = evaluator.primitive_operative(let_bind),
+  ["dump-env"] = evaluator.primitive_operative(function(syntax, env) print(environment.dump_env(env)); return true, types.unit_val, env end)
 }
 
 local wrapped = {}
@@ -90,11 +78,17 @@ local tree = treemap.build(wrapped)
 
 
 -- p(tree)
+local modules = require './modules'
 
 local function create()
-  return env.new_env {
+  local env = environment.new_env {
     nonlocals = tree
   }
+  -- p(env)
+  -- p(modules.mod)
+  env = modules.use_mod(modules.module_mod, env)
+  -- p(env)
+  return env
 end
 
 return {

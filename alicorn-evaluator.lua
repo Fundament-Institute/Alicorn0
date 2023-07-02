@@ -21,6 +21,11 @@ local semantic_error = {
       text = "function args mismatch",
       cause = cause
     }
+  end,
+  non_operable_combiner = function(t)
+    return {
+      text = "value in combiner slot that can't operate of type " .. types.type_name(t)
+    }
   end
 }
 
@@ -30,10 +35,13 @@ end
 
 local evaluates
 
+local operate_behavior = {}
+
 local function evaluate_pairhandler(env, a, b)
   local ok, combiner, env = a:match({evaluates(metalanguage.accept_handler, env)}, metalanguage.failure_handler, nil)
   if not ok then return false, combiner end
-  return combiner:apply(b, env)
+  if not operate_behavior[combiner.type.kind] then return false, semantic_error.non_operable_combiner(combiner.type) end
+  return operate_behavior[combiner.type.kind](combiner, b, env)
 end
 local function evaluate_symbolhandler(env, name)
   --print("looking up symbol", name)
@@ -72,16 +80,24 @@ evaluates =
 --     enfoundendd
 --   )
 
+operate_behavior[types.primop_kind] = function(self, ops, env)
+  -- print("evaluating operative")
+  -- p(self)
+  -- p(ops)
+  -- p(env)
+  return self.val(ops, env)
+end
 
 local function primitive_operative(fn)
   return {
     type = types.primop,
-    apply = function(self, ops, env) return fn(ops, env) end
+    val = fn
   }
 end
 
 local function collect_tuple_pair_handler(env, a, b)
   local ok, val, env = a:match({evaluates(metalanguage.accept_handler, env)}, metalanguage.failure_handler, nil)
+  if not ok then return false, val end
   return true, true, val, b, env
 end
 
@@ -108,7 +124,42 @@ local collect_tuple = metalanguage.reducer(function(syntax, _, env)
     end
     local tuple_t = types.tuple(tuple_t_args)
     return true, {val = tuple_val, type = tuple_t}, env
-end)
+end, "collect_tuple")
+
+local evaluates_args = metalanguage.reducer(function(syntax, _, env)
+    local vals = {}
+    local ok, continue = true, true
+    while ok and continue do
+      ok, continue, vals[#vals + 1], syntax, env = syntax:match(
+        {
+          metalanguage.ispair(collect_tuple_pair_handler),
+          metalanguage.isnil(collect_tuple_nil_handler)
+        },
+        metalanguage.failure_handler,
+        env
+      )
+    end
+    if not ok then return false, continue end
+    return true, vals, env
+end, "evaluates_args")
+
+local block = metalanguage.reducer(function(syntax, _, env)
+    local lastval, newval
+    local ok, continue = true, true
+    while ok and continue do
+      ok, continue, newval, syntax, env = syntax:match(
+        {
+          metalanguage.ispair(collect_tuple_pair_handler),
+          metalanguage.isnil(collect_tuple_nil_handler)
+        },
+        metalanguage.failure_handler,
+        env
+      )
+      if ok and continue then lastval = newval end
+    end
+    if not ok then return false, continue end
+    return true, lastval, env
+end, "block")
 
 local function primitive_apply(self, operands, environment)
   local ok, args, env = operands:match(
@@ -121,25 +172,32 @@ local function primitive_apply(self, operands, environment)
   if not ok then return false, args end
   local ok, err = types.typeident(self.type.params[1], args.type)
   if not ok then return false, semantic_error.function_args_mismatch(err) end
-  local res = self.fn(args.val)
+  local res = self.val(args.val)
   return true, {val = res, type = self.type.params[2]}, env
 end
 
+operate_behavior[types.primap_kind] = primitive_apply
 
 local function primitive_applicative(fn, params, results)
-  return {type = types.primap(params, results), fn = fn, apply = primitive_apply}
+  return {type = types.primap(params, results), val = fn}
 end
 
 
 local function eval(syntax, environment)
   return syntax:match({evaluates(metalanguage.accept_handler, environment)}, metalanguage.failure_handler, nil)
 end
+local function eval_block(syntax, environment)
+  return syntax:match({block(metalanguage.accept_handler, environment)}, metalanguage.failure_handler, nil)
+end
 
 return {
   evaluates = evaluates,
   -- constexpr = constexpr
+  block = block,
   primitive_operative = primitive_operative,
   primitive_applicative = primitive_applicative,
   collect_tuple = collect_tuple,
-  eval = eval
+  evaluates_args = evaluates_args,
+  eval = eval,
+  eval_block = eval_block
 }
