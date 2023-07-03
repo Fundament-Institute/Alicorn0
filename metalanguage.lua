@@ -344,6 +344,36 @@ end
 
 local listmatch = reducer(ListMatch, "list")
 
+local list_many
+
+local function list_many_pair_handler(rule, a, b)
+  local ok, val = a:match({rule}, failure_handler, nil)
+  if not ok then return ok, val end
+  return ok, true, val, b
+end
+
+local function list_many_nil_handler()
+  return true, false
+end
+
+list_many = reducer(function(syntax, _, submatcher)
+    local vals = {}
+    local ok, cont, val, tail = true, true, nil, syntax
+    while ok and cont do
+      ok, cont, val, tail = tail:match(
+        {
+          ispair(list_many_pair_handler),
+          isnil(list_many_nil_handler)
+        },
+        failure_handler,
+        submatcher
+      )
+      vals[#vals + 1] = val
+    end
+    if not ok then return ok, cont end
+    return true, vals
+end, "list_many")
+
 return {
   newenv = newenv,
   accept_handler = accept_handler,
@@ -353,6 +383,7 @@ return {
   isvalue = isvalue,
   value = value,
   listmatch = listmatch,
+  list_many = list_many,
   reducible = reducible,
   reducer = reducer,
   isnil = isnil,

@@ -100,4 +100,5 @@ end
 return {
   new_env = new_env,
   dump_env = dump_env,
+  new_store = new_store,
 }

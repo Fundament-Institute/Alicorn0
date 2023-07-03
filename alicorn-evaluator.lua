@@ -178,6 +178,10 @@ end
 
 operate_behavior[types.primap_kind] = primitive_apply
 
+local function define_operate(kind, handler)
+  operate_behavior[kind] = handler
+end
+
 local function primitive_applicative(fn, params, results)
   return {type = types.primap(params, results), val = fn}
 end
@@ -196,6 +200,7 @@ return {
   block = block,
   primitive_operative = primitive_operative,
   primitive_applicative = primitive_applicative,
+  define_operate = define_operate,
   collect_tuple = collect_tuple,
   evaluates_args = evaluates_args,
   eval = eval,

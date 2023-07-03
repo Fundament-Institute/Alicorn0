@@ -56,6 +56,77 @@ local function let_bind(syntax, env)
   return true, types.unit_val, env:bind_local(name, val)
 end
 
+local basic_fn_kind = {
+  kind_name = "basic_fn_kind",
+  type_name = function() return "basic_fn" end,
+  duplicable = function() return true end,
+  discardable = function() return true end,
+}
+
+local basic_fn_type = {kind = basic_fn_kind, params = {}}
+
+evaluator.define_operate(
+  basic_fn_kind,
+  function(self, operands, env)
+    local ok, args, env = operands:match(
+      {
+        evaluator.collect_tuple(metalang.accept_handler, env)
+      },
+      metalang.failure_handler,
+      nil
+    )
+    if not ok then return ok, args end
+    if #args.type.params ~= #self.val.argnames then return false, "argument count mismatch" end
+    local bindings = {}
+    for i = 1, #args.type.params do
+      bindings[self.val.argnames[i]] = environment.new_store{type = args.type.params[i], val = args.val[i]}
+    end
+    local callenv = environment.new_env {
+      locals = treemap.build(bindings),
+      nonlocals = self.val.enclosing_bindings,
+      carrier = env.carrier,
+      perms = self.val.enclosing_perms
+    }
+    local ok, res, resenv = self.val.body:match(
+      {
+        evaluator.block(metalang.accept_handler, callenv)
+      },
+      metalang.failure_handler,
+      nil
+    )
+    if not ok then return ok, res end
+    return ok, res, environment.new_env {locals = env.locals, nonlocals = env.nonlocals, carrier = resenv.carrier, perms = env.perms}
+
+end)
+
+local function basic_fn(syntax, env)
+  local ok, args, body = syntax:match(
+    {
+      metalang.ispair(metalang.accept_handler)
+    },
+    metalang.failure_handler,
+    nil
+  )
+  if not ok then return false, args end
+  -- print "defining function"
+  -- p(args)
+  -- p(body)
+  local ok, names = args:match(
+    {
+      metalang.list_many(metalang.accept_handler, metalang.issymbol(metalang.accept_handler))
+    },
+    metalang.failure_handler,
+    nil
+  )
+  if not ok then return ok, names end
+  local defn = {
+    enclosing_bindings = env.bindings,
+    enclosing_perms = env.perms,
+    body = body,
+    argnames = names,
+  }
+  return true, {type = basic_fn_type, val = defn}, env
+end
 
 local core_operations = {
   ["+"] = evaluator.primitive_applicative(function(args) return args[1] + args[2] end, types.tuple {types.number, types.number}, types.number),
@@ -66,7 +137,8 @@ local core_operations = {
 
   ["do"] = evaluator.primitive_operative(do_block),
   let = evaluator.primitive_operative(let_bind),
-  ["dump-env"] = evaluator.primitive_operative(function(syntax, env) print(environment.dump_env(env)); return true, types.unit_val, env end)
+  ["dump-env"] = evaluator.primitive_operative(function(syntax, env) print(environment.dump_env(env)); return true, types.unit_val, env end),
+  ["basic-fn"] = evaluator.primitive_operative(basic_fn)
 }
 
 local wrapped = {}

@@ -1,1 +1,1 @@
-(do (let m = (module (let y = 2) )) (let x = 5) (use-mod m) (dump-env) (+ x y))
+(do (let m = (module (let y = 3) (let add = (basic-fn (a b) (+ a b))) )) (let x = 5) (use-mod m) (dump-env) (add x y))
