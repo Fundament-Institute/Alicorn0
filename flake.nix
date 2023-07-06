@@ -29,6 +29,7 @@
             buildInputs = [
               luvitpkgs.packages.${system}.lit
               luvitpkgs.packages.${system}.luvit
+              pkgs.luaformatter
             ];
           };
           default = alicorn;
