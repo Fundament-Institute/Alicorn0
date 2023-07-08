@@ -5,6 +5,8 @@ let m =
 			basic-fn (a b)
 				+ a b
 let x = 5
+let bool = (cotuple-type (tuple) (tuple))
+let z = (cotuple-construct bool 0 (tuple-of))
 use-mod m
 dump-env;
 add x y

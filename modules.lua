@@ -136,6 +136,7 @@ return {
   index_mod = index_mod,
   use_mod = use_mod,
   open_mod = open_mod,
+  build_mod = build_mod,
   module_mod = mod_mod.val,
   module = mod_mod.val
 }

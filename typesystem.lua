@@ -227,7 +227,7 @@ local cotuple_kind = {
   end,
 }
 local function cotuple(fields)
-  return {kind = enum_kind, params = fields}
+  return {kind = cotuple_kind, params = fields}
   --TODO: make this store types as an immutable sequence type
 end
 local primop = {
@@ -282,6 +282,7 @@ return {
   primop_kind = primop.kind,
   tuple = tuple,
   cotuple = cotuple,
+  cotuple_kind = cotuple_kind,
   environment = environment,
   anyval = anyval,
   type = type,

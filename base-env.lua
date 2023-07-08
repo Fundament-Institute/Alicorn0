@@ -38,22 +38,23 @@ local function do_block(syntax, env)
 end
 
 local function let_bind(syntax, env)
-  local ok, name, val =
+  local ok, name, bind =
     syntax:match(
       {
         metalang.listmatch(
           metalang.accept_handler,
           metalang.issymbol(metalang.accept_handler),
           metalang.symbol_exact(metalang.accept_handler, "="),
-          evaluator.evaluates(metalang.accept_handler, env)
+          evaluator.evaluates(function(_, val, env) return true, {val = val, env = env} end, env)
         )
       },
       metalang.failure_handler,
       nil
     )
-  --print("val bind", ok, name, _, val)
+  -- print("val bind", ok, name, bind)
+  -- p(bind)
   if not ok then return false, name end
-  return true, types.unit_val, env:bind_local(name, val)
+  return true, types.unit_val, bind.env:bind_local(name, bind.val)
 end
 
 local basic_fn_kind = {
@@ -128,6 +129,34 @@ local function basic_fn(syntax, env)
   return true, {type = basic_fn_type, val = defn}, env
 end
 
+local function tuple_type_impl(syntax, env)
+  local ok, typeargs, env = syntax:match(
+    {
+      evaluator.collect_tuple(metalang.accept_handler, env)
+    },
+    metalang.failure_handler,
+    nil
+  )
+  if not ok then return ok, typeargs end
+  for i, t in ipairs(typeargs.type.params) do
+    if t ~= types.type then
+      return false, "tuple-type was provided something that wasn't a type"
+    end
+  end
+  return true, {type = types.type, val = types.tuple(typeargs.val)}, env
+end
+local function tuple_of_impl(syntax, env)
+  local ok, components, env = syntax:match(
+    {
+      evaluator.collect_tuple(metalang.accept_handler, env)
+    },
+    metalang.failure_handler,
+    nil
+  )
+  if not ok then return ok, components end
+  return true, components, env
+end
+
 local core_operations = {
   ["+"] = evaluator.primitive_applicative(function(args) return args[1] + args[2] end, types.tuple {types.number, types.number}, types.number),
   ["-"] = evaluator.primitive_applicative(function(args) return args[1] - args[2] end, types.tuple {types.number, types.number}, types.number),
@@ -138,7 +167,9 @@ local core_operations = {
   ["do"] = evaluator.primitive_operative(do_block),
   let = evaluator.primitive_operative(let_bind),
   ["dump-env"] = evaluator.primitive_operative(function(syntax, env) print(environment.dump_env(env)); return true, types.unit_val, env end),
-  ["basic-fn"] = evaluator.primitive_operative(basic_fn)
+  ["basic-fn"] = evaluator.primitive_operative(basic_fn),
+  tuple = evaluator.primitive_operative(tuple_type_impl),
+  ["tuple-of"] = evaluator.primitive_operative(tuple_of_impl),
 }
 
 local wrapped = {}
@@ -151,6 +182,7 @@ local tree = treemap.build(wrapped)
 
 -- p(tree)
 local modules = require './modules'
+local cotuple = require './cotuple'
 
 local function create()
   local env = environment.new_env {
@@ -159,6 +191,7 @@ local function create()
   -- p(env)
   -- p(modules.mod)
   env = modules.use_mod(modules.module_mod, env)
+  env = modules.use_mod(cotuple.cotuple_module, env)
   -- p(env)
   return env
 end
