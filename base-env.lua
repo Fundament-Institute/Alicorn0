@@ -164,6 +164,10 @@ local core_operations = {
   ["/"] = evaluator.primitive_applicative(function(args) return args[1] / args[2] end, types.tuple {types.number, types.number}, types.number),
   neg = evaluator.primitive_applicative(function(args) return -args[1] end, types.tuple {types.number}, types.number),
 
+  ["<"] = evaluator.primitive_applicative(function(args)
+    return { variant = (args[1] < args[2]) and 1 or 0, arg = types.unit_val }
+  end, types.tuple {types.number, types.number}, cotuple_unit_unit),
+
   ["do"] = evaluator.primitive_operative(do_block),
   let = evaluator.primitive_operative(let_bind),
   ["dump-env"] = evaluator.primitive_operative(function(syntax, env) print(environment.dump_env(env)); return true, types.unit_val, env end),
