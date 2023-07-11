@@ -78,11 +78,71 @@ local function cotuple_type_impl(syntax, env)
   return true, {type = types.type, val = types.cotuple(typeargs.val)}, env
 end
 
-local function cotuple_dispatch_impl
+local function cotuple_dispatch_impl(syntax, env)
+  local ok, subject_syntax, tail = syntax:match(
+    {
+      metalang.ispair(metalang.accept_handler)
+    },
+    metalang.failure_handler,
+    nil
+  )
+  if not ok then return ok, subject_syntax end
+  local ok, subject, env = subject_syntax:match(
+    {
+      evaluator.evaluates(metalang.accept_handler, env)
+    },
+    metalang.failure_handler,
+    nil
+  )
+  if not ok then return ok, subject end
+  if subject.type.kind ~= types.cotuple_kind then
+    return false, "dispatch subject must be a cotuple"
+  end
+  local found_variant, clause = false, nil
+  for i = 0, subject.val.variant do
+    ok, clause, tail = tail:match(
+      {
+        metalang.ispair(metalang.accept_handler)
+      },
+      metalang.failure_handler,
+      nil
+    )
+    if not ok then return ok, clause end
+  end
+  local ok, name_syntax, consequent_syntax = clause:match(
+    {
+      metalang.ispair(metalang.accept_handler)
+    },
+    metalang.failure_handler,
+    nil
+  )
+  if not ok then return ok, name_syntax end
+  local ok, name = name_syntax:match(
+    {
+      metalang.issymbol(metalang.accept_handler)
+    },
+    metalang.failure_handler,
+    nil
+  )
+  if not ok then return ok, name end
+  local ok, consequent, emptytail = consequent_syntax:match(
+    {
+      metalang.ispair(metalang.accept_handler)
+    },
+    metalang.failure_handler,
+    nil
+  )
+  if not ok then return ok, consequent end
+  local ok, err = emptytail:match({metalang.isnil(metalang.accept_handler)}, metalang.failure_handler, nil)
+  if not ok then return ok, err end
+  env = env:bind_local(name, {val = subject.val.arg, type = subject.type.params[subject.val.variant + 1]})
+  return consequent:match({evaluator.evaluates(metalang.accept_handler, env)}, metalang.failure_handler, nil)
+end
 
 local cotuple_module = modules.build_mod {
   ["cotuple-construct"] = evaluator.primitive_operative(new_cotuple_op_impl),
-  ["cotuple-type"] = evaluator.primitive_operative(cotuple_type_impl)
+  ["cotuple-type"] = evaluator.primitive_operative(cotuple_type_impl),
+  ["cotuple-dispatch"] = evaluator.primitive_operative(cotuple_dispatch_impl)
 }
 
 return {
