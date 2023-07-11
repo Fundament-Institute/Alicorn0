@@ -135,8 +135,15 @@ local function cotuple_dispatch_impl(syntax, env)
   if not ok then return ok, consequent end
   local ok, err = emptytail:match({metalang.isnil(metalang.accept_handler)}, metalang.failure_handler, nil)
   if not ok then return ok, err end
-  env = env:bind_local(name, {val = subject.val.arg, type = subject.type.params[subject.val.variant + 1]})
-  return consequent:match({evaluator.evaluates(metalang.accept_handler, env)}, metalang.failure_handler, nil)
+  -- create child scope
+  local childenv = env:child_scope()
+  -- bind local inchild scope
+  childenv = childenv:bind_local(name, {val = subject.val.arg, type = subject.type.params[subject.val.variant + 1]})
+  -- eval consequent in child scope
+  local ok, val, childenv = consequent:match({evaluator.evaluates(metalang.accept_handler, childenv)}, metalang.failure_handler, nil)
+  if not ok then return ok, val end
+  -- exit child scope with result of evaluation
+  return ok, val, env:exit_child_scope(childenv)
 end
 
 local cotuple_module = modules.build_mod {
