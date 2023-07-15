@@ -43,7 +43,14 @@ local function let_bind(syntax, env)
       {
         metalang.listmatch(
           metalang.accept_handler,
-          metalang.issymbol(metalang.accept_handler),
+          metalang.oneof(
+            metalang.accept_handler,
+            metalang.issymbol(metalang.accept_handler),
+            metalang.list_many(
+              metalang.accept_handler,
+              metalang.issymbol(metalang.accept_handler)
+            )
+          ),
           metalang.symbol_exact(metalang.accept_handler, "="),
           evaluator.evaluates(function(_, val, env) return true, {val = val, env = env} end, env)
         )
@@ -51,10 +58,28 @@ local function let_bind(syntax, env)
       metalang.failure_handler,
       nil
     )
-  -- print("val bind", ok, name, bind)
-  -- p(bind)
+
   if not ok then return false, name end
-  return true, types.unit_val, bind.env:bind_local(name, bind.val)
+
+  if type(name) == "table" then
+    if (bind.val.type.kind ~= types.tuple_kind) then
+      return false, "attempted a tuple destructure on a non tuple type"
+    end
+
+    if (#name ~= #bind.val.val) then
+      return false, "length of a tuple destructure must match the length of the tuple"
+    end
+
+    local env = bind.env
+    for i=1,#name do
+      local v = { val = bind.val.val[i], type = bind.val.type.params[i]  }
+      env = env:bind_local(name[i], v)
+    end
+
+    return true, types.unit_val, env
+  else
+    return true, types.unit_val, bind.env:bind_local(name, bind.val)
+  end
 end
 
 local basic_fn_kind = {

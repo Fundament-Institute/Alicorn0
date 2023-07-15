@@ -374,6 +374,10 @@ list_many = reducer(function(syntax, _, submatcher)
     return true, vals
 end, "list_many")
 
+oneof = reducer(function(syntax, _, ...)
+    return syntax:match({...}, failure_handler, nil)
+end, "oneof")
+
 return {
   newenv = newenv,
   accept_handler = accept_handler,
@@ -383,6 +387,7 @@ return {
   isvalue = isvalue,
   value = value,
   listmatch = listmatch,
+  oneof = oneof,
   list_many = list_many,
   reducible = reducible,
   reducer = reducer,

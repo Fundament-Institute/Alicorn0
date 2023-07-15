@@ -281,6 +281,7 @@ return {
   primop = primop,
   primop_kind = primop.kind,
   tuple = tuple,
+  tuple_kind = tuple_kind,
   cotuple = cotuple,
   cotuple_kind = cotuple_kind,
   environment = environment,
