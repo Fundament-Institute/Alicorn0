@@ -125,10 +125,7 @@ local function cotuple_dispatch_impl(syntax, env)
   -- eval consequent in child scope
   local ok, val_eval = tail:match(
     {
-      metalang.listmatch(
-        metalang.accept_handler,
-        evaluator.evaluates(metalang.eval_handler, childenv)
-      )
+      evaluator.block(metalang.eval_handler, childenv)
     },
     metalang.failure_handler,
     nil
