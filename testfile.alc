@@ -15,10 +15,28 @@ let x =
 			add one one
 let onelttwo = (cotuple-dispatch (< 1 2) (_ 1) (_ 2))
 let twoltone = (cotuple-dispatch (< 2 1) (_ 1) (_ 2))
+
+let collatz-t = (cotuple-type number (tuple number number))
+let collatz-init = (cotuple-construct collatz-t 1 (tuple-of 0 69))
+let collatz-end =
+	cotuple-flow collatz-init
+		n_x
+			let (n x) = n_x
+			cotuple-dispatch (== x 1)
+				_
+					let new_x =
+						cotuple-dispatch (== (% x 2) 0)
+							_ (+ (* x 3) 1)
+							_ (/ x 2)
+					cotuple-construct collatz-t 1 (tuple-of (+ n 1) new_x)
+				_
+					cotuple-construct collatz-t 0 n
+
 dump-env;
 (add (add x y) onelttwo)
 add x y
 
 let ( a b c ) = (tuple-of 3 6 9)
 
-add (add a b) c
+add (* 1000 collatz-end)
+	(add (add a b) c)
