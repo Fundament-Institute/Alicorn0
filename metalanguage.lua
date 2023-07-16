@@ -344,6 +344,28 @@ end
 
 local listmatch = reducer(ListMatch, "list")
 
+local function ListTail(syntax, _, ...)
+  local args = {}
+  local ok, err, val, tail = true, nil, true, nil
+  for i, rule in ipairs({...}) do
+    ok, val, tail =
+      syntax:match(
+        {
+          ispair(list_match_pair_handler)
+        },
+        failure_handler,
+        rule
+      )
+    --print("list+tail match rule", ok, val, tail)
+    if not ok then return false, val end
+    args[#args + 1] = val
+    syntax = tail
+  end
+  return true, unpack(args), tail
+end
+
+local listtail = reducer(ListTail, "list+tail")
+
 local list_many
 
 local function list_many_pair_handler(rule, a, b)
@@ -388,6 +410,7 @@ return {
   value = value,
   listmatch = listmatch,
   oneof = oneof,
+  listtail = listtail,
   list_many = list_many,
   reducible = reducible,
   reducer = reducer,

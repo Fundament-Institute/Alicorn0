@@ -3,6 +3,7 @@ local treemap = require './lazy-prefix-tree'
 local evaluator = require './alicorn-evaluator'
 local types = require './typesystem'
 local metalang = require './metalanguage'
+local utils = require './reducer-utils'
 
 local p = require 'pretty-print'.prettyPrint
 
@@ -52,7 +53,7 @@ local function let_bind(syntax, env)
             )
           ),
           metalang.symbol_exact(metalang.accept_handler, "="),
-          evaluator.evaluates(function(_, val, env) return true, {val = val, env = env} end, env)
+          evaluator.evaluates(utils.accept_with_env, env)
         )
       },
       metalang.failure_handler,

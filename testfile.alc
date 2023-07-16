@@ -10,7 +10,9 @@ use-mod m
 let x =
 	cotuple-dispatch z
 		_ 1
-		_ 2
+		_
+			let one = 1
+			add one one
 let onelttwo = (cotuple-dispatch (< 1 2) (_ 1) (_ 2))
 let twoltone = (cotuple-dispatch (< 2 1) (_ 1) (_ 2))
 dump-env;
