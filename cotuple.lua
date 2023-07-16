@@ -90,7 +90,7 @@ local function cotuple_dispatch_impl(syntax, env)
     metalang.failure_handler,
     nil
   )
-  if not ok then return ok, subject end
+  if not ok then return ok, subject_eval end
   local subject, env = subject_eval.val, subject_eval.env
   if subject.type.kind ~= types.cotuple_kind then
     return false, "dispatch subject must be a cotuple"
