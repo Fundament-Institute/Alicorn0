@@ -97,6 +97,7 @@ local function cotuple_dispatch_impl(syntax, env)
   end
   local clause = nil
   -- skip clauses until the relevant one
+  -- TODO: check that there aren't too many clauses?
   for i = 0, subject.val.variant do
     ok, clause, tail = tail:match(
       {
@@ -123,15 +124,14 @@ local function cotuple_dispatch_impl(syntax, env)
   -- bind local inchild scope
   childenv = childenv:bind_local(name, {val = subject.val.arg, type = subject.type.params[subject.val.variant + 1]})
   -- eval consequent in child scope
-  local ok, val_eval = tail:match(
+  local ok, val, childenv = tail:match(
     {
-      evaluator.block(utils.accept_with_env, childenv)
+      evaluator.block(metalang.accept_handler, childenv)
     },
     metalang.failure_handler,
     nil
   )
-  if not ok then return ok, val_eval end
-  local val, childenv = val_eval.val, val_eval.env
+  if not ok then return ok, val end
   -- exit child scope with result of evaluation
   return ok, val, env:exit_child_scope(childenv)
 end
