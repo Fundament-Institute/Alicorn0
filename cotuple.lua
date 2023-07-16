@@ -136,10 +136,90 @@ local function cotuple_dispatch_impl(syntax, env)
   return ok, val, env:exit_child_scope(childenv)
 end
 
+local function cotuple_flow_impl(syntax, env)
+  local ok, subject_eval, tail = syntax:match(
+    {
+      metalang.listtail(
+        metalang.accept_handler,
+        evaluator.evaluates(utils.accept_with_env, env)
+      )
+    },
+    metalang.failure_handler,
+    nil
+  )
+  if not ok then return ok, subject_eval end
+  local subject, env = subject_eval.val, subject_eval.env
+  if subject.type.kind ~= types.cotuple_kind then
+    return false, "flow subject must be a cotuple"
+  end
+  local clause, clauses = nil, {}
+  -- read all the clauses
+  -- not strictly necessary but reduces re-parsing when looping
+  -- every loop is re-interpreted though
+  for i = 1, #subject.type.params - 1 do
+    ok, clause, tail = tail:match(
+      {
+        metalang.ispair(metalang.accept_handler)
+      },
+      metalang.failure_handler,
+      nil
+    )
+    if not ok then return ok, clause end
+    local ok, name, block = clause:match(
+      {
+        metalang.listtail(
+          metalang.accept_handler,
+          metalang.issymbol(metalang.accept_handler)
+        )
+      },
+      metalang.failure_handler,
+      nil
+    )
+    if not ok then return ok, name end
+    clauses[#clauses + 1] = { name = name, block = block }
+  end
+  -- make sure this is the end
+  local ok, err = tail:match(
+    {
+      metalang.isnil(metalang.accept_handler)
+    },
+    metalang.failure_handler,
+    nil
+  )
+  if not ok then return ok, err end
+  -- flow time!
+  while subject.val.variant ~= 0 do
+    local name, block = clauses[subject.val.variant].name, clauses[subject.val.variant].block
+    local childenv = env:child_scope()
+    childenv = childenv:bind_local(name, {
+      val = subject.val.arg,
+      type = subject.type.params[subject.val.variant + 1]
+    })
+    local ok, new_subject, childenv = block:match(
+      {
+        evaluator.block(metalang.accept_handler, childenv)
+      },
+      metalang.failure_handler,
+      nil
+    )
+    if not ok then return ok, new_subject end
+    env = env:exit_child_scope(childenv)
+    if not types.typeident(new_subject.type, subject.type) then
+      return false, "flow returns must be consistent"
+    end
+    subject = new_subject
+  end
+  return true, {
+    val = subject.val.arg,
+    type = subject.type.params[1]
+  }, env
+end
+
 local cotuple_module = modules.build_mod {
   ["cotuple-construct"] = evaluator.primitive_operative(new_cotuple_op_impl),
   ["cotuple-type"] = evaluator.primitive_operative(cotuple_type_impl),
-  ["cotuple-dispatch"] = evaluator.primitive_operative(cotuple_dispatch_impl)
+  ["cotuple-dispatch"] = evaluator.primitive_operative(cotuple_dispatch_impl),
+  ["cotuple-flow"] = evaluator.primitive_operative(cotuple_flow_impl)
 }
 
 return {
