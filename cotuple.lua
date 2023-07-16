@@ -45,7 +45,7 @@ local function new_cotuple_op_impl(syntax, env)
       metalang.listmatch(
         metalang.accept_handler,
         metalang.isvalue(metalang.accept_handler),
-        evaluator.evaluates(function(_, val, env) return true, {val = val, env = env} end, env)
+        evaluator.evaluates(metalang.eval_handler, env)
       )
     },
     metalang.failure_handler,
@@ -84,7 +84,7 @@ local function cotuple_dispatch_impl(syntax, env)
     {
       metalang.listtail(
         metalang.accept_handler,
-        evaluator.evaluates(function(_, val, env) return true, {val = val, env = env} end, env)
+        evaluator.evaluates(metalang.eval_handler, env)
       )
     },
     metalang.failure_handler,
@@ -127,7 +127,7 @@ local function cotuple_dispatch_impl(syntax, env)
     {
       metalang.listmatch(
         metalang.accept_handler,
-        evaluator.evaluates(function(_, val, env) return true, {val = val, env = env} end, childenv)
+        evaluator.evaluates(metalang.eval_handler, childenv)
       )
     },
     metalang.failure_handler,

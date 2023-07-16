@@ -45,7 +45,7 @@ local function let_bind(syntax, env)
           metalang.accept_handler,
           metalang.issymbol(metalang.accept_handler),
           metalang.symbol_exact(metalang.accept_handler, "="),
-          evaluator.evaluates(function(_, val, env) return true, {val = val, env = env} end, env)
+          evaluator.evaluates(metalang.eval_handler, env)
         )
       },
       metalang.failure_handler,
