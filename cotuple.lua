@@ -137,6 +137,10 @@ local function cotuple_dispatch_impl(syntax, env)
 end
 
 local function cotuple_flow_impl(syntax, env)
+  -- note that it's incorrect to directly re-use
+  -- cotuple_dispatch_impl for this because it would
+  -- re-evaluate the subject every loop.
+  -- but maybe shared behavior can be factored out
   local ok, subject_eval, tail = syntax:match(
     {
       metalang.listtail(
