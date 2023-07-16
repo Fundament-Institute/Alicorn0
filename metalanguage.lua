@@ -154,9 +154,6 @@ end
 local function failure_handler(data, exception)
   return false, exception
 end
-local function eval_handler(data, val, env)
-  return true, { val = val, env = env }
-end
 
 local function SymbolInEnvironment(syntax, matcher, environment)
   --print("in symbol in environment reducer", matcher.kind, matcher[1], matcher)
@@ -403,7 +400,6 @@ return {
   newenv = newenv,
   accept_handler = accept_handler,
   failure_handler = failure_handler,
-  eval_handler = eval_handler,
   ispair = ispair,
   issymbol = issymbol,
   isvalue = isvalue,

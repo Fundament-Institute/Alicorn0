@@ -4,6 +4,7 @@ local types = require './typesystem'
 local modules = require './modules'
 local evaluator = require './alicorn-evaluator'
 local metalang = require './metalanguage'
+local utils = require './reducer-utils'
 
 local p = require 'pretty-print'.prettyPrint
 
@@ -45,7 +46,7 @@ local function new_cotuple_op_impl(syntax, env)
       metalang.listmatch(
         metalang.accept_handler,
         metalang.isvalue(metalang.accept_handler),
-        evaluator.evaluates(metalang.eval_handler, env)
+        evaluator.evaluates(utils.accept_with_env, env)
       )
     },
     metalang.failure_handler,
@@ -79,12 +80,11 @@ local function cotuple_type_impl(syntax, env)
 end
 
 local function cotuple_dispatch_impl(syntax, env)
-  -- TODO: do we *want* subject evaluation to affect env in the enclosing(outer) scope?
   local ok, subject_eval, tail = syntax:match(
     {
       metalang.listtail(
         metalang.accept_handler,
-        evaluator.evaluates(metalang.eval_handler, env)
+        evaluator.evaluates(utils.accept_with_env, env)
       )
     },
     metalang.failure_handler,
@@ -125,7 +125,7 @@ local function cotuple_dispatch_impl(syntax, env)
   -- eval consequent in child scope
   local ok, val_eval = tail:match(
     {
-      evaluator.block(metalang.eval_handler, childenv)
+      evaluator.block(utils.accept_with_env, childenv)
     },
     metalang.failure_handler,
     nil
