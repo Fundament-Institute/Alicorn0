@@ -79,26 +79,24 @@ local function cotuple_type_impl(syntax, env)
 end
 
 local function cotuple_dispatch_impl(syntax, env)
-  local ok, subject_syntax, tail = syntax:match(
+  -- TODO: do we *want* subject evaluation to affect env in the enclosing(outer) scope?
+  local ok, subject_eval, tail = syntax:match(
     {
-      metalang.ispair(metalang.accept_handler)
-    },
-    metalang.failure_handler,
-    nil
-  )
-  if not ok then return ok, subject_syntax end
-  local ok, subject, env = subject_syntax:match(
-    {
-      evaluator.evaluates(metalang.accept_handler, env)
+      metalang.listtail(
+        metalang.accept_handler,
+        evaluator.evaluates(function(_, val, env) return true, {val = val, env = env} end, env)
+      )
     },
     metalang.failure_handler,
     nil
   )
   if not ok then return ok, subject end
+  local subject, env = subject_eval.val, subject_eval.env
   if subject.type.kind ~= types.cotuple_kind then
     return false, "dispatch subject must be a cotuple"
   end
-  local found_variant, clause = false, nil
+  local clause = nil
+  -- skip clauses until the relevant one
   for i = 0, subject.val.variant do
     ok, clause, tail = tail:match(
       {
@@ -109,39 +107,34 @@ local function cotuple_dispatch_impl(syntax, env)
     )
     if not ok then return ok, clause end
   end
-  local ok, name_syntax, consequent_syntax = clause:match(
+  local ok, name, tail = clause:match(
     {
-      metalang.ispair(metalang.accept_handler)
-    },
-    metalang.failure_handler,
-    nil
-  )
-  if not ok then return ok, name_syntax end
-  local ok, name = name_syntax:match(
-    {
-      metalang.issymbol(metalang.accept_handler)
+      metalang.listtail(
+        metalang.accept_handler,
+        metalang.issymbol(metalang.accept_handler)
+      )
     },
     metalang.failure_handler,
     nil
   )
   if not ok then return ok, name end
-  local ok, consequent, emptytail = consequent_syntax:match(
-    {
-      metalang.ispair(metalang.accept_handler)
-    },
-    metalang.failure_handler,
-    nil
-  )
-  if not ok then return ok, consequent end
-  local ok, err = emptytail:match({metalang.isnil(metalang.accept_handler)}, metalang.failure_handler, nil)
-  if not ok then return ok, err end
   -- create child scope
   local childenv = env:child_scope()
   -- bind local inchild scope
   childenv = childenv:bind_local(name, {val = subject.val.arg, type = subject.type.params[subject.val.variant + 1]})
   -- eval consequent in child scope
-  local ok, val, childenv = consequent:match({evaluator.evaluates(metalang.accept_handler, childenv)}, metalang.failure_handler, nil)
-  if not ok then return ok, val end
+  local ok, val_eval = tail:match(
+    {
+      metalang.listmatch(
+        metalang.accept_handler,
+        evaluator.evaluates(function(_, val, env) return true, {val = val, env = env} end, childenv)
+      )
+    },
+    metalang.failure_handler,
+    nil
+  )
+  if not ok then return ok, val_eval end
+  local val, childenv = val_eval.val, val_eval.env
   -- exit child scope with result of evaluation
   return ok, val, env:exit_child_scope(childenv)
 end
