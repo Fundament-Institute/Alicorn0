@@ -188,10 +188,14 @@ local core_operations = {
   ["-"] = evaluator.primitive_applicative(function(args) return args[1] - args[2] end, types.tuple {types.number, types.number}, types.number),
   ["*"] = evaluator.primitive_applicative(function(args) return args[1] * args[2] end, types.tuple {types.number, types.number}, types.number),
   ["/"] = evaluator.primitive_applicative(function(args) return args[1] / args[2] end, types.tuple {types.number, types.number}, types.number),
+  ["%"] = evaluator.primitive_applicative(function(args) return args[1] % args[2] end, types.tuple {types.number, types.number}, types.number),
   neg = evaluator.primitive_applicative(function(args) return -args[1] end, types.tuple {types.number}, types.number),
 
   ["<"] = evaluator.primitive_applicative(function(args)
     return { variant = (args[1] < args[2]) and 1 or 0, arg = types.unit_val }
+  end, types.tuple {types.number, types.number}, types.cotuple({types.unit, types.unit})),
+  ["=="] = evaluator.primitive_applicative(function(args)
+    return { variant = (args[1] == args[2]) and 1 or 0, arg = types.unit_val }
   end, types.tuple {types.number, types.number}, types.cotuple({types.unit, types.unit})),
 
   ["do"] = evaluator.primitive_operative(do_block),
@@ -200,6 +204,7 @@ local core_operations = {
   ["basic-fn"] = evaluator.primitive_operative(basic_fn),
   tuple = evaluator.primitive_operative(tuple_type_impl),
   ["tuple-of"] = evaluator.primitive_operative(tuple_of_impl),
+  number = { type = types.type, val = types.number }
 }
 
 local wrapped = {}
