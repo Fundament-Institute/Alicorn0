@@ -24,8 +24,8 @@ function FibonacciBuffer:append(value)
   local merge_from = n_partitions
   local merge_length = 1
   for i = n_partitions - 1, 1, -1 do
-    local this_length = #self[i]
-    if this_length == merge_length then
+    local partition_length = #self[i]
+    if partition_length == merge_length then
       merge_from = merge_from - 1
       merge_length = merge_length * 2
     else
@@ -40,9 +40,11 @@ function FibonacciBuffer:append(value)
     merged_partition = self[n_partitions]
   else
     merged_partition = {}
+    local merged_length = 0
     for i = merge_from, n_partitions do
-      -- assuming the # operator is more efficient than storing lengths ourselves
-      table.move(self[i], 1, #self[i], #merged_partition + 1, merged_partition)
+      local partition_length = #self[i]
+      table.move(self[i], 1, partition_length, merged_length + 1, merged_partition)
+      merged_length = merged_length + partition_length
     end
   end
   -- now we build the output
