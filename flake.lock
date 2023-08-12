@@ -15,6 +15,21 @@
         "type": "github"
       }
     },
+    "flake-utils_2": {
+      "locked": {
+        "lastModified": 1676283394,
+        "narHash": "sha256-XX2f9c3iySLCw54rJ/CZs+ZK6IQy7GXNY4nSOyu2QG4=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "3db36a8b464d0c4532ba1c7dda728f4576d6d073",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
     "luvit": {
       "flake": false,
       "locked": {
@@ -33,15 +48,16 @@
     },
     "luvitpkgs": {
       "inputs": {
+        "flake-utils": "flake-utils_2",
         "luvit": "luvit",
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1651805603,
-        "narHash": "sha256-C50I+sDqwyMMdmDUZfplo8AN8HmFdssnwkgBFuZCRrk=",
+        "lastModified": 1677191845,
+        "narHash": "sha256-jAyQcaK9SAoP87K3qY50Lbc3VWWbVwSdGs+7raUDJS4=",
         "owner": "aiverson",
         "repo": "luvit-nix",
-        "rev": "86e7e526b9caedcb89cc6c4fdd68629f9a546676",
+        "rev": "92d0e7f7108092bd9756f7b57d3bdb939df5727c",
         "type": "github"
       },
       "original": {
@@ -52,11 +68,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1659446231,
-        "narHash": "sha256-hekabNdTdgR/iLsgce5TGWmfIDZ86qjPhxDg/8TlzhE=",
+        "lastModified": 1650501692,
+        "narHash": "sha256-ApKf0/dc0SyB7zZ6yiiOQgcXAhCXxbSDyihHfRDIzx0=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "eabc38219184cc3e04a974fe31857d8e0eac098d",
+        "rev": "9887f024766aa27704d1f89f623efd1d063da92a",
         "type": "github"
       },
       "original": {
