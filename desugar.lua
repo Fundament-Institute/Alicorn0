@@ -148,7 +148,8 @@ local SyntaxProcessor_mt = {
 
             if #self.exprstack[#self.exprstack] == 0 then
 
-
+            end
+          end
         else
           table.remove(self.syntaxstack, -1)
 

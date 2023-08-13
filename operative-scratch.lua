@@ -1,32 +1,30 @@
-
-
 local function identity_handler(syntax, environment)
   local ok, object =
-    syntax:match(
-      {
-        kind = "ListMatch",
+      syntax:match(
         {
-          kind = "ConstantAs",
-          environment,
-          typeT,
+          kind = "ListMatch",
+          {
+            kind = "ConstantAs",
+            environment,
+            typeT,
+            handler = accept_handler
+          },
           handler = accept_handler
         },
-        handler = accept_handler
-      },
-      failure_handler,
-      nil
-    )
+        failure_handler,
+        nil
+      )
   if not ok then return false, object end
   return true, Syntax.Value(identity(object), ExprT(UnitT, object))
 end
 
 local function compose_handler(syntax, environment)
   local ok, components =
-    syntax:match(
-      {
-        kind = ""
-      }
-    )
+      syntax:match(
+        {
+          kind = ""
+        }
+      )
 end
 
 -- toy type system has the following types: syntax, number, a -> b, list t, tupleT (ts : list type), enumT (ts : list type), newtype t
@@ -94,7 +92,7 @@ local function typepat(quantmatch, pattern, subject)
 end
 
 local function realize_typepat(quantmatch, pattern)
-  local res = {kind = pattern.kind, params = {}}
+  local res = { kind = pattern.kind, params = {} }
   for i, patarg in ipairs(pattern.params) do
     if patarg.kind == "variable" then
       res[i] = quantmatch[patarg.idx]
@@ -108,7 +106,7 @@ end
 local function typematch_args(quantifications, inputpattern, subject, outputpattern)
   local quantmatch = {}
   local ok, err = typepat(quantmatch, inputpattern, subject)
-  if not ok, then return false, err end
+  if not ok then return false, err end
   return true, realize_typepat(quantmatch, outputpattern)
 end
 
@@ -121,7 +119,7 @@ local function realize_trait(trait, subject)
 end
 
 local compose = primitive_applicative(function(args) return function(x) return args[2](args[1](x)) end end,
-  {typeT, typeT, typeT},
+  { typeT, typeT, typeT },
   {
     kind = "prod",
     params = {
@@ -130,7 +128,7 @@ local compose = primitive_applicative(function(args) return function(x) return a
         pat = {
           kind = "expr",
           params = {
-                        {
+            {
               kind = "variable",
               idx = 1
             },
@@ -146,7 +144,7 @@ local compose = primitive_applicative(function(args) return function(x) return a
         pat = {
           kind = "expr",
           params = {
-                        {
+            {
               kind = "variable",
               idx = 2
             },
