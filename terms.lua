@@ -63,6 +63,9 @@ local inferrable = {
       level_b = level_b,
     }
   end,
+  star = {
+    kind = "inferrable_star",
+  }
 }
 -- typed terms have been typechecked but do not store their type internally
 local typed = {
@@ -89,6 +92,12 @@ local typed = {
       kind = "typed_level_max",
       level_a = level_a,
       level_b = level_b,
+    }
+  end,
+  star = function(level) -- level number not a term
+    return {
+      kind = "typed_star",
+      level = level,
     }
   end
 }
@@ -122,7 +131,7 @@ local values = {
   end,
   star = function(level) -- the level number
       return {
-        kind = "star",
+        kind = "value_star",
         level = level,
       }
   end,
@@ -171,6 +180,8 @@ local function infer(
     return values.level_type, typed.level_max(arg_term_a, arg_term_b)
   elseif inferrable_term.kind == "inferrable_level_type" then
     return values.star(0), typed.level_type
+  elseif inferrable_term.kind == "inferrable_star" then
+    return values.star(1), typed.star(0)
   end
 
   error("unknown kind in infer: " .. inferrable_term.kind)
@@ -203,6 +214,8 @@ local function evaluate(
     return values.level(math.max(level_a.level, level_b.level))
   elseif typed_term.kind == "typed_level_type" then
     return values.level_type
+  elseif typed_term.kind == "typed_star" then
+    return values.star(typed_term.level)
   end
 
   error("unknown kind in evaluate " .. typed_term.kind)

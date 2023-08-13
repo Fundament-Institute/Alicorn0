@@ -11,4 +11,16 @@ function test_levels()
   assert(result.level == 1)
 end
 
+function test_star()
+  local test_term = terms.inferrable.star
+  local inferred_type, inferred_term = terms.infer(test_term, {})
+  p(inferred_type, inferred_term)
+  assert(inferred_type.kind == "value_star")
+  local result = terms.evaluate(inferred_term, {})
+  p(result)
+  assert(result.kind == "value_star")
+  assert(result.level == 0)
+end
+
 test_levels()
+test_star()
