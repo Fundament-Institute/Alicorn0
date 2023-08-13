@@ -108,19 +108,19 @@ local values = {
   end,
   -- closure is a type that contains a typed term corresponding to the body
   -- and a runtime context representng the bound context where the closure was created
-  closure = function(),
+  closure = function()
       -- TODO
-  end
+  end,
   level_type = {
     kind = "value_level_type",
   },
-  level = function(level), -- the level number
+  level = function(level) -- the level number
       return {
         kind = "value_level",
         level = level,
       }
   end,
-  star = function(level), -- the level number
+  star = function(level) -- the level number
       return {
         kind = "star",
         level = level,
@@ -154,22 +154,22 @@ end
 
 local function infer(
     inferrable_term, -- constructed from inferrable
-    typechecking_context, -- todo
+    typechecking_context -- todo
     )
   -- -> type of term, a typed term,
-  if inferrable_term.kind = "inferrable_level0" then
+  if inferrable_term.kind == "inferrable_level0" then
     return values.level_type, typed.level0
-  elseif inferrable_term.kind = "inferrable_level_suc" then
+  elseif inferrable_term.kind == "inferrable_level_suc" then
     local arg_type, arg_term = infer(inferrable_term.previous_level, typechecking_context)
     unify(arg_type, values.level_type)
     return values.level_type, typed.level_suc(arg_term)
-  elseif inferrable_term.kind = "inferrable_level_max" then
+  elseif inferrable_term.kind == "inferrable_level_max" then
     local arg_type_a, arg_term_a = infer(inferrable_term.level_a, typechecking_context)
     local arg_type_b, arg_term_b = infer(inferrable_term.level_b, typechecking_context)
     unify(arg_type_a, values.level_type)
     unify(arg_type_b, values.level_type)
     return values.level_type, typed.level_max(arg_term_a, arg_term_b)
-  elseif inferrable_term.kind = "inferrable_level_type" then
+  elseif inferrable_term.kind == "inferrable_level_type" then
     return values.star(0), typed.level_type
   end
 
@@ -178,7 +178,7 @@ end
 
 local function evaluate(
     typed_term,
-    runtime_context,
+    runtime_context
     )
   -- -> a value
 
@@ -186,8 +186,8 @@ local function evaluate(
     return values.level(0)
   elseif typed_term.kind == "typed_level_suc" then
     local previous_level = evaluate(typed_term.previous_level, runtime_context)
-    if previous_level.kind != "values_level" then
-      pp(previous_level)
+    if previous_level.kind ~= "value_level" then
+      p(previous_level)
       error("wrong type for previous_level")
     end
     if previous_level.level > 10 then
@@ -197,7 +197,7 @@ local function evaluate(
   elseif typed_term.kind == "typed_level_max" then
     local level_a = evaluate(typed_term.level_a, runtime_context)
     local level_b = evaluate(typed_term.level_b, runtime_context)
-    if level_a.kind != "values_level" or level_b.kind != "values_level" then
+    if level_a.kind ~= "value_level" or level_b.kind ~= "value_level" then
       error("wrong type for level_a or level_b")
     end
     return values.level(math.max(level_a.level, level_b.level))
