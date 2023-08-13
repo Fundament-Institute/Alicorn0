@@ -62,7 +62,7 @@ local inferrable = {
       level_a = level_a,
       level_b = level_b,
     }
-  end
+  end,
 }
 -- typed terms have been typechecked but do not store their type internally
 local typed = {
@@ -181,6 +181,31 @@ local function evaluate(
     runtime_context,
     )
   -- -> a value
+
+  if typed_term.kind == "typed_level0" then
+    return values.level(0)
+  elseif typed_term.kind == "typed_level_suc" then
+    local previous_level = evaluate(typed_term.previous_level, runtime_context)
+    if previous_level.kind != "values_level" then
+      pp(previous_level)
+      error("wrong type for previous_level")
+    end
+    if previous_level.level > 10 then
+      error("NYI: level too high for typed_level_suc" .. tostring(previous_level.level))
+    end
+    return values.level(previous_level.level + 1)
+  elseif typed_term.kind == "typed_level_max" then
+    local level_a = evaluate(typed_term.level_a, runtime_context)
+    local level_b = evaluate(typed_term.level_b, runtime_context)
+    if level_a.kind != "values_level" or level_b.kind != "values_level" then
+      error("wrong type for level_a or level_b")
+    end
+    return values.level(math.max(level_a.level, level_b.level))
+  elseif typed_term.kind == "typed_level_type" then
+    return values.level_type
+  end
+
+  error("unknown kind in evaluate " .. typed_term.kind)
 end
 
 return {
