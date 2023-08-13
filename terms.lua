@@ -149,7 +149,7 @@ local function check(
     -- TODO open says work on other things first they will be easier
   end
 
-
+  error("unknown kind in check: " .. checkable_term.kind)
 end
 
 local function infer(
@@ -172,6 +172,8 @@ local function infer(
   elseif inferrable_term.kind = "inferrable_level_type" then
     return values.star(0), typed.level_type
   end
+
+  error("unknown kind in infer: " .. inferrable_term.kind)
 end
 
 local function evaluate(
