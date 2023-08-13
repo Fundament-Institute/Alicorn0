@@ -64,7 +64,7 @@ local grammar = P {
 
 	-- every time there's a newline, get it's position. construct a named group with the position
 	-- of the latest (numbered) newline
-	newline = Cg(Cmt(Cb("newline_pos") * S "\r\n" * Cp(),
+	newline = Cg(Cmt(Cb("newline_pos") * P"\r"^0 * P"\n" * Cp(),
 	                 function(body, position, prev_pos)
 		local construct = {line_num = prev_pos["line_num"] + 1, line_pos = position}
 		return true, construct
@@ -129,7 +129,7 @@ local grammar = P {
 	end),
 
 	-- for the time being, accurate recording/reporting of indentation level (indentation level - parent indentation) is unsupported.
-	contiguous_body = (1 - S "\n\r") ^ 0,
+	contiguous_body = (1 - S "\r\n") ^ 0,
 	subordinate_body = C(V "contiguous_body") *
 		(C(V "subordinate_indent" * V "contiguous_body") + C(V "wsp" ^ 1)) ^ 0,
 	comment = element("comment", Cg(
