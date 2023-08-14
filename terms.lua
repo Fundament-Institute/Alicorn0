@@ -65,6 +65,12 @@ local inferrable = {
   end,
   star = {
     kind = "inferrable_star",
+  },
+  prop = {
+    kind = "inferrable_prop"
+  },
+  prim = {
+    kind = "inferrable_prim"
   }
 }
 -- typed terms have been typechecked but do not store their type internally
@@ -99,7 +105,16 @@ local typed = {
       kind = "typed_star",
       level = level,
     }
-  end
+  end,
+  prop = function(level) -- level number not a term
+    return {
+      kind = "typed_prop",
+      level = level,
+    }
+  end,
+  prim = {
+    kind = "typed_prim",
+  },
 }
 local values = {
   pi = function(
@@ -135,6 +150,15 @@ local values = {
         level = level,
       }
   end,
+  prop = function(level) -- the level number
+      return {
+        kind = "value_prop",
+        level = level,
+      }
+  end,
+  prim = {
+      kind = "value_prim",
+  },
 }
 
 local function unify(
@@ -182,6 +206,10 @@ local function infer(
     return values.star(0), typed.level_type
   elseif inferrable_term.kind == "inferrable_star" then
     return values.star(1), typed.star(0)
+  elseif inferrable_term.kind == "inferrable_prop" then
+    return values.star(1), typed.prop(0)
+  elseif inferrable_term.kind == "inferrable_prim" then
+    return values.star(1), typed.prim
   end
 
   error("unknown kind in infer: " .. inferrable_term.kind)
@@ -216,6 +244,10 @@ local function evaluate(
     return values.level_type
   elseif typed_term.kind == "typed_star" then
     return values.star(typed_term.level)
+  elseif typed_term.kind == "typed_prop" then
+    return values.prop(typed_term.level)
+  elseif typed_term.kind == "typed_prim" then
+    return values.prim
   end
 
   error("unknown kind in evaluate " .. typed_term.kind)
