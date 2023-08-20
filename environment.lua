@@ -1,5 +1,7 @@
-local trie = require './lazy-prefix-tree'
+local 
+trie = require './lazy-prefix-tree'
 local types = require './typesystem'
+local fibbuf = require './fibonacci-buffer'
 
 local new_env
 
@@ -13,6 +15,53 @@ local function new_store(val)
   return store
 end
 
+local runtime_context_mt
+
+runtime_context_mt = {
+  __index = {
+    get = function(self, index) 
+      return self.bindings:get(index)
+    end,
+    append = function(self, value) 
+      local copy = { bindings = self.bindings:append(value) }
+      return setmetatable(copy, runtime_context_mt)
+    end
+  }
+}
+
+
+local function runtime_context()
+  return setmetatable({
+      data_buffer = fibbuf,
+                      }, runtime_context_mt)
+end
+
+local typechecking_context_mt
+
+typechecking_context_mt = {
+  __index = {
+    get_name = function(self, index) 
+      return self.bindings:get(index).name
+    end,
+    get_type = function(self, index)
+      return self.bindings:get(index).type
+    end,
+    append = function(self, name, type) 
+      local copy = { bindings = self.bindings:append({name = name, type = type}) }
+      return setmetatable(copy, typechecking_context_mt)
+    end
+  }
+}
+
+local function typechecking_context()
+  local self = {}
+  self.bindings = fibbuf()
+  return setmetatable(self, typechecking_context_mt)
+end
+
+-- empty for now, just used to mark the table
+local module_mt = {}
+
 local environment_mt = {
   __index = {
     get = function(self, name)
@@ -21,23 +70,55 @@ local environment_mt = {
       if binding == nil then
         return false, "symbol \"" .. name .. "\" is marked as present but with no data; this indicates a bug in the environment or something violating encapsulation"
       end
-      if binding.kind == "used" then
-        return false, "symbol " .. name .. " was in scope but is a linear value that was already used"
-      end
-      local val = binding.val
-      if binding.kind == "useonce" then
-        binding.kind = "used"
-        binding.val = nil
-      end
-      return true, val
+      return true, binding
     end,
-    bind_local = function(self, name, val)
+    bind_local = function(self, name, term)
       return new_env {
-        locals = self.locals:put(name, new_store(val)),
+        locals = self.locals:put(name, term),
         nonlocals = self.nonlocals,
         carrier = self.carrier,
         perms = self.perms
       }
+    end,
+    gather_module = function(self)
+      return self, setmetatable({bindings = self.locals}, module_mt)
+    end,
+    open_module = function(self, module)
+      return new_env {
+        locals = self.locals:extend(module.bindings),
+        nonlocals = self.nonlocals,
+        carrier = self.carrier,
+        perms = self.perms
+      }
+    end,
+    use_module = function(self, module)
+      return new_env {
+        locals = self.locals,
+        nonlocals = self.nonlocals:extend(module.bindings),
+        carrier = self.carrier,
+        perms = self.perms
+      }
+    end,
+    unlet_local = function(self, name)
+      return new_env {
+        locals = self.locals:remove(name),
+        nonlocals = self.nonlocals,
+        carrier = self.carrier,
+        perms = self.perms
+      }
+    end,
+    enter_block = function(self)
+      return { shadowed = self }, new_env {
+        locals = nil,
+        nonlocals = self.nonlocals:extend(self.locals),
+        carrier = self.carrier,
+        perms = self.perms
+      }
+    end,
+    exit_block = function(self, term, shadowed)
+      for k, v in pairs(self.locals) do
+        term:let(k, v)
+      end
     end,
     child_scope = function(self)
       return new_env {

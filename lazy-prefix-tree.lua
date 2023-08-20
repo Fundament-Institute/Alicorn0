@@ -3,6 +3,10 @@ local p = require 'pretty-print'.prettyPrint
 local prefix_tree_mt
 local empty
 prefix_tree_mt = {
+  __pairs = function(self)
+    self:force()
+    return pairs(self.children)
+  end,
   __index = {
     get = function(self, key, offset)
       self:force()
