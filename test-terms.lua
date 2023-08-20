@@ -91,7 +91,7 @@ function test_unify_2()
   local free_b = freemeta(mv_b)
 
   local level0 = terms.value.level(0)
-  local arginfo = terms.arginfo(terms.quantity.unrestricted, terms.visibility.explicit)
+  local arginfo = terms.value.arginfo(terms.value.quantity(terms.quantity.unrestricted), terms.value.visibility(terms.visibility.explicit))
   local resinfo = terms.resultinfo(terms.purity.pure)
 
   local pi_a = terms.value.pi(free_a, arginfo, level0, resinfo)

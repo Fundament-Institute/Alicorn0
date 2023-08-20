@@ -181,6 +181,8 @@ local builtin_number = gen.declare_foreign(function(val)
   return type(val) == "number"
 end)
 
+local typed = gen.declare_type()
+local value = gen.declare_type()
 local checkable = gen.declare_type()
 local inferrable = gen.declare_type()
 -- checkable terms need a target type to typecheck against
@@ -204,9 +206,12 @@ inferrable:define_enum("inferrable", {
     "annotated_term", checkable,
     "annotated_type", inferrable,
   }},
+  {"typed", {
+     "type", value,
+     "typed_term", typed,
+  }},
 })
 -- typed terms have been typechecked but do not store their type internally
-local typed = gen.declare_type()
 typed:define_enum("typed", {
   {"lambda", {"body", typed}},
   {"level_type"},
@@ -219,6 +224,7 @@ typed:define_enum("typed", {
   {"star", {"level", builtin_number}},
   {"prop", {"level", builtin_number}},
   {"prim"},
+  {"literal", {"literal_value", value}},
 })
 
 local free = gen.declare_enum("free", {
@@ -235,29 +241,25 @@ local visibility = gen.declare_enum("visibility", {
   {"explicit"},
   {"implicit"},
 })
-local arginfo = gen.declare_record("arginfo", {
-  "quantity", quantity,
-  "visibility", visibility,
-})
 local purity = gen.declare_enum("purity", {
   {"effectful"},
   {"pure"},
 })
 local resultinfo = gen.declare_record("resultinfo", {"purity", purity})
-local value = gen.declare_type()
 value:define_enum("value", {
   -- erased, linear, unrestricted / none, one, many
   {"quantity", {"quantity", quantity}},
   -- explicit, implicit,
   {"visibility", {"visibility", visibility}},
   -- info about the argument (is it implicit / what are the usage restrictions?)
-  {"arginfo", {"arginfo", arginfo}},
+  -- quantity/visibility should be restricted to free or (quantity/visibility) rather than any value
+  {"arginfo", {"quantity", value, "visibility", value}},
   -- whether or not a function is effectful /
   -- for a function returning a monad do i have to be called in an effectful context or am i pure
   {"resultinfo", {"resultinfo", resultinfo}},
   {"pi", {
     "argtype", value,
-    "arginfo", arginfo,
+    "arginfo", value,
     "resulttype", value,
     "resultinfo", resultinfo
   }},
@@ -265,6 +267,8 @@ value:define_enum("value", {
   -- and a runtime context representng the bound context where the closure was created
   {"closure", {}}, -- TODO
   {"level_type"},
+  {"number_type"},
+  {"number", {"number", builtin_number}},
   {"level", {"level", builtin_number}},
   {"star", {"level", builtin_number}},
   {"prop", {"level", builtin_number}},
