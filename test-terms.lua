@@ -22,5 +22,90 @@ function test_star()
   assert(result.level == 0)
 end
 
+function test_metavariable_bind_to_other_mv()
+  local tcs = terms.typechecker_state()
+  local mv_a = tcs:metavariable()
+  local mv_b = tcs:metavariable()
+  mv_a:bind_metavariable(mv_a) -- noop
+  mv_b:bind_metavariable(mv_a) -- mv_b binds to mv_a
+  local canonical_a = mv_a:get_canonical()
+  local canonical_b = mv_b:get_canonical()
+  p(mv_a, mv_b, canonical_a, canonical_b)
+  assert(mv_b:get_canonical().id == mv_a.id)
+  local mv_c = tcs:metavariable()
+  mv_c:bind_metavariable(mv_b)
+  assert(mv_c:get_canonical().id == mv_a.id)
+  -- check that bound ID was correctly collapsed
+  assert(tcs.mvs[mv_c.id].bound_mv_id == mv_a.id)
+end
+
+function test_unify()
+  local tcs = terms.typechecker_state()
+
+  local mv_a = tcs:metavariable()
+  local free_mv_a = terms.value.free.metavariable(mv_a)
+  p(mv_a, free_mv_a)
+
+  local unified = terms.unify(free_mv_a, terms.value.level_type)
+  assert(unified == terms.value.level_type)
+  assert(mv_a:get_value() == terms.value.level_type)
+end
+
+function test_unify_more_metavariables()
+  local tcs = terms.typechecker_state()
+
+  -- terms.value.free.metavariable(...)
+  -- terms.value.free.axiom(...)
+  -- VS
+  -- terms.value.free(terms.free.metavariable(...))
+
+  local mv_a = tcs:metavariable()
+  local mv_b = tcs:metavariable()
+  p('mv_a', mv_a)
+  local free_mv_a = terms.value.free.metavariable(mv_a)
+  local free_mv_b = terms.value.free.metavariable(mv_b)
+  p(mv_a, free_mv_a)
+
+  terms.unify(free_mv_b, free_mv_a)
+  assert(mv_b:get_canonical().id == mv_a.id)
+
+  local unified = terms.unify(free_mv_a, terms.value.level_type)
+  assert(unified == terms.value.level_type)
+  assert(mv_a:get_value() == terms.value.level_type)
+
+  assert(mv_b:get_value() == terms.value.level_type)
+end
+
+function test_unify_2()
+  local level_type = terms.value.level_type
+  local prim = terms.value.prim
+  local status, err = pcall(function() terms.unify(level_type, prim) end)
+  assert(status == false)
+  p(err)
+
+  local tcs = terms.typechecker_state()
+  local mv_a = tcs:metavariable()
+  local mv_b = tcs:metavariable()
+  local freemeta = terms.value.free.metavariable
+  local free_a = freemeta(mv_a)
+  local free_b = freemeta(mv_b)
+
+  local level0 = terms.value.level(0)
+  local arginfo = terms.arginfo(terms.quantity.unrestricted, terms.visibility.explicit)
+  local resinfo = terms.resultinfo(terms.purity.pure)
+
+  local pi_a = terms.value.pi(free_a, arginfo, level0, resinfo)
+  local pi_b = terms.value.pi(level0, arginfo, free_b, resinfo)
+  local unified = terms.unify(pi_a, pi_b)
+  p(unified)
+  assert(unified.argtype == unified.resulttype)
+  assert(unified.argtype == level0)
+end
+
+
 test_levels()
 test_star()
+test_metavariable_bind_to_other_mv()
+test_unify()
+test_unify_more_metavariables()
+test_unify_2()
