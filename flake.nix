@@ -13,8 +13,17 @@
 
   outputs = { self, nixpkgs, luvitpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
-      let pkgs = nixpkgs.legacyPackages.${system};
-      in {
+      let
+        pkgs = nixpkgs.legacyPackages.${system};
+        alicorn-check = file: pkgs.runCommandNoCC "alicorn-check-${file}" { } ''
+          set -xeuo pipefail
+          cd ${./.}
+          mkdir $out
+          echo "Checking ${file}"
+          ${pkgs.lib.getExe luvitpkgs.packages.${system}.luvit} ${file}
+        '';
+      in
+      {
         packages = rec {
           hello = pkgs.hello;
           default = hello;
@@ -23,6 +32,9 @@
           hello =
             flake-utils.lib.mkApp { drv = self.packages.${system}.hello; };
           default = hello;
+        };
+        checks = {
+          terms = alicorn-check "test-terms.lua";
         };
         devShells = rec {
           alicorn = pkgs.mkShell {
