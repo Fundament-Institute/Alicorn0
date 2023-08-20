@@ -241,10 +241,6 @@ local visibility = gen.declare_enum("visibility", {
   {"explicit"},
   {"implicit"},
 })
-local arginfo = gen.declare_record("arginfo", {
-  "quantity", quantity,
-  "visibility", visibility,
-})
 local purity = gen.declare_enum("purity", {
   {"effectful"},
   {"pure"},
@@ -256,13 +252,14 @@ value:define_enum("value", {
   -- explicit, implicit,
   {"visibility", {"visibility", visibility}},
   -- info about the argument (is it implicit / what are the usage restrictions?)
-  {"arginfo", {"arginfo", arginfo}},
+  -- quantity/visibility should be restricted to free or (quantity/visibility) rather than any value
+  {"arginfo", {"quantity", value, "visibility", value}},
   -- whether or not a function is effectful /
   -- for a function returning a monad do i have to be called in an effectful context or am i pure
   {"resultinfo", {"resultinfo", resultinfo}},
   {"pi", {
     "argtype", value,
-    "arginfo", arginfo,
+    "arginfo", value,
     "resulttype", value,
     "resultinfo", resultinfo
   }},
