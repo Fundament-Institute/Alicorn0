@@ -319,9 +319,12 @@ local function extract_value_metavariable(value) -- -> Option<metavariable>
   return nil
 end
 
+local is_value = gen.metatable_equality(value)
+
 local function unify(
     first_value,
     params,
+    variant,
     second_value)
   -- -> unified value,
   if first_value == second_value then
@@ -344,18 +347,20 @@ local function unify(
     error("can't unify values of kinds " .. first_value.kind .. " and " .. second_value.kind)
   end
 
-  local unified = {}
+  local unified_args = {}
   local prefer_left = true
   local prefer_right = true
-  for _, v in ipairs(params) do
+  for i, v in ipairs(params) do
     local first_arg = first_value[v]
     local second_arg = second_value[v]
-    if first_arg.kind then
+    if is_value(first_arg) then
       local u = first_arg:unify(second_arg)
-      unified[v] = u
+      unified_args[i] = u
       prefer_left = prefer_left and u == first_arg
       prefer_right = prefer_right and u == second_arg
-    elseif first_arg ~= second_arg then
+    elseif first_arg == second_arg then
+      unified_args[i] = first_arg
+    else
       p("unify args", first_value, second_value)
       error("unification failure as " .. v .. " field value doesn't match")
     end
@@ -366,7 +371,13 @@ local function unify(
   elseif prefer_right then
     return second_value
   else
-    unified.kind = first_value.kind
+    -- create new value
+    local first_type = getmetatable(first_value)
+    local cons = first_type
+    if variant then
+      cons = first_type[variant]
+    end
+    local unified = cons(table.unpack(unified_args))
     return unified
   end
 end
@@ -375,14 +386,14 @@ local unifier = {
   record = function(t, info)
     t.__index = t.__index or {}
     function t.__index:unify(second_value)
-      return unify(self, info.params, second_value)
+      return unify(self, info.params, nil, second_value)
     end
   end,
   enum = function(t, info)
     t.__index = t.__index or {}
     function t.__index:unify(second_value)
       local vname = string.sub(self.kind, #info.name + 2, -1)
-      return unify(self, info.variants[vname].info.params, second_value)
+      return unify(self, info.variants[vname].info.params, vname, second_value)
     end
   end,
 }
