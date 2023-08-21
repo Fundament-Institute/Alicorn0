@@ -79,8 +79,8 @@ end
 function test_unify_2()
   local level_type = terms.value.level_type
   local prim = terms.value.prim
-  local status, err = pcall(function() level_type:unify(prim) end)
-  assert(status == false)
+  local success, err = pcall(function() level_type:unify(prim) end)
+  assert(success == false)
   p(err)
 
   local tcs = terms.typechecker_state()
@@ -91,7 +91,9 @@ function test_unify_2()
   local free_b = freemeta(mv_b)
 
   local level0 = terms.value.level(0)
-  local arginfo = terms.value.arginfo(terms.value.quantity(terms.quantity.unrestricted), terms.value.visibility(terms.visibility.explicit))
+  local quantity = terms.value.quantity(terms.quantity.unrestricted)
+  local visibility = terms.value.visibility(terms.visibility.explicit)
+  local arginfo = terms.value.arginfo(quantity, visibility)
   local resinfo = terms.resultinfo(terms.purity.pure)
 
   local pi_a = terms.value.pi(free_a, arginfo, level0, resinfo)
@@ -100,6 +102,21 @@ function test_unify_2()
   p(unified)
   assert(unified.argtype == unified.resulttype)
   assert(unified.argtype == level0)
+
+  local mv_c = tcs:metavariable()
+  local free_c = freemeta(mv_c)
+  local arginfo_c = terms.value.arginfo(free_c, visibility)
+  local pi_c = terms.value.pi(level0, arginfo_c, level0, resinfo)
+  local unified_c = pi_c:unify(unified)
+  p(unified_c)
+  assert(unified_c.arginfo.quantity == quantity)
+
+  local quantity_2 = terms.value.quantity(terms.quantity.linear)
+  local arginfo_2 = terms.value.arginfo(quantity_2, visibility)
+  local pi_2 = terms.value.pi(level0, arginfo_2, level0, resinfo)
+  local success_2, err_2 = pcall(function() pi_2:unify(pi_c) end)
+  assert(success_2 == false)
+  p(err_2)
 end
 
 
