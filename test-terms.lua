@@ -46,7 +46,7 @@ function test_unify()
   local free_mv_a = terms.value.free.metavariable(mv_a)
   p(mv_a, free_mv_a)
 
-  local unified = terms.unify(free_mv_a, terms.value.level_type)
+  local unified = free_mv_a:unify(terms.value.level_type)
   assert(unified == terms.value.level_type)
   assert(mv_a:get_value() == terms.value.level_type)
 end
@@ -66,10 +66,10 @@ function test_unify_more_metavariables()
   local free_mv_b = terms.value.free.metavariable(mv_b)
   p(mv_a, free_mv_a)
 
-  terms.unify(free_mv_b, free_mv_a)
+  free_mv_b:unify(free_mv_a)
   assert(mv_b:get_canonical().id == mv_a.id)
 
-  local unified = terms.unify(free_mv_a, terms.value.level_type)
+  local unified = free_mv_a:unify(terms.value.level_type)
   assert(unified == terms.value.level_type)
   assert(mv_a:get_value() == terms.value.level_type)
 
@@ -79,7 +79,7 @@ end
 function test_unify_2()
   local level_type = terms.value.level_type
   local prim = terms.value.prim
-  local status, err = pcall(function() terms.unify(level_type, prim) end)
+  local status, err = pcall(function() level_type:unify(prim) end)
   assert(status == false)
   p(err)
 
@@ -96,7 +96,7 @@ function test_unify_2()
 
   local pi_a = terms.value.pi(free_a, arginfo, level0, resinfo)
   local pi_b = terms.value.pi(level0, arginfo, free_b, resinfo)
-  local unified = terms.unify(pi_a, pi_b)
+  local unified = pi_a:unify(pi_b)
   p(unified)
   assert(unified.argtype == unified.resulttype)
   assert(unified.argtype == level0)

@@ -48,7 +48,6 @@ local function getmvinfo(id, mvs)
   return mvs[id] or getmvinfo(id, mvs.prev_mvs)
 end
 
-local unify
 local metavariable_mt
 
 metavariable_mt = {
@@ -77,7 +76,7 @@ metavariable_mt = {
       local canonical_info = getmvinfo(canonical.id, self.typechecker_state.mvs)
       if canonical_info.bound_value and canonical_info.bound_value ~= value then
         -- unify the two values, throws lua error if can't
-        value = unify(canonical_info.bound_value, value)
+        value = canonical_info.bound_value:unify(value)
       end
       self.typechecker_state.mvs[canonical.id] = {
         bound_value = value,
@@ -295,6 +294,9 @@ value:define_enum("value", {
   {"prop", {"level", builtin_number}},
   {"prim"},
   {"neutral", {"neutral", neutral_value}}
+  -- fn(free_value) and table of functions eg free.metavariable(metavariable)
+  -- value should be constructed w/ free.something()
+  {"free", {"free_value", free}},
 })
 
 neutral_value:define_enum("neutral_value", {
@@ -306,16 +308,6 @@ neutral_value:define_enum("neutral_value", {
   --{"recordextend_stuck", {"base", neutral_value, "extension", map(builtin_string, value)}}, --TODO
 })
 
-local function discard_self(fn)
-  return function(self, ...)
-    return fn(...)
-  end
-end
-
--- fn(free_value) and table of functions eg free.metavariable(metavariable)
-value.free = setmetatable({}, {
-    __call = discard_self(gen.gen_record(value, "value_free", {"free_value", free})) -- value should be constructed w/ free.something()
-})
 value.free.metavariable = function(mv)
   return value.free(free.metavariable(mv))
 end
@@ -327,8 +319,9 @@ local function extract_value_metavariable(value) -- -> Option<metavariable>
   return nil
 end
 
-unify = function(
+local function unify(
     first_value,
+    params,
     second_value)
   -- -> unified value,
   if first_value == second_value then
@@ -354,11 +347,11 @@ unify = function(
   local unified = {}
   local prefer_left = true
   local prefer_right = true
-  for _, v in ipairs(first_value.params) do
+  for _, v in ipairs(params) do
     local first_arg = first_value[v]
     local second_arg = second_value[v]
     if first_arg.kind then
-      local u = unify(first_arg, second_arg)
+      local u = first_arg:unify(second_arg)
       unified[v] = u
       prefer_left = prefer_left and u == first_arg
       prefer_right = prefer_right and u == second_arg
@@ -374,10 +367,28 @@ unify = function(
     return second_value
   else
     unified.kind = first_value.kind
-    unified.params = first_value.params
     return unified
   end
 end
+
+local unifier = {
+  record = function(t, info)
+    t.__index = t.__index or {}
+    function t.__index:unify(second_value)
+      return unify(self, info.params, second_value)
+    end
+  end,
+  enum = function(t, info)
+    t.__index = t.__index or {}
+    function t.__index:unify(second_value)
+      local vname = string.sub(self.kind, #info.name + 2, -1)
+      return unify(self, info.variants[vname].info.params, second_value)
+    end
+  end,
+}
+
+value:derive(unifier)
+resultinfo:derive(unifier)
 
 local function check(
     checkable_term, -- constructed from checkable
@@ -387,7 +398,7 @@ local function check(
 
   if checkable_term.kind == "inferred" then
     local inferred_type, typed_term = infer(checkable_term.inferred_term, typechecking_context)
-    unified_type = unify(inferred_type, target_type) -- can fail, will cause lua error
+    unified_type = inferred_type:unify(target_type) -- can fail, will cause lua error
     return unified_type, typed_term
   elseif checkable_term.kind == "checked_lambda" then
     -- assert that target_type is a pi type
@@ -406,13 +417,13 @@ local function infer(
     return value.level_type, typed.level0
   elseif inferrable_term.kind == "inferrable_level_suc" then
     local arg_type, arg_term = infer(inferrable_term.previous_level, typechecking_context)
-    unify(arg_type, value.level_type)
+    arg_type:unify(value.level_type)
     return value.level_type, typed.level_suc(arg_term)
   elseif inferrable_term.kind == "inferrable_level_max" then
     local arg_type_a, arg_term_a = infer(inferrable_term.level_a, typechecking_context)
     local arg_type_b, arg_term_b = infer(inferrable_term.level_b, typechecking_context)
-    unify(arg_type_a, value.level_type)
-    unify(arg_type_b, value.level_type)
+    arg_type_a:unify(value.level_type)
+    arg_type_b:unify(value.level_type)
     return value.level_type, typed.level_max(arg_term_a, arg_term_b)
   elseif inferrable_term.kind == "inferrable_level_type" then
     return value.star(0), typed.level_type
@@ -473,7 +484,6 @@ return {
   typed = typed, -- {}
   evaluate = evaluate, -- fn
   types = types, -- {}
-  unify = unify, -- fn
   typechecker_state = typechecker_state, -- fn (constructor)
 
   quantity = quantity,
