@@ -88,6 +88,7 @@ local function gen_unit(self, kind)
 end
 
 local function define_enum(self, name, variants)
+  setmetatable(self, nil)
   local derive_variants = {}
   for i, v in ipairs(variants) do
     local vname = v[1]
