@@ -141,10 +141,18 @@ local function define_type(self)
   return self
 end
 
+local function gen_builtin(typename)
+  return define_foreign({}, function(val)
+    return type(val) == typename
+  end)
+end
+
 return {
   declare_record = new_self(define_record),
   declare_enum = new_self(define_enum),
   declare_foreign = new_self(define_foreign),
   declare_type = new_self(define_type),
   metatable_equality = metatable_equality,
+  builtin_number = gen_builtin("number"),
+  builtin_string = gen_builtin("string"),
 }

@@ -176,12 +176,6 @@ local function speculate(f, ...)
   end
 end
 
-local builtin_number = gen.declare_foreign(function(val)
-  return type(val) == "number"
-end)
-
-local builtin_string = gen.declare_foreign(function(val) return type(val) == "string" end)
-
 local typed = gen.declare_type()
 local value = gen.declare_type()
 local checkable = gen.declare_type()
@@ -222,17 +216,17 @@ typed:define_enum("typed", {
     "level_a", typed,
     "level_b", typed,
   }},
-  {"star", {"level", builtin_number}},
-  {"prop", {"level", builtin_number}},
+  {"star", {"level", gen.builtin_number}},
+  {"prop", {"level", gen.builtin_number}},
   {"prim"},
   {"literal", {"literal_value", value}},
-  --{"recordcons", {"fields", map(builtin_string, typed)}} --TODO
-  --{"recordextend", {"base", typed, "fields", map(builtin_string, typed)}}, --TODO
-  {"datacons", {"constructor", builtin_string, "arg", typed}},
+  --{"recordcons", {"fields", map(gen.builtin_string, typed)}} --TODO
+  --{"recordextend", {"base", typed, "fields", map(gen.builtin_string, typed)}}, --TODO
+  {"datacons", {"constructor", gen.builtin_string, "arg", typed}},
   {"dataelim", {"motive", typed, "mechanism", typed, "subject", typed}},
   {"datarecelim", {"motive", typed, "mechanism", typed, "subject", typed}},
-  --{"objectcons", {"methods", map(builtin_string, typed)}}, --TODO
-  --{"objectcoreccons", {"methods", map(builtin_string, typed)}}, --TODO
+  --{"objectcons", {"methods", map(gen.builtin_string, typed)}}, --TODO
+  --{"objectcoreccons", {"methods", map(gen.builtin_string, typed)}}, --TODO
   {"objectelim", {"motive", typed, "mechanism", typed, "subject", typed}},
 })
 
@@ -275,23 +269,23 @@ value:define_enum("value", {
     "resulttype", value,
     "resultinfo", resultinfo
   }},
-  {"datavalue", {"constructor", builtin_string, "arg", value}},
+  {"datavalue", {"constructor", gen.builtin_string, "arg", value}},
   {"datatype", {"decls", value}},
-  --{"recordvalue", {"fields", map(builtin_string, value)}}, --TODO
+  --{"recordvalue", {"fields", map(gen.builtin_string, value)}}, --TODO
   {"recordtype", {"decls", value}},
-  --{"objectvalue", {"methods", map(builtin_string, value)}}, --TODO
+  --{"objectvalue", {"methods", map(gen.builtin_string, value)}}, --TODO
   {"objecttype", {"decls", value}}
   -- closure is a type that contains a typed term corresponding to the body
   -- and a runtime context representng the bound context where the closure was created
   --{"closure", {"code", typed_term, "capture", runtime_context}}, -- TODO
   {"name_type"},
-  {"name", {"name", builtin_string}},
+  {"name", {"name", gen.builtin_string}},
   {"level_type"},
   {"number_type"},
-  {"number", {"number", builtin_number}},
-  {"level", {"level", builtin_number}},
-  {"star", {"level", builtin_number}},
-  {"prop", {"level", builtin_number}},
+  {"number", {"number", gen.builtin_number}},
+  {"level", {"level", gen.builtin_number}},
+  {"star", {"level", gen.builtin_number}},
+  {"prop", {"level", gen.builtin_number}},
   {"prim"},
   {"neutral", {"neutral", neutral_value}}
   -- fn(free_value) and table of functions eg free.metavariable(metavariable)
@@ -305,7 +299,7 @@ neutral_value:define_enum("neutral_value", {
   {"datarecelim_stuck", {"motive", value, "handler", value, "subject", neutral_value}},
   {"objectelim_stuck", {"motive", value, "method", value, "subject", neutral_value}},
   {"recordelim_stuck", {"motive", value, "fields", value "uncurried", value, "subject", neutral_value}},
-  --{"recordextend_stuck", {"base", neutral_value, "extension", map(builtin_string, value)}}, --TODO
+  --{"recordextend_stuck", {"base", neutral_value, "extension", map(gen.builtin_string, value)}}, --TODO
 })
 
 value.free.metavariable = function(mv)
