@@ -274,7 +274,7 @@ value:define_enum("value", {
   --{"recordvalue", {"fields", map(gen.builtin_string, value)}}, --TODO
   {"recordtype", {"decls", value}},
   --{"objectvalue", {"methods", map(gen.builtin_string, value)}}, --TODO
-  {"objecttype", {"decls", value}}
+  {"objecttype", {"decls", value}},
   -- closure is a type that contains a typed term corresponding to the body
   -- and a runtime context representng the bound context where the closure was created
   --{"closure", {"code", typed_term, "capture", runtime_context}}, -- TODO
@@ -287,7 +287,7 @@ value:define_enum("value", {
   {"star", {"level", gen.builtin_number}},
   {"prop", {"level", gen.builtin_number}},
   {"prim"},
-  {"neutral", {"neutral", neutral_value}}
+  {"neutral", {"neutral", neutral_value}},
   -- fn(free_value) and table of functions eg free.metavariable(metavariable)
   -- value should be constructed w/ free.something()
   {"free", {"free_value", free}},
@@ -298,7 +298,7 @@ neutral_value:define_enum("neutral_value", {
   {"dataelim_stuck", {"motive", value, "handler", value, "subject", neutral_value}},
   {"datarecelim_stuck", {"motive", value, "handler", value, "subject", neutral_value}},
   {"objectelim_stuck", {"motive", value, "method", value, "subject", neutral_value}},
-  {"recordelim_stuck", {"motive", value, "fields", value "uncurried", value, "subject", neutral_value}},
+  {"recordelim_stuck", {"motive", value, "fields", value, "uncurried", value, "subject", neutral_value}},
   --{"recordextend_stuck", {"base", neutral_value, "extension", map(gen.builtin_string, value)}}, --TODO
 })
 
