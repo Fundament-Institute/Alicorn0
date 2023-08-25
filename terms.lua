@@ -115,8 +115,8 @@ metavariable_mt = {
       }
     end
   },
-  value_check = gen.metatable_equality,
 }
+metavariable_mt.value_check = gen.metatable_equality(metavariable_mt)
 
 local typechecker_state_mt
 typechecker_state_mt = {

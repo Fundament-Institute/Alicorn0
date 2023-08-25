@@ -47,7 +47,7 @@ local function gen_record(self, cons, kind, params_with_types)
       for i, v in ipairs(params) do
         local argi = args[i]
         -- type-check constructor arguments
-        if not params_types[i].value_check(argi) then
+        if params_types[i].value_check(argi) ~= true then
           p(argi)
           error("wrong argument type passed to constructor " .. kind .. ", parameter " .. v)
         end
