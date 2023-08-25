@@ -29,8 +29,8 @@ local function validate_params_types(kind, params, params_types)
   -- ensure there are at least as many param types as there are params
   for i, v in ipairs(params) do
     local param_type = params_types[i]
-    if not param_type then
-      error("nil passed to parameter type in constructor " .. kind .. ", parameter " .. v " (probable typo?)")
+    if type(param_type) ~= "table" then
+      error("wrong argument passed to parameter type in constructor " .. kind .. ", parameter " .. v " (possible typo?)")
     end
   end
 end
