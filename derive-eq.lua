@@ -43,12 +43,21 @@ local eq = {
     local variants_checks = {}
     for n, vname in ipairs(info.variants) do
       local vkind = info.name .. "_" .. vname
-      local vinfo = info.variants[vname].info
-      local checks = {}
-      for i, param in ipairs(vinfo.params) do
-        checks[i] = string.format("left[%q] == right[%q]", param, param)
+      local vdata = info.variants[vname]
+      local vtype = vdata.type
+      local vinfo = vdata.info
+      local all_checks
+      if vtype == "record" then
+        local checks = {}
+        for i, param in ipairs(vinfo.params) do
+            checks[i] = string.format("left[%q] == right[%q]", param, param)
+        end
+        all_checks = table.concat(checks, " and ")
+      elseif vtype == "unit" then
+        all_checks = "true"
+      else
+        error("unknown variant type: " .. vtype)
       end
-      local all_checks = table.concat(checks, " and ")
       local entry = string.format("[%q] = function(left, right) return %s end", vkind, all_checks)
       variants_checks[n] = entry
     end
