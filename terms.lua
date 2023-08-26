@@ -39,6 +39,7 @@
 -- when binding to another metavariable bind the one with a greater index to the lesser index
 
 local gen = require './terms-generators'
+local map = gen.declare_map
 
 local function getmvinfo(id, mvs)
   if mvs == nil then
@@ -48,7 +49,6 @@ local function getmvinfo(id, mvs)
   return mvs[id] or getmvinfo(id, mvs.prev_mvs)
 end
 
-local unify
 local metavariable_mt
 
 metavariable_mt = {
@@ -77,7 +77,7 @@ metavariable_mt = {
       local canonical_info = getmvinfo(canonical.id, self.typechecker_state.mvs)
       if canonical_info.bound_value and canonical_info.bound_value ~= value then
         -- unify the two values, throws lua error if can't
-        value = unify(canonical_info.bound_value, value)
+        value = canonical_info.bound_value:unify(value)
       end
       self.typechecker_state.mvs[canonical.id] = {
         bound_value = value,
@@ -116,8 +116,8 @@ metavariable_mt = {
       }
     end
   },
-  value_check = gen.metatable_equality,
 }
+metavariable_mt.value_check = gen.metatable_equality(metavariable_mt)
 
 local typechecker_state_mt
 typechecker_state_mt = {
@@ -177,12 +177,6 @@ local function speculate(f, ...)
   end
 end
 
-local builtin_number = gen.declare_foreign(function(val)
-  return type(val) == "number"
-end)
-
-local builtin_string = gen.declare_foreign(function(val) return type(val) == "string" end)
-
 local typed = gen.declare_type()
 local value = gen.declare_type()
 local checkable = gen.declare_type()
@@ -223,17 +217,17 @@ typed:define_enum("typed", {
     "level_a", typed,
     "level_b", typed,
   }},
-  {"star", {"level", builtin_number}},
-  {"prop", {"level", builtin_number}},
+  {"star", {"level", gen.builtin_number}},
+  {"prop", {"level", gen.builtin_number}},
   {"prim"},
   {"literal", {"literal_value", value}},
-  --{"recordcons", {"fields", map(builtin_string, typed)}} --TODO
-  --{"recordextend", {"base", typed, "fields", map(builtin_string, typed)}}, --TODO
-  {"datacons", {"constructor", builtin_string, "arg", typed}},
+  {"recordcons", {"fields", map(gen.builtin_string, typed)}},
+  {"recordextend", {"base", typed, "fields", map(gen.builtin_string, typed)}},
+  {"datacons", {"constructor", gen.builtin_string, "arg", typed}},
   {"dataelim", {"motive", typed, "mechanism", typed, "subject", typed}},
   {"datarecelim", {"motive", typed, "mechanism", typed, "subject", typed}},
-  --{"objectcons", {"methods", map(builtin_string, typed)}}, --TODO
-  --{"objectcoreccons", {"methods", map(builtin_string, typed)}}, --TODO
+  {"objectcons", {"methods", map(gen.builtin_string, typed)}},
+  {"objectcoreccons", {"methods", map(gen.builtin_string, typed)}},
   {"objectelim", {"motive", typed, "mechanism", typed, "subject", typed}},
 })
 
@@ -276,25 +270,28 @@ value:define_enum("value", {
     "resulttype", value,
     "resultinfo", resultinfo
   }},
-  {"datavalue", {"constructor", builtin_string, "arg", value}},
+  {"datavalue", {"constructor", gen.builtin_string, "arg", value}},
   {"datatype", {"decls", value}},
-  --{"recordvalue", {"fields", map(builtin_string, value)}}, --TODO
+  {"recordvalue", {"fields", map(gen.builtin_string, value)}},
   {"recordtype", {"decls", value}},
-  --{"objectvalue", {"methods", map(builtin_string, value)}}, --TODO
-  {"objecttype", {"decls", value}}
+  {"objectvalue", {"methods", map(gen.builtin_string, value)}},
+  {"objecttype", {"decls", value}},
   -- closure is a type that contains a typed term corresponding to the body
   -- and a runtime context representng the bound context where the closure was created
   --{"closure", {"code", typed_term, "capture", runtime_context}}, -- TODO
   {"name_type"},
-  {"name", {"name", builtin_string}},
+  {"name", {"name", gen.builtin_string}},
   {"level_type"},
   {"number_type"},
-  {"number", {"number", builtin_number}},
-  {"level", {"level", builtin_number}},
-  {"star", {"level", builtin_number}},
-  {"prop", {"level", builtin_number}},
+  {"number", {"number", gen.builtin_number}},
+  {"level", {"level", gen.builtin_number}},
+  {"star", {"level", gen.builtin_number}},
+  {"prop", {"level", gen.builtin_number}},
   {"prim"},
-  {"neutral", {"neutral", neutral_value}}
+  {"neutral", {"neutral", neutral_value}},
+  -- fn(free_value) and table of functions eg free.metavariable(metavariable)
+  -- value should be constructed w/ free.something()
+  {"free", {"free_value", free}},
 })
 
 neutral_value:define_enum("neutral_value", {
@@ -302,20 +299,10 @@ neutral_value:define_enum("neutral_value", {
   {"dataelim_stuck", {"motive", value, "handler", value, "subject", neutral_value}},
   {"datarecelim_stuck", {"motive", value, "handler", value, "subject", neutral_value}},
   {"objectelim_stuck", {"motive", value, "method", value, "subject", neutral_value}},
-  {"recordelim_stuck", {"motive", value, "fields", value "uncurried", value, "subject", neutral_value}},
-  --{"recordextend_stuck", {"base", neutral_value, "extension", map(builtin_string, value)}}, --TODO
+  {"recordelim_stuck", {"motive", value, "fields", value, "uncurried", value, "subject", neutral_value}},
+  {"recordextend_stuck", {"base", neutral_value, "extension", map(gen.builtin_string, value)}},
 })
 
-local function discard_self(fn)
-  return function(self, ...)
-    return fn(...)
-  end
-end
-
--- fn(free_value) and table of functions eg free.metavariable(metavariable)
-value.free = setmetatable({}, {
-    __call = discard_self(gen.gen_record(value, "value_free", {"free_value", free})) -- value should be constructed w/ free.something()
-})
 value.free.metavariable = function(mv)
   return value.free(free.metavariable(mv))
 end
@@ -327,8 +314,12 @@ local function extract_value_metavariable(value) -- -> Option<metavariable>
   return nil
 end
 
-unify = function(
+local is_value = gen.metatable_equality(value)
+
+local function unify(
     first_value,
+    params,
+    variant,
     second_value)
   -- -> unified value,
   if first_value == second_value then
@@ -351,18 +342,20 @@ unify = function(
     error("can't unify values of kinds " .. first_value.kind .. " and " .. second_value.kind)
   end
 
-  local unified = {}
+  local unified_args = {}
   local prefer_left = true
   local prefer_right = true
-  for _, v in ipairs(first_value.params) do
+  for i, v in ipairs(params) do
     local first_arg = first_value[v]
     local second_arg = second_value[v]
-    if first_arg.kind then
-      local u = unify(first_arg, second_arg)
-      unified[v] = u
+    if is_value(first_arg) then
+      local u = first_arg:unify(second_arg)
+      unified_args[i] = u
       prefer_left = prefer_left and u == first_arg
       prefer_right = prefer_right and u == second_arg
-    elseif first_arg ~= second_arg then
+    elseif first_arg == second_arg then
+      unified_args[i] = first_arg
+    else
       p("unify args", first_value, second_value)
       error("unification failure as " .. v .. " field value doesn't match")
     end
@@ -373,11 +366,35 @@ unify = function(
   elseif prefer_right then
     return second_value
   else
-    unified.kind = first_value.kind
-    unified.params = first_value.params
+    -- create new value
+    local first_type = getmetatable(first_value)
+    local cons = first_type
+    if variant then
+      cons = first_type[variant]
+    end
+    local unified = cons(table.unpack(unified_args))
     return unified
   end
 end
+
+local unifier = {
+  record = function(t, info)
+    t.__index = t.__index or {}
+    function t.__index:unify(second_value)
+      return unify(self, info.params, nil, second_value)
+    end
+  end,
+  enum = function(t, info)
+    t.__index = t.__index or {}
+    function t.__index:unify(second_value)
+      local vname = string.sub(self.kind, #info.name + 2, -1)
+      return unify(self, info.variants[vname].info.params, vname, second_value)
+    end
+  end,
+}
+
+value:derive(unifier)
+resultinfo:derive(unifier)
 
 local function check(
     checkable_term, -- constructed from checkable
@@ -387,7 +404,7 @@ local function check(
 
   if checkable_term.kind == "inferred" then
     local inferred_type, typed_term = infer(checkable_term.inferred_term, typechecking_context)
-    unified_type = unify(inferred_type, target_type) -- can fail, will cause lua error
+    unified_type = inferred_type:unify(target_type) -- can fail, will cause lua error
     return unified_type, typed_term
   elseif checkable_term.kind == "checked_lambda" then
     -- assert that target_type is a pi type
@@ -406,13 +423,13 @@ local function infer(
     return value.level_type, typed.level0
   elseif inferrable_term.kind == "inferrable_level_suc" then
     local arg_type, arg_term = infer(inferrable_term.previous_level, typechecking_context)
-    unify(arg_type, value.level_type)
+    arg_type:unify(value.level_type)
     return value.level_type, typed.level_suc(arg_term)
   elseif inferrable_term.kind == "inferrable_level_max" then
     local arg_type_a, arg_term_a = infer(inferrable_term.level_a, typechecking_context)
     local arg_type_b, arg_term_b = infer(inferrable_term.level_b, typechecking_context)
-    unify(arg_type_a, value.level_type)
-    unify(arg_type_b, value.level_type)
+    arg_type_a:unify(value.level_type)
+    arg_type_b:unify(value.level_type)
     return value.level_type, typed.level_max(arg_term_a, arg_term_b)
   elseif inferrable_term.kind == "inferrable_level_type" then
     return value.star(0), typed.level_type
@@ -473,7 +490,6 @@ return {
   typed = typed, -- {}
   evaluate = evaluate, -- fn
   types = types, -- {}
-  unify = unify, -- fn
   typechecker_state = typechecker_state, -- fn (constructor)
 
   quantity = quantity,
