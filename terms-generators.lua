@@ -155,8 +155,18 @@ local map_type_mt = {
   end,
 }
 
+local map_methods = {
+  pairs = function(self)
+    return pairs(self.__map)
+  end,
+}
+
 local function gen_map_fns(key_type, value_type)
   local function index(self, key)
+    local method = map_methods[key]
+    if method then
+      return method
+    end
     if key_type.value_check(key) ~= true then
       p("map-index", key_type, value_type)
       p(key)
@@ -165,6 +175,11 @@ local function gen_map_fns(key_type, value_type)
     return self.__map[key]
   end
   local function newindex(self, key, value)
+    local method = map_methods[key]
+    if method then
+      p(method)
+      error("attempted index-assignment that shadows a method")
+    end
     if key_type.value_check(key) ~= true then
       p("map-index-assign", key_type, value_type)
       p(key)
@@ -193,10 +208,11 @@ local function define_map(self, key_type, value_type)
 end
 
 local array_type_mt = {
-  __call = function(self)
+  __call = function(self, ...)
+    local args = { ... }
     local val = {
-      n = 0,
-      array = {},
+      n = #args,
+      array = args,
     }
     setmetatable(val, self)
     return val
@@ -206,8 +222,33 @@ local array_type_mt = {
   end,
 }
 
+local array_methods = {
+  ipairs = function(self)
+    local function iter(state, ctl)
+      local i = state[1]
+      state[1] = i + 1
+      if i >= self.n then
+        return
+      else
+        return i, self.array[i]
+      end
+    end
+    return iter, {0}
+  end,
+  len = function(self)
+    return self.n
+  end,
+  append = function(self, val)
+    self[self.n] = val
+  end,
+}
+
 local function gen_array_fns(value_type)
   local function index(self, key)
+    local method = array_methods[key]
+    if method then
+      return method
+    end
     if type(key) ~= "number" then
       p("array-index", value_type)
       p(key)
