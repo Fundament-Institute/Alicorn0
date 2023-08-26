@@ -24,8 +24,14 @@ local success_1, err_1 = pcall(fail1)
 assert(not success_1)
 p(err_1)
 function fail2()
-  stuff2["bar"] = "buzz"
+  stuff2["bar"] = "baz"
 end
-local success_2, err_2 = pcall(fail1)
+local success_2, err_2 = pcall(fail2)
 assert(not success_2)
 p(err_2)
+function fail3()
+  stuff2["foo"] = "quux"
+end
+local success_3, err_3 = pcall(fail3)
+assert(not success_3)
+p(err_3)
