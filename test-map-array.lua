@@ -5,7 +5,7 @@ local array = gen.declare_array
 local typed = gen.declare_type()
 typed:define_enum("typed", {
   {"recordcons", {"fields", map(gen.builtin_string, typed)}},
-  {"objectcons", {"methods", array(typed)}},
+  {"tuplecons", {"methods", array(typed)}},
 })
 
 local map_string_typed = map(gen.builtin_string, typed)
@@ -41,7 +41,7 @@ local array_typed = array(typed)
 local athing = array_typed()
 athing[0] = funvalue
 athing[1] = funvalue2
-local funvalue3 = typed.objectcons(athing)
+local funvalue3 = typed.tuplecons(athing)
 p(funvalue3)
 
 function fail4()
