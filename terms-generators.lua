@@ -1,3 +1,17 @@
+-- record and enum are nominative types.
+-- this means that two record types, given the same arguments, are distinct.
+-- values constructed from one type are of a different type compared to values
+-- constructed from the other.
+-- (likewise for enum)
+
+-- foreign, map, and array are structural types.
+-- this means that two map types, given the same key-type and value-type, alias
+-- each other.
+-- values constructed from one type are, at a high level, of the same type
+-- as values constructed from the other.
+-- (likewise for array, and foreign given the same value_check function;
+-- foreign values are constructed elsewhere)
+
 local function new_self(fn)
   return function(...)
     return fn({}, ...)
@@ -39,7 +53,7 @@ local function gen_record(self, cons, kind, params_with_types)
   local params, params_types = parse_params_with_types(params_with_types)
   validate_params_types(kind, params, params_types)
   setmetatable(cons, {
-    __call = function(_self, ...)
+    __call = function(cons, ...)
       local args = { ... }
       local val = {
         kind = kind,
@@ -128,11 +142,70 @@ local function define_foreign(self, value_check)
   return self
 end
 
+local map_type_mt = {
+  __call = function(self, ...)
+    local val = {}
+    setmetatable(val, self)
+    return val
+  end,
+  __eq = function(left, right)
+    return left.key_type == right.key_type and left.value_type == right.value_type
+  end
+}
+
+local function gen_map_fns(key_type, value_type)
+  local function index(self, key)
+    if key_type.value_check(key) ~= true then
+      p("index", key_type, value_type)
+      p(key)
+      error("wrong key type passed to indexing")
+    end
+    return rawget(self, key)
+  end
+  local function newindex(self, key, value)
+    if key_type.value_check(key) ~= true then
+      p("index-assign", key_type, value_type)
+      p(key)
+      error("wrong key type passed to index-assignment")
+    end
+    if value_type.value_check(value) ~= true then
+      p("index-assign", key_type, value_type)
+      p(value)
+      error("wrong value type passed to index-assignment")
+    end
+    rawset(self, key, value)
+  end
+  return index, newindex
+end
+
+-- TODO: memoize? otherwise LOTS of tables will be constructed,
+-- through repeated calls to declare_map
+local function define_map(self, key_type, value_type)
+  setmetatable(self, map_type_mt)
+  self.key_type = key_type
+  self.value_type = value_type
+  self.__index, self.__newindex = gen_map_fns(key_type, value_type)
+  -- NOTE: this isn't primitive equality; this type has a __eq metamethod!
+  self.value_check = metatable_equality(self)
+  return self
+end
+
+local array_type_mt = {}
+
+local function define_array(self, value_type)
+  setmetatable(self, array_type_mt)
+  self.value_type = value_type
+  self.value_check = metatable_equality(self)
+  return self
+end
+
 local type_mt = {
   __index = {
     define_record = define_record,
     define_enum = define_enum,
     define_foreign = define_foreign,
+    define_map = define_map,
+    define_array = define_array,
   }
 }
 
@@ -151,6 +224,8 @@ return {
   declare_record = new_self(define_record),
   declare_enum = new_self(define_enum),
   declare_foreign = new_self(define_foreign),
+  declare_map = new_self(define_map),
+  declare_array = new_self(define_array),
   declare_type = new_self(define_type),
   metatable_equality = metatable_equality,
   builtin_number = gen_builtin("number"),

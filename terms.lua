@@ -39,6 +39,7 @@
 -- when binding to another metavariable bind the one with a greater index to the lesser index
 
 local gen = require './terms-generators'
+local map = gen.declare_map
 
 local function getmvinfo(id, mvs)
   if mvs == nil then
@@ -220,13 +221,13 @@ typed:define_enum("typed", {
   {"prop", {"level", gen.builtin_number}},
   {"prim"},
   {"literal", {"literal_value", value}},
-  --{"recordcons", {"fields", map(gen.builtin_string, typed)}} --TODO
-  --{"recordextend", {"base", typed, "fields", map(gen.builtin_string, typed)}}, --TODO
+  {"recordcons", {"fields", map(gen.builtin_string, typed)}},
+  {"recordextend", {"base", typed, "fields", map(gen.builtin_string, typed)}},
   {"datacons", {"constructor", gen.builtin_string, "arg", typed}},
   {"dataelim", {"motive", typed, "mechanism", typed, "subject", typed}},
   {"datarecelim", {"motive", typed, "mechanism", typed, "subject", typed}},
-  --{"objectcons", {"methods", map(gen.builtin_string, typed)}}, --TODO
-  --{"objectcoreccons", {"methods", map(gen.builtin_string, typed)}}, --TODO
+  {"objectcons", {"methods", map(gen.builtin_string, typed)}},
+  {"objectcoreccons", {"methods", map(gen.builtin_string, typed)}},
   {"objectelim", {"motive", typed, "mechanism", typed, "subject", typed}},
 })
 
@@ -271,9 +272,9 @@ value:define_enum("value", {
   }},
   {"datavalue", {"constructor", gen.builtin_string, "arg", value}},
   {"datatype", {"decls", value}},
-  --{"recordvalue", {"fields", map(gen.builtin_string, value)}}, --TODO
+  {"recordvalue", {"fields", map(gen.builtin_string, value)}},
   {"recordtype", {"decls", value}},
-  --{"objectvalue", {"methods", map(gen.builtin_string, value)}}, --TODO
+  {"objectvalue", {"methods", map(gen.builtin_string, value)}},
   {"objecttype", {"decls", value}},
   -- closure is a type that contains a typed term corresponding to the body
   -- and a runtime context representng the bound context where the closure was created
@@ -299,7 +300,7 @@ neutral_value:define_enum("neutral_value", {
   {"datarecelim_stuck", {"motive", value, "handler", value, "subject", neutral_value}},
   {"objectelim_stuck", {"motive", value, "method", value, "subject", neutral_value}},
   {"recordelim_stuck", {"motive", value, "fields", value, "uncurried", value, "subject", neutral_value}},
-  --{"recordextend_stuck", {"base", neutral_value, "extension", map(gen.builtin_string, value)}}, --TODO
+  {"recordextend_stuck", {"base", neutral_value, "extension", map(gen.builtin_string, value)}},
 })
 
 value.free.metavariable = function(mv)
