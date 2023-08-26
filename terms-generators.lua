@@ -207,12 +207,20 @@ local function define_map(self, key_type, value_type)
   return self
 end
 
+local function base1to0(tab)
+  for i, v in ipairs(tab) do
+    tab[i-1] = v
+    tab[i] = nil
+  end
+  return tab
+end
+
 local array_type_mt = {
   __call = function(self, ...)
     local args = { ... }
     local val = {
       n = #args,
-      array = args,
+      array = base1to0(args),
     }
     setmetatable(val, self)
     return val
@@ -288,7 +296,9 @@ local function gen_array_fns(value_type)
       error("wrong value type passed to index-assignment")
     end
     self.array[key] = value
-    self.n = self.n + 1
+    if key >= self.n then
+      self.n = key + 1
+    end
   end
   return index, newindex
 end

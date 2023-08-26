@@ -47,6 +47,7 @@ athing:append(funvalue)
 athing[1] = funvalue2
 local funvalue3 = typed.tuplecons(athing)
 p(funvalue3)
+assert(funvalue3.methods:len() == 2)
 
 for i, v in funvalue3.methods:ipairs() do
   p(i, v)
@@ -54,6 +55,10 @@ end
 
 local athing2 = array_typed(funvalue, funvalue2)
 p(athing2)
+assert(athing2:len() == 2)
+athing2[0] = funvalue2
+p(athing2)
+assert(athing2:len() == 2)
 
 function fail4()
   athing["lol"] = funvalue
