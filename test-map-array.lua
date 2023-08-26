@@ -1,10 +1,11 @@
 local gen = require './terms-generators'
 local map = gen.declare_map
+local array = gen.declare_array
 
 local typed = gen.declare_type()
 typed:define_enum("typed", {
   {"recordcons", {"fields", map(gen.builtin_string, typed)}},
-  {"objectcons", {"methods", map(gen.builtin_string, typed)}},
+  {"objectcons", {"methods", array(typed)}},
 })
 
 local map_string_typed = map(gen.builtin_string, typed)
@@ -35,3 +36,35 @@ end
 local success_3, err_3 = pcall(fail3)
 assert(not success_3)
 p(err_3)
+
+local array_typed = array(typed)
+local athing = array_typed()
+athing[0] = funvalue
+athing[1] = funvalue2
+local funvalue3 = typed.objectcons(athing)
+p(funvalue3)
+
+function fail4()
+  athing["lol"] = funvalue
+end
+local success_4, err_4 = pcall(fail4)
+assert(not success_4)
+p(err_4)
+function fail5()
+  athing[2] = "ping"
+end
+local success_5, err_5 = pcall(fail5)
+assert(not success_5)
+p(err_5)
+function fail6()
+  athing[0] = "pong"
+end
+local success_6, err_6 = pcall(fail6)
+assert(not success_6)
+p(err_6)
+function fail7()
+  athing[69] = "nice"
+end
+local success_7, err_7 = pcall(fail7)
+assert(not success_7)
+p(err_7)

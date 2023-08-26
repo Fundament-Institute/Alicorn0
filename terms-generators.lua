@@ -143,37 +143,39 @@ local function define_foreign(self, value_check)
 end
 
 local map_type_mt = {
-  __call = function(self, ...)
-    local val = {}
+  __call = function(self)
+    local val = {
+      __map = {},
+    }
     setmetatable(val, self)
     return val
   end,
   __eq = function(left, right)
     return left.key_type == right.key_type and left.value_type == right.value_type
-  end
+  end,
 }
 
 local function gen_map_fns(key_type, value_type)
   local function index(self, key)
     if key_type.value_check(key) ~= true then
-      p("index", key_type, value_type)
+      p("map-index", key_type, value_type)
       p(key)
       error("wrong key type passed to indexing")
     end
-    return rawget(self, key)
+    return self.__map[key]
   end
   local function newindex(self, key, value)
     if key_type.value_check(key) ~= true then
-      p("index-assign", key_type, value_type)
+      p("map-index-assign", key_type, value_type)
       p(key)
       error("wrong key type passed to index-assignment")
     end
     if value_type.value_check(value) ~= true then
-      p("index-assign", key_type, value_type)
+      p("map-index-assign", key_type, value_type)
       p(value)
       error("wrong value type passed to index-assignment")
     end
-    rawset(self, key, value)
+    self.__map[key] = value
   end
   return index, newindex
 end
@@ -190,11 +192,72 @@ local function define_map(self, key_type, value_type)
   return self
 end
 
-local array_type_mt = {}
+local array_type_mt = {
+  __call = function(self)
+    local val = {
+      n = 0,
+      array = {},
+    }
+    setmetatable(val, self)
+    return val
+  end,
+  __eq = function(left, right)
+    return left.value_type == right.value_type
+  end,
+}
 
+local function gen_array_fns(value_type)
+  local function index(self, key)
+    if type(key) ~= "number" then
+      p("array-index", value_type)
+      p(key)
+      error("wrong key type passed to indexing")
+    end
+    -- check if integer
+    -- there are many nice ways to do this in lua >=5.3
+    -- unfortunately, this is not us
+    if math.floor(key) ~= key then
+      p(key)
+      error("key passed to indexing is not an integer")
+    end
+    if key < 0 or key >= self.n then
+      p(key, self.n)
+      error("key passed to indexing is out of bounds")
+    end
+    return self.array[key]
+  end
+  local function newindex(self, key, value)
+    if type(key) ~= "number" then
+      p("array-index", value_type)
+      p(key)
+      error("wrong key type passed to index-assignment")
+    end
+    if math.floor(key) ~= key then
+      p(key)
+      error("key passed to index-assignment is not an integer")
+    end
+    -- equal can be used to append
+    if key < 0 or key > self.n then
+      p(key, self.n)
+      error("key passed to index-assignment is out of bounds")
+    end
+    if value_type.value_check(value) ~= true then
+      p("map-index-assign", key_type, value_type)
+      p(value)
+      error("wrong value type passed to index-assignment")
+    end
+    self.array[key] = value
+    self.n = self.n + 1
+  end
+  return index, newindex
+end
+
+-- TODO: see define_map
 local function define_array(self, value_type)
   setmetatable(self, array_type_mt)
   self.value_type = value_type
+  self.__index, self.__newindex = gen_array_fns(value_type)
+  -- NOTE: this isn't primitive equality; this type has a __eq metamethod!
   self.value_check = metatable_equality(self)
   return self
 end
