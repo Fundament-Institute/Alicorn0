@@ -224,22 +224,13 @@ local array_type_mt = {
 
 local array_methods = {
   ipairs = function(self)
-    local function iter(state, ctl)
-      local i = state[1]
-      state[1] = i + 1
-      if i >= self.n then
-        return
-      else
-        return i, self.array[i]
-      end
-    end
-    return iter, {0}
+    return ipairs(self.array)
   end,
   len = function(self)
     return self.n
   end,
   append = function(self, val)
-    self[self.n] = val
+    self[self.n + 1] = val
   end,
 }
 
@@ -261,7 +252,7 @@ local function gen_array_fns(value_type)
       p(key)
       error("key passed to indexing is not an integer")
     end
-    if key < 0 or key >= self.n then
+    if key < 1 or key > self.n then
       p(key, self.n)
       error("key passed to indexing is out of bounds")
     end
@@ -277,8 +268,8 @@ local function gen_array_fns(value_type)
       p(key)
       error("key passed to index-assignment is not an integer")
     end
-    -- equal can be used to append
-    if key < 0 or key > self.n then
+    -- n+1 can be used to append
+    if key < 1 or key > self.n + 1 then
       p(key, self.n)
       error("key passed to index-assignment is out of bounds")
     end
@@ -288,7 +279,9 @@ local function gen_array_fns(value_type)
       error("wrong value type passed to index-assignment")
     end
     self.array[key] = value
-    self.n = self.n + 1
+    if key > self.n then
+      self.n = key
+    end
   end
   return index, newindex
 end
