@@ -19,6 +19,9 @@ local function new_self(fn)
 end
 
 local function metatable_equality(mt)
+  if type(mt) ~= "table" then
+    error("trying to define metatable equality to something that isn't a metatable (possible typo?)")
+  end
   return function(val)
     return getmetatable(val) == mt
   end
@@ -44,7 +47,7 @@ local function validate_params_types(kind, params, params_types)
   for i, v in ipairs(params) do
     local param_type = params_types[i]
     if type(param_type) ~= "table" then
-      error("wrong argument passed to parameter type in constructor " .. kind .. ", parameter " .. v " (possible typo?)")
+      error("trying to set a parameter type to something that isn't a type, in constructor " .. kind .. ", parameter " .. v " (possible typo?)")
     end
   end
 end
