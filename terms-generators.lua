@@ -239,7 +239,7 @@ local array_methods = {
     return self.n
   end,
   append = function(self, val)
-    self[self.n] = val
+    self[self.n + 1] = val
   end,
 }
 
@@ -261,11 +261,11 @@ local function gen_array_fns(value_type)
       p(key)
       error("key passed to indexing is not an integer")
     end
-    if key < 0 or key >= self.n then
+    if key < 1 or key > self.n then
       p(key, self.n)
       error("key passed to indexing is out of bounds")
     end
-    return self.array[key + 1]
+    return self.array[key]
   end
   local function newindex(self, key, value)
     if type(key) ~= "number" then
@@ -277,8 +277,8 @@ local function gen_array_fns(value_type)
       p(key)
       error("key passed to index-assignment is not an integer")
     end
-    -- equal can be used to append
-    if key < 0 or key > self.n then
+    -- n can be used to append
+    if key < 1 or key > self.n + 1 then
       p(key, self.n)
       error("key passed to index-assignment is out of bounds")
     end
@@ -287,9 +287,9 @@ local function gen_array_fns(value_type)
       p(value)
       error("wrong value type passed to index-assignment")
     end
-    self.array[key + 1] = value
-    if key >= self.n then
-      self.n = key + 1
+    self.array[key] = value
+    if key > self.n then
+      self.n = key
     end
   end
   return index, newindex
