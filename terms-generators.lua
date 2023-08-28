@@ -46,8 +46,8 @@ local function validate_params_types(kind, params, params_types)
   -- ensure there are at least as many param types as there are params
   for i, v in ipairs(params) do
     local param_type = params_types[i]
-    if type(param_type) ~= "table" then
-      error("trying to set a parameter type to something that isn't a type, in constructor " .. kind .. ", parameter " .. v " (possible typo?)")
+    if type(param_type) ~= "table" or type(param_type.value_check) ~= "function" then
+      error("trying to set a parameter type to something that isn't a type, in constructor " .. kind .. ", parameter " .. v .. " (possible typo?)")
     end
   end
 end
@@ -309,8 +309,13 @@ local type_mt = {
   }
 }
 
+local function undefined_value_check(val)
+  error("trying to typecheck a value against a type that has been declared but not defined")
+end
+
 local function define_type(self)
   setmetatable(self, type_mt)
+  self.value_check = undefined_value_check
   return self
 end
 
