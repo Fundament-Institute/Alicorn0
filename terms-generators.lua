@@ -207,20 +207,12 @@ local function define_map(self, key_type, value_type)
   return self
 end
 
-local function base1to0(tab)
-  for i, v in ipairs(tab) do
-    tab[i-1] = v
-    tab[i] = nil
-  end
-  return tab
-end
-
 local array_type_mt = {
   __call = function(self, ...)
     local args = { ... }
     local val = {
       n = #args,
-      array = base1to0(args),
+      array = args,
     }
     setmetatable(val, self)
     return val
@@ -238,7 +230,7 @@ local array_methods = {
       if i >= self.n then
         return
       else
-        return i, self.array[i]
+        return i, self.array[i + 1]
       end
     end
     return iter, {0}
@@ -273,7 +265,7 @@ local function gen_array_fns(value_type)
       p(key, self.n)
       error("key passed to indexing is out of bounds")
     end
-    return self.array[key]
+    return self.array[key + 1]
   end
   local function newindex(self, key, value)
     if type(key) ~= "number" then
@@ -295,7 +287,7 @@ local function gen_array_fns(value_type)
       p(value)
       error("wrong value type passed to index-assignment")
     end
-    self.array[key] = value
+    self.array[key + 1] = value
     if key >= self.n then
       self.n = key + 1
     end
