@@ -224,16 +224,7 @@ local array_type_mt = {
 
 local array_methods = {
   ipairs = function(self)
-    local function iter(state, ctl)
-      local i = state[1]
-      state[1] = i + 1
-      if i >= self.n then
-        return
-      else
-        return i, self.array[i + 1]
-      end
-    end
-    return iter, {0}
+    return ipairs(self.array)
   end,
   len = function(self)
     return self.n
