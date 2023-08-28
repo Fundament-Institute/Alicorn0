@@ -1,3 +1,11 @@
+local matcher_kinds = {
+  Symbol = true,
+  Pair = true,
+  Nil = true,
+  Value = true,
+  Reducible = true,
+}
+
 local function issymbol(handler)
   return {
     kind = "Symbol",
@@ -400,6 +408,13 @@ oneof = reducer(function(syntax, _, ...)
     return syntax:match({...}, failure_handler, nil)
 end, "oneof")
 
+local gen = require './terms-generators'
+local constructed_syntax_type = gen.declare_foreign(gen.metatable_equality(constructed_syntax_mt))
+local reducible_type = gen.declare_foreign(gen.metatable_equality(reducible_mt))
+local matcher_type = gen.declare_foreign(function(val)
+  return matcher_kinds[val.kind]
+end)
+
 return {
   newenv = newenv,
   accept_handler = accept_handler,
@@ -421,4 +436,7 @@ return {
   list = list,
   symbol = symbol,
   symbol_in_environment = symbol_in_environment,
+  constructed_syntax_type = constructed_syntax_type,
+  reducible_type = reducible_type,
+  matcher_type = matcher_type,
 }

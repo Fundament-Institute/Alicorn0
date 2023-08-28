@@ -38,6 +38,9 @@
 
 -- when binding to another metavariable bind the one with a greater index to the lesser index
 
+local environment = require './environment'
+local metalang = require './metalanguage'
+
 local gen = require './terms-generators'
 local map = gen.declare_map
 
@@ -115,9 +118,9 @@ metavariable_mt = {
         bound_mv_id = other.id,
       }
     end
-  },
+  }
 }
-metavariable_mt.value_check = gen.metatable_equality(metavariable_mt)
+local metavariable_type = gen.declare_foreign(gen.metatable_equality(metavariable_mt))
 
 local typechecker_state_mt
 typechecker_state_mt = {
@@ -177,10 +180,11 @@ local function speculate(f, ...)
   end
 end
 
-local typed = gen.declare_type()
-local value = gen.declare_type()
 local checkable = gen.declare_type()
 local inferrable = gen.declare_type()
+local typed = gen.declare_type()
+local value = gen.declare_type()
+local neutral_value = gen.declare_type()
 -- checkable terms need a target type to typecheck against
 checkable:define_enum("checkable", {
   {"inferred", {"inferred_term", inferrable}},
@@ -232,7 +236,7 @@ typed:define_enum("typed", {
 })
 
 local free = gen.declare_enum("free", {
-  {"metavariable", {"metavariable", metavariable_mt}},
+  {"metavariable", {"metavariable", metavariable_type}},
   -- TODO: quoting and axiom
 })
 
@@ -250,7 +254,6 @@ local purity = gen.declare_enum("purity", {
   {"pure"},
 })
 local resultinfo = gen.declare_record("resultinfo", {"purity", purity})
-local neutral_value = gen.declare_type()
 value:define_enum("value", {
   -- erased, linear, unrestricted / none, one, many
   {"quantity", {"quantity", quantity}},

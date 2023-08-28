@@ -97,8 +97,16 @@ local function dump_env(env)
     .. "\ncarrier: " .. tostring(env.carrier)
 end
 
+local gen = require './terms-generators'
+local runtime_context_type = gen.declare_foreign(gen.metatable_equality(runtime_context_mt))
+local typechecking_context_type = gen.declare_foreign(gen.metatable_equality(typechecking_context_mt))
+local environment_type = gen.declare_foreign(gen.metatable_equality(environment_mt))
+
 return {
   new_env = new_env,
   dump_env = dump_env,
   new_store = new_store,
+  runtime_context_type = runtime_context_type,
+  typechecking_context_type = typechecking_context_type,
+  environment_type = environment_type,
 }
