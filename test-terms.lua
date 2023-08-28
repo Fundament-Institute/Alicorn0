@@ -43,7 +43,7 @@ function test_unify()
   local tcs = terms.typechecker_state()
 
   local mv_a = tcs:metavariable()
-  local free_mv_a = terms.value.free.metavariable(mv_a)
+  local free_mv_a = terms.value.neutral(terms.neutral_value.free.metavariable(mv_a))
   p(mv_a, free_mv_a)
 
   local unified = free_mv_a:unify(terms.value.level_type)
@@ -54,16 +54,16 @@ end
 function test_unify_more_metavariables()
   local tcs = terms.typechecker_state()
 
-  -- terms.value.free.metavariable(...)
-  -- terms.value.free.axiom(...)
+  -- terms.neutral_value.free.metavariable(...)
+  -- terms.neutral_value.free.axiom(...)
   -- VS
-  -- terms.value.free(terms.free.metavariable(...))
+  -- terms.neutral_value.free(terms.free.metavariable(...))
 
   local mv_a = tcs:metavariable()
   local mv_b = tcs:metavariable()
   p('mv_a', mv_a)
-  local free_mv_a = terms.value.free.metavariable(mv_a)
-  local free_mv_b = terms.value.free.metavariable(mv_b)
+  local free_mv_a = terms.value.neutral(terms.neutral_value.free.metavariable(mv_a))
+  local free_mv_b = terms.value.neutral(terms.neutral_value.free.metavariable(mv_b))
   p(mv_a, free_mv_a)
 
   free_mv_b:unify(free_mv_a)
@@ -86,7 +86,7 @@ function test_unify_2()
   local tcs = terms.typechecker_state()
   local mv_a = tcs:metavariable()
   local mv_b = tcs:metavariable()
-  local freemeta = terms.value.free.metavariable
+  local freemeta = function(mv) return terms.value.neutral(terms.neutral_value.free.metavariable(mv)) end
   local free_a = freemeta(mv_a)
   local free_b = freemeta(mv_b)
 
