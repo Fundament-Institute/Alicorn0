@@ -289,12 +289,11 @@ value:define_enum("value", {
   {"prop", {"level", gen.builtin_number}},
   {"prim"},
   {"neutral", {"neutral", neutral_value}},
-  -- fn(free_value) and table of functions eg free.metavariable(metavariable)
-  -- value should be constructed w/ free.something()
-  {"free", {"free_value", free}},
 })
 
 neutral_value:define_enum("neutral_value", {
+  -- fn(free_value) and table of functions eg free.metavariable(metavariable)
+  -- value should be constructed w/ free.something()
   {"free", {"free", free}},
   {"dataelim_stuck", {"motive", value, "handler", value, "subject", neutral_value}},
   {"datarecelim_stuck", {"motive", value, "handler", value, "subject", neutral_value}},
@@ -303,13 +302,13 @@ neutral_value:define_enum("neutral_value", {
   {"recordextend_stuck", {"base", neutral_value, "extension", map(gen.builtin_string, value)}},
 })
 
-value.free.metavariable = function(mv)
-  return value.free(free.metavariable(mv))
+neutral_value.free.metavariable = function(mv)
+  return neutral_value.free(free.metavariable(mv))
 end
 
 local function extract_value_metavariable(value) -- -> Option<metavariable>
-  if value.kind == "value_free" and value.free_value.kind == "free_metavariable" then
-    return value.free_value.metavariable
+  if value.kind == "value_neutral" and value.neutral.kind == "neutral_value_free" and value.neutral.free.kind == "free_metavariable" then
+    return value.neutral.free.metavariable
   end
   return nil
 end
@@ -498,4 +497,5 @@ return {
   purity = purity,
   resultinfo = resultinfo,
   value = value,
+  neutral_value = neutral_value,
 }
