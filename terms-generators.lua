@@ -268,7 +268,7 @@ local function gen_array_fns(value_type)
       p(key)
       error("key passed to index-assignment is not an integer")
     end
-    -- n can be used to append
+    -- n+1 can be used to append
     if key < 1 or key > self.n + 1 then
       p(key, self.n)
       error("key passed to index-assignment is out of bounds")
