@@ -66,7 +66,7 @@ local function create_reducible(self, handler, ...)
   return reducible
 end
 
-local reducible_mt = { __call = create_reducible }
+local reducer_mt = { __call = create_reducible }
 
 local function reducer(func, name)
 
@@ -89,7 +89,7 @@ local function reducer(func, name)
 
   reducer.mt = funcnew_mt
 
-  setmetatable(reducer, reducible_mt)
+  setmetatable(reducer, reducer_mt)
 
   return reducer
 end
@@ -410,7 +410,7 @@ end, "oneof")
 
 local gen = require './terms-generators'
 local constructed_syntax_type = gen.declare_foreign(gen.metatable_equality(constructed_syntax_mt))
-local reducible_type = gen.declare_foreign(gen.metatable_equality(reducible_mt))
+local reducer_type = gen.declare_foreign(gen.metatable_equality(reducer_mt))
 local matcher_type = gen.declare_foreign(function(val)
   return matcher_kinds[val.kind]
 end)
@@ -427,7 +427,6 @@ return {
   oneof = oneof,
   listtail = listtail,
   list_many = list_many,
-  reducible = reducible,
   reducer = reducer,
   isnil = isnil,
   nilval = nilval,
@@ -437,6 +436,6 @@ return {
   symbol = symbol,
   symbol_in_environment = symbol_in_environment,
   constructed_syntax_type = constructed_syntax_type,
-  reducible_type = reducible_type,
+  reducer_type = reducer_type,
   matcher_type = matcher_type,
 }

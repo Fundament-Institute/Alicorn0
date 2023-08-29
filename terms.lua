@@ -43,6 +43,7 @@ local metalang = require './metalanguage'
 
 local gen = require './terms-generators'
 local map = gen.declare_map
+local array = gen.declare_array
 
 local function getmvinfo(id, mvs)
   if mvs == nil then
@@ -180,59 +181,71 @@ local function speculate(f, ...)
   end
 end
 
-local checkable = gen.declare_type()
-local inferrable = gen.declare_type()
-local typed = gen.declare_type()
+local checkable_term = gen.declare_type()
+local inferrable_term = gen.declare_type()
+local typed_term = gen.declare_type()
 local value = gen.declare_type()
 local neutral_value = gen.declare_type()
 -- checkable terms need a target type to typecheck against
-checkable:define_enum("checkable", {
-  {"inferred", {"inferred_term", inferrable}},
-  {"lambda", {"body", checkable}},
+checkable_term:define_enum("checkable", {
+  {"inferred", {"inferred_term", inferrable_term}},
+  {"lambda", {"body", checkable_term}},
 })
 -- inferrable terms can have their type inferred / don't need a target type
-inferrable:define_enum("inferrable", {
+inferrable_term:define_enum("inferrable", {
   {"level_type"},
   {"level0"},
-  {"level_suc", {"previous_level", inferrable}},
+  {"level_suc", {"previous_level", inferrable_term}},
   {"level_max", {
-    "level_a", inferrable,
-    "level_b", inferrable,
+    "level_a", inferrable_term,
+    "level_b", inferrable_term,
   }},
   {"star"},
   {"prop"},
   {"prim"},
   {"annotated", {
-    "annotated_term", checkable,
-    "annotated_type", inferrable,
+    "annotated_term", checkable_term,
+    "annotated_type", inferrable_term,
   }},
   {"typed", {
      "type", value,
-     "typed_term", typed,
+     "typed_term", typed_term,
   }},
 })
 -- typed terms have been typechecked but do not store their type internally
-typed:define_enum("typed", {
-  {"lambda", {"body", typed}},
+typed_term:define_enum("typed", {
+  {"bound_variable", {"index", gen.builtin_number}},
+  {"literal", {"literal_value", value}},
+  {"lambda", {"body", typed_term}},
+  {"qtype", {"quantity", typed_term, "type", typed_term}},
+  {"pi", {
+    "arg_type", typed_term,
+    "arg_info", typed_term,
+    "result_type", typed_term,
+    "result_info", typed_term,
+  }},
+  {"application", {
+    "f", typed_term,
+    "param", typed_term,
+  }},
   {"level_type"},
   {"level0"},
-  {"level_suc", {"previous_level", typed}},
+  {"level_suc", {"previous_level", typed_term}},
   {"level_max", {
-    "level_a", typed,
-    "level_b", typed,
+    "level_a", typed_term,
+    "level_b", typed_term,
   }},
   {"star", {"level", gen.builtin_number}},
   {"prop", {"level", gen.builtin_number}},
   {"prim"},
-  {"literal", {"literal_value", value}},
-  {"recordcons", {"fields", map(gen.builtin_string, typed)}},
-  {"recordextend", {"base", typed, "fields", map(gen.builtin_string, typed)}},
-  {"datacons", {"constructor", gen.builtin_string, "arg", typed}},
-  {"dataelim", {"motive", typed, "mechanism", typed, "subject", typed}},
-  {"datarecelim", {"motive", typed, "mechanism", typed, "subject", typed}},
-  {"objectcons", {"methods", map(gen.builtin_string, typed)}},
-  {"objectcoreccons", {"methods", map(gen.builtin_string, typed)}},
-  {"objectelim", {"motive", typed, "mechanism", typed, "subject", typed}},
+  {"record_cons", {"fields", map(gen.builtin_string, typed_term)}},
+  {"record_extend", {"base", typed_term, "fields", map(gen.builtin_string, typed_term)}},
+  {"data_cons", {"constructor", gen.builtin_string, "arg", typed_term}},
+  {"data_elim", {"motive", typed_term, "mechanism", typed_term, "subject", typed_term}},
+  {"data_rec_elim", {"motive", typed_term, "mechanism", typed_term, "subject", typed_term}},
+  {"object_cons", {"methods", map(gen.builtin_string, typed_term)}},
+  {"object_corec_cons", {"methods", map(gen.builtin_string, typed_term)}},
+  {"object_elim", {"motive", typed_term, "mechanism", typed_term, "subject", typed_term}},
 })
 
 local free = gen.declare_enum("free", {
@@ -240,20 +253,46 @@ local free = gen.declare_enum("free", {
   -- TODO: quoting and axiom
 })
 
+-- erased - - - - never used at runtime
+--              - can only be placed in other erased slots
+--              - e.g. the type Array(u8, 42) has length information that is relevant for typechecking
+--              -      but not for runtime. the constructor of Array(u8, 42) marks the 42 as erased,
+--              -      and it's dropped after compile time.
+-- linear - - - - used once during runtime
+--              - e.g. world
+-- unrestricted - used arbitrarily many times during runtime
 local quantity = gen.declare_enum("quantity", {
   {"erased"},
   {"linear"},
   {"unrestricted"},
 })
+-- implicit arguments are filled in through unification
+-- e.g. fn append(t : star(0), n : nat, xs : Array(t, n), val : t) -> Array(t, n+1)
+--      t and n can be implicit, given the explicit argument xs, as they're filled in by unification
 local visibility = gen.declare_enum("visibility", {
   {"explicit"},
   {"implicit"},
 })
+-- whether a function is effectful or pure
+-- an effectful function must return a monad
+-- calling an effectful function implicitly inserts a monad bind between the
+-- function return and getting the result of the call
 local purity = gen.declare_enum("purity", {
   {"effectful"},
   {"pure"},
 })
-local resultinfo = gen.declare_record("resultinfo", {"purity", purity})
+local result_info = gen.declare_record("result_info", {"purity", purity})
+
+-- values must always be constructed in their simplest form, that cannot be reduced further.
+-- their format must enforce this invariant.
+-- e.g. it must be impossible to construct "2 + 2"; it should be constructed in reduced form "4".
+-- values can contain neutral values, which represent free variables and stuck operations.
+-- stuck operations are those that are blocked from further evaluation by a neutral value.
+-- therefore neutral values must always contain another neutral value or a free variable.
+-- their format must enforce this invariant.
+-- e.g. it's possible to construct the neutral value "x + 2"; "2" is not neutral, but "x" is.
+-- values must all be finite in size and must not have loops.
+-- i.e. destructuring values always (eventually) terminates.
 value:define_enum("value", {
   -- erased, linear, unrestricted / none, one, many
   {"quantity", {"quantity", quantity}},
@@ -263,27 +302,47 @@ value:define_enum("value", {
   {"qtype", {"quantity", value, "type", value}},
   -- info about the argument (is it implicit / what are the usage restrictions?)
   -- quantity/visibility should be restricted to free or (quantity/visibility) rather than any value
-  {"arginfo", {"visibility", value}},
+  {"arg_info", {"visibility", value}},
   -- whether or not a function is effectful /
   -- for a function returning a monad do i have to be called in an effectful context or am i pure
-  {"resultinfo", {"resultinfo", resultinfo}},
+  {"result_info", {"result_info", result_info}},
   {"pi", {
-    "argtype", value,
-    "arginfo", value,
-    "resulttype", value,
-    "resultinfo", resultinfo
+    "arg_type", value, -- qtype
+    "arg_info", value, -- arginfo
+    "result_type", value, -- qtype
+    "result_info", value, -- result_info
   }},
-  {"datavalue", {"constructor", gen.builtin_string, "arg", value}},
-  {"datatype", {"decls", value}},
-  {"recordvalue", {"fields", map(gen.builtin_string, value)}},
-  {"recordtype", {"decls", value}},
-  {"objectvalue", {"methods", map(gen.builtin_string, value)}},
-  {"objecttype", {"decls", value}},
   -- closure is a type that contains a typed term corresponding to the body
   -- and a runtime context representng the bound context where the closure was created
-  --{"closure", {"code", typed_term, "capture", runtime_context}}, -- TODO
+  {"closure", {"code", typed_term, "capture", environment.runtime_context_type}},
+
+  -- metaprogramming stuff
+  -- TODO: add types of terms, and type indices
+  {"syntax_value", {"syntax", metalang.constructed_syntax_type}},
+  {"syntax_type"},
+  {"matcher_value", {"matcher", metalang.matcher_type}},
+  {"matcher_type", {"result_type", value}},
+  {"reducer_value", {"reducer", metalang.reducer_type}},
+  {"environment_value", {"environment", environment.environment_type}},
+  {"environment_type"},
+  {"checkable_term", {"checkable_term", checkable_term}},
+  {"inferrable_term", {"inferrable_term", inferrable_term}},
+  {"typed_term", {"typed_term", typed_term}},
+  --{"typechecker_monad_value", }, -- TODO
+  {"typechecker_monad_type", {"wrapped_type", value}},
   {"name_type"},
   {"name", {"name", gen.builtin_string}},
+
+  -- ordinary data
+  {"tuple_value", {"elements", array(value)}},
+  {"tuple_type", {"decls", value}},
+  {"data_value", {"constructor", gen.builtin_string, "arg", value}},
+  {"data_type", {"decls", value}},
+  {"record_value", {"fields", map(gen.builtin_string, value)}},
+  {"record_type", {"decls", value}},
+  {"record_extend_stuck", {"base", neutral_value, "extension", map(gen.builtin_string, value)}},
+  {"object_value", {"methods", map(gen.builtin_string, value)}},
+  {"object_type", {"decls", value}},
   {"level_type"},
   {"number_type"},
   {"number", {"number", gen.builtin_number}},
@@ -291,6 +350,7 @@ value:define_enum("value", {
   {"star", {"level", gen.builtin_number}},
   {"prop", {"level", gen.builtin_number}},
   {"prim"},
+
   {"neutral", {"neutral", neutral_value}},
 })
 
@@ -298,11 +358,12 @@ neutral_value:define_enum("neutral_value", {
   -- fn(free_value) and table of functions eg free.metavariable(metavariable)
   -- value should be constructed w/ free.something()
   {"free", {"free", free}},
-  {"dataelim_stuck", {"motive", value, "handler", value, "subject", neutral_value}},
-  {"datarecelim_stuck", {"motive", value, "handler", value, "subject", neutral_value}},
-  {"objectelim_stuck", {"motive", value, "method", value, "subject", neutral_value}},
-  {"recordelim_stuck", {"motive", value, "fields", value, "uncurried", value, "subject", neutral_value}},
-  {"recordextend_stuck", {"base", neutral_value, "extension", map(gen.builtin_string, value)}},
+  {"application_stuck", {"f", neutral_value, "param", value}},
+  {"data_elim_stuck", {"motive", value, "handler", value, "subject", neutral_value}},
+  {"data_rec_elim_stuck", {"motive", value, "handler", value, "subject", neutral_value}},
+  {"object_elim_stuck", {"motive", value, "method", value, "subject", neutral_value}},
+  {"record_elim_stuck", {"motive", value, "fields", value, "uncurried", value, "subject", neutral_value}},
+  --{"tuple_elim_stuck", {}},
 })
 
 neutral_value.free.metavariable = function(mv)
@@ -396,10 +457,10 @@ local unifier = {
 }
 
 value:derive(unifier)
-resultinfo:derive(unifier)
+result_info:derive(unifier)
 
 local function check(
-    checkable_term, -- constructed from checkable
+    checkable_term, -- constructed from checkable_term
     typechecking_context, -- todo
     target_type) -- must be unify with target type (there is some way we can assign metavariables to make them equal)
   -- -> type of that term, a typed term
@@ -422,25 +483,25 @@ local function infer(
     )
   -- -> type of term, a typed term,
   if inferrable_term.kind == "inferrable_level0" then
-    return value.level_type, typed.level0
+    return value.level_type, typed_term.level0
   elseif inferrable_term.kind == "inferrable_level_suc" then
     local arg_type, arg_term = infer(inferrable_term.previous_level, typechecking_context)
     arg_type:unify(value.level_type)
-    return value.level_type, typed.level_suc(arg_term)
+    return value.level_type, typed_term.level_suc(arg_term)
   elseif inferrable_term.kind == "inferrable_level_max" then
     local arg_type_a, arg_term_a = infer(inferrable_term.level_a, typechecking_context)
     local arg_type_b, arg_term_b = infer(inferrable_term.level_b, typechecking_context)
     arg_type_a:unify(value.level_type)
     arg_type_b:unify(value.level_type)
-    return value.level_type, typed.level_max(arg_term_a, arg_term_b)
+    return value.level_type, typed_term.level_max(arg_term_a, arg_term_b)
   elseif inferrable_term.kind == "inferrable_level_type" then
-    return value.star(0), typed.level_type
+    return value.star(0), typed_term.level_type
   elseif inferrable_term.kind == "inferrable_star" then
-    return value.star(1), typed.star(0)
+    return value.star(1), typed_term.star(0)
   elseif inferrable_term.kind == "inferrable_prop" then
-    return value.star(1), typed.prop(0)
+    return value.star(1), typed_term.prop(0)
   elseif inferrable_term.kind == "inferrable_prim" then
-    return value.star(1), typed.prim
+    return value.star(1), typed_term.prim
   end
 
   error("unknown kind in infer: " .. inferrable_term.kind)
@@ -452,7 +513,36 @@ local function evaluate(
     )
   -- -> a value
 
-  if typed_term.kind == "typed_level0" then
+  if typed_term.kind == "typed_bound_variable" then
+    return runtime_context:get(typed_term.index)
+  elseif typed_term.kind == "typed_literal" then
+    return typed_term.literal_value
+  elseif typed_term.kind == "typed_lambda" then
+    local value = value.closure(typed_term.body, runtime_context)
+    return value
+  elseif typed_term.kind == "typed_qtype" then
+    local eval_quantity = evaluate(typed_term.quantity, runtime_context)
+    local eval_type = evaluate(typed_term.type, runtime_context)
+    return value.qtype(eval_quantity, eval_type)
+  elseif typed_term.kind == "typed_pi" then
+    local eval_arg_type = evaluate(typed_term.arg_type, runtime_context)
+    local eval_arg_info = evaluate(typed_term.arg_info, runtime_context)
+    local eval_result_type = evaluate(typed_term.result_type, runtime_context)
+    local eval_result_info = evaluate(typed_term.result_info, runtime_context)
+    return value.pi(eval_arg_type, eval_arg_info, eval_result_type, eval_result_info)
+  elseif typed_term.kind == "typed_application" then
+    local eval_f = evaluate(typed_term.f, runtime_context)
+    local eval_param = evaluate(typed_term.param, runtime_context)
+    if eval_f.kind == "value_closure" then
+      local inner_context = eval_f.capture:append(eval_param)
+      return evaluate(eval_f.code, inner_context)
+    elseif eval_f.kind == "value_neutral" then
+      return value.neutral(neutral_value.application_stuck(eval_f.neutral_value, eval_param))
+    else
+      error("trying to apply on something that isn't a function/closure")
+    end
+
+  elseif typed_term.kind == "typed_level0" then
     return value.level(0)
   elseif typed_term.kind == "typed_level_suc" then
     local previous_level = evaluate(typed_term.previous_level, runtime_context)
@@ -485,11 +575,11 @@ local function evaluate(
 end
 
 return {
-  checkable = checkable, -- {}
-  inferrable = inferrable, -- {}
+  checkable_term = checkable_term, -- {}
+  inferrable_term = inferrable_term, -- {}
   check = check, -- fn
   infer = infer, -- fn
-  typed = typed, -- {}
+  typed_term = typed_term, -- {}
   evaluate = evaluate, -- fn
   types = types, -- {}
   typechecker_state = typechecker_state, -- fn (constructor)

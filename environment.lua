@@ -31,9 +31,9 @@ runtime_context_mt = {
 
 
 local function runtime_context()
-  return setmetatable({
-      data_buffer = fibbuf,
-                      }, runtime_context_mt)
+  local self = {}
+  self.bindings = fibbuf()
+  return setmetatable(self, runtime_context_mt)
 end
 
 local typechecking_context_mt
@@ -187,6 +187,8 @@ return {
   new_env = new_env,
   dump_env = dump_env,
   new_store = new_store,
+  runtime_context = runtime_context,
+  typechecking_context = typechecking_context,
   runtime_context_type = runtime_context_type,
   typechecking_context_type = typechecking_context_type,
   environment_type = environment_type,
