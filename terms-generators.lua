@@ -205,6 +205,7 @@ local function define_map(self, key_type, value_type)
   self.key_type = key_type
   self.value_type = value_type
   self.__index, self.__newindex = gen_map_fns(key_type, value_type)
+  self.__pairs = map_methods.pairs
   -- NOTE: this isn't primitive equality; this type has a __eq metamethod!
   self.value_check = metatable_equality(self)
   return self
@@ -234,6 +235,12 @@ local array_methods = {
   end,
   append = function(self, val)
     self[self.n + 1] = val
+  end,
+  pop_back = function(self)
+    local val = self.array[self.n]
+    self.array[self.n] = nil
+    self.n = self.n - 1
+    return val
   end,
 }
 
@@ -294,6 +301,8 @@ local function define_array(self, value_type)
   setmetatable(self, array_type_mt)
   self.value_type = value_type
   self.__index, self.__newindex = gen_array_fns(value_type)
+  self.__ipairs = array_methods.ipairs
+  self.__len = array_methods.len
   -- NOTE: this isn't primitive equality; this type has a __eq metamethod!
   self.value_check = metatable_equality(self)
   return self
