@@ -400,7 +400,7 @@ mechanism_term:define_enum("mechanism", {
 })
 mechanism_usage:define_enum("mechanism_usage", {
   {"callable", {
-    "argtype", value,
+    "arg_type", value,
     "next_usage", mechanism_usage,
   }},
   {"inferrable"},
@@ -442,6 +442,7 @@ inferrable_term:define_enum("inferrable", {
     "var_expr", inferrable_term,
     "body", inferrable_term,
   }},
+  {"operative_cons", {"handler", checkable_term}},
   {"level_type"},
   {"level0"},
   {"level_suc", {"previous_level", inferrable_term}},
@@ -498,6 +499,7 @@ typed_term:define_enum("typed", {
   {"object_cons", {"methods", map(gen.builtin_string, typed_term)}},
   {"object_corec_cons", {"methods", map(gen.builtin_string, typed_term)}},
   {"object_elim", {"mechanism", typed_term, "subject", typed_term}},
+  {"operative_cons"},
 })
 
 free:define_enum("free", {
@@ -591,11 +593,14 @@ value:define_enum("value", {
   {"environment_type"},
   {"checkable_term", {"checkable_term", checkable_term}},
   {"inferrable_term", {"inferrable_term", inferrable_term}},
+  {"inferrable_term_type"},
   {"typed_term", {"typed_term", typed_term}},
   --{"typechecker_monad_value", }, -- TODO
   {"typechecker_monad_type", {"wrapped_type", value}},
   {"name_type"},
   {"name", {"name", gen.builtin_string}},
+  {"operative_value"},
+  {"operative_type", {"handler", value}},
 
   -- ordinary data
   {"tuple_value", {"elements", array(value)}},
@@ -640,6 +645,8 @@ end
 return {
   typechecker_state = typechecker_state, -- fn (constructor)
   checkable_term = checkable_term, -- {}
+  mechanism_term = mechanism_term,
+  mechanism_usage = mechanism_usage,
   inferrable_term = inferrable_term, -- {}
   typed_term = typed_term, -- {}
   free = free,

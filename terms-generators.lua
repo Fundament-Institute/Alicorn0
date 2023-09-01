@@ -236,11 +236,15 @@ local array_methods = {
   append = function(self, val)
     self[self.n + 1] = val
   end,
-  pop_back = function(self)
-    local val = self.array[self.n]
-    self.array[self.n] = nil
-    self.n = self.n - 1
-    return val
+  copy = function(self, first, last)
+    local first = first or 1
+    local last = last or #self
+    local mt = getmetatable(self)
+    local new = mt()
+    for i = first, last do
+      new:append(self.array[i])
+    end
+    return new
   end,
 }
 
