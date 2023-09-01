@@ -115,7 +115,7 @@ local eq = {
     end
     local all_checks = table.concat(checks, " and ")
     local chunk = "return function(left, right) return " .. all_checks .. " end"
-    print("record chunk: ", info.kind)
+    print("record chunk: " .. info.kind)
     print("###")
     print(chunk)
     print("###")
@@ -155,7 +155,7 @@ local eq = {
     local check_function = "function(left, right) return " .. check_expression .. " end"
 
     local chunk = define_all_variants_checks .. "\nreturn " .. check_function
-    print("enum chunk: ", info.name)
+    print("enum chunk: " .. info.name)
     print("###")
     print(chunk)
     print("###")
@@ -168,7 +168,7 @@ local eq = {
 
 value:derive(eq)
 
-local evaluate
+local evaluate, infer
 
 local function check(
     checkable_term, -- constructed from checkable_term
@@ -185,10 +185,32 @@ local function check(
     -- TODO open says work on other things first they will be easier
   end
 
-  error("unknown kind in check: " .. checkable_term.kind)
+  error("check: unknown kind: " .. checkable_term.kind)
 end
 
-local function infer(
+local function add_arrays(onto, with)
+  for i, n in ipairs(with) do
+    local x = onto[i] or 0
+    onto[i] = x + n
+  end
+end
+
+local function substitute_type_variables(val, index_base, index_offset)
+  -- TODO: replace free_placeholder variables with bound variables
+  return value.closure(typed_term.literal(val), runtime_context())
+end
+
+local function infer_mechanism(mechanism_term, typechecking_context, mechanism_usage)
+  if mechanism_term.kind == "mechanism_inferrable" then
+    local mech_type, mech_usages, mech_term = infer(mechanism_term.inferrable_term, typechecking_context)
+  elseif mechanism_term.kind == "mechanism_lambda" then
+    if mechanism_usage.kind ~= "mechanism_usage_callable" then
+      error("infer_mechanism: can't infer mechanism type because mechanism lambda wasn't called immediately")
+    end
+  end
+end
+
+function infer(
     inferrable_term, -- constructed from inferrable
     typechecking_context -- todo
     )
@@ -214,16 +236,16 @@ local function infer(
     --print("infer, handing off to evaluate")
     --p(param_term)
     --print("let's go")
-    local eval_param_term = evaluate(param_term, typechecking_context:get_runtime_context())
+    local param_term_eval = evaluate(param_term, typechecking_context:get_runtime_context())
     -- TODO: also handle neutral values, for inference of qtype
-    if eval_param_term.kind ~= "value_qtype" then
-      p(eval_param_term)
-      error("lambda annotation without quantity information")
+    if param_term_eval.kind ~= "value_qtype" then
+      p(param_term_eval)
+      error("infer: lambda annotation without quantity information")
     end
-    local param_quantity = eval_param_term.quantity.quantity.kind
-    local inner_context = typechecking_context:append("", eval_param_term.type)
+    local param_quantity = param_term_eval.quantity.quantity.kind
+    local inner_context = typechecking_context:append(inferrable_term.param_name, param_term_eval.type)
     local body_type, body_usages, body_term = infer(inferrable_term.body, inner_context)
-    local result_type = value.closure(typed_term.literal(body_type), runtime_context()) -- TODO: replace free_placeholder variables with bound variables
+    local result_type = substitute_type_variables(body_type, #inner_context, 0)
     --p("A!")
     --p(body_usages)
     local body_usages_param = body_usages:pop_back()
@@ -231,19 +253,19 @@ local function infer(
     --p("B!")
     if param_quantity == "quantity_erased" then
       if body_usages_param > 0 then
-        error("trying to use an erased parameter")
+        error("infer: trying to use an erased parameter")
       end
     elseif param_quantity == "quantity_linear" then
       if body_usages_param > 1 then
-        error("trying to use a linear parameter multiple times")
+        error("infer: trying to use a linear parameter multiple times")
       end
     elseif param_quantity == "quantity_unrestricted" then
       -- nwn
     else
-      error("unknown quantity")
+      error("infer: unknown quantity")
     end
     local lambda_type = value.pi(
-      eval_param_term,
+      param_term_eval,
       value.param_info(value.visibility(visibility.explicit)),
       result_type,
       value.result_info(result_info(purity.pure))
@@ -253,16 +275,14 @@ local function infer(
   elseif inferrable_term.kind == "inferrable_qtype" then
     local quantity_type, quantity_usages, quantity_term = infer(inferrable_term.quantity, typechecking_context)
     local type_type, type_usages, type_term = infer(inferrable_term.type, typechecking_context)
-    for i, n in ipairs(type_usages) do
-      local qu = quantity_usages[i] or 0
-      qu = qu + n
-      quantity_usages[i] = qu
-    end
+    local qtype_usages = usage_array()
+    add_arrays(qtype_usages, quantity_usages)
+    add_arrays(qtype_usages, type_usages)
     local qtype = typed_term.qtype(quantity_term, type_term)
     local qtype_type = value.qtype_type(0) -- TODO: get level from the inner type
-    return qtype_type, quantity_usages, qtype
+    return qtype_type, qtype_usages, qtype
   elseif inferrable_term.kind == "inferrable_pi" then
-    error("nyi")
+    error("infer: nyi")
     local param_type_type, param_type_usages, param_type_term = infer(inferrable_term.param_type, typechecking_context)
     local param_info_type, param_info_usages, param_type_term = infer(inferrable_term.param_type, typechecking_context)
     local param_type_type, param_type_usages, param_type_term = infer(inferrable_term.param_type, typechecking_context)
@@ -271,28 +291,96 @@ local function infer(
     local f_type, f_usages, f_term = infer(inferrable_term.f, typechecking_context)
     local arg_type, arg_usages, arg_term = infer(inferrable_term.arg, typechecking_context)
     if f_type.kind ~= "value_pi" then
-      error("trying to apply to something whose type isn't a function type")
-    elseif f_type.param_info.visibility.visibility.kind ~= "visibility_explicit" then
-      error("nyi implicit parameters")
+      error("infer: trying to apply function application to something whose type isn't a function type")
+    end
+    if f_type.param_info.visibility.visibility.kind ~= "visibility_explicit" then
+      error("infer: nyi implicit parameters")
     end
     if f_type.param_type ~= arg_type then
       p(f_type)
       p(arg_type)
-      error("mismatch in arg type and param type of application")
+      error("infer: mismatch in arg type and param type of application")
     end
     local result_type = typed_term.application(typed_term.literal(f_type.result_type), arg_term)
     --print("infer, handing off to evaluate (2)")
     --p(f_type)
     --p(result_type)
     --print("let's go")
-    local eval_result_type = evaluate(result_type, typechecking_context:get_runtime_context())
-    for i, n in ipairs(arg_usages) do
-      local fu = f_usages[i] or 0
-      fu = fu + n
-      f_usages[i] = fu
-    end
+    local result_type_eval = evaluate(result_type, typechecking_context:get_runtime_context())
+    local application_usages = usage_array()
+    add_arrays(application_usages, f_usages)
+    add_arrays(application_usages, arg_usages)
     local application = typed_term.application(f_term, arg_term)
-    return eval_result_type, f_usages, application
+    return result_type_eval, application_usages, application
+  elseif inferrable_term.kind == "inferrable_tuple_cons" then
+    local type_elements_type = array(value)
+    -- type_data is either "empty", an empty tuple,
+    -- or "cons", a tuple with the previous type_data and a function that
+    -- takes all previous values and produces the type of the next element
+    local type_data = value.data_value("empty", value.tuple_value(type_elements_type()))
+    local usages = usage_array()
+    local elements = array(typed_term)()
+    for _, v in ipairs(inferrable_term.elements) do
+      local e_type, e_usages, e_term = infer(v, typechecking_context)
+
+      local new_type_elements = type_elements_type(type_data, substitute_type_variables(e_type, #typechecking_context + 1, 0))
+      type_data = value.data_value("cons", value.tuple_value(new_type_elements))
+
+      add_arrays(usages, e_usages)
+      elements:append(e_term)
+    end
+    return value.tuple_type(type_data), usages, typed_term.tuple_cons(elements)
+  elseif inferrable_term.kind == "inferrable_tuple_elim" then
+    local subject_type, subject_usages, subject_term = infer(inferrable_term.subject, typechecking_context)
+    if subject_type.kind ~= "value_tuple_type" then
+      error("infer: trying to apply tuple elimination to something whose type isn't a tuple type")
+    end
+    local mechanism = inferrable_term.mechanism
+    local data = subject_type.decls
+    while true do
+      if mechanism.kind == "mechanism_inferrable" then
+        local mechanism_type, mechanism_usages, mechanism_term = infer(inferrable_term.mechanism, typechecking_context)
+        break
+      elseif mechanism.kind == "mechanism_lambda" then
+        if data.constructor == "empty" then
+          error("infer: mechanism is not inferrable")
+        elseif data.constructor == "cons" then
+          local details = data.arg.elements
+          local f = details[2]
+          elim_type = value.pi(
+            ???????,
+            value.param_info(value.visibility(visibility.explicit)),
+            ???????,
+            value.result_info(result_info(purity.pure))
+          )
+          data = details[1]
+        else
+          error("infer: unknown tuple type data constructor")
+        end
+      else
+        error("infer: unknown mechanism kind")
+      end
+    end
+    local elim_type = ?????????
+    local data = subject_type.decls
+    while true do
+      local constructor = data.constructor
+      if constructor == "empty" then
+        break
+      elseif constructor == "cons" then
+        local details = data.arg.elements
+        local f = details[2]
+        elim_type = value.pi(
+          ???????,
+          value.param_info(value.visibility(visibility.explicit)),
+          ???????,
+          value.result_info(result_info(purity.pure))
+        )
+        data = details[1]
+      else
+        error("infer: unknown tuple type data constructor")
+      end
+    end
   end
 
   --[[
@@ -319,7 +407,20 @@ local function infer(
   end
   ]]
 
-  error("unknown kind in infer: " .. inferrable_term.kind)
+  error("infer: unknown kind: " .. inferrable_term.kind)
+end
+
+local function apply_value(f, arg)
+  local kind = f.kind
+  if kind == "value_closure" then
+    local inner_context = f.capture:append(arg)
+    return evaluate(f.code, inner_context)
+  elseif kind == "value_neutral" then
+    return value.neutral(neutral_value.application_stuck(f.neutral_value, arg))
+  else
+    p(f)
+    error("evaluate: trying to apply function application to something that isn't a function/closure")
+  end
 end
 
 function evaluate(
@@ -339,29 +440,43 @@ function evaluate(
     local value = value.closure(typed_term.body, runtime_context)
     return value
   elseif typed_term.kind == "typed_qtype" then
-    local eval_quantity = evaluate(typed_term.quantity, runtime_context)
-    local eval_type = evaluate(typed_term.type, runtime_context)
-    return value.qtype(eval_quantity, eval_type)
+    local quantity_eval = evaluate(typed_term.quantity, runtime_context)
+    local type_eval = evaluate(typed_term.type, runtime_context)
+    return value.qtype(quantity_eval, type_eval)
   elseif typed_term.kind == "typed_pi" then
-    local eval_param_type = evaluate(typed_term.param_type, runtime_context)
-    local eval_param_info = evaluate(typed_term.param_info, runtime_context)
-    local eval_result_type = evaluate(typed_term.result_type, runtime_context)
-    local eval_result_info = evaluate(typed_term.result_info, runtime_context)
-    return value.pi(eval_param_type, eval_param_info, eval_result_type, eval_result_info)
+    local param_type_eval = evaluate(typed_term.param_type, runtime_context)
+    local param_info_eval = evaluate(typed_term.param_info, runtime_context)
+    local result_type_eval = evaluate(typed_term.result_type, runtime_context)
+    local result_info_eval = evaluate(typed_term.result_info, runtime_context)
+    return value.pi(param_type_eval, param_info_eval, result_type_eval, result_info_eval)
   elseif typed_term.kind == "typed_application" then
-    local eval_f = evaluate(typed_term.f, runtime_context)
-    local eval_arg = evaluate(typed_term.arg, runtime_context)
-    if eval_f.kind == "value_closure" then
-      local inner_context = eval_f.capture:append(eval_arg)
-      return evaluate(eval_f.code, inner_context)
-    elseif eval_f.kind == "value_neutral" then
-      return value.neutral(neutral_value.application_stuck(eval_f.neutral_value, eval_arg))
-    else
-      p(eval_f)
-      error("trying to apply on something that isn't a function/closure")
+    local f_eval = evaluate(typed_term.f, runtime_context)
+    local arg_eval = evaluate(typed_term.arg, runtime_context)
+    return apply_value(f_eval, arg_eval)
+  elseif typed_term.kind == "typed_tuple_cons" then
+    local elements = array(value)()
+    for _, v in ipairs(typed_term.elements) do
+      elements:append(evaluate(v, runtime_context))
     end
+    return value.tuple_value(elements)
+  elseif typed_term.kind == "typed_tuple_elim" then
+    local mechanism_eval = evaluate(typed_term.mechanism, runtime_context)
+    local subject_eval = evaluate(typed_term.subject, runtime_context)
+    if subject_eval.kind == "value_tuple_value" then
+      local mechacons = mechanism_eval
+      for _, v in ipairs(subject_eval.elements) do
+        mechacons = apply_value(mechacons, v)
+      end
+      return mechacons
+    elseif subject_eval.kind == "value_neutral" then
+      return value.neutral(neutral_value.tuple_elim_stuck(mechanism_eval, subject_eval.neutral_value))
+    else
+      error("evaluate: trying to apply tuple elimination to something that isn't a tuple")
+    end
+  end
 
-  elseif typed_term.kind == "typed_level0" then
+  --[[
+  if typed_term.kind == "typed_level0" then
     return value.level(0)
   elseif typed_term.kind == "typed_level_suc" then
     local previous_level = evaluate(typed_term.previous_level, runtime_context)
@@ -389,8 +504,9 @@ function evaluate(
   elseif typed_term.kind == "typed_prim" then
     return value.prim
   end
+  ]]
 
-  error("unknown kind in evaluate " .. typed_term.kind)
+  error("evaluate: unknown kind: " .. typed_term.kind)
 end
 
 return {

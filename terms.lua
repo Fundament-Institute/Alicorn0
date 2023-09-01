@@ -185,6 +185,8 @@ local function speculate(f, ...)
 end
 
 local checkable_term = gen.declare_type()
+local mechanism_term = gen.declare_type()
+local mechanism_usage = gen.declare_type()
 local inferrable_term = gen.declare_type()
 local typed_term = gen.declare_type()
 local free = gen.declare_type()
@@ -383,8 +385,25 @@ local environment_type = gen.declare_foreign(gen.metatable_equality(environment_
 
 -- checkable terms need a target type to typecheck against
 checkable_term:define_enum("checkable", {
-  {"inferred", {"inferred_term", inferrable_term}},
-  {"lambda", {"body", checkable_term}},
+  {"mechanism", {"mechanism_term", mechanism_term}},
+  {"lambda", {
+    "param_name", gen.builtin_string,
+    "body", checkable_term,
+  }},
+})
+mechanism_term:define_enum("mechanism", {
+  {"inferrable", {"inferrable_term", inferrable_term}},
+  {"lambda", {
+    "param_name", gen.builtin_string,
+    "body", mechanism_term,
+  }},
+})
+mechanism_usage:define_enum("mechanism_usage", {
+  {"callable", {
+    "argtype", value,
+    "next_usage", mechanism_usage,
+  }},
+  {"inferrable"},
 })
 -- inferrable terms can have their type inferred / don't need a target type
 inferrable_term:define_enum("inferrable", {
@@ -395,7 +414,8 @@ inferrable_term:define_enum("inferrable", {
     "typed_term", typed_term,
   }},
   {"annotated_lambda", {
-    "parameter_annotation", inferrable_term,
+    "param_name", gen.builtin_string,
+    "param_annotation", inferrable_term,
     "body", inferrable_term,
   }},
   {"qtype", {
@@ -411,6 +431,16 @@ inferrable_term:define_enum("inferrable", {
   {"application", {
     "f", inferrable_term,
     "arg", inferrable_term,
+  }},
+  {"tuple_cons", {"elements", array(inferrable_term)}},
+  {"tuple_elim", {
+    "mechanism", mechanism_term,
+    "subject", inferrable_term,
+  }},
+  {"let", {
+    "var_name", gen.builtin_string,
+    "var_expr", inferrable_term,
+    "body", inferrable_term,
   }},
   {"level_type"},
   {"level0"},
@@ -456,14 +486,18 @@ typed_term:define_enum("typed", {
   {"star", {"level", gen.builtin_number}},
   {"prop", {"level", gen.builtin_number}},
   {"prim"},
+  {"tuple_cons", {"elements", array(typed_term)}},
+  --{"tuple_extend", {"base", typed_term, "fields", array(typed_term)}}, -- maybe?
+  {"tuple_elim", {"mechanism", typed_term, "subject", typed_term}},
   {"record_cons", {"fields", map(gen.builtin_string, typed_term)}},
   {"record_extend", {"base", typed_term, "fields", map(gen.builtin_string, typed_term)}},
+  --TODO record elim
   {"data_cons", {"constructor", gen.builtin_string, "arg", typed_term}},
-  {"data_elim", {"motive", typed_term, "mechanism", typed_term, "subject", typed_term}},
-  {"data_rec_elim", {"motive", typed_term, "mechanism", typed_term, "subject", typed_term}},
+  {"data_elim", {"mechanism", typed_term, "subject", typed_term}},
+  {"data_rec_elim", {"mechanism", typed_term, "subject", typed_term}},
   {"object_cons", {"methods", map(gen.builtin_string, typed_term)}},
   {"object_corec_cons", {"methods", map(gen.builtin_string, typed_term)}},
-  {"object_elim", {"motive", typed_term, "mechanism", typed_term, "subject", typed_term}},
+  {"object_elim", {"mechanism", typed_term, "subject", typed_term}},
 })
 
 free:define_enum("free", {
@@ -592,11 +626,11 @@ neutral_value:define_enum("neutral_value", {
     "f", neutral_value,
     "arg", value,
   }},
-  {"data_elim_stuck", {"motive", value, "handler", value, "subject", neutral_value}},
-  {"data_rec_elim_stuck", {"motive", value, "handler", value, "subject", neutral_value}},
-  {"object_elim_stuck", {"motive", value, "method", value, "subject", neutral_value}},
-  {"record_elim_stuck", {"motive", value, "fields", value, "uncurried", value, "subject", neutral_value}},
-  --{"tuple_elim_stuck", {}},
+  {"data_elim_stuck", {"handler", value, "subject", neutral_value}},
+  {"data_rec_elim_stuck", {"handler", value, "subject", neutral_value}},
+  {"object_elim_stuck", {"method", value, "subject", neutral_value}},
+  {"record_elim_stuck", {"fields", value, "uncurried", value, "subject", neutral_value}},
+  {"tuple_elim_stuck", {"mechanism", value, "subject", neutral_value}},
 })
 
 neutral_value.free.metavariable = function(mv)
