@@ -28,7 +28,7 @@ local result_info_pure = value.result_info(result_info(purity.pure))
 local result_info_effectful = value.result_info(result_info(purity.effectful))
 local function tupval(...) return value.tuple_value(array(value)(...)) end
 
-local eq = require './derive-eq'
+local derivers = require './derivers'
 
 --[[
 local function extract_value_metavariable(value) -- -> Option<metavariable>
@@ -121,7 +121,7 @@ value:derive(unifier)
 result_info:derive(unifier)
 ]]
 
-value:derive(eq)
+value:derive(derivers.eq)
 
 local evaluate, infer
 

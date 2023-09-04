@@ -1,4 +1,4 @@
-local eq = require './derive-eq'
+local eq = (require './derivers').eq
 local gen = require './terms-generators'
 
 local mytype1 = gen.declare_enum("mytype1", {

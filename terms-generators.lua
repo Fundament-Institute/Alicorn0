@@ -44,11 +44,17 @@ end
 
 local function validate_params_types(kind, params, params_types)
   -- ensure there are at least as many param types as there are params
+  -- also ensure there is at least one param
+  local at_least_one = false
   for i, v in ipairs(params) do
+    at_least_one = true
     local param_type = params_types[i]
     if type(param_type) ~= "table" or type(param_type.value_check) ~= "function" then
       error("trying to set a parameter type to something that isn't a type, in constructor " .. kind .. ", parameter " .. v .. " (possible typo?)")
     end
+  end
+  if not at_least_one then
+    error("trying to make a record type, or a record variant of an enum type, with no parameters")
   end
 end
 
@@ -97,8 +103,6 @@ local function gen_unit(self, kind)
   }
   local derive_info = {
     kind = kind,
-    params = {},
-    params_types = {},
   }
   setmetatable(val, self)
   return val, derive_info

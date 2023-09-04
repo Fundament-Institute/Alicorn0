@@ -50,6 +50,8 @@ end
 
 local array = gen.declare_array
 local usage_array = array(gen.builtin_number)
+local inferrable_array = array(terms.inferrable_term)
+local typed_array = array(terms.typed_term)
 
 local unrestricted_number_type = terms.value.qtype(terms.value.quantity(terms.quantity.unrestricted), terms.value.number_type)
 local inf_unrestricted_number_type = terms.inferrable_term.typed(terms.value.star(0), usage_array(), terms.typed_term.literal(unrestricted_number_type))
@@ -70,7 +72,7 @@ infer_and_eval("apply_inf_closure_with_capture", apply_inf_closure_with_capture)
 
 print("PART THREE!!!!!!!!")
 
-local function inftup(...) return terms.inferrable_term.tuple_cons(array(terms.inferrable_term)(...)) end
+local function inftup(...) return terms.inferrable_term.tuple_cons(inferrable_array(...)) end
 local tuple_of_69_420 = inftup(inflit(69), inflit(420))
 infer_and_eval("tuple_of_69_420", tuple_of_69_420)
 
@@ -82,9 +84,9 @@ infer_and_eval("swap_69_420", swap_69_420)
 
 print("PART FOUR!!!!!!!!!")
 
-local prim_add = terms.value.prim(function(left, right) return left + right end)
-local prim_3 = terms.typed_term.literal(terms.value.prim(3))
-local prim_4 = terms.typed_term.literal(terms.value.prim(4))
-local prim_3_4 = terms.typed_term.prim_tuple_cons(gen.declare_array(terms.typed_term)(prim_3, prim_4))
-local test_add_term = terms.typed_term.application(terms.typed_term.literal(prim_add), prim_3_4)
-local test_add_res = eval_test("test_add", test_add_term)
+local function prim_f(f) return terms.typed_term.literal(terms.value.prim(f)) end
+local prim_add = prim_f(function(left, right) return left + right end)
+local function prim_lit(x) return terms.typed_term.literal(terms.value.prim(x)) end
+local function prim_tup(...) return terms.typed_term.prim_tuple_cons(typed_array(...)) end
+local prim_add_69_420 = app(prim_add, prim_tup(prim_lit(69), prim_lit(420)))
+eval_test("prim_add_69_420", prim_add_69_420)

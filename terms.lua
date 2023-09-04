@@ -45,7 +45,7 @@ local trie = require './lazy-prefix-tree'
 local fibbuf = require './fibonacci-buffer'
 
 local gen = require './terms-generators'
-local as = require './derive-as'
+local derivers = require './derivers'
 local map = gen.declare_map
 local array = gen.declare_array
 
@@ -489,16 +489,34 @@ typed_term:define_enum("typed", {
   {"prop", {"level", gen.builtin_number}},
   {"tuple_cons", {"elements", array(typed_term)}},
   --{"tuple_extend", {"base", typed_term, "fields", array(typed_term)}}, -- maybe?
-  {"tuple_elim", {"mechanism", typed_term, "subject", typed_term}},
+  {"tuple_elim", {
+    "mechanism", typed_term,
+    "subject", typed_term,
+  }},
   {"record_cons", {"fields", map(gen.builtin_string, typed_term)}},
-  {"record_extend", {"base", typed_term, "fields", map(gen.builtin_string, typed_term)}},
+  {"record_extend", {
+    "base", typed_term,
+    "fields", map(gen.builtin_string, typed_term),
+  }},
   --TODO record elim
-  {"data_cons", {"constructor", gen.builtin_string, "arg", typed_term}},
-  {"data_elim", {"mechanism", typed_term, "subject", typed_term}},
-  {"data_rec_elim", {"mechanism", typed_term, "subject", typed_term}},
+  {"data_cons", {
+    "constructor", gen.builtin_string,
+    "arg", typed_term,
+  }},
+  {"data_elim", {
+    "mechanism", typed_term,
+    "subject", typed_term,
+  }},
+  {"data_rec_elim", {
+    "mechanism", typed_term,
+    "subject", typed_term,
+  }},
   {"object_cons", {"methods", map(gen.builtin_string, typed_term)}},
   {"object_corec_cons", {"methods", map(gen.builtin_string, typed_term)}},
-  {"object_elim", {"mechanism", typed_term, "subject", typed_term}},
+  {"object_elim", {
+    "mechanism", typed_term,
+    "subject", typed_term,
+  }},
   {"operative_cons"},
   {"prim_tuple_cons", {"elements", array(typed_term)}}, -- prim
 })
@@ -607,11 +625,17 @@ value:define_enum("value", {
   -- ordinary data
   {"tuple_value", {"elements", array(value)}},
   {"tuple_type", {"decls", value}},
-  {"data_value", {"constructor", gen.builtin_string, "arg", value}},
+  {"data_value", {
+    "constructor", gen.builtin_string,
+    "arg", value,
+  }},
   {"data_type", {"decls", value}},
   {"record_value", {"fields", map(gen.builtin_string, value)}},
   {"record_type", {"decls", value}},
-  {"record_extend_stuck", {"base", neutral_value, "extension", map(gen.builtin_string, value)}},
+  {"record_extend_stuck", {
+    "base", neutral_value,
+    "extension", map(gen.builtin_string, value),
+  }},
   {"object_value", {"methods", map(gen.builtin_string, value)}},
   {"object_type", {"decls", value}},
   {"level_type"},
@@ -629,10 +653,10 @@ value:define_enum("value", {
   {"prim_bool_type"},
   {"prim_string_type"},
   {"prim_function_type", {
-     "param_type", value, -- must be a prim_tuple_type
-     -- primitive functions can only have explicit arguments
-     "result_type", value, -- must be a prim_tuple_type
-     -- primitive functions can only be pure for now
+    "param_type", value, -- must be a prim_tuple_type
+    -- primitive functions can only have explicit arguments
+    "result_type", value, -- must be a prim_tuple_type
+    -- primitive functions can only be pure for now
   }},
   {"prim_nil_type"},
   --NOTE: prim_tuple is not considered a prim type because it's not a first class value in lua.
@@ -647,13 +671,35 @@ neutral_value:define_enum("neutral_value", {
   -- fn(free_value) and table of functions eg free.metavariable(metavariable)
   -- value should be constructed w/ free.something()
   {"free", {"free", free}},
-  {"application_stuck", {"f", neutral_value, "arg", value}},
-  {"data_elim_stuck", {"handler", value, "subject", neutral_value}},
-  {"data_rec_elim_stuck", {"handler", value, "subject", neutral_value}},
-  {"object_elim_stuck", {"method", value, "subject", neutral_value}},
-  {"record_elim_stuck", {"fields", value, "uncurried", value, "subject", neutral_value}},
-  {"tuple_elim_stuck", {"mechanism", value, "subject", neutral_value}},
-  {"prim_application_stuck", {"function", gen.any_lua_type, "arg", neutral_value}},
+  {"application_stuck", {
+    "f", neutral_value,
+    "arg", value,
+  }},
+  {"data_elim_stuck", {
+    "handler", value,
+    "subject", neutral_value,
+  }},
+  {"data_rec_elim_stuck", {
+    "handler", value,
+    "subject", neutral_value,
+  }},
+  {"object_elim_stuck", {
+    "method", value,
+    "subject", neutral_value,
+  }},
+  {"record_elim_stuck", {
+    "fields", value,
+    "uncurried", value,
+    "subject", neutral_value,
+  }},
+  {"tuple_elim_stuck", {
+    "mechanism", value,
+    "subject", neutral_value,
+  }},
+  {"prim_application_stuck", {
+    "function", gen.any_lua_type,
+    "arg", neutral_value,
+  }},
   {"prim_tuple_stuck", {
     "leading", array(gen.any_lua_type),
     "stuck_element", neutral_value,
@@ -665,10 +711,10 @@ neutral_value.free.metavariable = function(mv)
   return neutral_value.free(free.metavariable(mv))
 end
 
-checkable_term:derive(as)
-inferrable_term:derive(as)
-typed_term:derive(as)
-value:derive(as)
+checkable_term:derive(derivers.as)
+inferrable_term:derive(derivers.as)
+typed_term:derive(derivers.as)
+value:derive(derivers.as)
 
 return {
   typechecker_state = typechecker_state, -- fn (constructor)
