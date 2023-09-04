@@ -45,6 +45,7 @@ local trie = require './lazy-prefix-tree'
 local fibbuf = require './fibonacci-buffer'
 
 local gen = require './terms-generators'
+local derive_as = (require './derive-as').derive_as
 local map = gen.declare_map
 local array = gen.declare_array
 
@@ -124,6 +125,7 @@ metavariable_mt = {
     end
   }
 }
+local any_lua_type = gen.declare_foreign(function() return true end)
 local metavariable_type = gen.declare_foreign(gen.metatable_equality(metavariable_mt))
 
 local typechecker_state_mt
@@ -602,6 +604,7 @@ value:define_enum("value", {
   {"operative_value"},
   {"operative_type", {"handler", value}},
 
+
   -- ordinary data
   {"tuple_value", {"elements", array(value)}},
   {"tuple_type", {"decls", value}},
@@ -618,9 +621,18 @@ value:define_enum("value", {
   {"level", {"level", gen.builtin_number}},
   {"star", {"level", gen.builtin_number}},
   {"prop", {"level", gen.builtin_number}},
-  {"prim"},
-
   {"neutral", {"neutral", neutral_value}},
+
+  -- foreign data
+  {"prim", { "primitive_value", any_lua_type }},
+  {"prim_type_type"},
+  {"prim_number_type"},
+  {"prim_bool_type"},
+  {"prim_string_type"},
+  {"prim_function_type"},
+  {"prim_nil_type"},
+  -- type of key and value of key -> type of the value
+  -- {"prim_table_type"},
 })
 
 neutral_value:define_enum("neutral_value", {
@@ -641,6 +653,11 @@ neutral_value:define_enum("neutral_value", {
 neutral_value.free.metavariable = function(mv)
   return neutral_value.free(free.metavariable(mv))
 end
+
+checkable_term:derive(derive_as)
+inferrable_term:derive(derive_as)
+typed_term:derive(derive_as)
+value:derive(derive_as)
 
 return {
   typechecker_state = typechecker_state, -- fn (constructor)

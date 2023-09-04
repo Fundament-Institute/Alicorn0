@@ -2,7 +2,11 @@ local p = require 'pretty-print'.prettyPrint
 
 local prefix_tree_mt
 local empty
+local dump_map
 prefix_tree_mt = {
+  __tostring = function(self)
+    return "lazy-prefix-tree" .. dump_map(self)
+  end,
   __pairs = function(self)
     self:force()
     return pairs(self.children)
@@ -152,12 +156,15 @@ local function extract_map(tree, prefix, dest)
   end
 end
 
-local function dump_map(tree)
+function dump_map(tree)
   local content = {}
   extract_map(tree, "", content)
   local components = {}
   for k, v in pairs(content) do
     components[#components + 1] = k .. " = " .. tostring(v)
+  end
+  if #components == 0 then
+    return "{}"
   end
   return "{\n\t" .. table.concat(components, "\n\t") .. "\n}"
 end
