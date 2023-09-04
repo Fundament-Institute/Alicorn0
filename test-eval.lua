@@ -82,5 +82,9 @@ infer_and_eval("swap_69_420", swap_69_420)
 
 print("PART FOUR!!!!!!!!!")
 
-local prim_add = value.prim(function(left, right) return left + right end)
-local prim_ = typed_term.literal.prim
+local prim_add = terms.value.prim(function(left, right) return left + right end)
+local prim_3 = terms.typed_term.literal(terms.value.prim(3))
+local prim_4 = terms.typed_term.literal(terms.value.prim(4))
+local prim_3_4 = terms.typed_term.prim_tuple_cons(gen.declare_array(terms.typed_term)(prim_3, prim_4))
+local test_add_term = terms.typed_term.application(terms.typed_term.literal(prim_add), prim_3_4)
+local test_add_res = eval_test("test_add", test_add_term)

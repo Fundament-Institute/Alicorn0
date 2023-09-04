@@ -628,10 +628,17 @@ value:define_enum("value", {
   {"prim_number_type"},
   {"prim_bool_type"},
   {"prim_string_type"},
-  {"prim_function_type"},
+  {"prim_function_type", {
+     "param_type", value, -- must be a prim_tuple_type
+     -- primitive functions can only have explicit arguments
+     "result_type", value, -- must be a prim_tuple_type
+     -- primitive functions can only be pure for now
+  }},
   {"prim_nil_type"},
+  --NOTE: prim_tuple is not considered a prim type because it's not a first class value in lua.
   {"prim_tuple_value", {"elements", array(gen.any_lua_type)}},
-  {"prim_tuple_type", {"decls", value}},
+  {"prim_tuple_type", {"decls", value}}, -- just like an ordinary tuple type but can only hold prims
+
   -- type of key and value of key -> type of the value
   -- {"prim_table_type"},
 })

@@ -83,6 +83,11 @@ local function inferred_expression_pairhandler(env, a, b)
     return terms.inferrable_term.application(terms.inferrable_term.typed(type_of_term, usage_count, term), tuple)
   end
 
+  local ok = type_of_term.as_prim_function_type()
+  if ok then
+    --TODO
+  end
+
   return false, "unknown type for pairhandler", env
 end
 

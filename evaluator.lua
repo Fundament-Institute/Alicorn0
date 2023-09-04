@@ -468,6 +468,12 @@ function evaluate(
         mechacons = apply_value(mechacons, v)
       end
       return mechacons
+    elseif subject_value.kind == "value_prim_tuple_value" then
+      local mechacons = mechanism_value
+      for _, v in ipairs(subject_value.elements) do
+        mechacons = apply_value(mechacons, value.prim(v))
+      end
+      return mechacons
     elseif subject_value.kind == "value_neutral" then
       return value.neutral(neutral_value.tuple_elim_stuck(mechanism_value, subject_value.neutral_value))
     else
@@ -476,7 +482,7 @@ function evaluate(
   elseif typed_term.kind == "typed_operative_cons" then
     return value.operative_value
   elseif typed_term.kind == "typed_prim_tuple_cons" then
-    local elements = array(gen.any_lua_type)
+    local elements = array(gen.any_lua_type)()
     local stuck = false
     local stuck_element
     local trailing_values
