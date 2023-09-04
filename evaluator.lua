@@ -28,6 +28,8 @@ local result_info_pure = value.result_info(result_info(purity.pure))
 local result_info_effectful = value.result_info(result_info(purity.effectful))
 local function tupval(...) return value.tuple_value(array(value)(...)) end
 
+local eq = require './derive-eq'
+
 --[[
 local function extract_value_metavariable(value) -- -> Option<metavariable>
   if value.kind == "value_neutral" and value.neutral.kind == "neutral_value_free" and value.neutral.free.kind == "free_metavariable" then
@@ -119,65 +121,6 @@ value:derive(unifier)
 result_info:derive(unifier)
 ]]
 
-local eq = {
-  record = function(t, info)
-    local checks = {}
-    for i, param in ipairs(info.params) do
-      checks[i] = string.format("left[%q] == right[%q]", param, param)
-    end
-    local all_checks = table.concat(checks, " and ")
-    local chunk = "return function(left, right) return " .. all_checks .. " end"
-    print("record chunk: " .. info.kind)
-    print("###")
-    print(chunk)
-    print("###")
-    local compiled, message = load(chunk)
-    assert(compiled, message)
-    local eq_fn = compiled()
-    t.__eq = eq_fn
-  end,
-  enum = function(t, info)
-    local variants_checks = {}
-    for n, vname in ipairs(info.variants) do
-      local vkind = info.name .. "_" .. vname
-      local vdata = info.variants[vname]
-      local vtype = vdata.type
-      local vinfo = vdata.info
-      local all_checks
-      if vtype == "record" then
-        local checks = {}
-        for i, param in ipairs(vinfo.params) do
-            checks[i] = string.format("left[%q] == right[%q]", param, param)
-        end
-        all_checks = table.concat(checks, " and ")
-      elseif vtype == "unit" then
-        all_checks = "true"
-      else
-        error("unknown variant type: " .. vtype)
-      end
-      local entry = string.format("[%q] = function(left, right) return %s end", vkind, all_checks)
-      variants_checks[n] = entry
-    end
-    local all_variants_checks = "{\n  " .. table.concat(variants_checks, ",\n  ") .. "\n}"
-    local define_all_variants_checks = "local all_variants_checks = " .. all_variants_checks
-
-    local kind_check_expression = "left.kind == right.kind"
-    local variant_check_expression = "all_variants_checks[left.kind](left, right)"
-    local check_expression = kind_check_expression .. " and " .. variant_check_expression
-    local check_function = "function(left, right) return " .. check_expression .. " end"
-
-    local chunk = define_all_variants_checks .. "\nreturn " .. check_function
-    print("enum chunk: " .. info.name)
-    print("###")
-    print(chunk)
-    print("###")
-    local compiled, message = load(chunk)
-    assert(compiled, message)
-    local eq_fn = compiled()
-    t.__eq = eq_fn
-  end,
-}
-
 value:derive(eq)
 
 local evaluate, infer
@@ -254,9 +197,17 @@ local function apply_value(f, arg)
     return evaluate(f.code, inner_context)
   elseif kind == "value_neutral" then
     return value.neutral(neutral_value.application_stuck(f.neutral_value, arg))
+  elseif kind == "value_prim" then
+    if arg.kind == "value_prim_tuple_value" then
+      return value.prim_tuple_value(array(gen.any_lua_type)(f.primitive_value(arg.elements:unpack())))
+    elseif arg.kind == "value_neutral" then
+      return value.neutral(neutral_value.prim_application_stuck(f.primitive_value, arg.neutral_value))
+    else
+      error("apply_value: trying to apply a primitive function on a non-primitive value")
+    end
   else
     p(f)
-    error("evaluate: trying to apply function application to something that isn't a function/closure")
+    error("apply_value: trying to apply function application to something that isn't a function/closure")
   end
 end
 
@@ -480,6 +431,7 @@ function evaluate(
   --print("evaluating!")
   --p(typed_term)
   -- TODO: typecheck typed_term and runtime_context?
+  local value_array = array(value)
   if typed_term.kind == "typed_bound_variable" then
     return runtime_context:get(typed_term.index)
   elseif typed_term.kind == "typed_literal" then
@@ -502,7 +454,7 @@ function evaluate(
     local arg_value = evaluate(typed_term.arg, runtime_context)
     return apply_value(f_value, arg_value)
   elseif typed_term.kind == "typed_tuple_cons" then
-    local elements = array(value)()
+    local elements = value_array()
     for _, v in ipairs(typed_term.elements) do
       elements:append(evaluate(v, runtime_context))
     end
@@ -523,6 +475,30 @@ function evaluate(
     end
   elseif typed_term.kind == "typed_operative_cons" then
     return value.operative_value
+  elseif typed_term.kind == "typed_prim_tuple_cons" then
+    local elements = array(gen.any_lua_type)
+    local stuck = false
+    local stuck_element
+    local trailing_values
+    for _, v in ipairs(typed_term.elements) do
+      local element_value = evaluate(v, runtime_context)
+      if stuck == false and element_value.kind == "value_prim" then
+        elements:append(element_value.primitive_value)
+      elseif stuck == true then
+        trailing_values:append(element_value)
+      elseif element_value.kind == "value_neutral" then
+        stuck = true
+        stuck_element = element_value.neutral_value
+        trailing_values = value_array()
+      else
+        error("evaluate: trying to apply primitive tuple construction with something that isn't a primitive value")
+      end
+    end
+    if stuck then
+      return value.neutral(neutral_value.prim_tuple_stuck(elements, stuck_element, trailing_values))
+    else
+      return value.prim_tuple_value(elements)
+    end
   end
 
   --[[

@@ -246,6 +246,9 @@ local array_methods = {
     end
     return new
   end,
+  unpack = function(self)
+    return table.unpack(self.array)
+  end,
 }
 
 local function gen_array_fns(value_type)
@@ -348,4 +351,5 @@ return {
   metatable_equality = metatable_equality,
   builtin_number = gen_builtin("number"),
   builtin_string = gen_builtin("string"),
+  any_lua_type = define_foreign({}, function() return true end),
 }

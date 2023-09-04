@@ -79,3 +79,8 @@ local mechainf = terms.mechanism_term.inferrable
 local infswap = mechalam(mechalam(mechainf(inftup(infvar(2), infvar(1)))))
 local swap_69_420 = terms.inferrable_term.tuple_elim(infswap, tuple_of_69_420)
 infer_and_eval("swap_69_420", swap_69_420)
+
+print("PART FOUR!!!!!!!!!")
+
+local prim_add = value.prim(function(left, right) return left + right end)
+local prim_ = typed_term.literal.prim

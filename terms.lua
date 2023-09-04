@@ -45,7 +45,7 @@ local trie = require './lazy-prefix-tree'
 local fibbuf = require './fibonacci-buffer'
 
 local gen = require './terms-generators'
-local derive_as = (require './derive-as').derive_as
+local as = require './derive-as'
 local map = gen.declare_map
 local array = gen.declare_array
 
@@ -125,7 +125,6 @@ metavariable_mt = {
     end
   }
 }
-local any_lua_type = gen.declare_foreign(function() return true end)
 local metavariable_type = gen.declare_foreign(gen.metatable_equality(metavariable_mt))
 
 local typechecker_state_mt
@@ -488,7 +487,6 @@ typed_term:define_enum("typed", {
   }},
   {"star", {"level", gen.builtin_number}},
   {"prop", {"level", gen.builtin_number}},
-  {"prim"},
   {"tuple_cons", {"elements", array(typed_term)}},
   --{"tuple_extend", {"base", typed_term, "fields", array(typed_term)}}, -- maybe?
   {"tuple_elim", {"mechanism", typed_term, "subject", typed_term}},
@@ -502,6 +500,7 @@ typed_term:define_enum("typed", {
   {"object_corec_cons", {"methods", map(gen.builtin_string, typed_term)}},
   {"object_elim", {"mechanism", typed_term, "subject", typed_term}},
   {"operative_cons"},
+  {"prim_tuple_cons", {"elements", array(typed_term)}}, -- prim
 })
 
 free:define_enum("free", {
@@ -624,13 +623,15 @@ value:define_enum("value", {
   {"neutral", {"neutral", neutral_value}},
 
   -- foreign data
-  {"prim", { "primitive_value", any_lua_type }},
+  {"prim", {"primitive_value", gen.any_lua_type}},
   {"prim_type_type"},
   {"prim_number_type"},
   {"prim_bool_type"},
   {"prim_string_type"},
   {"prim_function_type"},
   {"prim_nil_type"},
+  {"prim_tuple_value", {"elements", array(gen.any_lua_type)}},
+  {"prim_tuple_type", {"decls", value}},
   -- type of key and value of key -> type of the value
   -- {"prim_table_type"},
 })
@@ -639,25 +640,28 @@ neutral_value:define_enum("neutral_value", {
   -- fn(free_value) and table of functions eg free.metavariable(metavariable)
   -- value should be constructed w/ free.something()
   {"free", {"free", free}},
-  {"application_stuck", {
-    "f", neutral_value,
-    "arg", value,
-  }},
+  {"application_stuck", {"f", neutral_value, "arg", value}},
   {"data_elim_stuck", {"handler", value, "subject", neutral_value}},
   {"data_rec_elim_stuck", {"handler", value, "subject", neutral_value}},
   {"object_elim_stuck", {"method", value, "subject", neutral_value}},
   {"record_elim_stuck", {"fields", value, "uncurried", value, "subject", neutral_value}},
   {"tuple_elim_stuck", {"mechanism", value, "subject", neutral_value}},
+  {"prim_application_stuck", {"function", gen.any_lua_type, "arg", neutral_value}},
+  {"prim_tuple_stuck", {
+    "leading", array(gen.any_lua_type),
+    "stuck_element", neutral_value,
+    "trailing", array(value), -- either primitive or neutral
+  }},
 })
 
 neutral_value.free.metavariable = function(mv)
   return neutral_value.free(free.metavariable(mv))
 end
 
-checkable_term:derive(derive_as)
-inferrable_term:derive(derive_as)
-typed_term:derive(derive_as)
-value:derive(derive_as)
+checkable_term:derive(as)
+inferrable_term:derive(as)
+typed_term:derive(as)
+value:derive(as)
 
 return {
   typechecker_state = typechecker_state, -- fn (constructor)
