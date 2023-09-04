@@ -10,7 +10,7 @@ local p = require 'pretty-print'.prettyPrint
 -- local types = require './typesystem'
 local fs = require 'fs'
 
-local src = "λ 2" -- fs.readFileSync("testfile.alc")
+local src = "2" -- fs.readFileSync("testfile.alc")
 print("read code")
 print(src)
 print("parsing code")
