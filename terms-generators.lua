@@ -205,6 +205,10 @@ end
 -- TODO: memoize? otherwise LOTS of tables will be constructed,
 -- through repeated calls to declare_map
 local function define_map(self, key_type, value_type)
+  if type(key_type) ~= "table" or type(key_type.value_check) ~= "function"
+    or type(value_type) ~= "table" or type(value_type.value_check) ~= "function" then
+    error("trying to set the key or value type to something that isn't a type (possible typo?)")
+  end
   setmetatable(self, map_type_mt)
   self.key_type = key_type
   self.value_type = value_type
@@ -217,12 +221,15 @@ end
 
 local array_type_mt = {
   __call = function(self, ...)
-    local args = { ... }
     local val = {
-      n = #args,
-      array = args,
+      n = 0,
+      array = {},
     }
     setmetatable(val, self)
+    local args = { ... }
+    for i = 1, select("#", ...) do
+      val:append(args[i])
+    end
     return val
   end,
   __eq = function(left, right)
@@ -295,7 +302,7 @@ local function gen_array_fns(value_type)
       error("key passed to index-assignment is out of bounds")
     end
     if value_type.value_check(value) ~= true then
-      p("map-index-assign", key_type, value_type)
+      p("array-index-assign", key_type, value_type)
       p(value)
       error("wrong value type passed to index-assignment")
     end
@@ -309,6 +316,9 @@ end
 
 -- TODO: see define_map
 local function define_array(self, value_type)
+  if type(value_type) ~= "table" or type(value_type.value_check) ~= "function" then
+    error("trying to set the value type to something that isn't a type (possible typo?)")
+  end
   setmetatable(self, array_type_mt)
   self.value_type = value_type
   self.__index, self.__newindex = gen_array_fns(value_type)

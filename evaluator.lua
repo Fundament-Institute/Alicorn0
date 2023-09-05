@@ -17,6 +17,10 @@ local neutral_value = terms.neutral_value
 local gen = require './terms-generators'
 local map = gen.declare_map
 local array = gen.declare_array
+local value_array = array(value)
+local typed_term_array = array(typed_term)
+local primitive_value_array = array(gen.any_lua_type)
+local usage_array = array(gen.builtin_number)
 
 local function qtype(q, val) return value.qtype(value.quantity(q), val) end
 local function unrestricted(val) return qtype(quantity.unrestricted, val) end
@@ -26,7 +30,8 @@ local param_info_explicit = value.param_info(value.visibility(visibility.explici
 local param_info_implicit = value.param_info(value.visibility(visibility.implicit))
 local result_info_pure = value.result_info(result_info(purity.pure))
 local result_info_effectful = value.result_info(result_info(purity.effectful))
-local function tupval(...) return value.tuple_value(array(value)(...)) end
+local function tup_val(...) return value.tuple_value(value_array(...)) end
+local function prim_tup_val(...) return value.prim_tuple_value(primitive_value_array(...)) end
 
 local derivers = require './derivers'
 
@@ -144,9 +149,10 @@ local function check(
 end
 
 local function add_arrays(onto, with)
+  local olen = #onto
   for i, n in ipairs(with) do
     local x
-    if i > #onto then
+    if i > olen then
       x = 0
     else
       x = onto[i]
@@ -182,7 +188,7 @@ local function infer_mechanism(mechanism_term, typechecking_context, mechanism_u
       inner_type,
       result_info_pure
     )
-    -- TODO: handle quantity
+    -- TODO: handle quantities
     return linear(res_type), inner_usages:copy(1, #inner_usages - 1), typed_term.lambda(inner_term)
   end
 end
@@ -199,7 +205,7 @@ local function apply_value(f, arg)
     return value.neutral(neutral_value.application_stuck(f.neutral_value, arg))
   elseif kind == "value_prim" then
     if arg.kind == "value_prim_tuple_value" then
-      return value.prim_tuple_value(array(gen.any_lua_type)(f.primitive_value(arg.elements:unpack())))
+      return prim_tup_val(f.primitive_value(arg.elements:unpack()))
     elseif arg.kind == "value_neutral" then
       return value.neutral(neutral_value.prim_application_stuck(f.primitive_value, arg.neutral_value))
     else
@@ -208,6 +214,43 @@ local function apply_value(f, arg)
   else
     p(f)
     error("apply_value: trying to apply function application to something that isn't a function/closure")
+  end
+end
+
+local function eq_prim_tuple_value_decls(left, right, typechecking_context)
+  --print("STARTING eq_prim_tuple_value_decls")
+  --p(left)
+  --p(right)
+  --p(typechecking_context)
+  if left.constructor == "empty" and right.constructor == "empty" then
+    return typechecking_context
+  elseif left.constructor == "empty" or right.constructor == "empty" then
+    error("eq_prim_tuple_value_decls: mismatch in number of expected and given args in primitive function application")
+  elseif left.constructor == "cons" and right.constructor == "cons" then
+    local left_details = left.arg.elements
+    local right_details = right.arg.elements
+    local context = eq_prim_tuple_value_decls(left_details[1], right_details[1], typechecking_context)
+    local left_f = left_details[2]
+    local right_f = right_details[2]
+    local elements = value_array()
+    local runtime_context = context:get_runtime_context()
+    for i = #typechecking_context + 1, #context do
+      elements:append(runtime_context:get(i))
+    end
+    local arg = value.tuple_value(elements)
+    local left_type = apply_value(left_f, arg)
+    local right_type = apply_value(right_f, arg)
+    if left_type == right_type then
+      local new_context = context:append("", left_type)
+      return new_context
+    else
+      print("mismatch")
+      p(left_type)
+      p(right_type)
+      error("eq_prim_tuple_value_decls: type mismatch in primitive function application")
+    end
+  else
+    error("eq_prim_tuple_value_decls: unknown tuple type data constructor")
   end
 end
 
@@ -221,9 +264,6 @@ function infer(
   --p(inferrable_term)
   --print(inferrable_term.kind)
   -- TODO: typecheck inferrable_term and typechecking_context?
-  local usage_array = array(gen.builtin_number)
-  local value_array = array(value)
-  local primitive_value_array = array(gen.any_lua_type)
   if inferrable_term.kind == "inferrable_bound_variable" then
     local index = inferrable_term.index
     local typeof_bound = typechecking_context:get_type(index)
@@ -276,7 +316,8 @@ function infer(
       result_info_pure
     )
     local lambda_term = typed_term.lambda(body_term)
-    return lambda_type, lambda_usages, lambda_term
+    -- TODO: handle quantities
+    return unrestricted(lambda_type), lambda_usages, lambda_term
   elseif inferrable_term.kind == "inferrable_qtype" then
     local quantity_type, quantity_usages, quantity_term = infer(inferrable_term.quantity, typechecking_context)
     local type_type, type_usages, type_term = infer(inferrable_term.type, typechecking_context)
@@ -294,37 +335,48 @@ function infer(
     local param_type_type, param_type_usages, param_type_term = infer(inferrable_term.param_type, typechecking_context)
   elseif inferrable_term.kind == "inferrable_application" then
     local f_type, f_usages, f_term = infer(inferrable_term.f, typechecking_context)
+    if f_type.kind ~= "value_qtype" then
+      error("infer: missing quantity information")
+    end
     local arg_type, arg_usages, arg_term = infer(inferrable_term.arg, typechecking_context)
-    -- NYI: handle primitive_function types
-    if f_type.kind ~= "value_pi" then
-      error("infer: trying to apply function application to something whose type isn't a function type")
+    if arg_type.kind ~= "value_qtype" then
+      error("infer: missing quantity information")
     end
-    if f_type.param_info.visibility.visibility.kind ~= "visibility_explicit" then
-      error("infer: nyi implicit parameters")
-    end
-    if f_type.param_type ~= arg_type then
-      p(f_type)
-      p(arg_type)
-      error("infer: mismatch in arg type and param type of application")
-    end
-    local result_type = typed_term.application(typed_term.literal(f_type.result_type), arg_term)
-    --print("infer, handing off to evaluate (2)")
-    --p(f_type)
-    --p(result_type)
-    --print("let's go")
-    local result_value = evaluate(result_type, typechecking_context:get_runtime_context())
     local application_usages = usage_array()
     add_arrays(application_usages, f_usages)
     add_arrays(application_usages, arg_usages)
     local application = typed_term.application(f_term, arg_term)
-    return result_value, application_usages, application
+    if f_type.type.kind == "value_pi" then
+      if f_type.type.param_info.visibility.visibility.kind ~= "visibility_explicit" then
+        error("infer: nyi implicit parameters")
+      end
+      if f_type.type.param_type ~= arg_type then
+        p(f_type)
+        p(arg_type)
+        error("infer: mismatch in arg type and param type of function application")
+      end
+      local result_type = apply_value(f_type.type.result_type, evaluate(arg_term, typechecking_context:get_runtime_context()))
+      return result_type, application_usages, application
+    elseif f_type.type.kind == "value_prim_function_type" then
+      if arg_type.type.kind ~= "value_prim_tuple_type" then
+        p(arg_type)
+        error("infer: trying to apply primitive function application with something whose type isn't a primitive tuple type")
+      end
+      -- will error if not equal/unifiable
+      eq_prim_tuple_value_decls(f_type.type.param_type.type.decls, arg_type.type.decls, typechecking_context)
+      local result_type = f_type.type.result_type
+      return unrestricted(result_type), application_usages, application
+    else
+      p(f_type)
+      error("infer: trying to apply function application to something whose type isn't a function type")
+    end
   elseif inferrable_term.kind == "inferrable_tuple_cons" then
     -- type_data is either "empty", an empty tuple,
     -- or "cons", a tuple with the previous type_data and a function that
     -- takes all previous values and produces the type of the next element
-    local type_data = value.data_value("empty", tupval())
+    local type_data = value.data_value("empty", tup_val())
     local usages = usage_array()
-    local elements = array(typed_term)()
+    local elements = typed_term_array()
     for _, v in ipairs(inferrable_term.elements) do
       local e_type, e_usages, e_term = infer(v, typechecking_context)
 
@@ -340,23 +392,27 @@ function infer(
     -- type_data is either "empty", an empty tuple,
     -- or "cons", a tuple with the previous type_data and a function that
     -- takes all previous values and produces the type of the next element
-    local type_data = value.data_value("empty", tupval())
+    -- TODO: it is a type error to put something that isn't a prim into a prim tuple
+    local type_data = value.data_value("empty", tup_val())
     local usages = usage_array()
-    local elements = array(typed_term)()
+    local elements = typed_term_array()
     for _, v in ipairs(inferrable_term.elements) do
       local e_type, e_usages, e_term = infer(v, typechecking_context)
 
-      local new_type_elements = primitive_value_array(type_data, substitute_type_variables(e_type, #typechecking_context + 1, 0))
-      type_data = value.data_value("cons", value.prim_tuple_value(new_type_elements))
+      local new_type_elements = value_array(type_data, substitute_type_variables(e_type, #typechecking_context + 1, 0))
+      type_data = value.data_value("cons", value.tuple_value(new_type_elements))
 
       add_arrays(usages, e_usages)
       elements:append(e_term)
     end
     -- TODO: handle quantities
-    return unrestricted(value.tuple_type(type_data)), usages, typed_term.tuple_cons(elements)
+    return unrestricted(value.prim_tuple_type(type_data)), usages, typed_term.prim_tuple_cons(elements)
   elseif inferrable_term.kind == "inferrable_tuple_elim" then
     local subject_type, subject_usages, subject_term = infer(inferrable_term.subject, typechecking_context)
-    if subject_type.kind ~= "value_qtype" or (subject_type.type.kind ~= "value_tuple_type" and subject_type.type.kind ~= "value_prim_tuple_type") then
+    if subject_type.kind ~= "value_qtype" then
+      error("infer: missing quantity information")
+    end
+    if subject_type.type.kind ~= "value_tuple_type" and subject_type.type.kind ~= "value_prim_tuple_type" then
       error("infer: trying to apply tuple elimination to something whose type isn't a tuple type")
     end
     local is_prim = subject_type.type.kind == "value_prim_tuple_type"
@@ -366,6 +422,8 @@ function infer(
     local data = subject_type.type.decls
     local mech_usage = mechanism_usage.inferrable
     local tcons = (is_prim and typed_term.prim_tuple_cons or typed_term.tuple_cons)
+    --print(#elements)
+    --p(subject_value)
     for i = #elements - 1, 0, -1 do
       local prefix
       if is_prim and subject_value.kind == "value_prim_tuple_value" then
@@ -373,7 +431,7 @@ function infer(
       elseif not is_prim and subject_value.kind == "value_tuple_value" then
         prefix = value.tuple_value(elements:copy(1, i))
       elseif subject_value.kind == "value_neutral" then
-        local prefix_elements = array(typed_term)()
+        local prefix_elements = typed_term_array()
         for x = 1, i do
           prefix_elements:append(typed_term.bound_variable(x))
         end
@@ -400,6 +458,10 @@ function infer(
     if data.constructor ~= "empty" then
       error("infer: mismatch in length between tuple type decl and tuple value")
     end
+    --print("here's some data:")
+    --p(inferrable_term.mechanism)
+    --p(typechecking_context)
+    --p(mech_usage)
     local mech_type, mech_usages, mech_term = infer_mechanism(inferrable_term.mechanism, typechecking_context, mech_usage)
     local result_type = mech_type
     for i = 1, #elements do
@@ -411,16 +473,16 @@ function infer(
     return result_type, result_usages, typed_term.tuple_elim(mech_term, subject_term)
   elseif inferrable_term.kind == "inferrable_operative_cons" then
     local goal_type = value.pi(
-      unrestricted(tupval(unrestricted(value.syntax_type), unrestricted(value.environment_type))),
+      unrestricted(tup_val(unrestricted(value.syntax_type), unrestricted(value.environment_type))),
       param_info_explicit,
-      unrestricted(tupval(unrestricted(value.inferrable_term_type), unrestricted(value.environment_type))),
+      unrestricted(tup_val(unrestricted(value.inferrable_term_type), unrestricted(value.environment_type))),
       result_info_pure
     )
     local unified_type, typed_operative = check(inferrable_term.handler, typechecking_context, goal_type)
     error("NYI inferrable_operative_cons")
   elseif inferrable_term.kind == "inferrable_prim_user_defined_type_cons" then
     local id = inferrable_term.id
-    local family_args = array(typed_term)()
+    local family_args = typed_term_array()
     local result_usages = usage_array()
     for _, v in ipairs(inferrable_term.family_args) do
       local e_type, e_usages, e_term = infer(v, runtime_context)
@@ -467,7 +529,6 @@ function evaluate(
   --print("evaluating!")
   --p(typed_term)
   -- TODO: typecheck typed_term and runtime_context?
-  local value_array = array(value)
   if typed_term.kind == "typed_bound_variable" then
     return runtime_context:get(typed_term.index)
   elseif typed_term.kind == "typed_literal" then
@@ -518,7 +579,7 @@ function evaluate(
   elseif typed_term.kind == "typed_operative_cons" then
     return value.operative_value
   elseif typed_term.kind == "typed_prim_tuple_cons" then
-    local elements = array(gen.any_lua_type)()
+    local elements = primitive_value_array()
     local stuck = false
     local stuck_element
     local trailing_values

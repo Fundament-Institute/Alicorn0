@@ -383,7 +383,9 @@ end
 local runtime_context_type = gen.declare_foreign(gen.metatable_equality(runtime_context_mt))
 local typechecking_context_type = gen.declare_foreign(gen.metatable_equality(typechecking_context_mt))
 local environment_type = gen.declare_foreign(gen.metatable_equality(environment_mt))
-local prim_user_defined_id = gen.declare_foreign(function(a) return not not (type(a) == "table" and a.name) end)
+local prim_user_defined_id = gen.declare_foreign(function(val)
+  return type(val) == "table" and type(val.name) == "string"
+end)
 
 -- checkable terms need a target type to typecheck against
 checkable_term:define_enum("checkable", {
