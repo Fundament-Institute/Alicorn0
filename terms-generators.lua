@@ -72,7 +72,7 @@ local function gen_record(self, cons, kind, params_with_types)
         -- type-check constructor arguments
         if params_types[i].value_check(argi) ~= true then
           p(argi)
-          error("wrong argument type passed to constructor " .. kind .. ", parameter " .. v)
+          error("wrong argument type passed to constructor " .. kind .. ", parameter '" .. v .. "'")
         end
         val[v] = argi
       end
@@ -348,6 +348,7 @@ end
 return {
   declare_record = new_self(define_record),
   declare_enum = new_self(define_enum),
+  -- Make sure the function you pass to this returns true, not just a truthy value
   declare_foreign = new_self(define_foreign),
   declare_map = new_self(define_map),
   declare_array = new_self(define_array),

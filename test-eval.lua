@@ -72,6 +72,15 @@ infer_and_eval("apply_inf_closure_with_capture", apply_inf_closure_with_capture)
 
 print("PART THREE!!!!!!!!")
 
+local function inflitty(ty, lit_val)
+  return terms.inferrable_term.typed(
+    terms.value.qtype(terms.value.quantity(terms.quantity.unrestricted)),
+    usage_array(),
+    terms.typed_term.literal(lit_val)
+  )
+end
+
+local function infprimtup(...) return terms.inferrable_term.prim_tuple_cons(inferrable_array(...)) end
 local function inftup(...) return terms.inferrable_term.tuple_cons(inferrable_array(...)) end
 local tuple_of_69_420 = inftup(inflit(69), inflit(420))
 infer_and_eval("tuple_of_69_420", tuple_of_69_420)
@@ -90,3 +99,36 @@ local function prim_lit(x) return terms.typed_term.literal(terms.value.prim(x)) 
 local function prim_tup(...) return terms.typed_term.prim_tuple_cons(typed_array(...)) end
 local prim_add_69_420 = app(prim_add, prim_tup(prim_lit(69), prim_lit(420)))
 eval_test("prim_add_69_420", prim_add_69_420)
+
+local infprimswap = mechalam(mechalam(mechainf(infprimtup(infvar(2), infvar(1)))))
+local inf_prim_tuple_of_621_420 = infprimtup(inflit(621), inflit(420))
+local inf_swap_prim_621_420 = terms.inferrable_term.tuple_elim(infprimswap, inf_prim_tuple_of_621_420)
+infer_and_eval("swap_prim_621_420", inf_swap_prim_621_420)
+
+print("prim tuple elim test")
+
+local function typedvar(x) return terms.typed_term.bound_variable(x) end
+local primextractrepack = lam(prim_tup(typedvar(1), prim_lit(-1)))
+
+-- create prim tuple
+-- call prim function
+-- use tuple elim to extract results and repack with another prim
+-- call another primitive function
+
+local input = prim_tup(prim_lit(2)) -- -> (2)
+local returns_input_and_3 = prim_f(function(a) return a, 3 end) -- returns_input_and_3(2) -> (2, 3)
+local result = app(prim_add, app(returns_input_and_3, input)) -- add(2, 3) -> (5)
+local t = terms.typed_term.tuple_elim(primextractrepack, result) -- (5) -> (5, -1)
+local result_2 = app(prim_add, t) -- add(5, -1) -> 4
+local result_3 = terms.typed_term.tuple_elim(lam(typedvar(1)), result_2)
+eval_test("repacking_tuples", result_3)
+
+-- local fmt = require './format-adapter'
+-- local user_defined_prim_a_id = { name = "syntax" }
+-- local user_defined_prim_a_cons = terms.inferrable_term.prim_user_defined_type_cons(user_defined_prim_a_id, inferrable_array())
+-- local value_user_defined_prim_a = infer_and_eval("syn_prim_cons", user_defined_prim_a_cons)
+
+-- local prim_fmt_read = prim_f(function(str) return fmt.read(str, "inline") end)
+-- local infer_prim_fmt_read = terms.inferrable_term.typed(value_user_defined_prim_a, usage_array(), terms.typed_term.literal(terms.value.prim(prim_fmt_read)))
+-- infer_and_eval("user_defined_prim_syntax_cons", infapp(infer_prim_fmt_read, terms.inferrable_term.typed(terms.value.prim_string_type, usage_array(), prim_lit("+ 2 3"))))
+

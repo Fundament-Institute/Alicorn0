@@ -223,6 +223,7 @@ function infer(
   -- TODO: typecheck inferrable_term and typechecking_context?
   local usage_array = array(gen.builtin_number)
   local value_array = array(value)
+  local primitive_value_array = array(gen.any_lua_type)
   if inferrable_term.kind == "inferrable_bound_variable" then
     local index = inferrable_term.index
     local typeof_bound = typechecking_context:get_type(index)
@@ -294,6 +295,7 @@ function infer(
   elseif inferrable_term.kind == "inferrable_application" then
     local f_type, f_usages, f_term = infer(inferrable_term.f, typechecking_context)
     local arg_type, arg_usages, arg_term = infer(inferrable_term.arg, typechecking_context)
+    -- NYI: handle primitive_function types
     if f_type.kind ~= "value_pi" then
       error("infer: trying to apply function application to something whose type isn't a function type")
     end
@@ -334,32 +336,54 @@ function infer(
     end
     -- TODO: handle quantities
     return unrestricted(value.tuple_type(type_data)), usages, typed_term.tuple_cons(elements)
+  elseif inferrable_term.kind == "inferrable_prim_tuple_cons" then
+    -- type_data is either "empty", an empty tuple,
+    -- or "cons", a tuple with the previous type_data and a function that
+    -- takes all previous values and produces the type of the next element
+    local type_data = value.data_value("empty", tupval())
+    local usages = usage_array()
+    local elements = array(typed_term)()
+    for _, v in ipairs(inferrable_term.elements) do
+      local e_type, e_usages, e_term = infer(v, typechecking_context)
+
+      local new_type_elements = primitive_value_array(type_data, substitute_type_variables(e_type, #typechecking_context + 1, 0))
+      type_data = value.data_value("cons", value.prim_tuple_value(new_type_elements))
+
+      add_arrays(usages, e_usages)
+      elements:append(e_term)
+    end
+    -- TODO: handle quantities
+    return unrestricted(value.tuple_type(type_data)), usages, typed_term.tuple_cons(elements)
   elseif inferrable_term.kind == "inferrable_tuple_elim" then
     local subject_type, subject_usages, subject_term = infer(inferrable_term.subject, typechecking_context)
-    if subject_type.kind ~= "value_qtype" or subject_type.type.kind ~= "value_tuple_type" then
+    if subject_type.kind ~= "value_qtype" or (subject_type.type.kind ~= "value_tuple_type" and subject_type.type.kind ~= "value_prim_tuple_type") then
       error("infer: trying to apply tuple elimination to something whose type isn't a tuple type")
     end
+    local is_prim = subject_type.type.kind == "value_prim_tuple_type"
     -- evaluating the subject is necessary for inferring the type of the mechanism
     local subject_value = evaluate(subject_term, typechecking_context:get_runtime_context())
     local elements = subject_value.elements
     local data = subject_type.type.decls
     local mech_usage = mechanism_usage.inferrable
+    local tcons = (is_prim and typed_term.prim_tuple_cons or typed_term.tuple_cons)
     for i = #elements - 1, 0, -1 do
       local prefix
-      if subject_value.kind == "value_tuple_value" then
+      if is_prim and subject_value.kind == "value_prim_tuple_value" then
+        prefix = value.prim_tuple_value(elements:copy(1, i))
+      elseif not is_prim and subject_value.kind == "value_tuple_value" then
         prefix = value.tuple_value(elements:copy(1, i))
       elseif subject_value.kind == "value_neutral" then
         local prefix_elements = array(typed_term)()
         for x = 1, i do
           prefix_elements:append(typed_term.bound_variable(x))
         end
-        local elim_tower = typed_term.tuple_cons(prefix_elements)
+        local elim_tower = tcons(prefix_elements)
         for x = 1, #elements do
           elim_tower = typed_term.lambda(elim_tower)
         end
         prefix = value.neutral_value(neutral_value.tuple_elim_stuck(evaluate(elim_tower, runtime_context()), subject_value))
       else
-        error("infer: trying to apply tuple elimination to something that isn't a tuple")
+        error("infer: trying to apply tuple elimination to something that isn't a tuple (prim: " .. tostring(is_prim) .. ")")
       end
       if data.constructor == "empty" then
         error("infer: mismatch in length between tuple type decl and tuple value")
@@ -393,6 +417,18 @@ function infer(
       result_info_pure
     )
     local unified_type, typed_operative = check(inferrable_term.handler, typechecking_context, goal_type)
+    error("NYI inferrable_operative_cons")
+  elseif inferrable_term.kind == "inferrable_prim_user_defined_type_cons" then
+    local id = inferrable_term.id
+    local family_args = array(typed_term)()
+    local result_usages = usage_array()
+    for _, v in ipairs(inferrable_term.family_args) do
+      local e_type, e_usages, e_term = infer(v, runtime_context)
+      -- FIXME: use e_type?
+      add_arrays(result_usages, e_usages)
+      family_args:append(e_term)
+    end
+    return terms.value.prim_type_type, result_usages, terms.typed_term.prim_user_defined_type_cons(id, family_args)
   end
 
   --[[
@@ -505,6 +541,13 @@ function evaluate(
     else
       return value.prim_tuple_value(elements)
     end
+  elseif typed_term.kind == "typed_prim_user_defined_type_cons" then
+    local id = typed_term.id
+    local family_args = value_array()
+    for _, v in ipairs(typed_term.family_args) do
+      family_args:append(evaluate(v, runtime_context))
+    end
+    return value.prim_user_defined_type(id, family_args)
   end
 
   --[[

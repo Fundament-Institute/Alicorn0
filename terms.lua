@@ -383,6 +383,7 @@ end
 local runtime_context_type = gen.declare_foreign(gen.metatable_equality(runtime_context_mt))
 local typechecking_context_type = gen.declare_foreign(gen.metatable_equality(typechecking_context_mt))
 local environment_type = gen.declare_foreign(gen.metatable_equality(environment_mt))
+local prim_user_defined_id = gen.declare_foreign(function(a) return not not (type(a) == "table" and a.name) end)
 
 -- checkable terms need a target type to typecheck against
 checkable_term:define_enum("checkable", {
@@ -458,6 +459,11 @@ inferrable_term:define_enum("inferrable", {
     "annotated_term", checkable_term,
     "annotated_type", inferrable_term,
   }},
+  {"prim_tuple_cons", {"elements", array(inferrable_term)}}, -- prim
+  {"prim_user_defined_type_cons", {
+    "id", prim_user_defined_id, -- prim_user_defined_type
+    "family_args", array(inferrable_term), -- prim
+  }},
 })
 -- typed terms have been typechecked but do not store their type internally
 typed_term:define_enum("typed", {
@@ -519,6 +525,10 @@ typed_term:define_enum("typed", {
   }},
   {"operative_cons"},
   {"prim_tuple_cons", {"elements", array(typed_term)}}, -- prim
+  {"prim_user_defined_type_cons", {
+    "id", prim_user_defined_id,
+    "family_args", array(typed_term), -- prim
+  }},
 })
 
 free:define_enum("free", {
@@ -657,6 +667,10 @@ value:define_enum("value", {
     -- primitive functions can only have explicit arguments
     "result_type", value, -- must be a prim_tuple_type
     -- primitive functions can only be pure for now
+  }},
+  {"prim_user_defined_type", {
+    "id", prim_user_defined_id,
+    "family_args", array(value),
   }},
   {"prim_nil_type"},
   --NOTE: prim_tuple is not considered a prim type because it's not a first class value in lua.
