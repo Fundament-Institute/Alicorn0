@@ -728,8 +728,12 @@ neutral_value.free.metavariable = function(mv)
 end
 
 checkable_term:derive(derivers.as)
+mechanism_term:derive(derivers.as)
+mechanism_usage:derive(derivers.as)
 inferrable_term:derive(derivers.as)
 typed_term:derive(derivers.as)
+quantity:derive(derivers.as)
+visibility:derive(derivers.as)
 value:derive(derivers.as)
 
 return {

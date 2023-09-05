@@ -35,11 +35,11 @@ local result
 
 local apply_id_with_42 = app(id, n42)
 result = eval_test("apply_id_with_42", apply_id_with_42)
-assert(result.kind == "value_number" and result.number == 42)
+assert(result:is_number() and result:unwrap_number() == 42)
 
 local apply_closure_with_capture = app(app(const, n69), n1337)
 result = eval_test("apply_closure_with_capture", apply_closure_with_capture)
-assert(result.kind == "value_number" and result.number == 69)
+assert(result:is_number() and result:unwrap_number() == 69)
 
 print("PART TWO!!!!!!!!!!")
 
@@ -117,7 +117,6 @@ local p621 = prim_lit(621)
 local prim_add_69_420 = app(prim_add, prim_tup(p69, p420))
 eval_test("prim_add_69_420", prim_add_69_420)
 
-local inf_prim_lit = terms.inferrable
 local function inf_prim_tup(...) return terms.inferrable_term.prim_tuple_cons(inferrable_array(...)) end
 
 local t_prim_num = terms.value.prim_number_type
