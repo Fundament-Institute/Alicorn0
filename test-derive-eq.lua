@@ -1,4 +1,5 @@
-local eq = (require './derivers').eq
+local derivers = require './derivers'
+local eq = derivers.eq
 local gen = require './terms-generators'
 
 local mytype1 = gen.declare_enum("mytype1", {
@@ -25,12 +26,14 @@ local mytype3butsimple = gen.declare_record("mytype3", {
 
 p("simple")
 mytype3butsimple:derive(eq)
+mytype3butsimple:derive(derivers.pretty_print)
 local x = mytype3butsimple(69, 420)
 local y = mytype3butsimple(420, 69)
 local z = mytype3butsimple(69, 420)
 p(x == y)
 p(x == z)
 p(y == z)
+print(x:pretty_print())
 
 p("2")
 -- beware of bugs if mytype2 doesn't derive eq

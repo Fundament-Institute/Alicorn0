@@ -40,6 +40,7 @@ end
 local inferred_expression
 local checked_expression
 local inferred_collect_tuple
+local inferred_collect_prim_tuple
 
 local function inferred_expression_pairhandler(env, a, b)
   -- resolve first of the pair as an expression
@@ -68,11 +69,10 @@ local function inferred_expression_pairhandler(env, a, b)
     end
     -- FIXME: assert type is an inferrable term using new API once it exists
     local resulting_type, usage_counts, term = evaluator.infer(env, operative_result_val.data)
-    return terms.inferrable_term.typed(resulting_type, usage_counts, term)
+    return true, terms.inferrable_term.typed(resulting_type, usage_counts, term), env
   end
 
-  local ok, as_pi_type = type_of_term:as_pi_type()
-  if ok then
+  if type_of_term:is_qtype() and type_of_term.type:is_pi() then
     -- multiple quantity of usages in tuple with usage in function arguments
     local ok, tuple, env = b:match({inferred_collect_tuple(metalanguage.accept_handler, env)}, metalanguage.failure_handler, nil)
 
@@ -83,12 +83,19 @@ local function inferred_expression_pairhandler(env, a, b)
     return terms.inferrable_term.application(terms.inferrable_term.typed(type_of_term, usage_count, term), tuple)
   end
 
-  local ok = type_of_term.as_prim_function_type()
-  if ok then
-    --TODO
+  if type_of_term:is_qtype() and type_of_term.type:as_prim_function_type() then
+    -- multiple quantity of usages in tuple with usage in function arguments
+    local ok, tuple, env = b:match({inferred_collect_prim_tuple(metalanguage.accept_handler, env)}, metalanguage.failure_handler, nil)
+
+    if not ok then
+      return false, tuple, env
+    end
+
+    return true, terms.inferrable_term.application(terms.inferrable_term.typed(type_of_term, usage_count, term), tuple), env
   end
 
-  return false, "unknown type for pairhandler", env
+  p(type_of_term)
+  return false, "unknown type for pairhandler " .. type_of_term.kind, env
 end
 
 local function inferred_expression_symbolhandler(env, name)
@@ -101,7 +108,12 @@ end
 local function inferred_expression_valuehandler(env, val)
   if val.type == "f64" then
     p(val)
-    return true, terms.inferrable_term.typed(terms.value.number_type, gen.declare_array(gen.builtin_number)(), terms.typed_term.literal(terms.value.number(val.val))), env
+    return true,
+      terms.inferrable_term.typed(
+        terms.value.qtype(terms.value.quantity(terms.quantity.unrestricted), terms.value.prim_number_type),
+        gen.declare_array(gen.builtin_number)(),
+        terms.typed_term.literal(terms.value.prim(val.val))
+      ), env
   end
   p("valuehandler error", val)
   error("unknown value type " .. val.type)
@@ -200,6 +212,26 @@ end
 local function inferred_collect_tuple_nil_handler(env) return true, false, nil, nil, env end
 
 inferred_collect_tuple = metalanguage.reducer(function(syntax, _, env)
+  local collected_terms = gen.declare_array(terms.inferrable_term)()
+  local ok, continue, next_term = true, true, nil
+  while ok and continue do
+    ok, continue, next_term, syntax, env = syntax:match(
+      {
+        metalanguage.ispair(inferred_collect_tuple_pair_handler),
+        metalanguage.isnil(inferred_collect_tuple_nil_handler)
+      },
+      metalanguage.failure_handler,
+      env
+    )
+    if ok and continue then
+      collected_terms:append(next_term)
+    end
+  end
+  if not ok then return false, continue end
+  return true, terms.inferrable_term.tuple_cons(collected_terms), env
+end, "inferred_collect_tuple")
+
+inferred_collect_prim_tuple = metalanguage.reducer(function(syntax, _, env)
     local collected_terms = gen.declare_array(terms.inferrable_term)()
     local ok, continue, next_term = true, true, nil
     while ok and continue do
@@ -216,8 +248,8 @@ inferred_collect_tuple = metalanguage.reducer(function(syntax, _, env)
       end
     end
     if not ok then return false, continue end
-    return true, terms.inferred.tuple_cons(collected_terms), env
-end, "inferred_collect_tuple")
+    return true, terms.inferrable_term.prim_tuple_cons(collected_terms), env
+end, "inferred_collect_prim_stuple")
 
 local expressions_args = metalanguage.reducer(function(syntax, _, env)
     local vals = {}

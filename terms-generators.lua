@@ -260,6 +260,13 @@ local array_methods = {
   unpack = function(self)
     return table.unpack(self.array)
   end,
+  pretty_print = function(self, prefix)
+    local parts = {}
+    for i, v in ipairs(self.array) do
+      parts[i] = ((type(v) == "table" and v.pretty_print) or tostring)(v, prefix)
+    end
+    return string.format("[%s]", table.concat(parts, ", "))
+  end
 }
 
 local function gen_array_fns(value_type)

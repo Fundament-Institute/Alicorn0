@@ -727,14 +727,16 @@ neutral_value.free.metavariable = function(mv)
   return neutral_value.free(free.metavariable(mv))
 end
 
-checkable_term:derive(derivers.as)
-mechanism_term:derive(derivers.as)
-mechanism_usage:derive(derivers.as)
-inferrable_term:derive(derivers.as)
-typed_term:derive(derivers.as)
-quantity:derive(derivers.as)
-visibility:derive(derivers.as)
-value:derive(derivers.as)
+for _, deriver in ipairs { derivers.as, derivers.pretty_print } do
+  checkable_term:derive(deriver)
+  mechanism_term:derive(deriver)
+  mechanism_usage:derive(deriver)
+  inferrable_term:derive(deriver)
+  typed_term:derive(deriver)
+  quantity:derive(deriver)
+  visibility:derive(deriver)
+  value:derive(deriver)
+end
 
 return {
   typechecker_state = typechecker_state, -- fn (constructor)

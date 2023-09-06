@@ -7,10 +7,6 @@ prefix_tree_mt = {
   __tostring = function(self)
     return "lazy-prefix-tree" .. dump_map(self)
   end,
-  __pairs = function(self)
-    self:force()
-    return pairs(self.children)
-  end,
   __index = {
     get = function(self, key, offset)
       self:force()

@@ -89,6 +89,88 @@ local is = {
   end,
 }
 
+local function pretty_print_or_tostring(v, prefix)
+  if type(v) == "table" and v.pretty_print then
+    return v:pretty_print(prefix)
+  end
+  return tostring(v)
+end
+
+local function record_pretty_printer(info)
+  local kind = info.kind
+  local params = info.params
+
+  local prints = {}
+  for i, param in ipairs(params) do
+    prints[i] = string.format(
+      [[result = result .. "\n" .. np .. %q .. ' = ' .. pretty_print_or_tostring(self[%q], np)]],
+      param,
+      param
+    )
+  end
+  local all_prints = table.concat(prints, "\n  ")
+  local chunk = string.format([[
+local pretty_print_or_tostring = ...
+return function(self, prefix)
+prefix = prefix or ''
+local np = prefix .. ' '
+local result = %q .. ' {'
+%s
+result = result .. "\n" .. prefix .. "}"
+return result
+end
+]], info.kind, all_prints)
+
+  local compiled, message = load(chunk, "derive-pretty_print_record", "t")
+  assert(compiled, message)
+  return compiled(pretty_print_or_tostring)
+end
+
+local pretty_print = {
+  record = function(t, info)
+    local idx = t.__index or {}
+    t.__index = idx
+    idx["pretty_print"] = record_pretty_printer(info)
+  end,
+  enum = function(t, info)
+    local idx = t.__index or {}
+    t.__index = idx
+    local name = info.name
+    local variants = info.variants
+
+    local variant_printers = {}
+    for n, vname in ipairs(variants) do
+      local vkind = name .. "_" .. vname
+      local vdata = variants[vname]
+      local vtype = vdata.type
+      local vinfo = vdata.info
+      if vtype == "record" then
+        variant_printers[vkind] = record_pretty_printer(vinfo)
+      elseif vtype == "unit" then
+        variant_printers[vkind] = function(self) return self.kind end
+      else
+        error("unknown variant type: " .. vtype)
+      end
+    end
+
+    local chunk = [[
+      local variant_printers = ...
+      return function(self, prefix)
+        return variant_printers[self.kind](self, prefix)
+      end
+    ]]
+
+    print("derive pretty_print: enum chunk: " .. name)
+    print("###")
+    print(chunk)
+    print("###")
+
+    local compiled, message = load(chunk, "derive-pretty_print_enum", "t")
+    assert(compiled, message)
+    idx["pretty_print"] = compiled(variant_printers)
+  end,
+}
+
 local unwrap = {
   record = function(t, info)
     local idx = t.__index or {}
@@ -185,4 +267,5 @@ return {
   is = is,
   unwrap = unwrap,
   as = as,
+  pretty_print = pretty_print,
 }
