@@ -14,11 +14,14 @@ local neutral_value = terms.neutral_value
 
 local gen = require './terms-generators'
 local map = gen.declare_map
+local string_value_map = map(gen.builtin_string, value)
+local string_typed_map = map(gen.builtin_string, typed_term)
 local array = gen.declare_array
 local value_array = array(value)
 local typed_term_array = array(typed_term)
 local primitive_value_array = array(gen.any_lua_type)
 local usage_array = array(gen.builtin_number)
+local string_array = array(gen.builtin_string)
 
 local function qtype(q, val) return value.qtype(value.quantity(q), val) end
 local function unrestricted(val) return qtype(quantity.unrestricted, val) end
@@ -374,15 +377,14 @@ function infer(
 
       if subject_value:is_tuple_value() then
         local subject_elements = subject_value:unwrap_tuple_value()
-        function make_prefix(i, n_elements)
-          return value.tuple_value(subject_elements:copy(1, n_elements - i))
+        function make_prefix(i)
+          return value.tuple_value(subject_elements:copy(1, i))
         end
       elseif subject_value:is_neutral() then
         local subject_neutral = subject_value:unwrap_neutral()
-        function make_prefix(i, n_elements)
-          local n = n_elements - i
+        function make_prefix(i)
           local prefix_elements = value_array()
-          for x = 1, n do
+          for x = 1, i do
             prefix_elements:append(value.neutral(neutral_value.tuple_element_access_stuck(subject_neutral, x)))
           end
           return value.tuple_value(prefix_elements)
@@ -400,16 +402,15 @@ function infer(
         for _, v in ipairs(subject_elements) do
           subject_value_elements:append(value.prim(v))
         end
-        function make_prefix(i, n_elements)
-          return value.tuple_value(subject_value_elements:copy(1, n_elements - i))
+        function make_prefix(i)
+          return value.tuple_value(subject_value_elements:copy(1, i))
         end
       elseif subject_value:is_neutral() then
         -- yes, literally a copy-paste of the neutral case above
         local subject_neutral = subject_value:unwrap_neutral()
-        function make_prefix(i, n_elements)
-          local n = n_elements - i
+        function make_prefix(i)
           local prefix_elements = value_array()
-          for x = 1, n do
+          for x = 1, i do
             prefix_elements:append(value.neutral(neutral_value.tuple_element_access_stuck(subject_neutral, x)))
           end
           return value.tuple_value(prefix_elements)
@@ -422,23 +423,23 @@ function infer(
     end
 
     -- evaluate the type of the tuple
-    local function make_inner_context(decls, i)
+    local function make_inner_context(decls)
       local constructor, arg = decls:unwrap_data_value()
       if constructor == "empty" then
-        return typechecking_context, i
+        return typechecking_context, 0
       elseif constructor == "cons" then
         local details = arg:unwrap_tuple_value()
-        local context, n_elements = make_inner_context(details[1], i+1)
+        local context, n_elements = make_inner_context(details[1])
         local f = details[2]
-        local prefix = make_prefix(i+1, n_elements)
+        local prefix = make_prefix(n_elements)
         local element_type = apply_value(f, prefix)
         local new_context = context:append("", element_type)
-        return new_context, n_elements
+        return new_context, n_elements + 1
       else
         error("infer: unknown tuple type data constructor")
       end
     end
-    local inner_context, n_elements = make_inner_context(decls, 0)
+    local inner_context, n_elements = make_inner_context(decls)
 
     -- infer the type of the body, now knowing the type of the tuple
     local body_type, body_usages, body_term = infer(body, inner_context)
@@ -447,6 +448,94 @@ function infer(
     add_arrays(result_usages, subject_usages)
     add_arrays(result_usages, body_usages)
     return body_type, result_usages, typed_term.tuple_elim(subject_term, n_elements, body_term)
+  elseif inferrable_term:is_record_cons() then
+    local fields = inferrable_term:unwrap_record_cons()
+    -- type_data is either "empty", an empty tuple,
+    -- or "cons", a tuple with the previous type_data and a function that
+    -- takes all previous values and produces the type of the next element
+    local type_data = value.data_value("empty", tup_val())
+    local usages = usage_array()
+    local new_fields = string_typed_map()
+    for k, v in pairs(fields) do
+      local e_type, e_usages, e_term = infer(v, typechecking_context)
+
+      local new_type_elements = value_array(type_data, value.name(k), substitute_type_variables(e_type, #typechecking_context + 1, 0))
+      type_data = value.data_value("cons", value.tuple_value(new_type_elements))
+
+      add_arrays(usages, e_usages)
+      new_fields[k] = e_term
+    end
+    -- TODO: handle quantities
+    return unrestricted(value.record_type(type_data)), usages, typed_term.record_cons(new_fields)
+  elseif inferrable_term:is_record_elim() then
+    local subject, field_names, body = inferrable_term:unwrap_record_elim()
+    local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
+    local subject_quantity, subject_type = subject_type:unwrap_qtype()
+    local ok, decls = subject_type:as_record_type()
+    if not ok then
+      error("infer: trying to apply record elimination to something whose type isn't a record type")
+    end
+    -- evaluating the subject is necessary for inferring the type of the body
+    local subject_value = evaluate(subject_term, typechecking_context:get_runtime_context())
+
+    -- define how the type of each record field should be evaluated
+    local make_prefix
+    if subject_value:is_record_value() then
+      local subject_fields = subject_value:unwrap_record_value()
+      function make_prefix(field_names)
+        local prefix_fields = string_value_map()
+        for _, v in ipairs(field_names) do
+          prefix_fields[v] = subject_fields[v]
+        end
+        return value.record_value(prefix_fields)
+      end
+    elseif subject_value:is_neutral() then
+      local subject_neutral = subject_value:unwrap_neutral()
+      function make_prefix(field_names)
+        local prefix_fields = string_value_map()
+        for _, v in ipairs(field_names) do
+          prefix_fields[v] = value.neutral(neutral_value.record_field_access_stuck(subject_neutral, v))
+        end
+        return value.record_value(prefix_fields)
+      end
+    else
+      error("infer: trying to apply record elimination to something that isn't a record")
+    end
+
+    -- evaluate the type of the record
+    local function make_type(decls)
+      local constructor, arg = decls:unwrap_data_value()
+      if constructor == "empty" then
+        return string_array(), string_value_map()
+      elseif constructor == "cons" then
+        local details = arg:unwrap_tuple_value()
+        local field_names, field_types = make_type(details[1])
+        local name = details[2]:unwrap_name()
+        local f = details[3]
+        local prefix = make_prefix(field_names)
+        local field_type = apply_value(f, prefix)
+        field_names:append(name)
+        field_types[name] = field_type
+        return field_names, field_types
+      else
+        error("infer: unknown tuple type data constructor")
+      end
+    end
+    local decls_field_names, decls_field_types = make_type(decls)
+
+    -- reorder the fields into the requested order
+    local inner_context = typechecking_context
+    for _, v in ipairs(field_names) do
+      inner_context = inner_context:append(v, decls_field_types[v])
+    end
+
+    -- infer the type of the body, now knowing the type of the record
+    local body_type, body_usages, body_term = infer(body, inner_context)
+
+    local result_usages = usage_array()
+    add_arrays(result_usages, subject_usages)
+    add_arrays(result_usages, body_usages)
+    return body_type, result_usages, typed_term.record_elim(subject_term, field_names, body_term)
   elseif inferrable_term:is_operative_cons() then
     local handler = inferrable_term:unwrap_operative_cons()
     error("NYI inferrable_operative_cons")
@@ -564,12 +653,12 @@ function evaluate(
   elseif typed_term:is_tuple_elim() then
     local subject, length, body = typed_term:unwrap_tuple_elim()
     local subject_value = evaluate(subject, runtime_context)
+    local inner_context = runtime_context
     if subject_value:is_tuple_value() then
       local subject_elements = subject_value:unwrap_tuple_value()
       if #subject_elements ~= length then
         error("evaluate: mismatch in tuple length from typechecking and evaluation")
       end
-      local inner_context = runtime_context
       for i = 1, length do
         inner_context = inner_context:append(subject_elements[i])
       end
@@ -579,20 +668,44 @@ function evaluate(
       if #subject_elements ~= length then
         error("evaluate: mismatch in tuple length from typechecking and evaluation")
       end
-      local inner_context = runtime_context
       for i = 1, length do
         inner_context = inner_context:append(value.prim(subject_elements[i]))
       end
       return evaluate(body, inner_context)
     elseif subject_value:is_neutral() then
       local subject_neutral = subject_value:unwrap_neutral()
-      local inner_context = runtime_context
       for i = 1, length do
         inner_context = inner_context:append(value.neutral(neutral_value.tuple_element_access_stuck(subject_neutral, i)))
       end
       return evaluate(body, inner_context)
     else
       error("evaluate: trying to apply tuple elimination to something that isn't a tuple")
+    end
+  elseif typed_term:is_record_cons() then
+    local fields = typed_term:unwrap_record_cons()
+    local new_fields = string_value_map()
+    for k, v in pairs(fields) do
+      new_fields[k] = evaluate(v, runtime_context)
+    end
+    return value.record_value(new_fields)
+  elseif typed_term:is_record_elim() then
+    local subject, field_names, body = typed_term:unwrap_record_elim()
+    local subject_value = evaluate(subject, runtime_context)
+    local inner_context = runtime_context
+    if subject_value:is_record_value() then
+      local subject_fields = subject_value:unwrap_record_value()
+      for _, v in ipairs(field_names) do
+        inner_context = inner_context:append(subject_fields[v])
+      end
+      return evaluate(body, inner_context)
+    elseif subject_value:is_neutral() then
+      local subject_neutral = subject_value:unwrap_neutral()
+      for _, v in ipairs(field_names) do
+        inner_context = inner_context:append(value.neutral(neutral_value.record_field_access_stuck(subject_neutral, v)))
+      end
+      return evaluate(body, inner_context)
+    else
+      error("evaluate: trying to apply record elimination to something that isn't a record")
     end
   elseif typed_term:is_operative_cons() then
     return value.operative_value

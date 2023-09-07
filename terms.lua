@@ -428,6 +428,7 @@ inferrable_term:define_enum("inferrable", {
   {"record_cons", {"fields", map(gen.builtin_string, inferrable_term)}},
   {"record_elim", {
     "subject", inferrable_term,
+    "field_names", array(gen.builtin_string),
     "body", inferrable_term,
   }},
   {"let", {
@@ -498,6 +499,7 @@ typed_term:define_enum("typed", {
   }},
   {"record_elim", {
     "subject", typed_term,
+    "field_names", array(gen.builtin_string),
     "body", typed_term,
   }},
   --TODO record elim
@@ -697,14 +699,13 @@ neutral_value:define_enum("neutral_value", {
     "method", value,
     "subject", neutral_value,
   }},
-  {"record_elim_stuck", {
-    "fields", value,
-    "uncurried", value,
-    "subject", neutral_value,
-  }},
   {"tuple_element_access_stuck", {
     "subject", neutral_value,
     "index", gen.builtin_number,
+  }},
+  {"record_field_access_stuck", {
+    "subject", neutral_value,
+    "field_name", gen.builtin_string,
   }},
   {"prim_application_stuck", {
     "function", gen.any_lua_type,

@@ -23,6 +23,7 @@ local n42 = lit(num(42))
 local n69 = lit(num(69))
 local n420 = lit(num(420))
 local n621 = lit(num(621))
+local n926 = lit(num(926))
 local n1337 = lit(num(1337))
 
 -- var(1) refers to the outermost bound variable, 2 next outermost, etc
@@ -74,6 +75,7 @@ local i42 = inf_typ(t_num, n42)
 local i69 = inf_typ(t_num, n69)
 local i420 = inf_typ(t_num, n420)
 local i621 = inf_typ(t_num, n621)
+local i926 = inf_typ(t_num, n926)
 local i1337 = inf_typ(t_num, n1337)
 
 local inf_id = inf_lam("x", t_num, inf_var(1))
@@ -106,6 +108,7 @@ local function prim_tup(...) return terms.typed_term.prim_tuple_cons(typed_array
 local p69 = prim_lit(69)
 local p420 = prim_lit(420)
 local p621 = prim_lit(621)
+local p926 = prim_lit(926)
 
 local prim_add_69_420 = app(prim_add, prim_tup(p69, p420))
 eval_test("prim_add_69_420", prim_add_69_420)
@@ -116,6 +119,7 @@ local t_prim_num = terms.value.prim_number_type
 local ip69 = inf_typ(t_prim_num, p69)
 local ip420 = inf_typ(t_prim_num, p420)
 local ip621 = inf_typ(t_prim_num, p621)
+local ip926 = inf_typ(t_prim_num, p926)
 
 local tuple_of_621_420 = inf_prim_tup(ip621, ip420)
 infer_and_eval("tuple_of_621_420", tuple_of_621_420)
@@ -174,3 +178,48 @@ local mogrify = prim_f(function(left, right) return left + right, left - right e
 local inf_mogrify = inf_typ(terms.value.prim_function_type(tuple_decl, tuple_decl), mogrify)
 local apply_mogrify_with_621_420 = inf_app(inf_mogrify, tuple_of_621_420)
 infer_and_eval("apply_mogrify_with_621_420", apply_mogrify_with_621_420)
+
+print("PART SEVEN!!!!!!!!")
+
+local map = gen.declare_map
+local string_array = array(gen.builtin_string)
+local string_inferrable_map = map(gen.builtin_string, terms.inferrable_term)
+local function inf_rec(map_desc)
+  local map = string_inferrable_map()
+  local odd = true
+  local key
+  for _, v in ipairs(map_desc) do
+    if odd then
+      key = v
+    else
+      map[key] = v
+    end
+    odd = not odd
+  end
+  return terms.inferrable_term.record_cons(map)
+end
+local inf_recelim = terms.inferrable_term.record_elim
+
+local record_621_926 = inf_rec({"foo", i621, "bar", i926})
+infer_and_eval("record_621_926", record_621_926)
+
+local record_swap = inf_rec({"baz", inf_var(2), "quux", inf_var(1)})
+local swap_621_926 = inf_recelim(record_621_926, string_array("foo", "bar"), record_swap)
+infer_and_eval("swap_621_926", swap_621_926)
+
+local record_prim_621_926 = inf_rec({"foo", ip621, "bar", ip926})
+local tuple_conv = inf_prim_tup(inf_var(1), inf_var(2))
+local record_conv = inf_rec({"sum", inf_var(1), "difference", inf_var(2)})
+local megamogrify =
+  inf_tupelim(
+    inf_app(
+      inf_mogrify,
+      inf_recelim(
+        record_prim_621_926,
+        string_array("foo", "bar"),
+        tuple_conv
+      )
+    ),
+    record_conv
+  )
+infer_and_eval("megamogrify", megamogrify)
