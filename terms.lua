@@ -488,6 +488,7 @@ typed_term:define_enum("typed", {
   --{"tuple_extend", {"base", typed_term, "fields", array(typed_term)}}, -- maybe?
   {"tuple_elim", {
     "subject", typed_term,
+    "length", gen.builtin_number,
     "body", typed_term,
   }},
   {"record_cons", {"fields", map(gen.builtin_string, typed_term)}},

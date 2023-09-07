@@ -184,6 +184,8 @@ local function apply_value(f, arg)
     p(f)
     error("apply_value: trying to apply function application to something that isn't a function/closure")
   end
+
+  error("unreachable!?")
 end
 
 local function eq_prim_tuple_value_decls(left, right, typechecking_context)
@@ -217,6 +219,8 @@ local function eq_prim_tuple_value_decls(left, right, typechecking_context)
   else
     error("eq_prim_tuple_value_decls: unknown tuple type data constructor")
   end
+
+  error("unreachable!?")
 end
 
 function infer(
@@ -387,6 +391,7 @@ function infer(
       end
     elseif subject_value:is_neutral() then
       local neutral = subject_value:unwrap_neutral()
+      error("nyi")
       function make_prefix(i, n_elements)
         local prefix_elements = typed_term_array()
         for x = 1, i do
@@ -419,7 +424,7 @@ function infer(
         error("infer: unknown tuple type data constructor")
       end
     end
-    local inner_context = make_inner_context(decls, 0)
+    local inner_context, n_elements = make_inner_context(decls, 0)
 
     -- infer the type of the body, now knowing the type of the tuple
     local body_type, body_usages, body_term = infer(body, inner_context)
@@ -427,7 +432,7 @@ function infer(
     local result_usages = usage_array()
     add_arrays(result_usages, subject_usages)
     add_arrays(result_usages, body_usages)
-    return body_type, result_usages, typed_term.tuple_elim(subject_term, body_term)
+    return body_type, result_usages, typed_term.tuple_elim(subject_term, n_elements, body_term)
   elseif inferrable_term:is_operative_cons() then
     local handler = inferrable_term:unwrap_operative_cons()
     error("NYI inferrable_operative_cons")
@@ -543,30 +548,35 @@ function evaluate(
       return value.prim_tuple_value(new_elements)
     end
   elseif typed_term:is_tuple_elim() then
-    local subject, body = typed_term:unwrap_tuple_elim()
+    local subject, length, body = typed_term:unwrap_tuple_elim()
     local subject_value = evaluate(subject, runtime_context)
     if subject_value:is_tuple_value() then
       local subject_elements = subject_value:unwrap_tuple_value()
+      if #subject_elements ~= length then
+        error("evaluate: mismatch in tuple length from typechecking and evaluation")
+      end
       local inner_context = runtime_context
-      for _, v in ipairs(subject_elements) do
-        inner_context = inner_context:append(v)
+      for i = 1, length do
+        inner_context = inner_context:append(subject_elements[i])
       end
       return evaluate(body, inner_context)
     elseif subject_value:is_prim_tuple_value() then
       local subject_elements = subject_value:unwrap_prim_tuple_value()
+      if #subject_elements ~= length then
+        error("evaluate: mismatch in tuple length from typechecking and evaluation")
+      end
       local inner_context = runtime_context
-      for _, v in ipairs(subject_elements) do
-        inner_context = inner_context:append(value.prim(v))
+      for i = 1, length do
+        inner_context = inner_context:append(value.prim(subject_elements[i]))
       end
       return evaluate(body, inner_context)
     elseif subject_value:is_neutral() then
-      error("nyi")
       local subject_neutral = subject_value:unwrap_neutral()
-      local mechacons = mechanism_value
-      --for i = ??? do
-      --  mechacons = apply_value(mechacons, value.neutral(neutral_value.tuple_element_access_stuck(subject_neutral, i)))
-      --end
-      return mechacons
+      local inner_context = runtime_context
+      for i = 1, length do
+        inner_context = inner_context:append(value.neutral(neutral_value.tuple_element_access_stuck(subject_neutral, i)))
+      end
+      return evaluate(body, inner_context)
     else
       error("evaluate: trying to apply tuple elimination to something that isn't a tuple")
     end

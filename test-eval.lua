@@ -136,9 +136,9 @@ local primextractrepack = prim_tup(var(1), prim_lit(-1))
 local input = prim_tup(prim_lit(2)) -- -> (2)
 local returns_input_and_3 = prim_f(function(a) return a, 3 end) -- returns_input_and_3(2) -> (2, 3)
 local result = app(prim_add, app(returns_input_and_3, input)) -- add(2, 3) -> (5)
-local t = terms.typed_term.tuple_elim(result, primextractrepack) -- (5) -> (5, -1)
+local t = terms.typed_term.tuple_elim(result, 1, primextractrepack) -- (5) -> (5, -1)
 local result_2 = app(prim_add, t) -- add(5, -1) -> 4
-local result_3 = terms.typed_term.tuple_elim(result_2, var(1))
+local result_3 = terms.typed_term.tuple_elim(result_2, 1, var(1))
 eval_test("repacking_tuples", result_3)
 
 -- local fmt = require './format-adapter'
