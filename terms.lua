@@ -186,8 +186,6 @@ local function speculate(f, ...)
 end
 
 local checkable_term = gen.declare_type()
-local mechanism_term = gen.declare_type()
-local mechanism_usage = gen.declare_type()
 local inferrable_term = gen.declare_type()
 local typed_term = gen.declare_type()
 local free = gen.declare_type()
@@ -389,25 +387,11 @@ end)
 
 -- checkable terms need a target type to typecheck against
 checkable_term:define_enum("checkable", {
-  {"mechanism", {"mechanism_term", mechanism_term}},
+  {"inferrable", {"inferrable_term", inferrable_term}},
   {"lambda", {
     "param_name", gen.builtin_string,
     "body", checkable_term,
   }},
-})
-mechanism_term:define_enum("mechanism", {
-  {"inferrable", {"inferrable_term", inferrable_term}},
-  {"lambda", {
-    "param_name", gen.builtin_string,
-    "body", mechanism_term,
-  }},
-})
-mechanism_usage:define_enum("mechanism_usage", {
-  {"callable", {
-    "arg_type", value,
-    "next_usage", mechanism_usage,
-  }},
-  {"inferrable"},
 })
 -- inferrable terms can have their type inferred / don't need a target type
 inferrable_term:define_enum("inferrable", {
@@ -438,13 +422,13 @@ inferrable_term:define_enum("inferrable", {
   }},
   {"tuple_cons", {"elements", array(inferrable_term)}},
   {"tuple_elim", {
-    "mechanism", mechanism_term,
     "subject", inferrable_term,
+    "body", inferrable_term,
   }},
   {"record_cons", {"fields", map(gen.builtin_string, inferrable_term)}},
   {"record_elim", {
-    "mechanism", mechanism_term,
     "subject", inferrable_term,
+    "body", inferrable_term,
   }},
   {"let", {
     "var_name", gen.builtin_string,
@@ -503,8 +487,8 @@ typed_term:define_enum("typed", {
   {"tuple_cons", {"elements", array(typed_term)}},
   --{"tuple_extend", {"base", typed_term, "fields", array(typed_term)}}, -- maybe?
   {"tuple_elim", {
-    "mechanism", typed_term,
     "subject", typed_term,
+    "body", typed_term,
   }},
   {"record_cons", {"fields", map(gen.builtin_string, typed_term)}},
   {"record_extend", {
@@ -512,8 +496,8 @@ typed_term:define_enum("typed", {
     "fields", map(gen.builtin_string, typed_term),
   }},
   {"record_elim", {
-    "mechanism", typed_term,
     "subject", typed_term,
+    "body", typed_term,
   }},
   --TODO record elim
   {"data_cons", {
@@ -521,18 +505,18 @@ typed_term:define_enum("typed", {
     "arg", typed_term,
   }},
   {"data_elim", {
-    "mechanism", typed_term,
     "subject", typed_term,
+    "body", typed_term,
   }},
   {"data_rec_elim", {
-    "mechanism", typed_term,
     "subject", typed_term,
+    "body", typed_term,
   }},
   {"object_cons", {"methods", map(gen.builtin_string, typed_term)}},
   {"object_corec_cons", {"methods", map(gen.builtin_string, typed_term)}},
   {"object_elim", {
-    "mechanism", typed_term,
     "subject", typed_term,
+    "body", typed_term,
   }},
   {"operative_cons"},
   {"prim_tuple_cons", {"elements", array(typed_term)}}, -- prim
@@ -738,8 +722,6 @@ end
 
 for _, deriver in ipairs { derivers.as, derivers.pretty_print } do
   checkable_term:derive(deriver)
-  mechanism_term:derive(deriver)
-  mechanism_usage:derive(deriver)
   inferrable_term:derive(deriver)
   typed_term:derive(deriver)
   quantity:derive(deriver)
@@ -750,8 +732,6 @@ end
 return {
   typechecker_state = typechecker_state, -- fn (constructor)
   checkable_term = checkable_term, -- {}
-  mechanism_term = mechanism_term,
-  mechanism_usage = mechanism_usage,
   inferrable_term = inferrable_term, -- {}
   typed_term = typed_term, -- {}
   free = free,

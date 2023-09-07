@@ -2,8 +2,6 @@ local terms = require './terms'
 local runtime_context = terms.runtime_context
 local typechecking_context = terms.typechecking_context
 local checkable_term = terms.checkable_term
-local mechanism_term = terms.mechanism_term
-local mechanism_usage = terms.mechanism_usage
 local inferrable_term = terms.inferrable_term
 local typed_term = terms.typed_term
 local free = terms.free
@@ -164,25 +162,6 @@ end
 local function substitute_type_variables(val, index_base, index_offset)
   -- TODO: replace free_placeholder variables with bound variables
   return value.closure(typed_term.literal(val), runtime_context())
-end
-
-local function infer_mechanism(mechanism_term, typechecking_context, mechanism_usage)
-  if mechanism_term:is_inferrable() then
-    return infer(mechanism_term:unwrap_inferrable(), typechecking_context)
-  elseif mechanism_term:is_lambda() then
-    local param_name, body = mechanism_term:unwrap_lambda()
-    local ok, arg_type, next_usage = mechanism_usage:as_callable()
-    if not ok then
-      error("infer_mechanism: can't infer mechanism type because mechanism lambda wasn't called immediately")
-    end
-    local inner_context = typechecking_context:append(param_name, arg_type)
-    local inner_type, inner_usages, inner_term = infer_mechanism(body, inner_context, next_usage)
-    local res_type = value.pi(arg_type, param_info_explicit, inner_type, result_info_pure)
-    -- TODO: handle quantities
-    return linear(res_type), inner_usages:copy(1, #inner_usages - 1), typed_term.lambda(inner_term)
-  else
-    error("infer_mechanism: unknown kind: " .. mechanism_term.kind)
-  end
 end
 
 local function apply_value(f, arg)
@@ -378,7 +357,7 @@ function infer(
     -- TODO: handle quantities
     return unrestricted(value.prim_tuple_type(type_data)), usages, typed_term.prim_tuple_cons(new_elements)
   elseif inferrable_term:is_tuple_elim() then
-    local mechanism, subject = inferrable_term:unwrap_tuple_elim()
+    local subject, body = inferrable_term:unwrap_tuple_elim()
     local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
     local subject_quantity, subject_type = subject_type:unwrap_qtype()
 
@@ -391,45 +370,24 @@ function infer(
       error("infer: trying to apply tuple elimination to something whose type isn't a tuple type")
     end
 
-    -- traverse the first time to find the length of the tuple
-    local n_elements = 0
-    local decls_cur = decls
-    while true do
-      local constructor, arg = decls_cur:unwrap_data_value()
-      if constructor == "empty" then
-        break
-      elseif constructor == "cons" then
-        n_elements = n_elements + 1
-        decls_cur = arg:unwrap_tuple_value()[1]
-      else
-        error("infer: unknown tuple type data constructor")
-      end
-    end
-
-    -- evaluating the subject is necessary for inferring the type of the mechanism
+    -- evaluating the subject is necessary for inferring the type of the body
     local subject_value = evaluate(subject_term, typechecking_context:get_runtime_context())
 
     -- define how the parameters for type evaluation should be set up
     local make_prefix
-    if subject_value:is_tuple_value() then
-      if not subject_type:is_tuple_type() then
-        error("infer: mismatch between tuple type and evaluated value")
-      end
+    if subject_type:is_tuple_type() and subject_value:is_tuple_value() then
       local subject_elements = subject_value:unwrap_tuple_value()
-      function make_prefix(i)
+      function make_prefix(i, n_elements)
         return value.tuple_value(subject_elements:copy(1, n_elements - i))
       end
-    elseif subject_value:is_prim_tuple_value() then
-      if not subject_type:is_prim_tuple_type() then
-        error("infer: mismatch between tuple type and evaluated value")
-      end
+    elseif subject_type:is_prim_tuple_type() and subject_value:is_prim_tuple_value() then
       local subject_elements = subject_value:unwrap_prim_tuple_value()
-      function make_prefix(i)
+      function make_prefix(i, n_elements)
         return value.prim_tuple_value(subject_elements:copy(1, n_elements - i))
       end
     elseif subject_value:is_neutral() then
       local neutral = subject_value:unwrap_neutral()
-      function make_prefix(i)
+      function make_prefix(i, n_elements)
         local prefix_elements = typed_term_array()
         for x = 1, i do
           prefix_elements:append(typed_term.bound_variable(x))
@@ -445,38 +403,31 @@ function infer(
     end
 
     -- evaluate the type of the tuple
-    local mech_usage = mechanism_usage.inferrable
-    local decls_cur = decls
-    while true do
-      local constructor, arg = decls_cur:unwrap_data_value()
+    local function make_inner_context(decls, i)
+      local constructor, arg = decls:unwrap_data_value()
       if constructor == "empty" then
-        break
+        return typechecking_context, i
       elseif constructor == "cons" then
-        local prefix = make_prefix(n_elements)
         local details = arg:unwrap_tuple_value()
+        local context, n_elements = make_inner_context(details[1], i+1)
         local f = details[2]
+        local prefix = make_prefix(i+1, n_elements)
         local element_type = apply_value(f, prefix)
-        mech_usage = mechanism_usage.callable(element_type, mech_usage)
-        decls_cur = details[1]
+        local new_context = context:append("", element_type)
+        return new_context, n_elements
       else
         error("infer: unknown tuple type data constructor")
       end
     end
+    local inner_context = make_inner_context(decls, 0)
 
-    -- infer the type of the mechanism, now knowing the type of the tuple
-    local mech_type, mech_usages, mech_term = infer_mechanism(mechanism, typechecking_context, mech_usage)
+    -- infer the type of the body, now knowing the type of the tuple
+    local body_type, body_usages, body_term = infer(body, inner_context)
 
-    -- unwrap the final result type
-    local result_type = mech_type
-    for i = 1, n_elements do
-      local _, result_t = result_type:unwrap_qtype()
-      local _, _, result_result_type, _ = result_t:unwrap_pi()
-      result_type = result_result_type
-    end
     local result_usages = usage_array()
     add_arrays(result_usages, subject_usages)
-    add_arrays(result_usages, mech_usages)
-    return result_type, result_usages, typed_term.tuple_elim(mech_term, subject_term)
+    add_arrays(result_usages, body_usages)
+    return body_type, result_usages, typed_term.tuple_elim(subject_term, body_term)
   elseif inferrable_term:is_operative_cons() then
     local handler = inferrable_term:unwrap_operative_cons()
     error("NYI inferrable_operative_cons")
@@ -501,6 +452,8 @@ function infer(
   else
     error("infer: unknown kind: " .. inferrable_term.kind)
   end
+
+  error("unreachable!?")
 
   --[[
   if inferrable_term.kind == "inferrable_level0" then
@@ -590,23 +543,22 @@ function evaluate(
       return value.prim_tuple_value(new_elements)
     end
   elseif typed_term:is_tuple_elim() then
-    local mechanism, subject = typed_term:unwrap_tuple_elim()
-    local mechanism_value = evaluate(mechanism, runtime_context)
+    local subject, body = typed_term:unwrap_tuple_elim()
     local subject_value = evaluate(subject, runtime_context)
     if subject_value:is_tuple_value() then
       local subject_elements = subject_value:unwrap_tuple_value()
-      local mechacons = mechanism_value
+      local inner_context = runtime_context
       for _, v in ipairs(subject_elements) do
-        mechacons = apply_value(mechacons, v)
+        inner_context = inner_context:append(v)
       end
-      return mechacons
+      return evaluate(body, inner_context)
     elseif subject_value:is_prim_tuple_value() then
       local subject_elements = subject_value:unwrap_prim_tuple_value()
-      local mechacons = mechanism_value
+      local inner_context = runtime_context
       for _, v in ipairs(subject_elements) do
-        mechacons = apply_value(mechacons, value.prim(v))
+        inner_context = inner_context:append(value.prim(v))
       end
-      return mechacons
+      return evaluate(body, inner_context)
     elseif subject_value:is_neutral() then
       error("nyi")
       local subject_neutral = subject_value:unwrap_neutral()
@@ -630,6 +582,8 @@ function evaluate(
   else
     error("evaluate: unknown kind: " .. typed_term.kind)
   end
+
+  error("unreachable!?")
 
   --[[
   if typed_term.kind == "typed_level0" then

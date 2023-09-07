@@ -92,15 +92,8 @@ local inf_tupelim = terms.inferrable_term.tuple_elim
 local tuple_of_69_420 = inf_tup(i69, i420)
 infer_and_eval("tuple_of_69_420", tuple_of_69_420)
 
-local mecha_lam = terms.mechanism_term.lambda
-local mecha_inf = terms.mechanism_term.inferrable
-local inf_swap =
-  mecha_lam("to_be_second",
-    mecha_lam("to_be_first",
-      mecha_inf(inf_tup(inf_var(2), inf_var(1)))
-    )
-  )
-local swap_69_420 = inf_tupelim(inf_swap, tuple_of_69_420)
+local inf_swap = inf_tup(inf_var(2), inf_var(1))
+local swap_69_420 = inf_tupelim(tuple_of_69_420, inf_swap)
 infer_and_eval("swap_69_420", swap_69_420)
 
 print("PART FOUR!!!!!!!!!")
@@ -127,13 +120,8 @@ local ip621 = inf_typ(t_prim_num, p621)
 local tuple_of_621_420 = inf_prim_tup(ip621, ip420)
 infer_and_eval("tuple_of_621_420", tuple_of_621_420)
 
-local inf_prim_swap =
-  mecha_lam("to_be_second",
-    mecha_lam("to_be_first",
-      mecha_inf(inf_prim_tup(inf_var(2), inf_var(1)))
-    )
-  )
-local swap_prim_621_420 = inf_tupelim(inf_prim_swap, tuple_of_621_420)
+local inf_prim_swap = inf_prim_tup(inf_var(2), inf_var(1))
+local swap_prim_621_420 = inf_tupelim(tuple_of_621_420, inf_prim_swap)
 infer_and_eval("swap_prim_621_420", swap_prim_621_420)
 
 print("PART FIVE!!!!!!!!!")
@@ -143,14 +131,14 @@ print("PART FIVE!!!!!!!!!")
 -- use tuple elim to extract results and repack with another prim
 -- call another primitive function
 
-local primextractrepack = lam(prim_tup(var(1), prim_lit(-1)))
+local primextractrepack = prim_tup(var(1), prim_lit(-1))
 
 local input = prim_tup(prim_lit(2)) -- -> (2)
 local returns_input_and_3 = prim_f(function(a) return a, 3 end) -- returns_input_and_3(2) -> (2, 3)
 local result = app(prim_add, app(returns_input_and_3, input)) -- add(2, 3) -> (5)
-local t = terms.typed_term.tuple_elim(primextractrepack, result) -- (5) -> (5, -1)
+local t = terms.typed_term.tuple_elim(result, primextractrepack) -- (5) -> (5, -1)
 local result_2 = app(prim_add, t) -- add(5, -1) -> 4
-local result_3 = terms.typed_term.tuple_elim(lam(var(1)), result_2)
+local result_3 = terms.typed_term.tuple_elim(result_2, var(1))
 eval_test("repacking_tuples", result_3)
 
 -- local fmt = require './format-adapter'
