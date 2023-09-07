@@ -441,6 +441,11 @@ inferrable_term:define_enum("inferrable", {
     "mechanism", mechanism_term,
     "subject", inferrable_term,
   }},
+  {"record_cons", {"fields", map(gen.builtin_string, inferrable_term)}},
+  {"record_elim", {
+    "mechanism", mechanism_term,
+    "subject", inferrable_term,
+  }},
   {"let", {
     "var_name", gen.builtin_string,
     "var_expr", inferrable_term,
@@ -505,6 +510,10 @@ typed_term:define_enum("typed", {
   {"record_extend", {
     "base", typed_term,
     "fields", map(gen.builtin_string, typed_term),
+  }},
+  {"record_elim", {
+    "mechanism", typed_term,
+    "subject", typed_term,
   }},
   --TODO record elim
   {"data_cons", {
@@ -708,9 +717,9 @@ neutral_value:define_enum("neutral_value", {
     "uncurried", value,
     "subject", neutral_value,
   }},
-  {"tuple_elim_stuck", {
-    "mechanism", value,
+  {"tuple_element_access_stuck", {
     "subject", neutral_value,
+    "index", gen.builtin_number,
   }},
   {"prim_application_stuck", {
     "function", gen.any_lua_type,
