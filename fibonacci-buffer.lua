@@ -10,12 +10,13 @@ local FibonacciBuffer_mt = {
 }
 
 local function new()
-  local fib_buf = {}
+  local fib_buf = {n = 0}
   setmetatable(fib_buf, FibonacciBuffer_mt)
   return fib_buf
 end
 
 function FibonacciBuffer:append(value)
+  local n = self.n
   local n_partitions = #self
   -- scan through self to find how many partitions need to be merged.
   -- doing it this way means we don't build intermediate tables that
@@ -53,20 +54,25 @@ function FibonacciBuffer:append(value)
   table.move(self, 1, merge_from - 1, 1, fib_buf)
   fib_buf[merge_from] = merged_partition
   fib_buf[merge_from + 1] = { value }
+  fib_buf.n = n + 1
   return fib_buf
 end
 
--- zero-based!!!
+-- one-based!!!
 function FibonacciBuffer:get(index)
   for _, p in ipairs(self) do
     local length = #p
-    if index < length then
-      return p[index + 1]
+    if index <= length then
+      return p[index]
     else
       index = index - length
     end
   end
   return nil
+end
+
+function FibonacciBuffer:len()
+  return self.n
 end
 
 function FibonacciBuffer:debug_repr()

@@ -19,6 +19,9 @@ local function new_self(fn)
 end
 
 local function metatable_equality(mt)
+  if type(mt) ~= "table" then
+    error("trying to define metatable equality to something that isn't a metatable (possible typo?)")
+  end
   return function(val)
     return getmetatable(val) == mt
   end
@@ -41,11 +44,17 @@ end
 
 local function validate_params_types(kind, params, params_types)
   -- ensure there are at least as many param types as there are params
+  -- also ensure there is at least one param
+  local at_least_one = false
   for i, v in ipairs(params) do
+    at_least_one = true
     local param_type = params_types[i]
-    if type(param_type) ~= "table" then
-      error("wrong argument passed to parameter type in constructor " .. kind .. ", parameter " .. v " (possible typo?)")
+    if type(param_type) ~= "table" or type(param_type.value_check) ~= "function" then
+      error("trying to set a parameter type to something that isn't a type, in constructor " .. kind .. ", parameter " .. v .. " (possible typo?)")
     end
+  end
+  if not at_least_one then
+    error("trying to make a record type, or a record variant of an enum type, with no parameters")
   end
 end
 
@@ -63,7 +72,7 @@ local function gen_record(self, cons, kind, params_with_types)
         -- type-check constructor arguments
         if params_types[i].value_check(argi) ~= true then
           p(argi)
-          error("wrong argument type passed to constructor " .. kind .. ", parameter " .. v)
+          error("wrong argument type passed to constructor " .. kind .. ", parameter '" .. v .. "'")
         end
         val[v] = argi
       end
@@ -94,8 +103,6 @@ local function gen_unit(self, kind)
   }
   local derive_info = {
     kind = kind,
-    params = {},
-    params_types = {},
   }
   setmetatable(val, self)
   return val, derive_info
@@ -198,10 +205,15 @@ end
 -- TODO: memoize? otherwise LOTS of tables will be constructed,
 -- through repeated calls to declare_map
 local function define_map(self, key_type, value_type)
+  if type(key_type) ~= "table" or type(key_type.value_check) ~= "function"
+    or type(value_type) ~= "table" or type(value_type.value_check) ~= "function" then
+    error("trying to set the key or value type to something that isn't a type (possible typo?)")
+  end
   setmetatable(self, map_type_mt)
   self.key_type = key_type
   self.value_type = value_type
   self.__index, self.__newindex = gen_map_fns(key_type, value_type)
+  self.__pairs = map_methods.pairs
   -- NOTE: this isn't primitive equality; this type has a __eq metamethod!
   self.value_check = metatable_equality(self)
   return self
@@ -209,12 +221,15 @@ end
 
 local array_type_mt = {
   __call = function(self, ...)
-    local args = { ... }
     local val = {
-      n = #args,
-      array = args,
+      n = 0,
+      array = {},
     }
     setmetatable(val, self)
+    local args = { ... }
+    for i = 1, select("#", ...) do
+      val:append(args[i])
+    end
     return val
   end,
   __eq = function(left, right)
@@ -232,6 +247,26 @@ local array_methods = {
   append = function(self, val)
     self[self.n + 1] = val
   end,
+  copy = function(self, first, last)
+    local first = first or 1
+    local last = last or #self
+    local mt = getmetatable(self)
+    local new = mt()
+    for i = first, last do
+      new:append(self.array[i])
+    end
+    return new
+  end,
+  unpack = function(self)
+    return table.unpack(self.array)
+  end,
+  pretty_print = function(self, prefix)
+    local parts = {}
+    for i, v in ipairs(self.array) do
+      parts[i] = ((type(v) == "table" and v.pretty_print) or tostring)(v, prefix)
+    end
+    return string.format("[%s]", table.concat(parts, ", "))
+  end
 }
 
 local function gen_array_fns(value_type)
@@ -274,7 +309,7 @@ local function gen_array_fns(value_type)
       error("key passed to index-assignment is out of bounds")
     end
     if value_type.value_check(value) ~= true then
-      p("map-index-assign", key_type, value_type)
+      p("array-index-assign", key_type, value_type)
       p(value)
       error("wrong value type passed to index-assignment")
     end
@@ -288,9 +323,14 @@ end
 
 -- TODO: see define_map
 local function define_array(self, value_type)
+  if type(value_type) ~= "table" or type(value_type.value_check) ~= "function" then
+    error("trying to set the value type to something that isn't a type (possible typo?)")
+  end
   setmetatable(self, array_type_mt)
   self.value_type = value_type
   self.__index, self.__newindex = gen_array_fns(value_type)
+  self.__ipairs = array_methods.ipairs
+  self.__len = array_methods.len
   -- NOTE: this isn't primitive equality; this type has a __eq metamethod!
   self.value_check = metatable_equality(self)
   return self
@@ -306,8 +346,13 @@ local type_mt = {
   }
 }
 
+local function undefined_value_check(val)
+  error("trying to typecheck a value against a type that has been declared but not defined")
+end
+
 local function define_type(self)
   setmetatable(self, type_mt)
+  self.value_check = undefined_value_check
   return self
 end
 
@@ -320,6 +365,7 @@ end
 return {
   declare_record = new_self(define_record),
   declare_enum = new_self(define_enum),
+  -- Make sure the function you pass to this returns true, not just a truthy value
   declare_foreign = new_self(define_foreign),
   declare_map = new_self(define_map),
   declare_array = new_self(define_array),
@@ -327,4 +373,5 @@ return {
   metatable_equality = metatable_equality,
   builtin_number = gen_builtin("number"),
   builtin_string = gen_builtin("string"),
+  any_lua_type = define_foreign({}, function() return true end),
 }

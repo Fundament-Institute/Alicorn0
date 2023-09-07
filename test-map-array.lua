@@ -18,7 +18,7 @@ stuff2["foo"] = funvalue
 local funvalue2 = typed.recordcons(stuff2)
 p(funvalue2)
 
-for k, v in funvalue2.fields:pairs() do
+for k, v in pairs(funvalue2.fields) do
   p(k, v)
 end
 
@@ -47,18 +47,18 @@ athing:append(funvalue)
 athing[2] = funvalue2
 local funvalue3 = typed.tuplecons(athing)
 p(funvalue3)
-assert(funvalue3.methods:len() == 2)
+assert(#funvalue3.methods == 2)
 
-for i, v in funvalue3.methods:ipairs() do
+for i, v in ipairs(funvalue3.methods) do
   p(i, v)
 end
 
 local athing2 = array_typed(funvalue, funvalue2)
 p(athing2)
-assert(athing2:len() == 2)
+assert(#athing2 == 2)
 athing2[1] = funvalue2
 p(athing2)
-assert(athing2:len() == 2)
+assert(#athing2 == 2)
 
 function fail4()
   athing["lol"] = funvalue
