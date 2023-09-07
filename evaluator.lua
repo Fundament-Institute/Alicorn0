@@ -364,47 +364,61 @@ function infer(
     local subject, body = inferrable_term:unwrap_tuple_elim()
     local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
     local subject_quantity, subject_type = subject_type:unwrap_qtype()
-
-    local decls
-    if subject_type:is_tuple_type() then
-      decls = subject_type:unwrap_tuple_type()
-    elseif subject_type:is_prim_tuple_type() then
-      decls = subject_type:unwrap_prim_tuple_type()
-    else
-      error("infer: trying to apply tuple elimination to something whose type isn't a tuple type")
-    end
-
     -- evaluating the subject is necessary for inferring the type of the body
     local subject_value = evaluate(subject_term, typechecking_context:get_runtime_context())
 
-    -- define how the parameters for type evaluation should be set up
-    local make_prefix
-    if subject_type:is_tuple_type() and subject_value:is_tuple_value() then
-      local subject_elements = subject_value:unwrap_tuple_value()
-      function make_prefix(i, n_elements)
-        return value.tuple_value(subject_elements:copy(1, n_elements - i))
-      end
-    elseif subject_type:is_prim_tuple_type() and subject_value:is_prim_tuple_value() then
-      local subject_elements = subject_value:unwrap_prim_tuple_value()
-      function make_prefix(i, n_elements)
-        return value.prim_tuple_value(subject_elements:copy(1, n_elements - i))
-      end
-    elseif subject_value:is_neutral() then
-      local neutral = subject_value:unwrap_neutral()
-      error("nyi")
-      function make_prefix(i, n_elements)
-        local prefix_elements = typed_term_array()
-        for x = 1, i do
-          prefix_elements:append(typed_term.bound_variable(x))
+    -- define how the type of each tuple element should be evaluated
+    local decls, make_prefix
+    if subject_type:is_tuple_type() then
+      decls = subject_type:unwrap_tuple_type()
+
+      if subject_value:is_tuple_value() then
+        local subject_elements = subject_value:unwrap_tuple_value()
+        function make_prefix(i, n_elements)
+          return value.tuple_value(subject_elements:copy(1, n_elements - i))
         end
-        local elim_tower = typed_term.tuple_cons(prefix_elements)
-        for x = 1, n_elements do
-          elim_tower = typed_term.lambda(elim_tower)
+      elseif subject_value:is_neutral() then
+        local subject_neutral = subject_value:unwrap_neutral()
+        function make_prefix(i, n_elements)
+          local n = n_elements - i
+          local prefix_elements = value_array()
+          for x = 1, n do
+            prefix_elements:append(value.neutral(neutral_value.tuple_element_access_stuck(subject_neutral, x)))
+          end
+          return value.tuple_value(prefix_elements)
         end
-        return value.neutral(neutral_value.tuple_elim_stuck(evaluate(elim_tower, runtime_context()), subject_value))
+      else
+        error("infer: trying to apply tuple elimination to something that isn't a tuple")
+      end
+
+    elseif subject_type:is_prim_tuple_type() then
+      decls = subject_type:unwrap_prim_tuple_type()
+
+      if subject_value:is_prim_tuple_value() then
+        local subject_elements = subject_value:unwrap_prim_tuple_value()
+        local subject_value_elements = value_array()
+        for _, v in ipairs(subject_elements) do
+          subject_value_elements:append(value.prim(v))
+        end
+        function make_prefix(i, n_elements)
+          return value.tuple_value(subject_value_elements:copy(1, n_elements - i))
+        end
+      elseif subject_value:is_neutral() then
+        -- yes, literally a copy-paste of the neutral case above
+        local subject_neutral = subject_value:unwrap_neutral()
+        function make_prefix(i, n_elements)
+          local n = n_elements - i
+          local prefix_elements = value_array()
+          for x = 1, n do
+            prefix_elements:append(value.neutral(neutral_value.tuple_element_access_stuck(subject_neutral, x)))
+          end
+          return value.tuple_value(prefix_elements)
+        end
+      else
+        error("infer: trying to apply primitive tuple elimination to something that isn't a primitive tuple")
       end
     else
-      error("infer: mismatch between tuple type and evaluated value")
+      error("infer: trying to apply tuple elimination to something whose type isn't a tuple type")
     end
 
     -- evaluate the type of the tuple
