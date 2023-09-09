@@ -436,7 +436,14 @@ inferrable_term:define_enum("inferrable", {
     "var_expr", inferrable_term,
     "body", inferrable_term,
   }},
-  {"operative_cons", {"handler", checkable_term}},
+  {"operative_cons", {
+    "operative_type", inferrable_term,
+    "userdata", inferrable_term,
+  }},
+  {"operative_type_cons", {
+    "handler", checkable_term,
+    "userdata_type", inferrable_term,
+  }},
   {"level_type"},
   {"level0"},
   {"level_suc", {"previous_level", inferrable_term}},
@@ -444,9 +451,9 @@ inferrable_term:define_enum("inferrable", {
     "level_a", inferrable_term,
     "level_b", inferrable_term,
   }},
-  {"star"},
-  {"prop"},
-  {"prim"},
+  --{"star"},
+  --{"prop"},
+  --{"prim"},
   {"annotated", {
     "annotated_term", checkable_term,
     "annotated_type", inferrable_term,
@@ -521,7 +528,11 @@ typed_term:define_enum("typed", {
     "subject", typed_term,
     "body", typed_term,
   }},
-  {"operative_cons"},
+  {"operative_cons", {"userdata", typed_term}},
+  {"operative_type_cons", {
+    "handler", typed_term,
+    "userdata_type", typed_term,
+  }},
   {"prim_tuple_cons", {"elements", array(typed_term)}}, -- prim
   {"prim_user_defined_type_cons", {
     "id", prim_user_defined_id,
@@ -611,23 +622,27 @@ value:define_enum("value", {
 
   -- metaprogramming stuff
   -- TODO: add types of terms, and type indices
-  {"syntax_value", {"syntax", metalang.constructed_syntax_type}},
-  {"syntax_type"},
-  {"matcher_value", {"matcher", metalang.matcher_type}},
-  {"matcher_type", {"result_type", value}},
-  {"reducer_value", {"reducer", metalang.reducer_type}},
-  {"environment_value", {"environment", environment_type}},
-  {"environment_type"},
-  {"checkable_term", {"checkable_term", checkable_term}},
-  {"inferrable_term", {"inferrable_term", inferrable_term}},
-  {"inferrable_term_type"},
-  {"typed_term", {"typed_term", typed_term}},
+  -- NOTE: we're doing this through prims instead
+  --{"syntax_value", {"syntax", metalang.constructed_syntax_type}},
+  --{"syntax_type"},
+  --{"matcher_value", {"matcher", metalang.matcher_type}},
+  --{"matcher_type", {"result_type", value}},
+  --{"reducer_value", {"reducer", metalang.reducer_type}},
+  --{"environment_value", {"environment", environment_type}},
+  --{"environment_type"},
+  --{"checkable_term", {"checkable_term", checkable_term}},
+  --{"inferrable_term", {"inferrable_term", inferrable_term}},
+  --{"inferrable_term_type"},
+  --{"typed_term", {"typed_term", typed_term}},
   --{"typechecker_monad_value", }, -- TODO
-  {"typechecker_monad_type", {"wrapped_type", value}},
+  --{"typechecker_monad_type", {"wrapped_type", value}},
   {"name_type"},
   {"name", {"name", gen.builtin_string}},
-  {"operative_value"},
-  {"operative_type", {"handler", value}},
+  {"operative_value", {"userdata", value}},
+  {"operative_type", {
+    "handler", value,
+    "userdata_type", value,
+  }},
 
 
   -- ordinary data
@@ -722,6 +737,10 @@ neutral_value.free.metavariable = function(mv)
   return neutral_value.free(free.metavariable(mv))
 end
 
+local prim_syntax_type = value.prim_user_defined_type({name = "syntax"}, array(value)())
+local prim_environment_type = value.prim_user_defined_type({name = "environment"}, array(value)())
+local prim_inferrable_term_type = value.prim_user_defined_type({name = "inferrable_term"}, array(value)())
+
 for _, deriver in ipairs { derivers.as, derivers.pretty_print } do
   checkable_term:derive(deriver)
   inferrable_term:derive(deriver)
@@ -743,6 +762,9 @@ return {
   result_info = result_info,
   value = value,
   neutral_value = neutral_value,
+  prim_syntax_type = prim_syntax_type,
+  prim_environment_type = prim_environment_type,
+  prim_inferrable_term_type = prim_inferrable_term_type,
 
   new_env = new_env,
   dump_env = dump_env,

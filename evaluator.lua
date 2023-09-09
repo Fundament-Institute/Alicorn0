@@ -11,15 +11,18 @@ local purity = terms.purity
 local result_info = terms.result_info
 local value = terms.value
 local neutral_value = terms.neutral_value
+local prim_syntax_type = terms.prim_syntax_type
+local prim_environment_type = terms.prim_environment_type
+local prim_inferrable_term_type = terms.prim_inferrable_term_type
 
 local gen = require './terms-generators'
 local map = gen.declare_map
-local string_value_map = map(gen.builtin_string, value)
 local string_typed_map = map(gen.builtin_string, typed_term)
+local string_value_map = map(gen.builtin_string, value)
 local array = gen.declare_array
+local typed_array = array(typed_term)
 local value_array = array(value)
-local typed_term_array = array(typed_term)
-local primitive_value_array = array(gen.any_lua_type)
+local primitive_array = array(gen.any_lua_type)
 local usage_array = array(gen.builtin_number)
 local string_array = array(gen.builtin_string)
 
@@ -32,9 +35,36 @@ local param_info_implicit = value.param_info(value.visibility(visibility.implici
 local result_info_pure = value.result_info(result_info(purity.pure))
 local result_info_effectful = value.result_info(result_info(purity.effectful))
 local function tup_val(...) return value.tuple_value(value_array(...)) end
-local function prim_tup_val(...) return value.prim_tuple_value(primitive_value_array(...)) end
+local function prim_tup_val(...) return value.prim_tuple_value(primitive_array(...)) end
 
 local derivers = require './derivers'
+
+local function add_arrays(onto, with)
+  local olen = #onto
+  for i, n in ipairs(with) do
+    local x
+    if i > olen then
+      x = 0
+    else
+      x = onto[i]
+    end
+    onto[i] = x + n
+  end
+end
+
+local function const_combinator(v)
+  return value.closure(typed_term.bound_variable(1), runtime_context():append(v))
+end
+
+local function get_level(t)
+  -- TODO: this
+  return 0
+end
+
+local function substitute_type_variables(val, index_base, index_offset)
+  -- TODO: replace free_placeholder variables with bound variables
+  return value.closure(typed_term.literal(val), runtime_context())
+end
 
 --[[
 local function extract_value_metavariable(value) -- -> Option<metavariable>
@@ -135,36 +165,30 @@ local function check(
     checkable_term, -- constructed from checkable_term
     typechecking_context, -- todo
     target_type) -- must be unify with target type (there is some way we can assign metavariables to make them equal)
-  -- -> type of that term, a typed term
+  -- -> type of that term, usage counts, a typed term
+  -- TODO: typecheck checkable_term and typechecking_context and target_type?
 
-  if checkable_term.kind == "inferred" then
-    local inferred_type, typed_term = infer(checkable_term.inferred_term, typechecking_context)
-    unified_type = inferred_type:unify(target_type) -- can fail, will cause lua error
-    return unified_type, typed_term
-  elseif checkable_term.kind == "checked_lambda" then
+  if checkable_term:is_inferrable() then
+    local inferrable_term = checkable_term:unwrap_inferrable()
+    local inferred_type, inferred_usages, typed_term = infer(inferrable_term, typechecking_context)
+    -- TODO: unify!!!!
+    --local unified_type = inferred_type:unify(target_type) -- can fail, will cause lua error
+    if inferred_type ~= target_type then
+      p(inferred_type)
+      p(target_type)
+      error("check: mismatch in inferred and target type")
+    end
+    return inferred_type, inferred_usages, typed_term
+  elseif checkable_term:is_lambda() then
+    local param_name, body = checkable_term:unwrap_lambda()
     -- assert that target_type is a pi type
     -- TODO open says work on other things first they will be easier
+    error("nyi")
+  else
+    error("check: unknown kind: " .. checkable_term.kind)
   end
 
-  error("check: unknown kind: " .. checkable_term.kind)
-end
-
-local function add_arrays(onto, with)
-  local olen = #onto
-  for i, n in ipairs(with) do
-    local x
-    if i > olen then
-      x = 0
-    else
-      x = onto[i]
-    end
-    onto[i] = x + n
-  end
-end
-
-local function substitute_type_variables(val, index_base, index_offset)
-  -- TODO: replace free_placeholder variables with bound variables
-  return value.closure(typed_term.literal(val), runtime_context())
+  error("unreachable!?")
 end
 
 local function apply_value(f, arg)
@@ -211,7 +235,7 @@ local function eq_prim_tuple_value_decls(left, right, typechecking_context)
     local left_type = apply_value(left_f, arg)
     local right_type = apply_value(right_f, arg)
     if left_type == right_type then
-      local new_context = context:append("", left_type)
+      local new_context = context:append("eq_prim_tuple_value_decls_param", left_type)
       return new_context
     else
       print("mismatch")
@@ -281,7 +305,7 @@ function infer(
     add_arrays(qtype_usages, quantity_usages)
     add_arrays(qtype_usages, type_usages)
     local qtype = typed_term.qtype(quantity_term, type_term)
-    local qtype_type = value.qtype_type(0) -- TODO: get level from the inner type
+    local qtype_type = value.qtype_type(get_level(type_type))
     return qtype_type, qtype_usages, qtype
   elseif inferrable_term:is_pi() then
     error("infer: nyi")
@@ -331,7 +355,7 @@ function infer(
     -- takes all previous values and produces the type of the next element
     local type_data = value.data_value("empty", tup_val())
     local usages = usage_array()
-    local new_elements = typed_term_array()
+    local new_elements = typed_array()
     for _, v in ipairs(elements) do
       local e_type, e_usages, e_term = infer(v, typechecking_context)
 
@@ -351,7 +375,7 @@ function infer(
     -- TODO: it is a type error to put something that isn't a prim into a prim tuple
     local type_data = value.data_value("empty", tup_val())
     local usages = usage_array()
-    local new_elements = typed_term_array()
+    local new_elements = typed_array()
     for _, v in ipairs(elements) do
       local e_type, e_usages, e_term = infer(v, typechecking_context)
 
@@ -433,7 +457,7 @@ function infer(
         local f = details[2]
         local prefix = make_prefix(n_elements)
         local element_type = apply_value(f, prefix)
-        local new_context = context:append("", element_type)
+        local new_context = context:append("tuple_element_" .. n_elements, element_type)
         return new_context, n_elements + 1
       else
         error("infer: unknown tuple type data constructor")
@@ -537,18 +561,41 @@ function infer(
     add_arrays(result_usages, body_usages)
     return body_type, result_usages, typed_term.record_elim(subject_term, field_names, body_term)
   elseif inferrable_term:is_operative_cons() then
-    local handler = inferrable_term:unwrap_operative_cons()
-    error("NYI inferrable_operative_cons")
+    local operative_type, userdata = inferrable_term:unwrap_operative_cons()
+    local operative_type_type, operative_type_usages, operative_type_term = infer(operative_type, typechecking_context)
+    local operative_type_value = evaluate(operative_type_term, typechecking_context:get_runtime_context())
+    local userdata_type, userdata_usages, userdata_term = infer(userdata, typechecking_context)
+    local ok, op_handler, op_userdata_type = operative_type_value:as_operative_type()
+    if not ok then
+      error("infer: trying to apply operative construction to something whose type isn't an operative type")
+    end
+    if userdata_type ~= op_userdata_type then
+      error("infer: mismatch in userdata types of operative construction")
+    end
+    local operative_usages = usage_array()
+    add_arrays(operative_usages, operative_type_usages)
+    add_arrays(operative_usages, userdata_usages)
+    return operative_type_value, operative_usages, typed_term.operative_cons(userdata_term)
+  elseif inferrable_term:is_operative_type_cons() then
+    local handler, userdata_type = inferrable_term:unwrap_operative_type_cons()
     local goal_type = value.pi(
-      unrestricted(tup_val(unrestricted(value.syntax_type), unrestricted(value.environment_type))),
+      unrestricted(tup_val(unrestricted(prim_syntax_type), unrestricted(prim_environment_type))),
       param_info_explicit,
-      unrestricted(tup_val(unrestricted(value.inferrable_term_type), unrestricted(value.environment_type))),
+      unrestricted(tup_val(unrestricted(prim_inferrable_term_type), unrestricted(prim_environment_type))),
       result_info_pure
     )
-    local unified_type, typed_operative = check(handler, typechecking_context, goal_type)
+    local handler_type, handler_usages, handler_term = check(handler, typechecking_context, goal_type)
+    local userdata_type_type, userdata_type_usages, userdata_type_term = infer(userdata_type, typechecking_context)
+    local operative_type_usages = usage_array()
+    add_arrays(operative_type_usages, handler_usages)
+    add_arrays(operative_type_usages, userdata_type_usages)
+    local handler_level = get_level(handler_type)
+    local userdata_type_level = get_level(userdata_type_type)
+    local operative_type_level = math.max(handler_level, userdata_type_level)
+    return value.star(operative_type_level), operative_type_usages, typed_term.operative_type_cons(handler_term, userdata_type_term)
   elseif inferrable_term:is_prim_user_defined_type_cons() then
     local id, family_args = inferrable_term:unwrap_prim_user_defined_type_cons()
-    local new_family_args = typed_term_array()
+    local new_family_args = typed_array()
     local result_usages = usage_array()
     for _, v in ipairs(family_args) do
       local e_type, e_usages, e_term = infer(v, runtime_context)
@@ -627,7 +674,7 @@ function evaluate(
     return value.tuple_value(new_elements)
   elseif typed_term:is_prim_tuple_cons() then
     local elements = typed_term:unwrap_prim_tuple_cons()
-    local new_elements = primitive_value_array()
+    local new_elements = primitive_array()
     local stuck = false
     local stuck_element
     local trailing_values
@@ -708,7 +755,14 @@ function evaluate(
       error("evaluate: trying to apply record elimination to something that isn't a record")
     end
   elseif typed_term:is_operative_cons() then
-    return value.operative_value
+    local userdata = typed_term:unwrap_operative_cons()
+    local userdata_value = evaluate(userdata, runtime_context)
+    return value.operative_value(userdata_value)
+  elseif typed_term:is_operative_type_cons() then
+    local handler, userdata_type = typed_term:unwrap_operative_type_cons()
+    local handler_value = evaluate(handler, runtime_context)
+    local userdata_type_value = evaluate(userdata_type, runtime_context)
+    return value.operative_type(handler_value, userdata_type_value)
   elseif typed_term:is_prim_user_defined_type_cons() then
     local id, family_args = typed_term:unwrap_prim_user_defined_type_cons()
     local new_family_args = value_array()
@@ -755,6 +809,7 @@ function evaluate(
 end
 
 return {
+  const_combinator = const_combinator,
   check = check,
   infer = infer,
   evaluate = evaluate,

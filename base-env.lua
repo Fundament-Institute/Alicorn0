@@ -1,6 +1,6 @@
 local environment = require './environment'
 local treemap = require './lazy-prefix-tree'
-local evaluator = require './alicorn-evaluator'
+local evaluator = require './alicorn-expressions'
 local types = require './typesystem'
 local metalang = require './metalanguage'
 local utils = require './reducer-utils'
