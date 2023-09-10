@@ -42,15 +42,67 @@ local checked_expression
 local inferred_collect_tuple
 local inferred_collect_prim_tuple
 
+local infix_data = {
+  ["="] = {precedence = 2, associativity = "r"},
+  ["|"] = {precedence = 3, associativity = "l"},
+  ["&"] = {precedence = 3, associativity = "l"},
+  ["!"] = {precedence = 3, associativity = "l"},
+  ["<"] = {precedence = 4, associativity = "l"},
+  [">"] = {precedence = 4, associativity = "l"},
+  ["+"] = {precedence = 5, associativity = "l"},
+  ["-"] = {precedence = 5, associativity = "l"},
+  ["*"] = {precedence = 6, associativity = "l"},
+  ["/"] = {precedence = 6, associativity = "l"},
+  ["%"] = {precedence = 6, associativity = "l"},
+  ["^"] = {precedence = 7, associativity = "r"},
+  [":"] = {precedence = 8, associativity = "l"},
+  -- # is the comment character and is forbidden here
+}
+
+
+local function check_infix_expression_handler(dat, a, b)
+  local env, prec = dat.env, dat.prec
+  local ok, name = a:match(
+    {
+      metalanguage.is_symbol(metalanguage.accept_handler)
+    },
+    metalanguage.failure_handler,
+    nil
+  )
+  local data = infix_data[name:sub(1,1)]
+  if data then
+    local ok, ifx, op, rhs
+  end
+end
+
 local function inferred_expression_pairhandler(env, a, b)
+
+
+  local ok, ifx, op, args = b:match(
+    {
+      metalanguage.is_pair(check_infix_expression_handler)
+    },
+    metalanguage.failure_handler,
+    {env = env, prec = 0, lhs = a}
+  )
+
+  local combiner
+  if ok and ifx then
+    combiner = env:get("_" + op + "_")
+  else
+    ok, combiner, env = a:match({inferred_expression(metalanguage.accept_handler, env)}, metalanguage.failure_handler, nil)
+    if not ok then return false, combiner end
+    args = b
+  end
+
+  
   -- resolve first of the pair as an expression
   -- typecheck it
   -- check type to see how it should be combined
   -- either
   --   resolve rest of the pair as collect tuple
   --   pass it into the operative's arguments
-  local ok, combiner, env = a:match({inferred_expression(metalanguage.accept_handler, env)}, metalanguage.failure_handler, nil)
-  if not ok then return false, combiner end
+
 
   -- combiner was an evaluated typed value, now it isn't
   local type_of_term, usage_count, term = evaluator.infer(combiner, env.typechecking_context)
@@ -59,7 +111,7 @@ local function inferred_expression_pairhandler(env, a, b)
   if ok then
     -- FIXME: this doesn't exist yet and API might change
     -- operative input: env, syntax tree, target type
-    local operative_result_val = terms.apply_value(as_operative.closure, terms.values.operative_input(env, terms.values.syntax(b), nil))
+    local operative_result_val = terms.apply_value(as_operative.closure, terms.values.prim_tuple(value_array(env, args))
     -- result should be able to be an inferred term, can fail
     if operative_result_val.kind ~= "value_data" then
       return false, "applying operative did not result in value_data type, typechecker or lua operative mistake when applying at " .. a.anchor .. " to the args at " .. b.anchor
@@ -74,7 +126,7 @@ local function inferred_expression_pairhandler(env, a, b)
 
   if type_of_term:is_qtype() and type_of_term.type:is_pi() then
     -- multiple quantity of usages in tuple with usage in function arguments
-    local ok, tuple, env = b:match({inferred_collect_tuple(metalanguage.accept_handler, env)}, metalanguage.failure_handler, nil)
+    local ok, tuple, env = args:match({inferred_collect_tuple(metalanguage.accept_handler, env)}, metalanguage.failure_handler, nil)
 
     if not ok then
       return false, tuple, env
@@ -85,7 +137,7 @@ local function inferred_expression_pairhandler(env, a, b)
 
   if type_of_term:is_qtype() and type_of_term.type:as_prim_function_type() then
     -- multiple quantity of usages in tuple with usage in function arguments
-    local ok, tuple, env = b:match({inferred_collect_prim_tuple(metalanguage.accept_handler, env)}, metalanguage.failure_handler, nil)
+    local ok, tuple, env = args:match({inferred_collect_prim_tuple(metalanguage.accept_handler, env)}, metalanguage.failure_handler, nil)
 
     if not ok then
       return false, tuple, env
