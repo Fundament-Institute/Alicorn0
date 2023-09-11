@@ -186,8 +186,6 @@ local function speculate(f, ...)
 end
 
 local checkable_term = gen.declare_type()
-local mechanism_term = gen.declare_type()
-local mechanism_usage = gen.declare_type()
 local inferrable_term = gen.declare_type()
 local typed_term = gen.declare_type()
 local free = gen.declare_type()
@@ -389,25 +387,11 @@ end)
 
 -- checkable terms need a target type to typecheck against
 checkable_term:define_enum("checkable", {
-  {"mechanism", {"mechanism_term", mechanism_term}},
+  {"inferrable", {"inferrable_term", inferrable_term}},
   {"lambda", {
     "param_name", gen.builtin_string,
     "body", checkable_term,
   }},
-})
-mechanism_term:define_enum("mechanism", {
-  {"inferrable", {"inferrable_term", inferrable_term}},
-  {"lambda", {
-    "param_name", gen.builtin_string,
-    "body", mechanism_term,
-  }},
-})
-mechanism_usage:define_enum("mechanism_usage", {
-  {"callable", {
-    "arg_type", value,
-    "next_usage", mechanism_usage,
-  }},
-  {"inferrable"},
 })
 -- inferrable terms can have their type inferred / don't need a target type
 inferrable_term:define_enum("inferrable", {
@@ -438,15 +422,28 @@ inferrable_term:define_enum("inferrable", {
   }},
   {"tuple_cons", {"elements", array(inferrable_term)}},
   {"tuple_elim", {
-    "mechanism", mechanism_term,
     "subject", inferrable_term,
+    "body", inferrable_term,
+  }},
+  {"record_cons", {"fields", map(gen.builtin_string, inferrable_term)}},
+  {"record_elim", {
+    "subject", inferrable_term,
+    "field_names", array(gen.builtin_string),
+    "body", inferrable_term,
   }},
   {"let", {
     "var_name", gen.builtin_string,
     "var_expr", inferrable_term,
     "body", inferrable_term,
   }},
-  {"operative_cons", {"handler", checkable_term}},
+  {"operative_cons", {
+    "operative_type", inferrable_term,
+    "userdata", inferrable_term,
+  }},
+  {"operative_type_cons", {
+    "handler", checkable_term,
+    "userdata_type", inferrable_term,
+  }},
   {"level_type"},
   {"level0"},
   {"level_suc", {"previous_level", inferrable_term}},
@@ -454,9 +451,9 @@ inferrable_term:define_enum("inferrable", {
     "level_a", inferrable_term,
     "level_b", inferrable_term,
   }},
-  {"star"},
-  {"prop"},
-  {"prim"},
+  --{"star"},
+  --{"prop"},
+  --{"prim"},
   {"annotated", {
     "annotated_term", checkable_term,
     "annotated_type", inferrable_term,
@@ -498,13 +495,19 @@ typed_term:define_enum("typed", {
   {"tuple_cons", {"elements", array(typed_term)}},
   --{"tuple_extend", {"base", typed_term, "fields", array(typed_term)}}, -- maybe?
   {"tuple_elim", {
-    "mechanism", typed_term,
     "subject", typed_term,
+    "length", gen.builtin_number,
+    "body", typed_term,
   }},
   {"record_cons", {"fields", map(gen.builtin_string, typed_term)}},
   {"record_extend", {
     "base", typed_term,
     "fields", map(gen.builtin_string, typed_term),
+  }},
+  {"record_elim", {
+    "subject", typed_term,
+    "field_names", array(gen.builtin_string),
+    "body", typed_term,
   }},
   --TODO record elim
   {"data_cons", {
@@ -512,20 +515,24 @@ typed_term:define_enum("typed", {
     "arg", typed_term,
   }},
   {"data_elim", {
-    "mechanism", typed_term,
     "subject", typed_term,
+    "body", typed_term,
   }},
   {"data_rec_elim", {
-    "mechanism", typed_term,
     "subject", typed_term,
+    "body", typed_term,
   }},
   {"object_cons", {"methods", map(gen.builtin_string, typed_term)}},
   {"object_corec_cons", {"methods", map(gen.builtin_string, typed_term)}},
   {"object_elim", {
-    "mechanism", typed_term,
     "subject", typed_term,
+    "body", typed_term,
   }},
-  {"operative_cons"},
+  {"operative_cons", {"userdata", typed_term}},
+  {"operative_type_cons", {
+    "handler", typed_term,
+    "userdata_type", typed_term,
+  }},
   {"prim_tuple_cons", {"elements", array(typed_term)}}, -- prim
   {"prim_user_defined_type_cons", {
     "id", prim_user_defined_id,
@@ -615,23 +622,27 @@ value:define_enum("value", {
 
   -- metaprogramming stuff
   -- TODO: add types of terms, and type indices
-  {"syntax_value", {"syntax", metalang.constructed_syntax_type}},
-  {"syntax_type"},
-  {"matcher_value", {"matcher", metalang.matcher_type}},
-  {"matcher_type", {"result_type", value}},
-  {"reducer_value", {"reducer", metalang.reducer_type}},
-  {"environment_value", {"environment", environment_type}},
-  {"environment_type"},
-  {"checkable_term", {"checkable_term", checkable_term}},
-  {"inferrable_term", {"inferrable_term", inferrable_term}},
-  {"inferrable_term_type"},
-  {"typed_term", {"typed_term", typed_term}},
+  -- NOTE: we're doing this through prims instead
+  --{"syntax_value", {"syntax", metalang.constructed_syntax_type}},
+  --{"syntax_type"},
+  --{"matcher_value", {"matcher", metalang.matcher_type}},
+  --{"matcher_type", {"result_type", value}},
+  --{"reducer_value", {"reducer", metalang.reducer_type}},
+  --{"environment_value", {"environment", environment_type}},
+  --{"environment_type"},
+  --{"checkable_term", {"checkable_term", checkable_term}},
+  --{"inferrable_term", {"inferrable_term", inferrable_term}},
+  --{"inferrable_term_type"},
+  --{"typed_term", {"typed_term", typed_term}},
   --{"typechecker_monad_value", }, -- TODO
-  {"typechecker_monad_type", {"wrapped_type", value}},
+  --{"typechecker_monad_type", {"wrapped_type", value}},
   {"name_type"},
   {"name", {"name", gen.builtin_string}},
-  {"operative_value"},
-  {"operative_type", {"handler", value}},
+  {"operative_value", {"userdata", value}},
+  {"operative_type", {
+    "handler", value,
+    "userdata_type", value,
+  }},
 
 
   -- ordinary data
@@ -703,14 +714,13 @@ neutral_value:define_enum("neutral_value", {
     "method", value,
     "subject", neutral_value,
   }},
-  {"record_elim_stuck", {
-    "fields", value,
-    "uncurried", value,
+  {"tuple_element_access_stuck", {
     "subject", neutral_value,
+    "index", gen.builtin_number,
   }},
-  {"tuple_elim_stuck", {
-    "mechanism", value,
+  {"record_field_access_stuck", {
     "subject", neutral_value,
+    "field_name", gen.builtin_string,
   }},
   {"prim_application_stuck", {
     "function", gen.any_lua_type,
@@ -727,10 +737,12 @@ neutral_value.free.metavariable = function(mv)
   return neutral_value.free(free.metavariable(mv))
 end
 
+local prim_syntax_type = value.prim_user_defined_type({name = "syntax"}, array(value)())
+local prim_environment_type = value.prim_user_defined_type({name = "environment"}, array(value)())
+local prim_inferrable_term_type = value.prim_user_defined_type({name = "inferrable_term"}, array(value)())
+
 for _, deriver in ipairs { derivers.as, derivers.pretty_print } do
   checkable_term:derive(deriver)
-  mechanism_term:derive(deriver)
-  mechanism_usage:derive(deriver)
   inferrable_term:derive(deriver)
   typed_term:derive(deriver)
   quantity:derive(deriver)
@@ -741,8 +753,6 @@ end
 return {
   typechecker_state = typechecker_state, -- fn (constructor)
   checkable_term = checkable_term, -- {}
-  mechanism_term = mechanism_term,
-  mechanism_usage = mechanism_usage,
   inferrable_term = inferrable_term, -- {}
   typed_term = typed_term, -- {}
   free = free,
@@ -752,6 +762,9 @@ return {
   result_info = result_info,
   value = value,
   neutral_value = neutral_value,
+  prim_syntax_type = prim_syntax_type,
+  prim_environment_type = prim_environment_type,
+  prim_inferrable_term_type = prim_inferrable_term_type,
 
   new_env = new_env,
   dump_env = dump_env,

@@ -32,12 +32,16 @@ local function parse_params_with_types(params_with_types)
   -- params_types are even
   local params = {}
   local params_types = {}
-  for i, v in ipairs(params_with_types) do
-    if i % 2 == 1 then
-      params[math.floor(i / 2 + 1)] = v
+  local odd = true
+  local i = 1
+  for _, v in ipairs(params_with_types) do
+    if odd then
+      params[i] = v
     else
-      params_types[math.floor(i / 2)] = v
+      params_types[i] = v
+      i = i + 1
     end
+    odd = not odd
   end
   return params, params_types
 end

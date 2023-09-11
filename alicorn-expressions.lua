@@ -3,9 +3,43 @@
 local metalanguage = require './metalanguage'
 -- local conexpr = require './contextual-exprs'
 local types = require './typesystem'
-local gen = require './terms-generators'
+
 local terms = require './terms'
+local runtime_context = terms.runtime_context
+local typechecking_context = terms.typechecking_context
+local inferrable_term = terms.inferrable_term
+local typed_term = terms.typed_term
+local quantity = terms.quantity
+local visibility = terms.visibility
+local purity = terms.purity
+local result_info = terms.result_info
+local value = terms.value
+local prim_syntax_type = terms.prim_syntax_type
+local prim_environment_type = terms.prim_environment_type
+local prim_inferrable_term_type = terms.prim_inferrable_term_type
+
+local gen = require './terms-generators'
+local array = gen.declare_array
+local inferrable_array = array(inferrable_term)
+local typed_array = array(typed_term)
+local value_array = array(value)
+local usage_array = array(gen.builtin_number)
+
+local function qtype(q, val) return value.qtype(value.quantity(q), val) end
+local function unrestricted(val) return qtype(quantity.unrestricted, val) end
+local function linear(val) return qtype(quantity.linear, val) end
+local function erased(val) return qtype(quantity.erased, val) end
+local param_info_explicit = value.param_info(value.visibility(visibility.explicit))
+local param_info_implicit = value.param_info(value.visibility(visibility.implicit))
+local result_info_pure = value.result_info(result_info(purity.pure))
+local result_info_effectful = value.result_info(result_info(purity.effectful))
+local function tup_val(...) return value.tuple_value(value_array(...)) end
+local function cons(...) return value.data_value("cons", tup_val(...)) end
+local empty = value.data_value("empty", tup_val())
+
 local evaluator = require './evaluator'
+local const_combinator = evaluator.const_combinator
+local infer = evaluator.infer
 
 local p = require 'pretty-print'.prettyPrint
 
@@ -105,7 +139,7 @@ local function inferred_expression_pairhandler(env, a, b)
 
 
   -- combiner was an evaluated typed value, now it isn't
-  local type_of_term, usage_count, term = evaluator.infer(combiner, env.typechecking_context)
+  local type_of_term, usage_count, term = infer(combiner, env.typechecking_context)
 
   local ok, as_operative = type_of_term:as_operative_type()
   if ok then
@@ -120,8 +154,8 @@ local function inferred_expression_pairhandler(env, a, b)
       return false, semantic_error.operative_apply_failed(operative_result_val.data, a.anchor, b.anchor)
     end
     -- FIXME: assert type is an inferrable term using new API once it exists
-    local resulting_type, usage_counts, term = evaluator.infer(env, operative_result_val.data)
-    return true, terms.inferrable_term.typed(resulting_type, usage_counts, term), env
+    local resulting_type, usage_counts, term = infer(env, operative_result_val.data)
+    return true, inferrable_term.typed(resulting_type, usage_counts, term), env
   end
 
   if type_of_term:is_qtype() and type_of_term.type:is_pi() then
@@ -132,7 +166,7 @@ local function inferred_expression_pairhandler(env, a, b)
       return false, tuple, env
     end
 
-    return terms.inferrable_term.application(terms.inferrable_term.typed(type_of_term, usage_count, term), tuple)
+    return inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
   end
 
   if type_of_term:is_qtype() and type_of_term.type:as_prim_function_type() then
@@ -143,7 +177,7 @@ local function inferred_expression_pairhandler(env, a, b)
       return false, tuple, env
     end
 
-    return true, terms.inferrable_term.application(terms.inferrable_term.typed(type_of_term, usage_count, term), tuple), env
+    return true, inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple), env
   end
 
   p(type_of_term)
@@ -161,10 +195,10 @@ local function inferred_expression_valuehandler(env, val)
   if val.type == "f64" then
     p(val)
     return true,
-      terms.inferrable_term.typed(
-        terms.value.qtype(terms.value.quantity(terms.quantity.unrestricted), terms.value.prim_number_type),
-        gen.declare_array(gen.builtin_number)(),
-        terms.typed_term.literal(terms.value.prim(val.val))
+      inferrable_term.typed(
+        unrestricted(value.prim_number_type),
+        usage_array(),
+        typed_term.literal(value.prim(val.val))
       ), env
   end
   p("valuehandler error", val)
@@ -249,10 +283,53 @@ checked_expression =
 -- end
 
 local function primitive_operative(fn)
-  return {
-    type = types.primop,
-    val = fn
-  }
+  -- what we're going for:
+  -- (s : syntax, e : environment, u : wrapped_typed_term(userdata), g : goal) -> (goal_to_term(g), environment)
+  -- what we have:
+  -- (s : syntax, e : environment) -> (inferrable_term, environment)
+
+  -- 1: wrap fn as a typed prim
+  -- this way it can take a prim tuple and return a prim tuple
+  local typed_prim_fn = typed_term.literal(value.prim(fn))
+  -- 2: wrap it to convert a normal tuple argument to a prim tuple
+  -- and a prim tuple result to a normal tuple
+  -- this way it can take a normal tuple and return a normal tuple
+  local nparams = 2 -- for convenience when we upgrade to 4
+  local tuple_conv_elements = typed_array()
+  local prim_tuple_conv_elements = typed_array()
+  for i = 1, nparams do
+    -- + 1 because variable 1 is the argument tuple
+    -- all variables that follow are the destructured tuple
+    local var = typed_term.bound_variable(i + 1)
+    tuple_conv_elements:append(var)
+    prim_tuple_conv_elements:append(var)
+  end
+  local tuple_conv = typed_term.tuple_cons(tuple_conv_elements)
+  local prim_tuple_conv = typed_term.prim_tuple_cons(prim_tuple_conv_elements)
+  local tuple_to_prim_tuple = typed_term.tuple_elim(typed_term.bound_variable(1), nparams, prim_tuple_conv)
+  local tuple_to_prim_tuple_fn = typed_term.application(typed_prim_fn, tuple_to_prim_tuple)
+  local tuple_to_tuple_fn = typed_term.tuple_elim(tuple_to_prim_tuple_fn, nparams, tuple_conv)
+  -- 3: wrap it in a closure with an empty capture, not a typed lambda
+  -- this ensures variable 1 is the argument tuple
+  local typed_fn = typed_term.literal(value.closure(tuple_to_tuple_fn, runtime_context()))
+  -- 4: wrap it in an inferrable term
+  -- note how it takes a normal tuple and returns a normal tuple
+  local cu_syntax_type = const_combinator(unrestricted(prim_syntax_type))
+  local cu_inf_type = const_combinator(unrestricted(prim_inferrable_term_type))
+  local cu_env_type = const_combinator(unrestricted(prim_environment_type))
+  local param_type = unrestricted(value.tuple_type(cons(cons(empty, cu_syntax_type), cu_env_type)))
+  local result_type = unrestricted(value.tuple_type(cons(cons(empty, cu_inf_type), cu_env_type)))
+  local inferred_type = value.pi(param_type, param_info_explicit, result_type, result_info_pure)
+  local inferrable_fn = inferrable_term.typed(inferred_type, usage_array(), typed_fn)
+  -- 5: wrap it in an operative type cons and finally an operative cons
+  -- with empty userdata
+  local userdata_type = unrestricted(value.tuple_type(empty))
+  local userdata_type_term = typed_term.literal(userdata_type)
+  local userdata_type_inf = inferrable_term.typed(value.star(0), usage_array(), userdata_type_term)
+  local op_type_fn = inferrable_term.operative_type_cons(checkable_term.inferrable(inferrable_fn), userdata_type_inf)
+  local userdata = inferrable_term.tuple_cons(inferrable_array())
+  local op_fn = inferrable_term.operative_cons(op_type_fn, userdata)
+  return op_fn
 end
 
 local function inferred_collect_tuple_pair_handler(env, a, b)
@@ -264,7 +341,7 @@ end
 local function inferred_collect_tuple_nil_handler(env) return true, false, nil, nil, env end
 
 inferred_collect_tuple = metalanguage.reducer(function(syntax, _, env)
-  local collected_terms = gen.declare_array(terms.inferrable_term)()
+  local collected_terms = inferrable_array()
   local ok, continue, next_term = true, true, nil
   while ok and continue do
     ok, continue, next_term, syntax, env = syntax:match(
@@ -280,11 +357,11 @@ inferred_collect_tuple = metalanguage.reducer(function(syntax, _, env)
     end
   end
   if not ok then return false, continue end
-  return true, terms.inferrable_term.tuple_cons(collected_terms), env
+  return true, inferrable_term.tuple_cons(collected_terms), env
 end, "inferred_collect_tuple")
 
 inferred_collect_prim_tuple = metalanguage.reducer(function(syntax, _, env)
-    local collected_terms = gen.declare_array(terms.inferrable_term)()
+    local collected_terms = inferrable_array()
     local ok, continue, next_term = true, true, nil
     while ok and continue do
       ok, continue, next_term, syntax, env = syntax:match(
@@ -300,7 +377,7 @@ inferred_collect_prim_tuple = metalanguage.reducer(function(syntax, _, env)
       end
     end
     if not ok then return false, continue end
-    return true, terms.inferrable_term.prim_tuple_cons(collected_terms), env
+    return true, inferrable_term.prim_tuple_cons(collected_terms), env
 end, "inferred_collect_prim_stuple")
 
 local expressions_args = metalanguage.reducer(function(syntax, _, env)
