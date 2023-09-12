@@ -279,7 +279,7 @@ local function primitive_operative(fn)
   local cu_inf_type = const_combinator(unrestricted(prim_inferrable_term_type))
   local cu_env_type = const_combinator(unrestricted(prim_environment_type))
   local param_type = unrestricted(value.tuple_type(cons(cons(empty, cu_syntax_type), cu_env_type)))
-  local result_type = unrestricted(value.tuple_type(cons(cons(empty, cu_inf_type), cu_env_type)))
+  local result_type = const_combinator(unrestricted(value.tuple_type(cons(cons(empty, cu_inf_type), cu_env_type))))
   local inferred_type = value.pi(param_type, param_info_explicit, result_type, result_info_pure)
   local inferrable_fn = inferrable_term.typed(inferred_type, usage_array(), typed_fn)
   -- 5: wrap it in an operative type cons and finally an operative cons
@@ -287,7 +287,7 @@ local function primitive_operative(fn)
   local userdata_type = unrestricted(value.tuple_type(empty))
   local userdata_type_term = typed_term.literal(userdata_type)
   local userdata_type_inf = inferrable_term.typed(value.star(0), usage_array(), userdata_type_term)
-  local op_type_fn = inferrable_term.operative_type_cons(checkable_term.inferrable(inferrable_fn), userdata_type_inf)
+  local op_type_fn = inferrable_term.operative_type_cons(terms.checkable_term.inferrable(inferrable_fn), userdata_type_inf)
   local userdata = inferrable_term.tuple_cons(inferrable_array())
   local op_fn = inferrable_term.operative_cons(op_type_fn, userdata)
   return op_fn
@@ -403,7 +403,7 @@ end
 -- local prim_num = terms.value.prim_number_type
 -- primitive_applicative(function(a, b) return a + b end, {prim_num, prim_num}, {prim_num}),
 
-local function ctype(t)
+local function evaluate_in_empty_runtime_context(t)
   local initial_context = terms.runtime_context()
   return evaluator.evaluate(terms.typed_term.application(terms.typed_term.lambda(terms.typed_term.lambda(terms.typed_term.bound_variable(1))), terms.typed_term.literal(t)), initial_context)
 end
@@ -417,7 +417,7 @@ local function build_prim_type_tuple(elems)
   end
 
   for i, v in ipairs(elems) do
-    result = cons(result, ctype(default_unrestricted(v)))
+    result = cons(result, evaluate_in_empty_runtime_context(default_unrestricted(v)))
   end
 
   return terms.value.qtype(quantity, terms.value.prim_tuple_type(result))

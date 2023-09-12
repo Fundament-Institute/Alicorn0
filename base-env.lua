@@ -93,39 +93,39 @@ local basic_fn_kind = {
 
 local basic_fn_type = {kind = basic_fn_kind, params = {}}
 
-evaluator.define_operate(
-  basic_fn_kind,
-  function(self, operands, env)
-    local ok, args, env = operands:match(
-      {
-        evaluator.collect_tuple(metalang.accept_handler, env)
-      },
-      metalang.failure_handler,
-      nil
-    )
-    if not ok then return ok, args end
-    if #args.type.params ~= #self.val.argnames then return false, "argument count mismatch" end
-    local bindings = {}
-    for i = 1, #args.type.params do
-      bindings[self.val.argnames[i]] = environment.new_store{type = args.type.params[i], val = args.val[i]}
-    end
-    local callenv = environment.new_env {
-      locals = treemap.build(bindings),
-      nonlocals = self.val.enclosing_bindings,
-      carrier = env.carrier,
-      perms = self.val.enclosing_perms
-    }
-    local ok, res, resenv = self.val.body:match(
-      {
-        evaluator.block(metalang.accept_handler, callenv)
-      },
-      metalang.failure_handler,
-      nil
-    )
-    if not ok then return ok, res end
-    return ok, res, environment.new_env {locals = env.locals, nonlocals = env.nonlocals, carrier = resenv.carrier, perms = env.perms}
-
-end)
+--evaluator.define_operate(
+--  basic_fn_kind,
+--  function(self, operands, env)
+--    local ok, args, env = operands:match(
+--      {
+--        evaluator.collect_tuple(metalang.accept_handler, env)
+--      },
+--      metalang.failure_handler,
+--      nil
+--    )
+--    if not ok then return ok, args end
+--    if #args.type.params ~= #self.val.argnames then return false, "argument count mismatch" end
+--    local bindings = {}
+--    for i = 1, #args.type.params do
+--      bindings[self.val.argnames[i]] = environment.new_store{type = args.type.params[i], val = args.val[i]}
+--    end
+--    local callenv = environment.new_env {
+--      locals = treemap.build(bindings),
+--      nonlocals = self.val.enclosing_bindings,
+--      carrier = env.carrier,
+--      perms = self.val.enclosing_perms
+--    }
+--    local ok, res, resenv = self.val.body:match(
+--      {
+--        evaluator.block(metalang.accept_handler, callenv)
+--      },
+--      metalang.failure_handler,
+--      nil
+--    )
+--    if not ok then return ok, res end
+--    return ok, res, environment.new_env {locals = env.locals, nonlocals = env.nonlocals, carrier = resenv.carrier, perms = env.perms}
+--
+--end)
 
 local function basic_fn(syntax, env)
   local ok, args, body = syntax:match(
@@ -202,7 +202,7 @@ local core_operations = {
   --end, types.tuple {types.number, types.number}, types.cotuple({types.unit, types.unit})),
 
   --["do"] = evaluator.primitive_operative(do_block),
-  --let = evaluator.primitive_operative(let_bind),
+  let = exprs.primitive_operative(let_bind),
   --["dump-env"] = evaluator.primitive_operative(function(syntax, env) print(environment.dump_env(env)); return true, types.unit_val, env end),
   --["basic-fn"] = evaluator.primitive_operative(basic_fn),
   --tuple = evaluator.primitive_operative(tuple_type_impl),
