@@ -27,6 +27,12 @@ local usage_array = array(gen.builtin_number)
 
 local function qtype(q, val) return value.qtype(value.quantity(q), val) end
 local function unrestricted(val) return qtype(quantity.unrestricted, val) end
+local function default_unrestricted(val)
+  if val:is_qtype() then
+    return val
+  end
+  return qtype(quantity.unrestricted, val)
+end
 local function linear(val) return qtype(quantity.linear, val) end
 local function erased(val) return qtype(quantity.erased, val) end
 local param_info_explicit = value.param_info(value.visibility(visibility.explicit))
@@ -64,6 +70,13 @@ local semantic_error = {
     return {
       text = "value in combiner slot that can't operate of type " .. types.type_name(t)
     }
+  end,
+  operative_apply_failed = function(result, anchors)
+    return {
+      text = "operative apply failed",
+      result = result,
+      anchors = anchors,
+    }
   end
 }
 
@@ -99,7 +112,7 @@ local function inferred_expression_pairhandler(env, a, b)
       return false, "applying operative did not result in value_data type, typechecker or lua operative mistake when applying at " .. a.anchor .. " to the args at " .. b.anchor
     end
     if operative_result_val.variant == "error" then
-      return false, semantic_error.operative_apply_failed(operative_result_val.data, a.anchor, b.anchor)
+      return false, semantic_error.operative_apply_failed(operative_result_val.data, {a.anchor, b.anchor})
     end
     -- FIXME: assert type is an inferrable term using new API once it exists
     local resulting_type, usage_counts, term = infer(env, operative_result_val.data)
@@ -359,6 +372,7 @@ local block = metalanguage.reducer(function(syntax, _, env)
       )
       if ok and continue then lastval = newval end
     end
+    p("block reducer", ok, continue)
     if not ok then return false, continue end
     return true, lastval, env
 end, "block")
@@ -384,8 +398,36 @@ end
 --   operate_behavior[kind] = handler
 -- end
 
+-- example usage of primitive_applicative
+-- add(a, b) = a + b ->
+-- local prim_num = terms.value.prim_number_type
+-- primitive_applicative(function(a, b) return a + b end, {prim_num, prim_num}, {prim_num}),
+
+local function ctype(t)
+  local initial_context = terms.runtime_context()
+  return evaluator.evaluate(terms.typed_term.application(terms.typed_term.lambda(terms.typed_term.lambda(terms.typed_term.bound_variable(1))), terms.typed_term.literal(t)), initial_context)
+end
+
+local function build_prim_type_tuple(elems)
+  local result = empty
+  local quantity = terms.value.quantity(terms.quantity.unrestricted)
+
+  if elems.is_qtype and elems:is_qtype() then
+    quantity, elems = elems:unwrap_qtype()
+  end
+
+  for i, v in ipairs(elems) do
+    result = cons(result, ctype(default_unrestricted(v)))
+  end
+
+  return terms.value.qtype(quantity, terms.value.prim_tuple_type(result))
+end
+
 local function primitive_applicative(fn, params, results)
-  return {type = types.primap(params, results), val = fn}
+  local literal_prim_fn = terms.typed_term.literal(terms.value.prim(fn))
+  local prim_fn_type = terms.value.prim_function_type(build_prim_type_tuple(params), build_prim_type_tuple(results))
+
+  return terms.inferrable_term.typed(unrestricted(prim_fn_type), usage_array(), literal_prim_fn)
 end
 
 

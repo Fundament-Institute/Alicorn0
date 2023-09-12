@@ -226,10 +226,10 @@ typechecking_context_mt = {
     get_runtime_context = function(self)
       return self.runtime_context
     end,
-    append = function(self, name, type)
+    append = function(self, name, type, val) -- value is optional
       local copy = {
         bindings = self.bindings:append({name = name, type = type}),
-        runtime_context = self.runtime_context:append(value.neutral(neutral_value.free(free.placeholder(#self + 1)))),
+        runtime_context = self.runtime_context:append(val or value.neutral(neutral_value.free(free.placeholder(#self + 1)))),
       }
       return setmetatable(copy, typechecking_context_mt)
     end
@@ -648,8 +648,6 @@ return {
   prim_environment_type = prim_environment_type,
   prim_inferrable_term_type = prim_inferrable_term_type,
 
-  new_env = new_env,
-  dump_env = dump_env,
   runtime_context = runtime_context,
   typechecking_context = typechecking_context,
   module_mt = module_mt,

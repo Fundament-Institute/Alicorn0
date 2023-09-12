@@ -4,9 +4,9 @@ local fibbuf = require './fibonacci-buffer'
 local terms = require './terms'
 local inferrable_term = terms.inferrable_term
 local typechecking_context = terms.typechecking_context
-local module_mt = module_mt,
+local module_mt = { }
 
-local eval = require './evaluator.lua'
+local eval = require './evaluator'
 local infer = eval.infer
 
 local environment_mt
@@ -39,7 +39,7 @@ local new_env = update_env
 environment_mt = {
   __index = {
     get = function(self, name)
-      local present, binding = self.bindings:get(name)
+      local present, binding = self.in_scope:get(name)
       if not present then return false, "symbol \"" .. name .. "\" is not in scope" end
       if binding == nil then
         return false, "symbol \"" .. name .. "\" is marked as present but with no data; this indicates a bug in the environment or something violating encapsulation"
@@ -52,8 +52,9 @@ environment_mt = {
         local expr_type, expr_usages, expr_term = infer(expr, self.typechecking_context)
         local n = #typechecking_context
         local term = inferrable_term.bound_variable(n + 1)
-        local locals = self.locals:put(var_name, term)
-        local typechecking_context = self.typechecking_context:append(var_name, expr_type)
+        local locals = self.locals:put(name, term)
+        local evaled = eval.evaluate(expr_term, self.typechecking_context.runtime_context)
+        local typechecking_context = self.typechecking_context:append(name, expr_type, evaled)
         local bindings = self.bindings:append(binding)
         return update_env(self, {
           locals = locals,
@@ -63,6 +64,7 @@ environment_mt = {
       elseif binding:is_tuple_elim() then
         local names, subject = binding:unwrap_tuple_elim()
         local subject_type, subject_usages, subject_term = infer(subject, self.typechecking_context)
+        local evaled = eval.evaluate(subject_term, self.typechecking_context.runtime_context)
         local decls = subject_type:unwrap_tuple_type()
         local n = #typechecking_context
         local locals = self.locals
@@ -74,7 +76,9 @@ environment_mt = {
           end
           local term = inferrable_term.bound_variable(n + i)
           locals = locals:put(v, term)
-          typechecking_context = typechecking_context:append(v, )
+          error("NYI")
+          -- FIXME: extract subject type and evaled for each elem in tuple
+          -- typechecking_context = typechecking_context:append(v, )
         end
         local bindings = self.bindings:append(binding)
         return update_env(self, {
@@ -145,3 +149,8 @@ local function dump_env(env)
     .. "\nlocals: " .. trie.dump_map(env.locals)
     .. "\nnonlocals: " .. trie.dump_map(env.nonlocals)
 end
+
+return {
+  new_env = new_env,
+  dump_env = dump_env,
+}

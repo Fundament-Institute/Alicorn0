@@ -11,6 +11,7 @@ local metalanguage = require './metalanguage'
 local format = require './format-adapter'
 local gen = require './terms-generators'
 local evaluator = require './evaluator'
+local environment = require './environment'
 local p = require 'pretty-print'.prettyPrint
 local trie = require './lazy-prefix-tree'
 
@@ -86,17 +87,31 @@ local function prim_tup(...) return terms.typed_term.prim_tuple_cons(typed_array
 
 local add = prim_f(function(left, right) return left + right end)
 local inf_add = inf_typ(terms.value.prim_function_type(two_tuple_decl, tuple_decl), add)
+local inf_add_from_primitive_applicative = exprs.primitive_applicative(function(a, b) return a + b end, {t_prim_num, t_prim_num}, {t_prim_num})
 
-local env = terms.new_env({
-  nonlocals = trie.empty:put("+", inf_add)
+print("hoof constructed add:")
+print(inf_add:pretty_print())
+
+print("primitive_applicative add:")
+print(inf_add_from_primitive_applicative:pretty_print())
+
+local env = environment.new_env({
+    nonlocals = trie.empty:put("+", inf_add)
+})
+local env = environment.new_env({
+    nonlocals = trie.empty:put("+", inf_add_from_primitive_applicative)
 })
 
-p("env", terms.dump_env(env))
+p("env", environment.dump_env(env))
 
 local ok, expr, env = code:match({exprs.block(metalanguage.accept_handler, env)}, metalanguage.failure_handler, nil)
 
 p("expr", ok, env)
-print(expr:pretty_print())
+if expr.pretty_print then
+    print(expr:pretty_print())
+else
+    p(expr)
+end
 
 if not ok then
     return
