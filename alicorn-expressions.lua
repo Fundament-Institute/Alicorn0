@@ -403,11 +403,6 @@ end
 -- local prim_num = terms.value.prim_number_type
 -- primitive_applicative(function(a, b) return a + b end, {prim_num, prim_num}, {prim_num}),
 
-local function evaluate_in_empty_runtime_context(t)
-  local initial_context = terms.runtime_context()
-  return evaluator.evaluate(terms.typed_term.application(terms.typed_term.lambda(terms.typed_term.lambda(terms.typed_term.bound_variable(1))), terms.typed_term.literal(t)), initial_context)
-end
-
 local function build_prim_type_tuple(elems)
   local result = empty
   local quantity = terms.value.quantity(terms.quantity.unrestricted)
@@ -417,7 +412,7 @@ local function build_prim_type_tuple(elems)
   end
 
   for i, v in ipairs(elems) do
-    result = cons(result, evaluate_in_empty_runtime_context(default_unrestricted(v)))
+    result = cons(result, const_combinator(default_unrestricted(v)))
   end
 
   return terms.value.qtype(quantity, terms.value.prim_tuple_type(result))
