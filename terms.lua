@@ -41,7 +41,6 @@
 local metalang = require './metalanguage'
 local types = require './typesystem'
 
-local trie = require './lazy-prefix-tree'
 local fibbuf = require './fibonacci-buffer'
 
 local gen = require './terms-generators'
@@ -191,18 +190,7 @@ local typed_term = gen.declare_type()
 local free = gen.declare_type()
 local value = gen.declare_type()
 local neutral_value = gen.declare_type()
-
-local new_env
-
-local function new_store(val)
-  local store = {val = val}
-  if not types.is_duplicable(val.type) then
-    store.kind = "useonce"
-  else
-    store.kind = "reusable"
-  end
-  return store
-end
+local binding = gen.declare_type()
 
 local runtime_context_mt
 
@@ -238,10 +226,10 @@ typechecking_context_mt = {
     get_runtime_context = function(self)
       return self.runtime_context
     end,
-    append = function(self, name, type)
+    append = function(self, name, type, val) -- value is optional
       local copy = {
         bindings = self.bindings:append({name = name, type = type}),
-        runtime_context = self.runtime_context:append(value.neutral(neutral_value.free(free.placeholder(#self + 1)))),
+        runtime_context = self.runtime_context:append(val or value.neutral(neutral_value.free(free.placeholder(#self + 1)))),
       }
       return setmetatable(copy, typechecking_context_mt)
     end
@@ -261,130 +249,24 @@ end
 -- empty for now, just used to mark the table
 local module_mt = {}
 
-local environment_mt = {
-  __index = {
-    get = function(self, name)
-      local present, binding = self.bindings:get(name)
-      if not present then return false, "symbol \"" .. name .. "\" is not in scope" end
-      if binding == nil then
-        return false, "symbol \"" .. name .. "\" is marked as present but with no data; this indicates a bug in the environment or something violating encapsulation"
-      end
-      return true, binding
-    end,
-    bind_local = function(self, name, term)
-      return new_env {
-        locals = self.locals:put(name, term),
-        nonlocals = self.nonlocals,
-        carrier = self.carrier,
-        perms = self.perms
-      }
-    end,
-    gather_module = function(self)
-      return self, setmetatable({bindings = self.locals}, module_mt)
-    end,
-    open_module = function(self, module)
-      return new_env {
-        locals = self.locals:extend(module.bindings),
-        nonlocals = self.nonlocals,
-        carrier = self.carrier,
-        perms = self.perms
-      }
-    end,
-    use_module = function(self, module)
-      return new_env {
-        locals = self.locals,
-        nonlocals = self.nonlocals:extend(module.bindings),
-        carrier = self.carrier,
-        perms = self.perms
-      }
-    end,
-    unlet_local = function(self, name)
-      return new_env {
-        locals = self.locals:remove(name),
-        nonlocals = self.nonlocals,
-        carrier = self.carrier,
-        perms = self.perms
-      }
-    end,
-    enter_block = function(self)
-      return { shadowed = self }, new_env {
-        locals = nil,
-        nonlocals = self.nonlocals:extend(self.locals),
-        carrier = self.carrier,
-        perms = self.perms
-      }
-    end,
-    exit_block = function(self, term, shadowed)
-      for k, v in pairs(self.locals) do
-        term:let(k, v)
-      end
-    end,
-    child_scope = function(self)
-      return new_env {
-        locals = trie.empty,
-        nonlocals = self.bindings,
-        carrier = self.carrier,
-        perms = self.perms
-      }
-    end,
-    exit_child_scope = function(self, child)
-      return new_env {
-        locals = self.locals,
-        nonlocals = self.nonlocals,
-        carrier = child.carrier,
-        perms = self.perms
-      }
-    end,
-    get_carrier = function(self)
-      if self.carrier == nil then
-        return false, "The environment has no effect carrier, code in the environment must be pure"
-      end
-      if self.carrier.kind == "used" then
-        return false, "The environment used to have an effect carrier but it was used; this environment shouldn't be used for anything and this message indicates a linearity-violating bug in an operative"
-      end
-      local val = self.carrier.val
-      if self.carrier.kind == "useonce" then
-        self.carrier.val = nil
-        self.carrier.kind = "used"
-      end
-      return true, val
-    end,
-    provide_carrier = function(self, carrier)
-      return new_env {
-        locals = self.locals,
-        nonlocals = self.nonlocals,
-        carrier = new_store(carrier),
-        perms = self.perms
-      }
-    end
-  }
-}
-
-function new_env(opts)
-  local self = {}
-  self.locals = opts.locals or trie.empty
-  self.nonlocals = opts.nonlocals or trie.empty
-  self.bindings = self.nonlocals:extend(self.locals)
-  self.carrier = opts.carrier or nil
-  self.perms = opts.perms or {}
-  self.typechecking_context = typechecking_context()
-  return setmetatable(self, environment_mt)
-end
-
-local function dump_env(env)
-  return "Environment"
-    .. "\nlocals: " .. trie.dump_map(env.locals)
-    .. "\nnonlocals: " .. trie.dump_map(env.nonlocals)
-    .. "\ncarrier: " .. tostring(env.carrier)
-end
 
 local runtime_context_type = gen.declare_foreign(gen.metatable_equality(runtime_context_mt))
 local typechecking_context_type = gen.declare_foreign(gen.metatable_equality(typechecking_context_mt))
-local environment_type = gen.declare_foreign(gen.metatable_equality(environment_mt))
 local prim_user_defined_id = gen.declare_foreign(function(val)
   return type(val) == "table" and type(val.name) == "string"
 end)
 
+-- terms that don't have a body yet
+binding:define_enum("binding", {
+  {"let", {
+    "name", gen.builtin_string,
+    "expr", inferrable_term,
+  }},
+  {"tuple_elim", {
+    "names", array(gen.builtin_string),
+    "subject", inferrable_term,
+  }},
+})
 -- checkable terms need a target type to typecheck against
 checkable_term:define_enum("checkable", {
   {"inferrable", {"inferrable_term", inferrable_term}},
@@ -432,8 +314,8 @@ inferrable_term:define_enum("inferrable", {
     "body", inferrable_term,
   }},
   {"let", {
-    "var_name", gen.builtin_string,
-    "var_expr", inferrable_term,
+    "name", gen.builtin_string,
+    "expr", inferrable_term,
     "body", inferrable_term,
   }},
   {"operative_cons", {
@@ -766,12 +648,9 @@ return {
   prim_environment_type = prim_environment_type,
   prim_inferrable_term_type = prim_inferrable_term_type,
 
-  new_env = new_env,
-  dump_env = dump_env,
-  new_store = new_store,
   runtime_context = runtime_context,
   typechecking_context = typechecking_context,
+  module_mt = module_mt,
   runtime_context_type = runtime_context_type,
   typechecking_context_type = typechecking_context_type,
-  environment_type = environment_type,
 }

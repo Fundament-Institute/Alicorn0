@@ -172,11 +172,14 @@ local function check(
     local inferrable_term = checkable_term:unwrap_inferrable()
     local inferred_type, inferred_usages, typed_term = infer(inferrable_term, typechecking_context)
     -- TODO: unify!!!!
+    if inferred_type ~= target_type then
+      inferred_type = inferred_type:unify(target_type)
+      --print(inferred_type:pretty_print())
+      --print(target_type:pretty_print())
+      --error("check: mismatch in inferred and target type")
+    end
     --local unified_type = inferred_type:unify(target_type) -- can fail, will cause lua error
     if inferred_type ~= target_type then
-      p(inferred_type)
-      p(target_type)
-      error("check: mismatch in inferred and target type")
     end
     return inferred_type, inferred_usages, typed_term
   elseif checkable_term:is_lambda() then
@@ -577,11 +580,15 @@ function infer(
     add_arrays(operative_usages, userdata_usages)
     return operative_type_value, operative_usages, typed_term.operative_cons(userdata_term)
   elseif inferrable_term:is_operative_type_cons() then
+    local function cons(...) return value.data_value("cons", tup_val(...)) end
+    local empty = value.data_value("empty", tup_val())
     local handler, userdata_type = inferrable_term:unwrap_operative_type_cons()
     local goal_type = value.pi(
-      unrestricted(tup_val(unrestricted(prim_syntax_type), unrestricted(prim_environment_type))),
+      unrestricted(value.tuple_type(cons(cons(empty, const_combinator(unrestricted(prim_syntax_type))), const_combinator(unrestricted(prim_environment_type))))),
+      --unrestricted(tup_val(unrestricted(prim_syntax_type), unrestricted(prim_environment_type))),
       param_info_explicit,
-      unrestricted(tup_val(unrestricted(prim_inferrable_term_type), unrestricted(prim_environment_type))),
+      const_combinator(unrestricted(value.tuple_type(cons(cons(empty, const_combinator(unrestricted(prim_inferrable_term_type))), const_combinator(unrestricted(prim_environment_type)))))),
+      --unrestricted(tup_val(unrestricted(prim_inferrable_term_type), unrestricted(prim_environment_type))),
       result_info_pure
     )
     local handler_type, handler_usages, handler_term = check(handler, typechecking_context, goal_type)

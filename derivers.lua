@@ -1,3 +1,5 @@
+local derive_print = function(...)  end -- can make this call derive_print(...) if you want to debug
+
 local eq = {
   record = function(t, info)
     local kind = info.kind
@@ -10,10 +12,10 @@ local eq = {
     local all_checks = table.concat(checks, " and ")
     local chunk = "return function(left, right) return " .. all_checks .. " end"
 
-    print("derive eq: record chunk: " .. kind)
-    print("###")
-    print(chunk)
-    print("###")
+    derive_print("derive eq: record chunk: " .. kind)
+    derive_print("###")
+    derive_print(chunk)
+    derive_print("###")
 
     local compiled, message = load(chunk, "derive-eq_record", "t")
     assert(compiled, message)
@@ -54,10 +56,10 @@ local eq = {
     local check_function = "function(left, right) return " .. check_expression .. " end"
     local chunk = define_all_variants_checks .. "\nreturn " .. check_function
 
-    print("derive eq: enum chunk: " .. name)
-    print("###")
-    print(chunk)
-    print("###")
+    derive_print("derive eq: enum chunk: " .. name)
+    derive_print("###")
+    derive_print(chunk)
+    derive_print("###")
 
     local compiled, message = load(chunk, "derive-eq_enum", "t")
     assert(compiled, message)
@@ -77,10 +79,10 @@ local is = {
       local vkind = name .. "_" .. vname
       local chunk = string.format("return function(self) return self.kind == %q end", vkind)
 
-      print("derive is: enum chunk: " .. vkind)
-      print("###")
-      print(chunk)
-      print("###")
+      derive_print("derive is: enum chunk: " .. vkind)
+      derive_print("###")
+      derive_print(chunk)
+      derive_print("###")
 
       local compiled, message = load(chunk, "derive-is_enum", "t")
       assert(compiled, message)
@@ -160,10 +162,10 @@ local pretty_print = {
       end
     ]]
 
-    print("derive pretty_print: enum chunk: " .. name)
-    print("###")
-    print(chunk)
-    print("###")
+    derive_print("derive pretty_print: enum chunk: " .. name)
+    derive_print("###")
+    derive_print(chunk)
+    derive_print("###")
 
     local compiled, message = load(chunk, "derive-pretty_print_enum", "t")
     assert(compiled, message)
@@ -185,10 +187,10 @@ local unwrap = {
     local all_returns = table.concat(returns, ", ")
     local chunk = "return function(self) return " .. all_returns .. " end"
 
-    print("derive unwrap: record chunk: " .. kind)
-    print("###")
-    print(chunk)
-    print("###")
+    derive_print("derive unwrap: record chunk: " .. kind)
+    derive_print("###")
+    derive_print(chunk)
+    derive_print("###")
 
     local compiled, message = load(chunk, "derive-unwrap_record", "t")
     assert(compiled, message)
@@ -221,10 +223,10 @@ local unwrap = {
       local error_statement = string.format("error(%q .. self.kind)", error_message)
       local chunk = "return function(self) if self:is_" .. vname .. "() then return " .. all_returns .. " else " .. error_statement .. " end end"
 
-      print("derive unwrap: enum chunk: " .. vkind)
-      print("###")
-      print(chunk)
-      print("###")
+      derive_print("derive unwrap: enum chunk: " .. vkind)
+      derive_print("###")
+      derive_print(chunk)
+      derive_print("###")
 
       local compiled, message = load(chunk, "derive-unwrap_enum", "t")
       assert(compiled, message)
@@ -244,10 +246,10 @@ local as = {
       local vkind = name .. "_" .. vname
       local chunk = "return function(self) return pcall(function() return self:unwrap_" .. vname .. "() end) end"
 
-      print("derive as: enum chunk: " .. vkind)
-      print("###")
-      print(chunk)
-      print("###")
+      derive_print("derive as: enum chunk: " .. vkind)
+      derive_print("###")
+      derive_print(chunk)
+      derive_print("###")
 
       local compiled, message = load(chunk, "derive-as_enum", "t")
       assert(compiled, message)

@@ -27,6 +27,12 @@ local usage_array = array(gen.builtin_number)
 
 local function qtype(q, val) return value.qtype(value.quantity(q), val) end
 local function unrestricted(val) return qtype(quantity.unrestricted, val) end
+local function default_unrestricted(val)
+  if val:is_qtype() then
+    return val
+  end
+  return qtype(quantity.unrestricted, val)
+end
 local function linear(val) return qtype(quantity.linear, val) end
 local function erased(val) return qtype(quantity.erased, val) end
 local param_info_explicit = value.param_info(value.visibility(visibility.explicit))
@@ -63,6 +69,13 @@ local semantic_error = {
   non_operable_combiner = function(t)
     return {
       text = "value in combiner slot that can't operate of type " .. types.type_name(t)
+    }
+  end,
+  operative_apply_failed = function(result, anchors)
+    return {
+      text = "operative apply failed",
+      result = result,
+      anchors = anchors,
     }
   end
 }
@@ -151,7 +164,7 @@ local function inferred_expression_pairhandler(env, a, b)
       return false, "applying operative did not result in value_data type, typechecker or lua operative mistake when applying at " .. a.anchor .. " to the args at " .. b.anchor
     end
     if operative_result_val.variant == "error" then
-      return false, semantic_error.operative_apply_failed(operative_result_val.data, a.anchor, b.anchor)
+      return false, semantic_error.operative_apply_failed(operative_result_val.data, {a.anchor, b.anchor})
     end
     -- FIXME: assert type is an inferrable term using new API once it exists
     local resulting_type, usage_counts, term = infer(env, operative_result_val.data)
@@ -318,7 +331,7 @@ local function primitive_operative(fn)
   local cu_inf_type = const_combinator(unrestricted(prim_inferrable_term_type))
   local cu_env_type = const_combinator(unrestricted(prim_environment_type))
   local param_type = unrestricted(value.tuple_type(cons(cons(empty, cu_syntax_type), cu_env_type)))
-  local result_type = unrestricted(value.tuple_type(cons(cons(empty, cu_inf_type), cu_env_type)))
+  local result_type = const_combinator(unrestricted(value.tuple_type(cons(cons(empty, cu_inf_type), cu_env_type))))
   local inferred_type = value.pi(param_type, param_info_explicit, result_type, result_info_pure)
   local inferrable_fn = inferrable_term.typed(inferred_type, usage_array(), typed_fn)
   -- 5: wrap it in an operative type cons and finally an operative cons
@@ -326,7 +339,7 @@ local function primitive_operative(fn)
   local userdata_type = unrestricted(value.tuple_type(empty))
   local userdata_type_term = typed_term.literal(userdata_type)
   local userdata_type_inf = inferrable_term.typed(value.star(0), usage_array(), userdata_type_term)
-  local op_type_fn = inferrable_term.operative_type_cons(checkable_term.inferrable(inferrable_fn), userdata_type_inf)
+  local op_type_fn = inferrable_term.operative_type_cons(terms.checkable_term.inferrable(inferrable_fn), userdata_type_inf)
   local userdata = inferrable_term.tuple_cons(inferrable_array())
   local op_fn = inferrable_term.operative_cons(op_type_fn, userdata)
   return op_fn
@@ -411,6 +424,7 @@ local block = metalanguage.reducer(function(syntax, _, env)
       )
       if ok and continue then lastval = newval end
     end
+    p("block reducer", ok, continue)
     if not ok then return false, continue end
     return true, lastval, env
 end, "block")
@@ -436,8 +450,31 @@ end
 --   operate_behavior[kind] = handler
 -- end
 
+-- example usage of primitive_applicative
+-- add(a, b) = a + b ->
+-- local prim_num = terms.value.prim_number_type
+-- primitive_applicative(function(a, b) return a + b end, {prim_num, prim_num}, {prim_num}),
+
+local function build_prim_type_tuple(elems)
+  local result = empty
+  local quantity = terms.value.quantity(terms.quantity.unrestricted)
+
+  if elems.is_qtype and elems:is_qtype() then
+    quantity, elems = elems:unwrap_qtype()
+  end
+
+  for i, v in ipairs(elems) do
+    result = cons(result, const_combinator(default_unrestricted(v)))
+  end
+
+  return terms.value.qtype(quantity, terms.value.prim_tuple_type(result))
+end
+
 local function primitive_applicative(fn, params, results)
-  return {type = types.primap(params, results), val = fn}
+  local literal_prim_fn = terms.typed_term.literal(terms.value.prim(fn))
+  local prim_fn_type = terms.value.prim_function_type(build_prim_type_tuple(params), build_prim_type_tuple(results))
+
+  return terms.inferrable_term.typed(unrestricted(prim_fn_type), usage_array(), literal_prim_fn)
 end
 
 
