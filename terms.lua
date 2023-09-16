@@ -345,6 +345,9 @@ inferrable_term:define_enum("inferrable", {
     "id", prim_user_defined_id, -- prim_user_defined_type
     "family_args", array(inferrable_term), -- prim
   }},
+  {"prim_boxed_type", {"type", inferrable_term}},
+  {"prim_box", {"content" inferrable_term}},
+  {"prim_unbox", {"container", inferrable_term}},
 })
 -- typed terms have been typechecked but do not store their type internally
 typed_term:define_enum("typed", {
@@ -420,11 +423,17 @@ typed_term:define_enum("typed", {
     "id", prim_user_defined_id,
     "family_args", array(typed_term), -- prim
   }},
+  {"prim_boxed_type", {"type", typed_term}},
+  {"prim_box", {"content", typed_term}},
+  {"prim_unbox", {"container", typed_term}}
 })
+
+local unique_id = gen.declare_foreign(function(val) return type(val) == "table" end)
 
 free:define_enum("free", {
   {"metavariable", {"metavariable", metavariable_type}},
   {"placeholder", {"index", gen.builtin_number}},
+  {"unique", {"id", unique_id}}
   -- TODO: axiom
 })
 
@@ -563,6 +572,9 @@ value:define_enum("value", {
     "result_type", value, -- must be a prim_tuple_type
     -- primitive functions can only be pure for now
   }},
+  {"prim_boxed_type", {"type", value}},
+  {"prim_box_stuck", {"content", neutral_value}},
+  {"prim_unbox_stuck", {"container", neutral_value}},
   {"prim_user_defined_type", {
     "id", prim_user_defined_id,
     "family_args", array(value),

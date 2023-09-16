@@ -66,6 +66,14 @@ local function substitute_type_variables(val, index_base, index_offset)
   return value.closure(typed_term.literal(val), runtime_context())
 end
 
+local function is_type_of_types(val)
+  if not val:is_qtype() then
+    error "val expected to be a qtype but wasn't"
+  end
+  local quantity, type = val:unwrap_qtype()
+  return type:is_qtype_type() or type:is_star() or type:is_prop() or type:is_prim_type_type()
+end
+
 --[[
 local function extract_value_metavariable(value) -- -> Option<metavariable>
   if value.kind == "value_neutral" and value.neutral.kind == "neutral_value_free" and value.neutral.free.kind == "free_metavariable" then
@@ -251,6 +259,16 @@ local function eq_prim_tuple_value_decls(left, right, typechecking_context)
   end
 
   error("unreachable!?")
+end
+
+local function closure_equivalence(a, b)
+  if not a:is_closure() and b:is_closure() then error "both arguments must be closures" end
+  if a == b then return true end
+  local arg = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
+  local a_res = apply_value(a, arg)
+  local b_res = apply_value(b, arg)
+  return a_res == b_res
+  --TODO: recursively check equivalence in resulting values
 end
 
 function infer(
@@ -611,6 +629,25 @@ function infer(
       new_family_args:append(e_term)
     end
     return value.prim_type_type, result_usages, typed_term.prim_user_defined_type_cons(id, new_family_args)
+  elseif inferrable_term:is_prim_boxed_type() then
+    local type_inf = inferrable_term:unwrap_prim_boxed_type()
+    local content_type_type, content_type_usages, content_type_term = infer(type_inf, typechecking_context)
+    if not is_type_of_types(content_type_type) then
+      error "infer: type being boxed must be a type"
+    end
+    local quantity, backing_type = content_type_type:unwrap_qtype()
+    return value.qtype(quantity, value.prim_type_type), content_type_usages, typed_term.prim_boxed_type(content_type_term)
+  elseif inferrable_term:is_prim_box() then
+    local content = inferrable_term:unwrap_prim_box()
+    local content_type, content_usages, content_term = infer(content, typechecking_context)
+    local quantity, backing_type = content_type:unwrap_qtype()
+    return value.qtype(quantity, value.prim_boxed_type(backing_type)), content_usages, typed_term.prim_box(content_term)
+  elseif inferrable_term:is_prim_unbox() then
+    local container = inferrable_term:unwrap_prim_unbox()
+    local container_type, container_usages, container_term = infer(container, typechecking_context)
+    local quantity, backing_type = container_type:unwrap_qtype()
+    local content_type = backing_type:unwrap_prim_boxed_type()
+    return value.qtype(quantity, content_type), container_usages, typed_term.prim_unbox(container_term)
   else
     error("infer: unknown kind: " .. inferrable_term.kind)
   end
@@ -777,6 +814,20 @@ function evaluate(
       new_family_args:append(evaluate(v, runtime_context))
     end
     return value.prim_user_defined_type(id, new_family_args)
+  elseif typed_term:is_prim_boxed_type() then
+    local type_term = typed_term:unwrap_prim_boxed_type()
+    local type_value = evaluate(type_term, runtime_context)
+    local quantity, backing_type = type_value:unwrap_qtype()
+    return qtype(quantity, value.prim_boxed_type(backing_type))
+  elseif typed_term:is_prim_box() then
+    local content = typed_term:unwrap_prim_box()
+    return value.prim(evaluate(content, runtime_context))
+  elseif typed_term:is_prim_unbox() then
+    local container = typed_term:unwrap_prim_unbox()
+    if not container:is_prim() then
+      error "evaluate: trying to unbox something that isn't a prim"
+    end
+    return container:unwrap_prim() -- this should already be a value
   else
     error("evaluate: unknown kind: " .. typed_term.kind)
   end

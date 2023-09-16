@@ -125,13 +125,15 @@ end
 local function inferred_expression_pairhandler(env, a, b)
 
 
-  local ok, ifx, op, args = b:match(
-    {
-      metalanguage.is_pair(check_infix_expression_handler)
-    },
-    metalanguage.failure_handler,
-    {env = env, prec = 0, lhs = a}
-  )
+  -- local ok, ifx, op, args = b:match(
+  --   {
+  --     metalanguage.is_pair(check_infix_expression_handler)
+  --   },
+  --   metalanguage.failure_handler,
+  --   {env = env, prec = 0, lhs = a}
+  -- )
+
+  local ok, ifx = true, false
 
   local combiner
   if ok and ifx then
@@ -158,7 +160,7 @@ local function inferred_expression_pairhandler(env, a, b)
   if ok then
     -- FIXME: this doesn't exist yet and API might change
     -- operative input: env, syntax tree, target type
-    local operative_result_val = terms.apply_value(as_operative.closure, terms.values.prim_tuple(value_array(env, args))
+    local operative_result_val = terms.apply_value(as_operative.closure, terms.values.prim_tuple(value_array(env, args)))
     -- result should be able to be an inferred term, can fail
     if operative_result_val.kind ~= "value_data" then
       return false, "applying operative did not result in value_data type, typechecker or lua operative mistake when applying at " .. a.anchor .. " to the args at " .. b.anchor
