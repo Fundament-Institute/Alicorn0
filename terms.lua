@@ -346,8 +346,9 @@ inferrable_term:define_enum("inferrable", {
     "family_args", array(inferrable_term), -- prim
   }},
   {"prim_boxed_type", {"type", inferrable_term}},
-  {"prim_box", {"content" inferrable_term}},
+  {"prim_box", {"content", inferrable_term}},
   {"prim_unbox", {"container", inferrable_term}},
+	{"prim_if", {"subject", inferrable_term, "alternate", inferrable_term}}
 })
 -- typed terms have been typechecked but do not store their type internally
 typed_term:define_enum("typed", {
@@ -425,7 +426,12 @@ typed_term:define_enum("typed", {
   }},
   {"prim_boxed_type", {"type", typed_term}},
   {"prim_box", {"content", typed_term}},
-  {"prim_unbox", {"container", typed_term}}
+  {"prim_unbox", {"container", typed_term}},
+	{"prim_if", {
+		"subject", typed_term,
+		"alternate", typed_term
+	}}
+
 })
 
 local unique_id = gen.declare_foreign(function(val) return type(val) == "table" end)
@@ -501,7 +507,7 @@ value:define_enum("value", {
   {"pi", {
     "param_type", value, -- qtype
     "param_info", value, -- param_info
-    "result_type", value, -- qtype
+    "result_type", value, -- closure from input -> qtype of result
     "result_info", value, -- result_info
   }},
   -- closure is a type that contains a typed term corresponding to the body
@@ -625,6 +631,11 @@ neutral_value:define_enum("neutral_value", {
     "stuck_element", neutral_value,
     "trailing", array(value), -- either primitive or neutral
   }},
+	{"prim_if_stuck", {
+		"subject", neutral_value,
+		"consequent", value,
+		"alternate", value,
+	}}
 })
 
 neutral_value.free.metavariable = function(mv)
@@ -642,6 +653,7 @@ for _, deriver in ipairs { derivers.as, derivers.pretty_print } do
   quantity:derive(deriver)
   visibility:derive(deriver)
   value:derive(deriver)
+	binding:derive(deriver)
 end
 
 return {
@@ -656,6 +668,7 @@ return {
   result_info = result_info,
   value = value,
   neutral_value = neutral_value,
+	binding = binding,
   prim_syntax_type = prim_syntax_type,
   prim_environment_type = prim_environment_type,
   prim_inferrable_term_type = prim_inferrable_term_type,

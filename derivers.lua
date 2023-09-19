@@ -258,6 +258,53 @@ local as = {
   end,
 }
 
+-- build_record_function = (trait, info) -> function that implements the trait method
+-- specializations - optional specialized implementations for particular variants
+local function trait_method(trait, method, build_record_function, specializations)
+	specializations = specializations or {}
+	return {
+		record = function(t, info)
+			trait:implement_on(t, {
+				[method] = build_record_function(trait, t, info)
+			})
+		end,
+		enum = function(t, info)
+			local name = info.name
+			local variants = info.variants
+	
+			local variant_impls = {}
+			for n, vname in ipairs(variants) do
+				local vkind = name .. "_" .. vname
+				local vdata = variants[vname]
+				local vtype = vdata.type
+				local vinfo = vdata.info
+				if specializations[vname] then
+					variant_impls[vkind] = specializations[vname]
+				elseif vtype == "record" then
+					variant_impls[vkind] = build_record_function(trait, t, vinfo)
+				elseif vtype == "unit" then
+					variant_impls[vkind] = function(self, other) return self == other end
+				else
+					error("unknown variant type: " .. vtype)
+				end
+			end
+	
+			local chunk = [[
+				local variant_impls = ...
+				return function(self, other)
+					return variant_impls[self.kind](self, other)
+				end
+			]]
+	
+			local compiled, message = load(chunk, "derive-pretty_print_enum", "t")
+			assert(compiled, message)
+			trait:implement_on(t, {
+				[method] = compiled(variant_impls)
+			})
+		end,
+	}
+end
+
 
   -- local typed = terms.inferrable_term.typed(terms.value.number_type, gen.declare_array(gen.builtin_number)(), terms.typed_term.literal(terms.value.number(1)))
   -- p(typed)
@@ -270,4 +317,5 @@ return {
   unwrap = unwrap,
   as = as,
   pretty_print = pretty_print,
+	trait_method = trait_method,
 }

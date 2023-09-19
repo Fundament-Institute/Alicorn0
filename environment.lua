@@ -47,10 +47,11 @@ environment_mt = {
       return true, binding
     end,
     bind_local = function(self, binding)
+			p(binding)
       if binding:is_let() then
         local name, expr = binding:unwrap_let()
         local expr_type, expr_usages, expr_term = infer(expr, self.typechecking_context)
-        local n = #typechecking_context
+        local n = #self.typechecking_context
         local term = inferrable_term.bound_variable(n + 1)
         local locals = self.locals:put(name, term)
         local evaled = eval.evaluate(expr_term, self.typechecking_context.runtime_context)

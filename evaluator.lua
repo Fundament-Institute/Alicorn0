@@ -38,6 +38,9 @@ local function tup_val(...) return value.tuple_value(value_array(...)) end
 local function prim_tup_val(...) return value.prim_tuple_value(primitive_array(...)) end
 
 local derivers = require './derivers'
+local traits = require './traits'
+
+local evaluate, infer, fitsinto, check
 
 local function add_arrays(onto, with)
   local olen = #onto
@@ -72,6 +75,114 @@ local function is_type_of_types(val)
   end
   local quantity, type = val:unwrap_qtype()
   return type:is_qtype_type() or type:is_star() or type:is_prop() or type:is_prim_type_type()
+end
+
+local fitsinto_trait = traits.declare_trait("fitsinto")
+local fitsinto
+local function quantity_sort(q)
+  if q == quantity.erased then
+    return 0
+  elseif q == quantity.linear then
+    return 1
+  elseif q == quantity.unrestricted then
+    return 2
+  end
+	error("should be unreachable, exhaustive. q is not a quantity or new quantity added?")
+end
+fitsinto_trait:declare_method("fitsinto")
+fitsinto_trait:implement_on(terms.quantity, {
+	fitsinto = function(self, other)
+		if quantity_sort(self) >= quantity_sort(other) then
+			return other
+		end
+		return false
+	end
+})
+fitsinto_trait:implement_on(gen.builtin_string, {
+	fitsinto = function(self, other)
+		return self == other
+	end
+})
+
+local function fitsinto_record_generator(trait, t, info)
+	local kind = info.kind
+	local params = info.params
+
+	local fieldparts = {}
+	for i, param in ipairs(params) do
+		fieldparts[i] = string.format(
+			[[if not fitsinto_trait:get(fieldtypes[%d]).fitsinto(self.%s, other.%s) then return false end]],
+			i,
+			param,
+			param
+		)
+	end
+	fieldparts = table.concat(fieldparts, "\n\t\t")
+	local chunk = string.format([[
+	local fitsinto_trait, fieldtypes = ...
+	return function(self, other)
+		if self == other then
+			return true
+		end
+		%s
+		return true
+	end
+	]], fieldparts)
+
+	local compiled, message = load(chunk, "derive-fitsinto_record_" .. kind, "t")
+	if not compiled then
+		error(message .. chunk)
+	end
+	return compiled(trait, info.params_types)
+end
+for _, v in ipairs({ terms.result_info, terms.purity }) do
+	v:derive(derivers.trait_method(fitsinto_trait, "fitsinto", fitsinto_record_generator))
+end
+terms.value:derive(derivers.trait_method(fitsinto_trait, "fitsinto", fitsinto_record_generator, {
+	closure = function(a, b)
+		if not a:is_closure() and b:is_closure() then error "both arguments must be closures" end
+		if a == b then return true end
+		local arg = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
+		local a_res = apply_value(a, arg)
+		local b_res = apply_value(b, arg)
+		return fitsinto(a_res, b_res)
+	end,
+	tuple_value = function(a, b)
+		if not a:is_tuple_value() and b:is_tuple_value() then error "both arguments must be tuple_values" end
+		if a.elements == b.elements then return true end
+		if #a.elements ~= #b.elements then return false end
+		for i, av in ipairs(a.elements) do
+			if not fitsinto(av, b.elements[i]) then return false end
+		end
+		return true
+	end,
+	pi = function(a, b)
+		if not a:is_pi() and b:is_pi() then error "both arguments must be pis" end
+		if a == b then return true end
+		if not fitsinto(a.param_type, b.param_type) then return false end
+		if not fitsinto(a.param_info, b.param_info) then return false end
+		if not fitsinto(b.result_info, a.result_info) then return false end
+		if not fitsinto(b.result_type, a.result_type) then return false end
+		return true
+	end,
+}))
+
+local value_fitsinto = fitsinto_trait:get(terms.value).fitsinto
+
+-- special handling:
+--   pitype
+--   types of types
+--   explicit casts NYI
+-- otherwise it's just equality or closure symbolic evaluation
+-- covariance, contravariance, invariance, phantom variance
+
+-- if a fits into b / a can be cast to b / b > a
+function fitsinto(a, b)
+	if getmetatable(a) ~= terms.value or getmetatable(b) ~= terms.value then
+		error("fitsinto should only be called on values")
+	end
+  if a == b then return true end
+	return value_fitsinto(a, b)
 end
 
 --[[
@@ -167,7 +278,6 @@ result_info:derive(unifier)
 
 value:derive(derivers.eq)
 
-local evaluate, infer
 
 local function check(
     checkable_term, -- constructed from checkable_term
@@ -180,11 +290,11 @@ local function check(
     local inferrable_term = checkable_term:unwrap_inferrable()
     local inferred_type, inferred_usages, typed_term = infer(inferrable_term, typechecking_context)
     -- TODO: unify!!!!
-    if inferred_type ~= target_type then
-      inferred_type = inferred_type:unify(target_type)
-      --print(inferred_type:pretty_print())
-      --print(target_type:pretty_print())
-      --error("check: mismatch in inferred and target type")
+    if inferred_type ~= target_type and not fitsinto(inferred_type, target_type) then
+      --inferred_type = inferred_type:unify(target_type)
+      print(inferred_type:pretty_print())
+      print(target_type:pretty_print())
+      error("check: mismatch in inferred and target type")
     end
     --local unified_type = inferred_type:unify(target_type) -- can fail, will cause lua error
     if inferred_type ~= target_type then
@@ -202,7 +312,7 @@ local function check(
   error("unreachable!?")
 end
 
-local function apply_value(f, arg)
+function apply_value(f, arg)
   if f:is_closure() then
     local code, capture = f:unwrap_closure()
     return evaluate(code, capture:append(arg))
@@ -590,7 +700,10 @@ function infer(
     if not ok then
       error("infer: trying to apply operative construction to something whose type isn't an operative type")
     end
-    if userdata_type ~= op_userdata_type then
+    if userdata_type ~= op_userdata_type and not fitsinto(userdata_type, op_userdata_type) then
+			p(userdata_type, op_userdata_type)
+			print(userdata_type:pretty_print())
+			print(op_userdata_type:pretty_print())
       error("infer: mismatch in userdata types of operative construction")
     end
     local operative_usages = usage_array()
@@ -648,7 +761,26 @@ function infer(
     local quantity, backing_type = container_type:unwrap_qtype()
     local content_type = backing_type:unwrap_prim_boxed_type()
     return value.qtype(quantity, content_type), container_usages, typed_term.prim_unbox(container_term)
-  else
+	elseif inferrable_term:is_prim_if() then
+		local subject, consequent, alternate = inferrable_term:unwrap_prim_if()
+		-- for each thing in typechecking context check if it == the subject, replace with literal true
+		-- same for alternate but literal false
+
+		local ctype, cusages, cterm = infer(consequent, typechecking_contex)
+		local atype, ausages, aterm = infer(alternate, typechecking_context)
+		local resulting_type
+		if ctype == atype or (fitsinto(ctype, atype) and fitsinto(atype, ctype))then
+			resulting_type = ctype
+		else
+			p(ctype, atype)
+			error("types of sides of prim_if aren't castable")
+		end
+    local result_usages = usage_array()
+		-- FIXME: max of usages rather than adding?
+    add_arrays(result_usages, cusages)
+    add_arrays(result_usages, ausages)
+		return resulting_type, 
+	else
     error("infer: unknown kind: " .. inferrable_term.kind)
   end
 
@@ -757,6 +889,7 @@ function evaluate(
     elseif subject_value:is_prim_tuple_value() then
       local subject_elements = subject_value:unwrap_prim_tuple_value()
       if #subject_elements ~= length then
+				p(#subject_elements, length)
         error("evaluate: mismatch in tuple length from typechecking and evaluation")
       end
       for i = 1, length do
@@ -871,4 +1004,5 @@ return {
   check = check,
   infer = infer,
   evaluate = evaluate,
+	apply_value = apply_value,
 }

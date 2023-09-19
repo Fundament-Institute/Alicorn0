@@ -366,6 +366,16 @@ local function gen_builtin(typename)
   end)
 end
 
+local function memoize(fn)
+	local results = {}
+	return function(arg)
+		if not results[arg] then
+			results[arg] = fn(arg)
+		end
+		return results[arg]
+	end
+end
+
 return {
   declare_record = new_self(define_record),
   declare_enum = new_self(define_enum),

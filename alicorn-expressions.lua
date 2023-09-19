@@ -156,14 +156,17 @@ local function inferred_expression_pairhandler(env, a, b)
   -- combiner was an evaluated typed value, now it isn't
   local type_of_term, usage_count, term = infer(combiner, env.typechecking_context)
 
-  local ok, as_operative = type_of_term:as_operative_type()
+  local ok, handler, userdata_type = type_of_term:as_operative_type()
   if ok then
     -- FIXME: this doesn't exist yet and API might change
-    -- operative input: env, syntax tree, target type
-    local operative_result_val = terms.apply_value(as_operative.closure, terms.values.prim_tuple(value_array(env, args)))
+    -- operative input: env, syntax tree, target type (if checked)
+		local tuple_args = array(gen.any_lua_type)(args, env)
+    local operative_result_val = evaluator.apply_value(handler, terms.value.prim_tuple_value(tuple_args))
     -- result should be able to be an inferred term, can fail
     if operative_result_val.kind ~= "value_data" then
-      return false, "applying operative did not result in value_data type, typechecker or lua operative mistake when applying at " .. a.anchor .. " to the args at " .. b.anchor
+			p(operative_result_val.kind)
+			print(operative_result_val:pretty_print())
+			return false, "applying operative did not result in value_data type, typechecker or lua operative mistake when applying at " .. a.anchor .. " to the args at " .. b.anchor
     end
     if operative_result_val.variant == "error" then
       return false, semantic_error.operative_apply_failed(operative_result_val.data, {a.anchor, b.anchor})
@@ -336,6 +339,7 @@ local function primitive_operative(fn)
   local result_type = const_combinator(unrestricted(value.tuple_type(cons(cons(empty, cu_inf_type), cu_env_type))))
   local inferred_type = value.pi(param_type, param_info_explicit, result_type, result_info_pure)
   local inferrable_fn = inferrable_term.typed(inferred_type, usage_array(), typed_fn)
+	-- FIXME: use prim_if here
   -- 5: wrap it in an operative type cons and finally an operative cons
   -- with empty userdata
   local userdata_type = unrestricted(value.tuple_type(empty))
