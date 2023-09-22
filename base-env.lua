@@ -5,6 +5,7 @@ local metalang = require './metalanguage'
 local utils = require './reducer-utils'
 local exprs = require './alicorn-expressions'
 local terms = require './terms'
+local gen = require './terms-generators'
 
 local p = require 'pretty-print'.prettyPrint
 
@@ -81,7 +82,11 @@ local function let_bind(syntax, env)
 
     return true, types.unit_val, env
   else
-		return types.unit_val, bind.env:bind_local(terms.binding.let(name, bind.val))
+		return true,
+			terms.inferrable_term.typed(terms.value.quantity(terms.quantity.unrestricted, terms.unit_type),
+				gen.declare_array(gen.builtin_number)(),
+				terms.typed_term.literal(terms.unit_val)),
+				bind.env:bind_local(terms.binding.let(name, bind.val))
     --return true, types.unit_val, 
   end
 end

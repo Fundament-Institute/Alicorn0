@@ -348,7 +348,11 @@ inferrable_term:define_enum("inferrable", {
   {"prim_boxed_type", {"type", inferrable_term}},
   {"prim_box", {"content", inferrable_term}},
   {"prim_unbox", {"container", inferrable_term}},
-	{"prim_if", {"subject", inferrable_term, "alternate", inferrable_term}}
+	{"prim_if", {
+		"subject", checkable_term, -- checkable because we always know must be of prim_bool_type
+		"consequent", inferrable_term,
+		"alternate", inferrable_term
+	}}
 })
 -- typed terms have been typechecked but do not store their type internally
 typed_term:define_enum("typed", {
@@ -369,6 +373,10 @@ typed_term:define_enum("typed", {
     "f", typed_term,
     "arg", typed_term,
   }},
+	{"let", {
+		"expr", typed_term,
+		"body", typed_term,
+	}},
   {"level_type"},
   {"level0"},
   {"level_suc", {"previous_level", typed_term}},
@@ -645,6 +653,14 @@ end
 local prim_syntax_type = value.prim_user_defined_type({name = "syntax"}, array(value)())
 local prim_environment_type = value.prim_user_defined_type({name = "environment"}, array(value)())
 local prim_inferrable_term_type = value.prim_user_defined_type({name = "inferrable_term"}, array(value)())
+-- return ok, err 
+local prim_lua_error_type = value.prim_user_defined_type({name = "lua_error_type"}, array(value)())
+
+local function tup_val(...) return value.tuple_value(array(value)(...)) end
+local function cons(...) return value.data_value("cons", tup_val(...)) end
+local empty = value.data_value("empty", tup_val())
+local unit_type = value.tuple_type(empty)
+local unit_val = tup_val()
 
 for _, deriver in ipairs { derivers.as, derivers.pretty_print } do
   checkable_term:derive(deriver)
@@ -672,6 +688,9 @@ return {
   prim_syntax_type = prim_syntax_type,
   prim_environment_type = prim_environment_type,
   prim_inferrable_term_type = prim_inferrable_term_type,
+	prim_lua_error_type = prim_lua_error_type,
+	unit_val = unit_val,
+	unit_type = unit_type,
 
   runtime_context = runtime_context,
   typechecking_context = typechecking_context,

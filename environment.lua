@@ -118,15 +118,10 @@ environment_mt = {
     end,
     enter_block = function(self)
       return { shadowed = self }, new_env {
-        locals = nil,
+        -- locals = nil,
         nonlocals = self.nonlocals:extend(self.locals),
         perms = self.perms
       }
-    end,
-    exit_block = function(self, term, shadowed)
-      for k, v in pairs(self.locals) do
-        term:let(k, v)
-      end
     end,
     child_scope = function(self)
       return new_env {
@@ -141,6 +136,26 @@ environment_mt = {
         nonlocals = self.nonlocals,
         perms = self.perms
       }
+    end,
+		exit_block = function(self, term, shadowed)
+      -- -> env, term
+			shadowed = shadowed.shadowed or error "shadowed.shadowed missing"
+			local env = new_env {
+        locals = shadowed.locals,
+        nonlocals = shadowed.nonlocals,
+        perms = shadowed.perms
+      }
+			local wrapped = term
+			for idx = self.bindings:len(), 1 ,-1 do
+				local binding = self.bindings:get(idx)
+				if not binding then
+					error "missing binding"
+				end
+				local name, expr = binding:unwrap_let()
+				wrapped = terms.inferrable_term.let(name, expr, wrapped)
+			end
+
+			return env, wrapped
     end,
   }
 }

@@ -3,6 +3,7 @@ local evaluator = require './evaluator'
 local format = require './format-adapter'
 local base_env = require './base-env'
 local p = require 'pretty-print'.prettyPrint
+local terms = require './terms'
 local exprs = require './alicorn-expressions'
 local fs = require 'fs'
 
@@ -15,17 +16,24 @@ local code = format.read(src, "inline")
 
 local env = base_env.create()
 
-print("evaluating")
+local shadowed, env = env:enter_block()
+
+print("Expression -> terms")
 local ok, expr, env = code:match({exprs.block(metalanguage.accept_handler, env)}, metalanguage.failure_handler, nil)
 if not ok then
-  p(expr)
+	print("evaluating failed")
+  print(expr)
   return
 end
 
-local type, usages, term = evaluator.infer(expr, env.typechecking_context)
+local env, bound_expr = env:exit_block(expr, shadowed)
+
+print("Inferring")
+local type, usages, term = evaluator.infer(bound_expr, terms.typechecking_context())
 print(type:pretty_print())
 p(usages)
 print(term:pretty_print())
 
-local result = evaluator.evaluate(term, env.runtime_context)
+print("Evaluating")
+local result = evaluator.evaluate(term, terms.runtime_context())
 print(result:pretty_print())

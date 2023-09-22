@@ -158,21 +158,30 @@ local function inferred_expression_pairhandler(env, a, b)
 
   local ok, handler, userdata_type = type_of_term:as_operative_type()
   if ok then
-    -- FIXME: this doesn't exist yet and API might change
     -- operative input: env, syntax tree, target type (if checked)
 		local tuple_args = array(gen.any_lua_type)(args, env)
     local operative_result_val = evaluator.apply_value(handler, terms.value.prim_tuple_value(tuple_args))
     -- result should be able to be an inferred term, can fail
-    if operative_result_val.kind ~= "value_data" then
-			p(operative_result_val.kind)
-			print(operative_result_val:pretty_print())
-			return false, "applying operative did not result in value_data type, typechecker or lua operative mistake when applying at " .. a.anchor .. " to the args at " .. b.anchor
-    end
+		-- NYI: operative_cons in evaluator must use Maybe type once it exists
+    -- if not operative_result_val:is_data_value() then
+		-- 	p(operative_result_val.kind)
+		-- 	print(operative_result_val:pretty_print())
+		-- 	return false, "applying operative did not result in value term with kind data_value, typechecker or lua operative mistake when applying " .. tostring(a.anchor) .. " to the args " .. tostring(b.anchor)
+    -- end
+		-- variants: ok, error
     if operative_result_val.variant == "error" then
       return false, semantic_error.operative_apply_failed(operative_result_val.data, {a.anchor, b.anchor})
     end
+
+		-- temporary, while it isn't a Maybe
+		local data = operative_result_val.elements[1].primitive_value
+		local env = operative_result_val.elements[2].primitive_value
+
+		-- data = operative_result_val.data
+
     -- FIXME: assert type is an inferrable term using new API once it exists
-    local resulting_type, usage_counts, term = infer(env, operative_result_val.data)
+		p("Inferring!", data.kind, env.typechecking_context)
+    local resulting_type, usage_counts, term = infer(data, env.typechecking_context)
     return true, inferrable_term.typed(resulting_type, usage_counts, term), env
   end
 
@@ -301,6 +310,13 @@ checked_expression =
 -- end
 
 local function primitive_operative(fn)
+	local aborting_fn = function(syn, env)
+		local ok, res, env = fn(syn, env)
+		if not ok then
+			error("Primitive operative apply failure, NYI convert to Maybe.\nError was:" .. tostring(res))
+		end
+		return res, env
+	end
   -- what we're going for:
   -- (s : syntax, e : environment, u : wrapped_typed_term(userdata), g : goal) -> (goal_to_term(g), environment)
   -- what we have:
@@ -308,7 +324,7 @@ local function primitive_operative(fn)
 
   -- 1: wrap fn as a typed prim
   -- this way it can take a prim tuple and return a prim tuple
-  local typed_prim_fn = typed_term.literal(value.prim(fn))
+  local typed_prim_fn = typed_term.literal(value.prim(aborting_fn))
   -- 2: wrap it to convert a normal tuple argument to a prim tuple
   -- and a prim tuple result to a normal tuple
   -- this way it can take a normal tuple and return a normal tuple
@@ -335,7 +351,29 @@ local function primitive_operative(fn)
   local cu_syntax_type = const_combinator(unrestricted(prim_syntax_type))
   local cu_inf_type = const_combinator(unrestricted(prim_inferrable_term_type))
   local cu_env_type = const_combinator(unrestricted(prim_environment_type))
+	local error_type = terms.prim_lua_error_type
   local param_type = unrestricted(value.tuple_type(cons(cons(empty, cu_syntax_type), cu_env_type)))
+
+	-- tuple_of(ok) -> prim_if(ok, prim_inferrable_term_type, error_type)
+	-- FIXME: once operative_cons makes the correct type with a Maybe, put this back and convert to Maybe
+	-- For now, we handle with a lua abort inside the primitive operative
+	-- local inf_term_or_error = value.closure(
+	-- 	typed_term.prim_if(
+	-- 		typed_term.tuple_elim(typed_term.bound_variable(3), 1, typed_term.bound_variable(4)), -- how do I get the first thing in the input tuple?
+	-- 		typed_term.bound_variable(1),
+	-- 		typed_term.bound_variable(2)
+	-- 	),
+	-- 	runtime_context():append(unrestricted(prim_inferrable_term_type)):append(error_type)
+	-- )
+	-- local result_type = const_combinator(unrestricted(value.tuple_type(
+	-- 	cons(
+	-- 		cons(
+	-- 			cons(empty, const_combinator(unrestricted(terms.value.prim_bool_type))),
+	-- 			inf_term_or_error
+	-- 		),
+	-- 		const_combinator(unrestricted(prim_environment_type))
+	-- 	)
+	-- )))
   local result_type = const_combinator(unrestricted(value.tuple_type(cons(cons(empty, cu_inf_type), cu_env_type))))
   local inferred_type = value.pi(param_type, param_info_explicit, result_type, result_info_pure)
   local inferrable_fn = inferrable_term.typed(inferred_type, usage_array(), typed_fn)
@@ -430,7 +468,6 @@ local block = metalanguage.reducer(function(syntax, _, env)
       )
       if ok and continue then lastval = newval end
     end
-    p("block reducer", ok, continue)
     if not ok then return false, continue end
     return true, lastval, env
 end, "block")

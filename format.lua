@@ -12,7 +12,7 @@ local P, C, Cg, Cmt, Ct, Cb, Cp, Cf, S, V, R = lpeg.P, lpeg.C, lpeg.Cg,
 local anchor_mt = {
 	__tostring = function(self)
 		return
-			"in file" .. self.sourceid .. ", line " .. self.line .. " character " ..
+			"in file " .. self.sourceid .. ", line " .. self.line .. " character " ..
 				self.char
 	end
 }

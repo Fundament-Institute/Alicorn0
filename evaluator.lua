@@ -77,6 +77,30 @@ local function is_type_of_types(val)
   return type:is_qtype_type() or type:is_star() or type:is_prop() or type:is_prim_type_type()
 end
 
+local fitsinto_fail_mt = {
+	__tostring = function(self)
+		local message = self.message
+		if type(message) == "table" then
+			message = table.concat(message, "")
+		end
+		if self.cause then
+			return message .. "." .. tostring(self.cause)
+		end
+		return message
+	end,
+}
+local function fitsinto_fail(message, cause)
+	if not cause and type(message) == "string" then
+		if not message then
+			error "missing error message for fitsinto_fail"
+		end
+		return message
+	end
+	return setmetatable({
+		message = message,
+		cause = cause,
+	}, fitsinto_fail_mt)
+end
 local fitsinto_trait = traits.declare_trait("fitsinto")
 local fitsinto
 local function quantity_sort(q)
@@ -95,12 +119,15 @@ fitsinto_trait:implement_on(terms.quantity, {
 		if quantity_sort(self) >= quantity_sort(other) then
 			return other
 		end
-		return false
+		return false, "quantity doesn't match"
 	end
 })
 fitsinto_trait:implement_on(gen.builtin_string, {
 	fitsinto = function(self, other)
-		return self == other
+		if self == other then
+			return true
+		end
+		return false, "(string mismatch. " .. self .. " != " .. other .. ")"
 	end
 })
 
@@ -111,19 +138,22 @@ local function fitsinto_record_generator(trait, t, info)
 	local fieldparts = {}
 	for i, param in ipairs(params) do
 		fieldparts[i] = string.format(
-			[[if not fitsinto_trait:get(fieldtypes[%d]).fitsinto(self.%s, other.%s) then return false end]],
+			[[ok, err = fitsinto_trait:get(fieldtypes[%d]).fitsinto(self.%s, other.%s)
+				if not ok then return false, fitsinto_fail(%q, err) end]],
 			i,
+			param,
 			param,
 			param
 		)
 	end
 	fieldparts = table.concat(fieldparts, "\n\t\t")
 	local chunk = string.format([[
-	local fitsinto_trait, fieldtypes = ...
+	local fitsinto_trait, fieldtypes, fitsinto_fail = ...
 	return function(self, other)
 		if self == other then
 			return true
 		end
+		local ok, err
 		%s
 		return true
 	end
@@ -133,7 +163,7 @@ local function fitsinto_record_generator(trait, t, info)
 	if not compiled then
 		error(message .. chunk)
 	end
-	return compiled(trait, info.params_types)
+	return compiled(trait, info.params_types, fitsinto_fail)
 end
 for _, v in ipairs({ terms.result_info, terms.purity }) do
 	v:derive(derivers.trait_method(fitsinto_trait, "fitsinto", fitsinto_record_generator))
@@ -145,24 +175,34 @@ terms.value:derive(derivers.trait_method(fitsinto_trait, "fitsinto", fitsinto_re
 		local arg = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
 		local a_res = apply_value(a, arg)
 		local b_res = apply_value(b, arg)
-		return fitsinto(a_res, b_res)
+		local ok, err = fitsinto(a_res, b_res)
+		if ok then
+			return true
+		end
+		return false, fitsinto_fail("closure_apply()", err)
 	end,
 	tuple_value = function(a, b)
 		if not a:is_tuple_value() and b:is_tuple_value() then error "both arguments must be tuple_values" end
 		if a.elements == b.elements then return true end
-		if #a.elements ~= #b.elements then return false end
+		if #a.elements ~= #b.elements then return false, "element count mismatch" end
 		for i, av in ipairs(a.elements) do
-			if not fitsinto(av, b.elements[i]) then return false end
+			local ok, err = fitsinto(av, b.elements[i])
+			if not ok then return false, fitsinto_fail({"[", i, "]"}, err) end
 		end
 		return true
 	end,
 	pi = function(a, b)
 		if not a:is_pi() and b:is_pi() then error "both arguments must be pis" end
 		if a == b then return true end
-		if not fitsinto(a.param_type, b.param_type) then return false end
-		if not fitsinto(a.param_info, b.param_info) then return false end
-		if not fitsinto(b.result_info, a.result_info) then return false end
-		if not fitsinto(b.result_type, a.result_type) then return false end
+		local ok, err
+		ok, err = fitsinto(a.param_type, b.param_type)
+		if not ok then return false, fitsinto_fail("param_type", err) end
+		ok, err = fitsinto(a.param_info, b.param_info)
+		if not ok then return false, fitsinto_fail("param_info", err) end
+		ok, err = fitsinto(b.result_info, a.result_info)
+		if not ok then return false, fitsinto_fail("result_info", err) end
+		ok, err = fitsinto(b.result_type, a.result_type)
+		if not ok then return false, fitsinto_fail("result_type", err) end
 		return true
 	end,
 }))
@@ -290,11 +330,14 @@ local function check(
     local inferrable_term = checkable_term:unwrap_inferrable()
     local inferred_type, inferred_usages, typed_term = infer(inferrable_term, typechecking_context)
     -- TODO: unify!!!!
-    if inferred_type ~= target_type and not fitsinto(inferred_type, target_type) then
-      --inferred_type = inferred_type:unify(target_type)
-      print(inferred_type:pretty_print())
-      print(target_type:pretty_print())
-      error("check: mismatch in inferred and target type")
+    if inferred_type ~= target_type then
+			local ok, err = fitsinto(inferred_type, target_type)
+			if not ok then
+				--inferred_type = inferred_type:unify(target_type)
+				print(inferred_type:pretty_print())
+				print(target_type:pretty_print())
+				error("check: mismatch in inferred and target type for " .. inferrable_term.kind .. " due to " .. tostring(err))
+			end
     end
     --local unified_type = inferred_type:unify(target_type) -- can fail, will cause lua error
     if inferred_type ~= target_type then
@@ -766,6 +809,7 @@ function infer(
 		-- for each thing in typechecking context check if it == the subject, replace with literal true
 		-- same for alternate but literal false
 
+		local stype, susages, sterm = check(terms.value.prim_bool_type, subject, typechecking_context)
 		local ctype, cusages, cterm = infer(consequent, typechecking_contex)
 		local atype, ausages, aterm = infer(alternate, typechecking_context)
 		local resulting_type
@@ -776,10 +820,23 @@ function infer(
 			error("types of sides of prim_if aren't castable")
 		end
     local result_usages = usage_array()
-		-- FIXME: max of usages rather than adding?
+		add_arrays(result_usages, susages)
+		-- FIXME: max of cusages and ausages rather than adding?
     add_arrays(result_usages, cusages)
     add_arrays(result_usages, ausages)
-		return resulting_type, 
+		return resulting_type, result_usages, typed_term.prim_if(sterm, cterm, aterm)
+	elseif inferrable_term:is_let() then
+		-- print(inferrable_term:pretty_print())
+		local name, expr, body = inferrable_term:unwrap_let()
+		local exprtype, exprusages, exprterm = infer(expr, typechecking_context)
+		typechecking_context = typechecking_context:append(name, exprtype)
+		local bodytype, bodyusages, bodyterm = infer(body, typechecking_context)
+
+    local result_usages = usage_array()
+		-- NYI usages are fucky, should remove ones not used in body
+		add_arrays(result_usages, exprusages)
+		add_arrays(result_usages, bodyusages)
+		return bodytype, result_usages, terms.typed_term.let(exprterm, bodyterm)
 	else
     error("infer: unknown kind: " .. inferrable_term.kind)
   end
@@ -817,9 +874,17 @@ function evaluate(
     )
   -- -> a value
   -- TODO: typecheck typed_term and runtime_context?
+	if not runtime_context then
+		error "Missing runtime_context for evaluate(typed_term, runtime_context)"
+	end
 
   if typed_term:is_bound_variable() then
-    return runtime_context:get(typed_term:unwrap_bound_variable())
+    local rc_val = runtime_context:get(typed_term:unwrap_bound_variable())
+		if rc_val == nil then
+			p(typed_term)
+			error("runtime_context:get() for bound_variable returned nil")
+		end
+		return rc_val
   elseif typed_term:is_literal() then
     return typed_term:unwrap_literal()
   elseif typed_term:is_lambda() then
@@ -856,6 +921,9 @@ function evaluate(
     local trailing_values
     for _, v in ipairs(elements) do
       local element_value = evaluate(v, runtime_context)
+			if element_value == nil then
+				p("wtf", v.kind)
+			end
       if stuck then
         trailing_values:append(element_value)
       elseif element_value:is_prim() then
@@ -961,6 +1029,10 @@ function evaluate(
       error "evaluate: trying to unbox something that isn't a prim"
     end
     return container:unwrap_prim() -- this should already be a value
+	elseif typed_term:is_let() then
+		local expr, body = typed_term:unwrap_let()
+		local expr_value = evaluate(expr, runtime_context)
+		return evaluate(body, runtime_context:append(expr_value))
   else
     error("evaluate: unknown kind: " .. typed_term.kind)
   end
