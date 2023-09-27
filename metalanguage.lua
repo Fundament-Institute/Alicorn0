@@ -411,10 +411,12 @@ end, "list_many")
 list_many_threaded = reducer(function(syntax, _, submatcher_fn, init_thread)
     local vals = {}
     local ok, cont, val, thread, tail = true, true, nil, init_thread, syntax
+		local nextthread = init_thread
     while ok and cont do
-      ok, cont, val, tail = tail:match(
+			thread = nextthread
+      ok, cont, val, nextthread, tail = tail:match(
         {
-          ispair(list_many_pair_handler),
+          ispair(list_many_threaded_pair_handler),
           isnil(list_many_nil_handler)
         },
         failure_handler,
@@ -424,7 +426,7 @@ list_many_threaded = reducer(function(syntax, _, submatcher_fn, init_thread)
     end
     if not ok then return ok, cont end
     return true, vals, thread
-end, "list_many_thread")
+end, "list_many_threaded")
 
 oneof = reducer(function(syntax, _, ...)
     return syntax:match({...}, failure_handler, nil)

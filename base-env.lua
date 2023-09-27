@@ -91,8 +91,8 @@ local function let_bind(syntax, env)
   end
 end
 
-local function record_threaded_element_acceptor(name, exprenv)
-	return {name = name, expr = exprenv.val}, exprenv.expr
+local function record_threaded_element_acceptor(_, name, exprenv)
+	return true, {name = name, expr = exprenv.val}, exprenv.env
 end
 
 local function record_threaded_element(env)
