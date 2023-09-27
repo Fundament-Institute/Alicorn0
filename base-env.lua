@@ -91,6 +91,38 @@ local function let_bind(syntax, env)
   end
 end
 
+local function record_threaded_element_acceptor(name, exprenv)
+	return {name = name, expr = exprenv.val}, exprenv.expr
+end
+
+local function record_threaded_element(env)
+	return metalang.listmatch(
+		record_threaded_element_acceptor,
+		metalang.issymbol(metalang.accept_handler),
+		metalang.symbol_exact(metalang.accept_handler, "="),
+		exprs.inferred_expression(utils.accept_with_env, env)
+	)
+end
+
+local function record_build(syntax, env)
+	local ok, defs, env =
+		syntax:match(
+			{
+				metalang.list_many_threaded(
+					metalang.accept_handler,
+					record_threaded_element,
+					env
+				)
+			}
+		)
+	if not ok then return ok, defs end
+	local map = gen.declare_map(gen.builtin_string, terms.inferrable_term)()
+	for i, v in ipairs(defs) do
+		map[v.name] = v.expr
+	end
+	return true, terms.inferrable_term.record_cons(map), env
+end
+
 local basic_fn_kind = {
   kind_name = "basic_fn_kind",
   type_name = function() return "basic_fn" end,
@@ -210,6 +242,7 @@ local core_operations = {
 
   --["do"] = evaluator.primitive_operative(do_block),
   let = exprs.primitive_operative(let_bind),
+	record = exprs.primitive_operative(record_build),
   --["dump-env"] = evaluator.primitive_operative(function(syntax, env) print(environment.dump_env(env)); return true, types.unit_val, env end),
   --["basic-fn"] = evaluator.primitive_operative(basic_fn),
   --tuple = evaluator.primitive_operative(tuple_type_impl),

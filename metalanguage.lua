@@ -350,7 +350,7 @@ local function ListMatch(syntax, matcher, ...)
   return true, unpack(args)
 end
 
-local listmatch = reducer(ListMatch, "list")
+local listmatch = reducer(ListMatch, "list_match")
 
 local function ListTail(syntax, _, ...)
   local args = {}
@@ -381,6 +381,11 @@ local function list_many_pair_handler(rule, a, b)
   if not ok then return ok, val end
   return ok, true, val, b
 end
+local function list_many_threaded_pair_handler(rule, a, b)
+  local ok, val, thread = a:match({rule}, failure_handler, nil)
+  if not ok then return ok, val end
+  return ok, true, val, thread, b
+end
 
 local function list_many_nil_handler()
   return true, false
@@ -403,6 +408,23 @@ list_many = reducer(function(syntax, _, submatcher)
     if not ok then return ok, cont end
     return true, vals
 end, "list_many")
+list_many_threaded = reducer(function(syntax, _, submatcher_fn, init_thread)
+    local vals = {}
+    local ok, cont, val, thread, tail = true, true, nil, init_thread, syntax
+    while ok and cont do
+      ok, cont, val, tail = tail:match(
+        {
+          ispair(list_many_pair_handler),
+          isnil(list_many_nil_handler)
+        },
+        failure_handler,
+        submatcher_fn(thread)
+      )
+      vals[#vals + 1] = val
+    end
+    if not ok then return ok, cont end
+    return true, vals, thread
+end, "list_many_thread")
 
 oneof = reducer(function(syntax, _, ...)
     return syntax:match({...}, failure_handler, nil)
@@ -427,6 +449,7 @@ return {
   oneof = oneof,
   listtail = listtail,
   list_many = list_many,
+	list_many_threaded = list_many_threaded,
   reducer = reducer,
   isnil = isnil,
   nilval = nilval,

@@ -24,6 +24,7 @@ local inferrable_array = array(inferrable_term)
 local typed_array = array(typed_term)
 local value_array = array(value)
 local usage_array = array(gen.builtin_number)
+local name_array = array(gen.builtin_string)
 
 local function qtype(q, val) return value.qtype(value.quantity(q), val) end
 local function unrestricted(val) return qtype(quantity.unrestricted, val) end
@@ -211,11 +212,32 @@ local function inferred_expression_pairhandler(env, a, b)
   return false, "unknown type for pairhandler " .. type_of_term.kind, env
 end
 
+local function split_dot_accessors(str)
+	return str:match("([^.]+)%.(.+)")
+end
+
 local function inferred_expression_symbolhandler(env, name)
   --print("looking up symbol", name)
   --p(env)
-  local ok, val = env:get(name)
-  return ok, val, env
+	print(name, split_dot_accessors(name))
+	local front, rest = split_dot_accessors(name)
+	if not front then
+		local ok, val = env:get(name)
+		return ok, val, env
+	else
+		local ok, part = env:get(front)
+		if not ok then return ok, part end
+		while front do
+			name = rest
+			front, rest = split_dot_accessors(name)
+			part = inferrable_term.record_elim(
+				part,
+				name_array(front or name),
+				inferrable_term.bound_variable(#env.typechecking_context + 1)
+			)
+		end
+		return ok, part, env
+	end
 end
 
 local function inferred_expression_valuehandler(env, val)

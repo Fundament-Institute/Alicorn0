@@ -1,3 +1,4 @@
 let x = 621
 let y = 926
-+ x y
+let foo = (record (bar = 5) (baz = 6))
++ foo.bar 3
