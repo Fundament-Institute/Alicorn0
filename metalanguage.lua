@@ -226,10 +226,10 @@ local constructed_syntax_mt = {
       local lasterr = nil
       for _, matcher in ipairs(matchers) do
         if self.accepters[matcher.kind] then
-          -- print("accepting primitive handler on kind", matcher.kind)
+        --   print("accepting primitive handler on kind", matcher.kind)
           return self.accepters[matcher.kind](self, matcher, extra)
         elseif matcher.kind == "Reducible" then
-          -- print("trying syntax reduction on kind", matcher.kind)
+        --   print("trying syntax reduction on kind", matcher.kind)
           local res = {matcher.reducible.reduce(self, matcher)}
           if res[1] then
             --print("accepted syntax reduction")
@@ -241,7 +241,8 @@ local constructed_syntax_mt = {
           --print("rejected syntax reduction")
           lasterr = res[2]
         end
-        --print("rejected syntax kind", matcher.kind)
+		-- local name = getmetatable(matcher.reducible)
+        -- print("rejected syntax kind", matcher.kind, name)
       end
       return unmatched(extra, syntax_error(matchers, self.anchor, lasterr))
     end

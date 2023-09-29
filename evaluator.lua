@@ -431,15 +431,96 @@ local function closure_equivalence(a, b)
   --TODO: recursively check equivalence in resulting values
 end
 
+local function make_tuple_prefix(subject_type, subject_value)
+		local decls, make_prefix
+		if subject_type:is_tuple_type() then
+			decls = subject_type:unwrap_tuple_type()
+
+			if subject_value:is_tuple_value() then
+				local subject_elements = subject_value:unwrap_tuple_value()
+				function make_prefix(i)
+					return value.tuple_value(subject_elements:copy(1, i))
+				end
+			elseif subject_value:is_neutral() then
+				local subject_neutral = subject_value:unwrap_neutral()
+				function make_prefix(i)
+					local prefix_elements = value_array()
+					for x = 1, i do
+						prefix_elements:append(value.neutral(neutral_value.tuple_element_access_stuck(subject_neutral, x)))
+					end
+					return value.tuple_value(prefix_elements)
+				end
+			else
+				error("infer: trying to apply tuple elimination to something that isn't a tuple")
+			end
+
+		elseif subject_type:is_prim_tuple_type() then
+			decls = subject_type:unwrap_prim_tuple_type()
+
+			if subject_value:is_prim_tuple_value() then
+				local subject_elements = subject_value:unwrap_prim_tuple_value()
+				local subject_value_elements = value_array()
+				for _, v in ipairs(subject_elements) do
+					subject_value_elements:append(value.prim(v))
+				end
+				function make_prefix(i)
+					return value.tuple_value(subject_value_elements:copy(1, i))
+				end
+			elseif subject_value:is_neutral() then
+				-- yes, literally a copy-paste of the neutral case above
+				local subject_neutral = subject_value:unwrap_neutral()
+				function make_prefix(i)
+					local prefix_elements = value_array()
+					for x = 1, i do
+						prefix_elements:append(value.neutral(neutral_value.tuple_element_access_stuck(subject_neutral, x)))
+					end
+					return value.tuple_value(prefix_elements)
+				end
+			else
+				error("infer: trying to apply primitive tuple elimination to something that isn't a primitive tuple")
+			end
+		else
+			error("infer: trying to apply tuple elimination to something whose type isn't a tuple type")
+		end
+
+	return decls, make_prefix
+end
+
+-- TODO: create a typechecking context append variant that merges two
+local function make_inner_context(decls, tupletypes, make_prefix)
+  	-- evaluate the type of the tuple
+	local constructor, arg = decls:unwrap_data_value()
+	if constructor == "empty" then
+		return tupletypes, 0
+	elseif constructor == "cons" then
+		local details = arg:unwrap_tuple_value()
+		local tupletypes, n_elements = make_inner_context(details[1], tupletypes, make_prefix)
+		local f = details[2]
+		local prefix = make_prefix(n_elements)
+		local element_type = apply_value(f, prefix)
+		tupletypes[#tupletypes+1] = element_type
+		return tupletypes, n_elements + 1
+	else
+		error("infer: unknown tuple type data constructor")
+	end
+end
+
+local function infer_tuple_type(subject_type, subject_value)
+  -- define how the type of each tuple element should be evaluated
+	local decls, make_prefix = make_tuple_prefix(subject_type, subject_value)
+	local inner_context, n_elements = make_inner_context(decls, {}, make_prefix)
+
+	return inner_context, n_elements
+end
+
 function infer(
     inferrable_term, -- constructed from inferrable
     typechecking_context -- todo
     )
   -- -> type of term, usage counts, a typed term,
   -- TODO: typecheck inferrable_term and typechecking_context?
-
-	if not terms.inferrable_term.value_check(inferrable_term) then error "tried to infer something that wasn't an inferable term" end
 	if not terms.typechecking_context_type.value_check(typechecking_context) then error "tried to infer in a context that wasn't a typechecking context" end
+	if not terms.inferrable_term.value_check(inferrable_term) then error "tried to infer something that wasn't an inferable term" end
 
   if inferrable_term:is_bound_variable() then
     local index = inferrable_term:unwrap_bound_variable()
@@ -575,79 +656,16 @@ function infer(
     local subject, body = inferrable_term:unwrap_tuple_elim()
     local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
     local subject_quantity, subject_type = subject_type:unwrap_qtype()
-    -- evaluating the subject is necessary for inferring the type of the body
+
+	-- evaluating the subject is necessary for inferring the type of the body
     local subject_value = evaluate(subject_term, typechecking_context:get_runtime_context())
+	local tupletypes, n_elements = infer_tuple_type(subject_type, subject_value)
 
-    -- define how the type of each tuple element should be evaluated
-    local decls, make_prefix
-    if subject_type:is_tuple_type() then
-      decls = subject_type:unwrap_tuple_type()
+	local inner_context = typechecking_context
 
-      if subject_value:is_tuple_value() then
-        local subject_elements = subject_value:unwrap_tuple_value()
-        function make_prefix(i)
-          return value.tuple_value(subject_elements:copy(1, i))
-        end
-      elseif subject_value:is_neutral() then
-        local subject_neutral = subject_value:unwrap_neutral()
-        function make_prefix(i)
-          local prefix_elements = value_array()
-          for x = 1, i do
-            prefix_elements:append(value.neutral(neutral_value.tuple_element_access_stuck(subject_neutral, x)))
-          end
-          return value.tuple_value(prefix_elements)
-        end
-      else
-        error("infer: trying to apply tuple elimination to something that isn't a tuple")
-      end
-
-    elseif subject_type:is_prim_tuple_type() then
-      decls = subject_type:unwrap_prim_tuple_type()
-
-      if subject_value:is_prim_tuple_value() then
-        local subject_elements = subject_value:unwrap_prim_tuple_value()
-        local subject_value_elements = value_array()
-        for _, v in ipairs(subject_elements) do
-          subject_value_elements:append(value.prim(v))
-        end
-        function make_prefix(i)
-          return value.tuple_value(subject_value_elements:copy(1, i))
-        end
-      elseif subject_value:is_neutral() then
-        -- yes, literally a copy-paste of the neutral case above
-        local subject_neutral = subject_value:unwrap_neutral()
-        function make_prefix(i)
-          local prefix_elements = value_array()
-          for x = 1, i do
-            prefix_elements:append(value.neutral(neutral_value.tuple_element_access_stuck(subject_neutral, x)))
-          end
-          return value.tuple_value(prefix_elements)
-        end
-      else
-        error("infer: trying to apply primitive tuple elimination to something that isn't a primitive tuple")
-      end
-    else
-      error("infer: trying to apply tuple elimination to something whose type isn't a tuple type")
-    end
-
-    -- evaluate the type of the tuple
-    local function make_inner_context(decls)
-      local constructor, arg = decls:unwrap_data_value()
-      if constructor == "empty" then
-        return typechecking_context, 0
-      elseif constructor == "cons" then
-        local details = arg:unwrap_tuple_value()
-        local context, n_elements = make_inner_context(details[1])
-        local f = details[2]
-        local prefix = make_prefix(n_elements)
-        local element_type = apply_value(f, prefix)
-        local new_context = context:append("tuple_element_" .. n_elements, element_type)
-        return new_context, n_elements + 1
-      else
-        error("infer: unknown tuple type data constructor")
-      end
-    end
-    local inner_context, n_elements = make_inner_context(decls)
+	for i,v in ipairs(tupletypes) do
+		inner_context = inner_context:append("tuple_element_" .. i, v)
+	end
 
     -- infer the type of the body, now knowing the type of the tuple
     local body_type, body_usages, body_term = infer(body, inner_context)
@@ -1140,6 +1158,7 @@ return {
   const_combinator = const_combinator,
   check = check,
   infer = infer,
+	infer_tuple_type = infer_tuple_type,
   evaluate = evaluate,
 	apply_value = apply_value,
 }

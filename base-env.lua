@@ -64,31 +64,21 @@ local function let_bind(syntax, env)
 
   if not ok then return false, name end
 
-  if type(name) == "table" then
-    if (bind.val.type.kind ~= types.tuple_kind) then
-      return false, "attempted a tuple destructure on a non tuple type"
-    end
+	local env = bind.env
 
-    if (#name ~= #bind.val.val) then
-      return false, "length of a tuple destructure must match the length of the tuple"
-    end
-
-		error("NYI")
-    local env = bind.env
-    for i=1,#name do
-      local v = { val = bind.val.val[i], type = bind.val.type.params[i]  }
-      env = env:bind_local(terms.binding.let(name[i], expr))
-    end
-
-    return true, types.unit_val, env
-  else
-		return true,
-			terms.inferrable_term.typed(terms.value.quantity(terms.quantity.unrestricted, terms.unit_type),
-				gen.declare_array(gen.builtin_number)(),
-				terms.typed_term.literal(terms.unit_val)),
-				bind.env:bind_local(terms.binding.let(name, bind.val))
-    --return true, types.unit_val, 
+	if type(name) == "table" then
+		local tupletype = gen.declare_array(gen.builtin_string)
+		env = env:bind_local(terms.binding.tuple_elim(tupletype(unpack(name)), bind.val))		
+	  else
+		env = env:bind_local(terms.binding.let(name, bind.val))
   end
+
+  return true,
+  terms.inferrable_term.typed(terms.value.quantity(terms.quantity.unrestricted, terms.unit_type),
+	  gen.declare_array(gen.builtin_number)(),
+	  terms.typed_term.literal(terms.unit_val)),
+	  env
+
 end
 
 local function record_threaded_element_acceptor(_, name, exprenv)

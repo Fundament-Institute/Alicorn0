@@ -63,23 +63,41 @@ environment_mt = {
           typechecking_context = typechecking_context,
         })
       elseif binding:is_tuple_elim() then
-        local names, subject = binding:unwrap_tuple_elim()
-        local subject_type, subject_usages, subject_term = infer(subject, self.typechecking_context)
-        local evaled = eval.evaluate(subject_term, self.typechecking_context.runtime_context)
-        local decls = subject_type:unwrap_tuple_type()
+
+		local names, subject = binding:unwrap_tuple_elim()
+		local subject_type, subject_usages, subject_term = infer(subject, self.typechecking_context)
+		local subject_quantity, subject_type = subject_type:unwrap_qtype()
+
+		-- evaluating the subject is necessary for inferring the type of the body
+		local subject_value = eval.evaluate(subject_term, self.typechecking_context:get_runtime_context())
+		-- extract subject type and evaled for each elem in tuple
+		local tupletypes, n_elements = eval.infer_tuple_type(subject_type, subject_value)
+
+        local decls
+
+		if subject_type:is_tuple_type() then
+			decls = subject_type:unwrap_tuple_type()
+		elseif subject_type:is_prim_tuple_type() then
+			decls = subject_type:unwrap_prim_tuple_type()
+		end
+
+        local typechecking_context = self.typechecking_context
         local n = #typechecking_context
         local locals = self.locals
-        local typechecking_context = self.typechecking_context
+
+		if not (n_elements == #names) then
+			error("attempted to bind ".. n_elements .. " tuple elements to " .. #names .. " variables")
+		end
+
         for i, v in ipairs(names) do
           local constructor, arg = decls:unwrap_data_value()
+
           if constructor ~= "cons" then
             error("todo: this error message")
           end
           local term = inferrable_term.bound_variable(n + i)
           locals = locals:put(v, term)
-          error("NYI")
-          -- FIXME: extract subject type and evaled for each elem in tuple
-          -- typechecking_context = typechecking_context:append(v, )
+		  typechecking_context = typechecking_context:append(v, tupletypes[i])
         end
         local bindings = self.bindings:append(binding)
         return update_env(self, {
@@ -156,8 +174,13 @@ environment_mt = {
 				if not binding then
 					error "missing binding"
 				end
-				local name, expr = binding:unwrap_let()
-				wrapped = terms.inferrable_term.let(name, expr, wrapped)
+				if binding:is_let() then
+					local name, expr = binding:unwrap_let()
+					wrapped = terms.inferrable_term.let(name, expr, wrapped)
+				elseif binding:is_tuple_elim() then 
+					local names, subject = binding:unwrap_tuple_elim()
+					wrapped = terms.inferrable_term.tuple_elim(subject, wrapped)
+				end
 			end
 
 			return env, wrapped

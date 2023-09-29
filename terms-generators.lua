@@ -282,7 +282,7 @@ local function gen_array_fns(value_type)
     if type(key) ~= "number" then
       p("array-index", value_type)
       p(key)
-      error("wrong key type passed to indexing")
+      error("wrong key type passed to indexing: ".. key)
     end
     -- check if integer
     -- there are many nice ways to do this in lua >=5.3

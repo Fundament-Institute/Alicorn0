@@ -124,8 +124,6 @@ local function check_infix_expression_handler(dat, a, b)
 end
 
 local function inferred_expression_pairhandler(env, a, b)
-
-
   -- local ok, ifx, op, args = b:match(
   --   {
   --     metalanguage.is_pair(check_infix_expression_handler)
@@ -178,11 +176,12 @@ local function inferred_expression_pairhandler(env, a, b)
 		local data = operative_result_val.elements[1].primitive_value
 		local env = operative_result_val.elements[2].primitive_value
 
-		-- data = operative_result_val.data
-
     -- FIXME: assert type is an inferrable term using new API once it exists
+		if not inferrable_term.value_check(data) then error "tried to handle something that was not an inferrable term" end
 		p("Inferring!", data.kind, env.typechecking_context)
+
     local resulting_type, usage_counts, term = infer(data, env.typechecking_context)
+
     return true, inferrable_term.typed(resulting_type, usage_counts, term), env
   end
 
@@ -290,7 +289,7 @@ inferred_expression =
   metalanguage.reducer(
     function(syntax, environment)
       -- print('trying to expression', syntax)
-      return syntax:match(
+    return syntax:match(
         {
           metalanguage.ispair(inferred_expression_pairhandler),
           metalanguage.issymbol(inferred_expression_symbolhandler),
