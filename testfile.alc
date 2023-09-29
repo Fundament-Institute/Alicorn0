@@ -1,4 +1,5 @@
 let x = 621
 let y = 926
+# let prim-sub = (intrinsic "return function(a, b) return a - b end" : (prim-func-type (a : prim-number) (b : prim-number) -> (c : prim-number)))
 let foo = (record (bar = 5) (baz = 6))
 + foo.bar 3

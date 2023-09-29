@@ -352,6 +352,10 @@ inferrable_term:define_enum("inferrable", {
 		"subject", checkable_term, -- checkable because we always know must be of prim_bool_type
 		"consequent", inferrable_term,
 		"alternate", inferrable_term
+	}},
+	{"prim_intrinsic", {
+			"source", checkable_term,
+			"type", checkable_term,
 	}}
 })
 -- typed terms have been typechecked but do not store their type internally
@@ -438,6 +442,9 @@ typed_term:define_enum("typed", {
 	{"prim_if", {
 		"subject", typed_term,
 		"alternate", typed_term
+	}},
+	{"prim_intrinsic", {
+			"source", typed_term,
 	}}
 
 })
@@ -643,7 +650,11 @@ neutral_value:define_enum("neutral_value", {
 		"subject", neutral_value,
 		"consequent", value,
 		"alternate", value,
+	}},
+	{"prim_intrinsic_stuck", {
+		 "source", neutral_value
 	}}
+
 })
 
 neutral_value.free.metavariable = function(mv)

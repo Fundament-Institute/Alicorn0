@@ -326,6 +326,10 @@ local function check(
   -- -> type of that term, usage counts, a typed term
   -- TODO: typecheck checkable_term and typechecking_context and target_type?
 
+	if not terms.checkable_term.value_check(checkable_term) then error "tried to check something that isn't a checkable term" end
+	if not terms.typechecking_context_type.value_check(typechecking_context) then error "tried to check with a context that isn't a typechecking context" end
+	if not terms.value.value_check(target_type) then error "tried to check with a target type that isn't an alicorn value" end
+
   if checkable_term:is_inferrable() then
     local inferrable_term = checkable_term:unwrap_inferrable()
     local inferred_type, inferred_usages, typed_term = infer(inferrable_term, typechecking_context)
@@ -356,6 +360,9 @@ local function check(
 end
 
 function apply_value(f, arg)
+	if not terms.value.value_check(f) then error "tried to apply something that wasn't an alicorn value" end
+	if not terms.value.value_check(arg) then error "tried to apply a function to something that wasn't an alicorn value" end
+
   if f:is_closure() then
     local code, capture = f:unwrap_closure()
     return evaluate(code, capture:append(arg))
@@ -430,6 +437,9 @@ function infer(
     )
   -- -> type of term, usage counts, a typed term,
   -- TODO: typecheck inferrable_term and typechecking_context?
+
+	if not terms.inferrable_term.value_check(inferrable_term) then error "tried to infer something that wasn't an inferable term" end
+	if not terms.typechecking_context_type.value_check(typechecking_context) then error "tried to infer in a context that wasn't a typechecking context" end
 
   if inferrable_term:is_bound_variable() then
     local index = inferrable_term:unwrap_bound_variable()
@@ -837,6 +847,12 @@ function infer(
 		add_arrays(result_usages, exprusages)
 		add_arrays(result_usages, bodyusages)
 		return bodytype, result_usages, terms.typed_term.let(exprterm, bodyterm)
+	elseif inferrable_term:is_prim_intrinsic() then
+		local source, type = inferrable_term:unwrap_prim_intrinsic()
+		local source_type, source_usages, source_term = check(source, typechecking_context, value.prim_string_type())
+		local type_type, type_usages, type_term = check(type, typechecking_context, value.prim_type_type())
+		local type_val = evaluate(type_term, typechecking_context.runtime_context)
+		return type_val, source_usages, typed_term.prim_intrinsic(source_term)
 	else
     error("infer: unknown kind: " .. inferrable_term.kind)
   end
@@ -874,9 +890,12 @@ function evaluate(
     )
   -- -> a value
   -- TODO: typecheck typed_term and runtime_context?
+
 	if not runtime_context then
 		error "Missing runtime_context for evaluate(typed_term, runtime_context)"
 	end
+	if not terms.typed_term.value_check(typed_term) then error "tried to evaluate something that wasn't a typed term" end
+	if not terms.runtime_context_type.value_check(runtime_context) then error "tried to evaluate in a context that wasn't a runtime context" end
 
   if typed_term:is_bound_variable() then
     local rc_val = runtime_context:get(typed_term:unwrap_bound_variable())
@@ -1033,6 +1052,18 @@ function evaluate(
 		local expr, body = typed_term:unwrap_let()
 		local expr_value = evaluate(expr, runtime_context)
 		return evaluate(body, runtime_context:append(expr_value))
+	elseif typed_term:is_prim_intrinsic() then
+		local source = typed_term:unwrap_prim_intrinsic()
+		local source_val = evaluate(source, runtime_context)
+		if source_val:is_prim() then
+			local source_str = source_val:unwrap_prim()
+			return value.prim(assert(load(source_str))())
+		elseif source_val:is_neutral() then
+			local source_neutral = source_val:unwrap_neutral()
+			return value.neutral(neutral_value.prim_intrinsic_stuck(source_neutral))
+		else
+			error "Tried to load an intrinsic with something that isn't a string"
+		end
   else
     error("evaluate: unknown kind: " .. typed_term.kind)
   end

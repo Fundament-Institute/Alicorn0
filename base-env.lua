@@ -113,7 +113,9 @@ local function record_build(syntax, env)
 					record_threaded_element,
 					env
 				)
-			}
+			},
+			metalang.failure_handler,
+			nil
 		)
 	if not ok then return ok, defs end
 	local map = gen.declare_map(gen.builtin_string, terms.inferrable_term)()
@@ -121,6 +123,37 @@ local function record_build(syntax, env)
 		map[v.name] = v.expr
 	end
 	return true, terms.inferrable_term.record_cons(map), env
+end
+
+local function intrinsic(syntax, env)
+	local ok, str_env, syntax =
+		syntax:match(
+			{
+				metalang.listtail(
+					metalang.accept_handler,
+					exprs.inferred_expression(utils.accept_with_env, env),
+					metalang.symbol_exact(metalang.accept_handler, ":")
+				)
+			},
+			metalang.failure_handler,
+			nil
+		)
+	if not ok then return ok, str_env end
+	env = str_env.env
+	local str = str_env.val
+	local ok, type, env =
+		syntax:match(
+			{
+				metalang.listmatch(
+					metalang.accept_handler,
+					exprs.inferred_expression(metalang.accept_handler, env)
+				)
+			},
+			metalang.failure_handler,
+			nil
+		)
+	if not ok then return ok, type end
+	return true, terms.inferrable_term.prim_intrinsic(str, type), env
 end
 
 local basic_fn_kind = {
@@ -225,6 +258,15 @@ end
 
 local value = terms.value
 
+local usage_array = gen.declare_array(gen.builtin_number)
+local function lit_term(val, typ)
+	return terms.inferrable_term.typed(
+		typ,
+		usage_array(),
+		terms.typed_term.literal(val)
+	)
+end
+
 local core_operations = {
   ["+"] = exprs.primitive_applicative(function(a, b) return a + b end, {value.prim_number_type, value.prim_number_type}, {value.prim_number_type}),
   ["-"] = exprs.primitive_applicative(function(a, b) return a - b end, {value.prim_number_type, value.prim_number_type}, {value.prim_number_type}),
@@ -243,6 +285,8 @@ local core_operations = {
   --["do"] = evaluator.primitive_operative(do_block),
   let = exprs.primitive_operative(let_bind),
 	record = exprs.primitive_operative(record_build),
+	intrinsic = exprs.primitive_operative(intrinsic),
+	["prim-number"] = lit_term(value.prim_number_type, value.prim_type_type),
   --["dump-env"] = evaluator.primitive_operative(function(syntax, env) print(environment.dump_env(env)); return true, types.unit_val, env end),
   --["basic-fn"] = evaluator.primitive_operative(basic_fn),
   --tuple = evaluator.primitive_operative(tuple_type_impl),
