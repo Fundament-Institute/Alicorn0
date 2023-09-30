@@ -87,6 +87,11 @@ environment_mt = {
           bindings = bindings,
           typechecking_context = typechecking_context,
         })
+			elseif binding:is_annotated_lambda() then
+				local param_name, param_annotation = binding:unwrap_annotated_lambda()
+				local annotation_type, annotation_usages, annotation_term = infer(param_annotation, self.typechecking_context)
+				local evaled = eval.evaluate(annotation_term, self.typechecking_context.runtime_context)
+				error "NYI lambda bindings"
       else
         error("bind_local: unknown kind: " .. binding.kind)
       end

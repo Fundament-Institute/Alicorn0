@@ -256,6 +256,28 @@ local function tuple_of_impl(syntax, env)
   return true, components, env
 end
 
+local function ascribed_name(syntax, env)
+	local ok, name, type_env =
+		syntax:match(
+			{
+				metalang.listmatch(
+					metalang.accept_handler,
+					metalang.issymbol(metalang.accept_handler),
+					metalang.symbol_exact(metalang.accept_handler, ":"),
+					exprs.inferred_expression(utils.accept_with_env, env)
+				)
+			},
+			metalang.failure_handler,
+			nil
+		)
+	if not ok then return ok, name end
+	return true, name, type_env.val, type_env.env
+end
+
+local function prim_func_type_impl(syntax, env)
+	--local ok,
+end
+
 local value = terms.value
 
 local usage_array = gen.declare_array(gen.builtin_number)

@@ -266,6 +266,10 @@ binding:define_enum("binding", {
     "names", array(gen.builtin_string),
     "subject", inferrable_term,
   }},
+	{"annotated_lambda", {
+		 "param_name", gen.builtin_string,
+		 "param_annotation", inferrable_term,
+	}}
 })
 -- checkable terms need a target type to typecheck against
 checkable_term:define_enum("checkable", {
