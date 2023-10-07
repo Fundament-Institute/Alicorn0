@@ -173,7 +173,7 @@ local grammar = P {
 			end
 
 			return buffer
-		end, "val") * Cg(P "" / "bytes", "literaltype")),
+		end, "val") * Cg(lpeg.Cc"bytes", "literaltype")),
 	string = element("string",
 	                 P "\"" *
 		                 Cg(Ct((V "string_literal" + V "splice") ^ 0), "elements") *

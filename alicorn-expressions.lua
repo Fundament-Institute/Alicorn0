@@ -250,6 +250,14 @@ local function inferred_expression_valuehandler(env, val)
         typed_term.literal(value.prim(val.val))
       ), env
   end
+	if val.type == "string" then
+    return true,
+      inferrable_term.typed(
+        unrestricted(value.prim_string_type),
+        usage_array(),
+        typed_term.literal(value.prim(val.val))
+      ), env
+	end
   p("valuehandler error", val)
   error("unknown value type " .. val.type)
 end

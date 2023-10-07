@@ -16,7 +16,17 @@ local function syntax_convert(tree)
   elseif tree.kind == "literal" then
     return metalanguage.value(tree.anchor, {type = tree.literaltype, val = tree.val})
   elseif tree.kind == "string" then
-    error "syntax contains a string which isn't yet implemented"
+		if #tree.elements ~= 1 or tree.elements[1].literaltype ~= "bytes" then
+			error "NYI: strings with splices / not exactly one literal"
+		end
+
+		-- converting this to a string here is a temporary simplification, remove when NYI above is fixed.
+		local chars = {}
+		for i, byte in ipairs(tree.elements[1].val) do
+			chars[i] = string.char(byte)
+		end
+		local val = table.concat(chars)
+		return metalanguage.value(tree.anchor, {type = "string", val = val})
 	elseif tree.kind == "comment" then
 		--do nothing
   else
