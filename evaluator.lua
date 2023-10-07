@@ -853,6 +853,15 @@ function infer(
 		local type_type, type_usages, type_term = check(type, typechecking_context, value.prim_type_type())
 		local type_val = evaluate(type_term, typechecking_context.runtime_context)
 		return type_val, source_usages, typed_term.prim_intrinsic(source_term)
+	elseif inferrable_term:is_level_max() then
+		local arg_type_a, arg_term_a = infer(inferrable_term.level_a, typechecking_context)
+		local arg_type_b, arg_term_b = infer(inferrable_term.level_b, typechecking_context)
+		return value.level_type, typed_term.level_max(arg_term_a, arg_term_b)
+	elseif inferrable_term:is_level_suc() then
+		local arg_type, arg_term = infer(inferrable_term.previous_level, typechecking_context)
+		return value.level_type, typed_term.level_suc(arg_term)
+	elseif inferrable_term:is_level0() then
+		return value.level_type, typed_term.level0
 	else
     error("infer: unknown kind: " .. inferrable_term.kind)
   end
@@ -1064,6 +1073,31 @@ function evaluate(
 		else
 			error "Tried to load an intrinsic with something that isn't a string"
 		end
+	elseif typed_term:is_level0() then
+		return value.level(0)
+	elseif typed_term:is_level_suc() then
+		local previous_level = evaluate(typed_term.previous_level, runtime_context)
+		if not previous_level:is_level() then
+			p(previous_level)
+			error "wrong type for previous_level"
+		end
+		if previous_level.level > 10 then
+			error("NYI: level too high for typed_level_suc" .. tostring(previous_level.level))
+		end
+		return value.level(previous_level.level + 1)
+	elseif typed_term:is_level_max() then
+		local level_a = evaluate(typed_term.level_a, runtime_context)
+		local level_b = evaluate(typed_term.level_b, runtime_context)
+		if not level_a:is_level() or not level_b:is_level() then
+			error "wrong type for level_a or level_b"
+		end
+		return value.level(math.max(level_a.level, level_b.level))
+	elseif typed_term:is_level_type() then
+		return value.level_type
+	elseif typed_term:is_star() then
+		return value.star(typed_term.level)
+	elseif typed_term:is_prop() then
+		return value.prop(typed_term.level)
   else
     error("evaluate: unknown kind: " .. typed_term.kind)
   end
