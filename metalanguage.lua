@@ -71,7 +71,7 @@ local reducer_mt = { __call = create_reducible }
 local function reducer(func, name)
 
   local function funcwrapper(syntax, matcher)
-    return func(syntax, unpack(matcher.reducible))
+    return func(syntax, table.unpack(matcher.reducible))
   end
 
   local reducer = {
@@ -236,7 +236,7 @@ local constructed_syntax_mt = {
             if not matcher.handler then
               print("missing handler for ", matcher.kind, debug.traceback())
             end
-            return matcher.handler(extra, unpack(res, 2))
+            return matcher.handler(extra, table.unpack(res, 2))
           end
           --print("rejected syntax reduction")
           lasterr = res[2]
@@ -347,7 +347,7 @@ local function ListMatch(syntax, ...)
       nil
     )
   if not ok then return false, err end
-  return true, unpack(args)
+  return true, table.unpack(args)
 end
 
 local listmatch = reducer(ListMatch, "list_match")
@@ -369,7 +369,7 @@ local function ListTail(syntax, ...)
     args[#args + 1] = val
     syntax = tail
   end
-  return true, unpack(args), tail
+  return true, table.unpack(args), tail
 end
 
 local listtail = reducer(ListTail, "list+tail")
