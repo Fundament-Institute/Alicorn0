@@ -342,8 +342,9 @@ end
 
 function testcomments()
 	local example = {
-		"# i am a normal comment created by a normal human\n\tand this comment is intended to be useful\n\t\tsee?\n\tall of this is on one line ",
-		"# i"
+		"1\n# list of one\n1",
+		"# i am a normal comment created by a normal human\n\tand this comment is intended to be useful\n\t\tsee?\n\n\tall of this is on one line ",
+		"# i",
 -- [[
 -- # aaaaa
 -- 	Ma'am is acceptable in a crunch, but I prefer Captain.
@@ -352,8 +353,9 @@ function testcomments()
 	}
 
 	local expected = {
-		{" i am a normal comment created by a normal human \n\tand this comment is intended to be useful \n\t\tsee? \n\tall of this is on one line "},
-		{" i"}
+		{1, " list of one", 1},
+		{" i am a normal comment created by a normal human\n\tand this comment is intended to be useful\n\t\tsee?\n\n\tall of this is on one line "},
+		{" i"},
 	}
 
     for i = 1,#example do

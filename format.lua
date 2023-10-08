@@ -50,7 +50,7 @@ local function string_concat(a, b)
 	elseif b and (not a) then
 		return b
 	else
-		return a .. " " .. b
+		return a .. b
 	end
 end
 
@@ -131,7 +131,7 @@ local grammar = P {
 	-- for the time being, accurate recording/reporting of indentation level (indentation level - parent indentation) is unsupported.
 	contiguous_body = (1 - S "\r\n") ^ 0,
 	subordinate_body = C(V "contiguous_body") *
-		(C(V "subordinate_indent" * V "contiguous_body") + C(V "wsp" ^ 1)) ^ 0,
+		(C(V "subordinate_indent" * V "contiguous_body") + (C(V"newline") * S"\t "^0 * #V"newline") ) ^ 0,
 	comment = element("comment", Cg(
 		                  P "#" * lpeg.Cf(V "subordinate_body", string_concat), "val")),
 	-- TODO automatically convert body to schema bytes variant
