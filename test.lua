@@ -364,4 +364,50 @@ function testcomments()
     end
 end
 
+function testcomma()
+    local example = {
+        "f(a, b, c)",
+        "f (a)",
+        "f((x + 3) + 2 * d)",
+        "f(x + y)",
+        "{ a = 1, b = 2 }",
+        "{c = a, b = d, e = 1 + 2 * (3 + 6)}",
+        "def f (a : int, b : int) (a + b)",
+        "f((a, b),c)",
+        "[1 , 2, 1 + 2]",
+        "let (a, b) = f(x)",
+        "f(a)"
+    }
+
+    local expected = {
+        {{"f", "a", "b", "c"}},
+        {{ "f", {"a"} }},
+        {{"f", {{"x", "+", 3}, "+", 2, "*", "d"}}},
+        {{"f", {"x", "+", "y"}}},
+        {{"curly-list", {"a", "=", 1}, {"b", "=", 2}}},
+        {{"curly-list", {"c", "=", "a"}, {"b", "=", "d"}, {"e", "=", 1, "+", 2, "*", {3, "+", 6}}}},
+        {{"def", "f", {{"a", ":", "int"}, {"b", ":", "int"}}, {"a", "+", "b"}}},
+        {{ "f", {"a", "b"}, "c" }},
+        {{"braced_list", 1, 2, {1, "+", 2}}},
+        {{"let", {"a", "b"}, "=", {"f", "x"}}},
+        {{"f", "a"}}
+    }
+
+    for i = 1,#example do
+        local results = format.parse(example[i], "inline")
+        luaunit.assertEquals(simplify_list(results), expected[i])
+    end
+end
+
+-- function teststrings()
+--     local example = {
+--         " \"this is a string ${with a splice} and more text over here\"  "
+--     }
+
+--     local expected = {
+--         "this is a string"
+--     }
+
+-- end
+
 os.exit( luaunit.LuaUnit.run() )

@@ -1,5 +1,5 @@
 local lpeg = require "lpeg"
-local P, C, Cg, Cmt, Ct, Cb, Cp, Cf, S, V, R = lpeg.P, lpeg.C, lpeg.Cg,
+local P, C, Cg, Cc, Cmt, Ct, Cb, Cp, Cf, S, V, R = lpeg.P, lpeg.C, lpeg.Cg, lpeg.Cc,
                                                lpeg.Cmt, lpeg.Ct, lpeg.Cb,
                                                lpeg.Cp, lpeg.Cf, lpeg.S, lpeg.V,
                                                lpeg.R
@@ -18,7 +18,7 @@ local anchor_mt = {
 }
 
 local function element(kind, pattern)
-	return Ct(V "anchor" * Cg(P "" / kind, "kind") * pattern)
+	return Ct(V "anchor" * Cg(Cc(kind), "kind") * pattern)
 end
 
 local function space_tokens(pattern)
@@ -58,7 +58,10 @@ local grammar = P {
 	"ast",
 	ast = V "foreward" * V "file",
 
+	-- shouldn't be used except in cases where the line/indentation is/does not matter
 	wsp = lpeg.S "\t\n\r ",
+
+	-- initializes empty capture groups at the start, remember to update when tracking new things!
 	foreward = Cg(P "" / function(_) return {0} end, "indent_level") *
 		Cg(P "" / function() return {line_num = 1, line_pos = 0} end, "newline_pos"),
 
@@ -69,8 +72,8 @@ local grammar = P {
 		local construct = {line_num = prev_pos["line_num"] + 1, line_pos = position}
 		return true, construct
 	end), "newline_pos"),
-	-- either match the newline or match the beginning of the file
 
+	-- either match the newline or match the beginning of the file
 	filestart = Cg(Cmt(Cp(), function(body, position, mypos)
 		if mypos == 1 then
 			return mypos == 1, {line_num = 0, line_pos = 0}
@@ -93,6 +96,8 @@ local grammar = P {
 			return anchor
 		end,
 
+	-- used by every element
+	-- TODO: make this propogate errors back up the stack
 	anchor = Cg(V "textpos", "anchor"),
 	endpos = Cg(V "textpos", "endpos"),
 
@@ -156,7 +161,6 @@ local grammar = P {
 	float_special = P "+inf" + P "-inf" + P "nan",
 
 	symbol = element("symbol", Cg((1 - (S "#;()[]{}," + V "wsp")) ^ 1, "str")),
-	comma = element("symbol", Cg(P ",", "str")),
 
 	-- probably works but it doesn't have complex tests
 	splice = P "${" * V "naked_list" * P "}",
@@ -179,18 +183,43 @@ local grammar = P {
 		                 Cg(Ct((V "string_literal" + V "splice") ^ 0), "elements") *
 		                 P "\"" * V "endpos"),
 
-	tokens = space_tokens(V "comment" + V "paren_list" + V "string" + V "number" +
-		                      V "symbol" + V "comma" + V "longstring"),
+	tokens = space_tokens(V "comment" + V"function_call" + V "paren_list" + V "string" + V "number" +
+		                      V "symbol" + V "longstring"),
 	token_spacer = S "\t " ^ 0,
 
-	open_paren = P "(" + element("symbol", Cg(P "[" / "braced_list", "str")) +
-		element("symbol", Cg(P "{" / "curly-list", "str")),
-	close_paren = S ")]}",
 	-- LIST SEPARATOR BEHAVIOR IS NOT CONSISTENT BETWEEN BRACED AND NAKED LISTS
-	paren_list = list(V "open_paren" *
-		                  (list(V "tokens" ^ 1 * P ";") -- ; control character splits list-up-to-point into child list
+	base_paren_body = (list(V "tokens" ^ 1 * P ";") -- ; control character splits list-up-to-point into child list
 		+ (P "\\" * V "naked_list") -- \ escape char enters naked list mode from inside a paren list. there's probably an edge case here, indentation is going to be wacky
-		+ V "tokens" + V "paren_list" + V "wsp") ^ 1) * V "close_paren", -- tokens and recursion
+		+ V "tokens" + V "wsp"),
+
+	-- the internal of a paren should be
+	-- you can have list separators, that put everything before it into it's own sublist
+	-- you can have commas. single token comma separated values are interpreted as if the comma was not there.
+	-- BUT if there are multiple tokens in a comma slot, the tokens are placed into a sub list.
+	-- backslash escapes into a naked list, at the root indentation level.
+	-- if you have no commas in a list, elements in that list should not be placed into a sublist as if they were the end token.
+	
+	-- breaks paren body into comma sequence, should accept any individual paren_body or comma separated list
+	comma_sep_paren_body =
+		((list(V"base_paren_body"^2) + V"base_paren_body") * V"token_spacer"
+	* P"," * V"token_spacer")^1 * (list(V"base_paren_body"^2) + V"base_paren_body"),
+
+	paren_body = V"comma_sep_paren_body" + V"base_paren_body"^1,
+	paren_list =
+		list(P"(" * V"paren_body" * P")")
+		+ list(
+			element("symbol", Cg(P "[" / "braced_list", "str")) * V"paren_body" * P"]"
+			  )
+		+ list(
+			element("symbol", Cg(P "{" / "curly-list", "str")) * V"paren_body" * P"}"
+			  ),
+
+	-- subtly different from the base case
+	-- if there's a set of arguments provided that aren't comma separated, they are automatically interpreted as a child list
+	-- the base case will interpret such a thing as part of the normal list
+	function_call = list(
+		V"symbol" * P"(" * (V"comma_sep_paren_body" + V"base_paren_body") * P")"
+	),
 
 	empty_line = V "newline" * space_tokens(P "") * #(V "newline" + -1),
 
