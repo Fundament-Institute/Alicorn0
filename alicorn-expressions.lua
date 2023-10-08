@@ -288,7 +288,7 @@ end
 
 inferred_expression =
   metalanguage.reducer(
-    function(syntax, _, environment)
+    function(syntax, environment)
       -- print('trying to expression', syntax)
       return syntax:match(
         {
@@ -306,7 +306,7 @@ inferred_expression =
 
 checked_expression =
   metalanguage.reducer(
-    function(syntax, _, environment)
+    function(syntax, environment)
       -- print('trying to expression', syntax)
       return syntax:match(
         {
@@ -427,7 +427,7 @@ end
 
 local function inferred_collect_tuple_nil_handler(env) return true, false, nil, nil, env end
 
-inferred_collect_tuple = metalanguage.reducer(function(syntax, _, env)
+inferred_collect_tuple = metalanguage.reducer(function(syntax, env)
   local collected_terms = inferrable_array()
   local ok, continue, next_term = true, true, nil
   while ok and continue do
@@ -447,7 +447,7 @@ inferred_collect_tuple = metalanguage.reducer(function(syntax, _, env)
   return true, inferrable_term.tuple_cons(collected_terms), env
 end, "inferred_collect_tuple")
 
-inferred_collect_prim_tuple = metalanguage.reducer(function(syntax, _, env)
+inferred_collect_prim_tuple = metalanguage.reducer(function(syntax, env)
     local collected_terms = inferrable_array()
     local ok, continue, next_term = true, true, nil
     while ok and continue do
@@ -467,7 +467,7 @@ inferred_collect_prim_tuple = metalanguage.reducer(function(syntax, _, env)
     return true, inferrable_term.prim_tuple_cons(collected_terms), env
 end, "inferred_collect_prim_stuple")
 
-local expressions_args = metalanguage.reducer(function(syntax, _, env)
+local expressions_args = metalanguage.reducer(function(syntax, env)
     local vals = {}
     local ok, continue = true, true
     while ok and continue do
@@ -484,7 +484,7 @@ local expressions_args = metalanguage.reducer(function(syntax, _, env)
     return true, vals, env
 end, "expressions_args")
 
-local block = metalanguage.reducer(function(syntax, _, env)
+local block = metalanguage.reducer(function(syntax, env)
     local lastval, newval
     local ok, continue = true, true
     while ok and continue do
