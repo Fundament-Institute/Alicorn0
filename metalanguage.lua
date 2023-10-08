@@ -71,7 +71,7 @@ local reducer_mt = { __call = create_reducible }
 local function reducer(func, name)
 
   local function funcwrapper(syntax, matcher)
-    return func(syntax, matcher, unpack(matcher.reducible))
+    return func(syntax, unpack(matcher.reducible))
   end
 
   local reducer = {
@@ -163,7 +163,7 @@ local function failure_handler(data, exception)
   return false, exception
 end
 
-local function SymbolInEnvironment(syntax, matcher, environment)
+local function SymbolInEnvironment(syntax, environment)
   --print("in symbol in environment reducer", matcher.kind, matcher[1], matcher)
   return syntax:match(
     {
@@ -174,7 +174,7 @@ local function SymbolInEnvironment(syntax, matcher, environment)
   )
 end
 
-local function SymbolExact(syntax, matcher, symbol)
+local function SymbolExact(syntax, symbol)
   return syntax:match(
     {
       issymbol(symbolexacthandler)
@@ -321,7 +321,7 @@ local function list_match_pair_handler(rule, a, b)
 end
 
 
-local function ListMatch(syntax, matcher, ...)
+local function ListMatch(syntax, ...)
   local args = {}
   local ok, err, val, tail = true, nil, true, nil
   for i, rule in ipairs({...}) do
@@ -352,7 +352,7 @@ end
 
 local listmatch = reducer(ListMatch, "list_match")
 
-local function ListTail(syntax, _, ...)
+local function ListTail(syntax, ...)
   local args = {}
   local ok, err, val, tail = true, nil, true, nil
   for i, rule in ipairs({...}) do
@@ -391,7 +391,7 @@ local function list_many_nil_handler()
   return true, false
 end
 
-list_many = reducer(function(syntax, _, submatcher)
+list_many = reducer(function(syntax, submatcher)
     local vals = {}
     local ok, cont, val, tail = true, true, nil, syntax
     while ok and cont do
@@ -408,7 +408,7 @@ list_many = reducer(function(syntax, _, submatcher)
     if not ok then return ok, cont end
     return true, vals
 end, "list_many")
-list_many_threaded = reducer(function(syntax, _, submatcher_fn, init_thread)
+list_many_threaded = reducer(function(syntax, submatcher_fn, init_thread)
     local vals = {}
     local ok, cont, val, thread, tail = true, true, nil, init_thread, syntax
 		local nextthread = init_thread
@@ -428,7 +428,7 @@ list_many_threaded = reducer(function(syntax, _, submatcher_fn, init_thread)
     return true, vals, thread
 end, "list_many_threaded")
 
-oneof = reducer(function(syntax, _, ...)
+oneof = reducer(function(syntax, ...)
     return syntax:match({...}, failure_handler, nil)
 end, "oneof")
 
