@@ -101,7 +101,7 @@ local primitive_applicative_mt = {
           metalang.failure_handler,
           nil
         )
-      local res = self.fn(unpack(args))
+      local res = self.fn(table.unpack(args))
       return true, metalang.value(res), env
     end
   }
