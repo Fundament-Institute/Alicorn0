@@ -1,11 +1,11 @@
-local metalanguage = require './metalanguage'
-local evaluator = require './evaluator'
-local format = require './format-adapter'
-local base_env = require './base-env'
-local p = require 'pretty-print'.prettyPrint
-local terms = require './terms'
-local exprs = require './alicorn-expressions'
-local fs = require 'fs'
+local metalanguage = require "./metalanguage"
+local evaluator = require "./evaluator"
+local format = require "./format-adapter"
+local base_env = require "./base-env"
+local p = require "pretty-print".prettyPrint
+local terms = require "./terms"
+local exprs = require "./alicorn-expressions"
+local fs = require "fs"
 
 local src = fs.readFileSync("testfile.alc")
 print("read code")
@@ -19,11 +19,11 @@ local env = base_env.create()
 local shadowed, env = env:enter_block()
 
 print("Expression -> terms")
-local ok, expr, env = code:match({exprs.block(metalanguage.accept_handler, env)}, metalanguage.failure_handler, nil)
+local ok, expr, env = code:match({ exprs.block(metalanguage.accept_handler, env) }, metalanguage.failure_handler, nil)
 if not ok then
 	print("evaluating failed")
-  print(expr)
-  return
+	print(expr)
+	return
 end
 
 local env, bound_expr = env:exit_block(expr, shadowed)

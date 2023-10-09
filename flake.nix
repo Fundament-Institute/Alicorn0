@@ -42,6 +42,8 @@
               luvitpkgs.packages.${system}.lit
               luvitpkgs.packages.${system}.luvit
               pkgs.luaformatter
+
+              (pkgs.luajit.withPackages (ps: with ps; [ luasocket lpeg inspect luaunit ]))
             ];
           };
           default = alicorn;
