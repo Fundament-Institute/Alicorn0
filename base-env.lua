@@ -246,7 +246,16 @@ local function tuple_of_impl(syntax, env)
   return true, components, env
 end
 
-local function ascribed_name(syntax, env)
+local ascribed_name = metalang.reducer(function(syntax, env, prev, names)
+	print("ascribed_name trying")
+	p(syntax)
+	local shadowed, env = env:enter_block()
+	env = env:bind_local(terms.binding.annotated_lambda("#prev", prev))
+	local ok, prev_binding = env:get("#prev")
+	if not ok then
+		error "#prev should always be bound, was just added"
+	end
+	env = env:bind_local(terms.binding.tuple_elim(names, prev_binding))
 	local ok, name, type_env =
 		syntax:match(
 			{
@@ -261,10 +270,87 @@ local function ascribed_name(syntax, env)
 			nil
 		)
 	if not ok then return ok, name end
-	return true, name, type_env.val, type_env.env
+	local val, env = type_env.env:exit_block(type_env.val, shadowed)
+	return true, name, val, env
+end, "ascribed_name")
+
+local function prim_func_type_pair_handler(env, a, b)
+  local ok, val, env = a:match({exprs.inferred_expression(metalang.accept_handler, env)}, metalang.failure_handler, nil)
+  if not ok then return false, val end
+  return true, true, val, b, env
 end
 
+local function prim_func_type_empty_handler(env)
+	return true, false, nil, nil, env
+end
+
+local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
+	local value_array = gen.declare_array(terms.value)
+	local function tup_val(...) return terms.value.tuple_value(value_array(...)) end
+	local function cons(...) return terms.value.data_value("cons", tup_val(...)) end
+	local empty = terms.value.data_value("empty", tup_val())
+	local args = empty
+
+	local head, tail, name, type_val, type_env
+	local ok, continue = true, true
+	while ok and continue do
+		ok, head, tail = syntax:match({ metalang.ispair(metalang.accept_handler) }, metalang.failure_handler, env)
+		print(env)
+		if not ok then
+			break
+		end
+
+		ok, continue, name, type_val, type_env = head:match({
+			metalang.symbol_exact(function() return true, false end, "->"),
+			ascribed_name(function(ok, ...)
+				return ok, true, ...
+			end, env, args)
+		}, metalang.failure_handler, env)
+
+		if continue then
+			-- type_env:bind_local(terms.binding.let(name, type_val))
+			-- local arg = nil
+			-- args = cons(args, arg)
+		end
+		if ok and continue then
+			env = type_env
+		end
+		print("arg", ok, continue, name, type_val, type_env)
+		--error "TODO use ascribed_name results"
+
+		syntax = tail
+	end
+	print("moving on to return type")
+	ok, continue = true, true
+	while ok and continue do
+		ok, head, tail = syntax:match({ metalang.ispair(metalang.accept_handler) }, metalang.failure_handler, env)
+		print(env)
+		if not ok then
+			break
+		end
+
+		ok, continue, name, type_val, type_env = head:match({
+			metalang.isnil(function() return true, false end),
+			ascribed_name(function(ok, ...) return ok, true, ... end, env)
+		}, metalang.failure_handler, env)
+		print("result", ok, continue, name, type_val, type_env)
+		
+		syntax = tail
+	end
+	if not ok then return false, continue end
+	return true, lastval, env
+end, "prim_func_type_impl")
+
+-- TODO: abstract so can reuse for func type and prim func type
 local function prim_func_type_impl(syntax, env)
+	print("in prim_func_type_impl")
+	local result = syntax:match({prim_func_type_impl_reducer(metalang.accept_handler, env)}, metalang.failure_handler, env)
+	p(result)
+	error "NYI"
+	-- parse sequence of ascribed names, arrow, then sequence of ascribed names
+	-- for each ascribed name:
+	  -- enter a block, perform lambda binding, perform tuple destrucutring binding, parse out the type of the ascription
+		
 	--local ok,
 end
 
@@ -299,6 +385,7 @@ local core_operations = {
 	record = exprs.primitive_operative(record_build),
 	intrinsic = exprs.primitive_operative(intrinsic),
 	["prim-number"] = lit_term(value.prim_number_type, value.prim_type_type),
+	["prim-func-type"] = exprs.primitive_operative(prim_func_type_impl),
   --["dump-env"] = evaluator.primitive_operative(function(syntax, env) print(environment.dump_env(env)); return true, types.unit_val, env end),
   --["basic-fn"] = evaluator.primitive_operative(basic_fn),
   --tuple = evaluator.primitive_operative(tuple_type_impl),
