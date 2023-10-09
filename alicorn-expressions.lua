@@ -348,6 +348,7 @@ local function primitive_operative(fn)
 	end
   -- what we're going for:
   -- (s : syntax, e : environment, u : wrapped_typed_term(userdata), g : goal) -> (goal_to_term(g), environment)
+	--   goal one of inferable, mechanism, checkable
   -- what we have:
   -- (s : syntax, e : environment) -> (inferrable_term, environment)
 
