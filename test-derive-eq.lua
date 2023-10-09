@@ -1,27 +1,31 @@
-local derivers = require './derivers'
+local derivers = require "./derivers"
 local eq = derivers.eq
-local gen = require './terms-generators'
+local gen = require "./terms-generators"
 
 local mytype1 = gen.declare_enum("mytype1", {
-  {"foo"},
-  {"bar"},
-  {"baz"},
+	{ "foo" },
+	{ "bar" },
+	{ "baz" },
 })
 
 local mytype2 = gen.declare_enum("mytype2", {
-  {"truer"},
-  {"middle", {"thing", mytype1}},
-  {"falser"},
+	{ "truer" },
+	{ "middle", { "thing", mytype1 } },
+	{ "falser" },
 })
 
 local mytype3 = gen.declare_record("mytype3", {
-  "one", mytype1,
-  "anotherone", mytype2,
+	"one",
+	mytype1,
+	"anotherone",
+	mytype2,
 })
 
 local mytype3butsimple = gen.declare_record("mytype3", {
-  "one", gen.builtin_number,
-  "anotherone", gen.builtin_number,
+	"one",
+	gen.builtin_number,
+	"anotherone",
+	gen.builtin_number,
 })
 
 p("simple")

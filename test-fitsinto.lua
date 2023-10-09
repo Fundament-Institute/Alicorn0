@@ -1,7 +1,7 @@
-local traits = require './traits'
-local terms = require './terms'
-local gen = require './terms-generators'
-local evaluator = require './evaluator'
+local traits = require "./traits"
+local terms = require "./terms"
+local gen = require "./terms-generators"
+local evaluator = require "./evaluator"
 
 local fitsinto = evaluator.fitsinto
 
@@ -16,4 +16,3 @@ local function test()
 end
 
 test()
-

@@ -1,8 +1,6 @@
 local lpeg = require "lpeg"
-local P, C, Cg, Cc, Cmt, Ct, Cb, Cp, Cf, S, V, R = lpeg.P, lpeg.C, lpeg.Cg, lpeg.Cc,
-                                               lpeg.Cmt, lpeg.Ct, lpeg.Cb,
-                                               lpeg.Cp, lpeg.Cf, lpeg.S, lpeg.V,
-                                               lpeg.R
+local P, C, Cg, Cc, Cmt, Ct, Cb, Cp, Cf, S, V, R =
+	lpeg.P, lpeg.C, lpeg.Cg, lpeg.Cc, lpeg.Cmt, lpeg.Ct, lpeg.Cb, lpeg.Cp, lpeg.Cf, lpeg.S, lpeg.V, lpeg.R
 
 -- SLN
 -- expressions, atoms, lists
@@ -11,10 +9,8 @@ local P, C, Cg, Cc, Cmt, Ct, Cb, Cp, Cf, S, V, R = lpeg.P, lpeg.C, lpeg.Cg, lpeg
 
 local anchor_mt = {
 	__tostring = function(self)
-		return
-			"in file " .. self.sourceid .. ", line " .. self.line .. " character " ..
-				self.char
-	end
+		return "in file " .. self.sourceid .. ", line " .. self.line .. " character " .. self.char
+	end,
 }
 
 local function element(kind, pattern)
@@ -45,9 +41,9 @@ local function replace_escape(data)
 end
 
 local function string_concat(a, b)
-	if a and (not b) then
+	if a and not b then
 		return a
-	elseif b and (not a) then
+	elseif b and not a then
 		return b
 	else
 		return a .. b
@@ -62,47 +58,53 @@ local grammar = P {
 	wsp = lpeg.S "\t\n\r ",
 
 	-- initializes empty capture groups at the start, remember to update when tracking new things!
-	foreward = Cg(P "" / function(_) return {0} end, "indent_level") *
-		Cg(P "" / function() return {line_num = 1, line_pos = 0} end, "newline_pos"),
+	foreward = Cg(P "" / function(_)
+		return { 0 }
+	end, "indent_level") * Cg(P "" / function()
+		return { line_num = 1, line_pos = 0 }
+	end, "newline_pos"),
 
 	-- every time there's a newline, get it's position. construct a named group with the position
 	-- of the latest (numbered) newline
-	newline = Cg(Cmt(Cb("newline_pos") * P"\r"^0 * P"\n" * Cp(),
-	                 function(body, position, prev_pos)
-		local construct = {line_num = prev_pos["line_num"] + 1, line_pos = position}
-		return true, construct
-	end), "newline_pos"),
+	newline = Cg(
+		Cmt(Cb("newline_pos") * P "\r" ^ 0 * P "\n" * Cp(), function(body, position, prev_pos)
+			local construct = { line_num = prev_pos["line_num"] + 1, line_pos = position }
+			return true, construct
+		end),
+		"newline_pos"
+	),
 
 	-- either match the newline or match the beginning of the file
-	filestart = Cg(Cmt(Cp(), function(body, position, mypos)
-		if mypos == 1 then
-			return mypos == 1, {line_num = 0, line_pos = 0}
-		else
-			return mypos == 1
-		end
-	end), "newline_pos"),
+	filestart = Cg(
+		Cmt(Cp(), function(body, position, mypos)
+			if mypos == 1 then
+				return mypos == 1, { line_num = 0, line_pos = 0 }
+			else
+				return mypos == 1
+			end
+		end),
+		"newline_pos"
+	),
 
 	-- every time there's a newline, get it's position, and construct a named group
 	-- subtract the position of the newline and use it as a comparison point
-	textpos = Cp() * Cb("newline_pos") * lpeg.Carg(1) /
-		function(new_pos, old_pos, filename)
-			local anchor = {
-				sourceid = filename,
-				line = old_pos["line_num"],
-				char = new_pos - old_pos["line_pos"]
-			}
-			setmetatable(anchor, anchor_mt)
+	textpos = Cp() * Cb("newline_pos") * lpeg.Carg(1) / function(new_pos, old_pos, filename)
+		local anchor = {
+			sourceid = filename,
+			line = old_pos["line_num"],
+			char = new_pos - old_pos["line_pos"],
+		}
+		setmetatable(anchor, anchor_mt)
 
-			return anchor
-		end,
+		return anchor
+	end,
 
 	-- used by every element
 	-- TODO: make this propogate errors back up the stack
 	anchor = Cg(V "textpos", "anchor"),
 	endpos = Cg(V "textpos", "endpos"),
 
-	count_tabs = Cmt(V "textpos" * C(S "\t " ^ 1),
-	                 function(body, position, anchor, indentstring)
+	count_tabs = Cmt(V "textpos" * C(S "\t " ^ 1), function(body, position, anchor, indentstring)
 		-- only tabs are allowed
 		-- tabs and spaces must not be interleaved - tabs must happen before spaces.
 		-- TODO: make nice errors in here
@@ -122,37 +124,30 @@ local grammar = P {
 		end
 
 		return true, numtabs
-
 	end),
 
 	-- an indented block which may have indents and dedents, so long as those indents
 	-- are subordinate to the initial indent
-	subordinate_indent = V "newline" * Cmt(Cb("indent_level") * V "count_tabs",
-	                                       function(body, position, prev_indent,
-	                                                this_indent)
-		return this_indent > prev_indent[#prev_indent]
-	end),
+	subordinate_indent = V "newline"
+		* Cmt(Cb("indent_level") * V "count_tabs", function(body, position, prev_indent, this_indent)
+			return this_indent > prev_indent[#prev_indent]
+		end),
 
 	-- for the time being, accurate recording/reporting of indentation level (indentation level - parent indentation) is unsupported.
 	contiguous_body = (1 - S "\r\n") ^ 0,
-	subordinate_body = C(V "contiguous_body") *
-		(C(V "subordinate_indent" * V "contiguous_body") + (C(V"newline") * S"\t "^0 * #V"newline") ) ^ 0,
-	comment = element("comment", Cg(
-		                  P "#" * lpeg.Cf(V "subordinate_body", string_concat), "val")),
+	subordinate_body = C(V "contiguous_body")
+		* (C(V "subordinate_indent" * V "contiguous_body") + (C(V "newline") * S "\t " ^ 0 * #V "newline")) ^ 0,
+	comment = element("comment", Cg(P "#" * lpeg.Cf(V "subordinate_body", string_concat), "val")),
 	-- TODO automatically convert body to schema bytes variant
-	longstring = element("string", Cg(
-		                     lpeg.Cf((P [[""""]] * V "subordinate_body"),
-		                             string_concat), "val")),
+	longstring = element("string", Cg(lpeg.Cf((P [[""""]] * V "subordinate_body"), string_concat), "val")),
 
 	-- numbers are limited, they are not bignums, they are standard lua numbers. scopes shares the problem of files not having arbitrary precision
 	-- so it probably doesn't matter.
-	number = element("literal", Cg(
-		                 (V "float_special" + V "hex" + V "big_e") / tonumber, "val") *
-		                 V "types"),
-	types = Cg((P ":" *
-		           C(
-			           (S "iu" * (P "8" + P "16" + P "32" + P "64")) +
-				           (P "f" * (P "32" + P "64")))) + P "" / "f64", "literaltype"),
+	number = element("literal", Cg((V "float_special" + V "hex" + V "big_e") / tonumber, "val") * V "types"),
+	types = Cg(
+		(P ":" * C((S "iu" * (P "8" + P "16" + P "32" + P "64")) + (P "f" * (P "32" + P "64")))) + P "" / "f64",
+		"literaltype"
+	),
 	digit = R("09") ^ 1,
 	hex_digit = (V "digit" + R "AF" + R "af") ^ 1,
 	decimal = S "-+" ^ 0 * V "digit" * (P "." * V "digit") ^ 0,
@@ -167,30 +162,31 @@ local grammar = P {
 	backslashes = C(P [[\\]]) / replace_escape,
 	escape = C(P [[\]] * S [[nrt"]]) / replace_escape,
 	unicode_escape = P "\\u" * (V "hex_digit") ^ 4 ^ -4,
-	string_literal = element("literal", Cg(
-		                         Ct(
-			                         (C((1 - S [["\]])) + V "escape" + V "backslashes" +
-				                         V "unicode_escape") ^ 1) / function(chars)
+	string_literal = element(
+		"literal",
+		Cg(Ct((C((1 - S [["\]])) + V "escape" + V "backslashes" + V "unicode_escape") ^ 1) / function(chars)
 			local buffer = {}
 			for _, element in ipairs(chars) do
 				table.insert(buffer, string.byte(element))
 			end
 
 			return buffer
-		end, "val") * Cg(lpeg.Cc"bytes", "literaltype")),
-	string = element("string",
-	                 P "\"" *
-		                 Cg(Ct((V "string_literal" + V "splice") ^ 0), "elements") *
-		                 P "\"" * V "endpos"),
+		end, "val") * Cg(lpeg.Cc "bytes", "literaltype")
+	),
+	string = element("string", P '"' * Cg(Ct((V "string_literal" + V "splice") ^ 0), "elements") * P '"' * V "endpos"),
 
-	tokens = space_tokens(V "comment" + V"function_call" + V "paren_list" + V "string" + V "number" +
-		                      V "symbol" + V "longstring"),
+	tokens = space_tokens(
+		V "comment" + V "function_call" + V "paren_list" + V "string" + V "number" + V "symbol" + V "longstring"
+	),
 	token_spacer = S "\t " ^ 0,
 
 	-- LIST SEPARATOR BEHAVIOR IS NOT CONSISTENT BETWEEN BRACED AND NAKED LISTS
-	base_paren_body = (list(V "tokens" ^ 1 * P ";") -- ; control character splits list-up-to-point into child list
+	base_paren_body = (
+		list(V "tokens" ^ 1 * P ";") -- ; control character splits list-up-to-point into child list
 		+ (P "\\" * V "naked_list") -- \ escape char enters naked list mode from inside a paren list. there's probably an edge case here, indentation is going to be wacky
-		+ V "tokens" + V "wsp"),
+		+ V "tokens"
+		+ V "wsp"
+	),
 
 	-- the internal of a paren should be
 	-- you can have list separators, that put everything before it into it's own sublist
@@ -198,80 +194,83 @@ local grammar = P {
 	-- BUT if there are multiple tokens in a comma slot, the tokens are placed into a sub list.
 	-- backslash escapes into a naked list, at the root indentation level.
 	-- if you have no commas in a list, elements in that list should not be placed into a sublist as if they were the end token.
-	
-	-- breaks paren body into comma sequence, should accept any individual paren_body or comma separated list
-	comma_sep_paren_body =
-		((list(V"base_paren_body"^2) + V"base_paren_body") * V"token_spacer"
-	* P"," * V"token_spacer")^1 * (list(V"base_paren_body"^2) + V"base_paren_body"),
 
-	paren_body = V"comma_sep_paren_body" + V"base_paren_body"^1,
-	paren_list =
-		list(P"(" * V"paren_body" * P")")
-		+ list(
-			element("symbol", Cg(P "[" / "braced_list", "str")) * V"paren_body" * P"]"
-			  )
-		+ list(
-			element("symbol", Cg(P "{" / "curly-list", "str")) * V"paren_body" * P"}"
-			  ),
+	-- breaks paren body into comma sequence, should accept any individual paren_body or comma separated list
+	comma_sep_paren_body = ((list(V "base_paren_body" ^ 2) + V "base_paren_body") * V "token_spacer" * P "," * V "token_spacer")
+			^ 1
+		* (list(V "base_paren_body" ^ 2) + V "base_paren_body"),
+
+	paren_body = V "comma_sep_paren_body" + V "base_paren_body" ^ 1,
+	paren_list = list(P "(" * V "paren_body" * P ")") + list(
+		element("symbol", Cg(P "[" / "braced_list", "str")) * V "paren_body" * P "]"
+	) + list(element("symbol", Cg(P "{" / "curly-list", "str")) * V "paren_body" * P "}"),
 
 	-- subtly different from the base case
 	-- if there's a set of arguments provided that aren't comma separated, they are automatically interpreted as a child list
 	-- the base case will interpret such a thing as part of the normal list
-	function_call = list(
-		V"symbol" * P"(" * (V"comma_sep_paren_body" + V"base_paren_body") * P")"
-	),
+	function_call = list(V "symbol" * P "(" * (V "comma_sep_paren_body" + V "base_paren_body") * P ")"),
 
 	empty_line = V "newline" * space_tokens(P "") * #(V "newline" + -1),
 
-	file = list(((V "tokens" * (V "newline" + -1) * V "isdedent") +
-		            (V "naked_list_line" ^ -1 * V "newline" * V "isdedent") +
-		            (V "naked_list")) ^ 1) * -1,
+	file = list(
+		(
+			(V "tokens" * (V "newline" + -1) * V "isdedent")
+			+ (V "naked_list_line" ^ -1 * V "newline" * V "isdedent")
+			+ (V "naked_list")
+		) ^ 1
+	) * -1,
 
-	naked_list_line = (list(V "tokens" ^ 0 * space_tokens(P ";"))) ^ 1 *
-		V "naked_list" ^ 0,
-	-- escape char terminates current list 
+	naked_list_line = (list(V "tokens" ^ 0 * space_tokens(P ";"))) ^ 1 * V "naked_list" ^ 0,
+	-- escape char terminates current list
 	naked_list = list( -- escape char terminates current list
-	-- TODO: fix this, set up \
-	((V "naked_list_line" + V "tokens" ^ 1) ^ 1) *
-		(V "empty_line" ^ 1 + (V "newline" * V "indent" *
-			(((list(V "tokens" * space_tokens(P ";")) + V "tokens") *
-				((#(V "newline" * V "isdedent") * V "dedent") + (-P(1)))) +
-				(V "naked_list" * V "dedent")))) ^ 0),
+		-- TODO: fix this, set up \
+		((V "naked_list_line" + V "tokens" ^ 1) ^ 1)
+			* (V "empty_line" ^ 1 + (V "newline" * V "indent" * (((list(V "tokens" * space_tokens(P ";")) + V "tokens") * ((#(V "newline" * V "isdedent") * V "dedent") + (-P(
+					1
+				)))) + (V "naked_list" * V "dedent"))))
+				^ 0
+	),
 
-	indent = Cg(Cmt(Cb("indent_level") * V "count_tabs",
-	                function(body, position, prev_indent, this_indent)
-		if this_indent == nil then this_indent = 0 end
+	indent = Cg(
+		Cmt(Cb("indent_level") * V "count_tabs", function(body, position, prev_indent, this_indent)
+			if this_indent == nil then
+				this_indent = 0
+			end
 
-		assert(prev_indent)
-		assert(this_indent)
+			assert(prev_indent)
+			assert(this_indent)
 
-		if this_indent > prev_indent[#prev_indent] then
-			table.insert(prev_indent, this_indent)
+			if this_indent > prev_indent[#prev_indent] then
+				table.insert(prev_indent, this_indent)
 
-			return true, prev_indent
-		else
-			return false
-		end
-	end), "indent_level"),
+				return true, prev_indent
+			else
+				return false
+			end
+		end),
+		"indent_level"
+	),
 
 	-- SIMPLIFYING ASSUMPTIONS:
 	-- I can assume no more than one layer of indent at a time
-	dedent = Cg(Cmt(Cb("indent_level"),
-	                function(body, position, prev_indent, this_indent)
-		table.remove(prev_indent, #prev_indent)
-		return true, prev_indent
-	end), "indent_level"),
+	dedent = Cg(
+		Cmt(Cb("indent_level"), function(body, position, prev_indent, this_indent)
+			table.remove(prev_indent, #prev_indent)
+			return true, prev_indent
+		end),
+		"indent_level"
+	),
 
-	isdedent = Cmt(Cb("indent_level") * V "count_tabs" ^ 0,
-	               function(body, position, prev_indent, this_indent)
-		if this_indent == nil then this_indent = 0 end
+	isdedent = Cmt(Cb("indent_level") * V "count_tabs" ^ 0, function(body, position, prev_indent, this_indent)
+		if this_indent == nil then
+			this_indent = 0
+		end
 
 		assert(prev_indent)
 		assert(this_indent)
 
 		return this_indent <= prev_indent[#prev_indent]
-	end)
-
+	end),
 }
 
 local function parse(input, filename)
@@ -279,4 +278,4 @@ local function parse(input, filename)
 	return lpeg.match(grammar, input, 1, filename)
 end
 
-return {parse = parse}
+return { parse = parse }
