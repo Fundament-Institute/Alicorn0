@@ -199,6 +199,7 @@ runtime_context_mt = {
 			return self.bindings:get(index)
 		end,
 		append = function(self, value)
+			-- TODO: typecheck
 			local copy = { bindings = self.bindings:append(value) }
 			return setmetatable(copy, runtime_context_mt)
 		end,
@@ -225,6 +226,10 @@ typechecking_context_mt = {
 			return self.runtime_context
 		end,
 		append = function(self, name, type, val) -- value is optional
+			-- TODO: typecheck
+			if name == nil or type == nil then
+				error("bug!!!")
+			end
 			local copy = {
 				bindings = self.bindings:append({ name = name, type = type }),
 				runtime_context = self.runtime_context:append(
@@ -285,6 +290,7 @@ checkable_term:define_enum("checkable", {
 		"body",
 		checkable_term,
 	} },
+	-- TODO: enum_cons
 })
 -- inferrable terms can have their type inferred / don't need a target type
 inferrable_term:define_enum("inferrable", {
@@ -352,6 +358,27 @@ inferrable_term:define_enum("inferrable", {
 			inferrable_term,
 		},
 	},
+	{ "enum_cons", {
+		"enum_type",
+		value,
+		"constructor",
+		gen.builtin_string,
+		"arg",
+		inferrable_term,
+	} },
+	{ "enum_elim", {
+		"subject",
+		inferrable_term,
+		"mechanism",
+		inferrable_term,
+	} },
+	{ "object_cons", { "methods", map(gen.builtin_string, inferrable_term) } },
+	{ "object_elim", {
+		"subject",
+		inferrable_term,
+		"mechanism",
+		inferrable_term,
+	} },
 	{ "let", {
 		"name",
 		gen.builtin_string,
@@ -497,22 +524,22 @@ typed_term:define_enum("typed", {
 		},
 	},
 	--TODO record elim
-	{ "data_cons", {
+	{ "enum_cons", {
 		"constructor",
 		gen.builtin_string,
 		"arg",
 		typed_term,
 	} },
-	{ "data_elim", {
+	{ "enum_elim", {
 		"subject",
 		typed_term,
-		"body",
+		"mechanism",
 		typed_term,
 	} },
-	{ "data_rec_elim", {
+	{ "enum_rec_elim", {
 		"subject",
 		typed_term,
-		"body",
+		"mechanism",
 		typed_term,
 	} },
 	{ "object_cons", { "methods", map(gen.builtin_string, typed_term) } },
@@ -520,7 +547,7 @@ typed_term:define_enum("typed", {
 	{ "object_elim", {
 		"subject",
 		typed_term,
-		"body",
+		"mechanism",
 		typed_term,
 	} },
 	{ "operative_cons", { "userdata", typed_term } },
@@ -680,13 +707,13 @@ value:define_enum("value", {
 	-- ordinary data
 	{ "tuple_value", { "elements", array(value) } },
 	{ "tuple_type", { "decls", value } },
-	{ "data_value", {
+	{ "enum_value", {
 		"constructor",
 		gen.builtin_string,
 		"arg",
 		value,
 	} },
-	{ "data_type", { "decls", value } },
+	{ "enum_type", { "decls", value } },
 	{ "record_value", { "fields", map(gen.builtin_string, value) } },
 	{ "record_type", { "decls", value } },
 	{ "record_extend_stuck", {
@@ -695,7 +722,12 @@ value:define_enum("value", {
 		"extension",
 		map(gen.builtin_string, value),
 	} },
-	{ "object_value", { "methods", map(gen.builtin_string, value) } },
+	{ "object_value", {
+		"methods",
+		map(gen.builtin_string, typed_term),
+		"capture",
+		runtime_context_type,
+	} },
 	{ "object_type", { "decls", value } },
 	{ "level_type" },
 	{ "number_type" },
@@ -750,20 +782,20 @@ neutral_value:define_enum("neutral_value", {
 		"arg",
 		value,
 	} },
-	{ "data_elim_stuck", {
-		"handler",
+	{ "enum_elim_stuck", {
+		"mechanism",
 		value,
 		"subject",
 		neutral_value,
 	} },
-	{ "data_rec_elim_stuck", {
+	{ "enum_rec_elim_stuck", {
 		"handler",
 		value,
 		"subject",
 		neutral_value,
 	} },
 	{ "object_elim_stuck", {
-		"method",
+		"mechanism",
 		value,
 		"subject",
 		neutral_value,
@@ -825,9 +857,9 @@ local function tup_val(...)
 	return value.tuple_value(array(value)(...))
 end
 local function cons(...)
-	return value.data_value("cons", tup_val(...))
+	return value.enum_value("cons", tup_val(...))
 end
-local empty = value.data_value("empty", tup_val())
+local empty = value.enum_value("empty", tup_val())
 local unit_type = value.tuple_type(empty)
 local unit_val = tup_val()
 

@@ -176,6 +176,19 @@ local map_methods = {
 	pairs = function(self)
 		return pairs(self.__map)
 	end,
+	pretty_print = function(self, prefix)
+		local np = prefix .. " "
+		local parts = {}
+		local i = 1
+		for k, v in pairs(self.__map) do
+			local function pp(x, p)
+				return ((type(x) == "table" and x.pretty_print) or tostring)(x, p)
+			end
+			parts[i] = string.format("%s = %s", pp(k, prefix), pp(v, np))
+			i = i + 1
+		end
+		return string.format("[\n" .. np .. "%s\n" .. prefix .. "]", table.concat(parts, ",\n" .. np))
+	end,
 }
 
 local function gen_map_fns(key_type, value_type)
@@ -374,16 +387,6 @@ local function gen_builtin(typename)
 	return define_foreign({}, function(val)
 		return type(val) == typename
 	end)
-end
-
-local function memoize(fn)
-	local results = {}
-	return function(arg)
-		if not results[arg] then
-			results[arg] = fn(arg)
-		end
-		return results[arg]
-	end
 end
 
 return {

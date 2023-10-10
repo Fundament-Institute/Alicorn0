@@ -9,6 +9,7 @@ local value = terms.value
 local gen = require "./terms-generators"
 local map = gen.declare_map
 local string_inferrable_map = map(gen.builtin_string, inferrable_term)
+local string_typed_map = map(gen.builtin_string, typed_term)
 local array = gen.declare_array
 local inferrable_array = array(inferrable_term)
 local typed_array = array(typed_term)
@@ -23,9 +24,9 @@ local function tup_val(...)
 	return value.tuple_value(value_array(...))
 end
 local function cons(...)
-	return value.data_value("cons", tup_val(...))
+	return value.enum_value("cons", tup_val(...))
 end
-local empty = value.data_value("empty", tup_val())
+local empty = value.enum_value("empty", tup_val())
 
 local eval = require "./evaluator"
 local const_combinator = eval.const_combinator
@@ -220,8 +221,8 @@ local apply_mogrify_with_621_420 = inf_app(inf_mogrify, tuple_of_621_420)
 infer_and_eval("apply_mogrify_with_621_420", apply_mogrify_with_621_420)
 
 print("PART SEVEN!!!!!!!!")
-local function inf_rec(map_desc)
-	local map = string_inferrable_map()
+local function desc2map(t, map_desc)
+	local map = t()
 	local odd = true
 	local key
 	for _, v in ipairs(map_desc) do
@@ -232,6 +233,10 @@ local function inf_rec(map_desc)
 		end
 		odd = not odd
 	end
+	return map
+end
+local function inf_rec(map_desc)
+	local map = desc2map(string_inferrable_map, map_desc)
 	return inferrable_term.record_cons(map)
 end
 local inf_recelim = inferrable_term.record_elim
@@ -251,3 +256,23 @@ local megamogrify = inf_tupelim(
 	record_conv
 )
 infer_and_eval("megamogrify", megamogrify)
+
+print("PART EIGHT!!!!!!!!")
+
+local enum_foo_prim_69 = typed_term.enum_cons("foo", p69)
+local prim_add_1 = prim_f(function(x)
+	return x + 1
+end)
+local prim_subtract_1 = prim_f(function(x)
+	return x - 1
+end)
+local primtupify = lam(app(var(2), prim_tup(var(1))))
+local untupify = var(1)
+local add_1 = app(primtupify, prim_add_1)
+local subtract_1 = app(primtupify, prim_subtract_1)
+local obj_foo_bar = typed_term.object_cons(desc2map(string_typed_map, { "foo", add_1, "bar", subtract_1 }))
+local typed_enum_elim = typed_term.tuple_elim(typed_term.enum_elim(enum_foo_prim_69, obj_foo_bar), 1, untupify)
+eval_test("typed_enum_elim", typed_enum_elim)
+
+local typed_object_elim = typed_term.tuple_elim(typed_term.object_elim(obj_foo_bar, enum_foo_prim_69), 1, untupify)
+eval_test("typed_object_elim", typed_object_elim)

@@ -52,9 +52,9 @@ local function tup_val(...)
 	return value.tuple_value(value_array(...))
 end
 local function cons(...)
-	return value.data_value("cons", tup_val(...))
+	return value.enum_value("cons", tup_val(...))
 end
-local empty = value.data_value("empty", tup_val())
+local empty = value.enum_value("empty", tup_val())
 
 local evaluator = require "./evaluator"
 local const_combinator = evaluator.const_combinator
@@ -172,10 +172,10 @@ local function inferred_expression_pairhandler(env, a, b)
 		local operative_result_val = evaluator.apply_value(handler, terms.value.prim_tuple_value(tuple_args))
 		-- result should be able to be an inferred term, can fail
 		-- NYI: operative_cons in evaluator must use Maybe type once it exists
-		-- if not operative_result_val:is_data_value() then
+		-- if not operative_result_val:is_enum_value() then
 		-- 	p(operative_result_val.kind)
 		-- 	print(operative_result_val:pretty_print())
-		-- 	return false, "applying operative did not result in value term with kind data_value, typechecker or lua operative mistake when applying " .. tostring(a.anchor) .. " to the args " .. tostring(b.anchor)
+		-- 	return false, "applying operative did not result in value term with kind enum_value, typechecker or lua operative mistake when applying " .. tostring(a.anchor) .. " to the args " .. tostring(b.anchor)
 		-- end
 		-- variants: ok, error
 		if operative_result_val.variant == "error" then

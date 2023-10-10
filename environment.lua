@@ -94,8 +94,7 @@ environment_mt = {
 				end
 
 				for i, v in ipairs(names) do
-					local constructor, arg = decls:unwrap_data_value()
-
+					local constructor, arg = decls:unwrap_enum_value()
 					if constructor ~= "cons" then
 						error("todo: this error message")
 					end

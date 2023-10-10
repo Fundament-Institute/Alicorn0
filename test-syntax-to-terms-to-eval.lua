@@ -39,10 +39,10 @@ local function tup_val(...)
 	return terms.value.tuple_value(value_array(...))
 end
 local function cons(...)
-	return terms.value.data_value("cons", tup_val(...))
+	return terms.value.enum_value("cons", tup_val(...))
 end
 p("tup_val!", tup_val())
-local empty = terms.value.data_value("empty", tup_val())
+local empty = terms.value.enum_value("empty", tup_val())
 
 local t_prim_num = terms.value.prim_number_type
 local two_tuple_decl = unrestricted(
