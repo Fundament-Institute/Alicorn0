@@ -43,6 +43,13 @@
             ${pkgs.lib.getExe pkgs-unstable.stylua} . -c
           '';
         };
+        formatter = pkgs.writeShellApplication {
+          name = "run-stylua";
+          runtimeInputs = [ pkgs-unstable.stylua ];
+          text = ''
+            stylua .
+          '';
+        };
         devShells = rec {
           alicorn = pkgs.mkShell {
             buildInputs = [
