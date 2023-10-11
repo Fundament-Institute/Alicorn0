@@ -43,11 +43,18 @@
             ${pkgs.lib.getExe pkgs-unstable.stylua} . -c
           '';
         };
+        # nix fmt's docs say this should only be for *.nix files but we're ignoring that as that's inconvenient
+        # See https://github.com/NixOS/nix/issues/9132#issuecomment-1754999829
         formatter = pkgs.writeShellApplication {
-          name = "run-stylua";
-          runtimeInputs = [ pkgs-unstable.stylua ];
+          name = "run-formatters";
+          runtimeInputs = [
+            pkgs-unstable.stylua
+            pkgs.nixpkgs-fmt
+          ];
           text = ''
-            stylua .
+            set -xeu
+            nixpkgs-fmt "$@"
+            stylua "$@"
           '';
         };
         devShells = rec {
