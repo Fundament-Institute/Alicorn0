@@ -1,6 +1,6 @@
 local lpeg = require "lpeg"
-local P, C, Cg, Cc, Cmt, Ct, Cb, Cp, Cf, S, V, R =
-	lpeg.P, lpeg.C, lpeg.Cg, lpeg.Cc, lpeg.Cmt, lpeg.Ct, lpeg.Cb, lpeg.Cp, lpeg.Cf, lpeg.S, lpeg.V, lpeg.R
+local P, C, Cg, Cc, Cmt, Ct, Cb, Cp, Cf, Cs, S, V, R =
+	lpeg.P, lpeg.C, lpeg.Cg, lpeg.Cc, lpeg.Cmt, lpeg.Ct, lpeg.Cb, lpeg.Cp, lpeg.Cf, lpeg.Cs, lpeg.S, lpeg.V, lpeg.R
 
 -- SLN
 -- expressions, atoms, lists
@@ -8,6 +8,16 @@ local P, C, Cg, Cc, Cmt, Ct, Cb, Cp, Cf, S, V, R =
 -- a python SLN parser: https://github.com/salotz/python-sln/blob/master/src/sln/parser.py
 
 local anchor_mt = {
+
+	__lt = function(fst, snd)
+		return snd.line > fst.line or (snd.line == fst.line and snd.char > fst.char)
+	end,
+	__le = function(fst, snd)
+		return fst < snd or fst == snd
+	end,
+	__eq = function(fst, snd)
+		return (snd.line == fst.line and snd.char == fst.char)
+	end,
 	__tostring = function(self)
 		return "in file " .. self.sourceid .. ", line " .. self.line .. " character " .. self.char
 	end,
@@ -17,37 +27,60 @@ local function element(kind, pattern)
 	return Ct(V "anchor" * Cg(Cc(kind), "kind") * pattern)
 end
 
+local function symbol(value)
+	return element("symbol", Cg(value, "str"))
+end
+
 local function space_tokens(pattern)
 	local token_spacer = S "\t " ^ 0
 	return pattern * token_spacer
 end
 
+local function thread_newline(pattern, func)
+	local list = Cg(Ct(pattern * Cg(Cb("newline_pos"), "newline_pos")), "temp")
+		-- these are Cmts for perf reasons
+		* Cmt(Cb("temp"), function(_, _, value)
+			return true, func(value)
+		end)
+		* Cg(
+			Cmt(Cb("temp"), function(_, _, temp)
+				return true, temp["newline_pos"]
+			end),
+			"newline_pos"
+		)
+		* Cg(Cc(nil), "temp")
+
+	return list
+end
+
 local function list(pattern)
-	return element("list", Cg(Ct(space_tokens(pattern)), "elements") * V "endpos")
+	return thread_newline(V "anchor" * space_tokens(pattern) * V "endpos", function(elements)
+		return {
+			kind = "list",
+			elements = elements,
+			anchor = elements.anchor,
+			endpos = elements.endpos,
+		}
+	end)
 end
 
-local function replace_escape(data)
-	if data == [[\\]] then
-		return [[\]]
-	elseif data == [[\"]] then
-		return [["]]
-	elseif data == [[\n]] then
-		return "\n"
-	elseif data == [[\r]] then
-		return "\r"
-	elseif data == [[\t]] then
-		return "\t"
-	end
-end
+local function create_literal(elements)
+	local val = {}
 
-local function string_concat(a, b)
-	if a and not b then
-		return a
-	elseif b and not a then
-		return b
-	else
-		return a .. b
+	for _, v in ipairs(elements) do
+		for char in v:gmatch "." do
+			table.insert(val, string.byte(char))
+		end
 	end
+
+	local longstring_val = {
+		anchor = elements.anchor,
+		kind = "literal",
+		literaltype = "bytes",
+		val = val,
+	}
+
+	return longstring_val
 end
 
 local grammar = P {
@@ -61,13 +94,14 @@ local grammar = P {
 	foreward = Cg(P "" / function(_)
 		return { 0 }
 	end, "indent_level") * Cg(P "" / function()
-		return { line_num = 1, line_pos = 0 }
+		return { line_num = 1, line_pos = 1 }
 	end, "newline_pos"),
 
 	-- every time there's a newline, get it's position. construct a named group with the position
 	-- of the latest (numbered) newline
-	newline = Cg(
-		Cmt(Cb("newline_pos") * P "\r" ^ 0 * P "\n" * Cp(), function(body, position, prev_pos)
+	-- Cmt because of precedence requirements
+	newline = P "\r" ^ 0 * P "\n" * Cg(
+		Cmt(Cb("newline_pos") * Cp(), function(_, position, prev_pos)
 			local construct = { line_num = prev_pos["line_num"] + 1, line_pos = position }
 			return true, construct
 		end),
@@ -76,24 +110,24 @@ local grammar = P {
 
 	-- either match the newline or match the beginning of the file
 	filestart = Cg(
-		Cmt(Cp(), function(body, position, mypos)
-			if mypos == 1 then
-				return mypos == 1, { line_num = 0, line_pos = 0 }
-			else
-				return mypos == 1
-			end
+		Cmt(Cp(), function(_, _, mypos)
+			return mypos == 1, { line_num = 1, line_pos = 1 }
 		end),
 		"newline_pos"
 	),
 
 	-- every time there's a newline, get it's position, and construct a named group
 	-- subtract the position of the newline and use it as a comparison point
-	textpos = Cp() * Cb("newline_pos") * lpeg.Carg(1) / function(new_pos, old_pos, filename)
+	-- complication: we have to get the most recent newline_pos. this includes nested inner values
+	-- lpeg doesn't have a mechanism natively to support this so we have to pass it up whenever we do this
+	-- and extract it here
+	textpos = Cp() * Cb("newline_pos") * lpeg.Carg(1) / function(current_pos, newline_pos, filename)
 		local anchor = {
 			sourceid = filename,
-			line = old_pos["line_num"],
-			char = new_pos - old_pos["line_pos"],
+			line = newline_pos["line_num"],
+			char = current_pos - newline_pos["line_pos"] + 1, -- obey 1-indexing
 		}
+
 		setmetatable(anchor, anchor_mt)
 
 		return anchor
@@ -104,7 +138,7 @@ local grammar = P {
 	anchor = Cg(V "textpos", "anchor"),
 	endpos = Cg(V "textpos", "endpos"),
 
-	count_tabs = Cmt(V "textpos" * C(S "\t " ^ 1), function(body, position, anchor, indentstring)
+	count_tabs = Cmt(V "textpos" * C(S "\t " ^ 1), function(_, _, anchor, indentstring)
 		-- only tabs are allowed
 		-- tabs and spaces must not be interleaved - tabs must happen before spaces.
 		-- TODO: make nice errors in here
@@ -128,18 +162,56 @@ local grammar = P {
 
 	-- an indented block which may have indents and dedents, so long as those indents
 	-- are subordinate to the initial indent
-	subordinate_indent = V "newline"
-		* Cmt(Cb("indent_level") * V "count_tabs", function(body, position, prev_indent, this_indent)
-			return this_indent > prev_indent[#prev_indent]
-		end),
+	subordinate_indent = Cmt(Cb("indent_level") * V "count_tabs", function(_, _, prev_indent, this_indent)
+		local norm_tab_level = this_indent - (prev_indent[#prev_indent] + 1)
+		local norm_tabs = string.rep("\t", norm_tab_level)
 
-	-- for the time being, accurate recording/reporting of indentation level (indentation level - parent indentation) is unsupported.
-	contiguous_body = (1 - S "\r\n") ^ 0,
-	subordinate_body = C(V "contiguous_body")
-		* (C(V "subordinate_indent" * V "contiguous_body") + (C(V "newline") * S "\t " ^ 0 * #V "newline")) ^ 0,
-	comment = element("comment", Cg(P "#" * lpeg.Cf(V "subordinate_body", string_concat), "val")),
-	-- TODO automatically convert body to schema bytes variant
-	longstring = element("string", Cg(lpeg.Cf((P [[""""]] * V "subordinate_body"), string_concat), "elements")),
+		return this_indent > prev_indent[#prev_indent], norm_tabs
+	end),
+
+	longstring_body = C((V "unicode_escape" + (1 - (V "newline" + V "splice"))) ^ 1),
+	longstring_newline = (
+		(V "newline" * Cc("\n") * ((Cs(V "subordinate_indent") * V "longstring_body") + (S "\t " ^ 0 * #V "newline")))
+		+ V "longstring_body"
+	),
+	longstring_literal = thread_newline(
+		V "anchor" * (V "longstring_body" + V "longstring_newline") ^ 1,
+		create_literal
+	),
+
+	longstring = thread_newline(
+		V "anchor" * P '""""' * (V "longstring_literal" + V "splice") ^ 0 * V "endpos",
+		function(elements)
+			assert(elements)
+			return {
+				anchor = elements.anchor,
+				endpos = elements.endpos,
+				kind = "string",
+				elements = elements,
+			}
+		end
+	),
+
+	comment_body = C((1 - V "newline") ^ 1),
+	comment = thread_newline(
+		V "anchor"
+			* P "#"
+			* V "comment_body" ^ -1
+			* (V "newline" * Cc("\n") * ((Cs(V "subordinate_indent") * V "comment_body") + (S "\t " ^ 0 * #V "newline")))
+				^ 0,
+		function(elements)
+			local val = ""
+
+			for _, v in ipairs(elements) do
+				val = val .. v
+			end
+			return {
+				anchor = elements.anchor,
+				kind = "comment",
+				val = val,
+			}
+		end
+	),
 
 	-- numbers are limited, they are not bignums, they are standard lua numbers. scopes shares the problem of files not having arbitrary precision
 	-- so it probably doesn't matter.
@@ -150,30 +222,31 @@ local grammar = P {
 	),
 	digit = R("09") ^ 1,
 	hex_digit = (V "digit" + R "AF" + R "af") ^ 1,
-	decimal = S "-+" ^ 0 * V "digit" * (P "." * V "digit") ^ 0,
-	hex = S "+-" ^ 0 * P "0x" * V "hex_digit" * (P "." * V "hex_digit") ^ 0,
-	big_e = V "decimal" * (P "e" * V "decimal") ^ 0,
+	decimal = S "-+" ^ -1 * V "digit" * (P "." * V "digit") ^ -1,
+	hex = S "+-" ^ -1 * P "0x" * V "hex_digit" * (P "." * V "hex_digit") ^ -1,
+	big_e = V "decimal" * (P "e" * V "decimal") ^ -1,
 	float_special = P "+inf" + P "-inf" + P "nan",
 
-	symbol = element("symbol", Cg((1 - (S "#;()[]{}," + V "wsp")) ^ 1, "str")),
+	symbol = symbol((1 - (S "#;()[]{}," + V "wsp")) ^ 1),
 
 	-- probably works but it doesn't have complex tests
 	splice = P "${" * V "naked_list" * P "}",
-	backslashes = C(P [[\\]]) / replace_escape,
-	escape = C(P [[\]] * S [[nrt"]]) / replace_escape,
+	escape_chars = Cs(P [[\\]] / [[\]] + P [[\"]] / [["]] + P [[\n]] / "\n" + P [[\r]] / "\r" + P [[\t]] / "\t"),
 	unicode_escape = P "\\u" * (V "hex_digit") ^ 4 ^ -4,
-	string_literal = element(
-		"literal",
-		Cg(Ct((C((1 - S [["\]])) + V "escape" + V "backslashes" + V "unicode_escape") ^ 1) / function(chars)
-			local buffer = {}
-			for _, element in ipairs(chars) do
-				table.insert(buffer, string.byte(element))
-			end
 
-			return buffer
-		end, "val") * Cg(lpeg.Cc "bytes", "literaltype")
+	-- for now, longstrings are not going to automatically translate \n into the escape character
+	string_literal = Ct(
+		V "anchor" * (V "escape_chars" + V "unicode_escape" + C(1 - (S [["\]] + V "newline" + V "splice"))) ^ 1
+	) / create_literal,
+
+	-- this doesn't work yet
+	string = thread_newline(
+		V "anchor" * P '"' * (V "string_literal" + V "splice") ^ 0 * P '"' * V "endpos",
+		function(elements)
+			assert(elements)
+			return { anchor = elements.anchor, endpos = elements.endpos, elements = elements, kind = "string" }
+		end
 	),
-	string = element("string", P '"' * Cg(Ct((V "string_literal" + V "splice") ^ 0), "elements") * P '"' * V "endpos"),
 
 	tokens = space_tokens(
 		V "comment" + V "function_call" + V "paren_list" + V "longstring" + V "string" + V "number" + V "symbol"
@@ -181,12 +254,14 @@ local grammar = P {
 	token_spacer = S "\t " ^ 0,
 
 	-- LIST SEPARATOR BEHAVIOR IS NOT CONSISTENT BETWEEN BRACED AND NAKED LISTS
-	base_paren_body = (
-		list(V "tokens" ^ 1 * P ";") -- ; control character splits list-up-to-point into child list
-		+ (P "\\" * V "naked_list") -- \ escape char enters naked list mode from inside a paren list. there's probably an edge case here, indentation is going to be wacky
+	permitted_paren_tokens = (
+		(P "\\" * V "naked_list") -- \ escape char enters naked list mode from inside a paren list. there's probably an edge case here, indentation is going to be wacky
 		+ V "tokens"
-		+ V "wsp"
+		+ V "newline"
+		+ S "\t " ^ 1
 	),
+	base_paren_body = list(V "permitted_paren_tokens" ^ 1 * P ";") -- ; control character splits list-up-to-point into child list
+		+ V "permitted_paren_tokens",
 
 	-- the internal of a paren should be
 	-- you can have list separators, that put everything before it into it's own sublist
@@ -200,10 +275,19 @@ local grammar = P {
 			^ 1
 		* (list(V "base_paren_body" ^ 2) + V "base_paren_body"),
 
+	match_paren_open = Cg(C(P "("), "bracetype")
+		+ (Cg(C(P "["), "bracetype") * symbol(Cc("braced_list")))
+		+ (Cg(C(P "{"), "bracetype") * symbol(Cc("curly-list"))),
+	match_paren_close = Cmt(Cb("bracetype") * C(S "])}"), function(_, _, bracetype, brace)
+		local matches = {
+			["("] = ")",
+			["["] = "]",
+			["{"] = "}",
+		}
+		return matches[bracetype] == brace
+	end),
 	paren_body = V "comma_sep_paren_body" + V "base_paren_body" ^ 1,
-	paren_list = list(P "(" * V "paren_body" * P ")") + list(
-		element("symbol", Cg(P "[" / "braced_list", "str")) * V "paren_body" * P "]"
-	) + list(element("symbol", Cg(P "{" / "curly-list", "str")) * V "paren_body" * P "}"),
+	paren_list = list(V "match_paren_open" * V "paren_body" ^ 0 * V "match_paren_close"),
 
 	-- subtly different from the base case
 	-- if there's a set of arguments provided that aren't comma separated, they are automatically interpreted as a child list
