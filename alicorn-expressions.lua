@@ -190,7 +190,7 @@ local function inferred_expression_pairhandler(env, a, b)
 		if not inferrable_term.value_check(data) then
 			error "tried to handle something that was not an inferrable term"
 		end
-		p("Inferring!", data.kind, env.typechecking_context)
+		--p("Inferring!", data.kind, env.typechecking_context)
 
 		local resulting_type, usage_counts, term = infer(data, env.typechecking_context)
 

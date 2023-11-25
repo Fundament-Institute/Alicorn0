@@ -569,6 +569,10 @@ local function make_inner_context(decls, tupletypes, make_prefix)
 end
 
 local function infer_tuple_type(subject_type, subject_value)
+	if not subject_type:is_qtype() then
+		print("missing qtype wrapping tuple type")
+		print(subject_type:pretty_print())
+	end
 	-- define how the type of each tuple element should be evaluated
 	local qty, base = subject_type:unwrap_qtype()
 	local decls, make_prefix = make_tuple_prefix(base, subject_value)
@@ -577,6 +581,7 @@ local function infer_tuple_type(subject_type, subject_value)
 	return inner_context, n_elements
 end
 
+---@return unknown, unknown, unknow
 function infer(
 	inferrable_term, -- constructed from inferrable
 	typechecking_context -- todo
@@ -609,7 +614,7 @@ function infer(
 		-- TODO: also handle neutral values, for inference of qtype
 		local param_quantity, param_type = param_value:unwrap_qtype()
 		local param_quantity = param_quantity:unwrap_quantity()
-		local inner_context = typechecking_context:append(param_name, param_type)
+		local inner_context = typechecking_context:append(param_name, param_value)
 		local body_type, body_usages, body_term = infer(body, inner_context)
 		local result_type = substitute_type_variables(body_type, #inner_context, 0)
 		local body_usages_param = body_usages[#body_usages]
@@ -640,6 +645,9 @@ function infer(
 		add_arrays(qtype_usages, type_usages)
 		local qtype = typed_term.qtype(quantity_term, type_term)
 		local qtype_type = value.qtype_type(get_level(type_type))
+		-- print("inferring a qtype")
+		-- print(inferrable_term:pretty_print())
+		-- print(qtype:pretty_print())
 		return qtype_type, qtype_usages, qtype
 	elseif inferrable_term:is_pi() then
 		error("infer: nyi")
@@ -752,8 +760,7 @@ function infer(
 		if definition_type ~= terms.value.tuple_defn_type then
 			error "argument to tuple_type is not a tuple_defn"
 		end
-		return unrestricted(terms.value.star(0)), definition_usages,
-			unrestricted_typed(terms.typed_term.tuple_type(definition_term))
+		return unrestricted(terms.value.star(0)), definition_usages, terms.typed_term.tuple_type(definition_term)
 	elseif inferrable_term:is_record_cons() then
 		local fields = inferrable_term:unwrap_record_cons()
 		-- type_data is either "empty", an empty tuple,
@@ -1013,12 +1020,20 @@ function infer(
 	elseif inferrable_term:is_level_max() then
 		local arg_type_a, arg_term_a = infer(inferrable_term.level_a, typechecking_context)
 		local arg_type_b, arg_term_b = infer(inferrable_term.level_b, typechecking_context)
-		return value.level_type, typed_term.level_max(arg_term_a, arg_term_b)
+		return value.level_type, usage_array(), typed_term.level_max(arg_term_a, arg_term_b)
 	elseif inferrable_term:is_level_suc() then
-		local arg_type, arg_term = infer(inferrable_term.previous_level, typechecking_context)
-		return value.level_type, typed_term.level_suc(arg_term)
+		local arg_type, arg_usages, arg_term = infer(inferrable_term.previous_level, typechecking_context)
+		return value.level_type, usage_array(), typed_term.level_suc(arg_term)
 	elseif inferrable_term:is_level0() then
-		return value.level_type, typed_term.level0
+		return value.level_type, usage_array(), typed_term.level0
+	elseif inferrable_term:is_prim_function_type() then
+		local args, returns = inferrable_term:unwrap_prim_function_type()
+		local arg_type, arg_usages, arg_term = infer(args, typechecking_context)
+		local return_type, return_usages, return_term = infer(args, typechecking_context)
+		local res_usages = usage_array()
+		add_arrays(res_usages, arg_usages)
+		add_arrays(res_usages, return_usages)
+		return value.prim_type_type, res_usages, typed_term.prim_function_type(arg_term, return_term)
 	else
 		error("infer: unknown kind: " .. inferrable_term.kind)
 	end
@@ -1297,6 +1312,11 @@ function evaluate(typed_term, runtime_context)
 		else
 			error "Tried to load an intrinsic with something that isn't a string"
 		end
+	elseif typed_term:is_prim_function_type() then
+		local args, returns = typed_term:unwrap_prim_function_type()
+		local args_val = evaluate(args, runtime_context)
+		local returns_val = evaluate(returns, runtime_context)
+		return value.prim_function_type(args_val, returns_val)
 	elseif typed_term:is_level0() then
 		return value.level(0)
 	elseif typed_term:is_level_suc() then

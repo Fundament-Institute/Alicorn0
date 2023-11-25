@@ -70,7 +70,7 @@ environment_mt = {
 			elseif binding:is_tuple_elim() then
 				local names, subject = binding:unwrap_tuple_elim()
 				local subject_type, subject_usages, subject_term = infer(subject, self.typechecking_context)
-				local subject_qty, subject_type = subject_type:unwrap_qtype()
+				--local subject_qty, subject_type = subject_type:unwrap_qtype()
 				--DEBUG:
 				if subject_type:is_enum_value() then print "bad subject infer" ; print(subject:pretty_print()) end
 

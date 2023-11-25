@@ -111,14 +111,14 @@ local function intrinsic(syntax, env)
 		return ok, str_env
 	end
 	env = str_env.env
-	local str = str_env.val
+	local str = terms.checkable_term.inferrable(str_env.val) -- workaround for not having exprs.checked_expression yet
 	local ok, type, env = syntax:match({
 		metalang.listmatch(metalang.accept_handler, exprs.inferred_expression(metalang.accept_handler, env)),
 	}, metalang.failure_handler, nil)
 	if not ok then
 		return ok, type
 	end
-	return true, terms.inferrable_term.prim_intrinsic(str, type), env
+	return true, terms.inferrable_term.prim_intrinsic(str, terms.checkable_term.inferrable(type)), env
 end
 
 local basic_fn_kind = {
@@ -277,15 +277,17 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	end
 	local empty = terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "empty", tup_cons())
 	local args = empty
+
+	local unrestricted_term = terms.inferrable_term.typed(
+		terms.value.quantity_type,
+		usage_array(),
+		terms.typed_term.literal(
+			terms.value.quantity(terms.quantity.unrestricted)))
 	
 	local function build_type_term(args)
 		return
 			terms.inferrable_term.qtype(
-				terms.inferrable_term.typed(
-					terms.value.quantity_type,
-					usage_array(),
-					terms.typed_term.literal(
-						terms.value.quantity(terms.quantity.unrestricted))),
+				unrestricted_term,
 				terms.inferrable_term.tuple_type(args)
 			)
 	end
@@ -309,6 +311,9 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 		--p(env)
 		print(env.get)
 		print(env.enter_block)
+
+		print "args in loop is"
+		print(args:pretty_print())
 
 		ok, continue, name, type_val, type_env = head:match({
 			metalang.symbol_exact(function()
@@ -339,7 +344,8 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	ok, continue = true, true
 	local shadowed, env = env:enter_block()
 	env = env:bind_local(terms.binding.annotated_lambda("#arg", build_type_term(args)))
-	env = env:bind_local(terms.binding.tuple_elim(names, build_type_term(args)))
+	local ok, arg = env:get("#arg")
+	env = env:bind_local(terms.binding.tuple_elim(names, arg))
 	names = gen.declare_array(gen.builtin_string)()
 	local results = empty
 	while ok and continue do
@@ -366,24 +372,26 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 			names:append(name)
 		end
 
+		if not ok then
+			return false, continue
+		end
+
 		syntax = tail
 	end
-	if not ok then
-		return false, continue
-	end
 
-	local fn_type_term = terms.value.qtype(terms.quantity.unrestricted, terms.value.prim_function_type(args, results))
-	
+	local fn_type_term = terms.inferrable_term.qtype(unrestricted_term, terms.inferrable_term.prim_function_type(args, results))
+	print("reached end of function type construction")
 	return true, fn_type_term, env
 end, "prim_func_type_impl")
 
 -- TODO: abstract so can reuse for func type and prim func type
 local function prim_func_type_impl(syntax, env)
 	print("in prim_func_type_impl")
-	local result =
+	local ok, fn_type_term, env =
 		syntax:match({ prim_func_type_impl_reducer(metalang.accept_handler, env) }, metalang.failure_handler, env)
-	p(result)
-	error "NYI"
+	print("finished matching prim_func_type_impl")
+	if not ok then return ok, fn_type_term end
+	return ok, fn_type_term, env
 	-- parse sequence of ascribed names, arrow, then sequence of ascribed names
 	-- for each ascribed name:
 	-- enter a block, perform lambda binding, perform tuple destrucutring binding, parse out the type of the ascription
