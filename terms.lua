@@ -346,6 +346,7 @@ inferrable_term:define_enum("inferrable", {
 		"body",
 		inferrable_term,
 	} },
+	{ "tuple_type", {"definition", inferrable_term} },
 	{ "record_cons", { "fields", map(gen.builtin_string, inferrable_term) } },
 	{
 		"record_elim",
@@ -372,6 +373,7 @@ inferrable_term:define_enum("inferrable", {
 		"mechanism",
 		inferrable_term,
 	} },
+	{ "enum_type", {"definition", inferrable_term} },
 	{ "object_cons", { "methods", map(gen.builtin_string, inferrable_term) } },
 	{ "object_elim", {
 		"subject",
@@ -505,6 +507,7 @@ typed_term:define_enum("typed", {
 		"body",
 		typed_term,
 	} },
+	{ "tuple_type", { "definition", typed_term }},
 	{ "record_cons", { "fields", map(gen.builtin_string, typed_term) } },
 	{ "record_extend", {
 		"base",
@@ -707,6 +710,7 @@ value:define_enum("value", {
 	-- ordinary data
 	{ "tuple_value", { "elements", array(value) } },
 	{ "tuple_type", { "decls", value } },
+	{ "tuple_defn_type"},
 	{ "enum_value", {
 		"constructor",
 		gen.builtin_string,
@@ -872,6 +876,21 @@ for _, deriver in ipairs { derivers.as, derivers.pretty_print } do
 	value:derive(deriver)
 	binding:derive(deriver)
 end
+
+--[[
+local tuple_defn = value.enum_value("variant",
+	tup_val(
+		value.enum_value("variant",
+			tup_val(
+				value.enum_value("empty", tup_val()),
+				value.prim "element",
+				value.closure()
+			)
+		),
+
+
+	)
+)]]
 
 return {
 	typechecker_state = typechecker_state, -- fn (constructor)

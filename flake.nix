@@ -17,15 +17,15 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
         pkgs-unstable = nixpkgs-unstable.legacyPackages.${system};
-        alicorn-check = file: pkgs.runCommandNoCC "alicorn-check-${file}" { } ''
-          set -xeuo pipefail
-          cd ${./.}
-          mkdir $out
-          echo "Checking ${file}"
-          ${pkgs.lib.getExe luvitpkgs.packages.${system}.luvit} ${file}
-        '';
-      in
-      {
+        alicorn-check = file:
+          pkgs.runCommandNoCC "alicorn-check-${file}" { } ''
+            set -xeuo pipefail
+            cd ${./.}
+            mkdir $out
+            echo "Checking ${file}"
+            ${pkgs.lib.getExe luvitpkgs.packages.${system}.luvit} ${file}
+          '';
+      in {
         packages = rec {
           hello = pkgs.hello;
           default = hello;
@@ -47,10 +47,7 @@
         # See https://github.com/NixOS/nix/issues/9132#issuecomment-1754999829
         formatter = pkgs.writeShellApplication {
           name = "run-formatters";
-          runtimeInputs = [
-            pkgs-unstable.stylua
-            pkgs.nixpkgs-fmt
-          ];
+          runtimeInputs = [ pkgs-unstable.stylua pkgs.nixpkgs-fmt ];
           text = ''
             set -xeu
             nixpkgs-fmt "$@"
@@ -64,7 +61,8 @@
               luvitpkgs.packages.${system}.luvit
               pkgs-unstable.stylua
 
-              (pkgs.luajit.withPackages (ps: with ps; [ luasocket lpeg inspect luaunit ]))
+              (pkgs.luajit.withPackages
+                (ps: with ps; [ luasocket lpeg inspect luaunit tl ]))
             ];
           };
           default = alicorn;

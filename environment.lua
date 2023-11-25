@@ -70,20 +70,26 @@ environment_mt = {
 			elseif binding:is_tuple_elim() then
 				local names, subject = binding:unwrap_tuple_elim()
 				local subject_type, subject_usages, subject_term = infer(subject, self.typechecking_context)
-				local subject_quantity, subject_type = subject_type:unwrap_qtype()
+				local subject_qty, subject_type = subject_type:unwrap_qtype()
+				--DEBUG:
+				if subject_type:is_enum_value() then print "bad subject infer" ; print(subject:pretty_print()) end
 
 				-- evaluating the subject is necessary for inferring the type of the body
 				local subject_value = eval.evaluate(subject_term, self.typechecking_context:get_runtime_context())
 				-- extract subject type and evaled for each elem in tuple
 				local tupletypes, n_elements = eval.infer_tuple_type(subject_type, subject_value)
 
-				local decls
+				--local decls
+				--[[
 
-				if subject_type:is_tuple_type() then
+				if inner_type:is_tuple_type() then
 					decls = subject_type:unwrap_tuple_type()
-				elseif subject_type:is_prim_tuple_type() then
+				elseif inner_type:is_prim_tuple_type() then
 					decls = subject_type:unwrap_prim_tuple_type()
+				else
+					error("bind_local tuple_elim, subject_type: expected a term with a tuple type, but got " .. subject_type.kind)
 				end
+				]]
 
 				local typechecking_context = self.typechecking_context
 				local n = #typechecking_context
@@ -94,10 +100,10 @@ environment_mt = {
 				end
 
 				for i, v in ipairs(names) do
-					local constructor, arg = decls:unwrap_enum_value()
-					if constructor ~= "cons" then
-						error("todo: this error message")
-					end
+					--local constructor, arg = decls:unwrap_enum_value()
+					-- if constructor ~= "cons" then
+					-- 	error("todo: this error message")
+					-- end
 					local term = inferrable_term.bound_variable(n + i)
 					locals = locals:put(v, term)
 					typechecking_context = typechecking_context:append(v, tupletypes[i])
@@ -112,8 +118,18 @@ environment_mt = {
 				local param_name, param_annotation = binding:unwrap_annotated_lambda()
 				local annotation_type, annotation_usages, annotation_term =
 					infer(param_annotation, self.typechecking_context)
+				print("binding lambda annotation")
+				print(annotation_term:pretty_print())
 				local evaled = eval.evaluate(annotation_term, self.typechecking_context.runtime_context)
-				error "NYI lambda bindings"
+				local bindings = self.bindings:append(binding)
+				local locals = self.locals:put(param_name, inferrable_term.bound_variable(#self.typechecking_context + 1))
+				local typechecking_context = self.typechecking_context:append(param_name, evaled)
+				return update_env(self, {
+					locals = locals,
+					bindings = bindings,
+					typechecking_context = typechecking_context,
+				})
+				--error "NYI lambda bindings"
 			else
 				error("bind_local: unknown kind: " .. binding.kind)
 			end
@@ -185,6 +201,9 @@ environment_mt = {
 				elseif binding:is_tuple_elim() then
 					local names, subject = binding:unwrap_tuple_elim()
 					wrapped = terms.inferrable_term.tuple_elim(subject, wrapped)
+				elseif binding:is_annotated_lambda() then
+					local name, annotation = binding:unwrap_annotated_lambda()
+					wrapped = terms.inferrable_term.annotated_lambda(name, annotation, wrapped)
 				end
 			end
 

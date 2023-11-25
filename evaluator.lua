@@ -26,11 +26,25 @@ local primitive_array = array(gen.any_lua_type)
 local usage_array = array(gen.builtin_number)
 local string_array = array(gen.builtin_string)
 
+--DEBUG
+do
+	local qtype = terms.value.qtype
+	terms.value.qtype = function(q, v)
+		if v.kind == "value_qtype" then
+			error "qtype in qtype"
+		end
+		return qtype(q, v)
+	end
+end
+
 local function qtype(q, val)
 	return value.qtype(value.quantity(q), val)
 end
 local function unrestricted(val)
 	return qtype(quantity.unrestricted, val)
+end
+local function unrestricted_typed(term)
+	return typed_term.qtype(typed_term.literal(value.quantity(quantity.unrestricted)), term)
 end
 local function linear(val)
 	return qtype(quantity.linear, val)
@@ -52,7 +66,7 @@ end
 local derivers = require "./derivers"
 local traits = require "./traits"
 
-local evaluate, infer, fitsinto, check
+local evaluate, infer, fitsinto, check, apply_value
 
 local function add_arrays(onto, with)
 	local olen = #onto
@@ -528,7 +542,8 @@ local function make_tuple_prefix(subject_type, subject_value)
 			error("make_tuple_prefix, is_prim_tuple_type, subject_value: expected a primitive tuple")
 		end
 	else
-		error("make_tuple_prefix, subject_type: expected a term with a tuple type")
+		print(subject_type:pretty_print())
+		error("make_tuple_prefix, subject_type: expected a term with a tuple type, but got " .. subject_type.kind)
 	end
 
 	return decls, make_prefix
@@ -555,7 +570,8 @@ end
 
 local function infer_tuple_type(subject_type, subject_value)
 	-- define how the type of each tuple element should be evaluated
-	local decls, make_prefix = make_tuple_prefix(subject_type, subject_value)
+	local qty, base = subject_type:unwrap_qtype()
+	local decls, make_prefix = make_tuple_prefix(base, subject_value)
 	local inner_context, n_elements = make_inner_context(decls, {}, make_prefix)
 
 	return inner_context, n_elements
@@ -706,10 +722,11 @@ function infer(
 		end
 		-- TODO: handle quantities
 		return unrestricted(value.prim_tuple_type(type_data)), usages, typed_term.prim_tuple_cons(new_elements)
+
 	elseif inferrable_term:is_tuple_elim() then
 		local subject, body = inferrable_term:unwrap_tuple_elim()
 		local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
-		local subject_quantity, subject_type = subject_type:unwrap_qtype()
+		--local subject_quantity, subject_type = subject_type:unwrap_qtype()
 
 		-- evaluating the subject is necessary for inferring the type of the body
 		local subject_value = evaluate(subject_term, typechecking_context:get_runtime_context())
@@ -728,6 +745,15 @@ function infer(
 		add_arrays(result_usages, subject_usages)
 		add_arrays(result_usages, body_usages)
 		return body_type, result_usages, typed_term.tuple_elim(subject_term, n_elements, body_term)
+	elseif inferrable_term:is_tuple_type() then
+		local definition = inferrable_term:unwrap_tuple_type()
+		local definition_type, definition_usages, definition_term = infer(definition, typechecking_context)
+		--local def_qty, def_base = definition_type:unwrap_qtype()
+		if definition_type ~= terms.value.tuple_defn_type then
+			error "argument to tuple_type is not a tuple_defn"
+		end
+		return unrestricted(terms.value.star(0)), definition_usages,
+			unrestricted_typed(terms.typed_term.tuple_type(definition_term))
 	elseif inferrable_term:is_record_cons() then
 		local fields = inferrable_term:unwrap_record_cons()
 		-- type_data is either "empty", an empty tuple,
@@ -1024,6 +1050,20 @@ function infer(
   ]]
 end
 
+---Replace stuck sections in a value with a more concrete form, possibly causing cascading evaluation
+---@param base Value
+---@param original Value
+---@param replacement Value
+local function substitute_value(base, original, replacement)
+	if base == original then
+		return replacement
+	end
+	if base:is_pi() then
+		local param_type, param_info, result_type, result_info = base:unwrap_pi()
+		
+	end
+end
+
 function evaluate(typed_term, runtime_context)
 	-- -> an alicorn value
 	-- TODO: typecheck typed_term and runtime_context?
@@ -1129,6 +1169,10 @@ function evaluate(typed_term, runtime_context)
 			error("evaluate, is_tuple_elim, subject_value: expected a tuple")
 		end
 		return evaluate(body, inner_context)
+	elseif typed_term:is_tuple_type() then
+		local definition_term = typed_term:unwrap_tuple_type()
+		local definition = evaluate(definition_term, runtime_context)
+		return terms.value.tuple_type(definition)
 	elseif typed_term:is_record_cons() then
 		local fields = typed_term:unwrap_record_cons()
 		local new_fields = string_value_map()

@@ -6,6 +6,7 @@ local utils = require "./reducer-utils"
 local exprs = require "./alicorn-expressions"
 local terms = require "./terms"
 local gen = require "./terms-generators"
+local evaluator = require "./evaluator"
 
 local p = require "pretty-print".prettyPrint
 
@@ -218,9 +219,14 @@ local function tuple_of_impl(syntax, env)
 	return true, components, env
 end
 
+
 local ascribed_name = metalang.reducer(function(syntax, env, prev, names)
-	print("ascribed_name trying")
-	p(syntax)
+	-- print("ascribed_name trying")
+	-- p(syntax)
+	-- print(prev:pretty_print())
+	-- print("is env an environment? (start of ascribed name)")
+	-- print(env.get)
+	-- print(env.enter_block)
 	local shadowed, env = env:enter_block()
 	env = env:bind_local(terms.binding.annotated_lambda("#prev", prev))
 	local ok, prev_binding = env:get("#prev")
@@ -239,7 +245,10 @@ local ascribed_name = metalang.reducer(function(syntax, env, prev, names)
 	if not ok then
 		return ok, name
 	end
-	local val, env = type_env.env:exit_block(type_env.val, shadowed)
+	local env, val = type_env.env:exit_block(type_env.val, shadowed)
+	-- print("is env an environment? (end of ascribed name)")
+	-- print(env.get)
+	-- print(env.enter_block)
 	return true, name, val, env
 end, "ascribed_name")
 
@@ -258,14 +267,34 @@ end
 
 local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	local value_array = gen.declare_array(terms.value)
-	local function tup_val(...)
-		return terms.value.tuple_value(value_array(...))
+	local inf_array = gen.declare_array(terms.inferrable_term)
+	local usage_array = gen.declare_array(gen.builtin_number)
+	local function tup_cons(...)
+		return terms.inferrable_term.tuple_cons(inf_array(...))
 	end
 	local function cons(...)
-		return terms.value.data_value("cons", tup_val(...))
+		return terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "cons", tup_cons(...))
 	end
-	local empty = terms.value.data_value("empty", tup_val())
+	local empty = terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "empty", tup_cons())
 	local args = empty
+	
+	local function build_type_term(args)
+		return
+			terms.inferrable_term.qtype(
+				terms.inferrable_term.typed(
+					terms.value.quantity_type,
+					usage_array(),
+					terms.typed_term.literal(
+						terms.value.quantity(terms.quantity.unrestricted))),
+				terms.inferrable_term.tuple_type(args)
+			)
+	end
+
+	local names = gen.declare_array(gen.builtin_string)()
+	print("is env an environment? (before loop)")
+	--p(env)
+	print(env.get)
+	print(env.enter_block)
 
 	local head, tail, name, type_val, type_env
 	local ok, continue = true, true
@@ -276,13 +305,18 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 			break
 		end
 
+		print("is env an environment? (in loop)")
+		--p(env)
+		print(env.get)
+		print(env.enter_block)
+
 		ok, continue, name, type_val, type_env = head:match({
 			metalang.symbol_exact(function()
 				return true, false
 			end, "->"),
 			ascribed_name(function(ok, ...)
 				return ok, true, ...
-			end, env, args),
+			end, env, build_type_term(args), names),
 		}, metalang.failure_handler, env)
 
 		if continue then
@@ -292,6 +326,9 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 		end
 		if ok and continue then
 			env = type_env
+			args = cons(args, type_val)
+			names = names:copy()
+			names:append(name)
 		end
 		print("arg", ok, continue, name, type_val, type_env)
 		--error "TODO use ascribed_name results"
@@ -300,6 +337,11 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	end
 	print("moving on to return type")
 	ok, continue = true, true
+	local shadowed, env = env:enter_block()
+	env = env:bind_local(terms.binding.annotated_lambda("#arg", build_type_term(args)))
+	env = env:bind_local(terms.binding.tuple_elim(names, build_type_term(args)))
+	names = gen.declare_array(gen.builtin_string)()
+	local results = empty
 	while ok and continue do
 		ok, head, tail = syntax:match({ metalang.ispair(metalang.accept_handler) }, metalang.failure_handler, env)
 		print(env)
@@ -313,16 +355,26 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 			end),
 			ascribed_name(function(ok, ...)
 				return ok, true, ...
-			end, env),
+			end, env, build_type_term(results), names),
 		}, metalang.failure_handler, env)
 		print("result", ok, continue, name, type_val, type_env)
+
+		if ok and continue then
+			env = type_env
+			results = cons(results, type_val)
+			names = names:copy()
+			names:append(name)
+		end
 
 		syntax = tail
 	end
 	if not ok then
 		return false, continue
 	end
-	return true, lastval, env
+
+	local fn_type_term = terms.value.qtype(terms.quantity.unrestricted, terms.value.prim_function_type(args, results))
+	
+	return true, fn_type_term, env
 end, "prim_func_type_impl")
 
 -- TODO: abstract so can reuse for func type and prim func type
