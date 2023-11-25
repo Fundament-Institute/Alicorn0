@@ -12,12 +12,23 @@
 -- (likewise for array, and foreign given the same value_check function;
 -- foreign values are constructed elsewhere)
 
+---@class Type
+---@field value_check ValueCheckFn
+---@alias ValueCheckFn fun(val: Type): boolean
+
+---@class Value
+---@field kind string
+
+-- TODO: are generic annotations powerful enough to describe this function?
+-- worked around at the bottom of this file
 local function new_self(fn)
 	return function(...)
 		return fn({}, ...)
 	end
 end
 
+---@param mt table
+---@return ValueCheckFn
 local function metatable_equality(mt)
 	if type(mt) ~= "table" then
 		error("trying to define metatable equality to something that isn't a metatable (possible typo?)")
@@ -27,6 +38,9 @@ local function metatable_equality(mt)
 	end
 end
 
+---@param params_with_types (string | Type)[]
+---@return string[] params
+---@return Type[] params_types
 local function parse_params_with_types(params_with_types)
 	-- params are odd entries of params_with_types
 	-- params_types are even
@@ -46,6 +60,10 @@ local function parse_params_with_types(params_with_types)
 	return params, params_types
 end
 
+---@param kind string
+---@param params string[]
+---@param params_types Type[]
+---@return nil
 local function validate_params_types(kind, params, params_types)
 	-- ensure there are at least as many param types as there are params
 	-- also ensure there is at least one param
@@ -68,6 +86,13 @@ local function validate_params_types(kind, params, params_types)
 	end
 end
 
+-- TODO: cons turns from a table to a callable table. how to conveniently annotate this?
+---@param self table
+---@param cons table
+---@param kind string
+---@param params_with_types (string | Type)[]
+---@return table cons
+---@return RecordDeriveInfo derive_info
 local function gen_record(self, cons, kind, params_with_types)
 	local params, params_types = parse_params_with_types(params_with_types)
 	validate_params_types(kind, params, params_types)
@@ -98,6 +123,13 @@ local function gen_record(self, cons, kind, params_with_types)
 	return cons, derive_info
 end
 
+---@class Record: Type
+---@field derive fun(self: Record, deriver: Deriver)
+
+---@param self table
+---@param kind string
+---@param params_with_types (string | Type)[]
+---@return Record self
 local function define_record(self, kind, params_with_types)
 	local self, derive_info = gen_record(self, self, kind, params_with_types)
 	function self:derive(deriver)
@@ -107,6 +139,10 @@ local function define_record(self, kind, params_with_types)
 	return self
 end
 
+---@param self table
+---@param kind string
+---@return Value val
+---@return UnitDeriveInfo derive_info
 local function gen_unit(self, kind)
 	local val = {
 		kind = kind,
@@ -118,6 +154,13 @@ local function gen_unit(self, kind)
 	return val, derive_info
 end
 
+---@class Enum: Type
+---@field derive fun(self: Enum, deriver: Deriver)
+
+---@param self table
+---@param name string
+---@param variants { [1]: string, [2]: (string | Type)[] }[]
+---@return Enum self
 local function define_enum(self, name, variants)
 	setmetatable(self, nil)
 	local derive_variants = {}
@@ -153,6 +196,11 @@ local function define_enum(self, name, variants)
 	return self
 end
 
+---@class Foreign: Type
+
+---@param self table
+---@param value_check ValueCheckFn
+---@return Foreign self
 local function define_foreign(self, value_check)
 	setmetatable(self, nil)
 	self.value_check = value_check
@@ -225,8 +273,14 @@ local function gen_map_fns(key_type, value_type)
 	return index, newindex
 end
 
+---@class Map: Type
+
 -- TODO: memoize? otherwise LOTS of tables will be constructed,
 -- through repeated calls to declare_map
+---@param self table
+---@param key_type Type
+---@param value_type Type
+---@return Map self
 local function define_map(self, key_type, value_type)
 	if
 		type(key_type) ~= "table"
@@ -336,7 +390,7 @@ local function gen_array_fns(value_type)
 			error("key passed to index-assignment is out of bounds")
 		end
 		if value_type.value_check(value) ~= true then
-			p("array-index-assign", key_type, value_type)
+			p("array-index-assign", value_type)
 			p(value)
 			error("wrong value type passed to index-assignment")
 		end
@@ -348,7 +402,12 @@ local function gen_array_fns(value_type)
 	return index, newindex
 end
 
+---@class Array: Type
+
 -- TODO: see define_map
+---@param self table
+---@param value_type Type
+---@return Array self
 local function define_array(self, value_type)
 	if type(value_type) ~= "table" or type(value_type.value_check) ~= "function" then
 		error("trying to set the value type to something that isn't a type (possible typo?)")
@@ -373,16 +432,21 @@ local type_mt = {
 	},
 }
 
+---@type ValueCheckFn
 local function undefined_value_check(val)
 	error("trying to typecheck a value against a type that has been declared but not defined")
 end
 
+---@param self table
+---@return Type self
 local function define_type(self)
 	setmetatable(self, type_mt)
 	self.value_check = undefined_value_check
 	return self
 end
 
+---@param typename string
+---@return Foreign
 local function gen_builtin(typename)
 	return define_foreign({}, function(val)
 		return type(val) == typename
@@ -390,12 +454,18 @@ local function gen_builtin(typename)
 end
 
 return {
+	---@type fun(kind: string, params_with_types: (string | Type)[]): Record
 	declare_record = new_self(define_record),
+	---@type fun(name: string, variants: { [1]: string, [2]: (string | Type)[] }): Enum
 	declare_enum = new_self(define_enum),
 	-- Make sure the function you pass to this returns true, not just a truthy value
+	---@type fun(value_check: ValueCheckFn): Foreign
 	declare_foreign = new_self(define_foreign),
+	---@type fun(key_type: Type, value_type: Type): Map
 	declare_map = new_self(define_map),
+	---@type fun(value_type: Type): Array
 	declare_array = new_self(define_array),
+	---@type fun(): Type
 	declare_type = new_self(define_type),
 	metatable_equality = metatable_equality,
 	builtin_number = gen_builtin("number"),
