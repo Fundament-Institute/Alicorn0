@@ -38,7 +38,9 @@ local function metatable_equality(mt)
 	end
 end
 
----@param params_with_types (string | Type)[]
+---@alias ParamsWithTypes (string | Type)[]
+
+---@param params_with_types ParamsWithTypes
 ---@return string[] params
 ---@return Type[] params_types
 local function parse_params_with_types(params_with_types)
@@ -90,7 +92,7 @@ end
 ---@param self table
 ---@param cons table
 ---@param kind string
----@param params_with_types (string | Type)[]
+---@param params_with_types ParamsWithTypes
 ---@return table cons
 ---@return RecordDeriveInfo derive_info
 local function gen_record(self, cons, kind, params_with_types)
@@ -128,7 +130,7 @@ end
 
 ---@param self table
 ---@param kind string
----@param params_with_types (string | Type)[]
+---@param params_with_types ParamsWithTypes
 ---@return Record self
 local function define_record(self, kind, params_with_types)
 	local self, derive_info = gen_record(self, self, kind, params_with_types)
@@ -136,6 +138,7 @@ local function define_record(self, kind, params_with_types)
 		return deriver.record(self, derive_info)
 	end
 	self.value_check = metatable_equality(self)
+	---@cast self Record
 	return self
 end
 
@@ -157,9 +160,11 @@ end
 ---@class Enum: Type
 ---@field derive fun(self: Enum, deriver: Deriver)
 
+---@alias Variants { [1]: string, [2]: ParamsWithTypes }[]
+
 ---@param self table
 ---@param name string
----@param variants { [1]: string, [2]: (string | Type)[] }[]
+---@param variants Variants
 ---@return Enum self
 local function define_enum(self, name, variants)
 	setmetatable(self, nil)
@@ -193,6 +198,7 @@ local function define_enum(self, name, variants)
 		return deriver.enum(self, derive_info)
 	end
 	self.value_check = metatable_equality(self)
+	---@cast self Enum
 	return self
 end
 
@@ -204,6 +210,7 @@ end
 local function define_foreign(self, value_check)
 	setmetatable(self, nil)
 	self.value_check = value_check
+	---@cast self Foreign
 	return self
 end
 
@@ -297,6 +304,7 @@ local function define_map(self, key_type, value_type)
 	self.__pairs = map_methods.pairs
 	-- NOTE: this isn't primitive equality; this type has a __eq metamethod!
 	self.value_check = metatable_equality(self)
+	---@cast self Map
 	return self
 end
 
@@ -419,6 +427,7 @@ local function define_array(self, value_type)
 	self.__len = array_methods.len
 	-- NOTE: this isn't primitive equality; this type has a __eq metamethod!
 	self.value_check = metatable_equality(self)
+	---@cast self Array
 	return self
 end
 
@@ -437,11 +446,19 @@ local function undefined_value_check(val)
 	error("trying to typecheck a value against a type that has been declared but not defined")
 end
 
+---@class UndefinedType: Type
+---@field define_record fun(self: table, kind: string, params_with_types: ParamsWithTypes): Record
+---@field define_enum fun(self: table, name: string, variants: Variants): Enum
+---@field define_foreign fun(self: table, value_check: ValueCheckFn): Foreign
+---@field define_map fun(self: table, key_type: Type, value_type: Type): Map
+---@field define_array fun(self: table, value_type: Type): Array
+
 ---@param self table
----@return Type self
+---@return UndefinedType self
 local function define_type(self)
 	setmetatable(self, type_mt)
 	self.value_check = undefined_value_check
+	---@cast self UndefinedType
 	return self
 end
 
@@ -454,9 +471,9 @@ local function gen_builtin(typename)
 end
 
 return {
-	---@type fun(kind: string, params_with_types: (string | Type)[]): Record
+	---@type fun(kind: string, params_with_types: ParamsWithTypes): Record
 	declare_record = new_self(define_record),
-	---@type fun(name: string, variants: { [1]: string, [2]: (string | Type)[] }): Enum
+	---@type fun(name: string, variants: Variants): Enum
 	declare_enum = new_self(define_enum),
 	-- Make sure the function you pass to this returns true, not just a truthy value
 	---@type fun(value_check: ValueCheckFn): Foreign
@@ -465,7 +482,7 @@ return {
 	declare_map = new_self(define_map),
 	---@type fun(value_type: Type): Array
 	declare_array = new_self(define_array),
-	---@type fun(): Type
+	---@type fun(): UndefinedType
 	declare_type = new_self(define_type),
 	metatable_equality = metatable_equality,
 	builtin_number = gen_builtin("number"),
