@@ -241,7 +241,7 @@ local ascribed_name = metalang.reducer(function(syntax, env, prev, names)
 	-- print("is env an environment? (start of ascribed name)")
 	-- print(env.get)
 	-- print(env.enter_block)
-	---@type unknown, Environment
+	---@cast env Environment
 	local shadowed, env = env:enter_block()
 	env = env:bind_local(terms.binding.annotated_lambda("#prev", prev))
 	local ok, prev_binding = env:get("#prev")
@@ -399,7 +399,7 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 		syntax = tail
 	end
 
-	local fn_type_term = terms.inferrable_term.qtype(unrestricted_term, terms.inferrable_term.prim_function_type(args, results))
+	local env, fn_type_term = env:exit_block(terms.inferrable_term.qtype(unrestricted_term, terms.inferrable_term.prim_function_type(args, results)), shadowed)
 	print("reached end of function type construction")
 	if not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl_reducer"

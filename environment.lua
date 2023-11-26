@@ -189,21 +189,6 @@ function environment:enter_block()
 		}
 end
 
-function environment:child_scope()
-	return new_env {
-		locals = trie.empty,
-		nonlocals = self.bindings,
-		perms = self.perms,
-	}
-end
-
-function environment:exit_child_scope(child)
-	return new_env {
-		locals = self.locals,
-		nonlocals = self.nonlocals,
-		perms = self.perms,
-	}
-end
 
 ---exit a block, resolving the bindings in that block and restoring the shadowed locals
 ---@param term unknown
@@ -221,7 +206,7 @@ function environment:exit_block(term, shadowed)
 		typechecking_context = outer.typechecking_context,
 		bindings = outer.bindings,
 	}
-	print "exiting block"
+	print("exiting block and dropping " .. #self.bindings .. " bindings")
 	self.typechecking_context:dump_names()
 	print "outer"
 	outer.typechecking_context:dump_names()
