@@ -1055,7 +1055,7 @@ function infer(
 	elseif inferrable_term:is_prim_function_type() then
 		local args, returns = inferrable_term:unwrap_prim_function_type()
 		local arg_type, arg_usages, arg_term = infer(args, typechecking_context)
-		local return_type, return_usages, return_term = infer(args, typechecking_context)
+		local return_type, return_usages, return_term = infer(returns, typechecking_context)
 		local res_usages = usage_array()
 		add_arrays(res_usages, arg_usages)
 		add_arrays(res_usages, return_usages)
