@@ -337,6 +337,9 @@ local function fitsinto_record_generator(trait, t, info)
 		if self == other then
 			return true
 		end
+		if self.kind ~= other.kind then
+			return false, fitsinto_fail("incompatible kinds: " .. self.kind .. ", " .. other.kind)
+		end
 		local ok, err
 		%s
 		return true
