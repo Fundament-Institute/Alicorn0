@@ -37,13 +37,17 @@ end
 local new_env = update_env
 
 ---@class Environment
----@field typechecking_context unknown
+---@field typechecking_context TypecheckingContext
 ---@field locals unknown
 ---@field in_scope unknown
 ---@field nonlocals unknown
 ---@field bindings unknown
 ---@field perms unknown
 local environment = {}
+
+---@class ShadowEnvironment
+---@field shadowed Environment
+
 function environment:get(name)
 	local present, binding = self.in_scope:get(name)
 	if not present then
@@ -170,12 +174,18 @@ function environment:unlet_local(name)
 	}
 end
 
+---enter a new block, shadowing the current context and allowing new bindings
+---@return ShadowEnvironment
+---@return Environment
 function environment:enter_block()
+	print "entering block"
+	self.typechecking_context:dump_names()
 	return { shadowed = self },
 		new_env {
 			-- locals = nil,
-			nonlocals = self.nonlocals:extend(self.locals),
+			nonlocals = self.in_scope,
 			perms = self.perms,
+			typechecking_context = self.typechecking_context,
 		}
 end
 
@@ -195,14 +205,28 @@ function environment:exit_child_scope(child)
 	}
 end
 
+---exit a block, resolving the bindings in that block and restoring the shadowed locals
+---@param term unknown
+---@param shadowed ShadowEnvironment
+---@return Environment
+---@return unknown
 function environment:exit_block(term, shadowed)
 	-- -> env, term
-	shadowed = shadowed.shadowed or error "shadowed.shadowed missing"
+	local outer = shadowed.shadowed or error "shadowed.shadowed missing"
 	local env = new_env {
-		locals = shadowed.locals,
-		nonlocals = shadowed.nonlocals,
-		perms = shadowed.perms,
+		locals = outer.locals,
+		nonlocals = outer.nonlocals,
+		in_scope = outer.in_scope,
+		perms = outer.perms,
+		typechecking_context = outer.typechecking_context,
+		bindings = outer.bindings,
 	}
+	print "exiting block"
+	self.typechecking_context:dump_names()
+	print "outer"
+	outer.typechecking_context:dump_names()
+	print "new"
+	env.typechecking_context:dump_names()
 	local wrapped = term
 	for idx = self.bindings:len(), 1, -1 do
 		local binding = self.bindings:get(idx)

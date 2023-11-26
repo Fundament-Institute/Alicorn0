@@ -193,17 +193,20 @@ local binding = gen.declare_type()
 
 local runtime_context_mt
 
+---@class RuntimeContext
+---@field bindings unknown
+local RuntimeContext = {}
+function RuntimeContext:get(index)
+	return self.bindings:get(index)
+end
+function RuntimeContext:append(value)
+	-- TODO: typecheck
+	local copy = { bindings = self.bindings:append(value) }
+	return setmetatable(copy, runtime_context_mt)
+end
+
 runtime_context_mt = {
-	__index = {
-		get = function(self, index)
-			return self.bindings:get(index)
-		end,
-		append = function(self, value)
-			-- TODO: typecheck
-			local copy = { bindings = self.bindings:append(value) }
-			return setmetatable(copy, runtime_context_mt)
-		end,
-	},
+	__index = RuntimeContext,
 }
 
 local function runtime_context()
@@ -214,31 +217,43 @@ end
 
 local typechecking_context_mt
 
+---@class TypecheckingContext
+---@field runtime_context RuntimeContext
+---@field bindings unknown
+local TypecheckingContext = {}
+---get the name of a binding in a TypecheckingContext
+---@param index integer
+---@return string
+function TypecheckingContext:get_name(index)
+	return self.bindings:get(index).name
+end
+function TypecheckingContext:dump_names()
+	for i = 1, #self do
+		print(i, self:get_name(i))
+	end
+end
+function TypecheckingContext:get_type(index)
+	return self.bindings:get(index).type
+end
+function TypecheckingContext:get_runtime_context()
+	return self.runtime_context
+end
+function TypecheckingContext:append(name, type, val) -- value is optional
+	-- TODO: typecheck
+	if name == nil or type == nil then
+		error("bug!!!")
+	end
+	local copy = {
+		bindings = self.bindings:append({ name = name, type = type }),
+		runtime_context = self.runtime_context:append(
+			val or value.neutral(neutral_value.free(free.placeholder(#self + 1)))
+		),
+	}
+	return setmetatable(copy, typechecking_context_mt)
+end
+
 typechecking_context_mt = {
-	__index = {
-		get_name = function(self, index)
-			return self.bindings:get(index).name
-		end,
-		get_type = function(self, index)
-			return self.bindings:get(index).type
-		end,
-		get_runtime_context = function(self)
-			return self.runtime_context
-		end,
-		append = function(self, name, type, val) -- value is optional
-			-- TODO: typecheck
-			if name == nil or type == nil then
-				error("bug!!!")
-			end
-			local copy = {
-				bindings = self.bindings:append({ name = name, type = type }),
-				runtime_context = self.runtime_context:append(
-					val or value.neutral(neutral_value.free(free.placeholder(#self + 1)))
-				),
-			}
-			return setmetatable(copy, typechecking_context_mt)
-		end,
-	},
+	__index = TypecheckingContext,
 	__len = function(self)
 		return self.bindings:len()
 	end,

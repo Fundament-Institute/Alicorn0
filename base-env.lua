@@ -241,6 +241,7 @@ local ascribed_name = metalang.reducer(function(syntax, env, prev, names)
 	-- print("is env an environment? (start of ascribed name)")
 	-- print(env.get)
 	-- print(env.enter_block)
+	---@type unknown, Environment
 	local shadowed, env = env:enter_block()
 	env = env:bind_local(terms.binding.annotated_lambda("#prev", prev))
 	local ok, prev_binding = env:get("#prev")
@@ -259,7 +260,9 @@ local ascribed_name = metalang.reducer(function(syntax, env, prev, names)
 	if not ok then
 		return ok, name
 	end
-	local env, val = type_env.env:exit_block(type_env.val, shadowed)
+	---@type Environment
+	env = type_env.env
+	local env, val = env:exit_block(type_env.val, shadowed)
 	-- print("is env an environment? (end of ascribed name)")
 	-- print(env.get)
 	-- print(env.enter_block)

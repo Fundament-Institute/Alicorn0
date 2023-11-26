@@ -486,8 +486,8 @@ local function eq_prim_tuple_value_decls(left, right, typechecking_context)
 			return new_context
 		else
 			print("mismatch")
-			p(left_type)
-			p(right_type)
+			print(left_type:pretty_print())
+			print(right_type:pretty_print())
 			error("eq_prim_tuple_value_decls: type mismatch in primitive function application")
 		end
 	else
@@ -584,7 +584,9 @@ local function infer_tuple_type(subject_type, subject_value)
 	return inner_context, n_elements
 end
 
----@return unknown, unknown, unknow
+---@param inferrable_term unknown
+---@param typechecking_context TypecheckingContext
+---@return unknown, unknown, unknown
 function infer(
 	inferrable_term, -- constructed from inferrable
 	typechecking_context -- todo
@@ -683,10 +685,16 @@ function infer(
 				apply_value(f_result_type, evaluate(arg_term, typechecking_context:get_runtime_context()))
 			return application_result_type, application_usages, application
 		elseif f_type:is_prim_function_type() then
+			print"inferring application of primitive function"
+			print(f_type:pretty_print())
+			print(arg:pretty_print())
 			local f_param_type, f_result_type = f_type:unwrap_prim_function_type()
 			local f_param_quantity, f_param_type = f_param_type:unwrap_qtype()
 			local f_decls = f_param_type:unwrap_prim_tuple_type()
 			local arg_decls = arg_t:unwrap_prim_tuple_type()
+			print "matching decls"
+			print(f_decls:pretty_print())
+			print(arg_decls:pretty_print())
 			-- will error if not equal/unifiable
 			eq_prim_tuple_value_decls(f_decls, arg_decls, typechecking_context)
 			return f_result_type, application_usages, application
@@ -714,6 +722,12 @@ function infer(
 		-- TODO: handle quantities
 		return unrestricted(value.tuple_type(type_data)), usages, typed_term.tuple_cons(new_elements)
 	elseif inferrable_term:is_prim_tuple_cons() then
+		print "inferring tuple construction"
+		print(inferrable_term:pretty_print())
+		print "environment_names"
+		for i = 1, #typechecking_context do
+			print(i, typechecking_context:get_name(i))
+		end
 		local elements = inferrable_term:unwrap_prim_tuple_cons()
 		-- type_data is either "empty", an empty tuple,
 		-- or "cons", a tuple with the previous type_data and a function that
@@ -724,6 +738,8 @@ function infer(
 		local new_elements = typed_array()
 		for _, v in ipairs(elements) do
 			local el_type, el_usages, el_term = infer(v, typechecking_context)
+			print "inferring element of tuple construction"
+			print(el_type:pretty_print())
 			type_data = value.enum_value(
 				"cons",
 				tup_val(type_data, substitute_type_variables(el_type, #typechecking_context + 1, 0))
@@ -987,7 +1003,7 @@ function infer(
 		-- same for alternate but literal false
 
 		local stype, susages, sterm = check(terms.value.prim_bool_type, subject, typechecking_context)
-		local ctype, cusages, cterm = infer(consequent, typechecking_contex)
+		local ctype, cusages, cterm = infer(consequent, typechecking_context)
 		local atype, ausages, aterm = infer(alternate, typechecking_context)
 		local resulting_type
 		if ctype == atype or (fitsinto(ctype, atype) and fitsinto(atype, ctype)) then
