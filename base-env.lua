@@ -132,7 +132,7 @@ local function intrinsic(syntax, env)
 	if not env then
 		error "env nil in base-env.intrinsic"
 	end
-	return true, terms.inferrable_term.prim_intrinsic(str, terms.checkable_term.inferrable(type)), env
+	return true, terms.inferrable_term.prim_intrinsic(str, type--[[terms.checkable_term.inferrable(type)]]), env
 end
 
 local basic_fn_kind = {
@@ -308,6 +308,13 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 				terms.inferrable_term.tuple_type(args)
 			)
 	end
+	local function build_prim_type_term(args)
+		return
+			terms.inferrable_term.qtype(
+				unrestricted_term,
+				terms.inferrable_term.prim_tuple_type(args)
+			)
+	end
 
 	local names = gen.declare_array(gen.builtin_string)()
 	print("is env an environment? (before loop)")
@@ -399,7 +406,8 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 		syntax = tail
 	end
 
-	local env, fn_type_term = env:exit_block(terms.inferrable_term.qtype(unrestricted_term, terms.inferrable_term.prim_function_type(args, results)), shadowed)
+	local env, fn_res_term = env:exit_block(build_prim_type_term(results), shadowed)
+	local fn_type_term = terms.inferrable_term.qtype(unrestricted_term, terms.inferrable_term.prim_function_type(build_prim_type_term(args), fn_res_term))
 	print("reached end of function type construction")
 	if not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl_reducer"
@@ -417,7 +425,8 @@ local function prim_func_type_impl(syntax, env)
 	print("in prim_func_type_impl")
 	local ok, fn_type_term, env =
 		syntax:match({ prim_func_type_impl_reducer(metalang.accept_handler, env) }, metalang.failure_handler, env)
-	print("finished matching prim_func_type_impl")
+	print("finished matching prim_func_type_impl and got")
+	print(fn_type_term:pretty_print())
 	if not ok then return ok, fn_type_term end
 	if not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl"
@@ -468,7 +477,7 @@ local core_operations = {
 	let = exprs.primitive_operative(let_bind),
 	record = exprs.primitive_operative(record_build),
 	intrinsic = exprs.primitive_operative(intrinsic),
-	["prim-number"] = lit_term(value.prim_number_type, value.prim_type_type),
+	["prim-number"] = lit_term(value.qtype(value.quantity(terms.quantity.unrestricted), value.prim_number_type), value.prim_type_type),
 	["prim-func-type"] = exprs.primitive_operative(prim_func_type_impl),
 	--["dump-env"] = evaluator.primitive_operative(function(syntax, env) print(environment.dump_env(env)); return true, types.unit_val, env end),
 	--["basic-fn"] = evaluator.primitive_operative(basic_fn),

@@ -243,6 +243,7 @@ function TypecheckingContext:append(name, type, val) -- value is optional
 	if name == nil or type == nil then
 		error("bug!!!")
 	end
+	if type:is_closure() then error "BUG!!!" end
 	local copy = {
 		bindings = self.bindings:append({ name = name, type = type }),
 		runtime_context = self.runtime_context:append(
@@ -444,6 +445,7 @@ inferrable_term:define_enum("inferrable", {
 			array(inferrable_term), -- prim
 		},
 	},
+	{ "prim_tuple_type", { "decls", inferrable_term } }, -- just like an ordinary tuple type but can only hold prims
 	{
 		"prim_function_type",
 		{
@@ -473,7 +475,7 @@ inferrable_term:define_enum("inferrable", {
 		"source",
 		checkable_term,
 		"type",
-		checkable_term,
+		inferrable_term, --checkable_term,
 	} },
 })
 -- typed terms have been typechecked but do not store their type internally
@@ -596,6 +598,7 @@ typed_term:define_enum("typed", {
 			array(typed_term), -- prim
 		},
 	},
+	{ "prim_tuple_type", { "decls", typed_term } }, -- just like an ordinary tuple type but can only hold prims
 	{
 		"prim_function_type",
 		{

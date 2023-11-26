@@ -228,7 +228,12 @@ local function inferred_expression_pairhandler(env, a, b)
 		return true, inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple), env
 	end
 
-	p(type_of_term)
+	print("!!! about to fail of invalid type")
+	print(combiner:pretty_print())
+	print("infers to")
+	print(type_of_term:pretty_print())
+	print("in")
+	env.typechecking_context:dump_names()
 	return false, "unknown type for pairhandler " .. type_of_term.kind, env
 end
 

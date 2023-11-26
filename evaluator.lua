@@ -1033,7 +1033,13 @@ function infer(
 	elseif inferrable_term:is_prim_intrinsic() then
 		local source, type = inferrable_term:unwrap_prim_intrinsic()
 		local source_type, source_usages, source_term = check(source, typechecking_context, unrestricted(value.prim_string_type))
-		local type_type, type_usages, type_term = check(type, typechecking_context, value.qtype_type(0))
+		local type_type, type_usages, type_term = infer(type, typechecking_context) --check(type, typechecking_context, value.qtype_type(0))
+
+		print "prim intrinsic is inferring"
+		print(type:pretty_print())
+		print("lowers to")
+		print(type_term:pretty_print())
+		--error "weird type"
 		-- FIXME: type_type, source_type are ignored, need checked?
 		local type_val = evaluate(type_term, typechecking_context.runtime_context)
 		return type_val, source_usages, typed_term.prim_intrinsic(source_term)
@@ -1054,6 +1060,11 @@ function infer(
 		add_arrays(res_usages, arg_usages)
 		add_arrays(res_usages, return_usages)
 		return value.prim_type_type, res_usages, typed_term.prim_function_type(arg_term, return_term)
+	elseif inferrable_term:is_prim_tuple_type() then
+		local decls = inferrable_term:unwrap_prim_tuple_type()
+		local decl_type, decl_usages, decl_term = infer(decls, typechecking_context)
+		if not decl_type:is_tuple_defn_type() then error "must be a tuple defn" end
+		return value.star(0), decl_usages, typed_term.prim_tuple_type(decl_term)
 	else
 		error("infer: unknown kind: " .. inferrable_term.kind)
 	end
@@ -1362,6 +1373,10 @@ function evaluate(typed_term, runtime_context)
 		return value.star(typed_term.level)
 	elseif typed_term:is_prop() then
 		return value.prop(typed_term.level)
+	elseif typed_term:is_prim_tuple_type() then
+		local decl = typed_term:unwrap_prim_tuple_type()
+		local decl_val = evaluate(decl, runtime_context)
+		return value.prim_tuple_type(decl_val)
 	else
 		error("evaluate: unknown kind: " .. typed_term.kind)
 	end

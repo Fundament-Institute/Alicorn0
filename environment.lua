@@ -71,6 +71,8 @@ function environment:bind_local(binding)
 		local term = inferrable_term.bound_variable(n + 1)
 		local locals = self.locals:put(name, term)
 		local evaled = eval.evaluate(expr_term, self.typechecking_context.runtime_context)
+		-- print "doing let binding"
+		-- print(expr:pretty_print())
 		local typechecking_context = self.typechecking_context:append(name, expr_type, evaled)
 		local bindings = self.bindings:append(binding)
 		return update_env(self, {
