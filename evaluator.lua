@@ -1013,8 +1013,9 @@ function infer(
 		return bodytype, result_usages, terms.typed_term.let(exprterm, bodyterm)
 	elseif inferrable_term:is_prim_intrinsic() then
 		local source, type = inferrable_term:unwrap_prim_intrinsic()
-		local source_type, source_usages, source_term = check(source, typechecking_context, value.prim_string_type())
-		local type_type, type_usages, type_term = check(type, typechecking_context, value.prim_type_type())
+		local source_type, source_usages, source_term = check(source, typechecking_context, value.prim_string_type)
+		local type_type, type_usages, type_term = check(type, typechecking_context, value.prim_type_type)
+		-- FIXME: type_type, source_type are ignored, need checked?
 		local type_val = evaluate(type_term, typechecking_context.runtime_context)
 		return type_val, source_usages, typed_term.prim_intrinsic(source_term)
 	elseif inferrable_term:is_level_max() then

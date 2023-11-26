@@ -1,7 +1,14 @@
 let x = 621
 let y = 926
-let prim-arith-binop = (prim-func-type (a : prim-number) (b : prim-number) -> (c : prim-number))
+#let prim-add = +
+
+# FIXME: let binding here errors due to type mismatch (qtype_type vs actual qtype wrapping prim_number_type)
+#let prim-arith-binop = (prim-func-type (a : prim-number) (b : prim-number) -> (c : prim-number))
 #let prim-sub = (intrinsic "return function(a, b) return a - b end" : prim-arith-binop)
+
+# FIXME: calling intrinsic here errors due to error in fits into (probably same root cause of qtype_type vs actual qtype wrapping prim_number_type)
+let prim-sub = (intrinsic "return function(a, b) return a - b end" : (prim-func-type (a : prim-number) (b : prim-number) -> (c : prim-number)))
+
 let foo = (record (bar = 5) (baz = 6))
 #let subbed = prim-sub foo.bar y
 
