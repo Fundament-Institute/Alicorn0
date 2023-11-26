@@ -36,181 +36,196 @@ end
 
 local new_env = update_env
 
-environment_mt = {
-	__index = {
-		get = function(self, name)
-			local present, binding = self.in_scope:get(name)
-			if not present then
-				return false, 'symbol "' .. name .. '" is not in scope'
-			end
-			if binding == nil then
-				return false,
-					'symbol "'
-						.. name
-						.. '" is marked as present but with no data; this indicates a bug in the environment or something violating encapsulation'
-			end
-			return true, binding
-		end,
-		bind_local = function(self, binding)
-			p(binding)
-			if binding:is_let() then
-				local name, expr = binding:unwrap_let()
-				local expr_type, expr_usages, expr_term = infer(expr, self.typechecking_context)
-				local n = #self.typechecking_context
-				local term = inferrable_term.bound_variable(n + 1)
-				local locals = self.locals:put(name, term)
-				local evaled = eval.evaluate(expr_term, self.typechecking_context.runtime_context)
-				local typechecking_context = self.typechecking_context:append(name, expr_type, evaled)
-				local bindings = self.bindings:append(binding)
-				return update_env(self, {
-					locals = locals,
-					bindings = bindings,
-					typechecking_context = typechecking_context,
-				})
-			elseif binding:is_tuple_elim() then
-				local names, subject = binding:unwrap_tuple_elim()
-				local subject_type, subject_usages, subject_term = infer(subject, self.typechecking_context)
-				--local subject_qty, subject_type = subject_type:unwrap_qtype()
-				--DEBUG:
-				if subject_type:is_enum_value() then print "bad subject infer" ; print(subject:pretty_print()) end
+---@class Environment
+---@field typechecking_context unknown
+---@field locals unknown
+---@field in_scope unknown
+---@field nonlocals unknown
+---@field bindings unknown
+---@field perms unknown
+local environment = {}
+function environment:get(name)
+	local present, binding = self.in_scope:get(name)
+	if not present then
+		return false, 'symbol "' .. name .. '" is not in scope'
+	end
+	if binding == nil then
+		return false,
+			'symbol "'
+				.. name
+				.. '" is marked as present but with no data; this indicates a bug in the environment or something violating encapsulation'
+	end
+	return true, binding
+end
 
-				-- evaluating the subject is necessary for inferring the type of the body
-				local subject_value = eval.evaluate(subject_term, self.typechecking_context:get_runtime_context())
-				-- extract subject type and evaled for each elem in tuple
-				local tupletypes, n_elements = eval.infer_tuple_type(subject_type, subject_value)
+function environment:bind_local(binding)
+	p(binding)
+	if binding:is_let() then
+		local name, expr = binding:unwrap_let()
+		local expr_type, expr_usages, expr_term = infer(expr, self.typechecking_context)
+		local n = #self.typechecking_context
+		local term = inferrable_term.bound_variable(n + 1)
+		local locals = self.locals:put(name, term)
+		local evaled = eval.evaluate(expr_term, self.typechecking_context.runtime_context)
+		local typechecking_context = self.typechecking_context:append(name, expr_type, evaled)
+		local bindings = self.bindings:append(binding)
+		return update_env(self, {
+			locals = locals,
+			bindings = bindings,
+			typechecking_context = typechecking_context,
+		})
+	elseif binding:is_tuple_elim() then
+		local names, subject = binding:unwrap_tuple_elim()
+		local subject_type, subject_usages, subject_term = infer(subject, self.typechecking_context)
+		--local subject_qty, subject_type = subject_type:unwrap_qtype()
+		--DEBUG:
+		if subject_type:is_enum_value() then print "bad subject infer" ; print(subject:pretty_print()) end
 
-				--local decls
-				--[[
+		-- evaluating the subject is necessary for inferring the type of the body
+		local subject_value = eval.evaluate(subject_term, self.typechecking_context:get_runtime_context())
+		-- extract subject type and evaled for each elem in tuple
+		local tupletypes, n_elements = eval.infer_tuple_type(subject_type, subject_value)
 
-				if inner_type:is_tuple_type() then
-					decls = subject_type:unwrap_tuple_type()
-				elseif inner_type:is_prim_tuple_type() then
-					decls = subject_type:unwrap_prim_tuple_type()
-				else
-					error("bind_local tuple_elim, subject_type: expected a term with a tuple type, but got " .. subject_type.kind)
-				end
-				]]
+		--local decls
+		--[[
 
-				local typechecking_context = self.typechecking_context
-				local n = #typechecking_context
-				local locals = self.locals
+		if inner_type:is_tuple_type() then
+			decls = subject_type:unwrap_tuple_type()
+		elseif inner_type:is_prim_tuple_type() then
+			decls = subject_type:unwrap_prim_tuple_type()
+		else
+			error("bind_local tuple_elim, subject_type: expected a term with a tuple type, but got " .. subject_type.kind)
+		end
+		]]
 
-				if not (n_elements == #names) then
-					error("attempted to bind " .. n_elements .. " tuple elements to " .. #names .. " variables")
-				end
+		local typechecking_context = self.typechecking_context
+		local n = #typechecking_context
+		local locals = self.locals
 
-				for i, v in ipairs(names) do
-					--local constructor, arg = decls:unwrap_enum_value()
-					-- if constructor ~= "cons" then
-					-- 	error("todo: this error message")
-					-- end
-					local term = inferrable_term.bound_variable(n + i)
-					locals = locals:put(v, term)
-					typechecking_context = typechecking_context:append(v, tupletypes[i])
-				end
-				local bindings = self.bindings:append(binding)
-				return update_env(self, {
-					locals = locals,
-					bindings = bindings,
-					typechecking_context = typechecking_context,
-				})
-			elseif binding:is_annotated_lambda() then
-				local param_name, param_annotation = binding:unwrap_annotated_lambda()
-				local annotation_type, annotation_usages, annotation_term =
-					infer(param_annotation, self.typechecking_context)
-				print("binding lambda annotation")
-				print(annotation_term:pretty_print())
-				local evaled = eval.evaluate(annotation_term, self.typechecking_context.runtime_context)
-				local bindings = self.bindings:append(binding)
-				local locals = self.locals:put(param_name, inferrable_term.bound_variable(#self.typechecking_context + 1))
-				local typechecking_context = self.typechecking_context:append(param_name, evaled)
-				return update_env(self, {
-					locals = locals,
-					bindings = bindings,
-					typechecking_context = typechecking_context,
-				})
-				--error "NYI lambda bindings"
-			else
-				error("bind_local: unknown kind: " .. binding.kind)
-			end
-			error("unreachable!?")
-		end,
-		gather_module = function(self)
-			return self, setmetatable({ bindings = self.locals }, module_mt)
-		end,
-		open_module = function(self, module)
-			return new_env {
-				locals = self.locals:extend(module.bindings),
-				nonlocals = self.nonlocals,
-				perms = self.perms,
-			}
-		end,
-		use_module = function(self, module)
-			return new_env {
-				locals = self.locals,
-				nonlocals = self.nonlocals:extend(module.bindings),
-				perms = self.perms,
-			}
-		end,
-		unlet_local = function(self, name)
-			return new_env {
-				locals = self.locals:remove(name),
-				nonlocals = self.nonlocals,
-				perms = self.perms,
-			}
-		end,
-		enter_block = function(self)
-			return { shadowed = self },
-				new_env {
-					-- locals = nil,
-					nonlocals = self.nonlocals:extend(self.locals),
-					perms = self.perms,
-				}
-		end,
-		child_scope = function(self)
-			return new_env {
-				locals = trie.empty,
-				nonlocals = self.bindings,
-				perms = self.perms,
-			}
-		end,
-		exit_child_scope = function(self, child)
-			return new_env {
-				locals = self.locals,
-				nonlocals = self.nonlocals,
-				perms = self.perms,
-			}
-		end,
-		exit_block = function(self, term, shadowed)
-			-- -> env, term
-			shadowed = shadowed.shadowed or error "shadowed.shadowed missing"
-			local env = new_env {
-				locals = shadowed.locals,
-				nonlocals = shadowed.nonlocals,
-				perms = shadowed.perms,
-			}
-			local wrapped = term
-			for idx = self.bindings:len(), 1, -1 do
-				local binding = self.bindings:get(idx)
-				if not binding then
-					error "missing binding"
-				end
-				if binding:is_let() then
-					local name, expr = binding:unwrap_let()
-					wrapped = terms.inferrable_term.let(name, expr, wrapped)
-				elseif binding:is_tuple_elim() then
-					local names, subject = binding:unwrap_tuple_elim()
-					wrapped = terms.inferrable_term.tuple_elim(subject, wrapped)
-				elseif binding:is_annotated_lambda() then
-					local name, annotation = binding:unwrap_annotated_lambda()
-					wrapped = terms.inferrable_term.annotated_lambda(name, annotation, wrapped)
-				end
-			end
+		if not (n_elements == #names) then
+			error("attempted to bind " .. n_elements .. " tuple elements to " .. #names .. " variables")
+		end
 
-			return env, wrapped
-		end,
-	},
-}
+		for i, v in ipairs(names) do
+			--local constructor, arg = decls:unwrap_enum_value()
+			-- if constructor ~= "cons" then
+			-- 	error("todo: this error message")
+			-- end
+			local term = inferrable_term.bound_variable(n + i)
+			locals = locals:put(v, term)
+			typechecking_context = typechecking_context:append(v, tupletypes[i])
+		end
+		local bindings = self.bindings:append(binding)
+		return update_env(self, {
+			locals = locals,
+			bindings = bindings,
+			typechecking_context = typechecking_context,
+		})
+	elseif binding:is_annotated_lambda() then
+		local param_name, param_annotation = binding:unwrap_annotated_lambda()
+		local annotation_type, annotation_usages, annotation_term =
+			infer(param_annotation, self.typechecking_context)
+		print("binding lambda annotation")
+		print(annotation_term:pretty_print())
+		local evaled = eval.evaluate(annotation_term, self.typechecking_context.runtime_context)
+		local bindings = self.bindings:append(binding)
+		local locals = self.locals:put(param_name, inferrable_term.bound_variable(#self.typechecking_context + 1))
+		local typechecking_context = self.typechecking_context:append(param_name, evaled)
+		return update_env(self, {
+			locals = locals,
+			bindings = bindings,
+			typechecking_context = typechecking_context,
+		})
+		--error "NYI lambda bindings"
+	else
+		error("bind_local: unknown kind: " .. binding.kind)
+	end
+	error("unreachable!?")
+end
+
+function environment:gather_module()
+	return self, setmetatable({ bindings = self.locals }, module_mt)
+end
+
+function environment:open_module(module)
+	return new_env {
+		locals = self.locals:extend(module.bindings),
+		nonlocals = self.nonlocals,
+		perms = self.perms,
+	}
+end
+function environment:use_module(module)
+	return new_env {
+		locals = self.locals,
+		nonlocals = self.nonlocals:extend(module.bindings),
+		perms = self.perms,
+	}
+end
+
+function environment:unlet_local(name)
+	return new_env {
+		locals = self.locals:remove(name),
+		nonlocals = self.nonlocals,
+		perms = self.perms,
+	}
+end
+
+function environment:enter_block()
+	return { shadowed = self },
+		new_env {
+			-- locals = nil,
+			nonlocals = self.nonlocals:extend(self.locals),
+			perms = self.perms,
+		}
+end
+
+function environment:child_scope()
+	return new_env {
+		locals = trie.empty,
+		nonlocals = self.bindings,
+		perms = self.perms,
+	}
+end
+
+function environment:exit_child_scope(child)
+	return new_env {
+		locals = self.locals,
+		nonlocals = self.nonlocals,
+		perms = self.perms,
+	}
+end
+
+function environment:exit_block(term, shadowed)
+	-- -> env, term
+	shadowed = shadowed.shadowed or error "shadowed.shadowed missing"
+	local env = new_env {
+		locals = shadowed.locals,
+		nonlocals = shadowed.nonlocals,
+		perms = shadowed.perms,
+	}
+	local wrapped = term
+	for idx = self.bindings:len(), 1, -1 do
+		local binding = self.bindings:get(idx)
+		if not binding then
+			error "missing binding"
+		end
+		if binding:is_let() then
+			local name, expr = binding:unwrap_let()
+			wrapped = terms.inferrable_term.let(name, expr, wrapped)
+		elseif binding:is_tuple_elim() then
+			local names, subject = binding:unwrap_tuple_elim()
+			wrapped = terms.inferrable_term.tuple_elim(subject, wrapped)
+		elseif binding:is_annotated_lambda() then
+			local name, annotation = binding:unwrap_annotated_lambda()
+			wrapped = terms.inferrable_term.annotated_lambda(name, annotation, wrapped)
+		end
+	end
+
+	return env, wrapped
+end
+
+
+environment_mt = {__index = environment}
 
 local function dump_env(env)
 	return "Environment" .. "\nlocals: " .. trie.dump_map(env.locals) .. "\nnonlocals: " .. trie.dump_map(env.nonlocals)

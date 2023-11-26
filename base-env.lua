@@ -99,6 +99,11 @@ local function record_build(syntax, env)
 	return true, terms.inferrable_term.record_cons(map), env
 end
 
+---@param syntax any
+---@param env Environment
+---@return boolean
+---@return any
+---@return Environment
 local function intrinsic(syntax, env)
 	local ok, str_env, syntax = syntax:match({
 		metalang.listtail(
@@ -111,12 +116,19 @@ local function intrinsic(syntax, env)
 		return ok, str_env
 	end
 	env = str_env.env
+	if not env then
+		error "env nil in base-env.intrinsic"
+	end
 	local str = terms.checkable_term.inferrable(str_env.val) -- workaround for not having exprs.checked_expression yet
-	local ok, type, env = syntax:match({
-		metalang.listmatch(metalang.accept_handler, exprs.inferred_expression(metalang.accept_handler, env)),
+	local ok, type_env = syntax:match({
+		metalang.listmatch(metalang.accept_handler, exprs.inferred_expression(utils.accept_with_env, env)),
 	}, metalang.failure_handler, nil)
 	if not ok then
-		return ok, type
+		return ok, type_env
+	end
+	local type, env = type_env.val, type_env.env
+	if not env then
+		error "env nil in base-env.intrinsic"
 	end
 	return true, terms.inferrable_term.prim_intrinsic(str, terms.checkable_term.inferrable(type)), env
 end
@@ -297,6 +309,9 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	--p(env)
 	print(env.get)
 	print(env.enter_block)
+	if not env.enter_block then
+		error "env isn't an environment in prim_func_type_impl_reducer"
+	end
 
 	local head, tail, name, type_val, type_env
 	local ok, continue = true, true
@@ -381,16 +396,27 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 
 	local fn_type_term = terms.inferrable_term.qtype(unrestricted_term, terms.inferrable_term.prim_function_type(args, results))
 	print("reached end of function type construction")
+	if not env.enter_block then
+		error "env isn't an environment at end in prim_func_type_impl_reducer"
+	end
 	return true, fn_type_term, env
 end, "prim_func_type_impl")
 
 -- TODO: abstract so can reuse for func type and prim func type
+---@param syntax any
+---@param env Environment
+---@return unknown
+---@return unknown
+---@return unknown
 local function prim_func_type_impl(syntax, env)
 	print("in prim_func_type_impl")
 	local ok, fn_type_term, env =
 		syntax:match({ prim_func_type_impl_reducer(metalang.accept_handler, env) }, metalang.failure_handler, env)
 	print("finished matching prim_func_type_impl")
 	if not ok then return ok, fn_type_term end
+	if not env.enter_block then
+		error "env isn't an environment at end in prim_func_type_impl"
+	end
 	return ok, fn_type_term, env
 	-- parse sequence of ascribed names, arrow, then sequence of ascribed names
 	-- for each ascribed name:

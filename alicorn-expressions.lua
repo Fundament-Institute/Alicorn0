@@ -185,6 +185,10 @@ local function inferred_expression_pairhandler(env, a, b)
 		-- temporary, while it isn't a Maybe
 		local data = operative_result_val.elements[1].primitive_value
 		local env = operative_result_val.elements[2].primitive_value
+		if not env then
+			print("operative_result_val.elements[2]", operative_result_val.elements[2]:pretty_print())
+			error "operative_result_val missing env"
+		end
 
 		-- FIXME: assert type is an inferrable term using new API once it exists
 		if not inferrable_term.value_check(data) then
@@ -342,11 +346,21 @@ end, "expressions")
 --   return self.val(ops, env)
 -- end
 
+---@param fn fun(syntax : any, env : Environment) : boolean, any, Environment
+---@return inferrable_term.operative_cons
 local function primitive_operative(fn)
 	local aborting_fn = function(syn, env)
+		if not env or not env.exit_block then
+			error("env passed to primitive_operative isn't an env or is nil", env)
+		end
 		local ok, res, env = fn(syn, env)
 		if not ok then
 			error("Primitive operative apply failure, NYI convert to Maybe.\nError was:" .. tostring(res))
+		end
+		if not env or not env.exit_block then
+			local dinfo = debug.getinfo(fn)
+			print("env returned from fn passed to alicorn-expressions.primitive_operative isn't an env or is nil", env, " in ", dinfo.short_src, dinfo.linedefined)
+			error("invalid env from primitive_operative fn")
 		end
 		return res, env
 	end
