@@ -57,6 +57,8 @@ local function let_bind(syntax, env)
 	local env = bind.env
 
 	if type(name) == "table" then
+		print("binding destructuring with let")
+		p(name)
 		local tupletype = gen.declare_array(gen.builtin_string)
 		env = env:bind_local(terms.binding.tuple_elim(tupletype(unpack(name)), bind.val))
 	else

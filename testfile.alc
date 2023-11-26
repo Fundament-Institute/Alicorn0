@@ -12,10 +12,12 @@ let prim-sub = (intrinsic "return function(a, b) return a - b end" : (prim-func-
 let foo = (record (bar = 5) (baz = 6))
 #let subbed = prim-sub foo.bar y
 
-let (val) =
-	+ x 1
+#let (val) =
+#	+ x 1
 
-let (val) =
-	+ val y
+#let (val) =
+#	+ val y
 
-+ foo.bar val
+#+ foo.bar val
+
+prim-sub

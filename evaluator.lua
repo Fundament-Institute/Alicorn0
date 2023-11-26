@@ -395,6 +395,9 @@ local function check(
 		local inferred_type, inferred_usages, typed_term = infer(inferrable_term, typechecking_context)
 		-- TODO: unify!!!!
 		if inferred_type ~= target_type then
+			print "attempting to check if terms fit"
+			print(inferred_type:pretty_print())
+			print(target_type:pretty_print())
 			local ok, err = fitsinto(inferred_type, target_type)
 			if not ok then
 				--inferred_type = inferred_type:unify(target_type)
@@ -1013,8 +1016,8 @@ function infer(
 		return bodytype, result_usages, terms.typed_term.let(exprterm, bodyterm)
 	elseif inferrable_term:is_prim_intrinsic() then
 		local source, type = inferrable_term:unwrap_prim_intrinsic()
-		local source_type, source_usages, source_term = check(source, typechecking_context, value.prim_string_type)
-		local type_type, type_usages, type_term = check(type, typechecking_context, value.prim_type_type)
+		local source_type, source_usages, source_term = check(source, typechecking_context, unrestricted(value.prim_string_type))
+		local type_type, type_usages, type_term = check(type, typechecking_context, value.qtype_type(0))
 		-- FIXME: type_type, source_type are ignored, need checked?
 		local type_val = evaluate(type_term, typechecking_context.runtime_context)
 		return type_val, source_usages, typed_term.prim_intrinsic(source_term)
