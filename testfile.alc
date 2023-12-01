@@ -20,4 +20,5 @@ let prim-sub = (intrinsic "return function(a, b) return a - b end" : (prim-func-
 
 #prim-sub foo.bar val
 
-prim-sub 5 1
+let (val) = (prim-sub 5 1)
+prim-sub val 3

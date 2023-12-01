@@ -688,7 +688,7 @@ function infer(
 			print"inferring application of primitive function"
 			print(f_type:pretty_print())
 			print(arg:pretty_print())
-			local f_param_type, f_result_type = f_type:unwrap_prim_function_type()
+			local f_param_type, f_result_type_closure = f_type:unwrap_prim_function_type()
 			local f_param_quantity, f_param_type = f_param_type:unwrap_qtype()
 			local f_decls = f_param_type:unwrap_prim_tuple_type()
 			local arg_decls = arg_t:unwrap_prim_tuple_type()
@@ -697,6 +697,7 @@ function infer(
 			print(arg_decls:pretty_print())
 			-- will error if not equal/unifiable
 			eq_prim_tuple_value_decls(f_decls, arg_decls, typechecking_context)
+			local f_result_type = apply_value(f_result_type_closure, evaluate(arg_term, typechecking_context:get_runtime_context()))
 			return f_result_type, application_usages, application
 		else
 			p(f_type)
