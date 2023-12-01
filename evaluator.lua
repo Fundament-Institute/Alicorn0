@@ -91,9 +91,33 @@ local function get_level(t)
 	return 0
 end
 
+local function substitute_inner(val, index_base, index_offset)
+	if val:is_neutral() then
+		local nval = val:unwrap_neutral()
+		if nval:is_free() then
+			local free = nval:unwrap_free()
+			if free:is_placeholder() then
+				local idx = free:unwrap_placeholder()
+				if idx >= index_base then
+					return typed_term.bound_variable(index_offset + idx - index_base + 1)
+				end
+			end
+		end
+	elseif val:is_tuple_value() then
+		local elems = val:unwrap_tuple_value()
+		local res = typed_array()
+		for i, v in ipairs(elems) do
+			res:append(substitute_inner(val, index_base, index_offset))
+		end
+		return typed_term.tuple_cons(res)
+	else
+		return typed_term.literal(val) --TODO: replace this with real cases and make the default case an error
+	end
+end
+
 local function substitute_type_variables(val, index_base, index_offset)
 	-- TODO: replace free_placeholder variables with bound variables
-	return value.closure(typed_term.literal(val), runtime_context())
+	return value.closure(substitute_inner(val, index_base, index_offset), runtime_context())
 end
 
 local function is_type_of_types(val)
