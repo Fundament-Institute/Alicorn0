@@ -92,8 +92,105 @@ local function get_level(t)
 end
 
 local function substitute_inner(val, index_base, index_offset)
-	if val:is_neutral() then
+	if val:is_quantity_type() then
+		return typed_term.literal(val)
+	elseif val:is_quantity() then
+		return typed_term.literal(val)
+	elseif val:is_visibility_type() then
+		return typed_term.literal(val)
+	elseif val:is_visibility() then
+		return typed_term.literal(val)
+	elseif val:is_qtype_type() then
+		return typed_term.literal(val)
+	elseif val:is_qtype() then
+		local quantity, type = val:unwrap_qtype()
+		quantity = typed_term.literal(quantity)
+		type = substitute_inner(type, index_base, index_offset)
+		return typed_term.qtype(quantity, type)
+	elseif val:is_param_info_type() then
+		return typed_term.literal(val)
+	elseif val:is_param_info() then
+		-- local visibility = val:unwrap_param_info()
+		-- TODO: this needs to be evaluated properly because it contains a value
+		return typed_term.literal(val)
+	elseif val:is_result_info_type() then
+		return typed_term.literal(val)
+	elseif val:is_result_info() then
+		return typed_term.literal(val)
+	elseif val:is_pi() then
+		local param_type, param_info, result_type, result_info = val:unwrap_pi()
+		param_type = substitute_inner(param_type, index_base, index_offset)
+		param_info = substitute_inner(param_info, index_base, index_offset)
+		result_type = substitute_inner(result_type, index_base, index_offset)
+		result_info = substitute_inner(result_info, index_base, index_offset)
+		return typed_term.pi(param_type, param_info, result_type, result_info)
+	elseif val:is_closure() then
+		return typed_term.literal(val)
+	elseif val:is_name_type() then
+		return typed_term.literal(val)
+	elseif val:is_name() then
+		return typed_term.literal(val)
+	elseif val:is_operative_value() then
+		local userdata = val:unwrap_operative_value()
+		userdata = substitute_inner(userdata, index_base, index_offset)
+		return typed_term.operative_cons(userdata)
+	elseif val:is_operative_type() then
+		local handler, userdata_type = val:unwrap_operative_type()
+		handler = substitute_inner(handler, index_base, index_offset)
+		userdata_type = substitute_inner(userdata_type, index_base, index_offset)
+		return typed_term.operative_type_cons(handler, userdata_type)
+	elseif val:is_tuple_value() then
+		local elems = val:unwrap_tuple_value()
+		local res = typed_array()
+		for i, v in ipairs(elems) do
+			res:append(substitute_inner(v, index_base, index_offset))
+		end
+		return typed_term.tuple_cons(res)
+	elseif val:is_tuple_type() then
+		local decls = val:unwrap_tuple_type()
+		decls = substitute_inner(decls, index_base, index_offset)
+		return typed_term.tuple_type(decls)
+	elseif val:is_tuple_defn_type() then
+		return typed_term.literal(val)
+	elseif val:is_enum_value() then
+		local constructor, arg = val:unwrap_enum_value()
+		arg = substitute_inner(arg, index_base, index_offset)
+		return typed_term.enum_cons(constructor, arg)
+	elseif val:is_enum_type() then
+		local decls = val:unwrap_enum_type()
+		-- TODO: Handle decls properly, because it's a value.
+		return typed_term.literal(val)
+	elseif val:is_record_value() then
+		-- TODO: How to deal with a map?
+		error("Records not yet implemented")
+	elseif val:is_record_type() then
+		local decls = val:unwrap_record_type()
+		-- TODO: Handle decls properly, because it's a value.
+		error("Records not yet implemented")
+	elseif val:is_record_extend_stuck() then
+		-- Needs to handle the nuetral value and map of values
+		error("Records not yet implemented")
+	elseif val:is_object_value() then
+		return typed_term.literal(val)
+	elseif val:is_object_type() then
+		-- local decls = val:unwrap_object_type()
+		-- TODO: this needs to be evaluated properly because it contains a value
+		error("Not yet implemented")
+	elseif val:is_level_type() then
+		return typed_term.literal(val)
+	elseif val:is_number_type() then
+		return typed_term.literal(val)
+	elseif val:is_number() then
+		return typed_term.literal(val)
+	elseif val:is_level() then
+		return typed_term.literal(val)
+	elseif val:is_star() then
+		return typed_term.literal(val)
+	elseif val:is_prop() then
+		return typed_term.literal(val)
+	elseif val:is_neutral() then
 		local nval = val:unwrap_neutral()
+		
 		if nval:is_free() then
 			local free = nval:unwrap_free()
 			if free:is_placeholder() then
@@ -103,15 +200,50 @@ local function substitute_inner(val, index_base, index_offset)
 				end
 			end
 		end
-	elseif val:is_tuple_value() then
-		local elems = val:unwrap_tuple_value()
+
+		-- TODO: deconstruct nuetral value or something
+		error("not implemented yet")
+	elseif val:is_prim() then
+		return typed_term.literal(val)
+	elseif val:is_prim_type_type() then
+		return typed_term.literal(val)
+	elseif val:is_prim_number_type() then
+		return typed_term.literal(val)
+	elseif val:is_prim_bool_type() then
+		return typed_term.literal(val)
+	elseif val:is_prim_string_type() then
+		return typed_term.literal(val)
+	elseif val:is_prim_function_type() then
+		local param_type, result_type = val:unwrap_prim_function_type()
+		param_type = substitute_inner(param_type, index_base, index_offset)
+		result_type = substitute_inner(result_type, index_base, index_offset)
+		return typed_term.prim_function_type(param_type, result_type)
+	elseif val:is_prim_boxed_type() then
+		local type = val:unwrap_prim_boxed_type()
+		type = substitute_inner(type, index_base, index_offset)
+		return typed_term.prim_boxed_type(type)
+	elseif val:is_prim_box_stuck() then
+		error("not yet implemented")
+	elseif val:is_prim_unbox_stuck() then
+		error("not yet implemented")
+	elseif val:is_prim_user_defined_type() then
+		local id, family_args = val:unwrap_prim_user_defined_type()
+		id = typed_term.literal(id)
 		local res = typed_array()
-		for i, v in ipairs(elems) do
-			res:append(substitute_inner(val, index_base, index_offset))
+		for i, v in ipairs(family_args) do
+			res:append(substitute_inner(v, index_base, index_offset))
 		end
-		return typed_term.tuple_cons(res)
+		return typed_term.prim_user_defined_type_cons(id, res)
+	elseif val:is_prim_nil_type() then
+		return typed_term.literal(val)
+	elseif val:is_prim_tuple_value() then
+		return typed_term.literal(val)
+	elseif val:is_prim_tuple_type() then
+		local decls = val:unwrap_prim_tuple_type()
+		decls = substitute_inner(decls, index_base, index_offset)
+		return typed_term.prim_tuple_type(decls)
 	else
-		return typed_term.literal(val) --TODO: replace this with real cases and make the default case an error
+		error "what the fuck is this???"
 	end
 end
 
