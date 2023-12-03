@@ -92,6 +92,9 @@ local is = {
 }
 
 local function pretty_print_or_tostring(v, prefix)
+	if type(v) == "string" then
+		return string.format("%q", v)
+	end
 	if type(v) == "table" and v.pretty_print then
 		return v:pretty_print(prefix)
 	end
@@ -103,12 +106,26 @@ local function record_pretty_printer(info)
 	local params = info.params
 
 	local prints = {}
-	for i, param in ipairs(params) do
-		prints[i] = string.format(
-			[[result = result .. "\n" .. np .. %q .. ' = ' .. pretty_print_or_tostring(self[%q], np)]],
-			param,
-			param
+	local lbracket, rbracket = "(", ")"
+	local end_spacing = ""
+	if #params == 0 then
+	elseif #params == 1 then
+		prints[1] = string.format(
+			-- [[result = result .. %q .. ' = ' .. pretty_print_or_tostring(self[%q], np)]],
+			[[result = result .. pretty_print_or_tostring(self[%q], np)]],
+			params[1],
+			params[1]
 		)
+	else
+		end_spacing = [[.. "\n" .. prefix]]
+		lbracket, rbracket = "{", "}"
+		for i, param in ipairs(params) do
+			prints[i] = string.format(
+				[[result = result .. "\n" .. np .. %q .. ' = ' .. pretty_print_or_tostring(self[%q], np)]],
+				param,
+				param
+			)
+		end
 	end
 	local all_prints = table.concat(prints, "\n  ")
 	local chunk = string.format(
@@ -117,17 +134,23 @@ local pretty_print_or_tostring = ...
 return function(self, prefix)
 prefix = prefix or ''
 local np = prefix .. ' '
-local result = %q .. ' {'
+local result = %q .. %q
 %s
-result = result .. "\n" .. prefix .. "}"
+result = result %s .. %q
 return result
 end
 ]],
 		info.kind,
-		all_prints
+		lbracket,
+		all_prints,
+		end_spacing,
+		rbracket
 	)
 
 	local compiled, message = load(chunk, "derive-pretty_print_record", "t")
+	if not compiled then
+		print(chunk)
+	end
 	assert(compiled, message)
 	return compiled(pretty_print_or_tostring)
 end
