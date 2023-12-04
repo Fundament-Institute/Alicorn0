@@ -139,7 +139,7 @@ local grammar = P {
 		* (C(V "subordinate_indent" * V "contiguous_body") + (C(V "newline") * S "\t " ^ 0 * #V "newline")) ^ 0,
 	comment = element("comment", Cg(P "#" * lpeg.Cf(V "subordinate_body", string_concat), "val")),
 	-- TODO automatically convert body to schema bytes variant
-	longstring = element("string", Cg(lpeg.Cf((P [[""""]] * V "subordinate_body"), string_concat), "val")),
+	longstring = element("string", Cg(lpeg.Cf((P [[""""]] * V "subordinate_body"), string_concat), "elements")),
 
 	-- numbers are limited, they are not bignums, they are standard lua numbers. scopes shares the problem of files not having arbitrary precision
 	-- so it probably doesn't matter.
