@@ -176,7 +176,7 @@ local grammar = P {
 	string = element("string", P '"' * Cg(Ct((V "string_literal" + V "splice") ^ 0), "elements") * P '"' * V "endpos"),
 
 	tokens = space_tokens(
-		V "comment" + V "function_call" + V "paren_list" + V "string" + V "number" + V "symbol" + V "longstring"
+		V "comment" + V "function_call" + V "paren_list" + V "longstring" + V "string" + V "number" + V "symbol"
 	),
 	token_spacer = S "\t " ^ 0,
 
