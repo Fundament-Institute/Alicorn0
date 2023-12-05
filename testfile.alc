@@ -2,15 +2,30 @@
 #let y = 926
 #let prim-add = +
 
-# FIXME: let binding here errors due to type mismatch (qtype_type vs actual qtype wrapping prim_number_type)
-#let prim-arith-binop = (prim-func-type (a : prim-number) (b : prim-number) -> (c : prim-number))
-#let prim-sub = (intrinsic "return function(a, b) return a - b end" : prim-arith-binop)
+let prim-arith-binop = (prim-func-type (a : prim-number) (b : prim-number) -> (c : prim-number))
+let prim-sub = (intrinsic "return function(a, b) return a - b end" : prim-arith-binop)
 
-# FIXME: calling intrinsic here errors due to error in fits into (probably same root cause of qtype_type vs actual qtype wrapping prim_number_type)
-let prim-sub = (intrinsic "return function(a, b) return a - b end" : (prim-func-type (a : prim-number) (b : prim-number) -> (c : prim-number)))
+#let prim-sub = (intrinsic "return function(a, b) return a - b end" : (prim-func-type (a : prim-number) (b : prim-number) -> (c : prim-number)))
 
 #let foo = (record (bar = 5) (baz = 6))
 #let subbed = prim-sub foo.bar y
+
+# this should error becaused prim-type is not a prim-type and therefore can't be an arg to a prim-func-type
+# but it doesn't.
+let array-type =
+	intrinsic
+		""""
+			local terms = require './terms'
+			local value = terms.value
+			local gens = require './terms-generators'
+			local value_array = gens.declare_array(value)
+			local id = {name = "array"}
+			local function mktype(elem)
+				return value.prim_boxed_type(id, value_array(elem))
+			end
+			return mktype
+		:
+		prim-func-type (T : prim-type) -> (array : prim-type)
 
 #let (val) =
 #	+ x 5
@@ -22,3 +37,4 @@ let prim-sub = (intrinsic "return function(a, b) return a - b end" : (prim-func-
 
 let (val) = (prim-sub 5 1)
 prim-sub val 3
+

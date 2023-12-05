@@ -39,7 +39,7 @@
 -- when binding to another metavariable bind the one with a greater index to the lesser index
 
 local metalang = require "./metalanguage"
-local types = require "./typesystem"
+--local types = require "./typesystem"
 
 local fibbuf = require "./fibonacci-buffer"
 
