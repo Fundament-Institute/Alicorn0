@@ -1475,7 +1475,7 @@ function evaluate(typed_term, runtime_context)
 		local type_term = typed_term:unwrap_prim_boxed_type()
 		local type_value = evaluate(type_term, runtime_context)
 		local quantity, backing_type = type_value:unwrap_qtype()
-		return qtype(quantity, value.prim_boxed_type(backing_type))
+		return value.qtype(quantity, value.prim_boxed_type(backing_type))
 	elseif typed_term:is_prim_box() then
 		local content = typed_term:unwrap_prim_box()
 		return value.prim(evaluate(content, runtime_context))
