@@ -160,6 +160,9 @@ local pretty_print = {
 		local idx = t.__index or {}
 		t.__index = idx
 		idx["pretty_print"] = record_pretty_printer(info)
+		if not t["__tostring"] then
+			t["__tostring"] = idx["pretty_print"]
+		end
 	end,
 	enum = function(t, info)
 		local idx = t.__index or {}
@@ -199,6 +202,9 @@ local pretty_print = {
 		local compiled, message = load(chunk, "derive-pretty_print_enum", "t")
 		assert(compiled, message)
 		idx["pretty_print"] = compiled(variant_printers)
+		if not t["__tostring"] then
+			t["__tostring"] = idx["pretty_print"]
+		end
 	end,
 }
 

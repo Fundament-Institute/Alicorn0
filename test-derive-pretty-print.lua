@@ -51,3 +51,6 @@ local c2 = mytype3(mytype1.foo, mytype2.middle(mytype1.baz))
 local n = nest1.n(nest1.n(nest1.n(nest1.n(nest1.n(nest1.n(nest1.base(x2)))))))
 print(x2:pretty_print())
 print(n:pretty_print())
+print(n)
+
+assert(tostring(n) == n:pretty_print())
