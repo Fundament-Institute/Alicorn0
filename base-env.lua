@@ -539,7 +539,7 @@ local core_operations = {
 						)
 					)
 				),
-				value.visibility(terms.visibility.explicit),
+				value.param_info(value.visibility(terms.visibility.explicit)),
 				value.closure(
 					typed.tuple_elim(
 						typed.bound_variable(1),
@@ -604,7 +604,7 @@ local core_operations = {
 						)
 					)
 				),
-				value.visibility(terms.visibility.explicit),
+				value.param_info(value.visibility(terms.visibility.explicit)),
 				value.closure(
 					typed.tuple_elim(
 						typed.bound_variable(1),
@@ -621,8 +621,8 @@ local core_operations = {
 		value.closure(
 			typed.tuple_elim(
 				typed.bound_variable(1),
-				2,
-				typed.prim_boxed_type(typed.bound_variable(3))
+				1,
+				typed.prim_boxed_type(typed.bound_variable(2))
 			),
 			terms.runtime_context()
 		),
@@ -647,7 +647,7 @@ local core_operations = {
 						)
 					)
 				),
-				value.visibility(terms.visibility.explicit),
+				value.param_info(value.visibility(terms.visibility.explicit)),
 				value.closure(
 					typed.tuple_elim(
 						typed.bound_variable(1),

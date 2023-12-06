@@ -832,9 +832,10 @@ function infer(
 			if not f_param_info:unwrap_param_info():unwrap_visibility():is_explicit() then
 				error("infer: nyi implicit parameters")
 			end
-			if f_param_type ~= arg_type then
-				p(f_param_type)
-				p(arg_type)
+			if not fitsinto(arg_type, f_param_type) then
+				print "function arg match failure"
+				print(f_param_type:pretty_print())
+				print(arg_type:pretty_print())
 				error("infer: mismatch in arg type and param type of function application")
 			end
 			local application_result_type =

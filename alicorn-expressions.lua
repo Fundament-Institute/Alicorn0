@@ -210,7 +210,7 @@ local function inferred_expression_pairhandler(env, a, b)
 			return false, tuple, env
 		end
 
-		return inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
+		return true, inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple), env
 	end
 
 	if type_of_term:is_qtype() and type_of_term.type:as_prim_function_type() then
