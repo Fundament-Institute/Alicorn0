@@ -477,8 +477,12 @@ local core_operations = {
 	let = exprs.primitive_operative(let_bind),
 	record = exprs.primitive_operative(record_build),
 	intrinsic = exprs.primitive_operative(intrinsic),
-	["prim-number"] = lit_term(value.qtype(value.quantity(terms.quantity.unrestricted), value.prim_number_type), value.prim_type_type),
-	["prim-type"] = lit_term(value.qtype(value.quantity(terms.quantity.unrestricted), value.prim_type_type), value.star(1)),
+	["prim-number"] = lit_term(
+		value.qtype(value.quantity(terms.quantity.unrestricted), value.prim_number_type),
+		value.qtype(value.quantity(terms.quantity.unrestricted), value.prim_type_type)),
+	["prim-type"] = lit_term(
+		value.qtype(value.quantity(terms.quantity.unrestricted), value.prim_type_type),
+		value.qtype(value.quantity(terms.quantity.unrestricted), value.star(1))),
 	["prim-func-type"] = exprs.primitive_operative(prim_func_type_impl),
 	--["dump-env"] = evaluator.primitive_operative(function(syntax, env) print(environment.dump_env(env)); return true, types.unit_val, env end),
 	--["basic-fn"] = evaluator.primitive_operative(basic_fn),

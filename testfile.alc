@@ -38,3 +38,4 @@ let array-type =
 let (val) = (prim-sub 5 1)
 prim-sub val 3
 
+array-type prim-number
