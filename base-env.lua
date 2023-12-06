@@ -440,11 +440,24 @@ local function prim_func_type_impl(syntax, env)
 end
 
 local value = terms.value
+local typed = terms.typed_term
 
 local usage_array = gen.declare_array(gen.builtin_number)
+local val_array = gen.declare_array(value)
 local function lit_term(val, typ)
 	return terms.inferrable_term.typed(typ, usage_array(), terms.typed_term.literal(val))
 end
+local function unrestricted(x)
+	return value.qtype(value.quantity(terms.quantity.unrestricted), x)
+end
+
+local function val_tup_cons(...)
+	return value.tuple_value(val_array(...))
+end
+local function val_desc_elem(x)
+	return value.enum_value("cons", x)
+end
+local val_desc_empty = value.enum_value("empty", val_tup_cons())
 
 local core_operations = {
 	["+"] = exprs.primitive_applicative(function(a, b)
@@ -478,12 +491,178 @@ local core_operations = {
 	record = exprs.primitive_operative(record_build),
 	intrinsic = exprs.primitive_operative(intrinsic),
 	["prim-number"] = lit_term(
-		value.qtype(value.quantity(terms.quantity.unrestricted), value.prim_number_type),
-		value.qtype(value.quantity(terms.quantity.unrestricted), value.prim_type_type)),
+		unrestricted(value.prim_number_type),
+		unrestricted(value.prim_type_type)),
 	["prim-type"] = lit_term(
-		value.qtype(value.quantity(terms.quantity.unrestricted), value.prim_type_type),
-		value.qtype(value.quantity(terms.quantity.unrestricted), value.star(1))),
+		unrestricted(value.prim_type_type),
+		unrestricted(value.star(1))),
 	["prim-func-type"] = exprs.primitive_operative(prim_func_type_impl),
+	box = lit_term(
+		value.closure(
+			typed.tuple_elim(
+				typed.bound_variable(1),
+				2,
+				typed.prim_box(typed.bound_variable(3))
+			),
+			terms.runtime_context()
+		),
+		unrestricted(
+			value.pi(
+				unrestricted(
+					value.tuple_type(
+						val_desc_elem(
+							val_tup_cons(
+								val_desc_elem(
+									val_tup_cons(
+										val_desc_empty,
+										value.closure(
+											typed.tuple_elim(
+												typed.bound_variable(1),
+												0,
+												typed.qtype(
+													typed.literal(value.quantity(terms.quantity.erased)),
+													typed.star(1))
+											),
+											terms.runtime_context()
+										)
+									)
+								),
+								value.closure(
+									terms.typed_term.tuple_elim(
+										terms.typed_term.bound_variable(1),
+										1,
+										typed.bound_variable(2)
+									),
+									terms.runtime_context()
+								)
+							)
+						)
+					)
+				),
+				value.visibility(terms.visibility.explicit),
+				value.closure(
+					typed.tuple_elim(
+						typed.bound_variable(1),
+						2,
+						typed.qtype(
+							typed.literal(value.quantity(terms.quantity.erased)),
+							typed.prim_boxed_type(
+								typed.bound_variable(2)
+							)
+						)
+					),
+					terms.runtime_context()
+				),
+				value.result_info(terms.result_info(terms.purity.pure))
+			)
+		)
+	),
+	unbox = lit_term(
+		value.closure(
+			typed.tuple_elim(
+				typed.bound_variable(1),
+				2,
+				typed.prim_unbox(typed.bound_variable(3))
+			),
+			terms.runtime_context()
+		),
+		unrestricted(
+			value.pi(
+				unrestricted(
+					value.tuple_type(
+						val_desc_elem(
+							val_tup_cons(
+								val_desc_elem(
+									val_tup_cons(
+										val_desc_empty,
+										value.closure(
+											typed.tuple_elim(
+												typed.bound_variable(1),
+												0,
+												typed.qtype(
+													typed.literal(value.quantity(terms.quantity.erased)),
+													typed.star(1))
+											),
+											terms.runtime_context()
+										)
+									)
+								),
+								value.closure(
+									terms.typed_term.tuple_elim(
+										terms.typed_term.bound_variable(1),
+										1,
+										typed.qtype(
+											typed.literal(value.quantity(terms.quantity.erased)),
+											typed.prim_boxed_type(
+												typed.bound_variable(2)
+											)
+										)
+									),
+									terms.runtime_context()
+								)
+							)
+						)
+					)
+				),
+				value.visibility(terms.visibility.explicit),
+				value.closure(
+					typed.tuple_elim(
+						typed.bound_variable(1),
+						2,
+						typed.bound_variable(2)
+					),
+					terms.runtime_context()
+				),
+				value.result_info(terms.result_info(terms.purity.pure))
+			)
+		)
+	),
+	boxed = lit_term(
+		value.closure(
+			typed.tuple_elim(
+				typed.bound_variable(1),
+				2,
+				typed.prim_boxed_type(typed.bound_variable(3))
+			),
+			terms.runtime_context()
+		),
+		unrestricted(
+			value.pi(
+				unrestricted(
+					value.tuple_type(
+						val_desc_elem(
+							val_tup_cons(
+								val_desc_empty,
+								value.closure(
+									typed.tuple_elim(
+										typed.bound_variable(1),
+										0,
+										typed.qtype(
+											typed.literal(value.quantity(terms.quantity.erased)),
+											typed.star(1))
+									),
+									terms.runtime_context()
+								)
+							)
+						)
+					)
+				),
+				value.visibility(terms.visibility.explicit),
+				value.closure(
+					typed.tuple_elim(
+						typed.bound_variable(1),
+						1,
+						typed.qtype(
+							typed.literal(value.quantity(terms.quantity.erased)),
+							typed.literal(value.prim_type_type)
+						)
+					),
+					terms.runtime_context()
+				),
+				value.result_info(terms.result_info(terms.purity.pure))
+			)
+		)
+	),
 	--["dump-env"] = evaluator.primitive_operative(function(syntax, env) print(environment.dump_env(env)); return true, types.unit_val, env end),
 	--["basic-fn"] = evaluator.primitive_operative(basic_fn),
 	--tuple = evaluator.primitive_operative(tuple_type_impl),

@@ -25,7 +25,7 @@ let array-type =
 			end
 			return mktype
 		:
-		prim-func-type (T : prim-type) -> (array : prim-type)
+		prim-func-type (T : (boxed prim-type)) -> (array : (boxed prim-type))
 
 #let (val) =
 #	+ x 5
@@ -38,4 +38,4 @@ let array-type =
 let (val) = (prim-sub 5 1)
 prim-sub val 3
 
-array-type prim-number
+array-type (box prim-type prim-number)
