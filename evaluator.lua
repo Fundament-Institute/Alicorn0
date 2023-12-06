@@ -337,6 +337,12 @@ local function fitsinto_record_generator(trait, t, info)
 		if self == other then
 			return true
 		end
+		if self.kind ~= other.kind then
+			print("fitsinto_fail kind check failed for self, other")
+			print(self)
+			print(other)
+			return false, fitsinto_fail("incompatible kinds: " .. self.kind .. ", " .. other.kind)
+		end
 		local ok, err
 		%s
 		return true
@@ -832,11 +838,12 @@ function infer(
 			if not f_param_info:unwrap_param_info():unwrap_visibility():is_explicit() then
 				error("infer: nyi implicit parameters")
 			end
-			if not fitsinto(arg_type, f_param_type) then
-				print "function arg match failure"
-				print(f_param_type:pretty_print())
-				print(arg_type:pretty_print())
-				error("infer: mismatch in arg type and param type of function application")
+			local fitsinto_ok, fitsinto_err = fitsinto(arg_type, f_param_type)
+			if not fitsinto_ok then
+				print("function arg match failure")
+				print("f_param_type", f_param_type:pretty_print())
+				print("arg_type", arg_type:pretty_print())
+				error("infer: mismatch in arg type and param type of function application. fitsinto_err: " .. tostring(fitsinto_err))
 			end
 			local application_result_type =
 				apply_value(f_result_type, evaluate(arg_term, typechecking_context:get_runtime_context()))
@@ -1475,7 +1482,7 @@ function evaluate(typed_term, runtime_context)
 		local type_term = typed_term:unwrap_prim_boxed_type()
 		local type_value = evaluate(type_term, runtime_context)
 		local quantity, backing_type = type_value:unwrap_qtype()
-		return qtype(quantity, value.prim_boxed_type(backing_type))
+		return value.qtype(quantity, value.prim_boxed_type(backing_type))
 	elseif typed_term:is_prim_box() then
 		local content = typed_term:unwrap_prim_box()
 		return value.prim(evaluate(content, runtime_context))

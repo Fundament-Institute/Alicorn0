@@ -914,6 +914,7 @@ for _, deriver in ipairs { derivers.as, derivers.pretty_print } do
 	quantity:derive(deriver)
 	visibility:derive(deriver)
 	value:derive(deriver)
+	neutral_value:derive(deriver)
 	binding:derive(deriver)
 end
 
