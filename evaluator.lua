@@ -555,6 +555,11 @@ local function check(
 	if checkable_term:is_inferrable() then
 		local inferrable_term = checkable_term:unwrap_inferrable()
 		local inferred_type, inferred_usages, typed_term = infer(inferrable_term, typechecking_context)
+		if not inferred_type:is_qtype() then
+			print(inferrable_term)
+			print(inferred_type)
+			error("check: infer didn't return a qtype for " .. inferrable_term.kind)
+		end
 		-- TODO: unify!!!!
 		if inferred_type ~= target_type then
 			print "attempting to check if terms fit"
@@ -1093,7 +1098,7 @@ function infer(
 		end
 		local empty = value.enum_value("empty", tup_val())
 		local handler, userdata_type = inferrable_term:unwrap_operative_type_cons()
-		local goal_type = value.pi(
+		local goal_type = unrestricted(value.pi(
 			unrestricted(
 				value.tuple_type(
 					cons(
@@ -1116,7 +1121,7 @@ function infer(
 			),
 			--unrestricted(tup_val(unrestricted(prim_inferrable_term_type), unrestricted(prim_environment_type))),
 			result_info_pure
-		)
+		))
 		local handler_type, handler_usages, handler_term = check(handler, typechecking_context, goal_type)
 		local userdata_type_type, userdata_type_usages, userdata_type_term = infer(userdata_type, typechecking_context)
 		local operative_type_usages = usage_array()
