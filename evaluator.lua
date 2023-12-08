@@ -347,9 +347,6 @@ add_comparer("value.tuple_type", "value.tuple_type", function(a, b)
 	return true
 end)
 add_comparer("value.pi", "value.pi", function(a, b)
-	if not a:is_pi() and b:is_pi() then
-		error "both arguments must be pis"
-	end
 	if a == b then
 		return true
 	end
