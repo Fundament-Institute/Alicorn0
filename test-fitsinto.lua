@@ -5,7 +5,7 @@ local evaluator = require "./evaluator"
 
 local value = terms.value
 local typed = terms.typed_term
-local fitsinto = require "./fitsinto".fitsinto
+local fitsinto = evaluator.fitsinto
 
 local qty = function(q, ty)
 	return value.qtype(value.quantity(q), ty)
@@ -217,6 +217,6 @@ local passed, failed, total = (require "tap")(function(test)
 				)
 			)
 		)
-		assert(fitsinto(decl_a, decl_b))
+		assert(fitsinto(unrestrict(decl_a), unrestrict(decl_b)))
 	end)
 end)
