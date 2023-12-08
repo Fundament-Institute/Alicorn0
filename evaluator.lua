@@ -260,6 +260,20 @@ local function is_type_of_types(val)
 	return type:is_qtype_type() or type:is_star() or type:is_prop() or type:is_prim_type_type()
 end
 
+local make_inner_context
+local infer_tuple_type, infer_tuple_type_unwrapped
+local terms = require "./terms"
+local value = terms.value
+
+local fitsinto
+-- indexed by kind x kind
+local fitsinto_comparers = {}
+
+local function add_comparer(ka, kb, comparer)
+	fitsinto_comparers[ka] = fitsinto_comparers[ka] or {}
+	fitsinto_comparers[ka][kb] = comparer
+end
+
 local fitsinto_fail_mt = {
 	__tostring = function(self)
 		local message = self.message
@@ -284,163 +298,142 @@ local function fitsinto_fail(message, cause)
 		cause = cause,
 	}, fitsinto_fail_mt)
 end
-local fitsinto_trait = traits.declare_trait("fitsinto")
-local fitsinto
-local function quantity_sort(q)
-	if q == quantity.erased then
-		return 0
-	elseif q == quantity.linear then
-		return 1
-	elseif q == quantity.unrestricted then
-		return 2
-	end
-	error("should be unreachable, exhaustive. q is not a quantity or new quantity added?")
-end
-fitsinto_trait:declare_method("fitsinto")
-fitsinto_trait:implement_on(terms.quantity, {
-	fitsinto = function(self, other)
-		if quantity_sort(self) >= quantity_sort(other) then
-			return other
-		end
-		return false, "quantity doesn't match"
-	end,
-})
-fitsinto_trait:implement_on(gen.builtin_string, {
-	fitsinto = function(self, other)
-		if self == other then
-			return true
-		end
-		return false, "(string mismatch. " .. self .. " != " .. other .. ")"
-	end,
-})
 
-local function fitsinto_record_generator(trait, t, info)
-	local kind = info.kind
-	local params = info.params
-
-	local fieldparts = {}
-	for i, param in ipairs(params) do
-		fieldparts[i] = string.format(
-			[[ok, err = fitsinto_trait:get(fieldtypes[%d]).fitsinto(self.%s, other.%s)
-				if not ok then return false, fitsinto_fail(%q, err) end]],
-			i,
-			param,
-			param,
-			param
-		)
-	end
-	fieldparts = table.concat(fieldparts, "\n\t\t")
-	local chunk = string.format(
-		[[
-	local fitsinto_trait, fieldtypes, fitsinto_fail = ...
-	return function(self, other)
-		if self == other then
-			return true
-		end
-		if self.kind ~= other.kind then
-			print("fitsinto_fail kind check failed for self, other")
-			print(self)
-			print(other)
-			return false, fitsinto_fail("incompatible kinds: " .. self.kind .. ", " .. other.kind)
-		end
-		local ok, err
-		%s
-		return true
-	end
-	]],
-		fieldparts
-	)
-
-	local compiled, message = load(chunk, "derive-fitsinto_record_" .. kind, "t")
-	if not compiled then
-		error(message .. chunk)
-	end
-	return compiled(trait, info.params_types, fitsinto_fail)
+local function always_fits_comparer(a, b)
+	return true
 end
-for _, v in ipairs({ terms.result_info, terms.purity }) do
-	v:derive(derivers.trait_method(fitsinto_trait, "fitsinto", fitsinto_record_generator))
+
+-- prim types
+for _, prim_type in ipairs({
+	value.prim_number_type,
+	value.prim_string_type,
+	value.prim_bool_type,
+	value.prim_user_defined_type({name=""}, value_array()),
+}) do
+	add_comparer(prim_type.kind, prim_type.kind, always_fits_comparer)
 end
-terms.value:derive(derivers.trait_method(fitsinto_trait, "fitsinto", fitsinto_record_generator, {
-	closure = function(a, b)
-		if not a:is_closure() and b:is_closure() then
-			error "both arguments must be closures"
-		end
-		if a == b then
-			return true
-		end
-		local arg = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
-		local a_res = apply_value(a, arg)
-		local b_res = apply_value(b, arg)
-		local ok, err = fitsinto(a_res, b_res)
-		if ok then
-			return true
-		end
-		return false, fitsinto_fail("closure_apply()", err)
-	end,
-	tuple_value = function(a, b)
-		if not a:is_tuple_value() and b:is_tuple_value() then
-			error "both arguments must be tuple_values"
-		end
-		if a.elements == b.elements then
-			return true
-		end
-		if #a.elements ~= #b.elements then
-			return false, "element count mismatch"
-		end
-		for i, av in ipairs(a.elements) do
-			local ok, err = fitsinto(av, b.elements[i])
+
+-- TODO: value.pi
+-- TODO: value.tuple_type
+
+-- types of types
+add_comparer(value.prim_type_type.kind, value.prim_type_type.kind, always_fits_comparer)
+add_comparer("value.tuple_type", "value.tuple_type", function(a, b)
+	-- fixme lol
+	local placeholder = value.neutral(neutral_value.free(free.unique({})))
+	local tuple_types_a, na = infer_tuple_type_unwrapped(a, placeholder)
+	local tuple_types_b, nb = infer_tuple_type_unwrapped(b, placeholder)
+	if na ~= nb then
+		return false, "tuple types have different length"
+	end
+	for i = 1, na do
+		local ta, tb = tuple_types_a[i], tuple_types_b[i]
+
+		if ta ~= tb then
+			if tb.kind == "value.neutral" then
+				print("value.tuple_type comparer a, b")
+				print(a)
+				print(b)
+				p("ta, tb")
+				p(ta)
+				p(tb)
+			end
+			local ok, err = fitsinto(ta, tb)
 			if not ok then
-				return false, fitsinto_fail({ "[", i, "]" }, err)
+				return false, err
 			end
 		end
-		return true
-	end,
-	pi = function(a, b)
-		if not a:is_pi() and b:is_pi() then
-			error "both arguments must be pis"
-		end
-		if a == b then
-			return true
-		end
-		local ok, err
-		ok, err = fitsinto(a.param_type, b.param_type)
-		if not ok then
-			return false, fitsinto_fail("param_type", err)
-		end
-		ok, err = fitsinto(a.param_info, b.param_info)
-		if not ok then
-			return false, fitsinto_fail("param_info", err)
-		end
-		ok, err = fitsinto(b.result_info, a.result_info)
-		if not ok then
-			return false, fitsinto_fail("result_info", err)
-		end
-		ok, err = fitsinto(b.result_type, a.result_type)
-		if not ok then
-			return false, fitsinto_fail("result_type", err)
-		end
-		return true
-	end,
-}))
-
-local value_fitsinto = fitsinto_trait:get(terms.value).fitsinto
-
--- special handling:
---   pitype
---   types of types
---   explicit casts NYI
--- otherwise it's just equality or closure symbolic evaluation
--- covariance, contravariance, invariance, phantom variance
-
--- if a fits into b / a can be cast to b / b > a
-function fitsinto(a, b)
-	if getmetatable(a) ~= terms.value or getmetatable(b) ~= terms.value then
-		error("fitsinto should only be called on alicorn values")
+	end
+	return true
+end)
+add_comparer("value.pi", "value.pi", function(a, b)
+	if not a:is_pi() and b:is_pi() then
+		error "both arguments must be pis"
 	end
 	if a == b then
 		return true
 	end
-	return value_fitsinto(a, b)
+	local ok, err
+	ok, err = fitsinto(a.param_type, b.param_type)
+	if not ok then
+		return false, fitsinto_fail("param_type", err)
+	end
+	local avis = a.param_info.visibility.visibility
+	local bvis = b.param_info.visibility.visibility
+	if avis ~= bvis and avis ~= terms.visibility.implicit then
+		return false, fitsinto_fail("param_info")
+	end
+
+	local apurity = a.result_info.purity
+	local bpurity = b.result_info.purity
+	if apurity ~= bpurity then
+		return false, fitsinto_fail("result_info")
+	end
+
+	local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
+	local a_res = apply_value(a.result_type, unique_placeholder)
+	local b_res = apply_value(b.result_type, unique_placeholder)
+	ok, err = fitsinto(a_res, b_res)
+	if not ok then
+		return false, fitsinto_fail("result_type", err)
+	end
+	return true
+end)
+
+for _, type_of_type in ipairs({
+	value.prim_type_type,
+}) do
+	add_comparer(type_of_type.kind, value.star(0).kind, always_fits_comparer)
+end
+
+add_comparer(value.star(0).kind, value.star(0).kind, function(a, b)
+	if a.level > b.level then
+		return false, "a.level > b.level"
+	end
+	return true
+end)
+
+local function quantities_fitsinto(qa, qb)
+	if qa == qb or qa == terms.quantity.unrestricted or qb == terms.quantity.erased then
+		return true
+	end
+	return false, qa.kind .. " doesn't fit into " .. qb.kind
+end
+
+function fitsinto(a, b)
+	if not a:is_qtype() then
+		print(a)
+		error("fitsinto given value a which isn't a qtype " .. a.kind)
+	end
+	if not b:is_qtype() then
+		print(b)
+		error("fitsinto given value b which isn't a qtype " .. b.kind)
+	end
+
+	local qa, tya = a:unwrap_qtype()
+	local qb, tyb = b:unwrap_qtype()
+
+	if not fitsinto_comparers[tya.kind] then
+		error("fitsinto given value a which isn't a type or NYI " .. tya.kind)
+	elseif not fitsinto_comparers[tyb.kind] then
+		error("fitsinto given value b which isn't a type or NYI " .. tyb.kind)
+	end
+
+	local ok, err = quantities_fitsinto(qa.quantity, qb.quantity)
+	if not ok then
+		return false, ".quantity " .. err
+	end
+
+	local comparer = (fitsinto_comparers[tya.kind] or {})[tyb.kind]
+	if not comparer then
+		return false, "no comparer for " .. tya.kind .. " with " .. tyb.kind
+	end
+
+	ok, err = comparer(tya, tyb)
+	if not ok then
+		return false, ".value" .. err
+	end
+	return true
 end
 
 --[[
@@ -720,7 +713,7 @@ local function make_tuple_prefix(subject_type, subject_value)
 end
 
 -- TODO: create a typechecking context append variant that merges two
-local function make_inner_context(decls, tupletypes, make_prefix)
+function make_inner_context(decls, tupletypes, make_prefix)
 	-- evaluate the type of the tuple
 	local constructor, arg = decls:unwrap_enum_value()
 	if constructor == "empty" then
@@ -738,17 +731,19 @@ local function make_inner_context(decls, tupletypes, make_prefix)
 	end
 end
 
-local function infer_tuple_type(subject_type, subject_value)
+function infer_tuple_type_unwrapped(subject_type, subject_value)
+	local decls, make_prefix = make_tuple_prefix(subject_type, subject_value)
+	return make_inner_context(decls, {}, make_prefix)
+end
+
+function infer_tuple_type(subject_type, subject_value)
 	if not subject_type:is_qtype() then
 		print("missing qtype wrapping tuple type")
 		print(subject_type:pretty_print())
 	end
 	-- define how the type of each tuple element should be evaluated
 	local qty, base = subject_type:unwrap_qtype()
-	local decls, make_prefix = make_tuple_prefix(base, subject_value)
-	local inner_context, n_elements = make_inner_context(decls, {}, make_prefix)
-
-	return inner_context, n_elements
+	return infer_tuple_type_unwrapped(base, subject_value)
 end
 
 ---@param inferrable_term unknown
@@ -1586,6 +1581,7 @@ function evaluate(typed_term, runtime_context)
 end
 
 return {
+	fitsinto = fitsinto,
 	const_combinator = const_combinator,
 	check = check,
 	infer = infer,
