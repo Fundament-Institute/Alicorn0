@@ -28,7 +28,7 @@ local eq = {
 
 		local variants_checks = {}
 		for n, vname in ipairs(variants) do
-			local vkind = name .. "_" .. vname
+			local vkind = name .. "." .. vname
 			local vdata = variants[vname]
 			local vtype = vdata.type
 			local vinfo = vdata.info
@@ -76,7 +76,7 @@ local is = {
 		local variants = info.variants
 
 		for n, vname in ipairs(variants) do
-			local vkind = name .. "_" .. vname
+			local vkind = name .. "." .. vname
 			local chunk = string.format("return function(self) return self.kind == %q end", vkind)
 
 			derive_print("derive is: enum chunk: " .. vkind)
@@ -172,7 +172,7 @@ local pretty_print = {
 
 		local variant_printers = {}
 		for n, vname in ipairs(variants) do
-			local vkind = name .. "_" .. vname
+			local vkind = name .. "." .. vname
 			local vdata = variants[vname]
 			local vtype = vdata.type
 			local vinfo = vdata.info
@@ -238,7 +238,7 @@ local unwrap = {
 		local variants = info.variants
 
 		for n, vname in ipairs(variants) do
-			local vkind = name .. "_" .. vname
+			local vkind = name .. "." .. vname
 			local vdata = variants[vname]
 			local vtype = vdata.type
 			local vinfo = vdata.info
@@ -284,7 +284,7 @@ local as = {
 		local variants = info.variants
 
 		for n, vname in ipairs(variants) do
-			local vkind = name .. "_" .. vname
+			local vkind = name .. "." .. vname
 			local chunk = "return function(self) return pcall(function() return self:unwrap_" .. vname .. "() end) end"
 
 			derive_print("derive as: enum chunk: " .. vkind)
@@ -315,7 +315,7 @@ local function trait_method(trait, method, build_record_function, specialization
 
 			local variant_impls = {}
 			for n, vname in ipairs(variants) do
-				local vkind = name .. "_" .. vname
+				local vkind = name .. "." .. vname
 				local vdata = variants[vname]
 				local vtype = vdata.type
 				local vinfo = vdata.info

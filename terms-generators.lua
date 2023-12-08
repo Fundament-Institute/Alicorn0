@@ -124,7 +124,7 @@ local function define_enum(self, name, variants)
 	for i, v in ipairs(variants) do
 		local vname = v[1]
 		local vparams_with_types = v[2]
-		local kind = name .. "_" .. vname
+		local kind = name .. "." .. vname
 		derive_variants[i] = vname
 		if vparams_with_types then
 			local record_cons, record_info = gen_record(self, {}, kind, vparams_with_types)
