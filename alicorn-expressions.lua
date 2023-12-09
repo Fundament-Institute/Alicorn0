@@ -428,7 +428,7 @@ local function primitive_operative(fn)
 	-- 	)
 	-- )))
 	local result_type = const_combinator(unrestricted(value.tuple_type(cons(cons(empty, cu_inf_type), cu_env_type))))
-	local inferred_type = value.pi(param_type, param_info_explicit, result_type, result_info_pure)
+	local inferred_type = unrestricted(value.pi(param_type, param_info_explicit, result_type, result_info_pure))
 	local inferrable_fn = inferrable_term.typed(inferred_type, usage_array(), typed_fn)
 	-- FIXME: use prim_if here
 	-- 5: wrap it in an operative type cons and finally an operative cons
