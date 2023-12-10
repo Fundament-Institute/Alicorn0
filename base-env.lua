@@ -37,6 +37,10 @@ local function do_block(syntax, env)
 end
 
 local function let_bind(syntax, env)
+	-- local target, env = args.target, args.env
+	-- assert(target and env)
+	assert(env and env.get)
+
 	local ok, name, bind = syntax:match({
 		metalang.listmatch(
 			metalang.accept_handler,
@@ -54,7 +58,7 @@ local function let_bind(syntax, env)
 		return false, name
 	end
 
-	local env = bind.env
+	env = bind.env
 
 	if type(name) == "table" then
 		print("binding destructuring with let")

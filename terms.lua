@@ -190,6 +190,7 @@ local free = gen.declare_type()
 local value = gen.declare_type()
 local neutral_value = gen.declare_type()
 local binding = gen.declare_type()
+local expression_target = gen.declare_type()
 
 local runtime_context_mt
 
@@ -276,6 +277,19 @@ local prim_user_defined_id = gen.declare_foreign(function(val)
 	return type(val) == "table" and type(val.name) == "string"
 end)
 
+expression_target:define_enum("expression_target", {
+	-- infer 
+  { "infer" },
+	-- check to a target type
+	{ "check", { 
+			"target_type", value,
+		}
+	},
+	{ "mechanism", {
+		-- TODO
+		"TODO", value
+	}}
+})
 -- terms that don't have a body yet
 binding:define_enum("binding", {
 	{ "let", {
@@ -353,7 +367,7 @@ inferrable_term:define_enum("inferrable", {
 		"f",
 		inferrable_term,
 		"arg",
-		inferrable_term,
+		checkable_term,
 	} },
 	{ "tuple_cons", { "elements", array(inferrable_term) } },
 	{ "tuple_elim", {
@@ -917,6 +931,7 @@ for _, deriver in ipairs { derivers.as, derivers.pretty_print } do
 	value:derive(deriver)
 	neutral_value:derive(deriver)
 	binding:derive(deriver)
+	expression_target:derive(deriver)
 end
 
 --[[
@@ -947,6 +962,7 @@ return {
 	value = value,
 	neutral_value = neutral_value,
 	binding = binding,
+	expression_target = expression_target,
 	prim_syntax_type = prim_syntax_type,
 	prim_environment_type = prim_environment_type,
 	prim_inferrable_term_type = prim_inferrable_term_type,
