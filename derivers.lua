@@ -1,5 +1,14 @@
+---@alias RecordDeriveInfo { kind: string, params: string[], params_types: Type[] }
+---@alias UnitDeriveInfo { kind: string }
+---@alias EnumDeriveInfo { name: string, variants: { [number]: string, [string]: { type: string, info: RecordDeriveInfo | UnitDeriveInfo } } }
+
+---@class (exact) Deriver
+---@field record fun(t: Record, info: RecordDeriveInfo)
+---@field enum fun(t: Enum, info: EnumDeriveInfo)
+
 local derive_print = function(...) end -- can make this call derive_print(...) if you want to debug
 
+---@type Deriver
 local eq = {
 	record = function(t, info)
 		local kind = info.kind
@@ -68,6 +77,7 @@ local eq = {
 	end,
 }
 
+---@type Deriver
 local is = {
 	enum = function(t, info)
 		local idx = t.__index or {}
@@ -155,6 +165,7 @@ end
 	return compiled(pretty_print_or_tostring)
 end
 
+---@type Deriver
 local pretty_print = {
 	record = function(t, info)
 		local idx = t.__index or {}
@@ -208,6 +219,7 @@ local pretty_print = {
 	end,
 }
 
+---@type Deriver
 local unwrap = {
 	record = function(t, info)
 		local idx = t.__index or {}
@@ -276,6 +288,7 @@ local unwrap = {
 	end,
 }
 
+---@type Deriver
 local as = {
 	enum = function(t, info)
 		t:derive(unwrap)
