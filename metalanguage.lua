@@ -393,7 +393,7 @@ list_many = reducer(function(syntax, submatcher)
 	end
 	return true, vals
 end, "list_many")
-list_many_threaded = reducer(function(syntax, submatcher_fn, init_thread)
+local list_many_threaded = reducer(function(syntax, submatcher_fn, init_thread)
 	local vals = {}
 	local ok, cont, val, thread, tail = true, true, nil, init_thread, syntax
 	local nextthread = init_thread
@@ -411,7 +411,7 @@ list_many_threaded = reducer(function(syntax, submatcher_fn, init_thread)
 	return true, vals, thread
 end, "list_many_threaded")
 
-oneof = reducer(function(syntax, ...)
+local oneof = reducer(function(syntax, ...)
 	return syntax:match({ ... }, failure_handler, nil)
 end, "oneof")
 

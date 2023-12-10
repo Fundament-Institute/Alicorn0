@@ -571,7 +571,7 @@ local function check(
 		--local unified_type = inferred_type:unify(target_type) -- can fail, will cause lua error
 		if inferred_type ~= target_type then
 		end
-		return inferred_type, inferred_usages, typed_term
+		return inferred_usages, typed_term
 	elseif checkable_term:is_lambda() then
 		local param_name, body = checkable_term:unwrap_lambda()
 		-- assert that target_type is a pi type
@@ -743,6 +743,16 @@ function infer_tuple_type(subject_type, subject_value)
 	return infer_tuple_type_unwrapped(base, subject_value)
 end
 
+local function nearest_star_level(typ)
+	if typ:is_prim_type_type() then
+		return 0
+	elseif typ:is_star() then
+		return typ:unwrap_star()
+	else
+		error "unknown sort in nearest_star, please expand or build a proper least upper bound"
+	end
+end
+
 ---@param inferrable_term unknown
 ---@param typechecking_context TypecheckingContext
 ---@return unknown, unknown, unknown
@@ -817,9 +827,45 @@ function infer(
 		error("infer: nyi")
 		local param_type, param_info, result_type, result_info = inferrable_term:unwrap_pi()
 		local param_type_type, param_type_usages, param_type_term = infer(param_type, typechecking_context)
-		local param_info_type, param_info_usages, param_type_term = infer(param_type, typechecking_context)
-		local param_type_type, param_type_usages, param_type_term = infer(param_type, typechecking_context)
-		local param_type_type, param_type_usages, param_type_term = infer(param_type, typechecking_context)
+		local param_info_usages, param_info_term = check(param_info, typechecking_context, value.param_info_type)
+		local result_type_type, result_type_usages, result_type_term = infer(result_type, typechecking_context)
+		local result_info_usages, result_info_term = check(result_info, typechecking_context, value.result_info_type)
+		local result_type_type_quantity, result_type_type_base = result_type_type:unwrap_qtype()
+		if not result_type_type_base:is_pi() then
+			error "result type of a pi term must infer to a pi because it must be callable"
+			-- TODO: switch to using a mechanism term system
+		end
+		local result_type_param_type, result_type_param_info, result_type_result_type, result_type_result_info = result_type_type_base:unwrap_pi()
+
+		if not result_type_result_info:unwrap_result_info():is_pure() then
+			error "result type computation must be pure for now"
+		end
+
+		local ok, err = fitsinto(evaluate(param_type_term, typechecking_context.runtime_context), result_type_param_type)
+		if not ok then
+			error("inferrable pi type's param type doesn't fit into the result type function's parameters because "..err)
+		end
+		local sort = value.star(math.max(
+			nearest_star_level(param_type_type),
+			nearest_star_level(result_type_result_type),
+			0
+		))
+
+		local term = typed_term.pi(
+			param_type_term,
+			param_info_term,
+			result_type_term,
+			result_info_term
+		)
+
+		local usages = usage_array()
+		add_arrays(usages, param_type_usages)
+		add_arrays(usages, param_info_usages)
+		add_arrays(usages, result_type_usages)
+		add_arrays(usages, result_info_usages)
+
+		return sort, usages, term
+
 	elseif inferrable_term:is_application() then
 		local f, arg = inferrable_term:unwrap_application()
 		local f_type, f_usages, f_term = infer(f, typechecking_context)
@@ -1114,7 +1160,7 @@ function infer(
 			--unrestricted(tup_val(unrestricted(prim_inferrable_term_type), unrestricted(prim_environment_type))),
 			result_info_pure
 		))
-		local handler_type, handler_usages, handler_term = check(handler, typechecking_context, goal_type)
+		local handler_usages, handler_term = check(handler, typechecking_context, goal_type)
 		local userdata_type_type, userdata_type_usages, userdata_type_term = infer(userdata_type, typechecking_context)
 		local operative_type_usages = usage_array()
 		add_arrays(operative_type_usages, handler_usages)
@@ -1194,7 +1240,7 @@ function infer(
 		return bodytype, result_usages, terms.typed_term.let(exprterm, bodyterm)
 	elseif inferrable_term:is_prim_intrinsic() then
 		local source, type = inferrable_term:unwrap_prim_intrinsic()
-		local source_type, source_usages, source_term = check(source, typechecking_context, unrestricted(value.prim_string_type))
+		local source_usages, source_term = check(source, typechecking_context, unrestricted(value.prim_string_type))
 		local type_type, type_usages, type_term = infer(type, typechecking_context) --check(type, typechecking_context, value.qtype_type(0))
 
 		print "prim intrinsic is inferring"

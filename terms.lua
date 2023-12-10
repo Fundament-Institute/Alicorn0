@@ -342,11 +342,11 @@ inferrable_term:define_enum("inferrable", {
 			"param_type",
 			inferrable_term,
 			"param_info",
-			inferrable_term,
+			checkable_term,
 			"result_type",
 			inferrable_term,
 			"result_info",
-			inferrable_term,
+			checkable_term,
 		},
 	},
 	{ "application", {
@@ -913,6 +913,7 @@ for _, deriver in ipairs { derivers.as, derivers.pretty_print } do
 	typed_term:derive(deriver)
 	quantity:derive(deriver)
 	visibility:derive(deriver)
+	free:derive(deriver)
 	value:derive(deriver)
 	neutral_value:derive(deriver)
 	binding:derive(deriver)

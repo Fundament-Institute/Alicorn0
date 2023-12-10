@@ -38,4 +38,11 @@ let array-type =
 let (val) = (prim-sub 5 1)
 prim-sub val 3
 
-array-type (box prim-type prim-number)
+#let number-array = array-type (box prim-type prim-number)
+
+let sub = 
+	lambda (x : prim-number, y : prim-number)
+		let (val) = (prim-sub x y)
+		val
+
+sub 5 (sub 3 2)
