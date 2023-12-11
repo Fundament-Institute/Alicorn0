@@ -673,13 +673,8 @@ function apply_value(f, arg)
 	elseif f:is_prim() then
 		local prim_func_impl = f:unwrap_prim()
 		if arg:is_prim_tuple_value() then
-			local elements = arg:unwrap_prim_tuple_value()
-			for i, v in ipairs(elements) do
-				print("elements", i, v)
-			end
-			p("unpack", elements:unpack())
-			p("prim_func_impl", debug.getinfo(prim_func_impl))
-			return prim_tup_val(prim_func_impl(elements:unpack()))
+			local arg_elements = arg:unwrap_prim_tuple_value()
+			return prim_tup_val(prim_func_impl(arg_elements:unpack()))
 		elseif arg:is_neutral() then
 			return value.neutral(neutral_value.prim_application_stuck(prim_func_impl, arg:unwrap_neutral()))
 		else

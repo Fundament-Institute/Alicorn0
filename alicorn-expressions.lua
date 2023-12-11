@@ -260,7 +260,7 @@ local function expression_pairhandler(args, a, b)
 		)
 
 		if not ok then
-			return false, tuple, env
+			return false, tuple
 		end
 
 		return true, inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple), env
@@ -317,7 +317,21 @@ end
 ---@return InferrableTerm | CheckableTerm
 ---@return Environment
 local function expression_valuehandler(args, val)
-	local env = args.env
+	local target, env = args:unwrap()
+
+	--TODO: proper checkable cases for literal values, requires more checkable terms
+	if target:is_check() then
+		local ok, inf_term, env = expression_valuehandler(ExpressionArgs.new(expression_target.infer, env), val)
+		if not ok then
+			return false, inf_term, env
+		end
+		return true, checkable_term.inferrable(inf_term), env
+	end
+
+	if not target:is_infer() then
+		error("expression_valuehandler NYI for " .. target.kind)
+	end
+
 	if val.type == "f64" then
 		p(val)
 		return true,
@@ -464,7 +478,8 @@ end
 
 local function collect_tuple_pair_handler(args, a, b)
 	local target, env = args:unwrap()
-	local ok, val, env =
+	local ok, val
+	ok, val, env =
 		a:match({ expression(metalanguage.accept_handler, ExpressionArgs.new(target, env)) }, metalanguage.failure_handler, nil)
 	if ok and val and target:is_check() and getmetatable(val) ~= checkable_term then
 		val = checkable_term.inferrable(val)
@@ -497,17 +512,10 @@ collect_tuple = metalanguage.reducer(function(syntax, args)
 	if target:is_check() then
 		collected_terms = array(checkable_term)()
 		target_type = target:unwrap_check()
-		print("target_type", target_type)
-		 closures = evaluator.extract_tuple_elem_type_closures(target_type.type:unwrap_tuple_type(), value_array())
-		print("closures")
-		for i, v in ipairs(closures) do
-			print(i, v)
-		end
+		closures = evaluator.extract_tuple_elem_type_closures(target_type.type:unwrap_tuple_type(), value_array())
 	else
 		collected_terms = inferrable_array
 	end
-
-	--assert(target:is_infer(), "NYI: collect_tuple non-infer cases")
 
 	local tuple_elems = value_array()
 	local ok, continue, next_term = true, true, nil
@@ -565,17 +573,10 @@ collect_prim_tuple = metalanguage.reducer(function(syntax, args)
 	if target:is_check() then
 		collected_terms = array(checkable_term)()
 		target_type = target:unwrap_check()
-		print("target_type", target_type)
-		 closures = evaluator.extract_tuple_elem_type_closures(target_type.type:unwrap_prim_tuple_type(), value_array())
-		print("closures")
-		for i, v in ipairs(closures) do
-			print(i, v)
-		end
+		closures = evaluator.extract_tuple_elem_type_closures(target_type.type:unwrap_prim_tuple_type(), value_array())
 	else
 		collected_terms = inferrable_array
 	end
-
-	--assert(target:is_infer(), "NYI: collect_tuple non-infer cases")
 
 	local tuple_elems = value_array()
 	local ok, continue, next_term = true, true, nil
@@ -626,17 +627,14 @@ collect_prim_tuple = metalanguage.reducer(function(syntax, args)
 end, "collect_prim_tuple")
 
 local expressions_args = metalanguage.reducer(function(syntax, args)
-	local env = args.env
+	local target, env = args:unwrap()
 	local vals = {}
 	local ok, continue = true, true
 	while ok and continue do
 		ok, continue, vals[#vals + 1], syntax, env = syntax:match({
 			metalanguage.ispair(collect_tuple_pair_handler),
 			metalanguage.isnil(collect_tuple_nil_handler),
-		}, metalanguage.failure_handler, args)
-		if ok and continue then
-			args.env = env
-		end
+		}, metalanguage.failure_handler, ExpressionArgs.new(target, env))
 	end
 	if not ok then
 		return false, continue
