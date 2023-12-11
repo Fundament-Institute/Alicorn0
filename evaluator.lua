@@ -564,6 +564,10 @@ local function check(
 		print("target_type", target_type)
 		error("check, target_type: expected a target type (as an alicorn value)")
 	end
+	if not target_type:is_qtype() then
+		print("target_type", target_type)
+		error("check, target_type: expected target type to be a qtype")
+	end
 
 	if checkable_term:is_inferrable() then
 		local inferrable_term = checkable_term:unwrap_inferrable()
@@ -576,8 +580,9 @@ local function check(
 		-- TODO: unify!!!!
 		if inferred_type ~= target_type then
 			print "attempting to check if terms fit"
-			print(inferred_type:pretty_print())
-			print(target_type:pretty_print())
+			print(checkable_term)
+			print("inferred_type", inferred_type:pretty_print())
+			print("target_type", target_type:pretty_print())
 			local ok, err = fitsinto(inferred_type, target_type)
 			if not ok then
 				--inferred_type = inferred_type:unify(target_type)
@@ -632,10 +637,11 @@ local function check(
 		local new_elements = typed_array()
 		local tuple_elems = value_array()
 		for i, v in ipairs(elements) do
-			local next_elem = apply_value(elem_type_closures[i], value.tuple_value(tuple_elems))
-			tuple_elems:append(next_elem)
+			local tuple_elem_type = apply_value(elem_type_closures[i], value.tuple_value(tuple_elems))
+			tuple_elems:append(tuple_elem_type)
 
-			local el_usages, el_term = check(v, typechecking_context, next_elem)
+			print("tuple_elem_type", tuple_elem_type)
+			local el_usages, el_term = check(v, typechecking_context, tuple_elem_type)
 
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
@@ -668,12 +674,17 @@ function apply_value(f, arg)
 	elseif f:is_neutral() then
 		return value.neutral(neutral_value.application_stuck(f:unwrap_neutral(), arg))
 	elseif f:is_prim() then
-		local primitive_value = f:unwrap_prim()
+		local prim_func_impl = f:unwrap_prim()
 		if arg:is_prim_tuple_value() then
 			local elements = arg:unwrap_prim_tuple_value()
-			return prim_tup_val(primitive_value(elements:unpack()))
+			for i, v in ipairs(elements) do
+				print("elements", i, v)
+			end
+			p("unpack", elements:unpack())
+			p("prim_func_impl", debug.getinfo(prim_func_impl))
+			return prim_tup_val(prim_func_impl(elements:unpack()))
 		elseif arg:is_neutral() then
-			return value.neutral(neutral_value.prim_application_stuck(primitive_value, arg:unwrap_neutral()))
+			return value.neutral(neutral_value.prim_application_stuck(prim_func_impl, arg:unwrap_neutral()))
 		else
 			error("apply_value, is_prim, arg: expected a prim tuple argument")
 		end
@@ -1409,9 +1420,14 @@ function evaluate(typed_term, runtime_context)
 	elseif typed_term:is_lambda() then
 		return value.closure(typed_term:unwrap_lambda(), runtime_context)
 	elseif typed_term:is_qtype() then
-		local quantity, t = typed_term:unwrap_qtype()
+		local quantity, type_term = typed_term:unwrap_qtype()
 		local quantity_value = evaluate(quantity, runtime_context)
-		local type_value = evaluate(t, runtime_context)
+		local type_value = evaluate(type_term, runtime_context)
+		if type_value:is_qtype() then
+			print("type_term", type_term)
+			print("type_value (evaluate(type_term))", type_value)
+			error"typed_term.qtype wrapping another qtype"
+		end
 		return value.qtype(quantity_value, type_value)
 	elseif typed_term:is_pi() then
 		local param_type, param_info, result_type, result_info = typed_term:unwrap_pi()
@@ -1594,7 +1610,7 @@ function evaluate(typed_term, runtime_context)
 		local type_term = typed_term:unwrap_prim_boxed_type()
 		local type_value = evaluate(type_term, runtime_context)
 		local quantity, backing_type = type_value:unwrap_qtype()
-		return value.qtype(quantity, value.prim_boxed_type(backing_type))
+		return value.prim_boxed_type(backing_type)
 	elseif typed_term:is_prim_box() then
 		local content = typed_term:unwrap_prim_box()
 		return value.prim(evaluate(content, runtime_context))
@@ -1613,7 +1629,13 @@ function evaluate(typed_term, runtime_context)
 		local source_val = evaluate(source, runtime_context)
 		if source_val:is_prim() then
 			local source_str = source_val:unwrap_prim()
-			return value.prim(assert(load(source_str))())
+			return value.prim(assert(load(source_str, "prim_intrinsic", "t", {
+				assert = assert,
+				p = p,
+				print = print,
+				terms = terms,
+				terms_gen = gen,
+			}))())
 		elseif source_val:is_neutral() then
 			local source_neutral = source_val:unwrap_neutral()
 			return value.neutral(neutral_value.prim_intrinsic_stuck(source_neutral))

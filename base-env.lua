@@ -898,7 +898,10 @@ local core_operations = {
 			typed.tuple_elim(
 				typed.bound_variable(1),
 				1,
-				typed.prim_boxed_type(typed.bound_variable(2))
+				typed.qtype(
+					typed.literal(value.quantity(terms.quantity.erased)),
+					typed.prim_boxed_type(typed.bound_variable(2))
+				)
 			),
 			terms.runtime_context()
 		),
