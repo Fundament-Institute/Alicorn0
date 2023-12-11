@@ -895,6 +895,9 @@ function infer(
 		local quantity, t = inferrable_term:unwrap_qtype()
 		local quantity_type, quantity_usages, quantity_term = infer(quantity, typechecking_context)
 		local type_type, type_usages, type_term = infer(t, typechecking_context)
+		if type_type:is_qtype_type() then
+			error("inferrable_term.qtype wrapping another qtype")
+		end
 		local qtype_usages = usage_array()
 		add_arrays(qtype_usages, quantity_usages)
 		add_arrays(qtype_usages, type_usages)
