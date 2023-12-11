@@ -579,15 +579,12 @@ local function check(
 		end
 		-- TODO: unify!!!!
 		if inferred_type ~= target_type then
-			print "attempting to check if terms fit"
-			print(checkable_term)
-			print("inferred_type", inferred_type:pretty_print())
-			print("target_type", target_type:pretty_print())
 			local ok, err = fitsinto(inferred_type, target_type)
 			if not ok then
-				--inferred_type = inferred_type:unify(target_type)
-				print(inferred_type:pretty_print())
-				print(target_type:pretty_print())
+				print "attempting to check if terms fit for checkable_term.inferrable"
+				print("checkable_term", checkable_term)
+				print("inferred_type", inferred_type)
+				print("target_type", target_type)
 				error(
 					"check: mismatch in inferred and target type for "
 						.. inferrable_term.kind
