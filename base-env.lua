@@ -456,10 +456,6 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 	end
 
 	local names = gen.declare_array(gen.builtin_string)()
-	print("is env an environment? (before loop)")
-	--p(env)
-	print(env.get)
-	print(env.enter_block)
 	if not env.enter_block then
 		error "env isn't an environment in prim_func_type_impl_reducer"
 	end
@@ -473,10 +469,9 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 			break
 		end
 
-		print("is env an environment? (in loop)")
-		--p(env)
-		print(env.get)
-		print(env.enter_block)
+		if not env or not env.get then
+			error "env isn't an environment in prim_func_type_impl_reducer"
+		end
 
 		print "args in loop is"
 		print(args:pretty_print())
@@ -516,7 +511,6 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 	local results = empty
 	while ok and continue do
 		ok, head, tail = syntax:match({ metalang.ispair(metalang.accept_handler) }, metalang.failure_handler, env)
-		print(env)
 		if not ok then
 			break
 		end
