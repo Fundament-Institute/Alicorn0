@@ -433,6 +433,28 @@ function fitsinto(a, b)
 	return true
 end
 
+local function extract_tuple_elem_type_closures(enum_val, closures)
+	local constructor, arg = enum_val.constructor, enum_val.arg
+	if constructor == "empty" then
+		if #arg.elements ~= 0 then
+			error "enum_value with constructor empty should have no args"
+		end
+		return closures
+	end
+	if constructor == "cons" then
+		if #arg.elements ~= 2 then
+			error "enum_value with constructor cons should have two args"
+		end
+		extract_tuple_elem_type_closures(arg.elements[1], closures)
+		if not arg.elements[2]:is_closure() then
+			error "second elem in tuple_type enum_value should be closure"
+		end
+		closures:append(arg.elements[2])
+		return closures
+	end
+	error "unknown enum constructor for value.tuple_type's enum_value, should not be reachable"
+end
+
 --[[
 local function extract_value_metavariable(value) -- -> Option<metavariable>
   if value.kind == "value_neutral" and value.neutral.kind == "neutral_value_free" and value.neutral.free.kind == "free_metavariable" then
@@ -539,6 +561,7 @@ local function check(
 		error("check, typechecking_context: expected a typechecking context")
 	end
 	if terms.value.value_check(target_type) ~= true then
+		print("target_type", target_type)
 		error("check, target_type: expected a target type (as an alicorn value)")
 	end
 
@@ -568,10 +591,57 @@ local function check(
 				)
 			end
 		end
-		--local unified_type = inferred_type:unify(target_type) -- can fail, will cause lua error
-		if inferred_type ~= target_type then
-		end
 		return inferred_usages, typed_term
+	elseif checkable_term:is_tuple_cons() then
+		local elements = checkable_term:unwrap_tuple_cons()
+
+		local target_tuple_type_elements = target_type.type:unwrap_tuple_type()
+		local elem_type_closures = extract_tuple_elem_type_closures(target_tuple_type_elements, value_array())
+		if #elem_type_closures ~= #elements then
+			print("target_type", target_type)
+			print("elements", elements)
+			error("check: mismatch in checkable_term.tuple_cons target type element count and elements in tuple cons")
+		end
+
+		local usages = usage_array()
+		local new_elements = typed_array()
+		local tuple_elems = value_array()
+		for i, v in ipairs(elements) do
+			local next_elem = apply_value(elem_type_closures[i], value.tuple_value(tuple_elems))
+			tuple_elems:append(next_elem)
+
+			local el_usages, el_term = check(v, typechecking_context, next_elem)
+
+			add_arrays(usages, el_usages)
+			new_elements:append(el_term)
+		end
+		-- TODO: handle quantities
+		return usages, typed_term.tuple_cons(new_elements)
+	elseif checkable_term:is_prim_tuple_cons() then
+		local elements = checkable_term:unwrap_prim_tuple_cons()
+
+		local target_tuple_type_elements = target_type.type:unwrap_prim_tuple_type()
+		local elem_type_closures = extract_tuple_elem_type_closures(target_tuple_type_elements, value_array())
+		if #elem_type_closures ~= #elements then
+			print("target_type", target_type)
+			print("elements", elements)
+			error("check: mismatch in checkable_term.prim_tuple_cons target type element count and elements in tuple cons")
+		end
+
+		local usages = usage_array()
+		local new_elements = typed_array()
+		local tuple_elems = value_array()
+		for i, v in ipairs(elements) do
+			local next_elem = apply_value(elem_type_closures[i], value.tuple_value(tuple_elems))
+			tuple_elems:append(next_elem)
+
+			local el_usages, el_term = check(v, typechecking_context, next_elem)
+
+			add_arrays(usages, el_usages)
+			new_elements:append(el_term)
+		end
+		-- TODO: handle quantities
+		return usages, typed_term.prim_tuple_cons(new_elements)
 	elseif checkable_term:is_lambda() then
 		local param_name, body = checkable_term:unwrap_lambda()
 		-- assert that target_type is a pi type
@@ -869,25 +939,23 @@ function infer(
 	elseif inferrable_term:is_application() then
 		local f, arg = inferrable_term:unwrap_application()
 		local f_type, f_usages, f_term = infer(f, typechecking_context)
+		--FIXME: f_quantity is unused
 		local f_quantity, f_type = f_type:unwrap_qtype()
-		local arg_type, arg_usages, arg_term = infer(arg, typechecking_context)
-		local arg_quantity, arg_t = arg_type:unwrap_qtype()
-		local application_usages = usage_array()
-		add_arrays(application_usages, f_usages)
-		add_arrays(application_usages, arg_usages)
-		local application = typed_term.application(f_term, arg_term)
+
 		if f_type:is_pi() then
 			local f_param_type, f_param_info, f_result_type, f_result_info = f_type:unwrap_pi()
 			if not f_param_info:unwrap_param_info():unwrap_visibility():is_explicit() then
 				error("infer: nyi implicit parameters")
 			end
-			local fitsinto_ok, fitsinto_err = fitsinto(arg_type, f_param_type)
-			if not fitsinto_ok then
-				print("function arg match failure")
-				print("f_param_type", f_param_type:pretty_print())
-				print("arg_type", arg_type:pretty_print())
-				error("infer: mismatch in arg type and param type of function application. fitsinto_err: " .. tostring(fitsinto_err))
-			end
+
+			local arg_usages, arg_term = check(arg, typechecking_context, f_param_type)
+
+			local application_usages = usage_array()
+			add_arrays(application_usages, f_usages)
+			add_arrays(application_usages, arg_usages)
+			local application = typed_term.application(f_term, arg_term)
+
+			-- check already checked for us so no fitsinto
 			local application_result_type =
 				apply_value(f_result_type, evaluate(arg_term, typechecking_context:get_runtime_context()))
 			return application_result_type, application_usages, application
@@ -896,14 +964,15 @@ function infer(
 			print(f_type:pretty_print())
 			print(arg:pretty_print())
 			local f_param_type, f_result_type_closure = f_type:unwrap_prim_function_type()
-			local f_param_quantity, f_param_type = f_param_type:unwrap_qtype()
-			local f_decls = f_param_type:unwrap_prim_tuple_type()
-			local arg_decls = arg_t:unwrap_prim_tuple_type()
-			print "matching decls"
-			print(f_decls:pretty_print())
-			print(arg_decls:pretty_print())
-			-- will error if not equal/unifiable
-			eq_prim_tuple_value_decls(f_decls, arg_decls, typechecking_context)
+
+			local arg_usages, arg_term = check(arg, typechecking_context, f_param_type)
+
+			local application_usages = usage_array()
+			add_arrays(application_usages, f_usages)
+			add_arrays(application_usages, arg_usages)
+			local application = typed_term.application(f_term, arg_term)
+
+			-- check already checked for us so no fitsinto
 			local f_result_type = apply_value(f_result_type_closure, evaluate(arg_term, typechecking_context:get_runtime_context()))
 			return f_result_type, application_usages, application
 		else
@@ -1625,6 +1694,7 @@ end
 
 return {
 	fitsinto = fitsinto,
+	extract_tuple_elem_type_closures = extract_tuple_elem_type_closures,
 	const_combinator = const_combinator,
 	check = check,
 	infer = infer,

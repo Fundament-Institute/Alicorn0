@@ -314,6 +314,8 @@ binding:define_enum("binding", {
 -- checkable terms need a target type to typecheck against
 checkable_term:define_enum("checkable", {
 	{ "inferrable", { "inferrable_term", inferrable_term } },
+	{ "tuple_cons", { "elements", array(checkable_term) } },
+	{ "prim_tuple_cons", { "elements", array(checkable_term) } },
 	{ "lambda", {
 		"param_name",
 		gen.builtin_string,

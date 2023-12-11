@@ -37,10 +37,6 @@ local function do_block(syntax, env)
 end
 
 local function let_bind(syntax, env)
-	-- local target, env = args.target, args.env
-	-- assert(target and env)
-	assert(env and env.get)
-
 	local ok, name, bind = syntax:match({
 		metalang.listmatch(
 			metalang.accept_handler,
@@ -59,6 +55,10 @@ local function let_bind(syntax, env)
 	end
 
 	env = bind.env
+	if not env or not env.get then
+		p(env)
+		error("env in let_bind isn't an env")
+	end
 
 	if type(name) == "table" then
 		print("binding destructuring with let")
@@ -680,7 +680,7 @@ local function lambda_impl(syntax, env)
 	inner_env = inner_env:bind_local(terms.binding.annotated_lambda("#arg", params_group.types))
 	local _, arg = inner_env:get("#arg")
 	inner_env = inner_env:bind_local(terms.binding.tuple_elim(params_group.names, arg))
-	local ok, expr, env = tail:match({exprs.block(metalang.accept_handler, inner_env)}, metalang.failure_handler, nil)
+	local ok, expr, env = tail:match({exprs.block(metalang.accept_handler, exprs.ExpressionArgs.new(terms.expression_target.infer, env))}, metalang.failure_handler, nil)
 	if not ok then return ok, expr end
 	local resenv, term = env:exit_block(expr, shadow)
 	return true, term, resenv
@@ -759,20 +759,20 @@ local core_operations = {
 	--end, types.tuple {types.number, types.number}, types.cotuple({types.unit, types.unit})),
 
 	--["do"] = evaluator.primitive_operative(do_block),
-	let = exprs.primitive_operative(let_bind),
-	record = exprs.primitive_operative(record_build),
-	intrinsic = exprs.primitive_operative(intrinsic),
+	let = exprs.primitive_operative(let_bind, "let_bind"),
+	record = exprs.primitive_operative(record_build, "record_build"),
+	intrinsic = exprs.primitive_operative(intrinsic, "intrinsic"),
 	["prim-number"] = lit_term(
 		unrestricted(value.prim_number_type),
 		unrestricted(value.prim_type_type)),
 	["prim-type"] = lit_term(
 		unrestricted(value.prim_type_type),
 		unrestricted(value.star(1))),
-	["prim-func-type"] = exprs.primitive_operative(prim_func_type_impl),
+	["prim-func-type"] = exprs.primitive_operative(prim_func_type_impl, "prim_func_type_impl"),
 	type = lit_term(value.star(1), value.star(0)),
-	type_ = exprs.primitive_operative(startype_impl),
-	["forall"] = exprs.primitive_operative(forall_type_impl),
-	lambda = exprs.primitive_operative(lambda_impl),
+	type_ = exprs.primitive_operative(startype_impl, "startype_impl"),
+	["forall"] = exprs.primitive_operative(forall_type_impl, "forall_type_impl"),
+	lambda = exprs.primitive_operative(lambda_impl, "lambda_impl"),
 	box = lit_term(
 		value.closure(
 			typed.tuple_elim(
