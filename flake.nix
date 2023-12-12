@@ -24,10 +24,10 @@
         pkgs-unstable = nixpkgs-unstable.legacyPackages.${system};
         alicorn-check = file:
           pkgs.runCommandNoCC "alicorn-check-${file}" { } ''
-            set -xeuo pipefail
+            set -euo pipefail
             cd ${./.}
             mkdir $out
-            echo "Checking ${file}"
+            >&2 echo "Checking ${file}"
             ${pkgs.lib.getExe luvitpkgs.packages.${system}.luvit} ${file}
           '';
       in
