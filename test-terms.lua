@@ -7,14 +7,17 @@ local tc = terms.typechecking_context()
 local rc = tc.runtime_context
 
 function test_levels()
-	local test_term =
-		inferrable_term.level_max(inferrable_term.level_suc(inferrable_term.level0), inferrable_term.level0)
-	local inferred_type, inferred_term = infer(test_term, tc)
+	print(inferrable_term.level0)
+	local suc_term = inferrable_term.level_suc(inferrable_term.level0)
+	print(suc_term)
+	local test_term = inferrable_term.level_max(suc_term, inferrable_term.level0)
+	local inferred_type, usages, typed_term = infer(test_term, tc)
 	p(inferred_type)
-	assert(inferred_type.kind == "value_level_type")
-	local result = evaluate(inferred_term, rc)
+	assert(inferred_type:is_level_type())
+	local result = evaluate(typed_term, rc)
 	p(result)
-	assert(result.kind == "value_level")
+	assert(result:is_level())
+	assert(result:unwrap_level() == 1)
 	assert(result.level == 1)
 end
 

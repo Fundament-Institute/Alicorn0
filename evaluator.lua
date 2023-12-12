@@ -1327,8 +1327,8 @@ function infer(
 		local type_val = evaluate(type_term, typechecking_context.runtime_context)
 		return type_val, source_usages, typed_term.prim_intrinsic(source_term)
 	elseif inferrable_term:is_level_max() then
-		local arg_type_a, arg_term_a = infer(inferrable_term.level_a, typechecking_context)
-		local arg_type_b, arg_term_b = infer(inferrable_term.level_b, typechecking_context)
+		local arg_type_a, arg_usages_a, arg_term_a = infer(inferrable_term.level_a, typechecking_context)
+		local arg_type_b, arg_usages_b, arg_term_b = infer(inferrable_term.level_b, typechecking_context)
 		return value.level_type, usage_array(), typed_term.level_max(arg_term_a, arg_term_b)
 	elseif inferrable_term:is_level_suc() then
 		local arg_type, arg_usages, arg_term = infer(inferrable_term.previous_level, typechecking_context)
