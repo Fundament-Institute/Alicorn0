@@ -23,8 +23,8 @@ local mytype3 = gen.declare_record("mytype3", {
 
 local nest1 = gen.declare_type()
 nest1:define_enum("nest", {
-	{ "n", { "a", nest1 }},
-	{ "base", {"mt3", mytype3}},
+	{ "n", { "a", nest1 } },
+	{ "base", { "mt3", mytype3 } },
 })
 
 local mytype3butsimple = gen.declare_record("mytype3simple", {

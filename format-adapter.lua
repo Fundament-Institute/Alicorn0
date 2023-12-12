@@ -16,7 +16,7 @@ local function syntax_convert(tree)
 	elseif tree.kind == "literal" then
 		return metalanguage.value(tree.anchor, { type = tree.literaltype, val = tree.val })
 	elseif tree.kind == "string" then
-    if type(tree.elements) == "string" then
+		if type(tree.elements) == "string" then
 			return metalanguage.value(tree.anchor, { type = "string", val = tree.elements })
 		end
 		if #tree.elements ~= 1 or tree.elements[1].literaltype ~= "bytes" then

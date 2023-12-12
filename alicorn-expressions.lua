@@ -130,7 +130,7 @@ function ExpressionArgs.new(target, env)
 	return setmetatable({
 		target = target,
 		env = env,
-	}, {__index = ExpressionArgs })
+	}, { __index = ExpressionArgs })
 end
 
 local infix_data = {
@@ -185,8 +185,11 @@ local function expression_pairhandler(args, a, b)
 	if ok and ifx then
 		combiner = env:get("_" + op + "_")
 	else
-		ok, combiner, env =
-			a:match({ expression(metalanguage.accept_handler, ExpressionArgs.new(target, env)) }, metalanguage.failure_handler, nil)
+		ok, combiner, env = a:match(
+			{ expression(metalanguage.accept_handler, ExpressionArgs.new(target, env)) },
+			metalanguage.failure_handler,
+			nil
+		)
 		if not ok then
 			return false, combiner
 		end
@@ -241,8 +244,12 @@ local function expression_pairhandler(args, a, b)
 
 	if type_of_term:is_qtype() and type_of_term.type:is_pi() then
 		-- multiple quantity of usages in tuple with usage in function arguments
-		local ok, tuple, env =
-			args:match({ collect_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_target.check(type_of_term.type.param_type), env)) }, metalanguage.failure_handler, nil)
+		local ok, tuple, env = args:match({
+			collect_tuple(
+				metalanguage.accept_handler,
+				ExpressionArgs.new(expression_target.check(type_of_term.type.param_type), env)
+			),
+		}, metalanguage.failure_handler, nil)
 
 		if not ok then
 			return false, tuple, env
@@ -253,11 +260,12 @@ local function expression_pairhandler(args, a, b)
 
 	if type_of_term:is_qtype() and type_of_term.type:as_prim_function_type() then
 		-- multiple quantity of usages in tuple with usage in function arguments
-		local ok, tuple, env = args:match(
-			{ collect_prim_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_target.check(type_of_term.type.param_type), env)) },
-			metalanguage.failure_handler,
-			nil
-		)
+		local ok, tuple, env = args:match({
+			collect_prim_tuple(
+				metalanguage.accept_handler,
+				ExpressionArgs.new(expression_target.check(type_of_term.type.param_type), env)
+			),
+		}, metalanguage.failure_handler, nil)
 
 		if not ok then
 			return false, tuple
@@ -387,17 +395,32 @@ end, "expressions")
 ---@return inferrable_term.operative_cons
 local function primitive_operative(fn, name)
 	local debuginfo = debug.getinfo(fn)
-	local debugstring = (name or error("name not passed to primitive_operative")) .. " " .. debuginfo.short_src .. ":" .. debuginfo.linedefined
+	local debugstring = (name or error("name not passed to primitive_operative"))
+		.. " "
+		.. debuginfo.short_src
+		.. ":"
+		.. debuginfo.linedefined
 	local aborting_fn = function(syn, env)
 		if not env or not env.exit_block then
 			error("env passed to primitive_operative " .. debugstring .. " isn't an env or is nil", env)
 		end
 		local ok, res, env = fn(syn, env)
 		if not ok then
-			error("Primitive operative " .. debugstring .. " apply failure, NYI convert to Maybe.\nError was:" .. tostring(res))
+			error(
+				"Primitive operative "
+					.. debugstring
+					.. " apply failure, NYI convert to Maybe.\nError was:"
+					.. tostring(res)
+			)
 		end
 		if not env or not env.exit_block then
-			print("env returned from fn passed to alicorn-expressions.primitive_operative isn't an env or is nil", env, " in ", debuginfo.short_src, debuginfo.linedefined)
+			print(
+				"env returned from fn passed to alicorn-expressions.primitive_operative isn't an env or is nil",
+				env,
+				" in ",
+				debuginfo.short_src,
+				debuginfo.linedefined
+			)
 			error("invalid env from primitive_operative fn " .. debugstring)
 		end
 		return res, env
@@ -479,8 +502,11 @@ end
 local function collect_tuple_pair_handler(args, a, b)
 	local target, env = args:unwrap()
 	local ok, val
-	ok, val, env =
-		a:match({ expression(metalanguage.accept_handler, ExpressionArgs.new(target, env)) }, metalanguage.failure_handler, nil)
+	ok, val, env = a:match(
+		{ expression(metalanguage.accept_handler, ExpressionArgs.new(target, env)) },
+		metalanguage.failure_handler,
+		nil
+	)
 	if ok and val and target:is_check() and getmetatable(val) ~= checkable_term then
 		val = checkable_term.inferrable(val)
 	end
@@ -564,7 +590,6 @@ collect_tuple = metalanguage.reducer(function(syntax, args)
 		error("NYI: collect_tuple target case " .. target.kind)
 	end
 end, "collect_tuple")
-
 
 collect_prim_tuple = metalanguage.reducer(function(syntax, args)
 	local target, env = args:unwrap()
@@ -719,7 +744,11 @@ local function eval(syntax, environment)
 end
 
 local function eval_block(syntax, environment)
-	return syntax:match({ block(metalanguage.accept_handler, ExpressionArgs.new(expression_target.infer, environment)) }, metalanguage.failure_handler, nil)
+	return syntax:match(
+		{ block(metalanguage.accept_handler, ExpressionArgs.new(expression_target.infer, environment)) },
+		metalanguage.failure_handler,
+		nil
+	)
 end
 
 ---comment Convenience wrapper inferred_expression(handler, env) -> expression(handler, expression_args(expression_target.infer, env))

@@ -190,7 +190,7 @@ local function substitute_inner(val, index_base, index_offset)
 		return typed_term.literal(val)
 	elseif val:is_neutral() then
 		local nval = val:unwrap_neutral()
-		
+
 		if nval:is_free() then
 			local free = nval:unwrap_free()
 			if free:is_placeholder() then
@@ -308,7 +308,7 @@ for _, prim_type in ipairs({
 	value.prim_number_type,
 	value.prim_string_type,
 	value.prim_bool_type,
-	value.prim_user_defined_type({name=""}, value_array()),
+	value.prim_user_defined_type({ name = "" }, value_array()),
 }) do
 	add_comparer(prim_type.kind, prim_type.kind, always_fits_comparer)
 end
@@ -627,7 +627,9 @@ local function check(
 		if #elem_type_closures ~= #elements then
 			print("target_type", target_type)
 			print("elements", elements)
-			error("check: mismatch in checkable_term.prim_tuple_cons target type element count and elements in tuple cons")
+			error(
+				"check: mismatch in checkable_term.prim_tuple_cons target type element count and elements in tuple cons"
+			)
 		end
 
 		local usages = usage_array()
@@ -911,28 +913,24 @@ function infer(
 			error "result type of a pi term must infer to a pi because it must be callable"
 			-- TODO: switch to using a mechanism term system
 		end
-		local result_type_param_type, result_type_param_info, result_type_result_type, result_type_result_info = result_type_type_base:unwrap_pi()
+		local result_type_param_type, result_type_param_info, result_type_result_type, result_type_result_info =
+			result_type_type_base:unwrap_pi()
 
 		if not result_type_result_info:unwrap_result_info():is_pure() then
 			error "result type computation must be pure for now"
 		end
 
-		local ok, err = fitsinto(evaluate(param_type_term, typechecking_context.runtime_context), result_type_param_type)
+		local ok, err =
+			fitsinto(evaluate(param_type_term, typechecking_context.runtime_context), result_type_param_type)
 		if not ok then
-			error("inferrable pi type's param type doesn't fit into the result type function's parameters because "..err)
+			error(
+				"inferrable pi type's param type doesn't fit into the result type function's parameters because " .. err
+			)
 		end
-		local sort = value.star(math.max(
-			nearest_star_level(param_type_type),
-			nearest_star_level(result_type_result_type),
-			0
-		))
+		local sort =
+			value.star(math.max(nearest_star_level(param_type_type), nearest_star_level(result_type_result_type), 0))
 
-		local term = typed_term.pi(
-			param_type_term,
-			param_info_term,
-			result_type_term,
-			result_info_term
-		)
+		local term = typed_term.pi(param_type_term, param_info_term, result_type_term, result_info_term)
 
 		local usages = usage_array()
 		add_arrays(usages, param_type_usages)
@@ -941,7 +939,6 @@ function infer(
 		add_arrays(usages, result_info_usages)
 
 		return sort, usages, term
-
 	elseif inferrable_term:is_application() then
 		local f, arg = inferrable_term:unwrap_application()
 		local f_type, f_usages, f_term = infer(f, typechecking_context)
@@ -966,7 +963,7 @@ function infer(
 				apply_value(f_result_type, evaluate(arg_term, typechecking_context:get_runtime_context()))
 			return application_result_type, application_usages, application
 		elseif f_type:is_prim_function_type() then
-			print"inferring application of primitive function"
+			print "inferring application of primitive function"
 			print(f_type:pretty_print())
 			print(arg:pretty_print())
 			local f_param_type, f_result_type_closure = f_type:unwrap_prim_function_type()
@@ -979,7 +976,8 @@ function infer(
 			local application = typed_term.application(f_term, arg_term)
 
 			-- check already checked for us so no fitsinto
-			local f_result_type = apply_value(f_result_type_closure, evaluate(arg_term, typechecking_context:get_runtime_context()))
+			local f_result_type =
+				apply_value(f_result_type_closure, evaluate(arg_term, typechecking_context:get_runtime_context()))
 			return f_result_type, application_usages, application
 		else
 			p(f_type)
@@ -1032,7 +1030,6 @@ function infer(
 		end
 		-- TODO: handle quantities
 		return unrestricted(value.prim_tuple_type(type_data)), usages, typed_term.prim_tuple_cons(new_elements)
-
 	elseif inferrable_term:is_tuple_elim() then
 		local subject, body = inferrable_term:unwrap_tuple_elim()
 		local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
@@ -1327,8 +1324,8 @@ function infer(
 		local type_val = evaluate(type_term, typechecking_context.runtime_context)
 		return type_val, source_usages, typed_term.prim_intrinsic(source_term)
 	elseif inferrable_term:is_level_max() then
-		local arg_type_a, arg_term_a = infer(inferrable_term.level_a, typechecking_context)
-		local arg_type_b, arg_term_b = infer(inferrable_term.level_b, typechecking_context)
+		local arg_type_a, arg_usages_a, arg_term_a = infer(inferrable_term.level_a, typechecking_context)
+		local arg_type_b, arg_usages_b, arg_term_b = infer(inferrable_term.level_b, typechecking_context)
 		return value.level_type, usage_array(), typed_term.level_max(arg_term_a, arg_term_b)
 	elseif inferrable_term:is_level_suc() then
 		local arg_type, arg_usages, arg_term = infer(inferrable_term.previous_level, typechecking_context)
@@ -1346,7 +1343,9 @@ function infer(
 	elseif inferrable_term:is_prim_tuple_type() then
 		local decls = inferrable_term:unwrap_prim_tuple_type()
 		local decl_type, decl_usages, decl_term = infer(decls, typechecking_context)
-		if not decl_type:is_tuple_defn_type() then error "must be a tuple defn" end
+		if not decl_type:is_tuple_defn_type() then
+			error "must be a tuple defn"
+		end
 		return value.star(0), decl_usages, typed_term.prim_tuple_type(decl_term)
 	else
 		error("infer: unknown kind: " .. inferrable_term.kind)
@@ -1389,7 +1388,6 @@ local function substitute_value(base, original, replacement)
 	end
 	if base:is_pi() then
 		local param_type, param_info, result_type, result_info = base:unwrap_pi()
-		
 	end
 end
 
@@ -1421,7 +1419,7 @@ function evaluate(typed_term, runtime_context)
 		if type_value:is_qtype() then
 			print("type_term", type_term)
 			print("type_value (evaluate(type_term))", type_value)
-			error"typed_term.qtype wrapping another qtype"
+			error "typed_term.qtype wrapping another qtype"
 		end
 		return value.qtype(quantity_value, type_value)
 	elseif typed_term:is_pi() then

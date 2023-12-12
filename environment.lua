@@ -85,7 +85,10 @@ function environment:bind_local(binding)
 		local subject_type, subject_usages, subject_term = infer(subject, self.typechecking_context)
 		--local subject_qty, subject_type = subject_type:unwrap_qtype()
 		--DEBUG:
-		if subject_type:is_enum_value() then print "bad subject infer" ; print(subject:pretty_print()) end
+		if subject_type:is_enum_value() then
+			print "bad subject infer"
+			print(subject:pretty_print())
+		end
 
 		-- evaluating the subject is necessary for inferring the type of the body
 		local subject_value = eval.evaluate(subject_term, self.typechecking_context:get_runtime_context())
@@ -129,8 +132,7 @@ function environment:bind_local(binding)
 		})
 	elseif binding:is_annotated_lambda() then
 		local param_name, param_annotation = binding:unwrap_annotated_lambda()
-		local annotation_type, annotation_usages, annotation_term =
-			infer(param_annotation, self.typechecking_context)
+		local annotation_type, annotation_usages, annotation_term = infer(param_annotation, self.typechecking_context)
 		print("binding lambda annotation")
 		print(annotation_term:pretty_print())
 		local evaled = eval.evaluate(annotation_term, self.typechecking_context.runtime_context)
@@ -191,7 +193,6 @@ function environment:enter_block()
 		}
 end
 
-
 ---exit a block, resolving the bindings in that block and restoring the shadowed locals
 ---@param term unknown
 ---@param shadowed ShadowEnvironment
@@ -235,8 +236,7 @@ function environment:exit_block(term, shadowed)
 	return env, wrapped
 end
 
-
-environment_mt = {__index = environment}
+environment_mt = { __index = environment }
 
 local function dump_env(env)
 	return "Environment" .. "\nlocals: " .. trie.dump_map(env.locals) .. "\nnonlocals: " .. trie.dump_map(env.nonlocals)
