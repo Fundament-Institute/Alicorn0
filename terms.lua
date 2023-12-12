@@ -244,7 +244,9 @@ function TypecheckingContext:append(name, type, val) -- value is optional
 	if name == nil or type == nil then
 		error("bug!!!")
 	end
-	if type:is_closure() then error "BUG!!!" end
+	if type:is_closure() then
+		error "BUG!!!"
+	end
 	local copy = {
 		bindings = self.bindings:append({ name = name, type = type }),
 		runtime_context = self.runtime_context:append(
@@ -278,17 +280,21 @@ local prim_user_defined_id = gen.declare_foreign(function(val)
 end)
 
 expression_target:define_enum("expression_target", {
-	-- infer 
-  { "infer" },
+	-- infer
+	{ "infer" },
 	-- check to a target type
-	{ "check", { 
-			"target_type", value,
-		}
+	{ "check", {
+		"target_type",
+		value,
+	} },
+	{
+		"mechanism",
+		{
+			-- TODO
+			"TODO",
+			value,
+		},
 	},
-	{ "mechanism", {
-		-- TODO
-		"TODO", value
-	}}
 })
 -- terms that don't have a body yet
 binding:define_enum("binding", {
@@ -378,7 +384,7 @@ inferrable_term:define_enum("inferrable", {
 		"body",
 		inferrable_term,
 	} },
-	{ "tuple_type", {"definition", inferrable_term} },
+	{ "tuple_type", { "definition", inferrable_term } },
 	{ "record_cons", { "fields", map(gen.builtin_string, inferrable_term) } },
 	{
 		"record_elim",
@@ -405,7 +411,7 @@ inferrable_term:define_enum("inferrable", {
 		"mechanism",
 		inferrable_term,
 	} },
-	{ "enum_type", {"definition", inferrable_term} },
+	{ "enum_type", { "definition", inferrable_term } },
 	{ "object_cons", { "methods", map(gen.builtin_string, inferrable_term) } },
 	{ "object_elim", {
 		"subject",
@@ -487,12 +493,15 @@ inferrable_term:define_enum("inferrable", {
 			inferrable_term,
 		},
 	},
-	{ "prim_intrinsic", {
-		"source",
-		checkable_term,
-		"type",
-		inferrable_term, --checkable_term,
-	} },
+	{
+		"prim_intrinsic",
+		{
+			"source",
+			checkable_term,
+			"type",
+			inferrable_term, --checkable_term,
+		},
+	},
 })
 -- typed terms have been typechecked but do not store their type internally
 typed_term:define_enum("typed", {
@@ -551,7 +560,7 @@ typed_term:define_enum("typed", {
 		"body",
 		typed_term,
 	} },
-	{ "tuple_type", { "definition", typed_term }},
+	{ "tuple_type", { "definition", typed_term } },
 	{ "record_cons", { "fields", map(gen.builtin_string, typed_term) } },
 	{ "record_extend", {
 		"base",
@@ -766,7 +775,7 @@ value:define_enum("value", {
 	-- ordinary data
 	{ "tuple_value", { "elements", array(value) } },
 	{ "tuple_type", { "decls", value } },
-	{ "tuple_defn_type"},
+	{ "tuple_defn_type" },
 	{ "enum_value", {
 		"constructor",
 		gen.builtin_string,

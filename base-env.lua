@@ -222,7 +222,6 @@ local function tuple_of_impl(syntax, env)
 	return true, components, env
 end
 
-
 local ascribed_name = metalang.reducer(function(syntax, env, prev, names)
 	-- print("ascribed_name trying")
 	-- p(syntax)
@@ -287,22 +286,14 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	local unrestricted_term = terms.inferrable_term.typed(
 		terms.value.quantity_type,
 		usage_array(),
-		terms.typed_term.literal(
-			terms.value.quantity(terms.quantity.unrestricted)))
-	
+		terms.typed_term.literal(terms.value.quantity(terms.quantity.unrestricted))
+	)
+
 	local function build_type_term(args)
-		return
-			terms.inferrable_term.qtype(
-				unrestricted_term,
-				terms.inferrable_term.tuple_type(args)
-			)
+		return terms.inferrable_term.qtype(unrestricted_term, terms.inferrable_term.tuple_type(args))
 	end
 	local function build_prim_type_term(args)
-		return
-			terms.inferrable_term.qtype(
-				unrestricted_term,
-				terms.inferrable_term.prim_tuple_type(args)
-			)
+		return terms.inferrable_term.qtype(unrestricted_term, terms.inferrable_term.prim_tuple_type(args))
 	end
 
 	local names = gen.declare_array(gen.builtin_string)()
@@ -396,7 +387,10 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	end
 
 	local env, fn_res_term = env:exit_block(build_prim_type_term(results), shadowed)
-	local fn_type_term = terms.inferrable_term.qtype(unrestricted_term, terms.inferrable_term.prim_function_type(build_prim_type_term(args), fn_res_term))
+	local fn_type_term = terms.inferrable_term.qtype(
+		unrestricted_term,
+		terms.inferrable_term.prim_function_type(build_prim_type_term(args), fn_res_term)
+	)
 	print("reached end of function type construction")
 	if not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl_reducer"
@@ -416,7 +410,9 @@ local function prim_func_type_impl(syntax, env)
 		syntax:match({ prim_func_type_impl_reducer(metalang.accept_handler, env) }, metalang.failure_handler, env)
 	print("finished matching prim_func_type_impl and got")
 	print(fn_type_term:pretty_print())
-	if not ok then return ok, fn_type_term end
+	if not ok then
+		return ok, fn_type_term
+	end
 	if not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl"
 	end
@@ -444,15 +440,11 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 	local unrestricted_term = terms.inferrable_term.typed(
 		terms.value.quantity_type,
 		usage_array(),
-		terms.typed_term.literal(
-			terms.value.quantity(terms.quantity.unrestricted)))
-	
+		terms.typed_term.literal(terms.value.quantity(terms.quantity.unrestricted))
+	)
+
 	local function build_type_term(args)
-		return
-			terms.inferrable_term.qtype(
-				unrestricted_term,
-				terms.inferrable_term.tuple_type(args)
-			)
+		return terms.inferrable_term.qtype(unrestricted_term, terms.inferrable_term.tuple_type(args))
 	end
 
 	local names = gen.declare_array(gen.builtin_string)()
@@ -547,25 +539,13 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 			terms.inferrable_term.typed(
 				terms.value.param_info_type,
 				usage_array(),
-				terms.typed_term.literal(
-					terms.value.param_info(
-						terms.value.visibility(
-							terms.visibility.explicit
-						)
-					)
-				)
+				terms.typed_term.literal(terms.value.param_info(terms.value.visibility(terms.visibility.explicit)))
 			),
 			fn_res_term,
 			terms.inferrable_term.typed(
 				terms.value.result_info_type,
 				usage_array(),
-				terms.typed_term.literal(
-					terms.value.result_info(
-						terms.value.purity(
-							terms.purity.pure
-						)
-					)
-				)
+				terms.typed_term.literal(terms.value.result_info(terms.value.purity(terms.purity.pure)))
 			)
 		)
 	)
@@ -588,7 +568,9 @@ local function forall_type_impl(syntax, env)
 		syntax:match({ forall_type_impl_reducer(metalang.accept_handler, env) }, metalang.failure_handler, env)
 	print("finished matching prim_func_type_impl and got")
 	print(fn_type_term:pretty_print())
-	if not ok then return ok, fn_type_term end
+	if not ok then
+		return ok, fn_type_term
+	end
 	if not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl"
 	end
@@ -622,64 +604,58 @@ local function lambda_impl(syntax, env)
 	local unrestricted_term = terms.inferrable_term.typed(
 		terms.value.quantity_type,
 		usage_array(),
-		terms.typed_term.literal(
-			terms.value.quantity(terms.quantity.unrestricted)))
-	
+		terms.typed_term.literal(terms.value.quantity(terms.quantity.unrestricted))
+	)
+
 	local function build_type_term(args)
-		return
-			terms.inferrable_term.qtype(
-				unrestricted_term,
-				terms.inferrable_term.tuple_type(args)
-			)
+		return terms.inferrable_term.qtype(unrestricted_term, terms.inferrable_term.tuple_type(args))
 	end
 
-	local ok, params_group, tail = syntax:match(
-		{
-			metalang.listtail(
-				function(_, thr, tail, ...)
-					return true, {names = thr.names, types = build_type_term(thr.args), env = thr.env}, tail
-				end,
-				metalang.list_many_threaded(
-					function(_, col, thr)
-						return true, thr
-					end,
-					function(thread)
-						return ascribed_name(
-							function(_, name, typ, env)
-								local names = thread.names:copy()
-								names:append(name)
-								return true, {name = name, type = typ}, {
-									names = names,
-									args = cons(thread.args, typ),
-									env = env
-								}
-							end,
-							thread.env,
-							build_type_term(thread.args),
-							thread.names
-						)
-					end, {
-					names = string_array(),
-					args = empty,
-					env = env
-				})
-			)
-		},
-		metalang.failure_handler,
-		nil
-	)
-	if not ok then return ok, params_group end
+	local ok, params_group, tail = syntax:match({
+		metalang.listtail(
+			function(_, thr, tail, ...)
+				return true, { names = thr.names, types = build_type_term(thr.args), env = thr.env }, tail
+			end,
+			metalang.list_many_threaded(function(_, col, thr)
+				return true, thr
+			end, function(thread)
+				return ascribed_name(function(_, name, typ, env)
+					local names = thread.names:copy()
+					names:append(name)
+					return true,
+						{ name = name, type = typ },
+						{
+							names = names,
+							args = cons(thread.args, typ),
+							env = env,
+						}
+				end, thread.env, build_type_term(thread.args), thread.names)
+			end, {
+				names = string_array(),
+				args = empty,
+				env = env,
+			})
+		),
+	}, metalang.failure_handler, nil)
+	if not ok then
+		return ok, params_group
+	end
 
 	local shadow, inner_env = env:enter_block()
 	inner_env = inner_env:bind_local(terms.binding.annotated_lambda("#arg", params_group.types))
 	local _, arg = inner_env:get("#arg")
 	inner_env = inner_env:bind_local(terms.binding.tuple_elim(params_group.names, arg))
-	local ok, expr, env = tail:match({exprs.block(metalang.accept_handler, exprs.ExpressionArgs.new(terms.expression_target.infer, inner_env))}, metalang.failure_handler, nil)
-	if not ok then return ok, expr end
+	local ok, expr, env = tail:match(
+		{ exprs.block(metalang.accept_handler, exprs.ExpressionArgs.new(terms.expression_target.infer, inner_env)) },
+		metalang.failure_handler,
+		nil
+	)
+	if not ok then
+		return ok, expr
+	end
 	local resenv, term = env:exit_block(expr, shadow)
 	return true, term, resenv
 end
-
 
 local value = terms.value
 local typed = terms.typed_term
@@ -687,14 +663,12 @@ local typed = terms.typed_term
 local usage_array = gen.declare_array(gen.builtin_number)
 local val_array = gen.declare_array(value)
 local function startype_impl(syntax, env)
-	local ok, level_val = syntax:match(
-		{
-			metalang.listmatch(
-				metalang.isvalue(metalang.accept_handler)
-			)
-		}
-	)
-	if not ok then return ok, level_val end
+	local ok, level_val = syntax:match({
+		metalang.listmatch(metalang.isvalue(metalang.accept_handler)),
+	})
+	if not ok then
+		return ok, level_val
+	end
 	if level_val.type ~= "f64" then
 		return false, "literal must be a number for type levels"
 	end
@@ -756,12 +730,8 @@ local core_operations = {
 	let = exprs.primitive_operative(let_bind, "let_bind"),
 	record = exprs.primitive_operative(record_build, "record_build"),
 	intrinsic = exprs.primitive_operative(intrinsic, "intrinsic"),
-	["prim-number"] = lit_term(
-		unrestricted(value.prim_number_type),
-		unrestricted(value.prim_type_type)),
-	["prim-type"] = lit_term(
-		unrestricted(value.prim_type_type),
-		unrestricted(value.star(1))),
+	["prim-number"] = lit_term(unrestricted(value.prim_number_type), unrestricted(value.prim_type_type)),
+	["prim-type"] = lit_term(unrestricted(value.prim_type_type), unrestricted(value.star(1))),
 	["prim-func-type"] = exprs.primitive_operative(prim_func_type_impl, "prim_func_type_impl"),
 	type = lit_term(value.star(1), value.star(0)),
 	type_ = exprs.primitive_operative(startype_impl, "startype_impl"),
@@ -769,11 +739,7 @@ local core_operations = {
 	lambda = exprs.primitive_operative(lambda_impl, "lambda_impl"),
 	box = lit_term(
 		value.closure(
-			typed.tuple_elim(
-				typed.bound_variable(1),
-				2,
-				typed.prim_box(typed.bound_variable(3))
-			),
+			typed.tuple_elim(typed.bound_variable(1), 2, typed.prim_box(typed.bound_variable(3))),
 			terms.runtime_context()
 		),
 		unrestricted(
@@ -791,7 +757,8 @@ local core_operations = {
 												0,
 												typed.qtype(
 													typed.literal(value.quantity(terms.quantity.erased)),
-													typed.star(1))
+													typed.star(1)
+												)
 											),
 											terms.runtime_context()
 										)
@@ -816,9 +783,7 @@ local core_operations = {
 						2,
 						typed.qtype(
 							typed.literal(value.quantity(terms.quantity.erased)),
-							typed.prim_boxed_type(
-								typed.bound_variable(2)
-							)
+							typed.prim_boxed_type(typed.bound_variable(2))
 						)
 					),
 					terms.runtime_context()
@@ -829,11 +794,7 @@ local core_operations = {
 	),
 	unbox = lit_term(
 		value.closure(
-			typed.tuple_elim(
-				typed.bound_variable(1),
-				2,
-				typed.prim_unbox(typed.bound_variable(3))
-			),
+			typed.tuple_elim(typed.bound_variable(1), 2, typed.prim_unbox(typed.bound_variable(3))),
 			terms.runtime_context()
 		),
 		unrestricted(
@@ -851,7 +812,8 @@ local core_operations = {
 												0,
 												typed.qtype(
 													typed.literal(value.quantity(terms.quantity.erased)),
-													typed.star(1))
+													typed.star(1)
+												)
 											),
 											terms.runtime_context()
 										)
@@ -863,9 +825,7 @@ local core_operations = {
 										1,
 										typed.qtype(
 											typed.literal(value.quantity(terms.quantity.erased)),
-											typed.prim_boxed_type(
-												typed.bound_variable(2)
-											)
+											typed.prim_boxed_type(typed.bound_variable(2))
 										)
 									),
 									terms.runtime_context()
@@ -876,11 +836,7 @@ local core_operations = {
 				),
 				value.param_info(value.visibility(terms.visibility.explicit)),
 				value.closure(
-					typed.tuple_elim(
-						typed.bound_variable(1),
-						2,
-						typed.bound_variable(2)
-					),
+					typed.tuple_elim(typed.bound_variable(1), 2, typed.bound_variable(2)),
 					terms.runtime_context()
 				),
 				value.result_info(terms.result_info(terms.purity.pure))
@@ -910,9 +866,7 @@ local core_operations = {
 									typed.tuple_elim(
 										typed.bound_variable(1),
 										0,
-										typed.qtype(
-											typed.literal(value.quantity(terms.quantity.erased)),
-											typed.star(1))
+										typed.qtype(typed.literal(value.quantity(terms.quantity.erased)), typed.star(1))
 									),
 									terms.runtime_context()
 								)

@@ -25,7 +25,8 @@
             echo "Checking ${file}"
             ${pkgs.lib.getExe luvitpkgs.packages.${system}.luvit} ${file}
           '';
-      in {
+      in
+      {
         packages = rec {
           hello = pkgs.hello;
           default = hello;
