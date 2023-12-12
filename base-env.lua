@@ -54,7 +54,11 @@ local function let_bind(syntax, env)
 		return false, name
 	end
 
-	local env = bind.env
+	env = bind.env
+	if not env or not env.get then
+		p(env)
+		error("env in let_bind isn't an env")
+	end
 
 	if type(name) == "table" then
 		print("binding destructuring with let")
@@ -452,10 +456,6 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 	end
 
 	local names = gen.declare_array(gen.builtin_string)()
-	print("is env an environment? (before loop)")
-	--p(env)
-	print(env.get)
-	print(env.enter_block)
 	if not env.enter_block then
 		error "env isn't an environment in prim_func_type_impl_reducer"
 	end
@@ -469,10 +469,9 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 			break
 		end
 
-		print("is env an environment? (in loop)")
-		--p(env)
-		print(env.get)
-		print(env.enter_block)
+		if not env or not env.get then
+			error "env isn't an environment in prim_func_type_impl_reducer"
+		end
 
 		print "args in loop is"
 		print(args:pretty_print())
@@ -512,7 +511,6 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 	local results = empty
 	while ok and continue do
 		ok, head, tail = syntax:match({ metalang.ispair(metalang.accept_handler) }, metalang.failure_handler, env)
-		print(env)
 		if not ok then
 			break
 		end
@@ -676,7 +674,7 @@ local function lambda_impl(syntax, env)
 	inner_env = inner_env:bind_local(terms.binding.annotated_lambda("#arg", params_group.types))
 	local _, arg = inner_env:get("#arg")
 	inner_env = inner_env:bind_local(terms.binding.tuple_elim(params_group.names, arg))
-	local ok, expr, env = tail:match({exprs.block(metalang.accept_handler, inner_env)}, metalang.failure_handler, nil)
+	local ok, expr, env = tail:match({exprs.block(metalang.accept_handler, exprs.ExpressionArgs.new(terms.expression_target.infer, inner_env))}, metalang.failure_handler, nil)
 	if not ok then return ok, expr end
 	local resenv, term = env:exit_block(expr, shadow)
 	return true, term, resenv
@@ -755,20 +753,20 @@ local core_operations = {
 	--end, types.tuple {types.number, types.number}, types.cotuple({types.unit, types.unit})),
 
 	--["do"] = evaluator.primitive_operative(do_block),
-	let = exprs.primitive_operative(let_bind),
-	record = exprs.primitive_operative(record_build),
-	intrinsic = exprs.primitive_operative(intrinsic),
+	let = exprs.primitive_operative(let_bind, "let_bind"),
+	record = exprs.primitive_operative(record_build, "record_build"),
+	intrinsic = exprs.primitive_operative(intrinsic, "intrinsic"),
 	["prim-number"] = lit_term(
 		unrestricted(value.prim_number_type),
 		unrestricted(value.prim_type_type)),
 	["prim-type"] = lit_term(
 		unrestricted(value.prim_type_type),
 		unrestricted(value.star(1))),
-	["prim-func-type"] = exprs.primitive_operative(prim_func_type_impl),
+	["prim-func-type"] = exprs.primitive_operative(prim_func_type_impl, "prim_func_type_impl"),
 	type = lit_term(value.star(1), value.star(0)),
-	type_ = exprs.primitive_operative(startype_impl),
-	["forall"] = exprs.primitive_operative(forall_type_impl),
-	lambda = exprs.primitive_operative(lambda_impl),
+	type_ = exprs.primitive_operative(startype_impl, "startype_impl"),
+	["forall"] = exprs.primitive_operative(forall_type_impl, "forall_type_impl"),
+	lambda = exprs.primitive_operative(lambda_impl, "lambda_impl"),
 	box = lit_term(
 		value.closure(
 			typed.tuple_elim(
@@ -894,7 +892,10 @@ local core_operations = {
 			typed.tuple_elim(
 				typed.bound_variable(1),
 				1,
-				typed.prim_boxed_type(typed.bound_variable(2))
+				typed.qtype(
+					typed.literal(value.quantity(terms.quantity.erased)),
+					typed.prim_boxed_type(typed.bound_variable(2))
+				)
 			),
 			terms.runtime_context()
 		),

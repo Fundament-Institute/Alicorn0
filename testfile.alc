@@ -15,12 +15,14 @@ let prim-sub = (intrinsic "return function(a, b) return a - b end" : prim-arith-
 let array-type =
 	intrinsic
 		""""
-			local terms = require './terms'
+			-- terms and terms_gen implicitly in env
 			local value = terms.value
-			local gens = require './terms-generators'
-			local value_array = gens.declare_array(value)
-			local id = {name = "array"}
+			assert(value and value.prim)
+			local value_array = terms_gen.declare_array(value)
+			local id = value.prim_user_defined_type({name = "array"}, value_array())
 			local function mktype(elem)
+				print("mktype id", id)
+				print("mktype elem", elem)
 				return value.prim_boxed_type(id, value_array(elem))
 			end
 			return mktype
@@ -38,7 +40,7 @@ let array-type =
 let (val) = (prim-sub 5 1)
 prim-sub val 3
 
-#let number-array = array-type (box prim-type prim-number)
+let number-array = (array-type (box prim-type prim-number))
 
 let sub = 
 	lambda (x : prim-number, y : prim-number)
@@ -46,3 +48,5 @@ let sub =
 		val
 
 sub 5 (sub 3 2)
+
+number-array

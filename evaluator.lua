@@ -433,6 +433,28 @@ function fitsinto(a, b)
 	return true
 end
 
+local function extract_tuple_elem_type_closures(enum_val, closures)
+	local constructor, arg = enum_val.constructor, enum_val.arg
+	if constructor == "empty" then
+		if #arg.elements ~= 0 then
+			error "enum_value with constructor empty should have no args"
+		end
+		return closures
+	end
+	if constructor == "cons" then
+		if #arg.elements ~= 2 then
+			error "enum_value with constructor cons should have two args"
+		end
+		extract_tuple_elem_type_closures(arg.elements[1], closures)
+		if not arg.elements[2]:is_closure() then
+			error "second elem in tuple_type enum_value should be closure"
+		end
+		closures:append(arg.elements[2])
+		return closures
+	end
+	error "unknown enum constructor for value.tuple_type's enum_value, should not be reachable"
+end
+
 --[[
 local function extract_value_metavariable(value) -- -> Option<metavariable>
   if value.kind == "value_neutral" and value.neutral.kind == "neutral_value_free" and value.neutral.free.kind == "free_metavariable" then
@@ -539,7 +561,12 @@ local function check(
 		error("check, typechecking_context: expected a typechecking context")
 	end
 	if terms.value.value_check(target_type) ~= true then
+		print("target_type", target_type)
 		error("check, target_type: expected a target type (as an alicorn value)")
+	end
+	if not target_type:is_qtype() then
+		print("target_type", target_type)
+		error("check, target_type: expected target type to be a qtype")
 	end
 
 	if checkable_term:is_inferrable() then
@@ -552,14 +579,12 @@ local function check(
 		end
 		-- TODO: unify!!!!
 		if inferred_type ~= target_type then
-			print "attempting to check if terms fit"
-			print(inferred_type:pretty_print())
-			print(target_type:pretty_print())
 			local ok, err = fitsinto(inferred_type, target_type)
 			if not ok then
-				--inferred_type = inferred_type:unify(target_type)
-				print(inferred_type:pretty_print())
-				print(target_type:pretty_print())
+				print "attempting to check if terms fit for checkable_term.inferrable"
+				print("checkable_term", checkable_term)
+				print("inferred_type", inferred_type)
+				print("target_type", target_type)
 				error(
 					"check: mismatch in inferred and target type for "
 						.. inferrable_term.kind
@@ -568,10 +593,58 @@ local function check(
 				)
 			end
 		end
-		--local unified_type = inferred_type:unify(target_type) -- can fail, will cause lua error
-		if inferred_type ~= target_type then
-		end
 		return inferred_usages, typed_term
+	elseif checkable_term:is_tuple_cons() then
+		local elements = checkable_term:unwrap_tuple_cons()
+
+		local target_tuple_type_elements = target_type.type:unwrap_tuple_type()
+		local elem_type_closures = extract_tuple_elem_type_closures(target_tuple_type_elements, value_array())
+		if #elem_type_closures ~= #elements then
+			print("target_type", target_type)
+			print("elements", elements)
+			error("check: mismatch in checkable_term.tuple_cons target type element count and elements in tuple cons")
+		end
+
+		local usages = usage_array()
+		local new_elements = typed_array()
+		local tuple_elems = value_array()
+		for i, v in ipairs(elements) do
+			local next_elem = apply_value(elem_type_closures[i], value.tuple_value(tuple_elems))
+			tuple_elems:append(next_elem)
+
+			local el_usages, el_term = check(v, typechecking_context, next_elem)
+
+			add_arrays(usages, el_usages)
+			new_elements:append(el_term)
+		end
+		-- TODO: handle quantities
+		return usages, typed_term.tuple_cons(new_elements)
+	elseif checkable_term:is_prim_tuple_cons() then
+		local elements = checkable_term:unwrap_prim_tuple_cons()
+
+		local target_tuple_type_elements = target_type.type:unwrap_prim_tuple_type()
+		local elem_type_closures = extract_tuple_elem_type_closures(target_tuple_type_elements, value_array())
+		if #elem_type_closures ~= #elements then
+			print("target_type", target_type)
+			print("elements", elements)
+			error("check: mismatch in checkable_term.prim_tuple_cons target type element count and elements in tuple cons")
+		end
+
+		local usages = usage_array()
+		local new_elements = typed_array()
+		local tuple_elems = value_array()
+		for i, v in ipairs(elements) do
+			local tuple_elem_type = apply_value(elem_type_closures[i], value.tuple_value(tuple_elems))
+			tuple_elems:append(tuple_elem_type)
+
+			print("tuple_elem_type", tuple_elem_type)
+			local el_usages, el_term = check(v, typechecking_context, tuple_elem_type)
+
+			add_arrays(usages, el_usages)
+			new_elements:append(el_term)
+		end
+		-- TODO: handle quantities
+		return usages, typed_term.prim_tuple_cons(new_elements)
 	elseif checkable_term:is_lambda() then
 		local param_name, body = checkable_term:unwrap_lambda()
 		-- assert that target_type is a pi type
@@ -598,12 +671,12 @@ function apply_value(f, arg)
 	elseif f:is_neutral() then
 		return value.neutral(neutral_value.application_stuck(f:unwrap_neutral(), arg))
 	elseif f:is_prim() then
-		local primitive_value = f:unwrap_prim()
+		local prim_func_impl = f:unwrap_prim()
 		if arg:is_prim_tuple_value() then
-			local elements = arg:unwrap_prim_tuple_value()
-			return prim_tup_val(primitive_value(elements:unpack()))
+			local arg_elements = arg:unwrap_prim_tuple_value()
+			return prim_tup_val(prim_func_impl(arg_elements:unpack()))
 		elseif arg:is_neutral() then
-			return value.neutral(neutral_value.prim_application_stuck(primitive_value, arg:unwrap_neutral()))
+			return value.neutral(neutral_value.prim_application_stuck(prim_func_impl, arg:unwrap_neutral()))
 		else
 			error("apply_value, is_prim, arg: expected a prim tuple argument")
 		end
@@ -814,6 +887,9 @@ function infer(
 		local quantity, t = inferrable_term:unwrap_qtype()
 		local quantity_type, quantity_usages, quantity_term = infer(quantity, typechecking_context)
 		local type_type, type_usages, type_term = infer(t, typechecking_context)
+		if type_type:is_qtype_type() then
+			error("inferrable_term.qtype wrapping another qtype")
+		end
 		local qtype_usages = usage_array()
 		add_arrays(qtype_usages, quantity_usages)
 		add_arrays(qtype_usages, type_usages)
@@ -869,25 +945,23 @@ function infer(
 	elseif inferrable_term:is_application() then
 		local f, arg = inferrable_term:unwrap_application()
 		local f_type, f_usages, f_term = infer(f, typechecking_context)
+		--FIXME: f_quantity is unused
 		local f_quantity, f_type = f_type:unwrap_qtype()
-		local arg_type, arg_usages, arg_term = infer(arg, typechecking_context)
-		local arg_quantity, arg_t = arg_type:unwrap_qtype()
-		local application_usages = usage_array()
-		add_arrays(application_usages, f_usages)
-		add_arrays(application_usages, arg_usages)
-		local application = typed_term.application(f_term, arg_term)
+
 		if f_type:is_pi() then
 			local f_param_type, f_param_info, f_result_type, f_result_info = f_type:unwrap_pi()
 			if not f_param_info:unwrap_param_info():unwrap_visibility():is_explicit() then
 				error("infer: nyi implicit parameters")
 			end
-			local fitsinto_ok, fitsinto_err = fitsinto(arg_type, f_param_type)
-			if not fitsinto_ok then
-				print("function arg match failure")
-				print("f_param_type", f_param_type:pretty_print())
-				print("arg_type", arg_type:pretty_print())
-				error("infer: mismatch in arg type and param type of function application. fitsinto_err: " .. tostring(fitsinto_err))
-			end
+
+			local arg_usages, arg_term = check(arg, typechecking_context, f_param_type)
+
+			local application_usages = usage_array()
+			add_arrays(application_usages, f_usages)
+			add_arrays(application_usages, arg_usages)
+			local application = typed_term.application(f_term, arg_term)
+
+			-- check already checked for us so no fitsinto
 			local application_result_type =
 				apply_value(f_result_type, evaluate(arg_term, typechecking_context:get_runtime_context()))
 			return application_result_type, application_usages, application
@@ -896,14 +970,15 @@ function infer(
 			print(f_type:pretty_print())
 			print(arg:pretty_print())
 			local f_param_type, f_result_type_closure = f_type:unwrap_prim_function_type()
-			local f_param_quantity, f_param_type = f_param_type:unwrap_qtype()
-			local f_decls = f_param_type:unwrap_prim_tuple_type()
-			local arg_decls = arg_t:unwrap_prim_tuple_type()
-			print "matching decls"
-			print(f_decls:pretty_print())
-			print(arg_decls:pretty_print())
-			-- will error if not equal/unifiable
-			eq_prim_tuple_value_decls(f_decls, arg_decls, typechecking_context)
+
+			local arg_usages, arg_term = check(arg, typechecking_context, f_param_type)
+
+			local application_usages = usage_array()
+			add_arrays(application_usages, f_usages)
+			add_arrays(application_usages, arg_usages)
+			local application = typed_term.application(f_term, arg_term)
+
+			-- check already checked for us so no fitsinto
 			local f_result_type = apply_value(f_result_type_closure, evaluate(arg_term, typechecking_context:get_runtime_context()))
 			return f_result_type, application_usages, application
 		else
@@ -1340,9 +1415,14 @@ function evaluate(typed_term, runtime_context)
 	elseif typed_term:is_lambda() then
 		return value.closure(typed_term:unwrap_lambda(), runtime_context)
 	elseif typed_term:is_qtype() then
-		local quantity, t = typed_term:unwrap_qtype()
+		local quantity, type_term = typed_term:unwrap_qtype()
 		local quantity_value = evaluate(quantity, runtime_context)
-		local type_value = evaluate(t, runtime_context)
+		local type_value = evaluate(type_term, runtime_context)
+		if type_value:is_qtype() then
+			print("type_term", type_term)
+			print("type_value (evaluate(type_term))", type_value)
+			error"typed_term.qtype wrapping another qtype"
+		end
 		return value.qtype(quantity_value, type_value)
 	elseif typed_term:is_pi() then
 		local param_type, param_info, result_type, result_info = typed_term:unwrap_pi()
@@ -1525,7 +1605,7 @@ function evaluate(typed_term, runtime_context)
 		local type_term = typed_term:unwrap_prim_boxed_type()
 		local type_value = evaluate(type_term, runtime_context)
 		local quantity, backing_type = type_value:unwrap_qtype()
-		return value.qtype(quantity, value.prim_boxed_type(backing_type))
+		return value.prim_boxed_type(backing_type)
 	elseif typed_term:is_prim_box() then
 		local content = typed_term:unwrap_prim_box()
 		return value.prim(evaluate(content, runtime_context))
@@ -1544,7 +1624,13 @@ function evaluate(typed_term, runtime_context)
 		local source_val = evaluate(source, runtime_context)
 		if source_val:is_prim() then
 			local source_str = source_val:unwrap_prim()
-			return value.prim(assert(load(source_str))())
+			return value.prim(assert(load(source_str, "prim_intrinsic", "t", {
+				assert = assert,
+				p = p,
+				print = print,
+				terms = terms,
+				terms_gen = gen,
+			}))())
 		elseif source_val:is_neutral() then
 			local source_neutral = source_val:unwrap_neutral()
 			return value.neutral(neutral_value.prim_intrinsic_stuck(source_neutral))
@@ -1625,6 +1711,7 @@ end
 
 return {
 	fitsinto = fitsinto,
+	extract_tuple_elem_type_closures = extract_tuple_elem_type_closures,
 	const_combinator = const_combinator,
 	check = check,
 	infer = infer,
