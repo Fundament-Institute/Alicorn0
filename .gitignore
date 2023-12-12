@@ -2,3 +2,4 @@
 /luvi.exe
 /luvit.exe
 /.direnv/
+/.pre-commit-config.yaml
