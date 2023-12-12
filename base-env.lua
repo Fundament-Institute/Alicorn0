@@ -674,7 +674,7 @@ local function lambda_impl(syntax, env)
 	inner_env = inner_env:bind_local(terms.binding.annotated_lambda("#arg", params_group.types))
 	local _, arg = inner_env:get("#arg")
 	inner_env = inner_env:bind_local(terms.binding.tuple_elim(params_group.names, arg))
-	local ok, expr, env = tail:match({exprs.block(metalang.accept_handler, exprs.ExpressionArgs.new(terms.expression_target.infer, env))}, metalang.failure_handler, nil)
+	local ok, expr, env = tail:match({exprs.block(metalang.accept_handler, exprs.ExpressionArgs.new(terms.expression_target.infer, inner_env))}, metalang.failure_handler, nil)
 	if not ok then return ok, expr end
 	local resenv, term = env:exit_block(expr, shadow)
 	return true, term, resenv
