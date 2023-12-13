@@ -297,11 +297,8 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	end
 
 	local names = gen.declare_array(gen.builtin_string)()
-	print("is env an environment? (before loop)")
-	--p(env)
-	print(env.get)
-	print(env.enter_block)
-	if not env.enter_block then
+
+	if not env or not env.enter_block then
 		error "env isn't an environment in prim_func_type_impl_reducer"
 	end
 
@@ -309,18 +306,13 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	local ok, continue = true, true
 	while ok and continue do
 		ok, head, tail = syntax:match({ metalang.ispair(metalang.accept_handler) }, metalang.failure_handler, env)
-		print(env)
 		if not ok then
 			break
 		end
 
-		print("is env an environment? (in loop)")
-		--p(env)
-		print(env.get)
-		print(env.enter_block)
-
-		print "args in loop is"
-		print(args:pretty_print())
+		if not env or not env.enter_block then
+			error "env isn't an environment in prim_func_type_impl_reducer"
+		end
 
 		ok, continue, name, type_val, type_env = head:match({
 			metalang.symbol_exact(function()
@@ -331,19 +323,12 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 			end, env, build_type_term(args), names),
 		}, metalang.failure_handler, env)
 
-		if continue then
-			-- type_env:bind_local(terms.binding.let(name, type_val))
-			-- local arg = nil
-			-- args = cons(args, arg)
-		end
 		if ok and continue then
 			env = type_env
 			args = cons(args, type_val)
 			names = names:copy()
 			names:append(name)
 		end
-		print("arg", ok, continue, name, type_val, type_env)
-		--error "TODO use ascribed_name results"
 
 		syntax = tail
 	end
@@ -357,9 +342,13 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	local results = empty
 	while ok and continue do
 		ok, head, tail = syntax:match({ metalang.ispair(metalang.accept_handler) }, metalang.failure_handler, env)
-		print(env)
+
 		if not ok then
 			break
+		end
+
+		if not env or not env.enter_block then
+			error "env isn't an environment in prim_func_type_impl_reducer"
 		end
 
 		ok, continue, name, type_val, type_env = head:match({
@@ -370,7 +359,8 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 				return ok, true, ...
 			end, env, build_type_term(results), names),
 		}, metalang.failure_handler, env)
-		print("result", ok, continue, name, type_val, type_env)
+
+		--print("result", ok, continue, name, type_val, type_env)
 
 		if ok and continue then
 			env = type_env
@@ -380,6 +370,7 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 		end
 
 		if not ok then
+			--print("prim_func_type_impl failed and returning ", continue)
 			return false, continue
 		end
 
@@ -408,20 +399,14 @@ local function prim_func_type_impl(syntax, env)
 	print("in prim_func_type_impl")
 	local ok, fn_type_term, env =
 		syntax:match({ prim_func_type_impl_reducer(metalang.accept_handler, env) }, metalang.failure_handler, env)
-	print("finished matching prim_func_type_impl and got")
-	print(fn_type_term:pretty_print())
 	if not ok then
 		return ok, fn_type_term
 	end
-	if not env.enter_block then
+	print("finished matching prim_func_type_impl and got (ok, fn_type_term)", ok, fn_type_term)
+	if not env or not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl"
 	end
 	return ok, fn_type_term, env
-	-- parse sequence of ascribed names, arrow, then sequence of ascribed names
-	-- for each ascribed name:
-	-- enter a block, perform lambda binding, perform tuple destrucutring binding, parse out the type of the ascription
-
-	--local ok,
 end
 
 local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
