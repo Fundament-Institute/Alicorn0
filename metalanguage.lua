@@ -68,9 +68,23 @@ end
 
 local reducer_mt = { __call = create_reducible }
 
+local function augment_error(syntax, reducer_name, ok, err_msg, ...)
+	if not ok then
+		err_msg = "error occured while parsing anchor "
+			.. tostring(syntax.anchor)
+			.. " for reducer "
+			.. reducer_name
+			.. "\n"
+			.. tostring(err_msg)
+		return false, err_msg
+	end
+	-- err_msg is the first result arg otherwise
+	return err_msg, ...
+end
+
 local function reducer(func, name)
 	local function funcwrapper(syntax, matcher)
-		return func(syntax, table.unpack(matcher.reducible))
+		return augment_error(syntax, name, xpcall(func, debug.traceback, syntax, table.unpack(matcher.reducible)))
 	end
 
 	local reducer = {
