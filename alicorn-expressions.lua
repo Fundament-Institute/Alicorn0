@@ -518,7 +518,7 @@ end
 
 local function collect_tuple_pair_too_many_handler(args)
 	local target, env = args:unwrap()
-	return false, "tuple has too many elements", nil, nil, env
+	return false, "tuple has too many elements for checked collect_tuple", nil, nil, env
 end
 
 local function collect_tuple_nil_handler(args)
@@ -528,7 +528,7 @@ end
 
 local function collect_tuple_nil_too_few_handler(args)
 	local target, env = args:unwrap()
-	return false, "tuple has too few elements", nil, nil, env
+	return false, "tuple has too few elements for checked collect_tuple", nil, nil, env
 end
 
 collect_tuple = metalanguage.reducer(function(syntax, args)
@@ -566,6 +566,14 @@ collect_tuple = metalanguage.reducer(function(syntax, args)
 				if ok and continue then
 					collected_terms:append(next_term)
 				end
+			end
+			if not ok then
+				continue = continue
+					.. " (should have "
+					.. tostring(#closures)
+					.. ", found "
+					.. tostring(#collected_terms)
+					.. " so far)"
 			end
 		-- else we don't know how many elems so nil or pair are both valid
 		else
@@ -626,6 +634,14 @@ collect_prim_tuple = metalanguage.reducer(function(syntax, args)
 				if ok and continue then
 					collected_terms:append(next_term)
 				end
+			end
+			if not ok then
+				continue = continue
+					.. " (should have "
+					.. tostring(#closures)
+					.. ", found "
+					.. tostring(#collected_terms)
+					.. " so far)"
 			end
 		-- else we don't know how many elems so nil or pair are both valid
 		else
