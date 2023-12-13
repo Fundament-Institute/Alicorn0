@@ -346,6 +346,9 @@ local function tuple_compare(a, b)
 	end
 	return true
 end
+add_comparer("value.prim_boxed_type", "value.prim_boxed_type", function(a, b)
+	return fitsinto(a:unwrap_prim_boxed_type(), b:unwrap_prim_boxed_type())
+end)
 add_comparer("value.tuple_type", "value.tuple_type", tuple_compare)
 add_comparer("value.prim_tuple_type", "value.prim_tuple_type", tuple_compare)
 add_comparer("value.pi", "value.pi", function(a, b)
