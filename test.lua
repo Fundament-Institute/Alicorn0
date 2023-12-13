@@ -1,6 +1,5 @@
 local luaunit = require "luaunit"
 local format = require "format"
-local inspect = require "inspect"
 
 local function simplify_list(list)
 	if list.kind == "list" then
@@ -409,6 +408,18 @@ function testcomma()
 	end
 end
 
+function testFunctionCalls()
+	local exampleA = [[
+		box(type, val)
+		test(box(type, val), "hi")
+	]]
+	local exampleB = [[
+		box type val
+		test(box type val, "hi")
+	]]
+	luaunit.assertEquals(format.parse(exampleA, "inline", format.parse(exampleB, "inline")))
+end
+
 -- function teststrings()
 --     local example = {
 --         " \"this is a string ${with a splice} and more text over here\"  "
@@ -419,5 +430,5 @@ end
 --     }
 
 -- end
-
+_G["tests"] = _ENV or getfenv()
 os.exit(luaunit.LuaUnit.run())

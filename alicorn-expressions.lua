@@ -532,6 +532,7 @@ local function collect_tuple_nil_too_few_handler(args)
 end
 
 collect_tuple = metalanguage.reducer(function(syntax, args)
+	local initial_syntax = syntax
 	local target, env = args:unwrap()
 	local target_type, closures, collected_terms
 
@@ -587,6 +588,11 @@ collect_tuple = metalanguage.reducer(function(syntax, args)
 		end
 	end
 	if not ok then
+		if target_type then
+			print("checked collect_tuple failed with target_type:", target_type)
+			print("initial_syntax")
+			p(initial_syntax)
+		end
 		return false, continue
 	end
 
@@ -655,6 +661,9 @@ collect_prim_tuple = metalanguage.reducer(function(syntax, args)
 		end
 	end
 	if not ok then
+		if target_type then
+			print("checked collect_tuple failed with target_type:", target_type)
+		end
 		return false, continue
 	end
 
