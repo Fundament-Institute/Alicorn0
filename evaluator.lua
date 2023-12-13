@@ -318,7 +318,7 @@ end
 
 -- types of types
 add_comparer(value.prim_type_type.kind, value.prim_type_type.kind, always_fits_comparer)
-add_comparer("value.tuple_type", "value.tuple_type", function(a, b)
+local function tuple_compare(a, b)
 	-- fixme lol
 	local placeholder = value.neutral(neutral_value.free(free.unique({})))
 	local tuple_types_a, na = infer_tuple_type_unwrapped(a, placeholder)
@@ -345,7 +345,9 @@ add_comparer("value.tuple_type", "value.tuple_type", function(a, b)
 		end
 	end
 	return true
-end)
+end
+add_comparer("value.tuple_type", "value.tuple_type", tuple_compare)
+add_comparer("value.prim_tuple_type", "value.prim_tuple_type", tuple_compare)
 add_comparer("value.pi", "value.pi", function(a, b)
 	if a == b then
 		return true

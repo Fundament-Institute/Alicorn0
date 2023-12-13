@@ -36,7 +36,7 @@ let prim-array-set =
 				array[index] = elem
 			end
 		:
-		prim-func-type (T : (boxed prim-type)) (arr : (unbox (prim-array-type T))) (index : prim-number) (elem : (unbox T)) ->
+		prim-func-type (T : (boxed prim-type)) (arr : (unbox prim-type (prim-array-type T))) (index : prim-number) (elem : (unbox prim-type T)) ->
 
 let prim-array-get = 
 	intrinsic
@@ -45,7 +45,7 @@ let prim-array-get =
 				return array[index]
 			end
 		:
-		prim-func-type (T : (boxed prim-type)) (arr : (unbox (prim-array-type T))) (index : prim-number) ->  (elem : (unbox T))
+		prim-func-type (T : (boxed prim-type)) (arr : (unbox prim-type (prim-array-type T))) (index : prim-number) ->  (elem : (unbox prim-type T))
 
 
 let prim-array-new = 
@@ -55,7 +55,7 @@ let prim-array-new =
 				return {}
 			end
 		:
-		prim-func-type (T : (boxed prim-type)) ->  (arr : (unbox (prim-array-type T)))
+		prim-func-type (T : (boxed prim-type)) ->  (arr : (unbox prim-type (prim-array-type T)))
 
 let array-type =
 	lambda ((T : prim-type))
