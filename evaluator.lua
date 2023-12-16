@@ -313,9 +313,6 @@ for _, prim_type in ipairs({
 	add_comparer(prim_type.kind, prim_type.kind, always_fits_comparer)
 end
 
--- TODO: value.pi
--- TODO: value.tuple_type
-
 -- types of types
 add_comparer(value.prim_type_type.kind, value.prim_type_type.kind, always_fits_comparer)
 local function tuple_compare(a, b)
@@ -393,6 +390,10 @@ add_comparer(value.star(0).kind, value.star(0).kind, function(a, b)
 		return false, "a.level > b.level"
 	end
 	return true
+end)
+
+add_comparer("value.prim_boxed_type", "value.prim_boxed_type", function(a, b)
+	return fitsinto(a:unwrap_prim_boxed_type(), b:unwrap_prim_boxed_type())
 end)
 
 local function quantities_fitsinto(qa, qb)
