@@ -265,7 +265,7 @@ local infer_tuple_type, infer_tuple_type_unwrapped
 local terms = require "./terms"
 local value = terms.value
 
-local fitsinto
+local fitsinto, fitsinto_qless
 -- indexed by kind x kind
 local fitsinto_comparers = {}
 
@@ -343,9 +343,6 @@ local function tuple_compare(a, b)
 	end
 	return true
 end
-add_comparer("value.prim_boxed_type", "value.prim_boxed_type", function(a, b)
-	return fitsinto(a:unwrap_prim_boxed_type(), b:unwrap_prim_boxed_type())
-end)
 add_comparer("value.tuple_type", "value.tuple_type", tuple_compare)
 add_comparer("value.prim_tuple_type", "value.prim_tuple_type", tuple_compare)
 add_comparer("value.pi", "value.pi", function(a, b)
@@ -393,7 +390,8 @@ add_comparer(value.star(0).kind, value.star(0).kind, function(a, b)
 end)
 
 add_comparer("value.prim_boxed_type", "value.prim_boxed_type", function(a, b)
-	return fitsinto(a:unwrap_prim_boxed_type(), b:unwrap_prim_boxed_type())
+	local ok, err = fitsinto_qless(a:unwrap_prim_boxed_type(), b:unwrap_prim_boxed_type())
+	return ok, err
 end)
 
 local function quantities_fitsinto(qa, qb)
@@ -402,7 +400,24 @@ local function quantities_fitsinto(qa, qb)
 	end
 	return false, qa.kind .. " doesn't fit into " .. qb.kind
 end
+function fitsinto_qless(tya, tyb)
+	if not fitsinto_comparers[tya.kind] then
+		error("fitsinto given value a which isn't a type or NYI " .. tya.kind)
+	elseif not fitsinto_comparers[tyb.kind] then
+		error("fitsinto given value b which isn't a type or NYI " .. tyb.kind)
+	end
 
+	local comparer = (fitsinto_comparers[tya.kind] or {})[tyb.kind]
+	if not comparer then
+		return false, "no comparer for " .. tya.kind .. " with " .. tyb.kind
+	end
+
+	ok, err = comparer(tya, tyb)
+	if not ok then
+		return false, ".value" .. err
+	end
+	return true
+end
 function fitsinto(a, b)
 	if not a:is_qtype() then
 		print(a)

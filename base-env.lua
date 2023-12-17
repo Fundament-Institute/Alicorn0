@@ -767,7 +767,7 @@ local core_operations = {
 						typed.bound_variable(1),
 						2,
 						typed.qtype(
-							typed.literal(value.quantity(terms.quantity.erased)),
+							typed.literal(value.quantity(terms.quantity.unrestricted)),
 							typed.prim_boxed_type(typed.bound_variable(2))
 						)
 					),
@@ -809,7 +809,7 @@ local core_operations = {
 										terms.typed_term.bound_variable(1),
 										1,
 										typed.qtype(
-											typed.literal(value.quantity(terms.quantity.erased)),
+											typed.literal(value.quantity(terms.quantity.unrestricted)),
 											typed.prim_boxed_type(typed.bound_variable(2))
 										)
 									),
@@ -834,7 +834,7 @@ local core_operations = {
 				typed.bound_variable(1),
 				1,
 				typed.qtype(
-					typed.literal(value.quantity(terms.quantity.erased)),
+					typed.literal(value.quantity(terms.quantity.unrestricted)),
 					typed.prim_boxed_type(typed.bound_variable(2))
 				)
 			),
@@ -851,7 +851,10 @@ local core_operations = {
 									typed.tuple_elim(
 										typed.bound_variable(1),
 										0,
-										typed.qtype(typed.literal(value.quantity(terms.quantity.erased)), typed.star(1))
+										typed.qtype(
+											typed.literal(value.quantity(terms.quantity.unrestricted)),
+											typed.star(1)
+										)
 									),
 									terms.runtime_context()
 								)
@@ -865,7 +868,7 @@ local core_operations = {
 						typed.bound_variable(1),
 						1,
 						typed.qtype(
-							typed.literal(value.quantity(terms.quantity.erased)),
+							typed.literal(value.quantity(terms.quantity.unrestricted)),
 							typed.literal(value.prim_type_type)
 						)
 					),
