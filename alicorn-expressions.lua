@@ -399,8 +399,8 @@ local external_error_mt = {
 	__tostring = function(self)
 		local message = "Lua error occured inside primitive operative "
 			.. self.operative_name
-			.. " at "
-			.. (self.anchor and tostring(self.anchor) or "<unknown position>")
+			.. " "
+			.. (self.anchor and tostring(self.anchor) or " at unknown position")
 			.. ":\n"
 			.. tostring(self.cause)
 		return message

@@ -77,8 +77,8 @@ local external_error_mt = {
 	__tostring = function(self)
 		local message = "Lua error raised inside reducer "
 			.. self.reducer_name
-			.. " at "
-			.. (self.anchor and tostring(self.anchor) or "<unknown position>")
+			.. " "
+			.. (self.anchor and tostring(self.anchor) or "at unknown position")
 			.. ":\n"
 			.. tostring(self.cause)
 		return message
