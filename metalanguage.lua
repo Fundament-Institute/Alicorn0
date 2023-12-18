@@ -68,15 +68,39 @@ end
 
 local reducer_mt = { __call = create_reducible }
 
+---@class ExternalError
+---@field cause any
+---@field anchor any
+---@field reducer_name string
+local ExternalError = {}
+local external_error_mt = {
+	__tostring = function(self)
+		local message = "Lua error raised inside reducer "
+			.. self.reducer_name
+			.. " at "
+			.. (self.anchor and tostring(self.anchor) or "<unknown position>")
+			.. ":\n"
+			.. tostring(self.cause)
+		return message
+	end,
+	__index = ExternalError,
+}
+
+---@param cause any
+---@param anchor any
+---@param reducer_name any
+---@return ExternalError
+function ExternalError.new(cause, anchor, reducer_name)
+	return setmetatable({
+		anchor = anchor,
+		cause = cause,
+		reducer_name = reducer_name,
+	}, external_error_mt)
+end
+
 local function augment_error(syntax, reducer_name, ok, err_msg, ...)
 	if not ok then
-		err_msg = "error occured while parsing anchor "
-			.. tostring(syntax.anchor)
-			.. " for reducer "
-			.. reducer_name
-			.. "\n"
-			.. tostring(err_msg)
-		return false, err_msg
+		return false, ExternalError.new(err_msg, syntax.anchor, reducer_name)
 	end
 	-- err_msg is the first result arg otherwise
 	return err_msg, ...

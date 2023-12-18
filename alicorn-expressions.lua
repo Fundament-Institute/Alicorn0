@@ -390,6 +390,36 @@ end, "expressions")
 --   return self.val(ops, env)
 -- end
 
+---@class OperativeError
+---@field cause any
+---@field anchor any
+---@field operative_name string
+local OperativeError = {}
+local external_error_mt = {
+	__tostring = function(self)
+		local message = "Lua error occured inside primitive operative "
+			.. self.operative_name
+			.. " at "
+			.. (self.anchor and tostring(self.anchor) or "<unknown position>")
+			.. ":\n"
+			.. tostring(self.cause)
+		return message
+	end,
+	__index = OperativeError,
+}
+
+---@param cause any
+---@param anchor any
+---@param operative_name any
+---@return OperativeError
+function OperativeError.new(cause, anchor, operative_name)
+	return setmetatable({
+		anchor = anchor,
+		cause = cause,
+		operative_name = operative_name,
+	}, external_error_mt)
+end
+
 ---@param fn fun(syntax : any, env : Environment) : boolean, any, Environment
 ---@param name string
 ---@return inferrable_term.operative_cons
@@ -406,12 +436,7 @@ local function primitive_operative(fn, name)
 		end
 		local ok, res, env = fn(syn, env)
 		if not ok then
-			error(
-				"Primitive operative "
-					.. debugstring
-					.. " apply failure, NYI convert to Maybe.\nError was:"
-					.. tostring(res)
-			)
+			error(OperativeError.new(res, syn.anchor, debugstring))
 		end
 		if not env or not env.exit_block then
 			print(
