@@ -7,11 +7,12 @@ local terms = require "./terms"
 local exprs = require "./alicorn-expressions"
 local fs = require "fs"
 
-local src = fs.readFileSync("testfile.alc")
+local filename = "testfile.alc"
+local src = fs.readFileSync(filename)
 print("read code")
 print(src)
 print("parsing code")
-local code = format.read(src, "inline")
+local code = format.read(src, filename)
 -- p(code)
 
 local env = base_env.create()
