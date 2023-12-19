@@ -41,7 +41,7 @@ let prim-array-set =
 				array[index] = elem
 			end
 		:
-		prim-func-type (T : (boxed prim-type)) (arr : (array-type T)) (index : prim-number) (elem : (unbox prim-type T)) ->
+		prim-func-type (T : (boxed prim-type)) (arr : (array-type (unbox prim-type T))) (index : prim-number) (elem : (unbox prim-type T)) ->
 
 let prim-array-get = 
 	intrinsic

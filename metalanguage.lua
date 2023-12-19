@@ -68,9 +68,47 @@ end
 
 local reducer_mt = { __call = create_reducible }
 
+---@class ExternalError
+---@field cause any
+---@field anchor any
+---@field reducer_name string
+local ExternalError = {}
+local external_error_mt = {
+	__tostring = function(self)
+		local message = "Lua error raised inside reducer "
+			.. self.reducer_name
+			.. " "
+			.. (self.anchor and tostring(self.anchor) or "at unknown position")
+			.. ":\n"
+			.. tostring(self.cause)
+		return message
+	end,
+	__index = ExternalError,
+}
+
+---@param cause any
+---@param anchor any
+---@param reducer_name any
+---@return ExternalError
+function ExternalError.new(cause, anchor, reducer_name)
+	return setmetatable({
+		anchor = anchor,
+		cause = cause,
+		reducer_name = reducer_name,
+	}, external_error_mt)
+end
+
+local function augment_error(syntax, reducer_name, ok, err_msg, ...)
+	if not ok then
+		return false, ExternalError.new(err_msg, syntax.anchor, reducer_name)
+	end
+	-- err_msg is the first result arg otherwise
+	return err_msg, ...
+end
+
 local function reducer(func, name)
 	local function funcwrapper(syntax, matcher)
-		return func(syntax, table.unpack(matcher.reducible))
+		return augment_error(syntax, name, xpcall(func, debug.traceback, syntax, table.unpack(matcher.reducible)))
 	end
 
 	local reducer = {
