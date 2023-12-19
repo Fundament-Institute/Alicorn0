@@ -1629,7 +1629,12 @@ function evaluate(typed_term, runtime_context)
 		local content = typed_term:unwrap_prim_box()
 		return value.prim(evaluate(content, runtime_context))
 	elseif typed_term:is_prim_unbox() then
-		local ok, prim = typed_term:unwrap_prim_unbox():as_prim()
+		local unwrapped = typed_term:unwrap_prim_unbox()
+		if not unwrapped.as_prim then
+			print("unwrapped", unwrapped)
+			error "evaluate, is_prim_unbox: missing as_prim on unwrapped prim_unbox"
+		end
+		local ok, prim = unwrapped:as_prim()
 		if not ok then
 			error "evaluate, is_prim_unbox: expected a prim"
 		end
