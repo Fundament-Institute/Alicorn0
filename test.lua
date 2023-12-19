@@ -410,18 +410,18 @@ print
 print
 	42
 ]],
-		-- TODO: Fix this
-		-- [[
-		-- print
-		-- 	(+ 1 2
-		-- 		\ 3 * 4)
-		-- ]]
+		[[
+print
+	(+ 1 2
+		\ 3 * 4)
+]],
 	}
 
 	local expected = {
 		{ { "print", { "+", 1, 2, { 3, "*", 4 } } } },
 		{ { "print", { "+", 1, 2, { 3, "*", 4 } } } },
 		{ { "print", 42 } },
+		{ { "print", { "+", 1, 2, { 3, "*", 4 } } } },
 	}
 
 	for i = 1, #example do

@@ -179,7 +179,7 @@ local grammar = P {
 
 	-- LIST SEPARATOR BEHAVIOR IS NOT CONSISTENT BETWEEN BRACED AND NAKED LISTS
 	permitted_paren_tokens = (
-		(P "\\" * V "naked_list") -- \ escape char enters naked list mode from inside a paren list. there's probably an edge case here, indentation is going to be wacky
+		(space_tokens(P [[\]]) * V "naked_list") -- \ escape char enters naked list mode from inside a paren list. there's probably an edge case here, indentation is going to be wacky
 		+ V "tokens"
 		+ V "newline"
 		+ S "\t " ^ 1
