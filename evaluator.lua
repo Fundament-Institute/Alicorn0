@@ -1630,15 +1630,20 @@ function evaluate(typed_term, runtime_context)
 		return value.prim(evaluate(content, runtime_context))
 	elseif typed_term:is_prim_unbox() then
 		local unwrapped = typed_term:unwrap_prim_unbox()
-		if not unwrapped.as_prim then
-			print("unwrapped", unwrapped)
+		local unwrap_val = evaluate(unwrapped, runtime_context)
+		if not unwrap_val.as_prim then
+			print("unwrapped", unwrapped, unwrap_val)
 			error "evaluate, is_prim_unbox: missing as_prim on unwrapped prim_unbox"
 		end
-		local ok, prim = unwrapped:as_prim()
-		if not ok then
-			error "evaluate, is_prim_unbox: expected a prim"
+		if unwrap_val:is_prim() then
+			return unwrap_val:unwrap_prim()
+		elseif unwrap_val:is_neutral() then
+			local nval = unwrap_val:unwrap_neutral()
+			return value.neutral(neutral_value.prim_unbox_stuck(nval))
+		else
+			print("unrecognized value in unbox", unwrap_val)
+			error "invalid value in unbox, must be prim or neutral"
 		end
-		return prim -- this should already be an alicorn value
 	elseif typed_term:is_let() then
 		local expr, body = typed_term:unwrap_let()
 		local expr_value = evaluate(expr, runtime_context)

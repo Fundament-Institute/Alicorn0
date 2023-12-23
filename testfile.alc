@@ -50,28 +50,28 @@ let prim-array-get =
 				return array[index]
 			end
 		:
-		prim-func-type (T : (boxed prim-type)) (arr : (array-type T)) (index : prim-number) ->  (elem : (unbox prim-type T))
+		prim-func-type (T : (boxed prim-type)) (arr : (array-type (unbox prim-type T))) (index : prim-number) ->  (elem : (unbox prim-type T))
 
 
-#let prim-array-new = 
-#	intrinsic
-#		""""
-#			local function array_get(_elem_type, array)
-#				return {}
-#			end
-#		:
-#		prim-func-type (T : (boxed prim-type)) ->  (arr : (unbox prim-type (prim-array-type T)))
+let prim-array-new = 
+	intrinsic
+		""""
+			local function array_get(_elem_type, array)
+				return {}
+			end
+		:
+		prim-func-type (T : (boxed prim-type)) ->  (arr : (array-type (unbox prim-type T)))
 
-#let array-set = 
-#	lambda (T : prim-type, arr : (array-type T), index : prim-number, elem : T)
-#		let ( ) = prim-array-set(box(prim-type, T), arr, index, elem)
-#let array-get = 
-#	lambda (T : prim-type, arr : (array-type T), index : prim-number)
-#		let (elem) = prim-array-get(box(prim-type, T), arr, index)
-#let array-new = 
-#	lambda ((T : prim-type))
-#		let (elem) = prim-array-new(box(prim-type, T))
-#		elem
+let array-set = 
+	lambda (T : prim-type, arr : (array-type T), index : prim-number, elem : T)
+		let ( ) = prim-array-set(box(prim-type, T), arr, index, elem)
+let array-get = 
+	lambda (T : prim-type, arr : (array-type T), index : prim-number)
+		let (elem) = prim-array-get(box(prim-type, T), arr, index)
+let array-new = 
+	lambda ((T : prim-type))
+		let (elem) = prim-array-new(box(prim-type, T))
+		elem
 
 # let arr = array-new(prim-number)
 # array-set(prim-number, arr, 1, 3)

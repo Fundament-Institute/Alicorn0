@@ -910,6 +910,10 @@ neutral_value:define_enum("neutral_value", {
 		"source",
 		neutral_value,
 	} },
+	{ "prim_unbox_stuck", {
+		"subject",
+		neutral_value,
+	} },
 })
 
 neutral_value.free.metavariable = function(mv)
