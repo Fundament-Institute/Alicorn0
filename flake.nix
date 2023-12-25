@@ -41,6 +41,7 @@
         };
         checks = {
           terms = alicorn-check "test-terms.lua";
+          derive-pretty-print = alicorn-check "test-derive-pretty-print.lua";
           formatting = pkgs.runCommandNoCC "stylua-check" { } ''
             cd ${./.}
             mkdir $out
