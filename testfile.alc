@@ -37,9 +37,10 @@ let array-type =
 let prim-array-set =
 	intrinsic
 		""""
-			local function array_get(_elem_type, array, index, elem)
+			local function array_set(_elem_type, array, index, elem)
 				array[index] = elem
 			end
+			return array_set
 		:
 		prim-func-type (T : (boxed prim-type)) (arr : (array-type (unbox prim-type T))) (index : prim-number) (elem : (unbox prim-type T)) ->
 
@@ -49,9 +50,22 @@ let prim-array-get =
 			local function array_get(_elem_type, array, index)
 				return array[index]
 			end
+			return array_get
 		:
 		prim-func-type (T : (boxed prim-type)) (arr : (array-type (unbox prim-type T))) (index : prim-number) ->  (elem : (unbox prim-type T))
 
+
+let example = unbox(prim-type, box(prim-type, prim-number))
+
+let (typ) = (prim-array-type (box prim-type prim-number))
+let example = unbox(prim-type, typ)
+
+let array-set = 
+	lambda (T : prim-type, arr : (array-type T), index : prim-number, elem : T)
+		let boxed_t = box(prim-type, T)
+		let arr_ty = (array-type (unbox prim-type boxed_t))
+		let elem_ty = (unbox prim-type boxed_t)
+		let ( ) = prim-array-set(box(prim-type, T), arr, index, elem)
 
 let prim-array-new = 
 	intrinsic
