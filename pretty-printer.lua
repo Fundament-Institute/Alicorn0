@@ -1,11 +1,14 @@
-local traits = require "./traits"
-
 ---@class PrettyPrint
 local PrettyPrint = {}
 local PrettyPrint_mt = { __index = PrettyPrint }
 
-local prettyprintable = traits.declare_trait("prettyprintable")
-prettyprintable:declare_method("print")
+local prettyprintable = require "./pretty-printable-trait"
+
+local kind_field = "kind"
+local hidden_fields = {
+	[kind_field] = true,
+	capture = true,
+}
 
 function PrettyPrint.new()
 	return setmetatable({}, PrettyPrint_mt)
@@ -25,7 +28,7 @@ function PrettyPrint:any(unknown)
 		if via_trait and via_trait.print then
 			via_trait.print(unknown, self)
 		elseif mt and mt.__tostring then
-			self[#self + 1] = string.format("%q", tostring(unknown))
+			self[#self + 1] = tostring(unknown)
 		else
 			self:table(unknown)
 		end
@@ -79,12 +82,25 @@ function PrettyPrint:_resetcolor()
 	return "\27[0m"
 end
 
+function PrettyPrint:array(array)
+	self:_enter()
+	self[#self + 1] = self:_color()
+	self[#self + 1] = "["
+	self[#self + 1] = self:_resetcolor()
+	for i, v in ipairs(array) do
+		self:any(v)
+	end
+	self[#self + 1] = self:_color()
+	self[#self + 1] = "]"
+	self[#self + 1] = self:_resetcolor()
+	self:_exit()
+end
+
 ---@param fields table
 function PrettyPrint:table(fields)
 	self:_enter()
 
 	local count = 0
-	local fields = {}
 	for k, v in pairs(fields) do
 		if k == "kind" then
 			self[#self + 1] = fields.kind
@@ -92,13 +108,22 @@ function PrettyPrint:table(fields)
 			count = count + 1
 		end
 	end
-
-	if count <= 1 then
+	if #fields > 0 and count == 0 then
+		self[#self + 1] = self:_color()
+		self[#self + 1] = "["
+		self[#self + 1] = self:_resetcolor()
+		for i, v in ipairs(fields) do
+			self:any(v)
+		end
+		self[#self + 1] = self:_color()
+		self[#self + 1] = "]"
+		self[#self + 1] = self:_resetcolor()
+	elseif count <= 1 then
 		self[#self + 1] = self:_color()
 		self[#self + 1] = "{"
 		self[#self + 1] = self:_resetcolor()
 		for k, v in pairs(fields) do
-			if k ~= "kind" then
+			if not hidden_fields[k] then
 				self:any(v)
 			end
 		end
@@ -111,7 +136,7 @@ function PrettyPrint:table(fields)
 		self[#self + 1] = self:_resetcolor()
 		self:_indent()
 		for k, v in pairs(fields) do
-			if k ~= "kind" then
+			if not hidden_fields[k] then
 				self:_prefix()
 				self[#self + 1] = k
 				self[#self + 1] = " = "
@@ -141,9 +166,12 @@ function PrettyPrint:record(kind, fields)
 
 	if #fields <= 1 then
 		--self[#self + 1] = self:_color()
+		local k, v = table.unpack(fields[1])
+		if hidden_fields[k] then
+			v = "..."
+		end
 		self[#self + 1] = "("
 		self[#self + 1] = self:_resetcolor()
-		local k, v = table.unpack(fields[1])
 		self:any(v)
 		self[#self + 1] = self:_color()
 		self[#self + 1] = ")"
@@ -154,6 +182,9 @@ function PrettyPrint:record(kind, fields)
 		self:_indent()
 		for _, pair in ipairs(fields) do
 			local k, v = table.unpack(pair)
+			if hidden_fields[k] then
+				v = "..."
+			end
 			self:_prefix()
 			self[#self + 1] = k
 			self[#self + 1] = " = "

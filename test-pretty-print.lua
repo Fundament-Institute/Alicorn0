@@ -1,6 +1,9 @@
 local PrettyPrint = require "./pretty-printer".PrettyPrint
 local luaunit = require "luaunit"
+local terms_gen = require "./terms-generators"
+local terms = require "./terms"
 
+local value_array = terms_gen.declare_array(terms.value)
 -- if this require fails you need to `lit install luvit/tap`
 local passed, failed, total = (require "tap")(function(test)
 	-- test cases are assuming that fitsinto(not a type, _) or fitinto(_, not a type)
@@ -12,6 +15,12 @@ local passed, failed, total = (require "tap")(function(test)
 	test("empty pretty printer result is empty", function(expect)
 		local pp = PrettyPrint.new()
 		assert(tostring(pp) == "")
+	end)
+
+	test("array", function(expect)
+		local pp = PrettyPrint.new()
+		pp:any(value_array({ terms.value.prim_number_type, terms.value.prim_number_type }))
+		luaunit.assertEquals(tostring(pp), "[value.prim_number_type, value.prim_number_type]")
 	end)
 
 	test("simple unit type", function(expect)

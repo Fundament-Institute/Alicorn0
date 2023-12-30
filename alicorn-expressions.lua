@@ -67,6 +67,18 @@ local p = require "pretty-print".prettyPrint
 local semantic_error_mt = {
 	__tostring = function(self)
 		local message = self.text
+		if self.anchors then
+			message = message .. " at anchors"
+			for _, anchor in ipairs(self.anchors) do
+				message = " " .. message .. " " .. tostring(anchor)
+			end
+		end
+		if self.terms then
+			message = message .. " with terms\n"
+			for k, term in pairs(self.terms) do
+				message = message .. k .. " = " .. tostring(term) .. "\n"
+			end
+		end
 		if self.cause then
 			message = message .. " because:\n" .. tostring(self.cause)
 		end
@@ -86,11 +98,19 @@ local semantic_error = {
 			text = "value in combiner slot that can't operate of type " .. types.type_name(t),
 		}
 	end,
-	operative_apply_failed = function(result, anchors)
+	operative_apply_failed = function(cause, anchors)
 		return {
 			text = "operative apply failed",
-			result = result,
+			cause = cause,
 			anchors = anchors,
+		}
+	end,
+	prim_function_argument_collect_failed = function(cause, anchors, terms)
+		return {
+			text = "prim_function_argument_collect_failed",
+			cause = cause,
+			anchors = anchors,
+			terms = terms,
 		}
 	end,
 }
@@ -259,6 +279,7 @@ local function expression_pairhandler(args, a, b)
 	end
 
 	if type_of_term:is_qtype() and type_of_term.type:as_prim_function_type() then
+		print("checking prim_function_type call args with target ", type_of_term.type.param_type)
 		-- multiple quantity of usages in tuple with usage in function arguments
 		local ok, tuple, env = args:match({
 			collect_prim_tuple(
@@ -268,7 +289,12 @@ local function expression_pairhandler(args, a, b)
 		}, metalanguage.failure_handler, nil)
 
 		if not ok then
-			return false, tuple
+			return false,
+				semantic_error.prim_function_argument_collect_failed(tuple, { a.anchor, b.anchor }, {
+					prim_function_type = type_of_term,
+					prim_function_value = term,
+				}),
+				env
 		end
 
 		return true, inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple), env

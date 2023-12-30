@@ -1,3 +1,4 @@
+local prettyprintable = require "./pretty-printable-trait"
 -- record and enum are nominative types.
 -- this means that two record types, given the same arguments, are distinct.
 -- values constructed from one type are of a different type compared to values
@@ -411,6 +412,10 @@ local function gen_array_fns(value_type)
 	return index, newindex
 end
 
+local function array_prettyprintable(self, printer)
+	return printer:array(self.array)
+end
+
 ---@class Array: Type
 
 -- TODO: see define_map
@@ -426,6 +431,10 @@ local function define_array(self, value_type)
 	self.__index, self.__newindex = gen_array_fns(value_type)
 	self.__ipairs = array_methods.ipairs
 	self.__len = array_methods.len
+	self.__tostring = self:__index("pretty_print")
+	prettyprintable:implement_on(self, {
+		print = array_prettyprintable,
+	})
 	-- NOTE: this isn't primitive equality; this type has a __eq metamethod!
 	self.value_check = metatable_equality(self)
 	---@cast self Array
