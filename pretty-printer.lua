@@ -19,7 +19,7 @@ function PrettyPrint:any(unknown)
 	if ty == "string" then
 		self[#self + 1] = string.format("%q", unknown)
 	elseif ty == "table" then
-		if self.depth and self.depth > 20 then
+		if self.depth and self.depth > 50 then
 			self[#self + 1] = "DEPTH LIMIT EXCEEDED"
 			return
 		end
