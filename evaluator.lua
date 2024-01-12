@@ -228,7 +228,6 @@ local function substitute_inner(val, index_base, index_offset)
 		error("not yet implemented")
 	elseif val:is_prim_user_defined_type() then
 		local id, family_args = val:unwrap_prim_user_defined_type()
-		id = typed_term.literal(id)
 		local res = typed_array()
 		for i, v in ipairs(family_args) do
 			res:append(substitute_inner(v, index_base, index_offset))
