@@ -122,7 +122,8 @@ function environment:bind_local(binding)
 			-- end
 			local term = inferrable_term.bound_variable(n + i)
 			locals = locals:put(v, term)
-			typechecking_context = typechecking_context:append(v, tupletypes[i])
+			typechecking_context =
+				typechecking_context:append(v, tupletypes[i], eval.index_tuple_value(subject_value, i))
 		end
 		local bindings = self.bindings:append(binding)
 		return update_env(self, {

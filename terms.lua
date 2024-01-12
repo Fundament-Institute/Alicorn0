@@ -233,6 +233,13 @@ function TypecheckingContext:dump_names()
 		print(i, self:get_name(i))
 	end
 end
+function TypecheckingContext:format_names()
+	local msg = ""
+	for i = 1, #self do
+		msg = msg .. tostring(i) .. "\t" .. self:get_name(i) .. "\n"
+	end
+	return msg
+end
 function TypecheckingContext:get_type(index)
 	return self.bindings:get(index).type
 end
@@ -936,7 +943,7 @@ local empty = value.enum_value("empty", tup_val())
 local unit_type = value.tuple_type(empty)
 local unit_val = tup_val()
 
-for _, deriver in ipairs { derivers.as, derivers.pretty_print } do
+for _, deriver in ipairs { derivers.as, derivers.pretty_print, derivers.eq } do
 	checkable_term:derive(deriver)
 	inferrable_term:derive(deriver)
 	typed_term:derive(deriver)

@@ -19,11 +19,15 @@ let prim-array-type =
 			local value = terms.value
 			assert(value and value.prim)
 			local value_array = terms_gen.declare_array(value)
-			local id = value.prim_user_defined_type({name = "array"}, value_array())
+			local id = {name = "array"}
+			--value.prim_user_defined_type({name = "array"}, value_array())
 			local function mktype(elem)
 				print("mktype id", id)
 				print("mktype elem", elem)
-				return value.prim_boxed_type(id, value_array(elem))
+				return value.qtype(
+					value.quantity(terms.quantity.unrestricted),
+					value.prim_user_defined_type(id, value_array(elem))
+				)
 			end
 			return mktype
 		:
@@ -70,9 +74,10 @@ let array-set =
 let prim-array-new = 
 	intrinsic
 		""""
-			local function array_get(_elem_type, array)
+			local function array_new(_elem_type)
 				return {}
 			end
+			return array_new
 		:
 		prim-func-type (T : (boxed prim-type)) ->  (arr : (array-type (unbox prim-type T)))
 
