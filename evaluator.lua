@@ -201,8 +201,40 @@ local function substitute_inner(val, index_base, index_offset)
 			end
 		end
 
+		if nval:is_tuple_element_access_stuck() then
+			local subject, index = nval:unwrap_tuple_element_access_stuck()
+			local subject_term = substitute_inner(value.neutral(subject), index_base, index_offset)
+			print("subject", subject)
+			print("subject_term", subject_term)
+			return typed_term.tuple_element_access(subject_term, index)
+		end
+
+		if nval:is_prim_unbox_stuck() then
+			local boxed = nval:unwrap_prim_unbox_stuck()
+			return typed_term.prim_unbox(substitute_inner(value.neutral(boxed), index_base, index_offset))
+		end
+
+		if nval:is_prim_tuple_stuck() then
+			local leading, stuck, trailing = nval:unwrap_prim_tuple_stuck()
+			local elems = typed_array()
+			-- leading is an array of unwrapped prims and must already be unwrapped prim values
+			for _, elem in ipairs(leading) do
+				local elem_value = typed_term.literal(value.prim(elem))
+				elems:append(elem_value)
+			end
+			elems:append(substitute_inner(value.neutral(stuck), index_base, index_offset))
+			for _, elem in ipairs(trailing) do
+				elems:append(substitute_inner(elem, index_base, index_offset))
+			end
+			-- print("prim_tuple_stuck nval", nval)
+			local result = typed_term.prim_tuple_cons(elems)
+			-- print("prim_tuple_stuck result", result)
+			return result
+		end
+
 		-- TODO: deconstruct nuetral value or something
-		error("not implemented yet")
+		print("nval", nval)
+		error("substitute_inner not implemented yet val:is_neutral")
 	elseif val:is_prim() then
 		return typed_term.literal(val)
 	elseif val:is_prim_type_type() then
@@ -635,13 +667,15 @@ local function check(
 		local new_elements = typed_array()
 		local tuple_elems = value_array()
 		for i, v in ipairs(elements) do
-			local next_elem = apply_value(elem_type_closures[i], value.tuple_value(tuple_elems))
-			tuple_elems:append(next_elem)
+			local tuple_elem_type = apply_value(elem_type_closures[i], value.tuple_value(tuple_elems))
 
-			local el_usages, el_term = check(v, typechecking_context, next_elem)
+			local el_usages, el_term = check(v, typechecking_context, tuple_elem_type)
 
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
+
+			local new_elem = evaluate(el_term, typechecking_context.runtime_context)
+			tuple_elems:append(new_elem)
 		end
 		-- TODO: handle quantities
 		return usages, typed_term.tuple_cons(new_elements)
@@ -663,7 +697,6 @@ local function check(
 		local tuple_elems = value_array()
 		for i, v in ipairs(elements) do
 			local tuple_elem_type = apply_value(elem_type_closures[i], value.tuple_value(tuple_elems))
-			--tuple_elems:append(tuple_elem_type)
 
 			print("tuple_elem_type", tuple_elem_type)
 			local el_usages, el_term = check(v, typechecking_context, tuple_elem_type)
@@ -1003,8 +1036,18 @@ function infer(
 			local application = typed_term.application(f_term, arg_term)
 
 			-- check already checked for us so no fitsinto
-			local application_result_type =
-				apply_value(f_result_type, evaluate(arg_term, typechecking_context:get_runtime_context()))
+			local arg_value = evaluate(arg_term, typechecking_context:get_runtime_context())
+			local application_result_type = apply_value(f_result_type, arg_value)
+			if value.value_check(application_result_type) ~= true then
+				print("arg_value", arg_value)
+				print("f_result_type", f_result_type)
+				local bindings = typechecking_context:get_runtime_context().bindings
+				-- for i = 1, bindings:len() do
+				-- 	print("runtime_context.bindings." .. tostring(i), bindings:get(i))
+				-- end
+				print("application_result_type", application_result_type)
+				error("application_result_type isn't a value inferring application of pi type")
+			end
 			return application_result_type, application_usages, application
 		elseif f_type:is_prim_function_type() then
 			print "inferring application of primitive function"
@@ -1022,6 +1065,9 @@ function infer(
 			-- check already checked for us so no fitsinto
 			local f_result_type =
 				apply_value(f_result_type_closure, evaluate(arg_term, typechecking_context:get_runtime_context()))
+			if value.value_check(f_result_type) ~= true then
+				error("application_result_type isn't a value inferring application of prim_function_type")
+			end
 			return f_result_type, application_usages, application
 		else
 			p(f_type)
@@ -1505,6 +1551,7 @@ function evaluate(typed_term, runtime_context)
 				stuck_element = element_value:unwrap_neutral()
 				trailing_values = value_array()
 			else
+				print("element_value", element_value)
 				error("evaluate, is_prim_tuple_cons, element_value: expected a primitive value")
 			end
 		end
@@ -1545,6 +1592,12 @@ function evaluate(typed_term, runtime_context)
 			error("evaluate, is_tuple_elim, subject_value: expected a tuple")
 		end
 		return evaluate(body, inner_context)
+	elseif typed_term:is_tuple_element_access() then
+		local tuple_term, index = typed_term:unwrap_tuple_element_access()
+		print("tuple_element_access tuple_term", tuple_term)
+		local tuple = evaluate(tuple_term, runtime_context)
+		print("tuple_element_access tuple_term", tuple)
+		return index_tuple_value(tuple, index)
 	elseif typed_term:is_tuple_type() then
 		local definition_term = typed_term:unwrap_tuple_type()
 		local definition = evaluate(definition_term, runtime_context)

@@ -616,6 +616,9 @@ collect_tuple = metalanguage.reducer(function(syntax, args)
 				}, metalanguage.failure_handler, ExpressionArgs.new(target, env))
 			else
 				local next_elem_type = evaluator.apply_value(closures[i], value.tuple_value(tuple_symbolic_elems))
+				if next_elem_type:is_neutral() then
+					error "neutral target type"
+				end
 
 				ok, continue, next_term, syntax, env = syntax:match({
 					metalanguage.ispair(collect_tuple_pair_handler),
@@ -623,12 +626,14 @@ collect_tuple = metalanguage.reducer(function(syntax, args)
 				}, metalanguage.failure_handler, ExpressionArgs.new(expression_target.check(next_elem_type), env))
 				if ok and continue then
 					collected_terms:append(next_term)
+					print("target type for next element in tuple", next_elem_type)
+					print("term we are checking", next_term)
 					local usages, typed_elem_term = evaluator.check(next_term, env.typechecking_context, next_elem_type)
 					local elem_value = evaluator.evaluate(typed_elem_term, env.typechecking_context.runtime_context)
 					tuple_symbolic_elems:append(elem_value)
 				end
 			end
-			if not ok then
+			if not ok and type(continue) == "string" then
 				continue = continue
 					.. " (should have "
 					.. tostring(#closures)

@@ -251,6 +251,15 @@ function TypecheckingContext:append(name, type, val) -- value is optional
 	if name == nil or type == nil then
 		error("bug!!!")
 	end
+	if value.value_check(type) ~= true then
+		print("type", type)
+		p(type)
+		for k, v in pairs(type) do
+			print(k, v)
+		end
+		print(getmetatable(type))
+		error "TypecheckingContext:append type parameter of wrong type"
+	end
 	if type:is_closure() then
 		error "BUG!!!"
 	end
@@ -566,6 +575,12 @@ typed_term:define_enum("typed", {
 		gen.builtin_number,
 		"body",
 		typed_term,
+	} },
+	{ "tuple_element_access", {
+		"subject",
+		typed_term,
+		"index",
+		gen.builtin_number,
 	} },
 	{ "tuple_type", { "definition", typed_term } },
 	{ "record_cons", { "fields", map(gen.builtin_string, typed_term) } },

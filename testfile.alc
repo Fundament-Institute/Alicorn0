@@ -87,14 +87,15 @@ let array-set =
 let array-get = 
 	lambda (T : prim-type, arr : (array-type T), index : prim-number)
 		let (elem) = prim-array-get(box(prim-type, T), arr, index)
+		elem
 let array-new = 
 	lambda ((T : prim-type))
 		let (elem) = prim-array-new(box(prim-type, T))
 		elem
 
-# let arr = array-new(prim-number)
-# array-set(prim-number, arr, 1, 3)
-# array-set(prim-number, arr, 2, 5)
+let arr = array-new(prim-number)
+array-set(prim-number, arr, 1, 3)
+array-set(prim-number, arr, 2, 5)
 
 #let (val) =
 #	+ x 5
@@ -114,6 +115,9 @@ let sub =
 		let (val) = (prim-sub x y)
 		val
 
-sub 5 (sub 3 2)
+#let from-array = 2
+let from-array = array-get(prim-number, arr, 2)
+
+sub 5 (sub 3 from-array)
 
 # sub(array-get(prim-number, arr, 2), array-get(prim-number, arr, 1))

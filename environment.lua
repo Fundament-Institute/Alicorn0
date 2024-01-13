@@ -67,6 +67,10 @@ function environment:bind_local(binding)
 	if binding:is_let() then
 		local name, expr = binding:unwrap_let()
 		local expr_type, expr_usages, expr_term = infer(expr, self.typechecking_context)
+		if terms.value.value_check(expr_type) ~= true then
+			print("expr", expr)
+			error("infer returned a bad type for expr in bind_local")
+		end
 		local n = #self.typechecking_context
 		local term = inferrable_term.bound_variable(n + 1)
 		local locals = self.locals:put(name, term)

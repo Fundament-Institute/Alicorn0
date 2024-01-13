@@ -19,6 +19,11 @@ local env = base_env.create()
 
 local shadowed, env = env:enter_block()
 
+-- local stdin = process.stdin.handle
+-- stdin:set_mode(1)
+-- stdin:read_start()
+--require("timer").sleep(7500)
+
 print("Expression -> terms")
 local ok, expr, env = code:match(
 	{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_target.infer, env)) },

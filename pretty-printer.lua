@@ -88,6 +88,9 @@ function PrettyPrint:array(array)
 	self[#self + 1] = "["
 	self[#self + 1] = self:_resetcolor()
 	for i, v in ipairs(array) do
+		if i > 1 then
+			self[#self + 1] = ", "
+		end
 		self:any(v)
 	end
 	self[#self + 1] = self:_color()
