@@ -228,7 +228,6 @@ local function substitute_inner(val, index_base, index_offset)
 		error("not yet implemented")
 	elseif val:is_prim_user_defined_type() then
 		local id, family_args = val:unwrap_prim_user_defined_type()
-		id = typed_term.literal(id)
 		local res = typed_array()
 		for i, v in ipairs(family_args) do
 			res:append(substitute_inner(v, index_base, index_offset))
@@ -419,6 +418,12 @@ function fitsinto_qless(tya, tyb)
 	return true
 end
 function fitsinto(a, b)
+	if a:is_neutral() and b:is_neutral() then
+		if a == b then
+			return true
+		end
+		return false, "both values are neutral, but they aren't equal: " .. tostring(a) .. " ~= " .. tostring(b)
+	end
 	if not a:is_qtype() then
 		print(a)
 		error("fitsinto given value a which isn't a qtype " .. a.kind)
@@ -574,7 +579,7 @@ local function check(
 	typechecking_context, -- todo
 	target_type
 ) -- must be unify with target type (there is some way we can assign metavariables to make them equal)
-	-- -> type of that term, usage counts, a typed term
+	-- -> usage counts, a typed term
 	if terms.checkable_term.value_check(checkable_term) ~= true then
 		error("check, checkable_term: expected a checkable term")
 	end
@@ -585,7 +590,7 @@ local function check(
 		print("target_type", target_type)
 		error("check, target_type: expected a target type (as an alicorn value)")
 	end
-	if not target_type:is_qtype() then
+	if not target_type:is_qtype() and not target_type:is_neutral() then
 		print("target_type", target_type)
 		error("check, target_type: expected target type to be a qtype")
 	end
@@ -593,7 +598,7 @@ local function check(
 	if checkable_term:is_inferrable() then
 		local inferrable_term = checkable_term:unwrap_inferrable()
 		local inferred_type, inferred_usages, typed_term = infer(inferrable_term, typechecking_context)
-		if not inferred_type:is_qtype() then
+		if not inferred_type:is_qtype() and not inferred_type:is_neutral() then
 			print(inferrable_term)
 			print(inferred_type)
 			error("check: infer didn't return a qtype for " .. inferrable_term.kind)
@@ -658,13 +663,15 @@ local function check(
 		local tuple_elems = value_array()
 		for i, v in ipairs(elements) do
 			local tuple_elem_type = apply_value(elem_type_closures[i], value.tuple_value(tuple_elems))
-			tuple_elems:append(tuple_elem_type)
+			--tuple_elems:append(tuple_elem_type)
 
 			print("tuple_elem_type", tuple_elem_type)
 			local el_usages, el_term = check(v, typechecking_context, tuple_elem_type)
 
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
+			local new_elem = evaluate(el_term, typechecking_context.runtime_context)
+			tuple_elems:append(new_elem)
 		end
 		-- TODO: handle quantities
 		return usages, typed_term.prim_tuple_cons(new_elements)
@@ -695,6 +702,9 @@ function apply_value(f, arg)
 		return value.neutral(neutral_value.application_stuck(f:unwrap_neutral(), arg))
 	elseif f:is_prim() then
 		local prim_func_impl = f:unwrap_prim()
+		if prim_func_impl == nil then
+			error "expected to get a function but found nil, did you forget to return the function from an intrinsic"
+		end
 		if arg:is_prim_tuple_value() then
 			local arg_elements = arg:unwrap_prim_tuple_value()
 			return prim_tup_val(prim_func_impl(arg_elements:unpack()))
@@ -709,6 +719,19 @@ function apply_value(f, arg)
 	end
 
 	error("unreachable!?")
+end
+
+local function index_tuple_value(subject, index)
+	if subject:is_tuple_value() then
+		local elems = subject:unwrap_tuple_value()
+		return elems[index]
+	elseif subject:is_prim_tuple_value() then
+		local elems = subject:unwrap_prim_tuple_value()
+		return value.prim(elems[index])
+	elseif subject:is_neutral() then
+		local inner = subject:unwrap_neutral()
+		return value.neutral(neutral_value.tuple_element_access_stuck(inner, index))
+	end
 end
 
 local function eq_prim_tuple_value_decls(left, right, typechecking_context)
@@ -1063,7 +1086,7 @@ function infer(
 		local inner_context = typechecking_context
 
 		for i, v in ipairs(tupletypes) do
-			inner_context = inner_context:append("tuple_element_" .. i, v)
+			inner_context = inner_context:append("tuple_element_" .. i, v, index_tuple_value(subject_value, i))
 		end
 
 		-- infer the type of the body, now knowing the type of the tuple
@@ -1747,4 +1770,5 @@ return {
 	infer_tuple_type = infer_tuple_type,
 	evaluate = evaluate,
 	apply_value = apply_value,
+	index_tuple_value = index_tuple_value,
 }

@@ -22,6 +22,7 @@ local prim_inferrable_term_type = terms.prim_inferrable_term_type
 
 local gen = require "./terms-generators"
 local array = gen.declare_array
+local checkable_array = array(checkable_term)
 local inferrable_array = array(inferrable_term)
 local typed_array = array(typed_term)
 local value_array = array(value)
@@ -67,6 +68,22 @@ local p = require "pretty-print".prettyPrint
 local semantic_error_mt = {
 	__tostring = function(self)
 		local message = self.text
+		if self.anchors then
+			message = message .. " at anchors"
+			for _, anchor in ipairs(self.anchors) do
+				message = " " .. message .. " " .. tostring(anchor)
+			end
+		end
+		if self.terms then
+			message = message .. " with terms\n"
+			for k, term in pairs(self.terms) do
+				message = message .. k .. " = " .. tostring(term) .. "\n"
+			end
+		end
+		if self.env then
+			message = message .. " in env\n"
+			message = message .. self.env.typechecking_context:format_names() .. "\n"
+		end
 		if self.cause then
 			message = message .. " because:\n" .. tostring(self.cause)
 		end
@@ -86,11 +103,20 @@ local semantic_error = {
 			text = "value in combiner slot that can't operate of type " .. types.type_name(t),
 		}
 	end,
-	operative_apply_failed = function(result, anchors)
+	operative_apply_failed = function(cause, anchors)
 		return {
 			text = "operative apply failed",
-			result = result,
+			cause = cause,
 			anchors = anchors,
+		}
+	end,
+	prim_function_argument_collect_failed = function(cause, anchors, terms, env)
+		return {
+			text = "prim_function_argument_collect_failed",
+			cause = cause,
+			anchors = anchors,
+			terms = terms,
+			env = env,
 		}
 	end,
 }
@@ -179,6 +205,7 @@ local function expression_pairhandler(args, a, b)
 	-- )
 
 	local target, env = args:unwrap()
+	local orig_env = env
 	local ok, ifx = true, false
 
 	local combiner
@@ -223,7 +250,7 @@ local function expression_pairhandler(args, a, b)
 			return false, semantic_error.operative_apply_failed(operative_result_val.data, { a.anchor, b.anchor })
 		end
 
-		-- temporary, while it isn't a Maybe
+		-- temporary, whFAILile it isn't a Maybe
 		local data = operative_result_val.elements[1].primitive_value
 		local env = operative_result_val.elements[2].primitive_value
 		if not env then
@@ -259,6 +286,7 @@ local function expression_pairhandler(args, a, b)
 	end
 
 	if type_of_term:is_qtype() and type_of_term.type:as_prim_function_type() then
+		print("checking prim_function_type call args with target ", type_of_term.type.param_type)
 		-- multiple quantity of usages in tuple with usage in function arguments
 		local ok, tuple, env = args:match({
 			collect_prim_tuple(
@@ -268,7 +296,12 @@ local function expression_pairhandler(args, a, b)
 		}, metalanguage.failure_handler, nil)
 
 		if not ok then
-			return false, tuple
+			return false,
+				semantic_error.prim_function_argument_collect_failed(tuple, { a.anchor, b.anchor }, {
+					prim_function_type = type_of_term,
+					prim_function_value = term,
+				}, orig_env),
+				env
 		end
 
 		return true, inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple), env
@@ -568,7 +601,8 @@ collect_tuple = metalanguage.reducer(function(syntax, args)
 		collected_terms = inferrable_array
 	end
 
-	local tuple_elems = value_array()
+	local tuple_type_elems = value_array()
+	local tuple_symbolic_elems = value_array()
 	local ok, continue, next_term = true, true, nil
 	local i = 0
 	while ok and continue do
@@ -581,15 +615,17 @@ collect_tuple = metalanguage.reducer(function(syntax, args)
 					metalanguage.isnil(collect_tuple_nil_handler),
 				}, metalanguage.failure_handler, ExpressionArgs.new(target, env))
 			else
-				local next_elem = evaluator.apply_value(closures[i], value.tuple_value(tuple_elems))
-				tuple_elems:append(next_elem)
+				local next_elem_type = evaluator.apply_value(closures[i], value.tuple_value(tuple_symbolic_elems))
 
 				ok, continue, next_term, syntax, env = syntax:match({
 					metalanguage.ispair(collect_tuple_pair_handler),
 					metalanguage.isnil(collect_tuple_nil_too_few_handler),
-				}, metalanguage.failure_handler, ExpressionArgs.new(expression_target.check(next_elem), env))
+				}, metalanguage.failure_handler, ExpressionArgs.new(expression_target.check(next_elem_type), env))
 				if ok and continue then
 					collected_terms:append(next_term)
+					local usages, typed_elem_term = evaluator.check(next_term, env.typechecking_context, next_elem_type)
+					local elem_value = evaluator.evaluate(typed_elem_term, env.typechecking_context.runtime_context)
+					tuple_symbolic_elems:append(elem_value)
 				end
 			end
 			if not ok then
@@ -636,7 +672,8 @@ collect_prim_tuple = metalanguage.reducer(function(syntax, args)
 		collected_terms = inferrable_array
 	end
 
-	local tuple_elems = value_array()
+	local type_elems = value_array()
+	local tuple_symbolic_elems = value_array()
 	local ok, continue, next_term = true, true, nil
 	local i = 0
 	while ok and continue do
@@ -649,15 +686,19 @@ collect_prim_tuple = metalanguage.reducer(function(syntax, args)
 					metalanguage.isnil(collect_tuple_nil_handler),
 				}, metalanguage.failure_handler, ExpressionArgs.new(target, env))
 			else
-				local next_elem = evaluator.apply_value(closures[i], value.tuple_value(tuple_elems))
-				tuple_elems:append(next_elem)
+				local next_elem_type = evaluator.apply_value(closures[i], value.tuple_value(tuple_symbolic_elems))
+				type_elems:append(next_elem_type)
 
 				ok, continue, next_term, syntax, env = syntax:match({
 					metalanguage.ispair(collect_tuple_pair_handler),
 					metalanguage.isnil(collect_tuple_nil_too_few_handler),
-				}, metalanguage.failure_handler, ExpressionArgs.new(expression_target.check(next_elem), env))
+				}, metalanguage.failure_handler, ExpressionArgs.new(expression_target.check(next_elem_type), env))
 				if ok and continue then
 					collected_terms:append(next_term)
+					print("trying to check tuple element as ", next_elem_type)
+					local usages, typed_elem_term = evaluator.check(next_term, env.typechecking_context, next_elem_type)
+					local elem_value = evaluator.evaluate(typed_elem_term, env.typechecking_context.runtime_context)
+					tuple_symbolic_elems:append(elem_value)
 				end
 			end
 			if not ok then

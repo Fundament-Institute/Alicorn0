@@ -99,70 +99,35 @@ local is = {
 			idx["is_" .. vname] = compiled()
 		end
 	end,
+	record = function(t, info) end,
 }
 
-local function pretty_print_or_tostring(v, prefix)
-	if type(v) == "string" then
-		return string.format("%q", v)
-	end
-	if type(v) == "table" and v.pretty_print then
-		return v:pretty_print(prefix)
-	end
-	return tostring(v)
-end
-
-local function record_pretty_printer(info)
+local function record_prettyprintable_trait(info)
 	local kind = info.kind
 	local params = info.params
 
-	local prints = {}
-	local lbracket, rbracket = "(", ")"
-	local end_spacing = ""
-	if #params == 0 then
-	elseif #params == 1 then
-		prints[1] = string.format(
-			-- [[result = result .. %q .. ' = ' .. pretty_print_or_tostring(self[%q], np)]],
-			[[result = result .. pretty_print_or_tostring(self[%q], np)]],
-			params[1],
-			params[1]
-		)
-	else
-		end_spacing = [[.. "\n" .. prefix]]
-		lbracket, rbracket = "{", "}"
-		for i, param in ipairs(params) do
-			prints[i] = string.format(
-				[[result = result .. "\n" .. np .. %q .. ' = ' .. pretty_print_or_tostring(self[%q], np)]],
-				param,
-				param
-			)
-		end
+	local all_fields = {}
+	for _, param in ipairs(params) do
+		all_fields[#all_fields + 1] = string.format("{ %q, self[%q] },", param, param)
 	end
-	local all_prints = table.concat(prints, "\n  ")
 	local chunk = string.format(
 		[[
-local pretty_print_or_tostring = ...
-return function(self, prefix)
-prefix = prefix or ''
-local np = prefix .. ' '
-local result = %q .. %q
-%s
-result = result %s .. %q
-return result
+return function(self, pp)
+	pp:record(%q, {
+		%s
+	})
 end
 ]],
 		info.kind,
-		lbracket,
-		all_prints,
-		end_spacing,
-		rbracket
+		table.concat(all_fields, "\n\t\t")
 	)
 
-	local compiled, message = load(chunk, "derive-pretty_print_record", "t")
+	local compiled, message = load(chunk, "derive-prettyprintable_trait", "t")
 	if not compiled then
 		print(chunk)
 	end
 	assert(compiled, message)
-	return compiled(pretty_print_or_tostring)
+	return compiled()
 end
 
 ---@type Deriver
@@ -170,7 +135,18 @@ local pretty_print = {
 	record = function(t, info)
 		local idx = t.__index or {}
 		t.__index = idx
-		idx["pretty_print"] = record_pretty_printer(info)
+		local prettyprintable = require("./pretty-printer").prettyprintable
+		local prettyprintable_print = record_prettyprintable_trait(info)
+		prettyprintable:implement_on(t, { print = prettyprintable_print })
+		idx["pretty_print"] = function(self)
+			local pp = require("./pretty-printer").PrettyPrint.new()
+			prettyprintable_print(self, pp)
+			return tostring(pp)
+		end
+
+		if not t["__tostring"] then
+			t["__tostring"] = idx["pretty_print"]
+		end
 		if not t["__tostring"] then
 			t["__tostring"] = idx["pretty_print"]
 		end
@@ -188,10 +164,10 @@ local pretty_print = {
 			local vtype = vdata.type
 			local vinfo = vdata.info
 			if vtype == "record" then
-				variant_printers[vkind] = record_pretty_printer(vinfo)
+				variant_printers[vkind] = record_prettyprintable_trait(vinfo)
 			elseif vtype == "unit" then
-				variant_printers[vkind] = function(self)
-					return self.kind
+				variant_printers[vkind] = function(self, printer)
+					return printer:unit(self.kind)
 				end
 			else
 				error("unknown variant type: " .. vtype)
@@ -201,6 +177,9 @@ local pretty_print = {
 		local chunk = [[
       local variant_printers = ...
       return function(self, prefix)
+		if not variant_printers[self.kind] then
+			error("missing variant_printer for" .. self.kind)
+		end
         return variant_printers[self.kind](self, prefix)
       end
     ]]
@@ -212,7 +191,16 @@ local pretty_print = {
 
 		local compiled, message = load(chunk, "derive-pretty_print_enum", "t")
 		assert(compiled, message)
-		idx["pretty_print"] = compiled(variant_printers)
+		local prettyprintable_print = compiled(variant_printers)
+
+		local prettyprintable = require("./pretty-printer").prettyprintable
+		prettyprintable:implement_on(t, { print = prettyprintable_print })
+		idx["pretty_print"] = function(self)
+			local pp = require("./pretty-printer").PrettyPrint.new()
+			prettyprintable_print(self, pp)
+			return tostring(pp)
+		end
+
 		if not t["__tostring"] then
 			t["__tostring"] = idx["pretty_print"]
 		end
@@ -310,6 +298,7 @@ local as = {
 			idx["as_" .. vname] = compiled()
 		end
 	end,
+	record = function(t, info) end,
 }
 
 -- build_record_function = (trait, info) -> function that implements the trait method

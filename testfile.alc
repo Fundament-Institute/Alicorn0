@@ -19,11 +19,15 @@ let prim-array-type =
 			local value = terms.value
 			assert(value and value.prim)
 			local value_array = terms_gen.declare_array(value)
-			local id = value.prim_user_defined_type({name = "array"}, value_array())
+			local id = {name = "array"}
+			--value.prim_user_defined_type({name = "array"}, value_array())
 			local function mktype(elem)
 				print("mktype id", id)
 				print("mktype elem", elem)
-				return value.prim_boxed_type(id, value_array(elem))
+				return value.qtype(
+					value.quantity(terms.quantity.unrestricted),
+					value.prim_user_defined_type(id, value_array(elem))
+				)
 			end
 			return mktype
 		:
@@ -37,9 +41,10 @@ let array-type =
 let prim-array-set =
 	intrinsic
 		""""
-			local function array_get(_elem_type, array, index, elem)
+			local function array_set(_elem_type, array, index, elem)
 				array[index] = elem
 			end
+			return array_set
 		:
 		prim-func-type (T : (boxed prim-type)) (arr : (array-type (unbox prim-type T))) (index : prim-number) (elem : (unbox prim-type T)) ->
 
@@ -49,16 +54,30 @@ let prim-array-get =
 			local function array_get(_elem_type, array, index)
 				return array[index]
 			end
+			return array_get
 		:
 		prim-func-type (T : (boxed prim-type)) (arr : (array-type (unbox prim-type T))) (index : prim-number) ->  (elem : (unbox prim-type T))
 
 
+let example = unbox(prim-type, box(prim-type, prim-number))
+
+let (typ) = (prim-array-type (box prim-type prim-number))
+let example = unbox(prim-type, typ)
+
+let array-set = 
+	lambda (T : prim-type, arr : (array-type T), index : prim-number, elem : T)
+		let boxed_t = box(prim-type, T)
+		let arr_ty = (array-type (unbox prim-type boxed_t))
+		let elem_ty = (unbox prim-type boxed_t)
+		let ( ) = prim-array-set(box(prim-type, T), arr, index, elem)
+
 let prim-array-new = 
 	intrinsic
 		""""
-			local function array_get(_elem_type, array)
+			local function array_new(_elem_type)
 				return {}
 			end
+			return array_new
 		:
 		prim-func-type (T : (boxed prim-type)) ->  (arr : (array-type (unbox prim-type T)))
 
