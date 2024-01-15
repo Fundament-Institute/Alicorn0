@@ -247,7 +247,7 @@ end
 function TypecheckingContext:get_runtime_context()
 	return self.runtime_context
 end
-function TypecheckingContext:append(name, type, val) -- value is optional
+function TypecheckingContext:append(name, type, val, anchor) -- value is optional, anchor is optional
 	-- TODO: typecheck
 	if name == nil or type == nil then
 		error("bug!!!")
@@ -267,7 +267,7 @@ function TypecheckingContext:append(name, type, val) -- value is optional
 	local copy = {
 		bindings = self.bindings:append({ name = name, type = type }),
 		runtime_context = self.runtime_context:append(
-			val or value.neutral(neutral_value.free(free.placeholder(#self + 1, placeholder_debug(name))))
+			val or value.neutral(neutral_value.free(free.placeholder(#self + 1, placeholder_debug(name, anchor))))
 		),
 	}
 	return setmetatable(copy, typechecking_context_mt)
@@ -313,6 +313,14 @@ expression_target:define_enum("expression_target", {
 		},
 	},
 })
+
+-- local is_anchor = gen.define_foreign({}, function(o)
+-- 	if not o or not o.sourceid then
+-- 		return false
+-- 	end
+-- 	return true
+-- end)
+
 -- terms that don't have a body yet
 binding:define_enum("binding", {
 	{ "let", {
@@ -327,12 +335,17 @@ binding:define_enum("binding", {
 		"subject",
 		inferrable_term,
 	} },
-	{ "annotated_lambda", {
-		"param_name",
-		gen.builtin_string,
-		"param_annotation",
-		inferrable_term,
-	} },
+	{
+		"annotated_lambda",
+		{
+			"param_name",
+			gen.builtin_string,
+			"param_annotation",
+			inferrable_term,
+			"anchor",
+			gen.anchor_type,
+		},
+	},
 })
 -- checkable terms need a target type to typecheck against
 checkable_term:define_enum("checkable", {
@@ -367,6 +380,8 @@ inferrable_term:define_enum("inferrable", {
 			inferrable_term,
 			"body",
 			inferrable_term,
+			"anchor",
+			gen.anchor_type,
 		},
 	},
 	{ "qtype", {
@@ -677,7 +692,7 @@ local unique_id = gen.declare_foreign(function(val)
 	return type(val) == "table"
 end)
 
-placeholder_debug:define_record("placeholder_debug", { "name", gen.builtin_string })
+placeholder_debug:define_record("placeholder_debug", { "name", gen.builtin_string, "anchor", gen.anchor_type })
 
 free:define_enum("free", {
 	{ "metavariable", { "metavariable", metavariable_type } },

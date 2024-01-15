@@ -497,6 +497,12 @@ return {
 	metatable_equality = metatable_equality,
 	builtin_number = gen_builtin("number"),
 	builtin_string = gen_builtin("string"),
+	anchor_type = define_foreign({}, function(o)
+		if o and o.sourceid then
+			return true
+		end
+		return false
+	end),
 	any_lua_type = define_foreign({}, function()
 		return true
 	end),

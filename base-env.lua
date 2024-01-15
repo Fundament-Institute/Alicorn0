@@ -231,7 +231,7 @@ local ascribed_name = metalang.reducer(function(syntax, env, prev, names)
 	-- print(env.enter_block)
 	---@cast env Environment
 	local shadowed, env = env:enter_block()
-	env = env:bind_local(terms.binding.annotated_lambda("#prev", prev))
+	env = env:bind_local(terms.binding.annotated_lambda("#prev", prev, syntax.anchor))
 	local ok, prev_binding = env:get("#prev")
 	if not ok then
 		error "#prev should always be bound, was just added"
@@ -271,6 +271,8 @@ local function prim_func_type_empty_handler(env)
 end
 
 local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
+	local pft_anchor = syntax.anchor
+
 	local value_array = gen.declare_array(terms.value)
 	local inf_array = gen.declare_array(terms.inferrable_term)
 	local usage_array = gen.declare_array(gen.builtin_number)
@@ -335,7 +337,8 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	print("moving on to return type")
 	ok, continue = true, true
 	local shadowed, env = env:enter_block()
-	env = env:bind_local(terms.binding.annotated_lambda("#arg", build_type_term(args)))
+
+	env = env:bind_local(terms.binding.annotated_lambda("#arg", build_type_term(args), pft_anchor))
 	local ok, arg = env:get("#arg")
 	env = env:bind_local(terms.binding.tuple_elim(names, arg))
 	names = gen.declare_array(gen.builtin_string)()
@@ -481,7 +484,7 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 	print("moving on to return type")
 	ok, continue = true, true
 	local shadowed, env = env:enter_block()
-	env = env:bind_local(terms.binding.annotated_lambda("#arg", build_type_term(args)))
+	env = env:bind_local(terms.binding.annotated_lambda("#arg", build_type_term(args)), syntax.anchor)
 	local ok, arg = env:get("#arg")
 	env = env:bind_local(terms.binding.tuple_elim(names, arg))
 	names = gen.declare_array(gen.builtin_string)()
@@ -627,7 +630,7 @@ local function lambda_impl(syntax, env)
 	end
 
 	local shadow, inner_env = env:enter_block()
-	inner_env = inner_env:bind_local(terms.binding.annotated_lambda("#arg", params_group.types))
+	inner_env = inner_env:bind_local(terms.binding.annotated_lambda("#arg", params_group.types, syntax.anchor))
 	local _, arg = inner_env:get("#arg")
 	inner_env = inner_env:bind_local(terms.binding.tuple_elim(params_group.names, arg))
 	local ok, expr, env = tail:match(

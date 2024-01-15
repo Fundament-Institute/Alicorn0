@@ -943,13 +943,13 @@ function infer(
 	elseif inferrable_term:is_typed() then
 		return inferrable_term:unwrap_typed()
 	elseif inferrable_term:is_annotated_lambda() then
-		local param_name, param_annotation, body = inferrable_term:unwrap_annotated_lambda()
+		local param_name, param_annotation, body, anchor = inferrable_term:unwrap_annotated_lambda()
 		local _, _, param_term = infer(param_annotation, typechecking_context)
-		local param_value = evaluate(param_term, typechecking_context:get_runtime_context())
+		local param_qtype = evaluate(param_term, typechecking_context:get_runtime_context())
 		-- TODO: also handle neutral values, for inference of qtype
-		local param_quantity, param_type = param_value:unwrap_qtype()
+		local param_quantity, param_type = param_qtype:unwrap_qtype()
 		local param_quantity = param_quantity:unwrap_quantity()
-		local inner_context = typechecking_context:append(param_name, param_value)
+		local inner_context = typechecking_context:append(param_name, param_qtype, nil, anchor)
 		local body_type, body_usages, body_term = infer(body, inner_context)
 		local result_type = substitute_type_variables(body_type, #inner_context, 0)
 		local body_usages_param = body_usages[#body_usages]
@@ -967,7 +967,7 @@ function infer(
 		else
 			error("infer: unknown quantity")
 		end
-		local lambda_type = value.pi(param_value, param_info_explicit, result_type, result_info_pure)
+		local lambda_type = value.pi(param_qtype, param_info_explicit, result_type, result_info_pure)
 		local lambda_term = typed_term.lambda(body_term)
 		-- TODO: handle quantities
 		return unrestricted(lambda_type), lambda_usages, lambda_term
@@ -1401,7 +1401,8 @@ function infer(
 		-- print(inferrable_term:pretty_print())
 		local name, expr, body = inferrable_term:unwrap_let()
 		local exprtype, exprusages, exprterm = infer(expr, typechecking_context)
-		typechecking_context = typechecking_context:append(name, exprtype)
+		typechecking_context =
+			typechecking_context:append(name, exprtype, evaluate(exprterm, typechecking_context.runtime_context))
 		local bodytype, bodyusages, bodyterm = infer(body, typechecking_context)
 
 		local result_usages = usage_array()
