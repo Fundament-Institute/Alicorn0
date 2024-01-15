@@ -187,6 +187,7 @@ local checkable_term = gen.declare_type()
 local inferrable_term = gen.declare_type()
 local typed_term = gen.declare_type()
 local free = gen.declare_type()
+local placeholder_debug = gen.declare_type()
 local value = gen.declare_type()
 local neutral_value = gen.declare_type()
 local binding = gen.declare_type()
@@ -266,7 +267,7 @@ function TypecheckingContext:append(name, type, val) -- value is optional
 	local copy = {
 		bindings = self.bindings:append({ name = name, type = type }),
 		runtime_context = self.runtime_context:append(
-			val or value.neutral(neutral_value.free(free.placeholder(#self + 1)))
+			val or value.neutral(neutral_value.free(free.placeholder(#self + 1, placeholder_debug(name))))
 		),
 	}
 	return setmetatable(copy, typechecking_context_mt)
@@ -676,9 +677,16 @@ local unique_id = gen.declare_foreign(function(val)
 	return type(val) == "table"
 end)
 
+placeholder_debug:define_record("placeholder_debug", { "name", gen.builtin_string })
+
 free:define_enum("free", {
 	{ "metavariable", { "metavariable", metavariable_type } },
-	{ "placeholder", { "index", gen.builtin_number } },
+	{ "placeholder", {
+		"index",
+		gen.builtin_number,
+		"debug",
+		placeholder_debug,
+	} },
 	{ "unique", { "id", unique_id } },
 	-- TODO: axiom
 })
@@ -969,6 +977,7 @@ for _, deriver in ipairs { derivers.as, derivers.pretty_print, derivers.eq } do
 	neutral_value:derive(deriver)
 	binding:derive(deriver)
 	expression_target:derive(deriver)
+	placeholder_debug:derive(deriver)
 end
 
 --[[

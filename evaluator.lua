@@ -606,6 +606,7 @@ result_info:derive(unifier)
 
 value:derive(derivers.eq)
 
+---@param typechecking_context TypecheckingContext
 local function check(
 	checkable_term, -- constructed from checkable_term
 	typechecking_context, -- todo
@@ -637,12 +638,20 @@ local function check(
 		end
 		-- TODO: unify!!!!
 		if inferred_type ~= target_type then
-			local ok, err = fitsinto(inferred_type, target_type)
+			local ok, err
+			if inferred_type:is_neutral() then
+				ok, err = false, "inferred type is a neutral value"
+				-- TODO: add debugging dump to typechecking context that looks for placeholders inside inferred_type
+				-- then shows matching types and values in env if relevant?
+			else
+				ok, err = fitsinto(inferred_type, target_type)
+			end
 			if not ok then
 				print "attempting to check if terms fit for checkable_term.inferrable"
 				print("checkable_term", checkable_term)
 				print("inferred_type", inferred_type)
 				print("target_type", target_type)
+				print("typechecking_context", typechecking_context:format_names())
 				error(
 					"check: mismatch in inferred and target type for "
 						.. inferrable_term.kind
