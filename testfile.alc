@@ -92,6 +92,11 @@ let array-get =
 		# FIXME:
 		# This type check fails because elem is referring to a placeholder from inside the typed-arr-get lambda
 		# which is invalid, it should have been substituted
+		# someone with a working lua debugger pls fix
+		# it should be possible to step into the `inferrable_term:is_annotated() then` case in evalator
+		# corresponding to this `the` operative and figure out why the elem side's type is referring to a placeholder from inside typed-arr-get
+		# the expected behavior is for T to be the placeholder from line 89, and for elem's type to get substituted and end up as exactly the same placeholder
+		# resulting in successful typecheck
 		(the T elem)
 let array-new = 
 	lambda ((T : prim-type))
