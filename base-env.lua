@@ -338,7 +338,8 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	ok, continue = true, true
 	local shadowed, env = env:enter_block()
 
-	env = env:bind_local(terms.binding.annotated_lambda("#arg", build_type_term(args), pft_anchor))
+	-- syntax.anchor can be nil so we fall back to the anchor for the start of this prim func type if needed
+	env = env:bind_local(terms.binding.annotated_lambda("#arg", build_type_term(args), syntax.anchor or pft_anchor))
 	local ok, arg = env:get("#arg")
 	env = env:bind_local(terms.binding.tuple_elim(names, arg))
 	names = gen.declare_array(gen.builtin_string)()
