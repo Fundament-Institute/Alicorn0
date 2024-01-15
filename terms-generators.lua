@@ -497,6 +497,7 @@ return {
 	metatable_equality = metatable_equality,
 	builtin_number = gen_builtin("number"),
 	builtin_string = gen_builtin("string"),
+	builtin_function = gen_builtin("function"),
 	anchor_type = define_foreign({}, function(o)
 		if o and o.sourceid then
 			return true

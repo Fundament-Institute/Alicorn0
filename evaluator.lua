@@ -198,6 +198,9 @@ local function substitute_inner(val, index_base, index_offset)
 				if idx >= index_base then
 					return typed_term.bound_variable(index_offset + idx - index_base + 1)
 				end
+				print("index_offset, idx, index_base", index_offset, idx, index_base)
+				--error "placeholder with unexpected idx"
+				return typed_term.literal(val)
 			end
 		end
 
@@ -279,8 +282,10 @@ local function substitute_inner(val, index_base, index_offset)
 end
 
 local function substitute_type_variables(val, index_base, index_offset)
-	-- TODO: replace free_placeholder variables with bound variables
-	return value.closure(substitute_inner(val, index_base, index_offset), runtime_context())
+	print("val", val)
+	local substituted = substitute_inner(val, index_base, index_offset)
+	print("substituted", substituted)
+	return value.closure(substituted, runtime_context())
 end
 
 local function is_type_of_types(val)
@@ -944,6 +949,11 @@ function infer(
 		usage_counts[index] = 1
 		local bound = typed_term.bound_variable(index)
 		return typeof_bound, usage_counts, bound
+	elseif inferrable_term:is_annotated() then
+		local checkable_term, inferrable_target_type = inferrable_term:unwrap_annotated()
+		local type_of_type, usages, target_typed_term = infer(inferrable_target_type, typechecking_context)
+		local target_type = evaluate(target_typed_term, typechecking_context.runtime_context)
+		return target_type, check(checkable_term, typechecking_context, target_type)
 	elseif inferrable_term:is_typed() then
 		return inferrable_term:unwrap_typed()
 	elseif inferrable_term:is_annotated_lambda() then

@@ -571,6 +571,50 @@ local function forall_type_impl(syntax, env)
 	--local ok,
 end
 
+---Constrains a type by using a checked expression target and producing an annotated inferrable term
+---(the prim-number 5) -> produces inferrable_term.annotated(lit(5), lit(prim-number))
+---@param syntax any
+---@param env Environment
+---@return boolean
+---@return unknown
+---@return unknown|nil
+local function the_operative_impl(syntax, env)
+	local ok, type_inferrable_term, tail = syntax:match({
+		metalang.listtail(metalang.accept_handler, exprs.inferred_expression(metalang.accept_handler, env)),
+	}, metalang.failure_handler, nil)
+	if not ok then
+		return ok, type, tail
+	end
+
+	local type_of_typed_term, usages, type_typed_term = evaluator.infer(type_inferrable_term, env.typechecking_context)
+	local evaled_type = evaluator.evaluate(type_typed_term, env.typechecking_context.runtime_context)
+
+	print("type_inferrable_term", type_inferrable_term)
+	print("evaled_type", evaled_type)
+	print("tail", tail)
+	local ok, val, tail = tail:match({
+		metalang.ispair(metalang.accept_handler),
+	}, metalang.failure_handler, nil)
+	if not ok then
+		return false, val
+	end
+	local ok, val, env = val:match({
+		exprs.expression(
+			metalang.accept_handler,
+			-- FIXME: do we infer here if evaled_type is stuck / a placeholder?
+			exprs.ExpressionArgs.new(terms.expression_target.check(evaled_type), env)
+		),
+	}, metalang.failure_handler, nil)
+	if not ok then
+		return ok, val
+	end
+	if terms.checkable_term.value_check(val) ~= true then
+		print("val", val)
+		error "the operative didn't get a checkable term"
+	end
+	return ok, terms.inferrable_term.annotated(val, type_inferrable_term), env
+end
+
 ---@param syntax any
 ---@param env Environment
 ---@return boolean
@@ -726,6 +770,7 @@ local core_operations = {
 	type_ = exprs.primitive_operative(startype_impl, "startype_impl"),
 	["forall"] = exprs.primitive_operative(forall_type_impl, "forall_type_impl"),
 	lambda = exprs.primitive_operative(lambda_impl, "lambda_impl"),
+	the = exprs.primitive_operative(the_operative_impl, "the"),
 	box = lit_term(
 		value.closure(
 			typed.tuple_elim(typed.bound_variable(1), 2, typed.prim_box(typed.bound_variable(3))),

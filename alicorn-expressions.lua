@@ -213,7 +213,7 @@ local function expression_pairhandler(args, a, b)
 		combiner = env:get("_" + op + "_")
 	else
 		ok, combiner, env = a:match(
-			{ expression(metalanguage.accept_handler, ExpressionArgs.new(target, env)) },
+			{ expression(metalanguage.accept_handler, ExpressionArgs.new(expression_target.infer, env)) },
 			metalanguage.failure_handler,
 			nil
 		)
@@ -333,6 +333,12 @@ local function expression_symbolhandler(args, name)
 	local front, rest = split_dot_accessors(name)
 	if not front then
 		local ok, val = env:get(name)
+		if not ok then
+			return ok, val, env
+		end
+		if target:is_check() then
+			return true, checkable_term.inferrable(val), env
+		end
 		return ok, val, env
 	else
 		local ok, part = env:get(front)
@@ -347,6 +353,9 @@ local function expression_symbolhandler(args, name)
 				name_array(front or name),
 				inferrable_term.bound_variable(#env.typechecking_context + 1)
 			)
+		end
+		if target:is_check() then
+			return true, checkable_term.inferrable(part), env
 		end
 		return ok, part, env
 	end
@@ -706,7 +715,7 @@ collect_prim_tuple = metalanguage.reducer(function(syntax, args)
 					tuple_symbolic_elems:append(elem_value)
 				end
 			end
-			if not ok then
+			if not ok and type(continue) == "string" then
 				continue = continue
 					.. " (should have "
 					.. tostring(#closures)
