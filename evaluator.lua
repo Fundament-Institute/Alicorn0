@@ -764,6 +764,10 @@ function apply_value(f, arg)
 end
 
 local function index_tuple_value(subject, index)
+	if terms.value.value_check(subject) ~= true then
+		error("index_tuple_value, subject: expected an alicorn value")
+	end
+
 	if subject:is_tuple_value() then
 		local elems = subject:unwrap_tuple_value()
 		return elems[index]
@@ -1047,14 +1051,15 @@ function infer(
 			-- check already checked for us so no fitsinto
 			local arg_value = evaluate(arg_term, typechecking_context:get_runtime_context())
 			local application_result_type = apply_value(f_result_type, arg_value)
+
+			print("arg_value", arg_value)
+			print("f_result_type", f_result_type)
+			print("application_result_type", application_result_type)
 			if value.value_check(application_result_type) ~= true then
-				print("arg_value", arg_value)
-				print("f_result_type", f_result_type)
 				local bindings = typechecking_context:get_runtime_context().bindings
 				-- for i = 1, bindings:len() do
 				-- 	print("runtime_context.bindings." .. tostring(i), bindings:get(i))
 				-- end
-				print("application_result_type", application_result_type)
 				error("application_result_type isn't a value inferring application of pi type")
 			end
 			return application_result_type, application_usages, application
