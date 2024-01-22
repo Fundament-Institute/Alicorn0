@@ -91,7 +91,11 @@ local function get_level(t)
 	return 0
 end
 
-local function substitute_inner(val, index_base, index_offset)
+---@param val any an alicorn value
+---@param mappings table the placeholder we are trying to get rid of by substituting
+---@param context_len integer number of bindings in the runtime context already used - needed for closures
+---@return unknown a typed term
+local function substitute_inner(val, mappings, context_len)
 	if val:is_quantity_type() then
 		return typed_term.literal(val)
 	elseif val:is_quantity() then
@@ -105,7 +109,7 @@ local function substitute_inner(val, index_base, index_offset)
 	elseif val:is_qtype() then
 		local quantity, type = val:unwrap_qtype()
 		quantity = typed_term.literal(quantity)
-		type = substitute_inner(type, index_base, index_offset)
+		type = substitute_inner(type, mappings, context_len)
 		return typed_term.qtype(quantity, type)
 	elseif val:is_param_info_type() then
 		return typed_term.literal(val)
@@ -119,42 +123,55 @@ local function substitute_inner(val, index_base, index_offset)
 		return typed_term.literal(val)
 	elseif val:is_pi() then
 		local param_type, param_info, result_type, result_info = val:unwrap_pi()
-		param_type = substitute_inner(param_type, index_base, index_offset)
-		param_info = substitute_inner(param_info, index_base, index_offset)
-		result_type = substitute_inner(result_type, index_base, index_offset)
-		result_info = substitute_inner(result_info, index_base, index_offset)
+		param_type = substitute_inner(param_type, mappings, context_len)
+		param_info = substitute_inner(param_info, mappings, context_len)
+		result_type = substitute_inner(result_type, mappings, context_len)
+		result_info = substitute_inner(result_info, mappings, context_len)
 		return typed_term.pi(param_type, param_info, result_type, result_info)
 	elseif val:is_closure() then
-		return typed_term.literal(val)
+		local ctxt = val.capture
+		--FIXME: I am broken if the closure depends on its argument and isn't a constant closure
+		local unique = free.unique({})
+		local arg = value.neutral(neutral_value.free(unique))
+		val = apply_value(val, arg)
+		print("applied closure during substitution", val)
+		-- Here we need to add the new arg placeholder to a map of things to substitute
+		mappings[unique] = typed_term.bound_variable(context_len + 1)
+		val = substitute_inner(val, mappings, context_len + 1)
+
+		-- FIXME: this results in more captures every time we substitute a closure ->
+		--   can cause non-obvious memory leaks
+		--   since we don't yet remove unused captures from closure value
+		return typed_term.lambda(val)
 	elseif val:is_name_type() then
 		return typed_term.literal(val)
 	elseif val:is_name() then
 		return typed_term.literal(val)
 	elseif val:is_operative_value() then
 		local userdata = val:unwrap_operative_value()
-		userdata = substitute_inner(userdata, index_base, index_offset)
+		userdata = substitute_inner(userdata, mappings, context_len)
 		return typed_term.operative_cons(userdata)
 	elseif val:is_operative_type() then
 		local handler, userdata_type = val:unwrap_operative_type()
-		handler = substitute_inner(handler, index_base, index_offset)
-		userdata_type = substitute_inner(userdata_type, index_base, index_offset)
+		handler = substitute_inner(handler, mappings, context_len)
+		userdata_type = substitute_inner(userdata_type, mappings, context_len)
 		return typed_term.operative_type_cons(handler, userdata_type)
 	elseif val:is_tuple_value() then
 		local elems = val:unwrap_tuple_value()
 		local res = typed_array()
 		for i, v in ipairs(elems) do
-			res:append(substitute_inner(v, index_base, index_offset))
+			res:append(substitute_inner(v, mappings, context_len))
 		end
 		return typed_term.tuple_cons(res)
 	elseif val:is_tuple_type() then
 		local decls = val:unwrap_tuple_type()
-		decls = substitute_inner(decls, index_base, index_offset)
+		decls = substitute_inner(decls, mappings, context_len)
 		return typed_term.tuple_type(decls)
 	elseif val:is_tuple_defn_type() then
 		return typed_term.literal(val)
 	elseif val:is_enum_value() then
 		local constructor, arg = val:unwrap_enum_value()
-		arg = substitute_inner(arg, index_base, index_offset)
+		arg = substitute_inner(arg, mappings, context_len)
 		return typed_term.enum_cons(constructor, arg)
 	elseif val:is_enum_type() then
 		local decls = val:unwrap_enum_type()
@@ -193,28 +210,31 @@ local function substitute_inner(val, index_base, index_offset)
 
 		if nval:is_free() then
 			local free = nval:unwrap_free()
+			local lookup
 			if free:is_placeholder() then
-				local idx = free:unwrap_placeholder()
-				if idx >= index_base then
-					return typed_term.bound_variable(index_offset + idx - index_base + 1)
-				end
-				print("index_offset, idx, index_base", index_offset, idx, index_base)
-				--error "placeholder with unexpected idx"
-				return typed_term.literal(val)
+				lookup = free:unwrap_placeholder()
+			elseif free:is_unique() then
+				lookup = free:unwrap_unique()
+			else
+				error("substitute_inner NYI free with kind " .. free.kind)
 			end
+
+			local mapping = mappings[lookup]
+			if mapping then
+				return mapping
+			end
+			return typed_term.literal(val)
 		end
 
 		if nval:is_tuple_element_access_stuck() then
 			local subject, index = nval:unwrap_tuple_element_access_stuck()
-			local subject_term = substitute_inner(value.neutral(subject), index_base, index_offset)
-			print("subject", subject)
-			print("subject_term", subject_term)
+			local subject_term = substitute_inner(value.neutral(subject), mappings, context_len)
 			return typed_term.tuple_element_access(subject_term, index)
 		end
 
 		if nval:is_prim_unbox_stuck() then
 			local boxed = nval:unwrap_prim_unbox_stuck()
-			return typed_term.prim_unbox(substitute_inner(value.neutral(boxed), index_base, index_offset))
+			return typed_term.prim_unbox(substitute_inner(value.neutral(boxed), mappings, context_len))
 		end
 
 		if nval:is_prim_tuple_stuck() then
@@ -225,9 +245,9 @@ local function substitute_inner(val, index_base, index_offset)
 				local elem_value = typed_term.literal(value.prim(elem))
 				elems:append(elem_value)
 			end
-			elems:append(substitute_inner(value.neutral(stuck), index_base, index_offset))
+			elems:append(substitute_inner(value.neutral(stuck), mappings, context_len))
 			for _, elem in ipairs(trailing) do
-				elems:append(substitute_inner(elem, index_base, index_offset))
+				elems:append(substitute_inner(elem, mappings, context_len))
 			end
 			-- print("prim_tuple_stuck nval", nval)
 			local result = typed_term.prim_tuple_cons(elems)
@@ -250,12 +270,12 @@ local function substitute_inner(val, index_base, index_offset)
 		return typed_term.literal(val)
 	elseif val:is_prim_function_type() then
 		local param_type, result_type = val:unwrap_prim_function_type()
-		param_type = substitute_inner(param_type, index_base, index_offset)
-		result_type = substitute_inner(result_type, index_base, index_offset)
+		param_type = substitute_inner(param_type, mappings, context_len)
+		result_type = substitute_inner(result_type, mappings, context_len)
 		return typed_term.prim_function_type(param_type, result_type)
 	elseif val:is_prim_boxed_type() then
 		local type = val:unwrap_prim_boxed_type()
-		type = substitute_inner(type, index_base, index_offset)
+		type = substitute_inner(type, mappings, context_len)
 		return typed_term.prim_boxed_type(type)
 	elseif val:is_prim_box_stuck() then
 		error("not yet implemented")
@@ -265,7 +285,7 @@ local function substitute_inner(val, index_base, index_offset)
 		local id, family_args = val:unwrap_prim_user_defined_type()
 		local res = typed_array()
 		for i, v in ipairs(family_args) do
-			res:append(substitute_inner(v, index_base, index_offset))
+			res:append(substitute_inner(v, mappings, context_len))
 		end
 		return typed_term.prim_user_defined_type_cons(id, res)
 	elseif val:is_prim_nil_type() then
@@ -274,17 +294,20 @@ local function substitute_inner(val, index_base, index_offset)
 		return typed_term.literal(val)
 	elseif val:is_prim_tuple_type() then
 		local decls = val:unwrap_prim_tuple_type()
-		decls = substitute_inner(decls, index_base, index_offset)
+		decls = substitute_inner(decls, mappings, context_len)
 		return typed_term.prim_tuple_type(decls)
 	else
-		error "what the fuck is this???"
+		error("Unhandled value kind in substitute_inner: " .. val.kind)
 	end
 end
 
-local function substitute_type_variables(val, index_base, index_offset)
-	print("val", val)
-	local substituted = substitute_inner(val, index_base, index_offset)
-	print("substituted", substituted)
+--for substituting a single var at index
+local function substitute_type_variables(val, index)
+	print("value before substituting (val)", val)
+	local substituted = substitute_inner(val, {
+		[index] = typed_term.bound_variable(1),
+	}, 1)
+	print("typed term after substitution (substituted)", substituted)
 	return value.closure(substituted, runtime_context())
 end
 
@@ -712,7 +735,6 @@ local function check(
 		for i, v in ipairs(elements) do
 			local tuple_elem_type = apply_value(elem_type_closures[i], value.tuple_value(tuple_elems))
 
-			print("tuple_elem_type", tuple_elem_type)
 			local el_usages, el_term = check(v, typechecking_context, tuple_elem_type)
 
 			add_arrays(usages, el_usages)
@@ -965,7 +987,7 @@ function infer(
 		local param_quantity = param_quantity:unwrap_quantity()
 		local inner_context = typechecking_context:append(param_name, param_qtype, nil, anchor)
 		local body_type, body_usages, body_term = infer(body, inner_context)
-		local result_type = substitute_type_variables(body_type, #inner_context, 0)
+		local result_type = substitute_type_variables(body_type, #inner_context)
 		local body_usages_param = body_usages[#body_usages]
 		local lambda_usages = body_usages:copy(1, #body_usages - 1)
 		if param_quantity:is_erased() then
@@ -1075,6 +1097,8 @@ function infer(
 			return application_result_type, application_usages, application
 		elseif f_type:is_prim_function_type() then
 			print "inferring application of primitive function"
+			print("typechecking_context")
+			typechecking_context:dump_names()
 			print(f_type:pretty_print())
 			print(arg:pretty_print())
 			local f_param_type, f_result_type_closure = f_type:unwrap_prim_function_type()
@@ -1109,7 +1133,7 @@ function infer(
 			local el_type, el_usages, el_term = infer(v, typechecking_context)
 			type_data = value.enum_value(
 				"cons",
-				tup_val(type_data, substitute_type_variables(el_type, #typechecking_context + 1, 0))
+				tup_val(type_data, substitute_type_variables(el_type, #typechecking_context + 1))
 			)
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
@@ -1137,7 +1161,7 @@ function infer(
 			print(el_type:pretty_print())
 			type_data = value.enum_value(
 				"cons",
-				tup_val(type_data, substitute_type_variables(el_type, #typechecking_context + 1, 0))
+				tup_val(type_data, substitute_type_variables(el_type, #typechecking_context + 1))
 			)
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
@@ -1186,7 +1210,7 @@ function infer(
 			local field_type, field_usages, field_term = infer(v, typechecking_context)
 			type_data = value.enum_value(
 				"cons",
-				tup_val(type_data, value.name(k), substitute_type_variables(field_type, #typechecking_context + 1, 0))
+				tup_val(type_data, value.name(k), substitute_type_variables(field_type, #typechecking_context + 1))
 			)
 			add_arrays(usages, field_usages)
 			new_fields[k] = field_term
