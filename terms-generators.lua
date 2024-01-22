@@ -480,7 +480,7 @@ local function gen_builtin(typename)
 	end)
 end
 
-return {
+local terms_gen = {
 	---@type fun(kind: string, params_with_types: ParamsWithTypes): Record
 	declare_record = new_self(define_record),
 	---@type fun(name: string, variants: Variants): Enum
@@ -508,3 +508,6 @@ return {
 		return true
 	end),
 }
+local internals_interface = require "./internals-interface"
+internals_interface.terms_gen = terms_gen
+return terms_gen

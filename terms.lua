@@ -1010,7 +1010,7 @@ local tuple_defn = value.enum_value("variant",
 	)
 )]]
 
-return {
+local terms = {
 	typechecker_state = typechecker_state, -- fn (constructor)
 	checkable_term = checkable_term, -- {}
 	inferrable_term = inferrable_term, -- {}
@@ -1037,3 +1037,6 @@ return {
 	runtime_context_type = runtime_context_type,
 	typechecking_context_type = typechecking_context_type,
 }
+local internals_interface = require "./internals-interface"
+internals_interface.terms = terms
+return terms

@@ -26,6 +26,8 @@ local primitive_array = array(gen.any_lua_type)
 local usage_array = array(gen.builtin_number)
 local string_array = array(gen.builtin_string)
 
+local internals_interface = require "./internals-interface"
+
 --DEBUG
 do
 	local qtype = terms.value.qtype
@@ -1779,13 +1781,14 @@ function evaluate(typed_term, runtime_context)
 		local source_val = evaluate(source, runtime_context)
 		if source_val:is_prim() then
 			local source_str = source_val:unwrap_prim()
-			return value.prim(assert(load(source_str, "prim_intrinsic", "t", {
-				assert = assert,
-				p = p,
-				print = print,
-				terms = terms,
-				terms_gen = gen,
-			}))())
+			local load_env = {}
+			for k, v in pairs(_G) do
+				load_env[k] = v
+			end
+			for k, v in pairs(internals_interface) do
+				load_env[k] = v
+			end
+			return value.prim(assert(load(source_str, "prim_intrinsic", "t", load_env))())
 		elseif source_val:is_neutral() then
 			local source_neutral = source_val:unwrap_neutral()
 			return value.neutral(neutral_value.prim_intrinsic_stuck(source_neutral))
@@ -1864,7 +1867,7 @@ function evaluate(typed_term, runtime_context)
   ]]
 end
 
-return {
+local evaluator = {
 	fitsinto = fitsinto,
 	extract_tuple_elem_type_closures = extract_tuple_elem_type_closures,
 	const_combinator = const_combinator,
@@ -1875,3 +1878,5 @@ return {
 	apply_value = apply_value,
 	index_tuple_value = index_tuple_value,
 }
+internals_interface.evaluator = evaluator
+return evaluator

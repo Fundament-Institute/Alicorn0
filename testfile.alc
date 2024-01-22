@@ -6,8 +6,6 @@ let prim-sub = (intrinsic "return function(a, b) return a - b end" : prim-arith-
 #let foo = (record (bar = 5) (baz = 6))
 #let subbed = prim-sub foo.bar y
 
-# this should error becaused prim-type is not a prim-type and therefore can't be an arg to a prim-func-type
-# but it doesn't.
 let prim-array-type =
 	intrinsic
 		""""
@@ -36,19 +34,22 @@ let array-type =
 
 # FIXME: return arr after setting
 let prim-array-set =
-	intrinsic
-		""""
-			local function array_set(_elem_type, array, index, elem)
-				-- we have to clone because can't guarantee input array isn't reused
-				cloned = {}
-				for i, v in ipairs(array) do
-					cloned[i] = v
+	lambda ((T : prim-type))
+		intrinsic
+			""""
+				local function array_set(array, index, elem)
+					-- we have to clone because can't guarantee input array isn't reused
+					-- Yet. growth mindset.
+					cloned = {}
+					for i, v in ipairs(array) do
+						cloned[i] = v
+					end
+					cloned[index] = elem
+					return cloned
 				end
-				cloned[index] = elem
-			end
-			return array_set
-		:
-		prim-func-type (T : (boxed prim-type)) (arr : (array-type (unbox prim-type T))) (index : prim-number) (elem : (unbox prim-type T)) ->
+				return array_set
+			:
+			prim-func-type (arr : (array-type T)) (index : prim-number) (elem : T) -> (arr : (array-type T))
 
 let prim-array-get = 
 	lambda ((T : prim-type))
@@ -61,19 +62,21 @@ let prim-array-get =
 			:
 			prim-func-type (arr : (array-type T)) (index : prim-number) ->  (elem : T)
 
-let prim-array-new = 
-	intrinsic
-		""""
-			local function array_new(_elem_type)
-				return {}
-			end
-			return array_new
-		:
-		prim-func-type (T : (boxed prim-type)) ->  (arr : (array-type (unbox prim-type T)))
+let prim-array-new =
+	lambda ((T : prim-type))
+		intrinsic
+			""""
+				local function array_new(_elem_type)
+					return {}
+				end
+				return array_new
+			:
+			prim-func-type ->  (arr : (array-type T))
 
 let array-set = 
 	lambda (T : prim-type, arr : (array-type T), index : prim-number, elem : T)
-		let ( ) = prim-array-set(box(prim-type, T), arr, index, elem)
+		let (arr) = (prim-array-set(T) arr index elem)
+		arr
 
 let array-get = 
 	lambda (T : prim-type, arr : (array-type T), index : prim-number)
@@ -91,45 +94,20 @@ let array-get =
 
 let array-new = 
 	lambda ((T : prim-type))
-		let (elem) = prim-array-new(box(prim-type, T))
+		let (elem) = (prim-array-new(T))
 		elem
 
-# let arr = array-new(prim-number)
-# array-set(prim-number, arr, 1, 3)
-# array-set(prim-number, arr, 2, 5)
+let arr = array-new(prim-number)
+let arr = array-set(prim-number, arr, 1, 3)
+let arr = array-set(prim-number, arr, 2, 5)
 	
-# let (res) = prim-sub(3,array-get(prim-number, arr, 2))
-# let (elem) = prim-array-get(box(prim-type, prim-number), arr, 2)
+let (res) = prim-sub(3,array-get(prim-number, arr, 2))
+#	let (elem) = prim-array-get(box(prim-type, prim-number), arr, 2)
 
-# let elem = array-get(prim-number, arr, 2)
-# let elem2 = (the prim-number elem)
-# let (res) = prim-sub(3, elem2)
+#	let elem = array-get(prim-number, arr, 2)
+	let elem2 = (the prim-number elem)
+	let (res) = prim-sub(3, elem2)
 
-let prim-array-get-bug-repro = 
-	lambda ((T : prim-type))
-		intrinsic
-			""""
-				local function array_get(index)
-					--error "not valid to call, just to debug typechecker issue"
-					return index
-				end
-				return array_get
-			:
-			prim-func-type (index : prim-number) -> (elem : T)
-
-let typed-arr-get-bug-repro = (prim-array-get-bug-repro prim-number)
-let (elem) = typed-arr-get-bug-repro(1)
-let elem = (the prim-number elem)
-
-elem
-
-#let (val) =
-#	+ x 5
-
-#let (val) =
-#	+ val y
-
-#prim-sub foo.bar val
 
 #	let (val) = (prim-sub 5 1)
 	prim-sub val 3
@@ -145,3 +123,5 @@ elem
 	sub 5 (sub 3 from-array)
 
 # sub(array-get(prim-number, arr, 2), array-get(prim-number, arr, 1))
+
+res

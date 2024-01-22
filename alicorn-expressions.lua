@@ -857,7 +857,7 @@ local function inferred_expression(handler, env)
 	return expression(handler, ExpressionArgs.new(expression_target.infer, env))
 end
 
-return {
+local alicorn_expressions = {
 	expression = expression,
 	inferred_expression = inferred_expression,
 	-- constexpr = constexpr
@@ -871,3 +871,6 @@ return {
 	eval = eval,
 	eval_block = eval_block,
 }
+local internals_interface = require "./internals-interface"
+internals_interface.alicorn_expressions = alicorn_expressions
+return alicorn_expressions
