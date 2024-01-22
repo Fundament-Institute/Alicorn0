@@ -130,12 +130,13 @@ local function substitute_inner(val, mappings, context_len)
 		return typed_term.pi(param_type, param_info, result_type, result_info)
 	elseif val:is_closure() then
 		local ctxt = val.capture
-		--FIXME: I am broken if the closure depends on its argument and isn't a constant closure
-		local unique = free.unique({})
-		local arg = value.neutral(neutral_value.free(unique))
+		local unique = {}
+		local arg = value.neutral(neutral_value.free(free.unique(unique)))
 		val = apply_value(val, arg)
 		print("applied closure during substitution", val)
+
 		-- Here we need to add the new arg placeholder to a map of things to substitute
+		-- otherwise it would be left as a free.unique in the result
 		mappings[unique] = typed_term.bound_variable(context_len + 1)
 		val = substitute_inner(val, mappings, context_len + 1)
 
