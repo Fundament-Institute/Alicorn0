@@ -62,6 +62,10 @@ function environment:get(name)
 	return true, binding
 end
 
+local function log_binding(name, type, value)
+	print("New let binding", name, "with type", type, "value", value)
+end
+
 function environment:bind_local(binding)
 	p(binding)
 	if binding:is_let() then
@@ -77,6 +81,7 @@ function environment:bind_local(binding)
 		local evaled = eval.evaluate(expr_term, self.typechecking_context.runtime_context)
 		-- print "doing let binding"
 		-- print(expr:pretty_print())
+		log_binding(name, expr_type, evaled)
 		local typechecking_context = self.typechecking_context:append(name, expr_type, evaled)
 		local bindings = self.bindings:append(binding)
 		return update_env(self, {
@@ -126,8 +131,10 @@ function environment:bind_local(binding)
 			-- end
 			local term = inferrable_term.bound_variable(n + i)
 			locals = locals:put(v, term)
-			typechecking_context =
-				typechecking_context:append(v, tupletypes[i], eval.index_tuple_value(subject_value, i))
+
+			local evaled = eval.index_tuple_value(subject_value, i)
+			log_binding(v, tupletypes[i], evaled)
+			typechecking_context = typechecking_context:append(v, tupletypes[i], evaled)
 		end
 		local bindings = self.bindings:append(binding)
 		return update_env(self, {
