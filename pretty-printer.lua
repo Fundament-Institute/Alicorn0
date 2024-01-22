@@ -6,8 +6,21 @@ local prettyprintable = require "./pretty-printable-trait"
 
 local kind_field = "kind"
 local hidden_fields = {
-	[kind_field] = true,
-	capture = true,
+	--[kind_field] = true,
+	capture = function(capture)
+		if capture.bindings and capture.bindings.len then
+			-- FIXME: we can't print all the bindings for a capture currently because we
+			-- capture everything in scope and that's way too verbose
+			-- if that gets fixed to only capture used bindings we can print more
+			-- local ret = {}
+			-- for i = 1, capture.bindings:len() do
+			-- 	ret[i] = capture.bindings:get(i)
+			-- end
+			-- return ret
+			return "runtime context with len=" .. tostring(capture.bindings:len())
+		end
+		return capture
+	end,
 }
 
 function PrettyPrint.new()
@@ -171,7 +184,7 @@ function PrettyPrint:record(kind, fields)
 		--self[#self + 1] = self:_color()
 		local k, v = table.unpack(fields[1])
 		if hidden_fields[k] then
-			v = "..."
+			v = hidden_fields[k](v)
 		end
 		self[#self + 1] = "("
 		self[#self + 1] = self:_resetcolor()
@@ -186,7 +199,7 @@ function PrettyPrint:record(kind, fields)
 		for _, pair in ipairs(fields) do
 			local k, v = table.unpack(pair)
 			if hidden_fields[k] then
-				v = "..."
+				v = hidden_fields[k](v)
 			end
 			self:_prefix()
 			self[#self + 1] = k
