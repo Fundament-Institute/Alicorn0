@@ -525,6 +525,8 @@ inferrable_term:define_enum("inferrable", {
 			checkable_term,
 			"type",
 			inferrable_term, --checkable_term,
+			"anchor",
+			gen.anchor_type,
 		},
 	},
 })
@@ -678,6 +680,8 @@ typed_term:define_enum("typed", {
 	{ "prim_intrinsic", {
 		"source",
 		typed_term,
+		"anchor",
+		gen.anchor_type,
 	} },
 })
 
@@ -947,6 +951,8 @@ neutral_value:define_enum("neutral_value", {
 	{ "prim_intrinsic_stuck", {
 		"source",
 		neutral_value,
+		"anchor",
+		gen.anchor_type,
 	} },
 	{ "prim_unbox_stuck", {
 		"subject",

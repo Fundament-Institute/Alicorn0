@@ -116,4 +116,25 @@ let (res) = prim-sub(3,array-get(prim-number, arr, 2))
 
 # sub(array-get(prim-number, arr, 2), array-get(prim-number, arr, 1))
 
-res
+let prim-string-box-get =
+	intrinsic
+		""""
+			return function()
+				return terms.value.qtype(
+					terms.value.quantity(terms.quantity.unrestricted),
+					terms.value.prim_string_type)
+			end
+		:
+		prim-func-type -> (res : (boxed prim-type))
+let (prim-string-box) = (prim-string-box-get)
+let prim-string = (unbox prim-type prim-string-box)
+
+let prim-file-read =
+	intrinsic
+		""""
+			local fs = require 'fs'
+			return fs.readFileSync
+		:
+		prim-func-type (fname : prim-string) -> (content : prim-string)
+
+prim-file-read "testfile.alc"

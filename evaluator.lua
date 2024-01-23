@@ -1453,7 +1453,7 @@ function infer(
 		add_arrays(result_usages, bodyusages)
 		return bodytype, result_usages, terms.typed_term.let(exprterm, bodyterm)
 	elseif inferrable_term:is_prim_intrinsic() then
-		local source, type = inferrable_term:unwrap_prim_intrinsic()
+		local source, type, anchor = inferrable_term:unwrap_prim_intrinsic()
 		local source_usages, source_term = check(source, typechecking_context, unrestricted(value.prim_string_type))
 		local type_type, type_usages, type_term = infer(type, typechecking_context) --check(type, typechecking_context, value.qtype_type(0))
 
@@ -1464,7 +1464,7 @@ function infer(
 		--error "weird type"
 		-- FIXME: type_type, source_type are ignored, need checked?
 		local type_val = evaluate(type_term, typechecking_context.runtime_context)
-		return type_val, source_usages, typed_term.prim_intrinsic(source_term)
+		return type_val, source_usages, typed_term.prim_intrinsic(source_term, anchor)
 	elseif inferrable_term:is_level_max() then
 		local arg_type_a, arg_usages_a, arg_term_a = infer(inferrable_term.level_a, typechecking_context)
 		local arg_type_b, arg_usages_b, arg_term_b = infer(inferrable_term.level_b, typechecking_context)
@@ -1777,7 +1777,7 @@ function evaluate(typed_term, runtime_context)
 		local expr_value = evaluate(expr, runtime_context)
 		return evaluate(body, runtime_context:append(expr_value))
 	elseif typed_term:is_prim_intrinsic() then
-		local source = typed_term:unwrap_prim_intrinsic()
+		local source, anchor = typed_term:unwrap_prim_intrinsic()
 		local source_val = evaluate(source, runtime_context)
 		if source_val:is_prim() then
 			local source_str = source_val:unwrap_prim()
@@ -1788,10 +1788,12 @@ function evaluate(typed_term, runtime_context)
 			for k, v in pairs(internals_interface) do
 				load_env[k] = v
 			end
+			local require_generator = require "require"
+			load_env.require = require_generator(anchor.sourceid)
 			return value.prim(assert(load(source_str, "prim_intrinsic", "t", load_env))())
 		elseif source_val:is_neutral() then
 			local source_neutral = source_val:unwrap_neutral()
-			return value.neutral(neutral_value.prim_intrinsic_stuck(source_neutral))
+			return value.neutral(neutral_value.prim_intrinsic_stuck(source_neutral, anchor))
 		else
 			error "Tried to load an intrinsic with something that isn't a string"
 		end
