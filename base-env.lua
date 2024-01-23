@@ -136,7 +136,9 @@ local function intrinsic(syntax, env)
 	if not env then
 		error "env nil in base-env.intrinsic"
 	end
-	return true, terms.inferrable_term.prim_intrinsic(str, type--[[terms.checkable_term.inferrable(type)]]), env
+	return true,
+		terms.inferrable_term.prim_intrinsic(str, type--[[terms.checkable_term.inferrable(type)]], syntax.anchor),
+		env
 end
 
 --evaluator.define_operate(
