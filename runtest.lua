@@ -6,8 +6,9 @@ local p = require "pretty-print".prettyPrint
 local terms = require "./terms"
 local exprs = require "./alicorn-expressions"
 local fs = require "fs"
+local path = require "path"
 
-local filename = "testfile.alc"
+local filename = path.resolve("testfile.alc")
 local src = fs.readFileSync(filename)
 print("read code")
 print(src)
