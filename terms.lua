@@ -314,13 +314,6 @@ expression_target:define_enum("expression_target", {
 	},
 })
 
--- local is_anchor = gen.define_foreign({}, function(o)
--- 	if not o or not o.sourceid then
--- 		return false
--- 	end
--- 	return true
--- end)
-
 -- terms that don't have a body yet
 binding:define_enum("binding", {
 	{ "let", {

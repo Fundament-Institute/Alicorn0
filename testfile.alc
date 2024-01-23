@@ -92,7 +92,7 @@ let array-new =
 let arr = array-new(prim-number)
 let arr = array-set(prim-number, arr, 1, 3)
 let arr = array-set(prim-number, arr, 2, 5)
-	
+
 let (res) = prim-sub(3,array-get(prim-number, arr, 2))
 #	let (elem) = prim-array-get(box(prim-type, prim-number), arr, 2)
 
