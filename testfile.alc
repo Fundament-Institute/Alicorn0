@@ -6,7 +6,7 @@ let prim-sub = (intrinsic "return function(a, b) return a - b end" : prim-arith-
 #let foo = (record (bar = 5) (baz = 6))
 #let subbed = prim-sub foo.bar y
 
-let prim-string-box-get =
+let prim-string-wrap-get =
 	intrinsic
 		""""
 			return function()
@@ -15,9 +15,9 @@ let prim-string-box-get =
 					terms.value.prim_string_type)
 			end
 		:
-		prim-func-type -> (res : (boxed prim-type))
-let (prim-string-box) = (prim-string-box-get)
-let prim-string = (unbox prim-type prim-string-box)
+		prim-func-type -> (res : (wrapped prim-type))
+let (prim-string-wrap) = (prim-string-wrap-get)
+let prim-string = (unwrap prim-type prim-string-wrap)
 
 let prim-array-type =
 	intrinsic
@@ -38,12 +38,12 @@ let prim-array-type =
 			end
 			return mktype
 		:
-		prim-func-type (T : (boxed prim-type)) -> (array : (boxed prim-type))
+		prim-func-type (T : (wrapped prim-type)) -> (array : (wrapped prim-type))
 
 let array-type =
 	lambda ((T : prim-type))
-		let (typ) = (prim-array-type (box prim-type T))
-		unbox prim-type typ
+		let (typ) = (prim-array-type (wrap prim-type T))
+		unwrap prim-type typ
 
 # FIXME: return arr after setting
 let prim-array-set =
@@ -111,7 +111,7 @@ let prim-file-read =
 		prim-func-type (fname : prim-string) -> (content : prim-string)
 
 let void =
-	unbox
+	unwrap
 		type
 		intrinsic
 			""""
@@ -121,10 +121,10 @@ let void =
 				local quantity = terms.value.quantity(terms.quantity.unrestricted)
 				return terms.value.qtype(quantity, basetype)
 			:
-			boxed type
+			wrapped type
 
 let prim-unit =
-	unbox
+	unwrap
 		prim-type
 		intrinsic
 			""""
@@ -134,7 +134,7 @@ let prim-unit =
 				local quantity = terms.value.quantity(terms.quantity.unrestricted)
 				return terms.value.qtype(quantity, basetype)
 			:
-			boxed prim-type
+			wrapped prim-type
 
 let prim-nil =
 	intrinsic
@@ -157,16 +157,16 @@ let only-accept-prim-tuples-inner =
 			return check_prim_tuple
 		:
 		prim-func-type
-			subject : boxed(type)
-			consequent : boxed(prim-type)
-			alternate : boxed(prim-type)
+			subject : wrapped(type)
+			consequent : wrapped(prim-type)
+			alternate : wrapped(prim-type)
 			->
-			result : boxed(prim-type)
+			result : wrapped(prim-type)
 
 let only-accept-prim-tuples =
-	lambda (subject : boxed(type), consequent : boxed(prim-type), alternate : boxed(prim-type))
+	lambda (subject : wrapped(type), consequent : wrapped(prim-type), alternate : wrapped(prim-type))
 		let (res) = only-accept-prim-tuples-inner(subject, consequent, alternate)
-		unbox prim-type res
+		unwrap prim-type res
 
 let prim-tuple-type-to-tuple-type-inner =
 	intrinsic
@@ -181,12 +181,12 @@ let prim-tuple-type-to-tuple-type-inner =
 			return prim_tuple_to_tuple
 		:
 		prim-func-type
-			t : boxed(type)
+			t : wrapped(type)
 			valid :
 				only-accept-prim-tuples
 					t
-					box(prim-type, prim-unit)
-					box(prim-type, boxed(void))
+					wrap(prim-type, prim-unit)
+					wrap(prim-type, wrapped(void))
 			->
-			res : boxed(type)
+			res : wrapped(type)
 

@@ -777,9 +777,9 @@ local core_operations = {
 	["forall"] = exprs.primitive_operative(forall_type_impl, "forall_type_impl"),
 	lambda = exprs.primitive_operative(lambda_impl, "lambda_impl"),
 	the = exprs.primitive_operative(the_operative_impl, "the"),
-	box = lit_term(
+	wrap = lit_term(
 		value.closure(
-			typed.tuple_elim(typed.bound_variable(1), 2, typed.prim_box(typed.bound_variable(3))),
+			typed.tuple_elim(typed.bound_variable(1), 2, typed.prim_wrap(typed.bound_variable(3))),
 			terms.runtime_context()
 		),
 		unrestricted(
@@ -823,7 +823,7 @@ local core_operations = {
 						2,
 						typed.qtype(
 							typed.literal(value.quantity(terms.quantity.unrestricted)),
-							typed.prim_boxed_type(typed.bound_variable(2))
+							typed.prim_wrapped_type(typed.bound_variable(2))
 						)
 					),
 					terms.runtime_context()
@@ -832,9 +832,9 @@ local core_operations = {
 			)
 		)
 	),
-	unbox = lit_term(
+	unwrap = lit_term(
 		value.closure(
-			typed.tuple_elim(typed.bound_variable(1), 2, typed.prim_unbox(typed.bound_variable(3))),
+			typed.tuple_elim(typed.bound_variable(1), 2, typed.prim_unwrap(typed.bound_variable(3))),
 			terms.runtime_context()
 		),
 		unrestricted(
@@ -865,7 +865,7 @@ local core_operations = {
 										1,
 										typed.qtype(
 											typed.literal(value.quantity(terms.quantity.unrestricted)),
-											typed.prim_boxed_type(typed.bound_variable(2))
+											typed.prim_wrapped_type(typed.bound_variable(2))
 										)
 									),
 									terms.runtime_context()
@@ -883,14 +883,14 @@ local core_operations = {
 			)
 		)
 	),
-	boxed = lit_term(
+	wrapped = lit_term(
 		value.closure(
 			typed.tuple_elim(
 				typed.bound_variable(1),
 				1,
 				typed.qtype(
 					typed.literal(value.quantity(terms.quantity.unrestricted)),
-					typed.prim_boxed_type(typed.bound_variable(2))
+					typed.prim_wrapped_type(typed.bound_variable(2))
 				)
 			),
 			terms.runtime_context()
