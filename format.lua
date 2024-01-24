@@ -36,32 +36,8 @@ local function space_tokens(pattern)
 	return pattern * token_spacer
 end
 
-local function thread_newline(pattern, func)
-	local list = Cg(Ct(pattern * Cg(Cb("newline_pos"), "newline_pos")), "temp")
-		-- these are Cmts for perf reasons
-		* Cmt(Cb("temp"), function(_, _, value)
-			return true, func(value)
-		end)
-		* Cg(
-			Cmt(Cb("temp"), function(_, _, temp)
-				return true, temp["newline_pos"]
-			end),
-			"newline_pos"
-		)
-		* Cg(Cc(nil), "temp")
-
-	return list
-end
-
 local function list(pattern)
-	return thread_newline(V "anchor" * space_tokens(pattern) * V "endpos", function(elements)
-		return {
-			kind = "list",
-			elements = elements,
-			anchor = elements.anchor,
-			endpos = elements.endpos,
-		}
-	end)
+	return element("list", Cg(Ct(space_tokens(pattern)), "elements") * V "endpos")
 end
 
 local function create_literal(elements)
@@ -93,52 +69,24 @@ local grammar = P {
 	-- initializes empty capture groups at the start, remember to update when tracking new things!
 	foreward = Cg(P "" / function(_)
 		return { 0 }
-	end, "indent_level") * Cg(P "" / function()
-		return { line_num = 1, line_pos = 1 }
-	end, "newline_pos"),
+	end, "indent_level"),
 
 	-- every time there's a newline, get it's position. construct a named group with the position
 	-- of the latest (numbered) newline
 	-- Cmt because of precedence requirements
-	newline = P "\r" ^ 0 * P "\n" * Cg(
-		Cmt(Cb("newline_pos") * Cp(), function(_, position, prev_pos)
-			local construct = { line_num = prev_pos["line_num"] + 1, line_pos = position }
-			return true, construct
-		end),
-		"newline_pos"
-	),
+	newline = P "\r" ^ 0 * P "\n",
 
 	-- either match the newline or match the beginning of the file
-	filestart = Cg(
-		Cmt(Cp(), function(_, _, mypos)
-			return mypos == 1, { line_num = 1, line_pos = 1 }
-		end),
-		"newline_pos"
-	),
-
-	-- every time there's a newline, get it's position, and construct a named group
-	-- subtract the position of the newline and use it as a comparison point
-	-- complication: we have to get the most recent newline_pos. this includes nested inner values
-	-- lpeg doesn't have a mechanism natively to support this so we have to pass it up whenever we do this
-	-- and extract it here
-	textpos = Cp() * Cb("newline_pos") * lpeg.Carg(1) / function(current_pos, newline_pos, filename)
-		local anchor = {
-			sourceid = filename,
-			line = newline_pos["line_num"],
-			char = current_pos - newline_pos["line_pos"] + 1, -- obey 1-indexing
-		}
-
-		setmetatable(anchor, anchor_mt)
-
-		return anchor
-	end,
+	filestart = Cmt(Cp(), function(_, _, mypos)
+		return mypos == 1
+	end),
 
 	-- used by every element
 	-- TODO: make this propogate errors back up the stack
-	anchor = Cg(V "textpos", "anchor"),
-	endpos = Cg(V "textpos", "endpos"),
+	anchor = Cg(Cp(), "anchor"),
+	endpos = Cg(Cp(), "endpos"),
 
-	count_tabs = Cmt(V "textpos" * C(S "\t " ^ 1), function(_, _, anchor, indentstring)
+	count_tabs = Cmt(Cp() * C(S "\t " ^ 1), function(_, _, anchor, indentstring)
 		-- only tabs are allowed
 		-- tabs and spaces must not be interleaved - tabs must happen before spaces.
 		-- TODO: make nice errors in here
@@ -174,43 +122,25 @@ local grammar = P {
 		(V "newline" * Cc("\n") * ((Cs(V "subordinate_indent") * V "longstring_body") + (S "\t " ^ 0 * #V "newline")))
 		+ V "longstring_body"
 	),
-	longstring_literal = thread_newline(
-		V "anchor" * (V "longstring_body" + V "longstring_newline") ^ 1,
-		create_literal
-	),
+	longstring_literal = Ct(V "anchor" * (V "longstring_body" + V "longstring_newline") ^ 1) / create_literal,
 
-	longstring = thread_newline(
-		V "anchor" * P '""""' * (V "longstring_literal" + V "splice") ^ 0 * V "endpos",
-		function(elements)
-			assert(elements)
-			return {
-				anchor = elements.anchor,
-				endpos = elements.endpos,
-				kind = "string",
-				elements = elements,
-			}
-		end
+	longstring = element(
+		"string",
+		P '""""' * Cg(Ct((V "longstring_literal" + V "splice") ^ 0), "elements") * V "endpos"
 	),
 
 	comment_body = C((1 - V "newline") ^ 1),
-	comment = thread_newline(
-		V "anchor"
-			* P "#"
-			* V "comment_body" ^ -1
-			* (V "newline" * Cc("\n") * ((Cs(V "subordinate_indent") * V "comment_body") + (S "\t " ^ 0 * #V "newline")))
-				^ 0,
-		function(elements)
-			local val = ""
-
-			for _, v in ipairs(elements) do
-				val = val .. v
-			end
-			return {
-				anchor = elements.anchor,
-				kind = "comment",
-				val = val,
-			}
-		end
+	comment = element(
+		"comment",
+		P "#"
+			* Cg(
+				Cs(
+					V "comment_body" ^ -1
+						* (V "newline" * ((V "subordinate_indent" * V "comment_body") + (S "\t " ^ 0 * #V "newline")))
+							^ 0
+				),
+				"val"
+			)
 	),
 
 	-- numbers are limited, they are not bignums, they are standard lua numbers. scopes shares the problem of files not having arbitrary precision
@@ -240,13 +170,7 @@ local grammar = P {
 	) / create_literal,
 
 	-- this doesn't work yet
-	string = thread_newline(
-		V "anchor" * P '"' * (V "string_literal" + V "splice") ^ 0 * P '"' * V "endpos",
-		function(elements)
-			assert(elements)
-			return { anchor = elements.anchor, endpos = elements.endpos, elements = elements, kind = "string" }
-		end
-	),
+	string = element("string", P '"' * Cg(Ct((V "string_literal" + V "splice") ^ 0), "elements") * P '"' * V "endpos"),
 
 	tokens = space_tokens(
 		V "comment" + V "function_call" + V "paren_list" + V "longstring" + V "string" + V "number" + V "symbol"
@@ -255,7 +179,7 @@ local grammar = P {
 
 	-- LIST SEPARATOR BEHAVIOR IS NOT CONSISTENT BETWEEN BRACED AND NAKED LISTS
 	permitted_paren_tokens = (
-		(P "\\" * V "naked_list") -- \ escape char enters naked list mode from inside a paren list. there's probably an edge case here, indentation is going to be wacky
+		(space_tokens(P [[\]]) * V "naked_list") -- \ escape char enters naked list mode from inside a paren list. there's probably an edge case here, indentation is going to be wacky
 		+ V "tokens"
 		+ V "newline"
 		+ S "\t " ^ 1
@@ -305,9 +229,7 @@ local grammar = P {
 	) * -1,
 
 	naked_list_line = (list(V "tokens" ^ 0 * space_tokens(P ";"))) ^ 1 * V "naked_list" ^ 0,
-	-- escape char terminates current list
 	naked_list = list( -- escape char terminates current list
-		-- TODO: fix this, set up \
 		((V "naked_list_line" + V "tokens" ^ 1) ^ 1)
 			* (V "empty_line" ^ 1 + (V "newline" * V "indent" * (((list(V "tokens" * space_tokens(P ";")) + V "tokens") * ((#(V "newline" * V "isdedent") * V "dedent") + (-P(
 					1
@@ -357,9 +279,56 @@ local grammar = P {
 	end),
 }
 
+local newlinegetter = P {
+	"newlines",
+	body = (1 - S "\r\n") ^ 1,
+	newline = P "\r" ^ 0 * P "\n",
+	newlines = Ct(Cp() * (V "body" + (V "newline" * Cp())) ^ 0),
+}
+
+local function create_anchor(anchor, newlines, cursor, sourceid)
+	local line_num = cursor
+
+	while (line_num + 1 <= #newlines) and (anchor >= newlines[line_num + 1]) do
+		line_num = line_num + 1
+	end
+	local newanchor = {
+		line = line_num,
+		char = anchor - newlines[line_num] + 1,
+		sourceid = sourceid,
+	}
+	setmetatable(newanchor, anchor_mt)
+
+	return newanchor, line_num
+end
+
+local function correct_anchors(ast, newlines, cursor, sourceid)
+	local revised_ast = ast
+	local line_num = cursor
+
+	assert(ast.anchor)
+	revised_ast.anchor, line_num = create_anchor(ast.anchor, newlines, line_num, sourceid)
+	if ast.kind == "list" or ast.kind == "string" then
+		for i, v in ipairs(ast.elements) do
+			revised_ast.elements[i], line_num = correct_anchors(v, newlines, line_num, sourceid)
+		end
+
+		revised_ast.endpos, line_num = create_anchor(ast.endpos, newlines, line_num, sourceid)
+	end
+
+	return revised_ast, line_num
+end
+
 local function parse(input, filename)
 	assert(filename)
-	return lpeg.match(grammar, input, 1, filename)
+	local newline_list = lpeg.match(newlinegetter, input)
+	local initial_ast = lpeg.match(grammar, input)
+
+	local file_endpos = create_anchor(initial_ast.endpos, newline_list, #newline_list, filename)
+	local revised_ast = correct_anchors(initial_ast, newline_list, 1, filename)
+	revised_ast.endpos = file_endpos
+
+	return revised_ast
 end
 
 return { parse = parse }
