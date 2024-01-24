@@ -1755,7 +1755,12 @@ function evaluate(typed_term, runtime_context)
 		return value.prim_boxed_type(backing_type)
 	elseif typed_term:is_prim_box() then
 		local content = typed_term:unwrap_prim_box()
-		return value.prim(evaluate(content, runtime_context))
+		local content_val = evaluate(content, runtime_context)
+		if content_val:is_neutral() then
+			local nval = content_val:unwrap_neutral()
+			return value.neutral(neutral_value.prim_box_stuck(nval))
+		end
+		return value.prim(content_val)
 	elseif typed_term:is_prim_unbox() then
 		local unwrapped = typed_term:unwrap_prim_unbox()
 		local unwrap_val = evaluate(unwrapped, runtime_context)

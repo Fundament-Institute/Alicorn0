@@ -866,8 +866,6 @@ value:define_enum("value", {
 		},
 	},
 	{ "prim_boxed_type", { "type", value } },
-	{ "prim_box_stuck", { "content", neutral_value } },
-	{ "prim_unbox_stuck", { "container", neutral_value } },
 	{ "prim_user_defined_type", {
 		"id",
 		prim_user_defined_id,
@@ -954,10 +952,8 @@ neutral_value:define_enum("neutral_value", {
 		"anchor",
 		gen.anchor_type,
 	} },
-	{ "prim_unbox_stuck", {
-		"subject",
-		neutral_value,
-	} },
+	{ "prim_box_stuck", { "content", neutral_value } },
+	{ "prim_unbox_stuck", { "container", neutral_value } },
 })
 
 neutral_value.free.metavariable = function(mv)

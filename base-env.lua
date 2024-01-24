@@ -697,10 +697,21 @@ local typed = terms.typed_term
 
 local usage_array = gen.declare_array(gen.builtin_number)
 local val_array = gen.declare_array(value)
+
+local function lit_term(val, typ)
+	return terms.inferrable_term.typed(typ, usage_array(), terms.typed_term.literal(val))
+end
+local function unrestricted(x)
+	return value.qtype(value.quantity(terms.quantity.unrestricted), x)
+end
+local function unrestricted_typed(term)
+	return typed.qtype(typed.literal(value.quantity(terms.quantity.unrestricted)), term)
+end
+
 local function startype_impl(syntax, env)
 	local ok, level_val = syntax:match({
-		metalang.listmatch(metalang.isvalue(metalang.accept_handler)),
-	})
+		metalang.listmatch(metalang.accept_handler, metalang.isvalue(metalang.accept_handler)),
+	}, metalang.failure_handler, nil)
 	if not ok then
 		return ok, level_val
 	end
@@ -711,19 +722,12 @@ local function startype_impl(syntax, env)
 		return false, "literal must be an integer for type levels"
 	end
 	local term = terms.inferrable_term.typed(
-		terms.typed_term.star(level_val.val + 1),
+		unrestricted(value.star(level_val.val + 1)),
 		usage_array(),
-		terms.typed_term.star(level_val.val)
+		unrestricted_typed(terms.typed_term.star(level_val.val))
 	)
 
 	return true, term, env
-end
-
-local function lit_term(val, typ)
-	return terms.inferrable_term.typed(typ, usage_array(), terms.typed_term.literal(val))
-end
-local function unrestricted(x)
-	return value.qtype(value.quantity(terms.quantity.unrestricted), x)
 end
 
 local function val_tup_cons(...)
@@ -768,7 +772,7 @@ local core_operations = {
 	["prim-number"] = lit_term(unrestricted(value.prim_number_type), unrestricted(value.prim_type_type)),
 	["prim-type"] = lit_term(unrestricted(value.prim_type_type), unrestricted(value.star(1))),
 	["prim-func-type"] = exprs.primitive_operative(prim_func_type_impl, "prim_func_type_impl"),
-	type = lit_term(value.star(1), value.star(0)),
+	type = lit_term(unrestricted(value.star(0)), unrestricted(value.star(1))),
 	type_ = exprs.primitive_operative(startype_impl, "startype_impl"),
 	["forall"] = exprs.primitive_operative(forall_type_impl, "forall_type_impl"),
 	lambda = exprs.primitive_operative(lambda_impl, "lambda_impl"),

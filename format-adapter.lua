@@ -42,6 +42,9 @@ local function read(text, source)
 	return syntax_convert(buffer)
 end
 
-return {
+local format_adapter = {
 	read = read,
 }
+local internals_interface = require "./internals-interface"
+internals_interface.format_adapter = format_adapter
+return format_adapter

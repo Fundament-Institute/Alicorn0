@@ -460,7 +460,7 @@ local matcher_type = gen.declare_foreign(function(val)
 	return matcher_kinds[val.kind]
 end)
 
-return {
+local metalanguage = {
 	newenv = newenv,
 	accept_handler = accept_handler,
 	failure_handler = failure_handler,
@@ -485,3 +485,6 @@ return {
 	reducer_type = reducer_type,
 	matcher_type = matcher_type,
 }
+local internals_interface = require "./internals-interface"
+internals_interface.metalanguage = metalanguage
+return metalanguage

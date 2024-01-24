@@ -6,6 +6,19 @@ let prim-sub = (intrinsic "return function(a, b) return a - b end" : prim-arith-
 #let foo = (record (bar = 5) (baz = 6))
 #let subbed = prim-sub foo.bar y
 
+let prim-string-box-get =
+	intrinsic
+		""""
+			return function()
+				return terms.value.qtype(
+					terms.value.quantity(terms.quantity.unrestricted),
+					terms.value.prim_string_type)
+			end
+		:
+		prim-func-type -> (res : (boxed prim-type))
+let (prim-string-box) = (prim-string-box-get)
+let prim-string = (unbox prim-type prim-string-box)
+
 let prim-array-type =
 	intrinsic
 		""""
@@ -89,46 +102,6 @@ let array-new =
 		let (elem) = (prim-array-new(T))
 		elem
 
-let arr = array-new(prim-number)
-let arr = array-set(prim-number, arr, 1, 3)
-let arr = array-set(prim-number, arr, 2, 5)
-
-let (res) = prim-sub(3,array-get(prim-number, arr, 2))
-#	let (elem) = prim-array-get(box(prim-type, prim-number), arr, 2)
-
-#	let elem = array-get(prim-number, arr, 2)
-	let elem2 = (the prim-number elem)
-	let (res) = prim-sub(3, elem2)
-
-
-#	let (val) = (prim-sub 5 1)
-	prim-sub val 3
-
-	let sub = 
-		lambda (x : prim-number, y : prim-number)
-			let (val) = (prim-sub x y)
-			val
-
-	let from-array = 2
-	let from-array = array-get(prim-number, arr, 2)
-
-	sub 5 (sub 3 from-array)
-
-# sub(array-get(prim-number, arr, 2), array-get(prim-number, arr, 1))
-
-let prim-string-box-get =
-	intrinsic
-		""""
-			return function()
-				return terms.value.qtype(
-					terms.value.quantity(terms.quantity.unrestricted),
-					terms.value.prim_string_type)
-			end
-		:
-		prim-func-type -> (res : (boxed prim-type))
-let (prim-string-box) = (prim-string-box-get)
-let prim-string = (unbox prim-type prim-string-box)
-
 let prim-file-read =
 	intrinsic
 		""""
@@ -137,4 +110,83 @@ let prim-file-read =
 		:
 		prim-func-type (fname : prim-string) -> (content : prim-string)
 
-prim-file-read "testfile.alc"
+let void =
+	unbox
+		type
+		intrinsic
+			""""
+				local val_array = terms_gen.declare_array(terms.value)
+				local decl = terms.value.enum_value("empty", terms.value.tuple_value(val_array()))
+				local basetype = terms.value.enum_type(decl)
+				local quantity = terms.value.quantity(terms.quantity.unrestricted)
+				return terms.value.qtype(quantity, basetype)
+			:
+			boxed type
+
+let prim-unit =
+	unbox
+		prim-type
+		intrinsic
+			""""
+				local unique_id = {name = "prim-unit"}
+				local value_array = terms_gen.declare_array(terms.value)
+				local basetype = terms.value.prim_user_defined_type(unique_id, value_array())
+				local quantity = terms.value.quantity(terms.quantity.unrestricted)
+				return terms.value.qtype(quantity, basetype)
+			:
+			boxed prim-type
+
+let prim-nil =
+	intrinsic
+		""""
+			return nil
+		:
+		prim-unit
+
+let only-accept-prim-tuples-inner =
+	intrinsic
+		""""
+			local function check_prim_tuple(subject, consequent, alternate)
+				local subjectqty, subjectbase = subject:unwrap_qtype()
+				if subject:is_prim_tuple() then
+					return consequent
+				else
+					return alternate
+				end
+			end
+			return check_prim_tuple
+		:
+		prim-func-type
+			subject : boxed(type)
+			consequent : boxed(prim-type)
+			alternate : boxed(prim-type)
+			->
+			result : boxed(prim-type)
+
+let only-accept-prim-tuples =
+	lambda (subject : boxed(type), consequent : boxed(prim-type), alternate : boxed(prim-type))
+		let (res) = only-accept-prim-tuples-inner(subject, consequent, alternate)
+		unbox prim-type res
+
+let prim-tuple-type-to-tuple-type-inner =
+	intrinsic
+		""""
+			local function prim_tuple_to_tuple(prim_tuple_type)
+				local quantity, basetype = prim_tuple_type:unwrap_qtype()
+				local decls = basetype:unwrap_prim_tuple_type()
+				-- this conversion happens to work since the eliminator for prim tuples and tuples is the same term
+				local newbasetype = terms.values.tuple_type(decls)
+				return terms.values.qtype(quantity, newbasetype)
+			end
+			return prim_tuple_to_tuple
+		:
+		prim-func-type
+			t : boxed(type)
+			valid :
+				only-accept-prim-tuples
+					t
+					box(prim-type, prim-unit)
+					box(prim-type, boxed(void))
+			->
+			res : boxed(type)
+
