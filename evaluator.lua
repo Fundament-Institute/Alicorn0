@@ -240,6 +240,24 @@ local function substitute_inner(val, mappings, context_len)
 			return typed_term.prim_unwrap(substitute_inner(value.neutral(boxed), mappings, context_len))
 		end
 
+		if nval:is_prim_wrap_stuck() then
+			local to_wrap = nval:unwrap_prim_wrap_stuck()
+			return typed_term.prim_wrap(substitute_inner(value.neutral(to_wrap), mappings, context_len))
+		end
+
+		if nval:is_prim_unwrap_stuck() then
+			local to_unwrap = nval:unwrap_prim_unwrap_stuck()
+			return typed_term.prim_unwrap(substitute_inner(value.neutral(to_unwrap), mappings, context_len))
+		end
+
+		if nval:is_prim_application_stuck() then
+			local fn, arg = nval:unwrap_prim_application_stuck()
+			return typed_term.application(
+				typed_term.literal(value.prim(fn)),
+				substitute_inner(value.neutral(arg), mappings, context_len)
+			)
+		end
+
 		if nval:is_prim_tuple_stuck() then
 			local leading, stuck, trailing = nval:unwrap_prim_tuple_stuck()
 			local elems = typed_array()
@@ -280,10 +298,6 @@ local function substitute_inner(val, mappings, context_len)
 		local type = val:unwrap_prim_wrapped_type()
 		type = substitute_inner(type, mappings, context_len)
 		return typed_term.prim_wrapped_type(type)
-	elseif val:is_prim_wrap_stuck() then
-		error("not yet implemented")
-	elseif val:is_prim_unwrap_stuck() then
-		error("not yet implemented")
 	elseif val:is_prim_user_defined_type() then
 		local id, family_args = val:unwrap_prim_user_defined_type()
 		local res = typed_array()
