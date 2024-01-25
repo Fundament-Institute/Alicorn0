@@ -509,6 +509,7 @@ inferrable_term:define_enum("inferrable", {
 	{ "prim_wrap", { "content", inferrable_term } },
 	{ "prim_unstrict_wrap", { "content", inferrable_term } },
 	{ "prim_unwrap", { "container", inferrable_term } },
+	{ "prim_unstrict_unwrap", { "container", inferrable_term } },
 	{
 		"prim_if",
 		{
@@ -671,6 +672,7 @@ typed_term:define_enum("typed", {
 		},
 	},
 	{ "prim_wrapped_type", { "type", typed_term } },
+	{ "prim_unstrict_wrapped_type", { "type", typed_term } },
 	{ "prim_wrap", { "content", typed_term } },
 	{ "prim_unwrap", { "container", typed_term } },
 	{ "prim_unstrict_wrap", { "content", typed_term } },

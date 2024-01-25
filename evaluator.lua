@@ -1426,12 +1426,25 @@ function infer(
 		return value.qtype(quantity, value.prim_wrapped_type(backing_type)),
 			content_usages,
 			typed_term.prim_wrap(content_term)
+	elseif inferrable_term:is_prim_unstrict_wrap() then
+		local content = inferrable_term:unwrap_prim_wrap()
+		local content_type, content_usages, content_term = infer(content, typechecking_context)
+		local quantity, backing_type = content_type:unwrap_qtype()
+		return value.qtype(quantity, value.prim_unstrict_wrapped_type(backing_type)),
+			content_usages,
+			typed_term.prim_unstrict_wrap(content_term)
 	elseif inferrable_term:is_prim_unwrap() then
 		local container = inferrable_term:unwrap_prim_unwrap()
 		local container_type, container_usages, container_term = infer(container, typechecking_context)
 		local quantity, backing_type = container_type:unwrap_qtype()
 		local content_type = backing_type:unwrap_prim_wrapped_type()
 		return value.qtype(quantity, content_type), container_usages, typed_term.prim_unwrap(container_term)
+	elseif inferrable_term:is_prim_unstrict_unwrap() then
+		local container = inferrable_term:unwrap_prim_unwrap()
+		local container_type, container_usages, container_term = infer(container, typechecking_context)
+		local quantity, backing_type = container_type:unwrap_qtype()
+		local content_type = backing_type:unwrap_prim_unstrict_wrapped_type()
+		return value.qtype(quantity, content_type), container_usages, typed_term.prim_unstrict_unwrap(container_term)
 	elseif inferrable_term:is_prim_if() then
 		local subject, consequent, alternate = inferrable_term:unwrap_prim_if()
 		-- for each thing in typechecking context check if it == the subject, replace with literal true
@@ -1775,8 +1788,28 @@ function evaluate(typed_term, runtime_context)
 			return value.neutral(neutral_value.prim_wrap_stuck(nval))
 		end
 		return value.prim(content_val)
+	elseif typed_term:is_prim_unstrict_wrap() then
+		local content = typed_term:unwrap_prim_unstrict_wrap()
+		local content_val = evaluate(content, runtime_context)
+		return value.prim(content_val)
 	elseif typed_term:is_prim_unwrap() then
 		local unwrapped = typed_term:unwrap_prim_unwrap()
+		local unwrap_val = evaluate(unwrapped, runtime_context)
+		if not unwrap_val.as_prim then
+			print("unwrapped", unwrapped, unwrap_val)
+			error "evaluate, is_prim_unwrap: missing as_prim on unwrapped prim_unwrap"
+		end
+		if unwrap_val:is_prim() then
+			return unwrap_val:unwrap_prim()
+		elseif unwrap_val:is_neutral() then
+			local nval = unwrap_val:unwrap_neutral()
+			return value.neutral(neutral_value.prim_unwrap_stuck(nval))
+		else
+			print("unrecognized value in unbox", unwrap_val)
+			error "invalid value in unbox, must be prim or neutral"
+		end
+	elseif typed_term:is_prim_unstrict_unwrap() then
+		local unwrapped = typed_term:unwrap_prim_unstrict_unwrap()
 		local unwrap_val = evaluate(unwrapped, runtime_context)
 		if not unwrap_val.as_prim then
 			print("unwrapped", unwrapped, unwrap_val)
