@@ -38,11 +38,11 @@ let prim-array-type =
 			end
 			return mktype
 		:
-		prim-func-type (T : (wrapped prim-type)) -> (array : (wrapped prim-type))
+		prim-func-type (T : (unstrict-wrapped prim-type)) -> (array : (unstrict-wrapped prim-type))
 
 let array-type =
 	lambda ((T : prim-type))
-		let (typ) = (prim-array-type (wrap prim-type T))
+		let (typ) = (prim-array-type (unstrict-wrap prim-type T))
 		unwrap prim-type typ
 
 let prim-array-set =
