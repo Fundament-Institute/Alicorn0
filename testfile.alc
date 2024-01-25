@@ -45,7 +45,6 @@ let array-type =
 		let (typ) = (prim-array-type (wrap prim-type T))
 		unwrap prim-type typ
 
-# FIXME: return arr after setting
 let prim-array-set =
 	lambda ((T : prim-type))
 		intrinsic
