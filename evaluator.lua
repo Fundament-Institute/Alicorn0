@@ -1780,6 +1780,11 @@ function evaluate(typed_term, runtime_context)
 		local type_value = evaluate(type_term, runtime_context)
 		local quantity, backing_type = type_value:unwrap_qtype()
 		return value.prim_wrapped_type(backing_type)
+	elseif typed_term:is_prim_unstrict_wrapped_type() then
+		local type_term = typed_term:unwrap_prim_unstrict_wrapped_type()
+		local type_value = evaluate(type_term, runtime_context)
+		local quantity, backing_type = type_value:unwrap_qtype()
+		return value.prim_wrapped_type(backing_type)
 	elseif typed_term:is_prim_wrap() then
 		local content = typed_term:unwrap_prim_wrap()
 		local content_val = evaluate(content, runtime_context)
