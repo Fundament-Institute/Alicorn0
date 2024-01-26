@@ -248,7 +248,7 @@ let get-prim-func-arg-inner =
 					wrapped void
 
 let foo =
-	prim-func-type (x : prim-number) (y : prim-number) -> (res : prim-number)
+	forall (x : prim-number) (y : prim-number) -> (res : prim-number)
 
 foo
 

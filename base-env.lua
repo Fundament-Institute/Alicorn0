@@ -487,7 +487,7 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 	print("moving on to return type")
 	ok, continue = true, true
 	local shadowed, env = env:enter_block()
-	env = env:bind_local(terms.binding.annotated_lambda("#arg", build_type_term(args)), syntax.anchor)
+	env = env:bind_local(terms.binding.annotated_lambda("#arg", build_type_term(args), syntax.anchor))
 	local ok, arg = env:get("#arg")
 	env = env:bind_local(terms.binding.tuple_elim(names, arg))
 	names = gen.declare_array(gen.builtin_string)()
@@ -527,16 +527,20 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 		unrestricted_term,
 		terms.inferrable_term.pi(
 			build_type_term(args),
-			terms.inferrable_term.typed(
-				terms.value.param_info_type,
-				usage_array(),
-				terms.typed_term.literal(terms.value.param_info(terms.value.visibility(terms.visibility.explicit)))
+			terms.checkable_term.inferrable(
+				terms.inferrable_term.typed(
+					terms.value.param_info_type,
+					usage_array(),
+					terms.typed_term.literal(terms.value.param_info(terms.value.visibility(terms.visibility.explicit)))
+				)
 			),
 			fn_res_term,
-			terms.inferrable_term.typed(
-				terms.value.result_info_type,
-				usage_array(),
-				terms.typed_term.literal(terms.value.result_info(terms.value.purity(terms.purity.pure)))
+			terms.checkable_term.inferrable(
+				terms.inferrable_term.typed(
+					terms.value.result_info_type,
+					usage_array(),
+					terms.typed_term.literal(terms.value.result_info(terms.result_info(terms.purity.pure)))
+				)
 			)
 		)
 	)
@@ -557,11 +561,11 @@ local function forall_type_impl(syntax, env)
 	print("in forall_type_impl")
 	local ok, fn_type_term, env =
 		syntax:match({ forall_type_impl_reducer(metalang.accept_handler, env) }, metalang.failure_handler, env)
-	print("finished matching prim_func_type_impl and got")
-	print(fn_type_term:pretty_print())
 	if not ok then
 		return ok, fn_type_term
 	end
+	print("finished matching prim_func_type_impl and got")
+	print(fn_type_term:pretty_print())
 	if not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl"
 	end
