@@ -1039,7 +1039,7 @@ function infer(
 		-- print("inferring a qtype")
 		-- print(inferrable_term:pretty_print())
 		-- print(qtype:pretty_print())
-		return qtype_type, qtype_usages, qtype
+		return unrestricted(type_type), qtype_usages, qtype
 	elseif inferrable_term:is_pi() then
 		error("infer: nyi")
 		local param_type, param_info, result_type, result_info = inferrable_term:unwrap_pi()
