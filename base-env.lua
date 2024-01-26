@@ -697,10 +697,21 @@ local typed = terms.typed_term
 
 local usage_array = gen.declare_array(gen.builtin_number)
 local val_array = gen.declare_array(value)
+
+local function lit_term(val, typ)
+	return terms.inferrable_term.typed(typ, usage_array(), terms.typed_term.literal(val))
+end
+local function unrestricted(x)
+	return value.qtype(value.quantity(terms.quantity.unrestricted), x)
+end
+local function unrestricted_typed(term)
+	return typed.qtype(typed.literal(value.quantity(terms.quantity.unrestricted)), term)
+end
+
 local function startype_impl(syntax, env)
 	local ok, level_val = syntax:match({
-		metalang.listmatch(metalang.isvalue(metalang.accept_handler)),
-	})
+		metalang.listmatch(metalang.accept_handler, metalang.isvalue(metalang.accept_handler)),
+	}, metalang.failure_handler, nil)
 	if not ok then
 		return ok, level_val
 	end
@@ -711,19 +722,12 @@ local function startype_impl(syntax, env)
 		return false, "literal must be an integer for type levels"
 	end
 	local term = terms.inferrable_term.typed(
-		terms.typed_term.star(level_val.val + 1),
+		unrestricted(value.star(level_val.val + 1)),
 		usage_array(),
-		terms.typed_term.star(level_val.val)
+		unrestricted_typed(terms.typed_term.star(level_val.val))
 	)
 
 	return true, term, env
-end
-
-local function lit_term(val, typ)
-	return terms.inferrable_term.typed(typ, usage_array(), terms.typed_term.literal(val))
-end
-local function unrestricted(x)
-	return value.qtype(value.quantity(terms.quantity.unrestricted), x)
 end
 
 local function val_tup_cons(...)
@@ -734,48 +738,11 @@ local function val_desc_elem(x)
 end
 local val_desc_empty = value.enum_value("empty", val_tup_cons())
 
-local core_operations = {
-	["+"] = exprs.primitive_applicative(function(a, b)
-		return a + b
-	end, { value.prim_number_type, value.prim_number_type }, { value.prim_number_type }),
-	["-"] = exprs.primitive_applicative(function(a, b)
-		return a - b
-	end, { value.prim_number_type, value.prim_number_type }, { value.prim_number_type }),
-	["*"] = exprs.primitive_applicative(function(a, b)
-		return a * b
-	end, { value.prim_number_type, value.prim_number_type }, { value.prim_number_type }),
-	["/"] = exprs.primitive_applicative(function(a, b)
-		return a / b
-	end, { value.prim_number_type, value.prim_number_type }, { value.prim_number_type }),
-	["%"] = exprs.primitive_applicative(function(a, b)
-		return a % b
-	end, { value.prim_number_type, value.prim_number_type }, { value.prim_number_type }),
-	neg = exprs.primitive_applicative(function(a)
-		return -a
-	end, { value.prim_number_type }, { value.prim_number_type }),
-
-	--["<"] = evaluator.primitive_applicative(function(args)
-	--  return { variant = (args[1] < args[2]) and 1 or 0, arg = types.unit_val }
-	--end, types.tuple {types.number, types.number}, types.cotuple({types.unit, types.unit})),
-	--["=="] = evaluator.primitive_applicative(function(args)
-	--  return { variant = (args[1] == args[2]) and 1 or 0, arg = types.unit_val }
-	--end, types.tuple {types.number, types.number}, types.cotuple({types.unit, types.unit})),
-
-	--["do"] = evaluator.primitive_operative(do_block),
-	let = exprs.primitive_operative(let_bind, "let_bind"),
-	record = exprs.primitive_operative(record_build, "record_build"),
-	intrinsic = exprs.primitive_operative(intrinsic, "intrinsic"),
-	["prim-number"] = lit_term(unrestricted(value.prim_number_type), unrestricted(value.prim_type_type)),
-	["prim-type"] = lit_term(unrestricted(value.prim_type_type), unrestricted(value.star(1))),
-	["prim-func-type"] = exprs.primitive_operative(prim_func_type_impl, "prim_func_type_impl"),
-	type = lit_term(value.star(1), value.star(0)),
-	type_ = exprs.primitive_operative(startype_impl, "startype_impl"),
-	["forall"] = exprs.primitive_operative(forall_type_impl, "forall_type_impl"),
-	lambda = exprs.primitive_operative(lambda_impl, "lambda_impl"),
-	the = exprs.primitive_operative(the_operative_impl, "the"),
-	box = lit_term(
+-- eg typed.prim_wrap, typed.prim_wrapped_type
+local function build_wrap(body_fn, type_fn)
+	return lit_term(
 		value.closure(
-			typed.tuple_elim(typed.bound_variable(1), 2, typed.prim_box(typed.bound_variable(3))),
+			typed.tuple_elim(typed.bound_variable(1), 2, body_fn(typed.bound_variable(3))),
 			terms.runtime_context()
 		),
 		unrestricted(
@@ -819,7 +786,7 @@ local core_operations = {
 						2,
 						typed.qtype(
 							typed.literal(value.quantity(terms.quantity.unrestricted)),
-							typed.prim_boxed_type(typed.bound_variable(2))
+							type_fn(typed.bound_variable(2))
 						)
 					),
 					terms.runtime_context()
@@ -827,10 +794,14 @@ local core_operations = {
 				value.result_info(terms.result_info(terms.purity.pure))
 			)
 		)
-	),
-	unbox = lit_term(
+	)
+end
+
+-- eg typed.prim_unwrap, typed.prim_wrapped_type
+local function build_unwrap(body_fn, type_fn)
+	return lit_term(
 		value.closure(
-			typed.tuple_elim(typed.bound_variable(1), 2, typed.prim_unbox(typed.bound_variable(3))),
+			typed.tuple_elim(typed.bound_variable(1), 2, body_fn(typed.bound_variable(3))),
 			terms.runtime_context()
 		),
 		unrestricted(
@@ -861,7 +832,7 @@ local core_operations = {
 										1,
 										typed.qtype(
 											typed.literal(value.quantity(terms.quantity.unrestricted)),
-											typed.prim_boxed_type(typed.bound_variable(2))
+											type_fn(typed.bound_variable(2))
 										)
 									),
 									terms.runtime_context()
@@ -878,15 +849,19 @@ local core_operations = {
 				value.result_info(terms.result_info(terms.purity.pure))
 			)
 		)
-	),
-	boxed = lit_term(
+	)
+end
+
+-- eg typed.prim_wrapped_type,
+local function build_wrapped(body_fn)
+	return lit_term(
 		value.closure(
 			typed.tuple_elim(
 				typed.bound_variable(1),
 				1,
 				typed.qtype(
 					typed.literal(value.quantity(terms.quantity.unrestricted)),
-					typed.prim_boxed_type(typed.bound_variable(2))
+					body_fn(typed.bound_variable(2))
 				)
 			),
 			terms.runtime_context()
@@ -928,7 +903,54 @@ local core_operations = {
 				value.result_info(terms.result_info(terms.purity.pure))
 			)
 		)
-	),
+	)
+end
+
+local core_operations = {
+	["+"] = exprs.primitive_applicative(function(a, b)
+		return a + b
+	end, { value.prim_number_type, value.prim_number_type }, { value.prim_number_type }),
+	["-"] = exprs.primitive_applicative(function(a, b)
+		return a - b
+	end, { value.prim_number_type, value.prim_number_type }, { value.prim_number_type }),
+	["*"] = exprs.primitive_applicative(function(a, b)
+		return a * b
+	end, { value.prim_number_type, value.prim_number_type }, { value.prim_number_type }),
+	["/"] = exprs.primitive_applicative(function(a, b)
+		return a / b
+	end, { value.prim_number_type, value.prim_number_type }, { value.prim_number_type }),
+	["%"] = exprs.primitive_applicative(function(a, b)
+		return a % b
+	end, { value.prim_number_type, value.prim_number_type }, { value.prim_number_type }),
+	neg = exprs.primitive_applicative(function(a)
+		return -a
+	end, { value.prim_number_type }, { value.prim_number_type }),
+
+	--["<"] = evaluator.primitive_applicative(function(args)
+	--  return { variant = (args[1] < args[2]) and 1 or 0, arg = types.unit_val }
+	--end, types.tuple {types.number, types.number}, types.cotuple({types.unit, types.unit})),
+	--["=="] = evaluator.primitive_applicative(function(args)
+	--  return { variant = (args[1] == args[2]) and 1 or 0, arg = types.unit_val }
+	--end, types.tuple {types.number, types.number}, types.cotuple({types.unit, types.unit})),
+
+	--["do"] = evaluator.primitive_operative(do_block),
+	let = exprs.primitive_operative(let_bind, "let_bind"),
+	record = exprs.primitive_operative(record_build, "record_build"),
+	intrinsic = exprs.primitive_operative(intrinsic, "intrinsic"),
+	["prim-number"] = lit_term(unrestricted(value.prim_number_type), unrestricted(value.prim_type_type)),
+	["prim-type"] = lit_term(unrestricted(value.prim_type_type), unrestricted(value.star(1))),
+	["prim-func-type"] = exprs.primitive_operative(prim_func_type_impl, "prim_func_type_impl"),
+	type = lit_term(unrestricted(value.star(0)), unrestricted(value.star(1))),
+	type_ = exprs.primitive_operative(startype_impl, "startype_impl"),
+	["forall"] = exprs.primitive_operative(forall_type_impl, "forall_type_impl"),
+	lambda = exprs.primitive_operative(lambda_impl, "lambda_impl"),
+	the = exprs.primitive_operative(the_operative_impl, "the"),
+	wrap = build_wrap(typed.prim_wrap, typed.prim_wrapped_type),
+	["unstrict-wrap"] = build_wrap(typed.prim_unstrict_wrap, typed.prim_unstrict_wrapped_type),
+	wrapped = build_wrapped(typed.prim_wrapped_type),
+	["unstrict-wrapped"] = build_wrapped(typed.prim_unstrict_wrapped_type),
+	unwrap = build_unwrap(typed.prim_unwrap, typed.prim_wrapped_type),
+	["unstrict-unwrap"] = build_unwrap(typed.prim_unstrict_unwrap, typed.prim_unstrict_wrapped_type),
 	--["dump-env"] = evaluator.primitive_operative(function(syntax, env) print(environment.dump_env(env)); return true, types.unit_val, env end),
 	--["basic-fn"] = evaluator.primitive_operative(basic_fn),
 	--tuple = evaluator.primitive_operative(tuple_type_impl),

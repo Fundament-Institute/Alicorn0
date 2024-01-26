@@ -504,9 +504,12 @@ inferrable_term:define_enum("inferrable", {
 			-- primitive functions can only be pure for now
 		},
 	},
-	{ "prim_boxed_type", { "type", inferrable_term } },
-	{ "prim_box", { "content", inferrable_term } },
-	{ "prim_unbox", { "container", inferrable_term } },
+	{ "prim_wrapped_type", { "type", inferrable_term } },
+	{ "prim_unstrict_wrapped_type", { "type", inferrable_term } },
+	{ "prim_wrap", { "content", inferrable_term } },
+	{ "prim_unstrict_wrap", { "content", inferrable_term } },
+	{ "prim_unwrap", { "container", inferrable_term } },
+	{ "prim_unstrict_unwrap", { "container", inferrable_term } },
 	{
 		"prim_if",
 		{
@@ -668,9 +671,12 @@ typed_term:define_enum("typed", {
 			-- primitive functions can only be pure for now
 		},
 	},
-	{ "prim_boxed_type", { "type", typed_term } },
-	{ "prim_box", { "content", typed_term } },
-	{ "prim_unbox", { "container", typed_term } },
+	{ "prim_wrapped_type", { "type", typed_term } },
+	{ "prim_unstrict_wrapped_type", { "type", typed_term } },
+	{ "prim_wrap", { "content", typed_term } },
+	{ "prim_unwrap", { "container", typed_term } },
+	{ "prim_unstrict_wrap", { "content", typed_term } },
+	{ "prim_unstrict_unwrap", { "container", typed_term } },
 	{ "prim_if", {
 		"subject",
 		typed_term,
@@ -865,9 +871,8 @@ value:define_enum("value", {
 			-- primitive functions can only be pure for now
 		},
 	},
-	{ "prim_boxed_type", { "type", value } },
-	{ "prim_box_stuck", { "content", neutral_value } },
-	{ "prim_unbox_stuck", { "container", neutral_value } },
+	{ "prim_wrapped_type", { "type", value } },
+	{ "prim_unstrict_wrapped_type", { "type", value } },
 	{ "prim_user_defined_type", {
 		"id",
 		prim_user_defined_id,
@@ -954,10 +959,8 @@ neutral_value:define_enum("neutral_value", {
 		"anchor",
 		gen.anchor_type,
 	} },
-	{ "prim_unbox_stuck", {
-		"subject",
-		neutral_value,
-	} },
+	{ "prim_wrap_stuck", { "content", neutral_value } },
+	{ "prim_unwrap_stuck", { "container", neutral_value } },
 })
 
 neutral_value.free.metavariable = function(mv)

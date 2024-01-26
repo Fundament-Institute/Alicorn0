@@ -235,9 +235,27 @@ local function substitute_inner(val, mappings, context_len)
 			return typed_term.tuple_element_access(subject_term, index)
 		end
 
-		if nval:is_prim_unbox_stuck() then
-			local boxed = nval:unwrap_prim_unbox_stuck()
-			return typed_term.prim_unbox(substitute_inner(value.neutral(boxed), mappings, context_len))
+		if nval:is_prim_unwrap_stuck() then
+			local boxed = nval:unwrap_prim_unwrap_stuck()
+			return typed_term.prim_unwrap(substitute_inner(value.neutral(boxed), mappings, context_len))
+		end
+
+		if nval:is_prim_wrap_stuck() then
+			local to_wrap = nval:unwrap_prim_wrap_stuck()
+			return typed_term.prim_wrap(substitute_inner(value.neutral(to_wrap), mappings, context_len))
+		end
+
+		if nval:is_prim_unwrap_stuck() then
+			local to_unwrap = nval:unwrap_prim_unwrap_stuck()
+			return typed_term.prim_unwrap(substitute_inner(value.neutral(to_unwrap), mappings, context_len))
+		end
+
+		if nval:is_prim_application_stuck() then
+			local fn, arg = nval:unwrap_prim_application_stuck()
+			return typed_term.application(
+				typed_term.literal(value.prim(fn)),
+				substitute_inner(value.neutral(arg), mappings, context_len)
+			)
 		end
 
 		if nval:is_prim_tuple_stuck() then
@@ -276,14 +294,10 @@ local function substitute_inner(val, mappings, context_len)
 		param_type = substitute_inner(param_type, mappings, context_len)
 		result_type = substitute_inner(result_type, mappings, context_len)
 		return typed_term.prim_function_type(param_type, result_type)
-	elseif val:is_prim_boxed_type() then
-		local type = val:unwrap_prim_boxed_type()
+	elseif val:is_prim_wrapped_type() then
+		local type = val:unwrap_prim_wrapped_type()
 		type = substitute_inner(type, mappings, context_len)
-		return typed_term.prim_boxed_type(type)
-	elseif val:is_prim_box_stuck() then
-		error("not yet implemented")
-	elseif val:is_prim_unbox_stuck() then
-		error("not yet implemented")
+		return typed_term.prim_wrapped_type(type)
 	elseif val:is_prim_user_defined_type() then
 		local id, family_args = val:unwrap_prim_user_defined_type()
 		local res = typed_array()
@@ -451,8 +465,8 @@ add_comparer(value.star(0).kind, value.star(0).kind, function(a, b)
 	return true
 end)
 
-add_comparer("value.prim_boxed_type", "value.prim_boxed_type", function(a, b)
-	local ok, err = fitsinto_qless(a:unwrap_prim_boxed_type(), b:unwrap_prim_boxed_type())
+add_comparer("value.prim_wrapped_type", "value.prim_wrapped_type", function(a, b)
+	local ok, err = fitsinto_qless(a:unwrap_prim_wrapped_type(), b:unwrap_prim_wrapped_type())
 	return ok, err
 end)
 
@@ -1025,7 +1039,7 @@ function infer(
 		-- print("inferring a qtype")
 		-- print(inferrable_term:pretty_print())
 		-- print(qtype:pretty_print())
-		return qtype_type, qtype_usages, qtype
+		return unrestricted(type_type), qtype_usages, qtype
 	elseif inferrable_term:is_pi() then
 		error("infer: nyi")
 		local param_type, param_info, result_type, result_info = inferrable_term:unwrap_pi()
@@ -1395,8 +1409,8 @@ function infer(
 			new_family_args:append(e_term)
 		end
 		return value.prim_type_type, result_usages, typed_term.prim_user_defined_type_cons(id, new_family_args)
-	elseif inferrable_term:is_prim_boxed_type() then
-		local type_inf = inferrable_term:unwrap_prim_boxed_type()
+	elseif inferrable_term:is_prim_wrapped_type() then
+		local type_inf = inferrable_term:unwrap_prim_wrapped_type()
 		local content_type_type, content_type_usages, content_type_term = infer(type_inf, typechecking_context)
 		if not is_type_of_types(content_type_type) then
 			error "infer: type being boxed must be a type"
@@ -1404,20 +1418,33 @@ function infer(
 		local quantity, backing_type = content_type_type:unwrap_qtype()
 		return value.qtype(quantity, value.prim_type_type),
 			content_type_usages,
-			typed_term.prim_boxed_type(content_type_term)
-	elseif inferrable_term:is_prim_box() then
-		local content = inferrable_term:unwrap_prim_box()
+			typed_term.prim_wrapped_type(content_type_term)
+	elseif inferrable_term:is_prim_wrap() then
+		local content = inferrable_term:unwrap_prim_wrap()
 		local content_type, content_usages, content_term = infer(content, typechecking_context)
 		local quantity, backing_type = content_type:unwrap_qtype()
-		return value.qtype(quantity, value.prim_boxed_type(backing_type)),
+		return value.qtype(quantity, value.prim_wrapped_type(backing_type)),
 			content_usages,
-			typed_term.prim_box(content_term)
-	elseif inferrable_term:is_prim_unbox() then
-		local container = inferrable_term:unwrap_prim_unbox()
+			typed_term.prim_wrap(content_term)
+	elseif inferrable_term:is_prim_unstrict_wrap() then
+		local content = inferrable_term:unwrap_prim_wrap()
+		local content_type, content_usages, content_term = infer(content, typechecking_context)
+		local quantity, backing_type = content_type:unwrap_qtype()
+		return value.qtype(quantity, value.prim_unstrict_wrapped_type(backing_type)),
+			content_usages,
+			typed_term.prim_unstrict_wrap(content_term)
+	elseif inferrable_term:is_prim_unwrap() then
+		local container = inferrable_term:unwrap_prim_unwrap()
 		local container_type, container_usages, container_term = infer(container, typechecking_context)
 		local quantity, backing_type = container_type:unwrap_qtype()
-		local content_type = backing_type:unwrap_prim_boxed_type()
-		return value.qtype(quantity, content_type), container_usages, typed_term.prim_unbox(container_term)
+		local content_type = backing_type:unwrap_prim_wrapped_type()
+		return value.qtype(quantity, content_type), container_usages, typed_term.prim_unwrap(container_term)
+	elseif inferrable_term:is_prim_unstrict_unwrap() then
+		local container = inferrable_term:unwrap_prim_unwrap()
+		local container_type, container_usages, container_term = infer(container, typechecking_context)
+		local quantity, backing_type = container_type:unwrap_qtype()
+		local content_type = backing_type:unwrap_prim_unstrict_wrapped_type()
+		return value.qtype(quantity, content_type), container_usages, typed_term.prim_unstrict_unwrap(container_term)
 	elseif inferrable_term:is_prim_if() then
 		local subject, consequent, alternate = inferrable_term:unwrap_prim_if()
 		-- for each thing in typechecking context check if it == the subject, replace with literal true
@@ -1748,26 +1775,56 @@ function evaluate(typed_term, runtime_context)
 			new_family_args:append(evaluate(v, runtime_context))
 		end
 		return value.prim_user_defined_type(id, new_family_args)
-	elseif typed_term:is_prim_boxed_type() then
-		local type_term = typed_term:unwrap_prim_boxed_type()
+	elseif typed_term:is_prim_wrapped_type() then
+		local type_term = typed_term:unwrap_prim_wrapped_type()
 		local type_value = evaluate(type_term, runtime_context)
 		local quantity, backing_type = type_value:unwrap_qtype()
-		return value.prim_boxed_type(backing_type)
-	elseif typed_term:is_prim_box() then
-		local content = typed_term:unwrap_prim_box()
-		return value.prim(evaluate(content, runtime_context))
-	elseif typed_term:is_prim_unbox() then
-		local unwrapped = typed_term:unwrap_prim_unbox()
+		return value.prim_wrapped_type(backing_type)
+	elseif typed_term:is_prim_unstrict_wrapped_type() then
+		local type_term = typed_term:unwrap_prim_unstrict_wrapped_type()
+		local type_value = evaluate(type_term, runtime_context)
+		local quantity, backing_type = type_value:unwrap_qtype()
+		return value.prim_wrapped_type(backing_type)
+	elseif typed_term:is_prim_wrap() then
+		local content = typed_term:unwrap_prim_wrap()
+		local content_val = evaluate(content, runtime_context)
+		if content_val:is_neutral() then
+			local nval = content_val:unwrap_neutral()
+			return value.neutral(neutral_value.prim_wrap_stuck(nval))
+		end
+		return value.prim(content_val)
+	elseif typed_term:is_prim_unstrict_wrap() then
+		local content = typed_term:unwrap_prim_unstrict_wrap()
+		local content_val = evaluate(content, runtime_context)
+		return value.prim(content_val)
+	elseif typed_term:is_prim_unwrap() then
+		local unwrapped = typed_term:unwrap_prim_unwrap()
 		local unwrap_val = evaluate(unwrapped, runtime_context)
 		if not unwrap_val.as_prim then
 			print("unwrapped", unwrapped, unwrap_val)
-			error "evaluate, is_prim_unbox: missing as_prim on unwrapped prim_unbox"
+			error "evaluate, is_prim_unwrap: missing as_prim on unwrapped prim_unwrap"
 		end
 		if unwrap_val:is_prim() then
 			return unwrap_val:unwrap_prim()
 		elseif unwrap_val:is_neutral() then
 			local nval = unwrap_val:unwrap_neutral()
-			return value.neutral(neutral_value.prim_unbox_stuck(nval))
+			return value.neutral(neutral_value.prim_unwrap_stuck(nval))
+		else
+			print("unrecognized value in unbox", unwrap_val)
+			error "invalid value in unbox, must be prim or neutral"
+		end
+	elseif typed_term:is_prim_unstrict_unwrap() then
+		local unwrapped = typed_term:unwrap_prim_unstrict_unwrap()
+		local unwrap_val = evaluate(unwrapped, runtime_context)
+		if not unwrap_val.as_prim then
+			print("unwrapped", unwrapped, unwrap_val)
+			error "evaluate, is_prim_unwrap: missing as_prim on unwrapped prim_unwrap"
+		end
+		if unwrap_val:is_prim() then
+			return unwrap_val:unwrap_prim()
+		elseif unwrap_val:is_neutral() then
+			local nval = unwrap_val:unwrap_neutral()
+			return value.neutral(neutral_value.prim_unwrap_stuck(nval))
 		else
 			print("unrecognized value in unbox", unwrap_val)
 			error "invalid value in unbox, must be prim or neutral"

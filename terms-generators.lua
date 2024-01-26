@@ -338,6 +338,17 @@ local array_methods = {
 	append = function(self, val)
 		self[self.n + 1] = val
 	end,
+	eq = function(self, other)
+		if #self ~= #other then
+			return false
+		end
+		for i = 1, #self do
+			if self[i] ~= other[i] then
+				return false
+			end
+		end
+		return true
+	end,
 	copy = function(self, first, last)
 		local first = first or 1
 		local last = last or #self
@@ -432,6 +443,7 @@ local function define_array(self, value_type)
 	self.__ipairs = array_methods.ipairs
 	self.__len = array_methods.len
 	self.__tostring = self:__index("pretty_print")
+	self.__eq = array_methods.eq
 	prettyprintable:implement_on(self, {
 		print = array_prettyprintable,
 	})
