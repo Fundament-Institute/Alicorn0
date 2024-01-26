@@ -178,8 +178,8 @@ let prim-tuple-type-to-tuple-type-inner =
 				local quantity, basetype = prim_tuple_type:unwrap_qtype()
 				local decls = basetype:unwrap_prim_tuple_type()
 				-- this conversion happens to work since the eliminator for prim tuples and tuples is the same term
-				local newbasetype = terms.values.tuple_type(decls)
-				return terms.values.qtype(quantity, newbasetype)
+				local newbasetype = terms.value.tuple_type(decls)
+				return terms.value.qtype(quantity, newbasetype)
 			end
 			return prim_tuple_to_tuple
 		:
@@ -198,7 +198,7 @@ let only-accept-prim-funcs-inner =
 		""""
 			local function check_prim_func(subject, consequent, alternate)
 				local subjectqty, subjectbase = subject:unwrap_qtype()
-				if subject:is_prim_function_type() then
+				if subjectbase:is_prim_function_type() then
 					return consequent
 				else
 					return alternate
