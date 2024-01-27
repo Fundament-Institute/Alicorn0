@@ -958,6 +958,7 @@ local function nearest_star_level(typ)
 	elseif typ:is_star() then
 		return typ:unwrap_star()
 	else
+		print(typ.kind, typ)
 		error "unknown sort in nearest_star, please expand or build a proper least upper bound"
 	end
 end
@@ -1004,6 +1005,13 @@ function infer(
 		local param_quantity = param_quantity:unwrap_quantity()
 		local inner_context = typechecking_context:append(param_name, param_qtype, nil, anchor)
 		local body_type, body_usages, body_term = infer(body, inner_context)
+
+		-- FIXME: remove me after the qtype refactor that fixes inferring the type of a qtype
+		-- this is a bodge
+		if body_type:is_qtype() and body_type.type:is_qtype() then
+			body_type = body_type.type
+		end
+
 		local result_type = substitute_type_variables(body_type, #inner_context)
 		local body_usages_param = body_usages[#body_usages]
 		local lambda_usages = body_usages:copy(1, #body_usages - 1)
@@ -1041,12 +1049,13 @@ function infer(
 		-- print(qtype:pretty_print())
 		return unrestricted(type_type), qtype_usages, qtype
 	elseif inferrable_term:is_pi() then
-		error("infer: nyi")
 		local param_type, param_info, result_type, result_info = inferrable_term:unwrap_pi()
 		local param_type_type, param_type_usages, param_type_term = infer(param_type, typechecking_context)
-		local param_info_usages, param_info_term = check(param_info, typechecking_context, value.param_info_type)
+		local param_info_usages, param_info_term =
+			check(param_info, typechecking_context, unrestricted(value.param_info_type))
 		local result_type_type, result_type_usages, result_type_term = infer(result_type, typechecking_context)
-		local result_info_usages, result_info_term = check(result_info, typechecking_context, value.result_info_type)
+		local result_info_usages, result_info_term =
+			check(result_info, typechecking_context, unrestricted(value.result_info_type))
 		local result_type_type_quantity, result_type_type_base = result_type_type:unwrap_qtype()
 		if not result_type_type_base:is_pi() then
 			error "result type of a pi term must infer to a pi because it must be callable"
@@ -1055,7 +1064,7 @@ function infer(
 		local result_type_param_type, result_type_param_info, result_type_result_type, result_type_result_info =
 			result_type_type_base:unwrap_pi()
 
-		if not result_type_result_info:unwrap_result_info():is_pure() then
+		if not result_type_result_info:unwrap_result_info().purity:is_pure() then
 			error "result type computation must be pure for now"
 		end
 
@@ -1066,8 +1075,16 @@ function infer(
 				"inferrable pi type's param type doesn't fit into the result type function's parameters because " .. err
 			)
 		end
-		local sort =
-			value.star(math.max(nearest_star_level(param_type_type), nearest_star_level(result_type_result_type), 0))
+		local result_type_result_type_result =
+			apply_value(result_type_result_type, evaluate(param_type_term, typechecking_context.runtime_context))
+		-- FIXME: remove the .type bodges once qtype issues are fixed
+		local sort = value.star(
+			math.max(
+				nearest_star_level(param_type_type.type.type),
+				nearest_star_level(result_type_result_type_result.type),
+				0
+			)
+		)
 
 		local term = typed_term.pi(param_type_term, param_info_term, result_type_term, result_info_term)
 

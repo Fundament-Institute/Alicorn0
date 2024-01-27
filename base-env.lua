@@ -528,18 +528,26 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 		terms.inferrable_term.pi(
 			build_type_term(args),
 			terms.checkable_term.inferrable(
-				terms.inferrable_term.typed(
-					terms.value.param_info_type,
-					usage_array(),
-					terms.typed_term.literal(terms.value.param_info(terms.value.visibility(terms.visibility.explicit)))
+				terms.inferrable_term.qtype(
+					unrestricted_term,
+					terms.inferrable_term.typed(
+						terms.value.param_info_type,
+						usage_array(),
+						terms.typed_term.literal(
+							terms.value.param_info(terms.value.visibility(terms.visibility.explicit))
+						)
+					)
 				)
 			),
 			fn_res_term,
 			terms.checkable_term.inferrable(
-				terms.inferrable_term.typed(
-					terms.value.result_info_type,
-					usage_array(),
-					terms.typed_term.literal(terms.value.result_info(terms.result_info(terms.purity.pure)))
+				terms.inferrable_term.qtype(
+					unrestricted_term,
+					terms.inferrable_term.typed(
+						terms.value.result_info_type,
+						usage_array(),
+						terms.typed_term.literal(terms.value.result_info(terms.result_info(terms.purity.pure)))
+					)
 				)
 			)
 		)

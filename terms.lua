@@ -995,6 +995,7 @@ for _, deriver in ipairs { derivers.as, derivers.pretty_print, derivers.eq } do
 	binding:derive(deriver)
 	expression_target:derive(deriver)
 	placeholder_debug:derive(deriver)
+	purity:derive(deriver)
 end
 
 --[[
