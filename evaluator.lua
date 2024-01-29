@@ -13,6 +13,8 @@ local value = terms.value
 local neutral_value = terms.neutral_value
 local prim_syntax_type = terms.prim_syntax_type
 local prim_environment_type = terms.prim_environment_type
+local prim_typed_term_type = terms.prim_typed_term_type
+local prim_target_type = terms.prim_target_type
 local prim_inferrable_term_type = terms.prim_inferrable_term_type
 
 local gen = require "./terms-generators"
@@ -1384,8 +1386,14 @@ function infer(
 			unrestricted(
 				value.tuple_type(
 					cons(
-						cons(empty, const_combinator(unrestricted(prim_syntax_type))),
-						const_combinator(unrestricted(prim_environment_type))
+						cons(
+							cons(
+								cons(empty, const_combinator(unrestricted(prim_syntax_type))),
+								const_combinator(unrestricted(prim_environment_type))
+							),
+							const_combinator(unrestricted(prim_typed_term_type))
+						),
+						const_combinator(unrestricted(prim_target_type))
 					)
 				)
 			),
@@ -1672,6 +1680,9 @@ function evaluate(typed_term, runtime_context)
 			local subject_elements = subject_value:unwrap_prim_tuple_value()
 			if #subject_elements ~= length then
 				p(#subject_elements, length)
+				print(typed_term)
+				print("THING HAPPANED:", length)
+				print(#subject_elements)
 				error("evaluate: mismatch in tuple length from typechecking and evaluation")
 			end
 			for i = 1, length do

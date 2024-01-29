@@ -236,8 +236,8 @@ local function expression_pairhandler(args, a, b)
 	local ok, handler, userdata_type = type_of_term:as_operative_type()
 	if ok then
 		-- operative input: env, syntax tree, target type (if checked)
-		local tuple_args = array(gen.any_lua_type)(args, env)
-		local operative_result_val = evaluator.apply_value(handler, terms.value.prim_tuple_value(tuple_args))
+		local tuple_args = value_array(value.prim(args), value.prim(env), value.prim(term), value.prim(target))
+		local operative_result_val = evaluator.apply_value(handler, terms.value.tuple_value(tuple_args))
 		-- result should be able to be an inferred term, can fail
 		-- NYI: operative_cons in evaluator must use Maybe type once it exists
 		-- if not operative_result_val:is_enum_value() then
@@ -504,7 +504,7 @@ local function primitive_operative(fn, name)
 	-- 2: wrap it to convert a normal tuple argument to a prim tuple
 	-- and a prim tuple result to a normal tuple
 	-- this way it can take a normal tuple and return a normal tuple
-	local nparams = 2 -- for convenience when we upgrade to 4
+	local nparams = 4
 	local tuple_conv_elements = typed_array()
 	local prim_tuple_conv_elements = typed_array()
 	for i = 1, nparams do
