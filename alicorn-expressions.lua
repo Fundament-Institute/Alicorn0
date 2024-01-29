@@ -258,15 +258,24 @@ local function expression_pairhandler(args, a, b)
 			error "operative_result_val missing env"
 		end
 
-		-- FIXME: assert type is an inferrable term using new API once it exists
-		if not inferrable_term.value_check(data) then
-			error "tried to handle something that was not an inferrable term"
+		if target:is_check() then
+			local checkable = data
+			if inferrable_term.value_check(checkable) == true then
+				checkable = checkable_term.inferrable(checkable)
+			end
+
+			local target_type = target:unwrap_check()
+			local usage_counts, term = evaluator.check(checkable, env.typechecking_context, target_type)
+			return true, checkable_term.inferrable(inferrable_term.typed(target_type, usage_counts, term)), env
+		elseif target:is_infer() then
+			if inferrable_term.value_check(data) == true then
+				local resulting_type, usage_counts, term = infer(data, env.typechecking_context)
+
+				return true, inferrable_term.typed(resulting_type, usage_counts, term), env
+			end
+		else
+			error("NYI target " .. target.kind .. " for operative in expression_pairhandler")
 		end
-		--p("Inferring!", data.kind, env.typechecking_context)
-
-		local resulting_type, usage_counts, term = infer(data, env.typechecking_context)
-
-		return true, inferrable_term.typed(resulting_type, usage_counts, term), env
 	end
 
 	if type_of_term:is_qtype() and type_of_term.type:is_pi() then
