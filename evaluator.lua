@@ -1680,9 +1680,6 @@ function evaluate(typed_term, runtime_context)
 			local subject_elements = subject_value:unwrap_prim_tuple_value()
 			if #subject_elements ~= length then
 				p(#subject_elements, length)
-				print(typed_term)
-				print("THING HAPPANED:", length)
-				print(#subject_elements)
 				error("evaluate: mismatch in tuple length from typechecking and evaluation")
 			end
 			for i = 1, length do

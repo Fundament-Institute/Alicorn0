@@ -505,20 +505,19 @@ local function primitive_operative(fn, name)
 	-- and a prim tuple result to a normal tuple
 	-- this way it can take a normal tuple and return a normal tuple
 	local nparams = 4
-	local tuple_conv_elements = typed_array()
+	local tuple_conv_elements = typed_array(typed_term.bound_variable(2), typed_term.bound_variable(3))
 	local prim_tuple_conv_elements = typed_array()
 	for i = 1, nparams do
 		-- + 1 because variable 1 is the argument tuple
 		-- all variables that follow are the destructured tuple
 		local var = typed_term.bound_variable(i + 1)
-		tuple_conv_elements:append(var)
 		prim_tuple_conv_elements:append(var)
 	end
 	local tuple_conv = typed_term.tuple_cons(tuple_conv_elements)
 	local prim_tuple_conv = typed_term.prim_tuple_cons(prim_tuple_conv_elements)
 	local tuple_to_prim_tuple = typed_term.tuple_elim(typed_term.bound_variable(1), nparams, prim_tuple_conv)
 	local tuple_to_prim_tuple_fn = typed_term.application(typed_prim_fn, tuple_to_prim_tuple)
-	local tuple_to_tuple_fn = typed_term.tuple_elim(tuple_to_prim_tuple_fn, nparams, tuple_conv)
+	local tuple_to_tuple_fn = typed_term.tuple_elim(tuple_to_prim_tuple_fn, 2, tuple_conv)
 	-- 3: wrap it in a closure with an empty capture, not a typed lambda
 	-- this ensures variable 1 is the argument tuple
 	local value_fn = value.closure(tuple_to_tuple_fn, runtime_context())
