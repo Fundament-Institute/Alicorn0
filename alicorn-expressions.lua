@@ -462,7 +462,7 @@ function OperativeError.new(cause, anchor, operative_name)
 	}, external_error_mt)
 end
 
----@param fn fun(syntax : any, env : Environment) : boolean, any, Environment
+---@param fn fun(syntax : any, env : Environment, target : ExpressionTarget) : boolean, any, Environment
 ---@param name string
 ---@return inferrable_term.operative_cons
 local function primitive_operative(fn, name)
@@ -472,11 +472,12 @@ local function primitive_operative(fn, name)
 		.. debuginfo.short_src
 		.. ":"
 		.. debuginfo.linedefined
-	local aborting_fn = function(syn, env)
+	local aborting_fn = function(syn, env, userdata, target)
 		if not env or not env.exit_block then
 			error("env passed to primitive_operative " .. debugstring .. " isn't an env or is nil", env)
 		end
-		local ok, res, env = fn(syn, env)
+		-- userdata isn't passed in as it's always empty for primitive operatives
+		local ok, res, env = fn(syn, env, target)
 		if not ok then
 			error(OperativeError.new(res, syn.anchor, debugstring))
 		end
