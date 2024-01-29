@@ -521,49 +521,14 @@ local function primitive_operative(fn, name)
 	local tuple_to_tuple_fn = typed_term.tuple_elim(tuple_to_prim_tuple_fn, nparams, tuple_conv)
 	-- 3: wrap it in a closure with an empty capture, not a typed lambda
 	-- this ensures variable 1 is the argument tuple
-	local typed_fn = typed_term.literal(value.closure(tuple_to_tuple_fn, runtime_context()))
-	-- 4: wrap it in an inferrable term
-	-- note how it takes a normal tuple and returns a normal tuple
-	local cu_syntax_type = const_combinator(unrestricted(prim_syntax_type))
-	local cu_inf_type = const_combinator(unrestricted(prim_inferrable_term_type))
-	local cu_env_type = const_combinator(unrestricted(prim_environment_type))
-	local error_type = terms.prim_lua_error_type
-	local param_type = unrestricted(value.tuple_type(cons(cons(empty, cu_syntax_type), cu_env_type)))
+	local value_fn = value.closure(tuple_to_tuple_fn, runtime_context())
 
-	-- tuple_of(ok) -> prim_if(ok, prim_inferrable_term_type, error_type)
-	-- FIXME: once operative_cons makes the correct type with a Maybe, put this back and convert to Maybe
-	-- For now, we handle with a lua abort inside the primitive operative
-	-- local inf_term_or_error = value.closure(
-	-- 	typed_term.prim_if(
-	-- 		typed_term.tuple_elim(typed_term.bound_variable(3), 1, typed_term.bound_variable(4)), -- how do I get the first thing in the input tuple?
-	-- 		typed_term.bound_variable(1),
-	-- 		typed_term.bound_variable(2)
-	-- 	),
-	-- 	runtime_context():append(unrestricted(prim_inferrable_term_type)):append(error_type)
-	-- )
-	-- local result_type = const_combinator(unrestricted(value.tuple_type(
-	-- 	cons(
-	-- 		cons(
-	-- 			cons(empty, const_combinator(unrestricted(terms.value.prim_bool_type))),
-	-- 			inf_term_or_error
-	-- 		),
-	-- 		const_combinator(unrestricted(prim_environment_type))
-	-- 	)
-	-- )))
-	local result_type = const_combinator(unrestricted(value.tuple_type(cons(cons(empty, cu_inf_type), cu_env_type))))
-	local inferred_type = unrestricted(value.pi(param_type, param_info_explicit, result_type, result_info_pure))
-	local inferrable_fn = inferrable_term.typed(inferred_type, usage_array(), typed_fn)
-	-- FIXME: use prim_if here
-	-- 5: wrap it in an operative type cons and finally an operative cons
-	-- with empty userdata
 	local userdata_type = unrestricted(value.tuple_type(empty))
-	local userdata_type_term = typed_term.literal(userdata_type)
-	local userdata_type_inf = inferrable_term.typed(value.star(0), usage_array(), userdata_type_term)
-	local op_type_fn =
-		inferrable_term.operative_type_cons(terms.checkable_term.inferrable(inferrable_fn), userdata_type_inf)
-	local userdata = inferrable_term.tuple_cons(inferrable_array())
-	local op_fn = inferrable_term.operative_cons(op_type_fn, userdata)
-	return op_fn
+	return inferrable_term.typed(
+		value.operative_type(value_fn, userdata_type),
+		array(gen.builtin_number)(),
+		typed_term.operative_cons(typed_term.tuple_cons(typed_array()))
+	)
 end
 
 local function collect_tuple_pair_handler(args, a, b)
