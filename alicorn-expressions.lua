@@ -132,18 +132,18 @@ local collect_tuple
 local collect_prim_tuple
 
 ---@class ExpressionArgs
----@field goal ExpressionTarget
+---@field goal ExpressionGoal
 ---@field env Environment
 local ExpressionArgs = {}
 
 ---Unpack ExpressionArgs into component parts
----@return ExpressionTarget
+---@return ExpressionGoal
 ---@return Environment
 function ExpressionArgs:unwrap()
 	return self.goal, self.env
 end
 
----@param goal ExpressionTarget
+---@param goal ExpressionGoal
 ---@param env Environment
 ---@return ExpressionArgs
 function ExpressionArgs.new(goal, env)
@@ -471,7 +471,7 @@ function OperativeError.new(cause, anchor, operative_name)
 	}, external_error_mt)
 end
 
----@param fn fun(syntax : any, env : Environment, goal : ExpressionTarget) : boolean, any, Environment
+---@param fn fun(syntax : any, env : Environment, goal : ExpressionGoal) : boolean, any, Environment
 ---@param name string
 ---@return inferrable_term.operative_cons
 local function primitive_operative(fn, name)
