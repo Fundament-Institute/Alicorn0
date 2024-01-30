@@ -191,7 +191,7 @@ local placeholder_debug = gen.declare_type()
 local value = gen.declare_type()
 local neutral_value = gen.declare_type()
 local binding = gen.declare_type()
-local expression_target = gen.declare_type()
+local expression_goal = gen.declare_type()
 
 local runtime_context_mt
 
@@ -296,12 +296,12 @@ local prim_user_defined_id = gen.declare_foreign(function(val)
 	return type(val) == "table" and type(val.name) == "string"
 end)
 
-expression_target:define_enum("expression_target", {
+expression_goal:define_enum("expression_goal", {
 	-- infer
 	{ "infer" },
-	-- check to a target type
+	-- check to a goal type
 	{ "check", {
-		"target_type",
+		"goal_type",
 		value,
 	} },
 	{
@@ -340,7 +340,7 @@ binding:define_enum("binding", {
 		},
 	},
 })
--- checkable terms need a target type to typecheck against
+-- checkable terms need a goal type to typecheck against
 checkable_term:define_enum("checkable", {
 	{ "inferrable", { "inferrable_term", inferrable_term } },
 	{ "tuple_cons", { "elements", array(checkable_term) } },
@@ -353,7 +353,7 @@ checkable_term:define_enum("checkable", {
 	} },
 	-- TODO: enum_cons
 })
--- inferrable terms can have their type inferred / don't need a target type
+-- inferrable terms can have their type inferred / don't need a goal type
 inferrable_term:define_enum("inferrable", {
 	{ "bound_variable", { "index", gen.builtin_number } },
 	{ "typed", {
@@ -970,7 +970,7 @@ end
 local prim_syntax_type = value.prim_user_defined_type({ name = "syntax" }, array(value)())
 local prim_environment_type = value.prim_user_defined_type({ name = "environment" }, array(value)())
 local prim_typed_term_type = value.prim_user_defined_type({ name = "typed_term" }, array(value)())
-local prim_target_type = value.prim_user_defined_type({ name = "target" }, array(value)())
+local prim_goal_type = value.prim_user_defined_type({ name = "goal" }, array(value)())
 local prim_inferrable_term_type = value.prim_user_defined_type({ name = "inferrable_term" }, array(value)())
 -- return ok, err
 local prim_lua_error_type = value.prim_user_defined_type({ name = "lua_error_type" }, array(value)())
@@ -995,7 +995,7 @@ for _, deriver in ipairs { derivers.as, derivers.pretty_print, derivers.eq } do
 	value:derive(deriver)
 	neutral_value:derive(deriver)
 	binding:derive(deriver)
-	expression_target:derive(deriver)
+	expression_goal:derive(deriver)
 	placeholder_debug:derive(deriver)
 	purity:derive(deriver)
 end
@@ -1028,11 +1028,11 @@ local terms = {
 	value = value,
 	neutral_value = neutral_value,
 	binding = binding,
-	expression_target = expression_target,
+	expression_goal = expression_goal,
 	prim_syntax_type = prim_syntax_type,
 	prim_environment_type = prim_environment_type,
 	prim_typed_term_type = prim_typed_term_type,
-	prim_target_type = prim_target_type,
+	prim_goal_type = prim_goal_type,
 	prim_inferrable_term_type = prim_inferrable_term_type,
 	prim_lua_error_type = prim_lua_error_type,
 	unit_val = unit_val,

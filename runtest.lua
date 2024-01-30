@@ -22,7 +22,7 @@ local shadowed, env = env:enter_block()
 
 print("Expression -> terms")
 local ok, expr, env = code:match(
-	{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_target.infer, env)) },
+	{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, env)) },
 	metalanguage.failure_handler,
 	nil
 )
