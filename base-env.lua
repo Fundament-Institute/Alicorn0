@@ -224,7 +224,29 @@ local function tuple_of_impl(syntax, env)
 	return true, components, env
 end
 
-local ascribed_name = metalang.reducer(function(syntax, env, prev, names)
+local pure_ascribed_name_with_tail = metalang.reducer(function(syntax, env)
+	-- print("ascribed_name trying")
+	-- p(syntax)
+	-- print(prev:pretty_print())
+	-- print("is env an environment? (start of ascribed name)")
+	-- print(env.get)
+	-- print(env.enter_block)
+	---@cast env Environment
+	local ok, name, type_env, tail = syntax:match({
+		metalang.listtail(
+			metalang.accept_handler,
+			metalang.issymbol(metalang.accept_handler),
+			metalang.symbol_exact(metalang.accept_handler, ":"),
+			exprs.inferred_expression(utils.accept_with_env, env)
+		),
+	}, metalang.failure_handler, nil)
+	if not ok then
+		return ok, name
+	end
+	return true, name, type_env.val, type_env.env, tail
+end, "pure_ascribed_name_with_tail")
+
+local ascribed_name_with_tail = metalang.reducer(function(syntax, env, prev, names)
 	-- print("ascribed_name trying")
 	-- p(syntax)
 	-- print(prev:pretty_print())
@@ -239,8 +261,8 @@ local ascribed_name = metalang.reducer(function(syntax, env, prev, names)
 		error "#prev should always be bound, was just added"
 	end
 	env = env:bind_local(terms.binding.tuple_elim(names, prev_binding))
-	local ok, name, type_env = syntax:match({
-		metalang.listmatch(
+	local ok, name, type_env, tail = syntax:match({
+		metalang.listtail(
 			metalang.accept_handler,
 			metalang.issymbol(metalang.accept_handler),
 			metalang.symbol_exact(metalang.accept_handler, ":"),
@@ -256,6 +278,21 @@ local ascribed_name = metalang.reducer(function(syntax, env, prev, names)
 	-- print("is env an environment? (end of ascribed name)")
 	-- print(env.get)
 	-- print(env.enter_block)
+	return true, name, val, env, tail
+end, "ascribed_name_with_tail")
+
+local ascribed_name = metalang.reducer(function(syntax, env, prev, names)
+	local ok, name, val, env, tail = syntax:match({
+		ascribed_name_with_tail(metalang.accept_handler, env, prev, names),
+	}, metalang.failure_handler, nil)
+	if not ok then
+		return ok, name
+	end
+
+	ok, err = tail:match({ metalang.isnil(metalang.accept_handler) }, metalang.failure_handler, nil)
+	if not ok then
+		return ok, err, "ascribed name expected end of list"
+	end
 	return true, name, val, env
 end, "ascribed_name")
 
@@ -428,88 +465,125 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 		error "env isn't an environment in prim_func_type_impl_reducer"
 	end
 
-	local head, tail, name, type_val, type_env
+	local single, head, tail, name, type_val, type_env
 	local ok, continue = true, true
-	while ok and continue do
-		ok, head, tail = syntax:match({ metalang.ispair(metalang.accept_handler) }, metalang.failure_handler, env)
-		print(env)
-		if not ok then
-			break
-		end
 
-		if not env or not env.get then
-			error "env isn't an environment in prim_func_type_impl_reducer"
-		end
+	single, name, type_val, type_env, tail = syntax:match({
+		pure_ascribed_name_with_tail(metalang.accept_handler, env),
+	}, metalang.failure_handler, nil)
 
-		print "args in loop is"
-		print(args:pretty_print())
-
-		ok, continue, name, type_val, type_env = head:match({
-			metalang.symbol_exact(function()
-				return true, false
-			end, "->"),
-			ascribed_name(function(ok, ...)
-				return ok, true, ...
-			end, env, build_type_term(args), names),
+	if single then
+		ok, tail = tail:match({
+			metalang.listtail(metalang.accept_handler, metalang.symbol_exact(metalang.accept_handler, "->")),
 		}, metalang.failure_handler, env)
 
-		if continue then
-			-- type_env:bind_local(terms.binding.let(name, type_val))
-			-- local arg = nil
-			-- args = cons(args, arg)
+		if not ok then
+			return false, "only one bare ascribed name permitted"
 		end
-		if ok and continue then
-			env = type_env
-			args = cons(args, type_val)
-			names = names:copy()
-			names:append(name)
-		end
-		print("arg", ok, continue, name, type_val, type_env)
-		--error "TODO use ascribed_name results"
+
+		env = type_env
+		args = type_val
+		names = name
 
 		syntax = tail
+	elseif not single then
+		ok = true
+
+		local ok, vals, thread, tail = syntax:match({
+			metalang.list_many_threaded_until(metalang.accept_handler, function(thread)
+				return ascribed_name(function(_, name, type_val, type_env)
+					local names = thread.names:copy()
+					names:append(name)
+					local newthread = {
+						names = names,
+						args = cons(thread.args, type_val),
+						env = type_env,
+					}
+					return true, { name = name, type = type_val }, newthread
+				end, thread.env, build_type_term(thread.args), thread.names)
+			end, {
+				names = names,
+				args = empty,
+				env = env,
+			}, metalang.symbol_exact(metalang.accept_handler, "->")),
+		}, metalang.failure_handler, nil)
+
+		if not ok then
+			return ok, vals
+		end
+
+		env = thread.env
+		args = build_type_term(thread.args)
+		names = thread.names
+		syntax = tail
 	end
+
 	print("moving on to return type")
 	ok, continue = true, true
+
 	local shadowed, env = env:enter_block()
-	env = env:bind_local(terms.binding.annotated_lambda("#arg", build_type_term(args), syntax.anchor))
+
+	env = env:bind_local(terms.binding.annotated_lambda("#arg", args, syntax.anchor))
 	local ok, arg = env:get("#arg")
-	env = env:bind_local(terms.binding.tuple_elim(names, arg))
-	names = gen.declare_array(gen.builtin_string)()
-	local results = empty
-	while ok and continue do
-		ok, head, tail = syntax:match({ metalang.ispair(metalang.accept_handler) }, metalang.failure_handler, env)
-		if not ok then
-			break
-		end
-
-		ok, continue, name, type_val, type_env = head:match({
-			metalang.isnil(function()
-				return true, false
-			end),
-			ascribed_name(function(ok, ...)
-				return ok, true, ...
-			end, env, build_type_term(results), names),
-		}, metalang.failure_handler, env)
-		print("result", ok, continue, name, type_val, type_env)
-
-		if ok and continue then
-			env = type_env
-			results = cons(results, type_val)
-			names = names:copy()
-			names:append(name)
-		end
-
-		if not ok then
-			return false, continue
-		end
-
-		syntax = tail
+	if single then
+		env = env:bind_local(terms.binding.let(names, arg))
+	else
+		env = env:bind_local(terms.binding.tuple_elim(names, arg))
 	end
 
-	local env, fn_res_term = env:exit_block(build_type_term(results), shadowed)
+	names = gen.declare_array(gen.builtin_string)()
+	local results = empty
+
+	single, name, type_val, type_env, tail = syntax:match({
+		pure_ascribed_name_with_tail(metalang.accept_handler, env),
+	}, metalang.failure_handler, nil)
+
+	if single then
+		ok = tail:match({
+			metalang.isnil(metalang.accept_handler),
+		}, metalang.failure_handler, env)
+
+		if not ok then
+			return false, "only one bare ascribed name permitted"
+		end
+
+		env = type_env
+		results = type_val
+		names = name
+	elseif not single then
+		ok = true
+
+		local ok, vals, thread, tail = syntax:match({
+			metalang.list_many_threaded_until(metalang.accept_handler, function(thread)
+				return ascribed_name(function(_, name, type_val, type_env)
+					local names = thread.names:copy()
+					names:append(name)
+					local newthread = {
+						names = names,
+						results = cons(thread.results, type_val),
+						env = type_env,
+					}
+					return true, { name = name, type = type_val }, newthread
+				end, thread.env, build_type_term(thread.results), thread.names)
+			end, {
+				names = names,
+				results = empty,
+				env = env,
+			}, metalang.isnil(metalang.accept_handler)),
+		}, metalang.failure_handler, nil)
+
+		if not ok then
+			return ok, vals
+		end
+
+		env = thread.env
+		results = build_type_term(thread.results)
+		names = thread.names
+	end
+
+	local env, fn_res_term = env:exit_block(results, shadowed)
 	local fn_type_term = terms.inferrable_term.pi(
-		build_type_term(args),
+		args,
 		terms.checkable_term.inferrable(
 			terms.inferrable_term.typed(
 				terms.value.param_info_type,
@@ -526,6 +600,7 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 			)
 		)
 	)
+
 	print("reached end of function type construction")
 	if not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl_reducer"
