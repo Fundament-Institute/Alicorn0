@@ -390,6 +390,10 @@ for _, prim_type in ipairs({
 end
 
 -- types of types
+add_subtyping_comparer("value.qtype_type", "value.qtype_type", function(a, b)
+	return issubtype(a:unwrap_qtype_type(), b:unwrap_qtype_type())
+end)
+
 add_subtyping_comparer(value.prim_type_type.kind, value.prim_type_type.kind, always_fits_comparer)
 local function tuple_compare(a, b)
 	-- We don't remember what this fixme was supposed to be for so we hope this isn't a problem
@@ -1057,11 +1061,11 @@ function infer(
 		add_arrays(qtype_usages, quantity_usages)
 		add_arrays(qtype_usages, type_usages)
 		local qtype = typed_term.qtype(quantity_term, type_term)
-		local qtype_type = value.qtype_type(get_level(type_type))
+		local qtype_type = value.qtype_type(type_type)
 		-- print("inferring a qtype")
 		-- print(inferrable_term:pretty_print())
 		-- print(qtype:pretty_print())
-		return unrestricted(type_type), qtype_usages, qtype
+		return unrestricted(qtype_type), qtype_usages, qtype
 	elseif inferrable_term:is_pi() then
 		local param_type, param_info, result_type, result_info = inferrable_term:unwrap_pi()
 		local param_type_type, param_type_usages, param_type_term = infer(param_type, typechecking_context)

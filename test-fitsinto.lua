@@ -213,6 +213,22 @@ local passed, failed, total = (require "tap")(function(test)
 		assert(fitsinto(qty(q.unrestricted, value.prim_type_type), qty(q.unrestricted, value.star(0))))
 	end)
 
+	test("prim-type into (qtype) star(0)", function(expect)
+		local q = terms.quantity
+		assert(issubtype(value.qtype_type(value.prim_type_type), value.qtype_type(value.prim_type_type)))
+		assert(issubtype(value.qtype_type(value.prim_type_type), value.qtype_type(value.star(0))))
+		assert(issubtype(value.qtype_type(value.prim_type_type), value.qtype_type(value.star(1))))
+		expect_error(function()
+			assert(not issubtype(value.prim_type_type, qty(q.erased, value.star(0))))
+		end, "issubtype shouldn't be called with a qtype")
+		expect_error(function()
+			assert(not issubtype(value.prim_type_type, qty(q.linear, value.star(0))))
+		end, "issubtype shouldn't be called with a qtype")
+		expect_error(function()
+			assert(not issubtype(value.prim_type_type, qty(q.unrestricted, value.star(0))))
+		end, "issubtype shouldn't be called with a qtype")
+	end)
+
 	test("quantity linear into other quantities", function(expect)
 		local q = terms.quantity
 		assert(fitsinto(qty(q.linear, value.prim_number_type), qty(q.erased, value.prim_number_type)))

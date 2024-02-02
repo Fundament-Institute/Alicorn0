@@ -757,13 +757,16 @@ value:define_enum("value", {
 	{ "visibility_type" },
 	{ "visibility", { "visibility", visibility } },
 	-- a type with a quantity
-	{ "qtype_type", { "level", gen.builtin_number } },
-	{ "qtype", {
-		"quantity",
-		value,
-		"type",
-		value,
-	} },
+	{ "qtype_type", { "universe", value } }, -- universe must be a type, not any value
+	{
+		"qtype",
+		{
+			"quantity",
+			value, -- must be value.quantity
+			"type",
+			value, -- must be a type
+		},
+	},
 	-- info about the parameter (is it implicit / what are the usage restrictions?)
 	-- quantity/visibility should be restricted to free or (quantity/visibility) rather than any value
 	{ "param_info_type" },

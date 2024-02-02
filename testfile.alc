@@ -252,6 +252,6 @@ let foo =
 
 foo
 
-let (args valid) = get-prim-func-arg-inner(wrap(type, foo), prim-nil)
-let (newargs) = prim-tuple-type-to-tuple-type-inner(args, valid)
-newargs
+#let (args valid) = get-prim-func-arg-inner(wrap(type, foo), prim-nil)
+#let (newargs) = prim-tuple-type-to-tuple-type-inner(args, valid)
+#newargs
