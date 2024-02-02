@@ -6,6 +6,7 @@ local evaluator = require "./evaluator"
 local value = terms.value
 local typed = terms.typed_term
 local fitsinto = evaluator.fitsinto
+local issubtype = evaluator.issubtype
 
 local qty = function(q, ty)
 	return value.qtype(value.quantity(q), ty)
@@ -151,6 +152,65 @@ local passed, failed, total = (require "tap")(function(test)
 		assert(fitsinto(unrestrict(value.prim_number_type), qty(q.erased, value.prim_number_type)))
 		assert(fitsinto(unrestrict(value.prim_number_type), qty(q.linear, value.prim_number_type)))
 		assert(fitsinto(unrestrict(value.prim_number_type), qty(q.unrestricted, value.prim_number_type)))
+	end)
+
+	test("quantity not specified not into quantities", function(expect)
+		local q = terms.quantity
+		expect_error(function()
+			assert(not fitsinto(value.prim_number_type, qty(q.erased, value.prim_number_type)))
+		end, "given value a which isn't a qtype")
+		expect_error(function()
+			assert(not fitsinto(value.prim_number_type, qty(q.linear, value.prim_number_type)))
+		end, "given value a which isn't a qtype")
+		expect_error(function()
+			assert(not fitsinto(value.prim_number_type, qty(q.unrestricted, value.prim_number_type)))
+		end, "given value a which isn't a qtype")
+	end)
+
+	test("prim-type into star(0)", function(expect)
+		local q = terms.quantity
+		expect_error(function()
+			assert(not issubtype(value.prim_number_type, qty(q.erased, value.prim_number_type)))
+		end, "issubtype shouldn't be called with a qtype")
+		expect_error(function()
+			assert(not issubtype(value.prim_number_type, qty(q.linear, value.prim_number_type)))
+		end, "issubtype shouldn't be called with a qtype")
+		expect_error(function()
+			assert(not issubtype(value.prim_number_type, qty(q.unrestricted, value.prim_number_type)))
+		end, "issubtype shouldn't be called with a qtype")
+	end)
+
+	test("prim-type into (qtype) star(0)", function(expect)
+		local q = terms.quantity
+		assert(issubtype(value.prim_type_type, value.star(0)))
+		expect_error(function()
+			assert(not issubtype(value.prim_type_type, qty(q.erased, value.star(0))))
+		end, "issubtype shouldn't be called with a qtype")
+		expect_error(function()
+			assert(not issubtype(value.prim_type_type, qty(q.linear, value.star(0))))
+		end, "issubtype shouldn't be called with a qtype")
+		expect_error(function()
+			assert(not issubtype(value.prim_type_type, qty(q.unrestricted, value.star(0))))
+		end, "issubtype shouldn't be called with a qtype")
+	end)
+
+	test("qtype prim-type into (qtype) star(0)", function(expect)
+		local q = terms.quantity
+		expect_error(function()
+			assert(not fitsinto(qty(q.erased, value.prim_type_type), value.star(0)))
+		end, "isn't a qtype")
+		assert(fitsinto(qty(q.erased, value.prim_type_type), qty(q.erased, value.star(0))))
+		expect_error(function()
+			assert(not fitsinto(qty(q.linear, value.prim_type_type), value.star(0)))
+		end, "isn't a qtype")
+		assert(fitsinto(qty(q.linear, value.prim_type_type), qty(q.erased, value.star(0))))
+		assert(fitsinto(qty(q.linear, value.prim_type_type), qty(q.linear, value.star(0))))
+		expect_error(function()
+			assert(not fitsinto(qty(q.unrestricted, value.prim_type_type), value.star(0)))
+		end, "isn't a qtype")
+		assert(fitsinto(qty(q.unrestricted, value.prim_type_type), qty(q.erased, value.star(0))))
+		assert(fitsinto(qty(q.unrestricted, value.prim_type_type), qty(q.linear, value.star(0))))
+		assert(fitsinto(qty(q.unrestricted, value.prim_type_type), qty(q.unrestricted, value.star(0))))
 	end)
 
 	test("quantity linear into other quantities", function(expect)

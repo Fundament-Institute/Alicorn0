@@ -32,7 +32,7 @@ local internals_interface = require "./internals-interface"
 do
 	local qtype = terms.value.qtype
 	terms.value.qtype = function(q, v)
-		if v.kind == "value_qtype" then
+		if v and v.kind == "value_qtype" then
 			error "qtype in qtype"
 		end
 		return qtype(q, v)
@@ -341,13 +341,13 @@ local infer_tuple_type, infer_tuple_type_unwrapped
 local terms = require "./terms"
 local value = terms.value
 
-local fitsinto, fitsinto_qless
+local fitsinto, issubtype
 -- indexed by kind x kind
-local fitsinto_comparers = {}
+local subtyping_comparers = {}
 
-local function add_comparer(ka, kb, comparer)
-	fitsinto_comparers[ka] = fitsinto_comparers[ka] or {}
-	fitsinto_comparers[ka][kb] = comparer
+local function add_subtyping_comparer(ka, kb, comparer)
+	subtyping_comparers[ka] = subtyping_comparers[ka] or {}
+	subtyping_comparers[ka][kb] = comparer
 end
 
 local fitsinto_fail_mt = {
@@ -386,12 +386,14 @@ for _, prim_type in ipairs({
 	value.prim_bool_type,
 	value.prim_user_defined_type({ name = "" }, value_array()),
 }) do
-	add_comparer(prim_type.kind, prim_type.kind, always_fits_comparer)
+	add_subtyping_comparer(prim_type.kind, prim_type.kind, always_fits_comparer)
 end
 
 -- types of types
-add_comparer(value.prim_type_type.kind, value.prim_type_type.kind, always_fits_comparer)
+add_subtyping_comparer(value.prim_type_type.kind, value.prim_type_type.kind, always_fits_comparer)
 local function tuple_compare(a, b)
+	-- We don't remember what this fixme was supposed to be for so we hope this isn't a problem
+	-- it looks fine
 	-- fixme lol
 	local placeholder = value.neutral(neutral_value.free(free.unique({})))
 	local tuple_types_a, na = infer_tuple_type_unwrapped(a, placeholder)
@@ -419,9 +421,9 @@ local function tuple_compare(a, b)
 	end
 	return true
 end
-add_comparer("value.tuple_type", "value.tuple_type", tuple_compare)
-add_comparer("value.prim_tuple_type", "value.prim_tuple_type", tuple_compare)
-add_comparer("value.pi", "value.pi", function(a, b)
+add_subtyping_comparer("value.tuple_type", "value.tuple_type", tuple_compare)
+add_subtyping_comparer("value.prim_tuple_type", "value.prim_tuple_type", tuple_compare)
+add_subtyping_comparer("value.pi", "value.pi", function(a, b)
 	if a == b then
 		return true
 	end
@@ -455,37 +457,42 @@ end)
 for _, type_of_type in ipairs({
 	value.prim_type_type,
 }) do
-	add_comparer(type_of_type.kind, value.star(0).kind, always_fits_comparer)
+	add_subtyping_comparer(type_of_type.kind, value.star(0).kind, always_fits_comparer)
 end
 
-add_comparer(value.star(0).kind, value.star(0).kind, function(a, b)
+add_subtyping_comparer(value.star(0).kind, value.star(0).kind, function(a, b)
 	if a.level > b.level then
 		return false, "a.level > b.level"
 	end
 	return true
 end)
 
-add_comparer("value.prim_wrapped_type", "value.prim_wrapped_type", function(a, b)
-	local ok, err = fitsinto_qless(a:unwrap_prim_wrapped_type(), b:unwrap_prim_wrapped_type())
+add_subtyping_comparer("value.prim_wrapped_type", "value.prim_wrapped_type", function(a, b)
+	local ok, err = issubtype(a:unwrap_prim_wrapped_type(), b:unwrap_prim_wrapped_type())
 	return ok, err
 end)
 
-local function quantities_fitsinto(qa, qb)
+local function issubcoeffect(qa, qb)
 	if qa == qb or qa == terms.quantity.unrestricted or qb == terms.quantity.erased then
 		return true
 	end
 	return false, qa.kind .. " doesn't fit into " .. qb.kind
 end
-function fitsinto_qless(tya, tyb)
-	if not fitsinto_comparers[tya.kind] then
-		error("fitsinto given value a which isn't a type or NYI " .. tya.kind)
-	elseif not fitsinto_comparers[tyb.kind] then
-		error("fitsinto given value b which isn't a type or NYI " .. tyb.kind)
+
+function issubtype(tya, tyb)
+	if tya:is_qtype() or tyb:is_qtype() then
+		error "issubtype shouldn't be called with a qtype (use fitsinto)"
 	end
 
-	local comparer = (fitsinto_comparers[tya.kind] or {})[tyb.kind]
+	if not subtyping_comparers[tya.kind] then
+		error("issubtype given value a which isn't a type or NYI " .. tya.kind)
+	elseif not subtyping_comparers[tyb.kind] then
+		error("issubtype given value b which isn't a type or NYI " .. tyb.kind)
+	end
+
+	local comparer = (subtyping_comparers[tya.kind] or {})[tyb.kind]
 	if not comparer then
-		return false, "no comparer for " .. tya.kind .. " with " .. tyb.kind
+		return false, "no subtype comparer for " .. tya.kind .. " with " .. tyb.kind
 	end
 
 	ok, err = comparer(tya, tyb)
@@ -494,17 +501,24 @@ function fitsinto_qless(tya, tyb)
 	end
 	return true
 end
+
+-- enforces subtyping and subcoeffect (currently linearity)
 function fitsinto(a, b)
+	-- FIXME:
+	-- structural equality is insufficient
+	-- neutral case needs to do recursive descent to handle metavariables
 	if a:is_neutral() and b:is_neutral() then
 		if a == b then
 			return true
 		end
 		return false, "both values are neutral, but they aren't equal: " .. tostring(a) .. " ~= " .. tostring(b)
 	end
+
 	if not a:is_qtype() then
 		print(a)
 		error("fitsinto given value a which isn't a qtype " .. a.kind)
 	end
+
 	if not b:is_qtype() then
 		print(b)
 		error("fitsinto given value b which isn't a qtype " .. b.kind)
@@ -513,18 +527,18 @@ function fitsinto(a, b)
 	local qa, tya = a:unwrap_qtype()
 	local qb, tyb = b:unwrap_qtype()
 
-	if not fitsinto_comparers[tya.kind] then
+	if not subtyping_comparers[tya.kind] then
 		error("fitsinto given value a which isn't a type or NYI " .. tya.kind)
-	elseif not fitsinto_comparers[tyb.kind] then
+	elseif not subtyping_comparers[tyb.kind] then
 		error("fitsinto given value b which isn't a type or NYI " .. tyb.kind)
 	end
 
-	local ok, err = quantities_fitsinto(qa.quantity, qb.quantity)
+	local ok, err = issubcoeffect(qa.quantity, qb.quantity)
 	if not ok then
 		return false, ".quantity " .. err
 	end
 
-	local comparer = (fitsinto_comparers[tya.kind] or {})[tyb.kind]
+	local comparer = (subtyping_comparers[tya.kind] or {})[tyb.kind]
 	if not comparer then
 		return false, "no comparer for " .. tya.kind .. " with " .. tyb.kind
 	end
@@ -1080,7 +1094,7 @@ function infer(
 		-- FIXME: remove the .type bodges once qtype issues are fixed
 		local sort = value.star(
 			math.max(
-				nearest_star_level(param_type_type.type.type),
+				nearest_star_level(param_type_type.type),
 				nearest_star_level(result_type_result_type_result.type),
 				0
 			)
@@ -1945,6 +1959,7 @@ end
 
 local evaluator = {
 	fitsinto = fitsinto,
+	issubtype = issubtype,
 	extract_tuple_elem_type_closures = extract_tuple_elem_type_closures,
 	const_combinator = const_combinator,
 	check = check,
