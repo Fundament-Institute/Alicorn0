@@ -585,7 +585,7 @@ local function forall_type_impl(syntax, env)
 	--local ok,
 end
 
----Constrains a type by using a checked expression target and producing an annotated inferrable term
+---Constrains a type by using a checked expression goal and producing an annotated inferrable term
 ---(the prim-number 5) -> produces inferrable_term.annotated(lit(5), lit(prim-number))
 ---@param syntax any
 ---@param env Environment
@@ -616,7 +616,7 @@ local function the_operative_impl(syntax, env)
 		exprs.expression(
 			metalang.accept_handler,
 			-- FIXME: do we infer here if evaled_type is stuck / a placeholder?
-			exprs.ExpressionArgs.new(terms.expression_target.check(evaled_type), env)
+			exprs.ExpressionArgs.new(terms.expression_goal.check(evaled_type), env)
 		),
 	}, metalang.failure_handler, nil)
 	if not ok then
@@ -693,7 +693,7 @@ local function lambda_impl(syntax, env)
 	local _, arg = inner_env:get("#arg")
 	inner_env = inner_env:bind_local(terms.binding.tuple_elim(params_group.names, arg))
 	local ok, expr, env = tail:match(
-		{ exprs.block(metalang.accept_handler, exprs.ExpressionArgs.new(terms.expression_target.infer, inner_env)) },
+		{ exprs.block(metalang.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env)) },
 		metalang.failure_handler,
 		nil
 	)

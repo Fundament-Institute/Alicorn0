@@ -13,6 +13,8 @@ local value = terms.value
 local neutral_value = terms.neutral_value
 local prim_syntax_type = terms.prim_syntax_type
 local prim_environment_type = terms.prim_environment_type
+local prim_typed_term_type = terms.prim_typed_term_type
+local prim_goal_type = terms.prim_goal_type
 local prim_inferrable_term_type = terms.prim_inferrable_term_type
 
 local gen = require "./terms-generators"
@@ -655,8 +657,8 @@ value:derive(derivers.eq)
 local function check(
 	checkable_term, -- constructed from checkable_term
 	typechecking_context, -- todo
-	target_type
-) -- must be unify with target type (there is some way we can assign metavariables to make them equal)
+	goal_type
+) -- must be unify with goal type (there is some way we can assign metavariables to make them equal)
 	-- -> usage counts, a typed term
 	if terms.checkable_term.value_check(checkable_term) ~= true then
 		error("check, checkable_term: expected a checkable term")
@@ -664,13 +666,13 @@ local function check(
 	if terms.typechecking_context_type.value_check(typechecking_context) ~= true then
 		error("check, typechecking_context: expected a typechecking context")
 	end
-	if terms.value.value_check(target_type) ~= true then
-		print("target_type", target_type)
-		error("check, target_type: expected a target type (as an alicorn value)")
+	if terms.value.value_check(goal_type) ~= true then
+		print("goal_type", goal_type)
+		error("check, goal_type: expected a goal type (as an alicorn value)")
 	end
-	if not target_type:is_qtype() and not target_type:is_neutral() then
-		print("target_type", target_type)
-		error("check, target_type: expected target type to be a qtype")
+	if not goal_type:is_qtype() and not goal_type:is_neutral() then
+		print("goal_type", goal_type)
+		error("check, goal_type: expected goal type to be a qtype")
 	end
 
 	if checkable_term:is_inferrable() then
@@ -682,23 +684,23 @@ local function check(
 			error("check: infer didn't return a qtype for " .. inferrable_term.kind)
 		end
 		-- TODO: unify!!!!
-		if inferred_type ~= target_type then
+		if inferred_type ~= goal_type then
 			local ok, err
 			if inferred_type:is_neutral() then
 				ok, err = false, "inferred type is a neutral value"
 				-- TODO: add debugging dump to typechecking context that looks for placeholders inside inferred_type
 				-- then shows matching types and values in env if relevant?
 			else
-				ok, err = fitsinto(inferred_type, target_type)
+				ok, err = fitsinto(inferred_type, goal_type)
 			end
 			if not ok then
 				print "attempting to check if terms fit for checkable_term.inferrable"
 				print("checkable_term", checkable_term)
 				print("inferred_type", inferred_type)
-				print("target_type", target_type)
+				print("goal_type", goal_type)
 				print("typechecking_context", typechecking_context:format_names())
 				error(
-					"check: mismatch in inferred and target type for "
+					"check: mismatch in inferred and goal type for "
 						.. inferrable_term.kind
 						.. " due to "
 						.. tostring(err)
@@ -709,12 +711,12 @@ local function check(
 	elseif checkable_term:is_tuple_cons() then
 		local elements = checkable_term:unwrap_tuple_cons()
 
-		local target_tuple_type_elements = target_type.type:unwrap_tuple_type()
-		local elem_type_closures = extract_tuple_elem_type_closures(target_tuple_type_elements, value_array())
+		local goal_tuple_type_elements = goal_type.type:unwrap_tuple_type()
+		local elem_type_closures = extract_tuple_elem_type_closures(goal_tuple_type_elements, value_array())
 		if #elem_type_closures ~= #elements then
-			print("target_type", target_type)
+			print("goal_type", goal_type)
 			print("elements", elements)
-			error("check: mismatch in checkable_term.tuple_cons target type element count and elements in tuple cons")
+			error("check: mismatch in checkable_term.tuple_cons goal type element count and elements in tuple cons")
 		end
 
 		local usages = usage_array()
@@ -736,13 +738,13 @@ local function check(
 	elseif checkable_term:is_prim_tuple_cons() then
 		local elements = checkable_term:unwrap_prim_tuple_cons()
 
-		local target_tuple_type_elements = target_type.type:unwrap_prim_tuple_type()
-		local elem_type_closures = extract_tuple_elem_type_closures(target_tuple_type_elements, value_array())
+		local goal_tuple_type_elements = goal_type.type:unwrap_prim_tuple_type()
+		local elem_type_closures = extract_tuple_elem_type_closures(goal_tuple_type_elements, value_array())
 		if #elem_type_closures ~= #elements then
-			print("target_type", target_type)
+			print("goal_type", goal_type)
 			print("elements", elements)
 			error(
-				"check: mismatch in checkable_term.prim_tuple_cons target type element count and elements in tuple cons"
+				"check: mismatch in checkable_term.prim_tuple_cons goal type element count and elements in tuple cons"
 			)
 		end
 
@@ -763,7 +765,7 @@ local function check(
 		return usages, typed_term.prim_tuple_cons(new_elements)
 	elseif checkable_term:is_lambda() then
 		local param_name, body = checkable_term:unwrap_lambda()
-		-- assert that target_type is a pi type
+		-- assert that goal_type is a pi type
 		-- TODO open says work on other things first they will be easier
 		error("nyi")
 	else
@@ -990,10 +992,10 @@ function infer(
 		local bound = typed_term.bound_variable(index)
 		return typeof_bound, usage_counts, bound
 	elseif inferrable_term:is_annotated() then
-		local checkable_term, inferrable_target_type = inferrable_term:unwrap_annotated()
-		local type_of_type, usages, target_typed_term = infer(inferrable_target_type, typechecking_context)
-		local target_type = evaluate(target_typed_term, typechecking_context.runtime_context)
-		return target_type, check(checkable_term, typechecking_context, target_type)
+		local checkable_term, inferrable_goal_type = inferrable_term:unwrap_annotated()
+		local type_of_type, usages, goal_typed_term = infer(inferrable_goal_type, typechecking_context)
+		local goal_type = evaluate(goal_typed_term, typechecking_context.runtime_context)
+		return goal_type, check(checkable_term, typechecking_context, goal_type)
 	elseif inferrable_term:is_typed() then
 		return inferrable_term:unwrap_typed()
 	elseif inferrable_term:is_annotated_lambda() then
@@ -1384,8 +1386,14 @@ function infer(
 			unrestricted(
 				value.tuple_type(
 					cons(
-						cons(empty, const_combinator(unrestricted(prim_syntax_type))),
-						const_combinator(unrestricted(prim_environment_type))
+						cons(
+							cons(
+								cons(empty, const_combinator(unrestricted(prim_syntax_type))),
+								const_combinator(unrestricted(prim_environment_type))
+							),
+							const_combinator(unrestricted(prim_typed_term_type))
+						),
+						const_combinator(unrestricted(prim_goal_type))
 					)
 				)
 			),
