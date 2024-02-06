@@ -544,6 +544,10 @@ typed_term:define_enum("typed", {
 		"type",
 		typed_term,
 	} },
+	{ "qtype_type", {
+		"universe",
+		typed_term,
+	} },
 	{
 		"pi",
 		{
