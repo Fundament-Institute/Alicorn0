@@ -105,22 +105,35 @@ local is = {
 local function record_prettyprintable_trait(info)
 	local kind = info.kind
 	local params = info.params
+	local pretty = info.pretty
 
-	local all_fields = {}
-	for _, param in ipairs(params) do
-		all_fields[#all_fields + 1] = string.format("{ %q, self[%q] },", param, param)
-	end
-	local chunk = string.format(
-		[[
+	local chunk
+	if pretty then
+		chunk = string.format(
+			[[
+return function(self, pp)
+%s
+end
+]],
+			pretty
+		)
+	else
+		local all_fields = {}
+		for _, param in ipairs(params) do
+			all_fields[#all_fields + 1] = string.format("{ %q, self[%q] },", param, param)
+		end
+		chunk = string.format(
+			[[
 return function(self, pp)
 	pp:record(%q, {
 		%s
 	})
 end
 ]],
-		info.kind,
-		table.concat(all_fields, "\n\t\t")
-	)
+			info.kind,
+			table.concat(all_fields, "\n\t\t")
+		)
+	end
 
 	local compiled, message = load(chunk, "derive-prettyprintable_trait", "t")
 	if not compiled then

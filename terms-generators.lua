@@ -96,7 +96,7 @@ end
 ---@param params_with_types ParamsWithTypes
 ---@return table cons
 ---@return RecordDeriveInfo derive_info
-local function gen_record(self, cons, kind, params_with_types)
+local function gen_record(self, cons, kind, params_with_types, pretty)
 	local params, params_types = parse_params_with_types(params_with_types)
 	validate_params_types(kind, params, params_types)
 	setmetatable(cons, {
@@ -123,6 +123,7 @@ local function gen_record(self, cons, kind, params_with_types)
 		kind = kind,
 		params = params,
 		params_types = params_types,
+		pretty = pretty,
 	}
 	return cons, derive_info
 end
@@ -134,8 +135,8 @@ end
 ---@param kind string
 ---@param params_with_types ParamsWithTypes
 ---@return Record self
-local function define_record(self, kind, params_with_types)
-	local self, derive_info = gen_record(self, self, kind, params_with_types)
+local function define_record(self, kind, params_with_types, pretty)
+	local self, derive_info = gen_record(self, self, kind, params_with_types, pretty)
 	function self:derive(deriver)
 		return deriver.record(self, derive_info)
 	end
@@ -174,16 +175,18 @@ local function define_enum(self, name, variants)
 	for i, v in ipairs(variants) do
 		local vname = v[1]
 		local vparams_with_types = v[2]
+		local vpretty = v.pretty
 		local kind = name .. "." .. vname
 		derive_variants[i] = vname
 		if vparams_with_types then
-			local record_cons, record_info = gen_record(self, {}, kind, vparams_with_types)
+			local record_cons, record_info = gen_record(self, {}, kind, vparams_with_types, vpretty)
 			self[vname] = record_cons
 			derive_variants[vname] = {
 				type = "record",
 				info = record_info,
 			}
 		else
+			-- TODO: custom pretty for unit?
 			local unit_val, unit_info = gen_unit(self, kind)
 			self[vname] = unit_val
 			derive_variants[vname] = {
