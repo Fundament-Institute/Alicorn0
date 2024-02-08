@@ -13,7 +13,7 @@ blarg:define_enum("blarg", {
 	{ "mult", { "left", blarg, "right", blarg } },
 })
 
-blarg:derive(derivers.unwrap)
+blarg:derive(derivers.as)
 
 blarg.override_pretty = {
 	bar = function(self, pp)
@@ -30,6 +30,29 @@ blarg.override_pretty = {
 		pp:any(bingle)
 		pp:unit("\n")
 		pp:_dedent()
+
+		local function unwrap_if_quux(q)
+			local ok, ziggle = q:as_quux()
+			if ok then
+				return ziggle
+			else
+				return q
+			end
+		end
+
+		binky = unwrap_if_quux(binky)
+
+		while binky:is_bar() do
+			bingle, binky = binky:unwrap_bar()
+
+			pp:_indent()
+			pp:_prefix()
+			pp:any(bingle)
+			pp:unit("\n")
+			pp:_dedent()
+
+			binky = unwrap_if_quux(binky)
+		end
 
 		pp:_prefix()
 		pp:unit(pp:_color())
@@ -109,7 +132,7 @@ print(blarg.foo)
 
 local b = blarg.baz(420, "blazeit")
 for i = 1, 5 do
-	b = blarg.bar(b, blarg.foo)
+	b = blarg.bar(blarg.foo, b)
 	b = blarg.quux(b)
 	print(b)
 end
