@@ -9,6 +9,8 @@ blarg:define_enum("blarg", {
 	{ "baz", { "num", gen.builtin_number, "str", gen.builtin_string } },
 	{ "quux", { "ziggle", blarg } },
 	{ "flux", { "pb", blarg, "em", blarg } },
+	{ "add", { "left", blarg, "right", blarg } },
+	{ "mult", { "left", blarg, "right", blarg } },
 })
 
 blarg:derive(derivers.unwrap)
@@ -54,6 +56,48 @@ blarg.override_pretty = {
 		pp:any(self.str)
 		pp:unit("}")
 	end,
+	add = function(self, pp)
+		local left, right = self:unwrap_add()
+
+		if left:is_add() or left:is_mult() then
+			pp:any(left)
+		else
+			pp:unit("(")
+			pp:any(left)
+			pp:unit(")")
+		end
+
+		pp:unit("+")
+
+		if right:is_add() or right:is_mult() then
+			pp:any(right)
+		else
+			pp:unit("(")
+			pp:any(right)
+			pp:unit(")")
+		end
+	end,
+	mult = function(self, pp)
+		local left, right = self:unwrap_mult()
+
+		if left:is_mult() then
+			pp:any(left)
+		else
+			pp:unit("(")
+			pp:any(left)
+			pp:unit(")")
+		end
+
+		pp:unit("*")
+
+		if right:is_mult() then
+			pp:any(right)
+		else
+			pp:unit("(")
+			pp:any(right)
+			pp:unit(")")
+		end
+	end,
 }
 
 blarg:derive(derivers.pretty_print)
@@ -67,3 +111,10 @@ for i = 1, 5 do
 	print(b)
 end
 print(blarg.flux(blarg.foo, b))
+
+local c = blarg.add(blarg.foo, blarg.foo)
+for i = 1, 5 do
+	c = blarg.add(c, blarg.foo)
+end
+c = blarg.mult(blarg.foo, c)
+print(c)
