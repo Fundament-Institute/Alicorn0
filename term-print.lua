@@ -39,13 +39,13 @@ blarg.override_pretty = {
 		pp:_indent()
 		pp:_prefix()
 		pp:any(binky)
-		pp:unit("\n")
+		--pp:unit("\n")
 		pp:_dedent()
 
-		pp:_prefix()
-		pp:unit(pp:_color())
-		pp:unit(";")
-		pp:unit(pp:_resetcolor())
+		--pp:_prefix()
+		--pp:unit(pp:_color())
+		--pp:unit(";")
+		--pp:unit(pp:_resetcolor())
 
 		pp:_exit()
 	end,
@@ -55,6 +55,9 @@ blarg.override_pretty = {
 		pp:unit(",s:")
 		pp:any(self.str)
 		pp:unit("}")
+	end,
+	quux = function(self, pp)
+		pp:any(self.ziggle)
 	end,
 	add = function(self, pp)
 		local left, right = self:unwrap_add()
