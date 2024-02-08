@@ -736,7 +736,7 @@ local function startype_impl(syntax, env)
 	local term = terms.inferrable_term.typed(
 		unrestricted(value.star(level_val.val + 1)),
 		usage_array(),
-		unrestricted_typed(terms.typed_term.star(level_val.val))
+		terms.typed_term.star(level_val.val)
 	)
 
 	return true, term, env
@@ -749,6 +749,41 @@ local function val_desc_elem(x)
 	return value.enum_value("cons", x)
 end
 local val_desc_empty = value.enum_value("empty", val_tup_cons())
+
+-- tuple decl with args elements, each elem of args should be the closure body (typed term)
+-- prev elems in tuple are available as bound variables starting at idx 2 (1 is the entire tuple)
+local function value_tuple_decl(...)
+	local current = val_desc_empty
+	for i, arg in ipairs({ ... }) do
+		if i > 1 then
+			arg = terms.typed_term.tuple_elim(terms.typed_term.bound_variable(1), i, arg)
+		end
+		current = val_desc_elem(val_tup_cons(current, value.closure(arg, terms.runtime_context())))
+	end
+	return current
+end
+
+local qtype_val = lit_term(
+	value.closure(
+		typed.tuple_elim(typed.bound_variable(1), 3, typed.qtype(typed.bound_variable(3), typed.bound_variable(4))),
+		terms.runtime_context()
+	),
+	unrestricted(
+		value.pi(
+			value.tuple_type(value_tuple_decl(
+				typed.literal(value.star(100)), --TODO, make this omega
+				typed.literal(value.quantity_type),
+				typed.bound_variable(2)
+			)),
+			value.param_info(value.visibility(terms.visibility.explicit)),
+			value.closure(
+				typed.tuple_elim(typed.bound_variable(1), 3, typed.qtype_type(typed.bound_variable(2))),
+				terms.runtime_context()
+			),
+			value.result_info(terms.result_info(terms.purity.pure))
+		)
+	)
+)
 
 -- eg typed.prim_wrap, typed.prim_wrapped_type
 local function build_wrap(body_fn, type_fn)
@@ -963,6 +998,10 @@ local core_operations = {
 	["unstrict-wrapped"] = build_wrapped(typed.prim_unstrict_wrapped_type),
 	unwrap = build_unwrap(typed.prim_unwrap, typed.prim_wrapped_type),
 	["unstrict-unwrap"] = build_unwrap(typed.prim_unstrict_unwrap, typed.prim_unstrict_wrapped_type),
+	unrestricted = lit_term(value.quantity(terms.quantity.unrestricted), unrestricted(value.quantity_type)),
+	linear = lit_term(value.quantity(terms.quantity.linear), unrestricted(value.quantity_type)),
+	erased = lit_term(value.quantity(terms.quantity.erased), unrestricted(value.quantity_type)),
+	qtype = qtype_val,
 	--["dump-env"] = evaluator.primitive_operative(function(syntax, env) print(environment.dump_env(env)); return true, types.unit_val, env end),
 	--["basic-fn"] = evaluator.primitive_operative(basic_fn),
 	--tuple = evaluator.primitive_operative(tuple_type_impl),

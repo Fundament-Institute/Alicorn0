@@ -1,4 +1,12 @@
-let prim-arith-binop = (prim-func-type (a : prim-number) (b : prim-number) -> (c : prim-number))
+let unr0 =
+	lambda ((basetype : qtype(type_(0), unrestricted)))
+		qtype(type_(0), unrestricted, basetype)
+
+let unrp =
+	lambda ((basetype : qtype(prim-type, unrestricted)))
+		qtype(prim-type, unrestricted, basetype)
+
+let prim-arith-binop = (prim-func-type (a : unrp(prim-number)) (b : unrp(prim-number)) -> (c : unrp(prim-number)))
 let prim-sub = (intrinsic "return function(a, b) return a - b end" : prim-arith-binop)
 
 #let prim-sub = (intrinsic "return function(a, b) return a - b end" : (prim-func-type (a : prim-number) (b : prim-number) -> (c : prim-number)))
