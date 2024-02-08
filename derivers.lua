@@ -136,8 +136,13 @@ local pretty_print = {
 		local idx = t.__index or {}
 		t.__index = idx
 		local prettyprintable = require("./pretty-printer").prettyprintable
-		local prettyprintable_print = record_prettyprintable_trait(info)
-		prettyprintable:implement_on(t, { print = prettyprintable_print })
+		local override_pretty = t.override_pretty
+		if override_pretty then
+			prettyprintable:implement_on(t, { print = override_pretty })
+		else
+			local prettyprintable_print = record_prettyprintable_trait(info)
+			prettyprintable:implement_on(t, { print = prettyprintable_print })
+		end
 		idx["pretty_print"] = function(self)
 			local pp = require("./pretty-printer").PrettyPrint.new()
 			prettyprintable_print(self, pp)
@@ -163,7 +168,10 @@ local pretty_print = {
 			local vdata = variants[vname]
 			local vtype = vdata.type
 			local vinfo = vdata.info
-			if vtype == "record" then
+			local override_pretty = t.override_pretty[vname]
+			if override_pretty then
+				variant_printers[vkind] = override_pretty
+			elseif vtype == "record" then
 				variant_printers[vkind] = record_prettyprintable_trait(vinfo)
 			elseif vtype == "unit" then
 				variant_printers[vkind] = function(self, printer)

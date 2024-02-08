@@ -11,8 +11,12 @@ blarg:define_enum("blarg", {
 	{ "flux", { "pb", blarg, "em", blarg } },
 })
 
-blarg:override_pretty({
+blarg:derive(derivers.unwrap)
+
+blarg.override_pretty = {
 	bar = function(self, pp)
+		local bingle, binky = self:unwrap_bar()
+
 		pp:_enter()
 
 		pp:unit(pp:_color())
@@ -21,7 +25,7 @@ blarg:override_pretty({
 
 		pp:_indent()
 		pp:_prefix()
-		pp:any(self.bingle)
+		pp:any(bingle)
 		pp:unit("\n")
 		pp:_dedent()
 
@@ -32,7 +36,7 @@ blarg:override_pretty({
 
 		pp:_indent()
 		pp:_prefix()
-		pp:any(self.binky)
+		pp:any(binky)
 		pp:unit("\n")
 		pp:_dedent()
 
@@ -50,7 +54,7 @@ blarg:override_pretty({
 		pp:any(self.str)
 		pp:unit("}")
 	end,
-})
+}
 
 blarg:derive(derivers.pretty_print)
 
