@@ -168,7 +168,7 @@ local pretty_print = {
 			local vdata = variants[vname]
 			local vtype = vdata.type
 			local vinfo = vdata.info
-			local override_pretty = t.override_pretty[vname]
+			local override_pretty = t.override_pretty and t.override_pretty[vname]
 			if override_pretty then
 				variant_printers[vkind] = override_pretty
 			elseif vtype == "record" then
