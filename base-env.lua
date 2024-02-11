@@ -294,10 +294,10 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	)
 
 	local function build_type_term(args)
-		return terms.inferrable_term.qtype(unrestricted_term, terms.inferrable_term.tuple_type(args))
+		return terms.inferrable_term.tuple_type(args)
 	end
 	local function build_prim_type_term(args)
-		return terms.inferrable_term.qtype(unrestricted_term, terms.inferrable_term.prim_tuple_type(args))
+		return terms.inferrable_term.prim_tuple_type(args)
 	end
 
 	local names = gen.declare_array(gen.builtin_string)()
@@ -384,10 +384,7 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	end
 
 	local env, fn_res_term = env:exit_block(build_prim_type_term(results), shadowed)
-	local fn_type_term = terms.inferrable_term.qtype(
-		unrestricted_term,
-		terms.inferrable_term.prim_function_type(build_prim_type_term(args), fn_res_term)
-	)
+	local fn_type_term = terms.inferrable_term.prim_function_type(build_prim_type_term(args), fn_res_term)
 	print("reached end of function type construction")
 	if not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl_reducer"
@@ -435,7 +432,7 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 	)
 
 	local function build_type_term(args)
-		return terms.inferrable_term.qtype(unrestricted_term, terms.inferrable_term.tuple_type(args))
+		return terms.inferrable_term.tuple_type(args)
 	end
 
 	local names = gen.declare_array(gen.builtin_string)()
@@ -523,32 +520,21 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 	end
 
 	local env, fn_res_term = env:exit_block(build_type_term(results), shadowed)
-	local fn_type_term = terms.inferrable_term.qtype(
-		unrestricted_term,
-		terms.inferrable_term.pi(
-			build_type_term(args),
-			terms.checkable_term.inferrable(
-				terms.inferrable_term.qtype(
-					unrestricted_term,
-					terms.inferrable_term.typed(
-						terms.value.param_info_type,
-						usage_array(),
-						terms.typed_term.literal(
-							terms.value.param_info(terms.value.visibility(terms.visibility.explicit))
-						)
-					)
-				)
-			),
-			fn_res_term,
-			terms.checkable_term.inferrable(
-				terms.inferrable_term.qtype(
-					unrestricted_term,
-					terms.inferrable_term.typed(
-						terms.value.result_info_type,
-						usage_array(),
-						terms.typed_term.literal(terms.value.result_info(terms.result_info(terms.purity.pure)))
-					)
-				)
+	local fn_type_term = terms.inferrable_term.pi(
+		build_type_term(args),
+		terms.checkable_term.inferrable(
+			terms.inferrable_term.typed(
+				terms.value.param_info_type,
+				usage_array(),
+				terms.typed_term.literal(terms.value.param_info(terms.value.visibility(terms.visibility.explicit)))
+			)
+		),
+		fn_res_term,
+		terms.checkable_term.inferrable(
+			terms.inferrable_term.typed(
+				terms.value.result_info_type,
+				usage_array(),
+				terms.typed_term.literal(terms.value.result_info(terms.result_info(terms.purity.pure)))
 			)
 		)
 	)
@@ -655,7 +641,7 @@ local function lambda_impl(syntax, env)
 	)
 
 	local function build_type_term(args)
-		return terms.inferrable_term.qtype(unrestricted_term, terms.inferrable_term.tuple_type(args))
+		return terms.inferrable_term.tuple_type(args)
 	end
 
 	local ok, params_group, tail = syntax:match({
@@ -713,12 +699,12 @@ local val_array = gen.declare_array(value)
 local function lit_term(val, typ)
 	return terms.inferrable_term.typed(typ, usage_array(), terms.typed_term.literal(val))
 end
-local function unrestricted(x)
-	return value.qtype(value.quantity(terms.quantity.unrestricted), x)
-end
-local function unrestricted_typed(term)
-	return typed.qtype(typed.literal(value.quantity(terms.quantity.unrestricted)), term)
-end
+--local function unrestricted(x)
+--	return value.qtype(value.quantity(terms.quantity.unrestricted), x)
+--end
+--local function unrestricted_typed(term)
+--	return typed.qtype(typed.literal(value.quantity(terms.quantity.unrestricted)), term)
+--end
 
 local function startype_impl(syntax, env)
 	local ok, level_val = syntax:match({
@@ -757,54 +743,32 @@ local function build_wrap(body_fn, type_fn)
 			typed.tuple_elim(typed.bound_variable(1), 2, body_fn(typed.bound_variable(3))),
 			terms.runtime_context()
 		),
-		unrestricted(
-			value.pi(
-				unrestricted(
-					value.tuple_type(
+		value.pi(
+			value.tuple_type(
+				val_desc_elem(
+					val_tup_cons(
 						val_desc_elem(
 							val_tup_cons(
-								val_desc_elem(
-									val_tup_cons(
-										val_desc_empty,
-										value.closure(
-											typed.tuple_elim(
-												typed.bound_variable(1),
-												0,
-												typed.qtype(
-													typed.literal(value.quantity(terms.quantity.erased)),
-													typed.star(1)
-												)
-											),
-											terms.runtime_context()
-										)
-									)
-								),
+								val_desc_empty,
 								value.closure(
-									terms.typed_term.tuple_elim(
-										terms.typed_term.bound_variable(1),
-										1,
-										typed.bound_variable(2)
-									),
+									typed.tuple_elim(typed.bound_variable(1), 0, typed.star(1)),
 									terms.runtime_context()
 								)
 							)
+						),
+						value.closure(
+							terms.typed_term.tuple_elim(terms.typed_term.bound_variable(1), 1, typed.bound_variable(2)),
+							terms.runtime_context()
 						)
 					)
-				),
-				value.param_info(value.visibility(terms.visibility.explicit)),
-				value.closure(
-					typed.tuple_elim(
-						typed.bound_variable(1),
-						2,
-						typed.qtype(
-							typed.literal(value.quantity(terms.quantity.unrestricted)),
-							type_fn(typed.bound_variable(2))
-						)
-					),
-					terms.runtime_context()
-				),
-				value.result_info(terms.result_info(terms.purity.pure))
-			)
+				)
+			),
+			value.param_info(value.visibility(terms.visibility.explicit)),
+			value.closure(
+				typed.tuple_elim(typed.bound_variable(1), 2, type_fn(typed.bound_variable(2))),
+				terms.runtime_context()
+			),
+			value.result_info(terms.result_info(terms.purity.pure))
 		)
 	)
 end
@@ -816,50 +780,36 @@ local function build_unwrap(body_fn, type_fn)
 			typed.tuple_elim(typed.bound_variable(1), 2, body_fn(typed.bound_variable(3))),
 			terms.runtime_context()
 		),
-		unrestricted(
-			value.pi(
-				unrestricted(
-					value.tuple_type(
+		value.pi(
+			value.tuple_type(
+				val_desc_elem(
+					val_tup_cons(
 						val_desc_elem(
 							val_tup_cons(
-								val_desc_elem(
-									val_tup_cons(
-										val_desc_empty,
-										value.closure(
-											typed.tuple_elim(
-												typed.bound_variable(1),
-												0,
-												typed.qtype(
-													typed.literal(value.quantity(terms.quantity.erased)),
-													typed.star(1)
-												)
-											),
-											terms.runtime_context()
-										)
-									)
-								),
+								val_desc_empty,
 								value.closure(
-									terms.typed_term.tuple_elim(
-										terms.typed_term.bound_variable(1),
-										1,
-										typed.qtype(
-											typed.literal(value.quantity(terms.quantity.unrestricted)),
-											type_fn(typed.bound_variable(2))
-										)
-									),
+									typed.tuple_elim(typed.bound_variable(1), 0, typed.star(1)),
 									terms.runtime_context()
 								)
 							)
+						),
+						value.closure(
+							terms.typed_term.tuple_elim(
+								terms.typed_term.bound_variable(1),
+								1,
+								type_fn(typed.bound_variable(2))
+							),
+							terms.runtime_context()
 						)
 					)
-				),
-				value.param_info(value.visibility(terms.visibility.explicit)),
-				value.closure(
-					typed.tuple_elim(typed.bound_variable(1), 2, typed.bound_variable(2)),
-					terms.runtime_context()
-				),
-				value.result_info(terms.result_info(terms.purity.pure))
-			)
+				)
+			),
+			value.param_info(value.visibility(terms.visibility.explicit)),
+			value.closure(
+				typed.tuple_elim(typed.bound_variable(1), 2, typed.bound_variable(2)),
+				terms.runtime_context()
+			),
+			value.result_info(terms.result_info(terms.purity.pure))
 		)
 	)
 end
@@ -868,52 +818,27 @@ end
 local function build_wrapped(body_fn)
 	return lit_term(
 		value.closure(
-			typed.tuple_elim(
-				typed.bound_variable(1),
-				1,
-				typed.qtype(
-					typed.literal(value.quantity(terms.quantity.unrestricted)),
-					body_fn(typed.bound_variable(2))
-				)
-			),
+			typed.tuple_elim(typed.bound_variable(1), 1, body_fn(typed.bound_variable(2))),
 			terms.runtime_context()
 		),
-		unrestricted(
-			value.pi(
-				unrestricted(
-					value.tuple_type(
-						val_desc_elem(
-							val_tup_cons(
-								val_desc_empty,
-								value.closure(
-									typed.tuple_elim(
-										typed.bound_variable(1),
-										0,
-										typed.qtype(
-											typed.literal(value.quantity(terms.quantity.unrestricted)),
-											typed.star(1)
-										)
-									),
-									terms.runtime_context()
-								)
-							)
+		value.pi(
+			value.tuple_type(
+				val_desc_elem(
+					val_tup_cons(
+						val_desc_empty,
+						value.closure(
+							typed.tuple_elim(typed.bound_variable(1), 0, typed.star(1)),
+							terms.runtime_context()
 						)
 					)
-				),
-				value.param_info(value.visibility(terms.visibility.explicit)),
-				value.closure(
-					typed.tuple_elim(
-						typed.bound_variable(1),
-						1,
-						typed.qtype(
-							typed.literal(value.quantity(terms.quantity.unrestricted)),
-							typed.literal(value.prim_type_type)
-						)
-					),
-					terms.runtime_context()
-				),
-				value.result_info(terms.result_info(terms.purity.pure))
-			)
+				)
+			),
+			value.param_info(value.visibility(terms.visibility.explicit)),
+			value.closure(
+				typed.tuple_elim(typed.bound_variable(1), 1, typed.literal(value.prim_type_type)),
+				terms.runtime_context()
+			),
+			value.result_info(terms.result_info(terms.purity.pure))
 		)
 	)
 end
@@ -949,10 +874,10 @@ local core_operations = {
 	let = exprs.primitive_operative(let_bind, "let_bind"),
 	record = exprs.primitive_operative(record_build, "record_build"),
 	intrinsic = exprs.primitive_operative(intrinsic, "intrinsic"),
-	["prim-number"] = lit_term(unrestricted(value.prim_number_type), unrestricted(value.prim_type_type)),
-	["prim-type"] = lit_term(unrestricted(value.prim_type_type), unrestricted(value.star(1))),
+	["prim-number"] = lit_term(value.prim_number_type, value.prim_type_type),
+	["prim-type"] = lit_term(value.prim_type_type, value.star(1)),
 	["prim-func-type"] = exprs.primitive_operative(prim_func_type_impl, "prim_func_type_impl"),
-	type = lit_term(unrestricted(value.star(0)), unrestricted(value.star(1))),
+	type = lit_term(value.star(0), value.star(1)),
 	type_ = exprs.primitive_operative(startype_impl, "startype_impl"),
 	["forall"] = exprs.primitive_operative(forall_type_impl, "forall_type_impl"),
 	lambda = exprs.primitive_operative(lambda_impl, "lambda_impl"),

@@ -377,12 +377,12 @@ inferrable_term:define_enum("inferrable", {
 			gen.anchor_type,
 		},
 	},
-	{ "qtype", {
-		"quantity",
-		inferrable_term,
-		"type",
-		inferrable_term,
-	} },
+	--{ "qtype", {
+	--	"quantity",
+	--	inferrable_term,
+	--	"type",
+	--	inferrable_term,
+	--} },
 	{
 		"pi",
 		{
@@ -538,12 +538,12 @@ typed_term:define_enum("typed", {
 	{ "bound_variable", { "index", gen.builtin_number } },
 	{ "literal", { "literal_value", value } },
 	{ "lambda", { "body", typed_term } },
-	{ "qtype", {
-		"quantity",
-		typed_term,
-		"type",
-		typed_term,
-	} },
+	--{ "qtype", {
+	--	"quantity",
+	--	typed_term,
+	--	"type",
+	--	typed_term,
+	--} },
 	{
 		"pi",
 		{
@@ -757,13 +757,13 @@ value:define_enum("value", {
 	{ "visibility_type" },
 	{ "visibility", { "visibility", visibility } },
 	-- a type with a quantity
-	{ "qtype_type", { "level", gen.builtin_number } },
-	{ "qtype", {
-		"quantity",
-		value,
-		"type",
-		value,
-	} },
+	--{ "qtype_type", { "level", gen.builtin_number } },
+	--{ "qtype", {
+	--	"quantity",
+	--	value,
+	--	"type",
+	--	value,
+	--} },
 	-- info about the parameter (is it implicit / what are the usage restrictions?)
 	-- quantity/visibility should be restricted to free or (quantity/visibility) rather than any value
 	{ "param_info_type" },
@@ -776,11 +776,11 @@ value:define_enum("value", {
 		"pi",
 		{
 			"param_type",
-			value, -- qtype
+			value,
 			"param_info",
 			value, -- param_info
 			"result_type",
-			value, -- closure from input -> qtype of result
+			value, -- closure from input -> result
 			"result_info",
 			value, -- result_info
 		},
