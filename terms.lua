@@ -340,6 +340,81 @@ binding:define_enum("binding", {
 		},
 	},
 })
+
+binding.override_pretty = {
+	let = function(self, pp)
+		local name, expr = self:unwrap_let()
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("let ")
+		pp:unit(pp:_resetcolor())
+
+		pp:unit(name)
+
+		pp:unit(pp:_color())
+		pp:unit(" = ")
+		pp:unit(pp:_resetcolor())
+
+		pp:any(expr)
+
+		pp:unit(pp:_color())
+		pp:unit("; <binding>")
+		pp:unit(pp:_resetcolor())
+
+		pp:_exit()
+	end,
+	tuple_elim = function(self, pp)
+		local names, subject = self:unwrap_tuple_elim()
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("let (")
+		pp:unit(pp:_resetcolor())
+
+		for _, name in names:ipairs() do
+			pp:unit(name)
+		end
+
+		pp:unit(pp:_color())
+		pp:unit(") = ")
+		pp:unit(pp:_resetcolor())
+
+		pp:any(subject)
+
+		pp:unit(pp:_color())
+		pp:unit("; <binding>")
+		pp:unit(pp:_resetcolor())
+
+		pp:_exit()
+	end,
+	annotated_lambda = function(self, pp)
+		local param_name, param_annotation, anchor = self:unwrap_annotated_lambda()
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("lam ")
+		pp:unit(pp:_resetcolor())
+
+		pp:unit(param_name)
+
+		pp:unit(pp:_color())
+		pp:unit(" : ")
+		pp:unit(pp:_resetcolor())
+
+		pp:any(param_annotation)
+
+		pp:unit(pp:_color())
+		pp:unit(" = <binding>")
+		pp:unit(pp:_resetcolor())
+
+		pp:_exit()
+	end,
+}
+
 -- checkable terms need a goal type to typecheck against
 checkable_term:define_enum("checkable", {
 	{ "inferrable", { "inferrable_term", inferrable_term } },
@@ -533,6 +608,14 @@ inferrable_term:define_enum("inferrable", {
 		},
 	},
 })
+
+inferrable_term.override_pretty = {
+	qtype = function(self, pp)
+		local quantity, type = self:unwrap_qtype()
+		pp:any(type)
+	end,
+}
+
 -- typed terms have been typechecked but do not store their type internally
 typed_term:define_enum("typed", {
 	{ "bound_variable", { "index", gen.builtin_number } },
@@ -690,6 +773,13 @@ typed_term:define_enum("typed", {
 		gen.anchor_type,
 	} },
 })
+
+typed_term.override_pretty = {
+	qtype = function(self, pp)
+		local quantity, type = self:unwrap_qtype()
+		pp:any(type)
+	end,
+}
 
 local unique_id = gen.declare_foreign(function(val)
 	return type(val) == "table"
@@ -887,6 +977,32 @@ value:define_enum("value", {
 	-- type of key and value of key -> type of the value
 	-- {"prim_table_type"},
 })
+
+value.override_pretty = {
+	qtype = function(self, pp)
+		local quantity, type = self:unwrap_qtype()
+		pp:any(type)
+	end,
+	pi = function(self, pp)
+		local param_type, param_info, result_type, result_info = self:unwrap_pi()
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("PI ")
+		pp:unit(pp:_resetcolor())
+
+		pp:any(param_type)
+
+		pp:unit(pp:_color())
+		pp:unit(" -> ")
+		pp:unit(pp:_resetcolor())
+
+		pp:any(result_type)
+
+		pp:_exit()
+	end,
+}
 
 neutral_value:define_enum("neutral_value", {
 	-- fn(free_value) and table of functions eg free.metavariable(metavariable)
