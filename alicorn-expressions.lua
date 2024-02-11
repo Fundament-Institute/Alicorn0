@@ -295,7 +295,8 @@ local function expression_pairhandler(args, a, b)
 	end
 
 	if type_of_term:is_qtype() and type_of_term.type:as_prim_function_type() then
-		print("checking prim_function_type call args with goal ", type_of_term.type.param_type)
+		print("checking prim_function_type call args with goal: (value term follows)")
+		print(type_of_term.type.param_type)
 		-- multiple quantity of usages in tuple with usage in function arguments
 		local ok, tuple, env = args:match({
 			collect_prim_tuple(
@@ -609,8 +610,10 @@ collect_tuple = metalanguage.reducer(function(syntax, args)
 				}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
 				if ok and continue then
 					collected_terms:append(next_term)
-					print("goal type for next element in tuple", next_elem_type)
-					print("term we are checking", next_term)
+					print("goal type for next element in tuple: (value term follows)")
+					print(next_elem_type)
+					print("term we are checking: (checkable term follows)")
+					print(next_term)
 					local usages, typed_elem_term = evaluator.check(next_term, env.typechecking_context, next_elem_type)
 					local elem_value = evaluator.evaluate(typed_elem_term, env.typechecking_context.runtime_context)
 					tuple_symbolic_elems:append(elem_value)
@@ -683,7 +686,8 @@ collect_prim_tuple = metalanguage.reducer(function(syntax, args)
 				}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
 				if ok and continue then
 					collected_terms:append(next_term)
-					print("trying to check tuple element as ", next_elem_type)
+					print("trying to check tuple element as: (value term follows)")
+					print(next_elem_type)
 					local usages, typed_elem_term = evaluator.check(next_term, env.typechecking_context, next_elem_type)
 					local elem_value = evaluator.evaluate(typed_elem_term, env.typechecking_context.runtime_context)
 					tuple_symbolic_elems:append(elem_value)

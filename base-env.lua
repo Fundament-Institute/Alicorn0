@@ -408,7 +408,10 @@ local function prim_func_type_impl(syntax, env)
 	if not ok then
 		return ok, fn_type_term
 	end
-	print("finished matching prim_func_type_impl and got (ok, fn_type_term)", ok, fn_type_term)
+	print("finished matching prim_func_type_impl and got:")
+	print("ok:", ok)
+	print("fn_type_term: (inferrable term follows)")
+	print(fn_type_term)
 	if not env or not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl"
 	end
@@ -603,8 +606,10 @@ local function the_operative_impl(syntax, env)
 	local type_of_typed_term, usages, type_typed_term = evaluator.infer(type_inferrable_term, env.typechecking_context)
 	local evaled_type = evaluator.evaluate(type_typed_term, env.typechecking_context.runtime_context)
 
-	print("type_inferrable_term", type_inferrable_term)
-	print("evaled_type", evaled_type)
+	print("type_inferrable_term: (inferrable term follows)")
+	print(type_inferrable_term)
+	print("evaled_type: (value term follows)")
+	print(evaled_type)
 	print("tail", tail)
 	local ok, val, tail = tail:match({
 		metalang.ispair(metalang.accept_handler),

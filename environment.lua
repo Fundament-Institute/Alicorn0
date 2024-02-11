@@ -63,14 +63,20 @@ function environment:get(name)
 end
 
 local function log_binding(name, type, value)
-	print("New let binding", name, "with type", type, "value", value)
+	print("New let binding")
+	print("name:", name)
+	print("type: (value term follows)")
+	print(type)
+	print("value: (value term follows)")
+	print(value)
 	if not type:is_neutral() and not type:is_qtype() then
 		error("Invalid binding type for " .. name .. ", not a neutral or qtype")
 	end
 end
 
 function environment:bind_local(binding)
-	p(binding)
+	print("bind_local: (binding term follows)")
+	print(binding)
 	if binding:is_let() then
 		local name, expr = binding:unwrap_let()
 		local expr_type, expr_usages, expr_term = infer(expr, self.typechecking_context)
@@ -152,8 +158,8 @@ function environment:bind_local(binding)
 			error "missing anchor for annotated lambda binding"
 		end
 		local annotation_type, annotation_usages, annotation_term = infer(param_annotation, self.typechecking_context)
-		print("binding lambda annotation")
-		print(annotation_term:pretty_print())
+		print("binding lambda annotation: (typed term follows)")
+		print(annotation_term)
 		local evaled = eval.evaluate(annotation_term, self.typechecking_context.runtime_context)
 		local bindings = self.bindings:append(binding)
 		local locals = self.locals:put(param_name, inferrable_term.bound_variable(#self.typechecking_context + 1))
