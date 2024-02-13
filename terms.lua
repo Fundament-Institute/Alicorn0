@@ -341,7 +341,7 @@ binding:define_enum("binding", {
 	},
 })
 
-binding.override_pretty = {
+local binding_override_pretty = {
 	let = function(self, pp)
 		local name, expr = self:unwrap_let()
 
@@ -370,7 +370,10 @@ binding.override_pretty = {
 		pp:unit("binding.let (")
 		pp:unit(pp:_resetcolor())
 
-		for _, name in names:ipairs() do
+		for i, name in names:ipairs() do
+			if i > 1 then
+				pp:unit(", ")
+			end
 			pp:unit(name)
 		end
 
@@ -388,7 +391,7 @@ binding.override_pretty = {
 		pp:_enter()
 
 		pp:unit(pp:_color())
-		pp:unit("binding.lam ")
+		pp:unit("binding.\u{03BB} ")
 		pp:unit(pp:_resetcolor())
 
 		pp:unit(param_name)
@@ -603,23 +606,29 @@ inferrable_term:define_enum("inferrable", {
 })
 
 -- the only difference compared to typed_tuple_type_inner is enum_type
-local function inferrable_tuple_type_inner(definition, pp)
+local function inferrable_tuple_type_inner(definition, pp, depth)
 	local enum_type, constructor, arg = definition:unwrap_enum_cons()
 	if constructor == "empty" then
-		return ""
+		if depth <= 1 then
+			return depth, ""
+		else
+			pp:_indent()
+			return depth, "\n" .. pp.prefix
+		end
 	elseif constructor == "cons" then
 		local elements = arg:unwrap_tuple_cons()
 		local definition = elements[1]
 		local f = elements[2]
-		local comma = inferrable_tuple_type_inner(definition, pp)
+		local maxdepth, comma = inferrable_tuple_type_inner(definition, pp, depth + 1)
 		pp:unit(comma)
 		pp:any(f)
-		return ", "
+		local p = pp.prefix or ""
+		return maxdepth, ",\n" .. p
 	else
 		error("override_pretty: inferrable.tuple_type: unknown tuple type data constructor")
 	end
 end
-inferrable_term.override_pretty = {
+local inferrable_term_override_pretty = {
 	typed = function(self, pp)
 		local type, usage_counts, typed_term = self:unwrap_typed()
 
@@ -649,7 +658,7 @@ inferrable_term.override_pretty = {
 		pp:_enter()
 
 		pp:unit(pp:_color())
-		pp:unit("inferrable.lam ")
+		pp:unit("inferrable.\u{03BB} ")
 		pp:unit(pp:_resetcolor())
 
 		pp:unit(param_name)
@@ -685,7 +694,10 @@ inferrable_term.override_pretty = {
 		pp:unit("inferrable.let (")
 		pp:unit(pp:_resetcolor())
 
-		for _, name in names:ipairs() do
+		for i, name in names:ipairs() do
+			if i > 1 then
+				pp:unit(", ")
+			end
 			pp:unit(name)
 		end
 
@@ -717,10 +729,16 @@ inferrable_term.override_pretty = {
 		pp:unit(pp:_resetcolor())
 
 		local enum_type, constructor, arg = definition:unwrap_enum_cons()
+		local maxdepth = 0
 		if enum_type == value.tuple_defn_type then
-			inferrable_tuple_type_inner(definition, pp)
+			maxdepth = inferrable_tuple_type_inner(definition, pp, 0)
 		else
 			pp:any(definition)
+		end
+
+		if maxdepth > 1 then
+			pp:_dedent()
+			pp:unit("\n")
 		end
 
 		pp:unit(pp:_color())
@@ -764,7 +782,12 @@ inferrable_term.override_pretty = {
 typed_term:define_enum("typed", {
 	{ "bound_variable", { "index", gen.builtin_number } },
 	{ "literal", { "literal_value", value } },
-	{ "lambda", { "body", typed_term } },
+	{ "lambda", {
+		"param_name",
+		gen.builtin_string,
+		"body",
+		typed_term,
+	} },
 	{ "qtype", {
 		"quantity",
 		typed_term,
@@ -791,6 +814,8 @@ typed_term:define_enum("typed", {
 		typed_term,
 	} },
 	{ "let", {
+		"name",
+		gen.builtin_string,
 		"expr",
 		typed_term,
 		"body",
@@ -809,14 +834,19 @@ typed_term:define_enum("typed", {
 	{ "prop", { "level", gen.builtin_number } },
 	{ "tuple_cons", { "elements", array(typed_term) } },
 	--{"tuple_extend", {"base", typed_term, "fields", array(typed_term)}}, -- maybe?
-	{ "tuple_elim", {
-		"subject",
-		typed_term,
-		"length",
-		gen.builtin_number,
-		"body",
-		typed_term,
-	} },
+	{
+		"tuple_elim",
+		{
+			"names",
+			array(gen.builtin_string),
+			"subject",
+			typed_term,
+			"length",
+			gen.builtin_number,
+			"body",
+			typed_term,
+		},
+	},
 	{ "tuple_element_access", {
 		"subject",
 		typed_term,
@@ -919,30 +949,55 @@ typed_term:define_enum("typed", {
 })
 
 -- the only difference compared to inferrable_tuple_type_inner is lack of enum_type
-local function typed_tuple_type_inner(definition, pp)
+local function typed_tuple_type_inner(definition, pp, depth)
 	local constructor, arg = definition:unwrap_enum_cons()
 	if constructor == "empty" then
-		return ""
+		if depth <= 1 then
+			return depth, ""
+		else
+			pp:_indent()
+			return depth, "\n" .. pp.prefix
+		end
 	elseif constructor == "cons" then
 		local elements = arg:unwrap_tuple_cons()
 		local definition = elements[1]
 		local f = elements[2]
-		local comma = typed_tuple_type_inner(definition, pp)
+		local maxdepth, comma = typed_tuple_type_inner(definition, pp, depth + 1)
 		pp:unit(comma)
 		pp:any(f)
-		return ", "
+		local p = pp.prefix or ""
+		return maxdepth, ",\n" .. p
 	else
 		error("override_pretty: typed.tuple_type: unknown tuple type data constructor")
 	end
 end
-typed_term.override_pretty = {
+local typed_term_override_pretty = {
 	literal = function(self, pp)
 		local literal_value = self:unwrap_literal()
 		pp:any(literal_value)
 	end,
 	lambda = function(self, pp)
-		local body = self:unwrap_lambda()
+		local param_name, body = self:unwrap_lambda()
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("typed.\u{03BB} ")
+		pp:unit(pp:_resetcolor())
+
+		pp:unit(param_name)
+
+		pp:unit(pp:_color())
+		pp:unit(" =")
+		pp:unit(pp:_resetcolor())
+		pp:unit("\n")
+
+		pp:_indent()
+		pp:_prefix()
 		pp:any(body)
+		pp:_dedent()
+
+		pp:_exit()
 	end,
 	qtype = function(self, pp)
 		local quantity, type = self:unwrap_qtype()
@@ -963,7 +1018,75 @@ typed_term.override_pretty = {
 		pp:unit(" -> ")
 		pp:unit(pp:_resetcolor())
 
-		pp:any(result_type)
+		if result_type:is_lambda() then
+			local param_name, body = result_type:unwrap_lambda()
+			pp:any(body)
+		else
+			pp:any(result_type)
+		end
+
+		pp:_exit()
+	end,
+	let = function(self, pp)
+		local name, expr, body = self:unwrap_let()
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("typed.let ")
+		pp:unit(pp:_resetcolor())
+
+		pp:unit(name)
+
+		pp:unit(pp:_color())
+		pp:unit(" = ")
+		pp:unit(pp:_resetcolor())
+
+		pp:any(expr)
+
+		pp:unit(pp:_color())
+		pp:unit(" in")
+		pp:unit(pp:_resetcolor())
+		pp:unit("\n")
+
+		pp:_indent()
+		pp:_prefix()
+		pp:any(body)
+		pp:_dedent()
+
+		pp:_exit()
+	end,
+	tuple_elim = function(self, pp)
+		local names, subject, length, body = self:unwrap_tuple_elim()
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("typed.let (")
+		pp:unit(pp:_resetcolor())
+
+		for i, name in names:ipairs() do
+			if i > 1 then
+				pp:unit(", ")
+			end
+			pp:unit(name)
+		end
+
+		pp:unit(pp:_color())
+		pp:unit(") = ")
+		pp:unit(pp:_resetcolor())
+
+		pp:any(subject)
+
+		pp:unit(pp:_color())
+		pp:unit(" in")
+		pp:unit(pp:_resetcolor())
+		pp:unit("\n")
+
+		pp:_indent()
+		pp:_prefix()
+		pp:any(body)
+		pp:_dedent()
 
 		pp:_exit()
 	end,
@@ -976,7 +1099,12 @@ typed_term.override_pretty = {
 		pp:unit("typed.tuple_type[")
 		pp:unit(pp:_resetcolor())
 
-		typed_tuple_type_inner(definition, pp)
+		local maxdepth = typed_tuple_type_inner(definition, pp, 0)
+
+		if maxdepth > 1 then
+			pp:_dedent()
+			pp:unit("\n")
+		end
 
 		pp:unit(pp:_color())
 		pp:unit("]")
@@ -1184,23 +1312,29 @@ value:define_enum("value", {
 })
 
 -- the only difference compared to typed_tuple_type_inner is enum_value / tuple_value (as opposed to *_cons)
-local function value_tuple_type_inner(decls, pp)
+local function value_tuple_type_inner(decls, pp, depth)
 	local constructor, arg = decls:unwrap_enum_value()
 	if constructor == "empty" then
-		return ""
+		if depth <= 1 then
+			return depth, ""
+		else
+			pp:_indent()
+			return depth, "\n" .. pp.prefix
+		end
 	elseif constructor == "cons" then
 		local elements = arg:unwrap_tuple_value()
 		local decls = elements[1]
 		local f = elements[2]
-		local comma = value_tuple_type_inner(decls, pp)
+		local maxdepth, comma = value_tuple_type_inner(decls, pp, depth + 1)
 		pp:unit(comma)
 		pp:any(f)
-		return ", "
+		local p = pp.prefix or ""
+		return maxdepth, ",\n" .. p
 	else
 		error("override_pretty: typed.tuple_type: unknown tuple type data constructor")
 	end
 end
-value.override_pretty = {
+local value_override_pretty = {
 	qtype = function(self, pp)
 		local quantity, type = self:unwrap_qtype()
 		pp:any(type)
@@ -1220,13 +1354,27 @@ value.override_pretty = {
 		pp:unit(" -> ")
 		pp:unit(pp:_resetcolor())
 
-		pp:any(result_type)
+		if result_type:is_closure() then
+			local code, capture = result_type:unwrap_closure()
+			pp:any(code)
+		else
+			pp:any(result_type)
+		end
 
 		pp:_exit()
 	end,
 	closure = function(self, pp)
 		local code, capture = self:unwrap_closure()
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("value.closure ")
+		pp:unit(pp:_resetcolor())
+
 		pp:any(code)
+
+		pp:_exit()
 	end,
 	tuple_type = function(self, pp)
 		local decls = self:unwrap_tuple_type()
@@ -1237,7 +1385,12 @@ value.override_pretty = {
 		pp:unit("value.tuple_type[")
 		pp:unit(pp:_resetcolor())
 
-		value_tuple_type_inner(decls, pp)
+		local maxdepth = value_tuple_type_inner(decls, pp, 0)
+
+		if maxdepth > 1 then
+			pp:_dedent()
+			pp:unit("\n")
+		end
 
 		pp:unit(pp:_color())
 		pp:unit("]")
@@ -1344,7 +1497,7 @@ local empty = value.enum_value("empty", tup_val())
 local unit_type = value.tuple_type(empty)
 local unit_val = tup_val()
 
-for _, deriver in ipairs { derivers.as, derivers.pretty_print, derivers.eq } do
+for _, deriver in ipairs { derivers.as, derivers.eq } do
 	checkable_term:derive(deriver)
 	inferrable_term:derive(deriver)
 	typed_term:derive(deriver)
@@ -1358,6 +1511,19 @@ for _, deriver in ipairs { derivers.as, derivers.pretty_print, derivers.eq } do
 	placeholder_debug:derive(deriver)
 	purity:derive(deriver)
 end
+
+checkable_term:derive(derivers.pretty_print)
+inferrable_term:derive(derivers.pretty_print, inferrable_term_override_pretty)
+typed_term:derive(derivers.pretty_print, typed_term_override_pretty)
+quantity:derive(derivers.pretty_print)
+visibility:derive(derivers.pretty_print)
+free:derive(derivers.pretty_print)
+value:derive(derivers.pretty_print, value_override_pretty)
+neutral_value:derive(derivers.pretty_print)
+binding:derive(derivers.pretty_print, binding_override_pretty)
+expression_goal:derive(derivers.pretty_print)
+placeholder_debug:derive(derivers.pretty_print)
+purity:derive(derivers.pretty_print)
 
 --[[
 local tuple_defn = value.enum_value("variant",

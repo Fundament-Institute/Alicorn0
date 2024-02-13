@@ -22,7 +22,7 @@ blong:define_record("blong", { "str", gen.builtin_string })
 
 blarg:derive(derivers.as)
 
-blarg.override_pretty = {
+local blarg_override_pretty = {
 	bar = function(self, pp)
 		local bingle, binky = self:unwrap_bar()
 
@@ -133,7 +133,7 @@ blarg.override_pretty = {
 	end,
 }
 
-blarg:derive(derivers.pretty_print)
+blarg:derive(derivers.pretty_print, blarg_override_pretty)
 bling:derive(derivers.pretty_print)
 blong:derive(derivers.pretty_print)
 

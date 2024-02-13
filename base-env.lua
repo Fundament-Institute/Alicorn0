@@ -757,9 +757,14 @@ local val_desc_empty = value.enum_value("empty", val_tup_cons())
 
 -- eg typed.prim_wrap, typed.prim_wrapped_type
 local function build_wrap(body_fn, type_fn)
+	local names = gen.declare_array(gen.builtin_string)
+	local names_todo_1 = names("TODO1", "TODO2")
+	local names_todo_2 = names()
+	local names_todo_3 = names("TODO3")
+	local names_todo_4 = names("TODO4", "TODO5")
 	return lit_term(
 		value.closure(
-			typed.tuple_elim(typed.bound_variable(1), 2, body_fn(typed.bound_variable(3))),
+			typed.tuple_elim(names_todo_1, typed.bound_variable(1), 2, body_fn(typed.bound_variable(3))),
 			terms.runtime_context()
 		),
 		unrestricted(
@@ -773,6 +778,7 @@ local function build_wrap(body_fn, type_fn)
 										val_desc_empty,
 										value.closure(
 											typed.tuple_elim(
+												names_todo_2,
 												typed.bound_variable(1),
 												0,
 												typed.qtype(
@@ -786,6 +792,7 @@ local function build_wrap(body_fn, type_fn)
 								),
 								value.closure(
 									terms.typed_term.tuple_elim(
+										names_todo_3,
 										terms.typed_term.bound_variable(1),
 										1,
 										typed.bound_variable(2)
@@ -799,6 +806,7 @@ local function build_wrap(body_fn, type_fn)
 				value.param_info(value.visibility(terms.visibility.explicit)),
 				value.closure(
 					typed.tuple_elim(
+						names_todo_4,
 						typed.bound_variable(1),
 						2,
 						typed.qtype(
@@ -816,9 +824,14 @@ end
 
 -- eg typed.prim_unwrap, typed.prim_wrapped_type
 local function build_unwrap(body_fn, type_fn)
+	local names = gen.declare_array(gen.builtin_string)
+	local names_todo_1 = names("TODO6", "TODO7")
+	local names_todo_2 = names()
+	local names_todo_3 = names("TODO8")
+	local names_todo_4 = names("TODO9", "TOD10")
 	return lit_term(
 		value.closure(
-			typed.tuple_elim(typed.bound_variable(1), 2, body_fn(typed.bound_variable(3))),
+			typed.tuple_elim(names_todo_1, typed.bound_variable(1), 2, body_fn(typed.bound_variable(3))),
 			terms.runtime_context()
 		),
 		unrestricted(
@@ -832,6 +845,7 @@ local function build_unwrap(body_fn, type_fn)
 										val_desc_empty,
 										value.closure(
 											typed.tuple_elim(
+												names_todo_2,
 												typed.bound_variable(1),
 												0,
 												typed.qtype(
@@ -845,6 +859,7 @@ local function build_unwrap(body_fn, type_fn)
 								),
 								value.closure(
 									terms.typed_term.tuple_elim(
+										names_todo_3,
 										terms.typed_term.bound_variable(1),
 										1,
 										typed.qtype(
@@ -860,7 +875,7 @@ local function build_unwrap(body_fn, type_fn)
 				),
 				value.param_info(value.visibility(terms.visibility.explicit)),
 				value.closure(
-					typed.tuple_elim(typed.bound_variable(1), 2, typed.bound_variable(2)),
+					typed.tuple_elim(names_todo_4, typed.bound_variable(1), 2, typed.bound_variable(2)),
 					terms.runtime_context()
 				),
 				value.result_info(terms.result_info(terms.purity.pure))
@@ -871,9 +886,14 @@ end
 
 -- eg typed.prim_wrapped_type,
 local function build_wrapped(body_fn)
+	local names = gen.declare_array(gen.builtin_string)
+	local names_todo_1 = names("TOD11")
+	local names_todo_2 = names()
+	local names_todo_3 = names("TOD12")
 	return lit_term(
 		value.closure(
 			typed.tuple_elim(
+				names_todo_1,
 				typed.bound_variable(1),
 				1,
 				typed.qtype(
@@ -892,6 +912,7 @@ local function build_wrapped(body_fn)
 								val_desc_empty,
 								value.closure(
 									typed.tuple_elim(
+										names_todo_2,
 										typed.bound_variable(1),
 										0,
 										typed.qtype(
@@ -908,6 +929,7 @@ local function build_wrapped(body_fn)
 				value.param_info(value.visibility(terms.visibility.explicit)),
 				value.closure(
 					typed.tuple_elim(
+						names_todo_3,
 						typed.bound_variable(1),
 						1,
 						typed.qtype(

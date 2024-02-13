@@ -136,8 +136,8 @@ end
 ---@return Record self
 local function define_record(self, kind, params_with_types)
 	local self, derive_info = gen_record(self, self, kind, params_with_types)
-	function self:derive(deriver)
-		return deriver.record(self, derive_info)
+	function self:derive(deriver, ...)
+		return deriver.record(self, derive_info, ...)
 	end
 	self.value_check = metatable_equality(self)
 	---@cast self Record
@@ -196,8 +196,8 @@ local function define_enum(self, name, variants)
 		name = name,
 		variants = derive_variants,
 	}
-	function self:derive(deriver)
-		return deriver.enum(self, derive_info)
+	function self:derive(deriver, ...)
+		return deriver.enum(self, derive_info, ...)
 	end
 	self.value_check = metatable_equality(self)
 	---@cast self Enum

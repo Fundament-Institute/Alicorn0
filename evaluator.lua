@@ -148,7 +148,7 @@ local function substitute_inner(val, mappings, context_len)
 		-- FIXME: this results in more captures every time we substitute a closure ->
 		--   can cause non-obvious memory leaks
 		--   since we don't yet remove unused captures from closure value
-		return typed_term.lambda(val)
+		return typed_term.lambda("lam_param", val)
 	elseif val:is_name_type() then
 		return typed_term.literal(val)
 	elseif val:is_name() then
@@ -1034,7 +1034,7 @@ function infer(
 			error("infer: unknown quantity")
 		end
 		local lambda_type = value.pi(param_qtype, param_info_explicit, result_type, result_info_pure)
-		local lambda_term = typed_term.lambda(body_term)
+		local lambda_term = typed_term.lambda(param_name, body_term)
 		-- TODO: handle quantities
 		return unrestricted(lambda_type), lambda_usages, lambda_term
 	elseif inferrable_term:is_qtype() then
@@ -1233,7 +1233,7 @@ function infer(
 		local result_usages = usage_array()
 		add_arrays(result_usages, subject_usages)
 		add_arrays(result_usages, body_usages)
-		return body_type, result_usages, typed_term.tuple_elim(subject_term, n_elements, body_term)
+		return body_type, result_usages, typed_term.tuple_elim(names, subject_term, n_elements, body_term)
 	elseif inferrable_term:is_tuple_type() then
 		local definition = inferrable_term:unwrap_tuple_type()
 		local definition_type, definition_usages, definition_term = infer(definition, typechecking_context)
@@ -1511,7 +1511,7 @@ function infer(
 		-- NYI usages are fucky, should remove ones not used in body
 		add_arrays(result_usages, exprusages)
 		add_arrays(result_usages, bodyusages)
-		return bodytype, result_usages, terms.typed_term.let(exprterm, bodyterm)
+		return bodytype, result_usages, terms.typed_term.let(name, exprterm, bodyterm)
 	elseif inferrable_term:is_prim_intrinsic() then
 		local source, type, anchor = inferrable_term:unwrap_prim_intrinsic()
 		local source_usages, source_term = check(source, typechecking_context, unrestricted(value.prim_string_type))
@@ -1613,7 +1613,8 @@ function evaluate(typed_term, runtime_context)
 	elseif typed_term:is_literal() then
 		return typed_term:unwrap_literal()
 	elseif typed_term:is_lambda() then
-		return value.closure(typed_term:unwrap_lambda(), runtime_context)
+		local param_name, body = typed_term:unwrap_lambda()
+		return value.closure(body, runtime_context)
 	elseif typed_term:is_qtype() then
 		local quantity, type_term = typed_term:unwrap_qtype()
 		local quantity_value = evaluate(quantity, runtime_context)
@@ -1673,7 +1674,7 @@ function evaluate(typed_term, runtime_context)
 			return value.prim_tuple_value(new_elements)
 		end
 	elseif typed_term:is_tuple_elim() then
-		local subject, length, body = typed_term:unwrap_tuple_elim()
+		local names, subject, length, body = typed_term:unwrap_tuple_elim()
 		local subject_value = evaluate(subject, runtime_context)
 		local inner_context = runtime_context
 		if subject_value:is_tuple_value() then
@@ -1865,7 +1866,7 @@ function evaluate(typed_term, runtime_context)
 			error "invalid value in unbox, must be prim or neutral"
 		end
 	elseif typed_term:is_let() then
-		local expr, body = typed_term:unwrap_let()
+		local name, expr, body = typed_term:unwrap_let()
 		local expr_value = evaluate(expr, runtime_context)
 		return evaluate(body, runtime_context:append(expr_value))
 	elseif typed_term:is_prim_intrinsic() then

@@ -504,10 +504,8 @@ local function primitive_operative(fn, name)
 		return res, env
 	end
 	-- what we're going for:
-	-- (s : syntax, e : environment, u : wrapped_typed_term(userdata), g : goal) -> (goal_to_term(g), environment)
+	-- (s : syntax, e : environment, g : goal, u : wrapped_typed_term(userdata)) -> (goal_to_term(g), environment)
 	--   goal one of inferable, mechanism, checkable
-	-- what we have:
-	-- (s : syntax, e : environment) -> (inferrable_term, environment)
 
 	-- 1: wrap fn as a typed prim
 	-- this way it can take a prim tuple and return a prim tuple
@@ -526,9 +524,12 @@ local function primitive_operative(fn, name)
 	end
 	local tuple_conv = typed_term.tuple_cons(tuple_conv_elements)
 	local prim_tuple_conv = typed_term.prim_tuple_cons(prim_tuple_conv_elements)
-	local tuple_to_prim_tuple = typed_term.tuple_elim(typed_term.bound_variable(1), nparams, prim_tuple_conv)
+	local param_names = name_array("syntax", "env", "goal", "userdata")
+	local tuple_to_prim_tuple =
+		typed_term.tuple_elim(param_names, typed_term.bound_variable(1), nparams, prim_tuple_conv)
 	local tuple_to_prim_tuple_fn = typed_term.application(typed_prim_fn, tuple_to_prim_tuple)
-	local tuple_to_tuple_fn = typed_term.tuple_elim(tuple_to_prim_tuple_fn, 2, tuple_conv)
+	local result_names = name_array("term", "env")
+	local tuple_to_tuple_fn = typed_term.tuple_elim(result_names, tuple_to_prim_tuple_fn, 2, tuple_conv)
 	-- 3: wrap it in a closure with an empty capture, not a typed lambda
 	-- this ensures variable 1 is the argument tuple
 	local value_fn = value.closure(tuple_to_tuple_fn, runtime_context())

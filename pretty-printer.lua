@@ -97,18 +97,34 @@ end
 
 function PrettyPrint:array(array)
 	self:_enter()
-	self[#self + 1] = self:_color()
-	self[#self + 1] = "["
-	self[#self + 1] = self:_resetcolor()
-	for i, v in ipairs(array) do
-		if i > 1 then
-			self[#self + 1] = ", "
+	if #array == 0 then
+		self[#self + 1] = self:_color()
+		self[#self + 1] = "[]"
+		self[#self + 1] = self:_resetcolor()
+	elseif #array == 1 then
+		self[#self + 1] = self:_color()
+		self[#self + 1] = "["
+		self[#self + 1] = self:_resetcolor()
+		self:any(array[1])
+		self[#self + 1] = self:_color()
+		self[#self + 1] = "]"
+		self[#self + 1] = self:_resetcolor()
+	else
+		self[#self + 1] = self:_color()
+		self[#self + 1] = "[\n"
+		self[#self + 1] = self:_resetcolor()
+		self:_indent()
+		for i, v in ipairs(array) do
+			self:_prefix()
+			self:any(v)
+			self[#self + 1] = ",\n"
 		end
-		self:any(v)
+		self:_dedent()
+		self:_prefix()
+		self[#self + 1] = self:_color()
+		self[#self + 1] = "]"
+		self[#self + 1] = self:_resetcolor()
 	end
-	self[#self + 1] = self:_color()
-	self[#self + 1] = "]"
-	self[#self + 1] = self:_resetcolor()
 	self:_exit()
 end
 
