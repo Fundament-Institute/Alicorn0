@@ -2,6 +2,8 @@ local gen = require "./terms-generators"
 local derivers = require "./derivers"
 
 local blarg = gen.declare_type()
+local bling = gen.declare_type()
+local blong = gen.declare_type()
 
 blarg:define_enum("blarg", {
 	{ "foo" },
@@ -11,7 +13,12 @@ blarg:define_enum("blarg", {
 	{ "flux", { "pb", blarg, "em", blarg } },
 	{ "add", { "left", blarg, "right", blarg } },
 	{ "mult", { "left", blarg, "right", blarg } },
+	{ "bling", { "bling", bling } },
+	{ "blong", { "blong", blong } },
 })
+
+bling:define_record("bling", { "num", gen.builtin_number, "str", gen.builtin_string })
+blong:define_record("blong", { "str", gen.builtin_string })
 
 blarg:derive(derivers.as)
 
@@ -127,6 +134,8 @@ blarg.override_pretty = {
 }
 
 blarg:derive(derivers.pretty_print)
+bling:derive(derivers.pretty_print)
+blong:derive(derivers.pretty_print)
 
 print(blarg.foo)
 
@@ -144,3 +153,6 @@ for i = 1, 5 do
 end
 c = blarg.mult(blarg.foo, c)
 print(c)
+
+print(blarg.bling(bling(69, "nice")))
+print(blarg.blong(blong("foobar")))

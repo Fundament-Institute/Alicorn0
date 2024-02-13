@@ -1213,7 +1213,7 @@ function infer(
 		-- TODO: handle quantities
 		return unrestricted(value.prim_tuple_type(type_data)), usages, typed_term.prim_tuple_cons(new_elements)
 	elseif inferrable_term:is_tuple_elim() then
-		local subject, body = inferrable_term:unwrap_tuple_elim()
+		local names, subject, body = inferrable_term:unwrap_tuple_elim()
 		local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
 		--local subject_quantity, subject_type = subject_type:unwrap_qtype()
 

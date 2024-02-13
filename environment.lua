@@ -251,7 +251,7 @@ function environment:exit_block(term, shadowed)
 			wrapped = terms.inferrable_term.let(name, expr, wrapped)
 		elseif binding:is_tuple_elim() then
 			local names, subject = binding:unwrap_tuple_elim()
-			wrapped = terms.inferrable_term.tuple_elim(subject, wrapped)
+			wrapped = terms.inferrable_term.tuple_elim(names, subject, wrapped)
 		elseif binding:is_annotated_lambda() then
 			local name, annotation, anchor = binding:unwrap_annotated_lambda()
 			wrapped = terms.inferrable_term.annotated_lambda(name, annotation, wrapped, anchor)

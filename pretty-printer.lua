@@ -139,7 +139,7 @@ function PrettyPrint:table(fields)
 		self[#self + 1] = "{"
 		self[#self + 1] = self:_resetcolor()
 		for k, v in pairs(fields) do
-			if not hidden_fields[k] then
+			if not hidden_fields[k] and k ~= "kind" then
 				self:any(v)
 			end
 		end
@@ -152,7 +152,7 @@ function PrettyPrint:table(fields)
 		self[#self + 1] = self:_resetcolor()
 		self:_indent()
 		for k, v in pairs(fields) do
-			if not hidden_fields[k] then
+			if not hidden_fields[k] and k ~= "kind" then
 				self:_prefix()
 				self[#self + 1] = k
 				self[#self + 1] = " = "
