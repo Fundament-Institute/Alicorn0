@@ -64,9 +64,6 @@ end
 
 local function log_binding(name, type, value)
 	print("New let binding", name, "with type", type, "value", value)
-	if not type:is_neutral() and not type:is_qtype() then
-		error("Invalid binding type for " .. name .. ", not a neutral or qtype")
-	end
 end
 
 function environment:bind_local(binding)

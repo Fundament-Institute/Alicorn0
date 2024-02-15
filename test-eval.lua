@@ -3,7 +3,6 @@ local runtime_context = terms.runtime_context
 local typechecking_context = terms.typechecking_context
 local inferrable_term = terms.inferrable_term
 local typed_term = terms.typed_term
-local quantity = terms.quantity
 local value = terms.value
 
 local gen = require "./terms-generators"
@@ -17,9 +16,6 @@ local value_array = array(value)
 local usage_array = array(gen.builtin_number)
 local string_array = array(gen.builtin_string)
 
-local function unrestricted(t)
-	return value.qtype(value.quantity(quantity.unrestricted), t)
-end
 local function tup_val(...)
 	return value.tuple_value(value_array(...))
 end
@@ -100,10 +96,10 @@ local function infer_and_eval(name, inf)
 end
 
 local function inf_t(t)
-	return inferrable_term.typed(value.star(0), usage_array(), lit(unrestricted(t)))
+	return inferrable_term.typed(value.star(0), usage_array(), lit(t))
 end
 local function inf_typ(t, typ)
-	return inferrable_term.typed(unrestricted(t), usage_array(), typ)
+	return inferrable_term.typed(t, usage_array(), typ)
 end
 local inf_var = inferrable_term.bound_variable
 local function inf_lam(n, t, b)
@@ -211,8 +207,8 @@ eval_test("repacking_tuples", result_3)
 
 print("PART SIX!!!!!!!!!!")
 
-local cupnum = const_combinator(unrestricted(t_prim_num))
-local tuple_decl = unrestricted(value.prim_tuple_type(cons(cons(empty, cupnum), cupnum)))
+local cupnum = const_combinator(t_prim_num)
+local tuple_decl = value.prim_tuple_type(cons(cons(empty, cupnum), cupnum))
 local mogrify = prim_f(function(left, right)
 	return left + right, left - right
 end)

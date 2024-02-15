@@ -7,12 +7,6 @@ local value = terms.value
 local typed = terms.typed_term
 local fitsinto = evaluator.fitsinto
 
-local qty = function(q, ty)
-	return value.qtype(value.quantity(q), ty)
-end
-local unrestrict = function(ty)
-	return qty(terms.quantity.unrestricted, ty)
-end
 local val_array = gen.declare_array(value)
 
 local function val_tup_cons(...)
@@ -46,9 +40,6 @@ local passed, failed, total = (require "tap")(function(test)
 		-- should fail because number isn't a type
 		expect_error(function()
 			fitsinto(value.number(1), value.number(2))
-		end, "isn't a qtype")
-		expect_error(function()
-			fitsinto(unrestrict(value.number(1)), unrestrict(value.number(2)))
 		end, "isn't a type")
 	end)
 	test("should fail for non-type which do match content", function(expect)
@@ -56,65 +47,48 @@ local passed, failed, total = (require "tap")(function(test)
 		-- should fail because number isn't a type
 		expect_error(function()
 			fitsinto(one, one)
-		end, "isn't a qtype")
-		expect_error(function()
-			fitsinto(unrestrict(one), unrestrict(one))
 		end, "isn't a type")
 		-- try again but different instances
 		expect_error(function()
 			fitsinto(value.number(1), value.number(1))
-		end, "isn't a qtype")
-		expect_error(function()
-			fitsinto(unrestrict(value.number(1)), unrestrict(value.number(1)))
 		end, "isn't a type")
 	end)
 	test("should fail for unrelated non-type values", function(expect)
 		expect_error(function()
 			fitsinto(value.number(1), value.operative_value(value.number(1)))
-		end, "isn't a qtype")
-		expect_error(function()
-			fitsinto(unrestrict(value.number(1)), unrestrict(value.operative_value(value.number(1))))
 		end, "isn't a type")
-	end)
-	test("star forgot qtype", function(expect)
-		local initial = value.star(0)
-		local successor = value.star(1)
-		-- should error because forgot qtype
-		expect_error(function()
-			fitsinto(initial, successor)
-		end, "isn't a qtype")
 	end)
 
 	test("prim_number_type into prim_number_type should fitsinto", function(expect)
-		assert(fitsinto(unrestrict(value.prim_number_type), unrestrict(value.prim_number_type)))
+		assert(fitsinto(value.prim_number_type, value.prim_number_type))
 	end)
 
 	test("prim_number_type into prim_string_type should not fitsinto", function(expect)
-		assert(not fitsinto(unrestrict(value.prim_number_type), unrestrict(value.prim_string_type)))
+		assert(not fitsinto(value.prim_number_type, value.prim_string_type))
 	end)
 
 	test("prim_string_type into prim_number_type should not fitsinto", function(expect)
-		assert(not fitsinto(unrestrict(value.prim_string_type), unrestrict(value.prim_number_type)))
+		assert(not fitsinto(value.prim_string_type, value.prim_number_type))
 	end)
 
 	-- test type of type into star(0), should work
 	test("type into star", function(expect)
-		local initial = unrestrict(value.prim_type_type)
-		local successor = unrestrict(value.star(0))
+		local initial = value.prim_type_type
+		local successor = value.star(0)
 		assert(fitsinto(initial, successor))
 	end)
 
 	-- test prim_number_type into star(0), should not work
 	test("type into star", function(expect)
-		local initial = unrestrict(value.prim_number_type)
-		local successor = unrestrict(value.star(0))
+		local initial = value.prim_number_type
+		local successor = value.star(0)
 		assert(not fitsinto(initial, successor))
 	end)
 
 	test("prim_type_type into star(0..5)", function(expect)
 		for i = 0, 5 do
-			local initial = unrestrict(value.prim_type_type)
-			local successor = unrestrict(value.star(i))
+			local initial = value.prim_type_type
+			local successor = value.star(i)
 			assert(fitsinto(initial, successor))
 		end
 	end)
@@ -122,8 +96,8 @@ local passed, failed, total = (require "tap")(function(test)
 	-- test type into star(n) into star(n + 1), should work
 	test("star successors", function(expect)
 		for i = 1, 5 do
-			local initial = unrestrict(value.star(i))
-			local successor = unrestrict(value.star(i + 1))
+			local initial = value.star(i)
+			local successor = value.star(i + 1)
 			assert(fitsinto(initial, successor))
 		end
 	end)
@@ -131,8 +105,8 @@ local passed, failed, total = (require "tap")(function(test)
 	-- test type into star(n) into star(n * 3), should work
 	test("star successors with gap", function(expect)
 		for i = 0, 5 do
-			local initial = unrestrict(value.star(i))
-			local successor = unrestrict(value.star(i * 3))
+			local initial = value.star(i)
+			local successor = value.star(i * 3)
 			assert(fitsinto(initial, successor))
 		end
 	end)
@@ -140,31 +114,10 @@ local passed, failed, total = (require "tap")(function(test)
 	-- test type into star(n + 2) into star(n), should not work
 	test("star prevs", function(expect)
 		for i = 0, 5 do
-			local initial = unrestrict(value.star(i + 2))
-			local successor = unrestrict(value.star(i))
+			local initial = value.star(i + 2)
+			local successor = value.star(i)
 			assert(not fitsinto(initial, successor))
 		end
-	end)
-
-	test("quantity unrestricted into other quantities", function(expect)
-		local q = terms.quantity
-		assert(fitsinto(unrestrict(value.prim_number_type), qty(q.erased, value.prim_number_type)))
-		assert(fitsinto(unrestrict(value.prim_number_type), qty(q.linear, value.prim_number_type)))
-		assert(fitsinto(unrestrict(value.prim_number_type), qty(q.unrestricted, value.prim_number_type)))
-	end)
-
-	test("quantity linear into other quantities", function(expect)
-		local q = terms.quantity
-		assert(fitsinto(qty(q.linear, value.prim_number_type), qty(q.erased, value.prim_number_type)))
-		assert(fitsinto(qty(q.linear, value.prim_number_type), qty(q.linear, value.prim_number_type)))
-		assert(not fitsinto(qty(q.linear, value.prim_number_type), qty(q.unrestricted, value.prim_number_type)))
-	end)
-
-	test("quantity erased into other quantities", function(expect)
-		local q = terms.quantity
-		assert(fitsinto(qty(q.erased, value.prim_number_type), qty(q.erased, value.prim_number_type)))
-		assert(not fitsinto(qty(q.erased, value.prim_number_type), qty(q.linear, value.prim_number_type)))
-		assert(not fitsinto(qty(q.erased, value.prim_number_type), qty(q.unrestricted, value.prim_number_type)))
 	end)
 
 	-- testing two tuple type decls that are the same, should work
@@ -178,11 +131,7 @@ local passed, failed, total = (require "tap")(function(test)
 						val_tup_cons(
 							val_desc_empty,
 							value.closure(
-								typed.tuple_elim(
-									typed.bound_variable(1),
-									0,
-									typed.qtype(typed.literal(value.quantity(terms.quantity.erased)), typed.star(1))
-								),
+								typed.tuple_elim(typed.bound_variable(1), 0, typed.star(1)),
 								terms.runtime_context()
 							)
 						)
@@ -201,11 +150,7 @@ local passed, failed, total = (require "tap")(function(test)
 						val_tup_cons(
 							val_desc_empty,
 							value.closure(
-								typed.tuple_elim(
-									typed.bound_variable(1),
-									0,
-									typed.qtype(typed.literal(value.quantity(terms.quantity.erased)), typed.star(1))
-								),
+								typed.tuple_elim(typed.bound_variable(1), 0, typed.star(1)),
 								terms.runtime_context()
 							)
 						)
@@ -217,6 +162,6 @@ local passed, failed, total = (require "tap")(function(test)
 				)
 			)
 		)
-		assert(fitsinto(unrestrict(decl_a), unrestrict(decl_b)))
+		assert(fitsinto(decl_a, decl_b))
 	end)
 end)
