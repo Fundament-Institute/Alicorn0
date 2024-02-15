@@ -409,14 +409,14 @@ end
 local function list_many_threaded_pair_handler(rule, a, b)
 	local ok, val, thread
 
-	ok = a:match({ rule[1] }, failure_handler, nil)
-	if ok then
-		return ok, false, nil, nil, b
-	end
-
-	ok, val, thread = a:match({ rule[2] }, failure_handler, nil)
+	ok, val, thread = a:match({ rule[1] }, failure_handler, nil)
 	if not ok then
-		return ok, val
+		ok = a:match({ rule[2] }, failure_handler, nil)
+		if ok then
+			return ok, false, nil, nil, b
+		else
+			return ok, val
+		end
 	end
 	return ok, true, val, thread, b
 end
@@ -434,7 +434,7 @@ local list_many_threaded_until = reducer(function(syntax, submatcher_fn, init_th
 		ok, cont, val, nextthread, tail = tail:match({
 			ispair(list_many_threaded_pair_handler),
 			isnil(list_many_nil_handler),
-		}, failure_handler, { termination, submatcher_fn(thread) })
+		}, failure_handler, { submatcher_fn(thread), termination })
 		vals[#vals + 1] = val
 	end
 	if not ok then
@@ -473,6 +473,24 @@ local oneof = reducer(function(syntax, ...)
 	return syntax:match({ ... }, failure_handler, nil)
 end, "oneof")
 
+local list_tail_ends = reducer(function(syntax, rule)
+	local res = { syntax:match({ rule }, failure_handler, nil) }
+	local ok, err, tail = res[1], res[2], res[#res]
+
+	if not ok then
+		return false, err
+	end
+
+	ok, err = tail:match({ isnil(accept_handler) }, failure_handler, nil)
+	if not ok then
+		return false, err, "list tail does not end with nil"
+	end
+
+	res[#res] = nil
+
+	return table.unpack(res)
+end, "list_tail_ends")
+
 local gen = require "./terms-generators"
 local constructed_syntax_type = gen.declare_foreign(gen.metatable_equality(constructed_syntax_mt))
 local reducer_type = gen.declare_foreign(gen.metatable_equality(reducer_mt))
@@ -494,6 +512,7 @@ local metalanguage = {
 	list_many = list_many,
 	list_many_threaded = list_many_threaded,
 	list_many_threaded_until = list_many_threaded_until,
+	list_tail_ends = list_tail_ends,
 	reducer = reducer,
 	isnil = isnil,
 	nilval = nilval,

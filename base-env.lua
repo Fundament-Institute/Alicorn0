@@ -225,13 +225,6 @@ local function tuple_of_impl(syntax, env)
 end
 
 local pure_ascribed_name_with_tail = metalang.reducer(function(syntax, env)
-	-- print("ascribed_name trying")
-	-- p(syntax)
-	-- print(prev:pretty_print())
-	-- print("is env an environment? (start of ascribed name)")
-	-- print(env.get)
-	-- print(env.enter_block)
-	---@cast env Environment
 	local ok, name, type_env, tail = syntax:match({
 		metalang.listtail(
 			metalang.accept_handler,
@@ -261,20 +254,13 @@ local ascribed_name_with_tail = metalang.reducer(function(syntax, env, prev, nam
 		error "#prev should always be bound, was just added"
 	end
 	env = env:bind_local(terms.binding.tuple_elim(names, prev_binding))
-	local ok, name, type_env, tail = syntax:match({
-		metalang.listtail(
-			metalang.accept_handler,
-			metalang.issymbol(metalang.accept_handler),
-			metalang.symbol_exact(metalang.accept_handler, ":"),
-			exprs.inferred_expression(utils.accept_with_env, env)
-		),
-	}, metalang.failure_handler, nil)
+	local ok, name, val, env, tail =
+		syntax:match({ pure_ascribed_name_with_tail(metalang.accept_handler, env) }, metalang.failure_handler, nil)
 	if not ok then
 		return ok, name
 	end
 	---@type Environment
-	env = type_env.env
-	local env, val = env:exit_block(type_env.val, shadowed)
+	local env, val = env:exit_block(val, shadowed)
 	-- print("is env an environment? (end of ascribed name)")
 	-- print(env.get)
 	-- print(env.enter_block)
@@ -282,19 +268,108 @@ local ascribed_name_with_tail = metalang.reducer(function(syntax, env, prev, nam
 end, "ascribed_name_with_tail")
 
 local ascribed_name = metalang.reducer(function(syntax, env, prev, names)
-	local ok, name, val, env, tail = syntax:match({
-		ascribed_name_with_tail(metalang.accept_handler, env, prev, names),
+	local ok, name, val, env = syntax:match({
+		metalang.list_tail_ends(
+			metalang.accept_handler,
+			ascribed_name_with_tail(metalang.accept_handler, env, prev, names)
+		),
 	}, metalang.failure_handler, nil)
 	if not ok then
 		return ok, name
 	end
-
-	ok, err = tail:match({ metalang.isnil(metalang.accept_handler) }, metalang.failure_handler, nil)
-	if not ok then
-		return ok, err, "ascribed name expected end of list"
-	end
 	return true, name, val, env
 end, "ascribed_name")
+
+local tupleof_ascribed_names = metalang.reducer(function(syntax, env, termination)
+	local function build_type_term(args)
+		return terms.inferrable_term.tuple_type(args)
+	end
+
+	local inf_array = gen.declare_array(terms.inferrable_term)
+	local function tup_cons(...)
+		return terms.inferrable_term.tuple_cons(inf_array(...))
+	end
+	local function cons(...)
+		return terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "cons", tup_cons(...))
+	end
+	local empty = terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "empty", tup_cons())
+	local args = empty
+
+	local names = gen.declare_array(gen.builtin_string)()
+
+	local ok = true
+
+	ok, names, args, env, tail = syntax:match({
+		metalang.list_many_threaded_until(function(_, vals, thread, tail)
+			return true, thread.names, build_type_term(thread.args), thread.env, tail
+		end, function(thread)
+			return ascribed_name(function(_, name, type_val, type_env)
+				local names = thread.names:copy()
+				names:append(name)
+				local newthread = {
+					names = names,
+					args = cons(thread.args, type_val),
+					env = type_env,
+				}
+				return true, { name = name, type = type_val }, newthread
+			end, thread.env, build_type_term(thread.args), thread.names)
+		end, {
+			names = names,
+			args = empty,
+			env = env,
+		}, termination),
+	}, metalang.failure_handler, nil)
+
+	if not ok then
+		return ok, names
+	end
+
+	return true, { names = names, args = args, env = env }, tail
+end, "tupleof_ascribed_names")
+
+local ascribed_segment = metalang.reducer(function(syntax, env, termination)
+	local single, tail, name, type_val, type_env
+
+	local ok = true
+
+	single, name, type_val, type_env, tail = syntax:match({
+		pure_ascribed_name_with_tail(metalang.accept_handler, env),
+	}, metalang.failure_handler, nil)
+
+	local names, args
+
+	if single then
+		ok, tail = tail:match({
+			metalang.listtail(metalang.accept_handler, termination),
+			-- if termination is nil listtail will fail to match. so this is redundant and SHOULDN'T activate
+			-- but I don't know how to make it not necessary
+			termination,
+		}, metalang.failure_handler, env)
+
+		if not ok then
+			return false, "only one bare ascribed name permitted"
+		end
+
+		env = type_env
+		args = type_val
+		names = name
+	elseif not single then
+		local thread
+		ok, thread, tail = syntax:match({
+			tupleof_ascribed_names(metalang.accept_handler, env, termination),
+		}, metalang.failure_handler, nil)
+
+		if not ok then
+			return ok, names
+		end
+
+		env = thread.env
+		args = thread.args
+		names = thread.names
+	end
+
+	return true, { single = single, names = names, args = args, env = env }, tail
+end, "ascribed_segment")
 
 local function prim_func_type_pair_handler(env, a, b)
 	local ok, val, env =
