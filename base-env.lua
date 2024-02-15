@@ -71,7 +71,7 @@ local function let_bind(syntax, env)
 
 	return true,
 		terms.inferrable_term.typed(
-			terms.value.quantity(terms.quantity.unrestricted, terms.unit_type),
+			terms.unit_type,
 			gen.declare_array(gen.builtin_number)(),
 			terms.typed_term.literal(terms.unit_val)
 		),
@@ -287,12 +287,6 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	local empty = terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "empty", tup_cons())
 	local args = empty
 
-	local unrestricted_term = terms.inferrable_term.typed(
-		terms.value.quantity_type,
-		usage_array(),
-		terms.typed_term.literal(terms.value.quantity(terms.quantity.unrestricted))
-	)
-
 	local function build_type_term(args)
 		return terms.inferrable_term.tuple_type(args)
 	end
@@ -424,12 +418,6 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 	end
 	local empty = terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "empty", tup_cons())
 	local args = empty
-
-	local unrestricted_term = terms.inferrable_term.typed(
-		terms.value.quantity_type,
-		usage_array(),
-		terms.typed_term.literal(terms.value.quantity(terms.quantity.unrestricted))
-	)
 
 	local function build_type_term(args)
 		return terms.inferrable_term.tuple_type(args)
@@ -634,12 +622,6 @@ local function lambda_impl(syntax, env)
 	local empty = terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "empty", tup_cons())
 	local args = empty
 
-	local unrestricted_term = terms.inferrable_term.typed(
-		terms.value.quantity_type,
-		usage_array(),
-		terms.typed_term.literal(terms.value.quantity(terms.quantity.unrestricted))
-	)
-
 	local function build_type_term(args)
 		return terms.inferrable_term.tuple_type(args)
 	end
@@ -699,12 +681,6 @@ local val_array = gen.declare_array(value)
 local function lit_term(val, typ)
 	return terms.inferrable_term.typed(typ, usage_array(), terms.typed_term.literal(val))
 end
---local function unrestricted(x)
---	return value.qtype(value.quantity(terms.quantity.unrestricted), x)
---end
---local function unrestricted_typed(term)
---	return typed.qtype(typed.literal(value.quantity(terms.quantity.unrestricted)), term)
---end
 
 local function startype_impl(syntax, env)
 	local ok, level_val = syntax:match({

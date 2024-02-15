@@ -11,7 +11,6 @@ local typechecking_context = terms.typechecking_context
 local checkable_term = terms.checkable_term
 local inferrable_term = terms.inferrable_term
 local typed_term = terms.typed_term
-local quantity = terms.quantity
 local visibility = terms.visibility
 local purity = terms.purity
 local result_info = terms.result_info
@@ -29,24 +28,6 @@ local value_array = array(value)
 local usage_array = array(gen.builtin_number)
 local name_array = array(gen.builtin_string)
 
---local function qtype(q, val)
---	return value.qtype(value.quantity(q), val)
---end
---local function unrestricted(val)
---	return qtype(quantity.unrestricted, val)
---end
---local function default_unrestricted(val)
---	if val:is_qtype() then
---		return val
---	end
---	return qtype(quantity.unrestricted, val)
---end
---local function linear(val)
---	return qtype(quantity.linear, val)
---end
---local function erased(val)
---	return qtype(quantity.erased, val)
---end
 local param_info_explicit = value.param_info(value.visibility(visibility.explicit))
 local param_info_implicit = value.param_info(value.visibility(visibility.implicit))
 local result_info_pure = value.result_info(result_info(purity.pure))
@@ -773,10 +754,6 @@ end
 
 local function build_prim_type_tuple(elems)
 	local result = empty
-
-	--if elems.is_qtype and elems:is_qtype() then
-	--	quantity, elems = elems:unwrap_qtype()
-	--end
 
 	for i, v in ipairs(elems) do
 		result = cons(result, const_combinator(v))
