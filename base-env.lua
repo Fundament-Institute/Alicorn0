@@ -519,82 +519,27 @@ local function prim_func_type_impl(syntax, env)
 end
 
 local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
-	local value_array = gen.declare_array(terms.value)
-	local inf_array = gen.declare_array(terms.inferrable_term)
 	local usage_array = gen.declare_array(gen.builtin_number)
-	local function tup_cons(...)
-		return terms.inferrable_term.tuple_cons(inf_array(...))
-	end
-	local function cons(...)
-		return terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "cons", tup_cons(...))
-	end
-	local empty = terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "empty", tup_cons())
-	local args = empty
 
-	local function build_type_term(args)
-		return terms.inferrable_term.tuple_type(args)
-	end
-
-	local names = gen.declare_array(gen.builtin_string)()
 	if not env.enter_block then
 		error "env isn't an environment in prim_func_type_impl_reducer"
 	end
 
-	local single, head, tail, name, type_val, type_env
-	local ok, continue = true, true
+	local single, args, names, thread
+	local ok = true
 
-	single, name, type_val, type_env, tail = syntax:match({
-		pure_ascribed_name_with_tail(metalang.accept_handler, env),
-	}, metalang.failure_handler, nil)
+	ok, thread, syntax = syntax:match(
+		{ ascribed_segment(metalang.accept_handler, env, metalang.symbol_exact(metalang.accept_handler, "->")) },
+		metalang.failure_handler,
+		nil
+	)
 
-	if single then
-		ok, tail = tail:match({
-			metalang.listtail(metalang.accept_handler, metalang.symbol_exact(metalang.accept_handler, "->")),
-		}, metalang.failure_handler, env)
-
-		if not ok then
-			return false, "only one bare ascribed name permitted"
-		end
-
-		env = type_env
-		args = type_val
-		names = name
-
-		syntax = tail
-	elseif not single then
-		ok = true
-
-		local ok, vals, thread, tail = syntax:match({
-			metalang.list_many_threaded_until(metalang.accept_handler, function(thread)
-				return ascribed_name(function(_, name, type_val, type_env)
-					local names = thread.names:copy()
-					names:append(name)
-					local newthread = {
-						names = names,
-						args = cons(thread.args, type_val),
-						env = type_env,
-					}
-					return true, { name = name, type = type_val }, newthread
-				end, thread.env, build_type_term(thread.args), thread.names)
-			end, {
-				names = names,
-				args = empty,
-				env = env,
-			}, metalang.symbol_exact(metalang.accept_handler, "->")),
-		}, metalang.failure_handler, nil)
-
-		if not ok then
-			return ok, vals
-		end
-
-		env = thread.env
-		args = build_type_term(thread.args)
-		names = thread.names
-		syntax = tail
+	if not ok then
+		return false, thread
 	end
+	single, args, names, env = thread.single, thread.args, thread.names, thread.env
 
 	print("moving on to return type")
-	ok, continue = true, true
 
 	local shadowed, env = env:enter_block()
 
@@ -606,55 +551,18 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 		env = env:bind_local(terms.binding.tuple_elim(names, arg))
 	end
 
-	names = gen.declare_array(gen.builtin_string)()
-	local results = empty
+	local results
 
-	single, name, type_val, type_env, tail = syntax:match({
-		pure_ascribed_name_with_tail(metalang.accept_handler, env),
-	}, metalang.failure_handler, nil)
+	ok, thread, syntax = syntax:match(
+		{ ascribed_segment(metalang.accept_handler, env, metalang.isnil(metalang.accept_handler)) },
+		metalang.failure_handler,
+		nil
+	)
 
-	if single then
-		ok = tail:match({
-			metalang.isnil(metalang.accept_handler),
-		}, metalang.failure_handler, env)
-
-		if not ok then
-			return false, "only one bare ascribed name permitted"
-		end
-
-		env = type_env
-		results = type_val
-		names = name
-	elseif not single then
-		ok = true
-
-		local ok, vals, thread, tail = syntax:match({
-			metalang.list_many_threaded_until(metalang.accept_handler, function(thread)
-				return ascribed_name(function(_, name, type_val, type_env)
-					local names = thread.names:copy()
-					names:append(name)
-					local newthread = {
-						names = names,
-						results = cons(thread.results, type_val),
-						env = type_env,
-					}
-					return true, { name = name, type = type_val }, newthread
-				end, thread.env, build_type_term(thread.results), thread.names)
-			end, {
-				names = names,
-				results = empty,
-				env = env,
-			}, metalang.isnil(metalang.accept_handler)),
-		}, metalang.failure_handler, nil)
-
-		if not ok then
-			return ok, vals
-		end
-
-		env = thread.env
-		results = build_type_term(thread.results)
-		names = thread.names
+	if not ok then
+		return false, thread
 	end
+	single, results, names, env = thread.single, thread.args, thread.names, thread.env
 
 	local env, fn_res_term = env:exit_block(results, shadowed)
 	local fn_type_term = terms.inferrable_term.pi(
@@ -759,57 +667,26 @@ end
 ---@return unknown
 ---@return unknown|nil
 local function lambda_impl(syntax, env)
-	local value_array = gen.declare_array(terms.value)
-	local inf_array = gen.declare_array(terms.inferrable_term)
-	local usage_array = gen.declare_array(gen.builtin_number)
-	local string_array = gen.declare_array(gen.builtin_string)
-	local function tup_cons(...)
-		return terms.inferrable_term.tuple_cons(inf_array(...))
-	end
-	local function cons(...)
-		return terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "cons", tup_cons(...))
-	end
-	local empty = terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "empty", tup_cons())
-	local args = empty
-
-	local function build_type_term(args)
-		return terms.inferrable_term.tuple_type(args)
-	end
-
-	local ok, params_group, tail = syntax:match({
+	local ok, thread, tail = syntax:match({
 		metalang.listtail(
-			function(_, thr, tail, ...)
-				return true, { names = thr.names, types = build_type_term(thr.args), env = thr.env }, tail
-			end,
-			metalang.list_many_threaded(function(_, col, thr)
-				return true, thr
-			end, function(thread)
-				return ascribed_name(function(_, name, typ, env)
-					local names = thread.names:copy()
-					names:append(name)
-					return true,
-						{ name = name, type = typ },
-						{
-							names = names,
-							args = cons(thread.args, typ),
-							env = env,
-						}
-				end, thread.env, build_type_term(thread.args), thread.names)
-			end, {
-				names = string_array(),
-				args = empty,
-				env = env,
-			})
+			metalang.accept_handler,
+			ascribed_segment(metalang.accept_handler, env, metalang.isnil(metalang.accept_handler))
 		),
 	}, metalang.failure_handler, nil)
 	if not ok then
-		return ok, params_group
+		return ok, thread
 	end
 
+	local single, args, names, env = thread.single, thread.args, thread.names, thread.env
+
 	local shadow, inner_env = env:enter_block()
-	inner_env = inner_env:bind_local(terms.binding.annotated_lambda("#arg", params_group.types, syntax.anchor))
+	inner_env = inner_env:bind_local(terms.binding.annotated_lambda("#arg", thread.args, syntax.anchor))
 	local _, arg = inner_env:get("#arg")
-	inner_env = inner_env:bind_local(terms.binding.tuple_elim(params_group.names, arg))
+	if single then
+		inner_env = inner_env:bind_local(terms.binding.let(names, arg))
+	else
+		inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
+	end
 	local ok, expr, env = tail:match(
 		{ exprs.block(metalang.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env)) },
 		metalang.failure_handler,
