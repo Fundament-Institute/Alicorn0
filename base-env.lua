@@ -37,21 +37,30 @@ local function do_block(syntax, env)
 end
 
 local function let_bind(syntax, env)
-	local ok, name, bind = syntax:match({
-		metalang.listmatch(
+	local ok, name, tail = syntax:match({
+		metalang.listtail(
 			metalang.accept_handler,
 			metalang.oneof(
 				metalang.accept_handler,
 				metalang.issymbol(metalang.accept_handler),
 				metalang.list_many(metalang.accept_handler, metalang.issymbol(metalang.accept_handler))
 			),
-			metalang.symbol_exact(metalang.accept_handler, "="),
-			exprs.inferred_expression(utils.accept_with_env, env)
+			metalang.symbol_exact(metalang.accept_handler, "=")
 		),
 	}, metalang.failure_handler, nil)
 
 	if not ok then
 		return false, name
+	end
+
+	local bind
+	ok, bind = tail:match({
+		metalang.listmatch(metalang.accept_handler, exprs.inferred_expression(utils.accept_with_env, env)),
+		exprs.inferred_expression(utils.accept_with_env, env),
+	}, metalang.failure_handler, nil)
+
+	if not ok then
+		return false, bind
 	end
 
 	env = bind.env
