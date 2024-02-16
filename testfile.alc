@@ -244,3 +244,20 @@ foo
 let (args valid) = get-prim-func-arg-inner(wrap(type, foo), prim-nil)
 let (newargs) = prim-tuple-type-to-tuple-type-inner(args, valid)
 newargs
+
+let id_type = (forall name : prim-number -> name : prim-number)
+
+let id_num =
+	lambda (T : prim-number)
+		T
+
+(the id_type id_num)
+
+let sub =
+	lambda (x : prim-number, y : prim-number)
+		let (res) = prim-sub(x, y)
+		res
+
+let sub_type = (forall (x : prim-number) (y : prim-number) -> res : prim-number)
+
+(the sub_type sub)
