@@ -317,7 +317,7 @@ local fitsinto_fail_mt = {
 			message = table.concat(message, "")
 		end
 		if self.cause then
-			return message .. "." .. tostring(self.cause)
+			return message .. " because:\n" .. tostring(self.cause)
 		end
 		return message
 	end,
@@ -442,9 +442,10 @@ function fitsinto_qless(tya, tyb)
 		return false, "no comparer for " .. tya.kind .. " with " .. tyb.kind
 	end
 
-	ok, err = comparer(tya, tyb)
+	local ok, err = comparer(tya, tyb)
 	if not ok then
-		return false, ".value" .. err
+		print("comparer failure: " .. tostring(err))
+		return false, err
 	end
 	return true
 end
@@ -469,9 +470,10 @@ function fitsinto(a, b)
 		return false, "no comparer for " .. tya.kind .. " with " .. tyb.kind
 	end
 
-	ok, err = comparer(tya, tyb)
+	local ok, err = comparer(tya, tyb)
 	if not ok then
-		return false, ".value" .. err
+		print("comparer failure: " .. tostring(err))
+		return false, err
 	end
 	return true
 end
