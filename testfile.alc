@@ -258,4 +258,6 @@ let sub =
 		let (res) = prim-sub(x, y)
 		res
 
-sub(69, 42)
+let sub_type = (forall (x : prim-number) (y : prim-number) -> res : prim-number)
+
+(the sub_type sub)
