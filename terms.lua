@@ -787,7 +787,7 @@ value:define_enum("value", {
 	-- ordinary data
 	{ "tuple_value", { "elements", array(value) } },
 	{ "tuple_type", { "decls", value } },
-	{ "tuple_defn_type" },
+	{ "tuple_defn_type", { "universe", value } },
 	{ "enum_value", {
 		"constructor",
 		gen.builtin_string,
@@ -795,8 +795,10 @@ value:define_enum("value", {
 		value,
 	} },
 	{ "enum_type", { "decls", value } },
+	{ "enum_defn_type", { "universe", value } },
 	{ "record_value", { "fields", map(gen.builtin_string, value) } },
 	{ "record_type", { "decls", value } },
+	{ "record_defn_type", { "universe", value } },
 	{ "record_extend_stuck", {
 		"base",
 		neutral_value,

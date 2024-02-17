@@ -135,7 +135,7 @@ let prim-nil =
 		:
 		prim-unit
 
-let only-accept-prim-tuples-inner =
+let only-accept-prim-tuples-inner-prim =
 	intrinsic
 		""""
 			local function check_prim_tuple(subject, consequent, alternate)
@@ -154,14 +154,20 @@ let only-accept-prim-tuples-inner =
 			->
 			result : wrapped(prim-type)
 
-let only-accept-prim-tuples =
+let only-accept-prim-tuples-inner =
 	lambda (subject : wrapped(type), consequent : prim-type, alternate : prim-type)
 		let (res) =
-			only-accept-prim-tuples-inner
+			only-accept-prim-tuples-inner-prim
 				subject
 				wrap prim-type consequent
 				wrap prim-type alternate
 		unwrap prim-type res
+let only-accept-prim-tuples =
+	lambda (subject : wrapped(type))
+		only-accept-prim-tuples-inner
+			subject
+			prim-unit
+			wrapped void
 
 let prim-tuple-type-to-tuple-type-inner =
 	intrinsic
@@ -177,14 +183,11 @@ let prim-tuple-type-to-tuple-type-inner =
 		prim-func-type
 			t : wrapped(type)
 			valid :
-				only-accept-prim-tuples
-					t
-					prim-unit
-					wrapped(void)
+				only-accept-prim-tuples(t)
 			->
 			res : wrapped(type)
 
-let only-accept-prim-funcs-inner =
+let only-accept-prim-funcs-inner-prim =
 	intrinsic
 		""""
 			local function check_prim_func(subject, consequent, alternate)
@@ -203,14 +206,20 @@ let only-accept-prim-funcs-inner =
 			->
 			result : wrapped(prim-type)
 
-let only-accept-prim-funcs =
+let only-accept-prim-funcs-inner =
 	lambda (subject : wrapped(type), consequent : prim-type, alternate : prim-type)
 		let (res) =
-			only-accept-prim-funcs-inner
+			only-accept-prim-funcs-inner-prim
 				subject
 				wrap prim-type consequent
 				wrap prim-type alternate
 		unwrap prim-type res
+let only-accept-prim-tuples =
+	lambda (subject : wrapped(type))
+		only-accept-prim-funcs-inner
+			subject
+			prim-unit
+			wrapped void
 
 let get-prim-func-arg-inner =
 	intrinsic
@@ -226,15 +235,58 @@ let get-prim-func-arg-inner =
 			valid :
 				only-accept-prim-funcs
 					subject
-					prim-unit
-					wrapped void
 			->
 			result : wrapped(type)
 			valid :
 				only-accept-prim-tuples
 					result
-					prim-unit
-					wrapped void
+
+let just-args =
+	lambda (subject : wrapped(type), valid : only-accept-prim-funcs(subject))
+		let (result, valid) = get-prim-func-arg-inner(subject, valid)
+		result
+
+let func-conv-res-type = 
+	lambda ((argtype : wrapped(type)))
+		forall
+			arg : unwrap(type, subject)
+			->
+			res : wrapped(type)
+			valid :
+				only-accept-prim-tuples
+					res
+
+let get-prim-func-res-inner =
+	intrinsic
+		""""
+			local function get_prim_func_res(subject, valid)
+				local param_type, result_type = subject:unwrap_prim_function_type()
+				local typed_array = terms_gen.declare_array(terms.typed)
+				local tuple_build = terms.typed.tuple_cons(
+					typed_array(
+						terms.typed.application(
+							terms.typed.bound_variable(1),
+							terms.typed.bound_variable(2)
+						),
+						terms.typed.literal(terms.value.prim(nil))
+					)
+				)
+				local ctx = terms.runtime_context():append(result_type)
+				return terms.value.closure(tuple_build, ctx)
+			end
+			return get_prim_func_res
+		:
+		prim-func-type
+			subject : wrapped(type)
+			valid :
+				only-accept-prim-funcs
+					subject
+			->
+			results :
+				wrapped
+					func-conv-res-type
+						just-args(subject, valid)
+						
 
 let foo =
 	prim-func-type (x : prim-number) (y : prim-number) -> (res : prim-number)
@@ -261,3 +313,9 @@ let sub =
 let sub_type = (forall (x : prim-number) (y : prim-number) -> res : prim-number)
 
 (the sub_type sub)
+
+let (orig-results) = get-prim-func-res-inner(wrap(type, foo), prim-nil)
+let orig-results = unwrap(func-conv-res-type(args), orig-results))
+let new-results =
+	lambda ((args : newargs))
+		let (newres valid) = orig-results(args)
