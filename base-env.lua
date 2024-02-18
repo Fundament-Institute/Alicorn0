@@ -383,7 +383,7 @@ local ascribed_segment = metalang.reducer(function(syntax, env, termination)
 		}, metalang.failure_handler, nil)
 
 		if not ok then
-			return ok, names
+			return ok, thread
 		end
 
 		env = thread.env
@@ -479,7 +479,7 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 	local usage_array = gen.declare_array(gen.builtin_number)
 
 	if not env.enter_block then
-		error "env isn't an environment in prim_func_type_impl_reducer"
+		error "env isn't an environment in forall_type_impl_reducer"
 	end
 
 	local single, args, names, thread
