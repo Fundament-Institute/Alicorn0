@@ -182,8 +182,7 @@ let prim-tuple-type-to-tuple-type-inner =
 		:
 		prim-func-type
 			t : wrapped(type)
-			valid :
-				only-accept-prim-tuples(t)
+			valid : only-accept-prim-tuples(t)
 			->
 			res : wrapped(type)
 
@@ -315,7 +314,9 @@ let sub_type = (forall (x : prim-number) (y : prim-number) -> res : prim-number)
 (the sub_type sub)
 
 let (orig-results) = get-prim-func-res-inner(wrap(type, foo), prim-nil)
-let orig-results = unwrap(func-conv-res-type(args), orig-results))
+let orig-results = unwrap(func-conv-res-type(args), orig-results)
 let new-results =
 	lambda ((args : newargs))
 		let (newres valid) = orig-results(args)
+
+

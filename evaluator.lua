@@ -1101,7 +1101,7 @@ function infer(
 	elseif inferrable_term:is_tuple_type() then
 		local definition = inferrable_term:unwrap_tuple_type()
 		local definition_type, definition_usages, definition_term = infer(definition, typechecking_context)
-		if definition_type ~= terms.value.tuple_defn_type then
+		if not definition_type:is_tuple_defn_type() then
 			error "argument to tuple_type is not a tuple_defn"
 		end
 		return terms.value.star(0), definition_usages, terms.typed_term.tuple_type(definition_term)

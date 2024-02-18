@@ -290,9 +290,9 @@ local tupleof_ascribed_names = metalang.reducer(function(syntax, env, terminatio
 		return terms.inferrable_term.tuple_cons(inf_array(...))
 	end
 	local function cons(...)
-		return terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "cons", tup_cons(...))
+		return terms.inferrable_term.enum_cons(terms.value.tuple_defn_type(terms.value.star(0)), "cons", tup_cons(...))
 	end
-	local empty = terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "empty", tup_cons())
+	local empty = terms.inferrable_term.enum_cons(terms.value.tuple_defn_type(terms.value.star(0)), "empty", tup_cons())
 	local args = empty
 
 	local names = gen.declare_array(gen.builtin_string)()
@@ -394,9 +394,14 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 		return terms.inferrable_term.tuple_cons(inf_array(...))
 	end
 	local function cons(...)
-		return terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "cons", tup_cons(...))
+		return terms.inferrable_term.enum_cons(
+			terms.value.tuple_defn_type(terms.value.prim_type_type),
+			"cons",
+			tup_cons(...)
+		)
 	end
-	local empty = terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "empty", tup_cons())
+	local empty =
+		terms.inferrable_term.enum_cons(terms.value.tuple_defn_type(terms.value.prim_type_type), "empty", tup_cons())
 	local args = empty
 
 	local function build_type_term(args)
