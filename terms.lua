@@ -665,6 +665,12 @@ typed_term:define_enum("typed", {
 	{ "prim_unwrap", { "container", typed_term } },
 	{ "prim_unstrict_wrap", { "content", typed_term } },
 	{ "prim_unstrict_unwrap", { "container", typed_term } },
+	{ "prim_user_defined_type", {
+		"id",
+		prim_user_defined_id,
+		"family_args",
+		array(typed_term),
+	} },
 	{ "prim_if", {
 		"subject",
 		typed_term,
