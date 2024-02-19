@@ -534,6 +534,7 @@ function testcomma()
 		"[1 , 2, 1 + 2]",
 		"let (a, b) = f(x)",
 		"f(a)",
+		"f()",
 	}
 
 	local expected = {
@@ -548,6 +549,7 @@ function testcomma()
 		{ { "braced_list", 1, 2, { 1, "+", 2 } } },
 		{ { "let", { "a", "b" }, "=", { "f", "x" } } },
 		{ { "f", "a" } },
+		{ { "f" } },
 	}
 
 	for i = 1, #example do

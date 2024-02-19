@@ -248,7 +248,7 @@ local grammar = P {
 	-- subtly different from the base case
 	-- if there's a set of arguments provided that aren't comma separated, they are automatically interpreted as a child list
 	-- the base case will interpret such a thing as part of the normal list
-	function_call = list(V "symbol" * P "(" * (V "comma_sep_paren_body" + V "base_paren_body") * P ")"),
+	function_call = list(V "symbol" * P "(" * (V "comma_sep_paren_body" + V "base_paren_body") ^ -1 * P ")"),
 
 	empty_line = V "newline" * space_tokens(P "") * #(V "newline" + -1),
 
@@ -312,13 +312,6 @@ local grammar = P {
 	end),
 }
 
-local newlinegetter = P {
-	"newlines",
-	body = (1 - S "\r\n") ^ 1,
-	newline = P "\r" ^ 0 * P "\n",
-	newlines = Ct(Cp() * (V "body" + (V "newline" * Cp())) ^ 0),
-}
-
 local function parse(input, filename)
 	assert(filename)
 
@@ -338,7 +331,7 @@ local function parse(input, filename)
 	local ast = lpeg.match(grammar, input, 1, newlinetable, furthest_forward)
 
 	if furthest_forward.position then
-		p("error in " .. tostring(furthest_forward.position))
+		print("error in " .. tostring(furthest_forward.position))
 		-- for i, v in ipairs(furthest_forward.position) do
 		-- end
 
