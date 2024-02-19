@@ -59,6 +59,16 @@ local function create_literal(elements)
 	return longstring_val
 end
 
+local function create_anchor(line, char, sourceid)
+	local newanchor = {
+		line = line,
+		char = char,
+		sourceid = sourceid,
+	}
+	setmetatable(newanchor, anchor_mt)
+	return newanchor
+end
+
 local grammar = P {
 	"ast",
 	ast = V "foreward" * V "file",
@@ -74,17 +84,27 @@ local grammar = P {
 	-- every time there's a newline, get it's position. construct a named group with the position
 	-- of the latest (numbered) newline
 	-- Cmt because of precedence requirements
-	newline = P "\r" ^ 0 * P "\n",
+	newline = (P "\r" ^ 0 * P "\n") * lpeg.Carg(1) * Cp() / function(table, position)
+		table.positions[#table.positions + 1] = { pos = position, line = table.positions[#table.positions].line + 1 }
+	end,
 
 	-- either match the newline or match the beginning of the file
 	filestart = Cmt(Cp(), function(_, _, mypos)
 		return mypos == 1
 	end),
 
+	textpos = lpeg.Carg(1) * Cp() / function(table, position)
+		local simple = create_anchor(
+			table.positions[#table.positions].line,
+			position - table.positions[#table.positions].pos + 1,
+			table.sourceid
+		)
+		return simple
+	end,
 	-- used by every element
 	-- TODO: make this propogate errors back up the stack
-	anchor = Cg(Cp(), "anchor"),
-	endpos = Cg(Cp(), "endpos"),
+	anchor = Cg(V "textpos", "anchor"),
+	endpos = Cg(V "textpos", "endpos"),
 
 	count_tabs = Cmt(Cp() * C(S "\t " ^ 1), function(_, _, anchor, indentstring)
 		-- only tabs are allowed
@@ -175,6 +195,18 @@ local grammar = P {
 	tokens = space_tokens(
 		V "comment" + V "function_call" + V "paren_list" + V "longstring" + V "string" + V "number" + V "symbol"
 	),
+
+	-- furthest_forward = ,
+	furthest_forward = lpeg.Carg(2) * V "textpos" * 1 ^ 1 / function(table, position)
+		if table.position then
+			if table.position < position then
+				table.position = position
+			end
+		else
+			table.position = position
+		end
+	end,
+
 	token_spacer = S "\t " ^ 0,
 
 	-- LIST SEPARATOR BEHAVIOR IS NOT CONSISTENT BETWEEN BRACED AND NAKED LISTS
@@ -225,6 +257,7 @@ local grammar = P {
 			(V "tokens" * (V "newline" + -1) * V "isdedent")
 			+ (V "naked_list_line" ^ -1 * V "newline" * V "isdedent")
 			+ (V "naked_list")
+			+ V "furthest_forward"
 		) ^ 1
 	) * -1,
 
@@ -286,49 +319,46 @@ local newlinegetter = P {
 	newlines = Ct(Cp() * (V "body" + (V "newline" * Cp())) ^ 0),
 }
 
-local function create_anchor(anchor, newlines, cursor, sourceid)
-	local line_num = cursor
-
-	while (line_num + 1 <= #newlines) and (anchor >= newlines[line_num + 1]) do
-		line_num = line_num + 1
-	end
-	local newanchor = {
-		line = line_num,
-		char = anchor - newlines[line_num] + 1,
-		sourceid = sourceid,
-	}
-	setmetatable(newanchor, anchor_mt)
-
-	return newanchor, line_num
-end
-
-local function correct_anchors(ast, newlines, cursor, sourceid)
-	local revised_ast = ast
-	local line_num = cursor
-
-	assert(ast.anchor)
-	revised_ast.anchor, line_num = create_anchor(ast.anchor, newlines, line_num, sourceid)
-	if ast.kind == "list" or ast.kind == "string" then
-		for i, v in ipairs(ast.elements) do
-			revised_ast.elements[i], line_num = correct_anchors(v, newlines, line_num, sourceid)
-		end
-
-		revised_ast.endpos, line_num = create_anchor(ast.endpos, newlines, line_num, sourceid)
-	end
-
-	return revised_ast, line_num
-end
-
 local function parse(input, filename)
 	assert(filename)
-	local newline_list = lpeg.match(newlinegetter, input)
-	local initial_ast = lpeg.match(grammar, input)
 
-	local file_endpos = create_anchor(initial_ast.endpos, newline_list, #newline_list, filename)
-	local revised_ast = correct_anchors(initial_ast, newline_list, 1, filename)
-	revised_ast.endpos = file_endpos
+	if not (string.len(input) > 0) then
+		print("empty file")
+		return nil
+	end
 
-	return revised_ast
+	local newlinetable = {
+		sourceid = filename,
+		positions = { {
+			pos = 1,
+			line = 1,
+		} },
+	}
+	local furthest_forward = { position = nil }
+	local ast = lpeg.match(grammar, input, 1, newlinetable, furthest_forward)
+
+	if furthest_forward.position then
+		p("error in " .. tostring(furthest_forward.position))
+		-- for i, v in ipairs(furthest_forward.position) do
+		-- end
+
+		assert(false, "errors in file")
+	end
+
+	-- fix comments
+	-- fix function calls
+
+	local prev = 0
+	for i, v in ipairs(newlinetable.positions) do
+		assert(newlinetable.positions[i].pos > prev)
+		prev = newlinetable.positions[i].pos
+	end
+
+	if not ast then
+		print("failed to parse format, last position ")
+	end
+
+	return ast
 end
 
 return { parse = parse }
