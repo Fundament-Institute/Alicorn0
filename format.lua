@@ -123,7 +123,7 @@ local grammar = P {
 
 			if (char == "\t") and (lookbehind_char == " ") then
 				print("error at ", anchor, ": tabs and spaces must not be interspersed")
-				return false
+				assert(false)
 			elseif char == "\t" then
 				numtabs = numtabs + 1
 			end
@@ -154,13 +154,22 @@ local grammar = P {
 	),
 
 	comment_body = C((1 - V "newline") ^ 1),
+
 	comment = element(
 		"comment",
-		P "#"
-			* Cg(
-				Cs(V "comment_body" * ((V "nextline" * V "subordinate_indent" * V "comment_body") + V "empty_line") ^ 0),
-				"val"
-			)
+		(
+			V "nextline"
+				* S "\t " ^ 0
+				* P "#"
+				* Cg(
+					Cs(
+						V "comment_body"
+							* ((V "newline" * V "subordinate_indent" * V "comment_body") + V "empty_line") ^ 0
+					),
+					"val"
+				)
+			+ (P "#" * Cg(Cs(V "comment_body"), "val"))
+		)
 	),
 
 	-- numbers are limited, they are not bignums, they are standard lua numbers. scopes shares the problem of files not having arbitrary precision
@@ -254,10 +263,10 @@ local grammar = P {
 
 	file = list(
 		(
-						-- V "comment"
-			-- +
-(V "tokens" * V "nextline" * V "isdedent")
-			+ (V "naked_list_line" ^ -1 * V "newline" * V "isdedent")
+			V "comment"
+			+ (V "newline" * V "isdedent")
+			+ (V "tokens" * #(V "nextline" * V "isdedent"))
+			+ (V "naked_list_line" * #(V "newline" * V "isdedent"))
 			+ V "naked_list"
 			+ V "furthest_forward"
 		) ^ 1
@@ -265,19 +274,8 @@ local grammar = P {
 
 	naked_list_line = (list(V "tokens" ^ 0 * space_tokens(P ";"))) ^ 1 * V "naked_list" ^ 0,
 	naked_list = list( -- escape char terminates current list
-		((V "naked_list_line" + V "tokens" ^ 1) ^ 1)
-			* (
-					V "empty_line" -- + V "comment"
-					+ (
-							V "newline"
-							* V "indent"
-							* (
-								((list(V "tokens" * space_tokens(P ";")) + V "tokens") * #(V "nextline" * V "isdedent"))
-								+ (V "naked_list")
-							)
-						)
-						* V "dedent"
-				)
+		(V "naked_list_line" + V "tokens" ^ 1)
+			* (V "empty_line" + (V "newline" * V "indent" * (((list(V "tokens" * space_tokens(P ";")) + V "tokens") * #(V "nextline" * V "isdedent")) + (V "naked_list")) * V "dedent"))
 				^ 0
 	),
 
@@ -341,25 +339,11 @@ local function parse(input, filename)
 	local furthest_forward = { position = nil }
 	local ast = lpeg.match(grammar, input, 1, newlinetable, furthest_forward)
 
+	assert(ast, "completely failed to parse format")
+
 	if furthest_forward.position then
 		print("error in " .. tostring(furthest_forward.position))
-		-- for i, v in ipairs(furthest_forward.position) do
-		-- end
-
 		assert(false, "errors in file")
-	end
-
-	-- fix comments
-	-- fix function calls
-
-	local prev = 0
-	for i, v in ipairs(newlinetable.positions) do
-		assert(newlinetable.positions[i].pos > prev)
-		prev = newlinetable.positions[i].pos
-	end
-
-	if not ast then
-		print("failed to parse format, last position ")
 	end
 
 	return ast
