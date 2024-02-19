@@ -88,10 +88,14 @@ local grammar = P {
 		table.positions[#table.positions + 1] = { pos = position, line = table.positions[#table.positions].line + 1 }
 	end,
 
+	nextline = V "newline" + V "eof" + V "filestart",
+
 	-- either match the newline or match the beginning of the file
 	filestart = Cmt(Cp(), function(_, _, mypos)
 		return mypos == 1
 	end),
+
+	eof = P(-1),
 
 	textpos = lpeg.Carg(1) * Cp() / function(table, position)
 		local simple = create_anchor(
@@ -139,7 +143,7 @@ local grammar = P {
 
 	longstring_body = C((V "unicode_escape" + (1 - (V "newline" + V "splice"))) ^ 1),
 	longstring_newline = (
-		(V "newline" * Cc("\n") * ((Cs(V "subordinate_indent") * V "longstring_body") + (S "\t " ^ 0 * #V "newline")))
+		(Cc("\n") * ((V "newline" * (Cs(V "subordinate_indent") * V "longstring_body")) + V "empty_line"))
 		+ V "longstring_body"
 	),
 	longstring_literal = Ct(V "anchor" * (V "longstring_body" + V "longstring_newline") ^ 1) / create_literal,
@@ -154,11 +158,7 @@ local grammar = P {
 		"comment",
 		P "#"
 			* Cg(
-				Cs(
-					V "comment_body" ^ -1
-						* (V "newline" * ((V "subordinate_indent" * V "comment_body") + (S "\t " ^ 0 * #V "newline")))
-							^ 0
-				),
+				Cs(V "comment_body" * ((V "nextline" * V "subordinate_indent" * V "comment_body") + V "empty_line") ^ 0),
 				"val"
 			)
 	),
@@ -250,13 +250,15 @@ local grammar = P {
 	-- the base case will interpret such a thing as part of the normal list
 	function_call = list(V "symbol" * P "(" * (V "comma_sep_paren_body" + V "base_paren_body") ^ -1 * P ")"),
 
-	empty_line = V "newline" * space_tokens(P "") * #(V "newline" + -1),
+	empty_line = V "newline" * space_tokens(P "") * #V "nextline",
 
 	file = list(
 		(
-			(V "tokens" * (V "newline" + -1) * V "isdedent")
+						-- V "comment"
+			-- +
+(V "tokens" * V "nextline" * V "isdedent")
 			+ (V "naked_list_line" ^ -1 * V "newline" * V "isdedent")
-			+ (V "naked_list")
+			+ V "naked_list"
 			+ V "furthest_forward"
 		) ^ 1
 	) * -1,
@@ -264,9 +266,18 @@ local grammar = P {
 	naked_list_line = (list(V "tokens" ^ 0 * space_tokens(P ";"))) ^ 1 * V "naked_list" ^ 0,
 	naked_list = list( -- escape char terminates current list
 		((V "naked_list_line" + V "tokens" ^ 1) ^ 1)
-			* (V "empty_line" ^ 1 + (V "newline" * V "indent" * (((list(V "tokens" * space_tokens(P ";")) + V "tokens") * ((#(V "newline" * V "isdedent") * V "dedent") + (-P(
-					1
-				)))) + (V "naked_list" * V "dedent"))))
+			* (
+					V "empty_line" -- + V "comment"
+					+ (
+							V "newline"
+							* V "indent"
+							* (
+								((list(V "tokens" * space_tokens(P ";")) + V "tokens") * #(V "nextline" * V "isdedent"))
+								+ (V "naked_list")
+							)
+						)
+						* V "dedent"
+				)
 				^ 0
 	),
 
