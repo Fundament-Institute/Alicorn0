@@ -95,20 +95,19 @@ function PrettyPrint:_resetcolor()
 	return "\27[0m"
 end
 
-function PrettyPrint:array(array)
-	self:_enter()
+function PrettyPrint:_array(array)
 	if #array == 0 then
 		self[#self + 1] = self:_color()
 		self[#self + 1] = "[]"
 		self[#self + 1] = self:_resetcolor()
-	elseif #array == 1 then
-		self[#self + 1] = self:_color()
-		self[#self + 1] = "["
-		self[#self + 1] = self:_resetcolor()
-		self:any(array[1])
-		self[#self + 1] = self:_color()
-		self[#self + 1] = "]"
-		self[#self + 1] = self:_resetcolor()
+	--elseif #array == 1 then
+	--	self[#self + 1] = self:_color()
+	--	self[#self + 1] = "["
+	--	self[#self + 1] = self:_resetcolor()
+	--	self:any(array[1])
+	--	self[#self + 1] = self:_color()
+	--	self[#self + 1] = "]"
+	--	self[#self + 1] = self:_resetcolor()
 	else
 		self[#self + 1] = self:_color()
 		self[#self + 1] = "[\n"
@@ -125,6 +124,11 @@ function PrettyPrint:array(array)
 		self[#self + 1] = "]"
 		self[#self + 1] = self:_resetcolor()
 	end
+end
+
+function PrettyPrint:array(array)
+	self:_enter()
+	self:_array(array)
 	self:_exit()
 end
 

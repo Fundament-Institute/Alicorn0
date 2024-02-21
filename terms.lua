@@ -599,25 +599,20 @@ inferrable_term:define_enum("inferrable", {
 	},
 })
 
--- the only difference compared to typed_tuple_type_inner is enum_type
-local function inferrable_tuple_type_inner(definition, pp, depth)
+-- the only difference compared to typed_tuple_type_flatten is enum_type
+-- TODO: what is enum_type?
+local function inferrable_tuple_type_flatten(definition)
 	local enum_type, constructor, arg = definition:unwrap_enum_cons()
 	if constructor == "empty" then
-		if depth <= 1 then
-			return depth, ""
-		else
-			pp:_indent()
-			return depth, "\n" .. pp.prefix
-		end
+		return {}, 0
 	elseif constructor == "cons" then
 		local elements = arg:unwrap_tuple_cons()
 		local definition = elements[1]
 		local f = elements[2]
-		local maxdepth, comma = inferrable_tuple_type_inner(definition, pp, depth + 1)
-		pp:unit(comma)
-		pp:any(f)
-		local p = pp.prefix or ""
-		return maxdepth, ",\n" .. p
+		local prev, n = inferrable_tuple_type_flatten(definition)
+		n = n + 1
+		prev[n] = f
+		return prev, n
 	else
 		error("override_pretty: inferrable.tuple_type: unknown tuple type data constructor")
 	end
@@ -655,7 +650,30 @@ local inferrable_term_override_pretty = {
 		pp:unit("inferrable.\u{03BB} ")
 		pp:unit(pp:_resetcolor())
 
-		pp:unit(param_name)
+		local ok, names, subject, inner_body = body:as_tuple_elim()
+		-- !!!!!!!!!!!!!!!!FIXME!!!!!!!!!!!!!!!!!!!!!!!!!
+		-- how to tell when bound_variable refers to lambda parameter?
+		-- currently assuming this is always the case
+		if ok and subject:is_bound_variable() then
+			body = inner_body
+
+			pp:unit(pp:_color())
+			pp:unit("(")
+			pp:unit(pp:_resetcolor())
+
+			for i, name in names:ipairs() do
+				if i > 1 then
+					pp:unit(", ")
+				end
+				pp:unit(name)
+			end
+
+			pp:unit(pp:_color())
+			pp:unit(")")
+			pp:unit(pp:_resetcolor())
+		else
+			pp:unit(param_name)
+		end
 
 		pp:unit(pp:_color())
 		pp:unit(" : ")
@@ -715,25 +733,12 @@ local inferrable_term_override_pretty = {
 		pp:_enter()
 
 		pp:unit(pp:_color())
-		pp:unit("inferrable.tuple_type[")
+		pp:unit("inferrable.tuple_type")
 		pp:unit(pp:_resetcolor())
 
-		local enum_type, constructor, arg = definition:unwrap_enum_cons()
-		local maxdepth = 0
-		if enum_type == value.tuple_defn_type then
-			maxdepth = inferrable_tuple_type_inner(definition, pp, 0)
-		else
-			pp:any(definition)
-		end
+		local members = inferrable_tuple_type_flatten(definition)
 
-		if maxdepth > 1 then
-			pp:_dedent()
-			pp:unit("\n")
-		end
-
-		pp:unit(pp:_color())
-		pp:unit("]")
-		pp:unit(pp:_resetcolor())
+		pp:_array(members)
 
 		pp:_exit()
 	end,
@@ -763,6 +768,21 @@ local inferrable_term_override_pretty = {
 		pp:_prefix()
 		pp:any(body)
 		pp:_dedent()
+
+		pp:_exit()
+	end,
+	prim_tuple_type = function(self, pp)
+		local decls = self:unwrap_prim_tuple_type()
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("inferrable.prim_tuple_type")
+		pp:unit(pp:_resetcolor())
+
+		local members = inferrable_tuple_type_flatten(decls)
+
+		pp:_array(members)
 
 		pp:_exit()
 	end,
@@ -932,25 +952,19 @@ typed_term:define_enum("typed", {
 	} },
 })
 
--- the only difference compared to inferrable_tuple_type_inner is lack of enum_type
-local function typed_tuple_type_inner(definition, pp, depth)
+-- the only difference compared to inferrable_tuple_type_flatten is lack of enum_type
+local function typed_tuple_type_flatten(definition)
 	local constructor, arg = definition:unwrap_enum_cons()
 	if constructor == "empty" then
-		if depth <= 1 then
-			return depth, ""
-		else
-			pp:_indent()
-			return depth, "\n" .. pp.prefix
-		end
+		return {}, 0
 	elseif constructor == "cons" then
 		local elements = arg:unwrap_tuple_cons()
 		local definition = elements[1]
 		local f = elements[2]
-		local maxdepth, comma = typed_tuple_type_inner(definition, pp, depth + 1)
-		pp:unit(comma)
-		pp:any(f)
-		local p = pp.prefix or ""
-		return maxdepth, ",\n" .. p
+		local prev, n = typed_tuple_type_flatten(definition)
+		n = n + 1
+		prev[n] = f
+		return prev, n
 	else
 		error("override_pretty: typed.tuple_type: unknown tuple type data constructor")
 	end
@@ -969,7 +983,30 @@ local typed_term_override_pretty = {
 		pp:unit("typed.\u{03BB} ")
 		pp:unit(pp:_resetcolor())
 
-		pp:unit(param_name)
+		local ok, names, subject, length, inner_body = body:as_tuple_elim()
+		-- !!!!!!!!!!!!!!!!FIXME!!!!!!!!!!!!!!!!!!!!!!!!!
+		-- how to tell when bound_variable refers to lambda parameter?
+		-- currently assuming this is always the case
+		if ok and subject:is_bound_variable() then
+			body = inner_body
+
+			pp:unit(pp:_color())
+			pp:unit("(")
+			pp:unit(pp:_resetcolor())
+
+			for i, name in names:ipairs() do
+				if i > 1 then
+					pp:unit(", ")
+				end
+				pp:unit(name)
+			end
+
+			pp:unit(pp:_color())
+			pp:unit(")")
+			pp:unit(pp:_resetcolor())
+		else
+			pp:unit(param_name)
+		end
 
 		pp:unit(pp:_color())
 		pp:unit(" =")
@@ -1076,19 +1113,27 @@ local typed_term_override_pretty = {
 		pp:_enter()
 
 		pp:unit(pp:_color())
-		pp:unit("typed.tuple_type[")
+		pp:unit("typed.tuple_type")
 		pp:unit(pp:_resetcolor())
 
-		local maxdepth = typed_tuple_type_inner(definition, pp, 0)
+		local members = typed_tuple_type_flatten(definition)
 
-		if maxdepth > 1 then
-			pp:_dedent()
-			pp:unit("\n")
-		end
+		pp:_array(members)
+
+		pp:_exit()
+	end,
+	prim_tuple_type = function(self, pp)
+		local decls = self:unwrap_prim_tuple_type()
+
+		pp:_enter()
 
 		pp:unit(pp:_color())
-		pp:unit("]")
+		pp:unit("typed.prim_tuple_type")
 		pp:unit(pp:_resetcolor())
+
+		local members = typed_tuple_type_flatten(decls)
+
+		pp:_array(members)
 
 		pp:_exit()
 	end,
@@ -1267,27 +1312,21 @@ value:define_enum("value", {
 	-- {"prim_table_type"},
 })
 
--- the only difference compared to typed_tuple_type_inner is enum_value / tuple_value (as opposed to *_cons)
-local function value_tuple_type_inner(decls, pp, depth)
-	local constructor, arg = decls:unwrap_enum_value()
+-- the only difference compared to typed_tuple_type_flatten is enum_value / tuple_value (as opposed to *_cons)
+local function value_tuple_type_flatten(definition)
+	local constructor, arg = definition:unwrap_enum_value()
 	if constructor == "empty" then
-		if depth <= 1 then
-			return depth, ""
-		else
-			pp:_indent()
-			return depth, "\n" .. pp.prefix
-		end
+		return {}, 0
 	elseif constructor == "cons" then
 		local elements = arg:unwrap_tuple_value()
-		local decls = elements[1]
+		local definition = elements[1]
 		local f = elements[2]
-		local maxdepth, comma = value_tuple_type_inner(decls, pp, depth + 1)
-		pp:unit(comma)
-		pp:any(f)
-		local p = pp.prefix or ""
-		return maxdepth, ",\n" .. p
+		local prev, n = value_tuple_type_flatten(definition)
+		n = n + 1
+		prev[n] = f
+		return prev, n
 	else
-		error("override_pretty: typed.tuple_type: unknown tuple type data constructor")
+		error("override_pretty: value.tuple_type: unknown tuple type data constructor")
 	end
 end
 local value_override_pretty = {
@@ -1334,19 +1373,27 @@ local value_override_pretty = {
 		pp:_enter()
 
 		pp:unit(pp:_color())
-		pp:unit("value.tuple_type[")
+		pp:unit("value.tuple_type")
 		pp:unit(pp:_resetcolor())
 
-		local maxdepth = value_tuple_type_inner(decls, pp, 0)
+		local members = value_tuple_type_flatten(decls)
 
-		if maxdepth > 1 then
-			pp:_dedent()
-			pp:unit("\n")
-		end
+		pp:_array(members)
+
+		pp:_exit()
+	end,
+	prim_tuple_type = function(self, pp)
+		local decls = self:unwrap_prim_tuple_type()
+
+		pp:_enter()
 
 		pp:unit(pp:_color())
-		pp:unit("]")
+		pp:unit("value.prim_tuple_type")
 		pp:unit(pp:_resetcolor())
+
+		local members = value_tuple_type_flatten(decls)
+
+		pp:_array(members)
 
 		pp:_exit()
 	end,
