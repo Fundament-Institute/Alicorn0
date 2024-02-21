@@ -37,21 +37,30 @@ local function do_block(syntax, env)
 end
 
 local function let_bind(syntax, env)
-	local ok, name, bind = syntax:match({
-		metalang.listmatch(
+	local ok, name, tail = syntax:match({
+		metalang.listtail(
 			metalang.accept_handler,
 			metalang.oneof(
 				metalang.accept_handler,
 				metalang.issymbol(metalang.accept_handler),
 				metalang.list_many(metalang.accept_handler, metalang.issymbol(metalang.accept_handler))
 			),
-			metalang.symbol_exact(metalang.accept_handler, "="),
-			exprs.inferred_expression(utils.accept_with_env, env)
+			metalang.symbol_exact(metalang.accept_handler, "=")
 		),
 	}, metalang.failure_handler, nil)
 
 	if not ok then
 		return false, name
+	end
+
+	local bind
+	ok, bind = tail:match({
+		metalang.listmatch(metalang.accept_handler, exprs.inferred_expression(utils.accept_with_env, env)),
+		exprs.inferred_expression(utils.accept_with_env, env),
+	}, metalang.failure_handler, nil)
+
+	if not ok then
+		return false, bind
 	end
 
 	env = bind.env
@@ -71,7 +80,7 @@ local function let_bind(syntax, env)
 
 	return true,
 		terms.inferrable_term.typed(
-			terms.value.quantity(terms.quantity.unrestricted, terms.unit_type),
+			terms.unit_type,
 			gen.declare_array(gen.builtin_number)(),
 			terms.typed_term.literal(terms.unit_val)
 		),
@@ -224,7 +233,22 @@ local function tuple_of_impl(syntax, env)
 	return true, components, env
 end
 
-local ascribed_name = metalang.reducer(function(syntax, env, prev, names)
+local pure_ascribed_name_with_tail = metalang.reducer(function(syntax, env)
+	local ok, name, type_env, tail = syntax:match({
+		metalang.listtail(
+			metalang.accept_handler,
+			metalang.issymbol(metalang.accept_handler),
+			metalang.symbol_exact(metalang.accept_handler, ":"),
+			exprs.inferred_expression(utils.accept_with_env, env)
+		),
+	}, metalang.failure_handler, nil)
+	if not ok then
+		return ok, name
+	end
+	return true, name, type_env.val, type_env.env, tail
+end, "pure_ascribed_name_with_tail")
+
+local ascribed_name_with_tail = metalang.reducer(function(syntax, env, prev, names)
 	-- print("ascribed_name trying")
 	-- p(syntax)
 	-- print(prev:pretty_print())
@@ -239,25 +263,136 @@ local ascribed_name = metalang.reducer(function(syntax, env, prev, names)
 		error "#prev should always be bound, was just added"
 	end
 	env = env:bind_local(terms.binding.tuple_elim(names, prev_binding))
-	local ok, name, type_env = syntax:match({
-		metalang.listmatch(
+	local ok, name, val, env, tail =
+		syntax:match({ pure_ascribed_name_with_tail(metalang.accept_handler, env) }, metalang.failure_handler, nil)
+	if not ok then
+		return ok, name
+	end
+	---@type Environment
+	local env, val = env:exit_block(val, shadowed)
+	-- print("is env an environment? (end of ascribed name)")
+	-- print(env.get)
+	-- print(env.enter_block)
+	return true, name, val, env, tail
+end, "ascribed_name_with_tail")
+
+local ascribed_name = metalang.reducer(function(syntax, env, prev, names)
+	local ok, name, val, env = syntax:match({
+		metalang.list_tail_ends(
 			metalang.accept_handler,
-			metalang.issymbol(metalang.accept_handler),
-			metalang.symbol_exact(metalang.accept_handler, ":"),
-			exprs.inferred_expression(utils.accept_with_env, env)
+			ascribed_name_with_tail(metalang.accept_handler, env, prev, names)
 		),
 	}, metalang.failure_handler, nil)
 	if not ok then
 		return ok, name
 	end
-	---@type Environment
-	env = type_env.env
-	local env, val = env:exit_block(type_env.val, shadowed)
-	-- print("is env an environment? (end of ascribed name)")
-	-- print(env.get)
-	-- print(env.enter_block)
 	return true, name, val, env
 end, "ascribed_name")
+
+local tupleof_ascribed_names_inner = metalang.reducer(function(syntax, env, termination, build_type_term)
+	local inf_array = gen.declare_array(terms.inferrable_term)
+	local function tup_cons(...)
+		return terms.inferrable_term.tuple_cons(inf_array(...))
+	end
+	local function cons(...)
+		return terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "cons", tup_cons(...))
+	end
+	local empty = terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "empty", tup_cons())
+	local args = empty
+
+	local names = gen.declare_array(gen.builtin_string)()
+
+	local ok = true
+
+	ok, names, args, env, tail = syntax:match({
+		metalang.list_many_threaded_until(function(_, vals, thread, tail)
+			return true, thread.names, build_type_term(thread.args), thread.env, tail
+		end, function(thread)
+			return ascribed_name(function(_, name, type_val, type_env)
+				local names = thread.names:copy()
+				names:append(name)
+				local newthread = {
+					names = names,
+					args = cons(thread.args, type_val),
+					env = type_env,
+				}
+				return true, { name = name, type = type_val }, newthread
+			end, thread.env, build_type_term(thread.args), thread.names)
+		end, {
+			names = names,
+			args = empty,
+			env = env,
+		}, termination),
+	}, metalang.failure_handler, nil)
+
+	if not ok then
+		return ok, names
+	end
+
+	return true, { names = names, args = args, env = env }, tail
+end, "tupleof_ascribed_names_inner")
+
+local tupleof_ascribed_names = metalang.reducer(function(syntax, env, termination)
+	local function build_type_term(args)
+		return terms.inferrable_term.tuple_type(args)
+	end
+	return syntax:match({
+		tupleof_ascribed_names_inner(metalang.accept_handler, env, termination, build_type_term),
+	}, metalang.failure_handler, nil)
+end, "tupleof_ascribed_names")
+
+local prim_tupleof_ascribed_names = metalang.reducer(function(syntax, env, termination)
+	local function build_type_term(args)
+		return terms.inferrable_term.prim_tuple_type(args)
+	end
+	return syntax:match({
+		tupleof_ascribed_names_inner(metalang.accept_handler, env, termination, build_type_term),
+	}, metalang.failure_handler, nil)
+end, "prim_tupleof_ascribed_names")
+
+local ascribed_segment = metalang.reducer(function(syntax, env, termination)
+	local single, tail, name, type_val, type_env
+
+	local ok = true
+
+	single, name, type_val, type_env, tail = syntax:match({
+		pure_ascribed_name_with_tail(metalang.accept_handler, env),
+	}, metalang.failure_handler, nil)
+
+	local names, args
+
+	if single then
+		ok, tail = tail:match({
+			metalang.listtail(metalang.accept_handler, termination),
+			-- if termination is nil listtail will fail to match. so this is redundant and SHOULDN'T activate
+			-- but I don't know how to make it not necessary
+			termination,
+		}, metalang.failure_handler, env)
+
+		if not ok then
+			return false, "only one bare ascribed name permitted"
+		end
+
+		env = type_env
+		args = type_val
+		names = name
+	elseif not single then
+		local thread
+		ok, thread, tail = syntax:match({
+			tupleof_ascribed_names(metalang.accept_handler, env, termination),
+		}, metalang.failure_handler, nil)
+
+		if not ok then
+			return ok, thread
+		end
+
+		env = thread.env
+		args = thread.args
+		names = thread.names
+	end
+
+	return true, { single = single, names = names, args = args, env = env }, tail
+end, "ascribed_segment")
 
 local function prim_func_type_pair_handler(env, a, b)
 	local ok, val, env =
@@ -275,119 +410,44 @@ end
 local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	local pft_anchor = syntax.anchor
 
-	local value_array = gen.declare_array(terms.value)
-	local inf_array = gen.declare_array(terms.inferrable_term)
-	local usage_array = gen.declare_array(gen.builtin_number)
-	local function tup_cons(...)
-		return terms.inferrable_term.tuple_cons(inf_array(...))
-	end
-	local function cons(...)
-		return terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "cons", tup_cons(...))
-	end
-	local empty = terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "empty", tup_cons())
-	local args = empty
-
-	local unrestricted_term = terms.inferrable_term.typed(
-		terms.value.quantity_type,
-		usage_array(),
-		terms.typed_term.literal(terms.value.quantity(terms.quantity.unrestricted))
-	)
-
-	local function build_type_term(args)
-		return terms.inferrable_term.qtype(unrestricted_term, terms.inferrable_term.tuple_type(args))
-	end
-	local function build_prim_type_term(args)
-		return terms.inferrable_term.qtype(unrestricted_term, terms.inferrable_term.prim_tuple_type(args))
-	end
-
-	local names = gen.declare_array(gen.builtin_string)()
-
 	if not env or not env.enter_block then
 		error "env isn't an environment in prim_func_type_impl_reducer"
 	end
 
-	local head, tail, name, type_val, type_env
-	local ok, continue = true, true
-	while ok and continue do
-		ok, head, tail = syntax:match({ metalang.ispair(metalang.accept_handler) }, metalang.failure_handler, env)
-		if not ok then
-			break
-		end
+	local ok, thread, syntax = syntax:match({
+		prim_tupleof_ascribed_names(metalang.accept_handler, env, metalang.symbol_exact(metalang.accept_handler, "->")),
+	}, metalang.failure_handler, nil)
 
-		if not env or not env.enter_block then
-			error "env isn't an environment in prim_func_type_impl_reducer"
-		end
-
-		ok, continue, name, type_val, type_env = head:match({
-			metalang.symbol_exact(function()
-				return true, false
-			end, "->"),
-			ascribed_name(function(ok, ...)
-				return ok, true, ...
-			end, env, build_type_term(args), names),
-		}, metalang.failure_handler, env)
-
-		if ok and continue then
-			env = type_env
-			args = cons(args, type_val)
-			names = names:copy()
-			names:append(name)
-		end
-
-		syntax = tail
+	if not ok then
+		return ok, thread
 	end
+
+	env = thread.env
+	local args = thread.args
+	local names = thread.names
+
 	print("moving on to return type")
-	ok, continue = true, true
 	local shadowed, env = env:enter_block()
 
 	-- syntax.anchor can be nil so we fall back to the anchor for the start of this prim func type if needed
-	env = env:bind_local(terms.binding.annotated_lambda("#arg", build_type_term(args), syntax.anchor or pft_anchor))
+	env = env:bind_local(terms.binding.annotated_lambda("#arg", args, syntax.anchor or pft_anchor))
 	local ok, arg = env:get("#arg")
 	env = env:bind_local(terms.binding.tuple_elim(names, arg))
-	names = gen.declare_array(gen.builtin_string)()
-	local results = empty
-	while ok and continue do
-		ok, head, tail = syntax:match({ metalang.ispair(metalang.accept_handler) }, metalang.failure_handler, env)
 
-		if not ok then
-			break
-		end
+	ok, thread, tail = syntax:match({
+		prim_tupleof_ascribed_names(metalang.accept_handler, env, metalang.isnil(metalang.accept_handler)),
+	}, metalang.failure_handler, nil)
 
-		if not env or not env.enter_block then
-			error "env isn't an environment in prim_func_type_impl_reducer"
-		end
-
-		ok, continue, name, type_val, type_env = head:match({
-			metalang.isnil(function()
-				return true, false
-			end),
-			ascribed_name(function(ok, ...)
-				return ok, true, ...
-			end, env, build_type_term(results), names),
-		}, metalang.failure_handler, env)
-
-		--print("result", ok, continue, name, type_val, type_env)
-
-		if ok and continue then
-			env = type_env
-			results = cons(results, type_val)
-			names = names:copy()
-			names:append(name)
-		end
-
-		if not ok then
-			--print("prim_func_type_impl failed and returning ", continue)
-			return false, continue
-		end
-
-		syntax = tail
+	if not ok then
+		return ok, thread
 	end
 
-	local env, fn_res_term = env:exit_block(build_prim_type_term(results), shadowed)
-	local fn_type_term = terms.inferrable_term.qtype(
-		unrestricted_term,
-		terms.inferrable_term.prim_function_type(build_prim_type_term(args), fn_res_term)
-	)
+	env = thread.env
+	local results = thread.args
+	local names = thread.names
+
+	local env, fn_res_term = env:exit_block(results, shadowed)
+	local fn_type_term = terms.inferrable_term.prim_function_type(args, fn_res_term)
 	print("reached end of function type construction")
 	if not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl_reducer"
@@ -419,142 +479,71 @@ local function prim_func_type_impl(syntax, env)
 end
 
 local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
-	local value_array = gen.declare_array(terms.value)
-	local inf_array = gen.declare_array(terms.inferrable_term)
 	local usage_array = gen.declare_array(gen.builtin_number)
-	local function tup_cons(...)
-		return terms.inferrable_term.tuple_cons(inf_array(...))
-	end
-	local function cons(...)
-		return terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "cons", tup_cons(...))
-	end
-	local empty = terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "empty", tup_cons())
-	local args = empty
 
-	local unrestricted_term = terms.inferrable_term.typed(
-		terms.value.quantity_type,
-		usage_array(),
-		terms.typed_term.literal(terms.value.quantity(terms.quantity.unrestricted))
+	if not env.enter_block then
+		error "env isn't an environment in forall_type_impl_reducer"
+	end
+
+	local single, args, names, thread
+	local ok = true
+
+	ok, thread, syntax = syntax:match(
+		{ ascribed_segment(metalang.accept_handler, env, metalang.symbol_exact(metalang.accept_handler, "->")) },
+		metalang.failure_handler,
+		nil
 	)
 
-	local function build_type_term(args)
-		return terms.inferrable_term.qtype(unrestricted_term, terms.inferrable_term.tuple_type(args))
+	if not ok then
+		return false, thread
 	end
+	single, args, names, env = thread.single, thread.args, thread.names, thread.env
 
-	local names = gen.declare_array(gen.builtin_string)()
-	if not env.enter_block then
-		error "env isn't an environment in prim_func_type_impl_reducer"
-	end
-
-	local head, tail, name, type_val, type_env
-	local ok, continue = true, true
-	while ok and continue do
-		ok, head, tail = syntax:match({ metalang.ispair(metalang.accept_handler) }, metalang.failure_handler, env)
-		print(env)
-		if not ok then
-			break
-		end
-
-		if not env or not env.get then
-			error "env isn't an environment in prim_func_type_impl_reducer"
-		end
-
-		print "args in loop is"
-		print(args:pretty_print())
-
-		ok, continue, name, type_val, type_env = head:match({
-			metalang.symbol_exact(function()
-				return true, false
-			end, "->"),
-			ascribed_name(function(ok, ...)
-				return ok, true, ...
-			end, env, build_type_term(args), names),
-		}, metalang.failure_handler, env)
-
-		if continue then
-			-- type_env:bind_local(terms.binding.let(name, type_val))
-			-- local arg = nil
-			-- args = cons(args, arg)
-		end
-		if ok and continue then
-			env = type_env
-			args = cons(args, type_val)
-			names = names:copy()
-			names:append(name)
-		end
-		print("arg", ok, continue, name, type_val, type_env)
-		--error "TODO use ascribed_name results"
-
-		syntax = tail
-	end
 	print("moving on to return type")
-	ok, continue = true, true
+
 	local shadowed, env = env:enter_block()
-	env = env:bind_local(terms.binding.annotated_lambda("#arg", build_type_term(args), syntax.anchor))
+
+	env = env:bind_local(terms.binding.annotated_lambda("#arg", args, syntax.anchor))
 	local ok, arg = env:get("#arg")
-	env = env:bind_local(terms.binding.tuple_elim(names, arg))
-	names = gen.declare_array(gen.builtin_string)()
-	local results = empty
-	while ok and continue do
-		ok, head, tail = syntax:match({ metalang.ispair(metalang.accept_handler) }, metalang.failure_handler, env)
-		if not ok then
-			break
-		end
-
-		ok, continue, name, type_val, type_env = head:match({
-			metalang.isnil(function()
-				return true, false
-			end),
-			ascribed_name(function(ok, ...)
-				return ok, true, ...
-			end, env, build_type_term(results), names),
-		}, metalang.failure_handler, env)
-		print("result", ok, continue, name, type_val, type_env)
-
-		if ok and continue then
-			env = type_env
-			results = cons(results, type_val)
-			names = names:copy()
-			names:append(name)
-		end
-
-		if not ok then
-			return false, continue
-		end
-
-		syntax = tail
+	if single then
+		env = env:bind_local(terms.binding.let(names, arg))
+	else
+		env = env:bind_local(terms.binding.tuple_elim(names, arg))
 	end
 
-	local env, fn_res_term = env:exit_block(build_type_term(results), shadowed)
-	local fn_type_term = terms.inferrable_term.qtype(
-		unrestricted_term,
-		terms.inferrable_term.pi(
-			build_type_term(args),
-			terms.checkable_term.inferrable(
-				terms.inferrable_term.qtype(
-					unrestricted_term,
-					terms.inferrable_term.typed(
-						terms.value.param_info_type,
-						usage_array(),
-						terms.typed_term.literal(
-							terms.value.param_info(terms.value.visibility(terms.visibility.explicit))
-						)
-					)
-				)
-			),
-			fn_res_term,
-			terms.checkable_term.inferrable(
-				terms.inferrable_term.qtype(
-					unrestricted_term,
-					terms.inferrable_term.typed(
-						terms.value.result_info_type,
-						usage_array(),
-						terms.typed_term.literal(terms.value.result_info(terms.result_info(terms.purity.pure)))
-					)
-				)
+	local results
+
+	ok, thread, syntax = syntax:match(
+		{ ascribed_segment(metalang.accept_handler, env, metalang.isnil(metalang.accept_handler)) },
+		metalang.failure_handler,
+		nil
+	)
+
+	if not ok then
+		return false, thread
+	end
+	single, results, names, env = thread.single, thread.args, thread.names, thread.env
+
+	local env, fn_res_term = env:exit_block(results, shadowed)
+	local fn_type_term = terms.inferrable_term.pi(
+		args,
+		terms.checkable_term.inferrable(
+			terms.inferrable_term.typed(
+				terms.value.param_info_type,
+				usage_array(),
+				terms.typed_term.literal(terms.value.param_info(terms.value.visibility(terms.visibility.explicit)))
+			)
+		),
+		fn_res_term,
+		terms.checkable_term.inferrable(
+			terms.inferrable_term.typed(
+				terms.value.result_info_type,
+				usage_array(),
+				terms.typed_term.literal(terms.value.result_info(terms.result_info(terms.purity.pure)))
 			)
 		)
 	)
+
 	print("reached end of function type construction")
 	if not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl_reducer"
@@ -640,63 +629,26 @@ end
 ---@return unknown
 ---@return unknown|nil
 local function lambda_impl(syntax, env)
-	local value_array = gen.declare_array(terms.value)
-	local inf_array = gen.declare_array(terms.inferrable_term)
-	local usage_array = gen.declare_array(gen.builtin_number)
-	local string_array = gen.declare_array(gen.builtin_string)
-	local function tup_cons(...)
-		return terms.inferrable_term.tuple_cons(inf_array(...))
-	end
-	local function cons(...)
-		return terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "cons", tup_cons(...))
-	end
-	local empty = terms.inferrable_term.enum_cons(terms.value.tuple_defn_type, "empty", tup_cons())
-	local args = empty
-
-	local unrestricted_term = terms.inferrable_term.typed(
-		terms.value.quantity_type,
-		usage_array(),
-		terms.typed_term.literal(terms.value.quantity(terms.quantity.unrestricted))
-	)
-
-	local function build_type_term(args)
-		return terms.inferrable_term.qtype(unrestricted_term, terms.inferrable_term.tuple_type(args))
-	end
-
-	local ok, params_group, tail = syntax:match({
+	local ok, thread, tail = syntax:match({
 		metalang.listtail(
-			function(_, thr, tail, ...)
-				return true, { names = thr.names, types = build_type_term(thr.args), env = thr.env }, tail
-			end,
-			metalang.list_many_threaded(function(_, col, thr)
-				return true, thr
-			end, function(thread)
-				return ascribed_name(function(_, name, typ, env)
-					local names = thread.names:copy()
-					names:append(name)
-					return true,
-						{ name = name, type = typ },
-						{
-							names = names,
-							args = cons(thread.args, typ),
-							env = env,
-						}
-				end, thread.env, build_type_term(thread.args), thread.names)
-			end, {
-				names = string_array(),
-				args = empty,
-				env = env,
-			})
+			metalang.accept_handler,
+			ascribed_segment(metalang.accept_handler, env, metalang.isnil(metalang.accept_handler))
 		),
 	}, metalang.failure_handler, nil)
 	if not ok then
-		return ok, params_group
+		return ok, thread
 	end
 
+	local single, args, names, env = thread.single, thread.args, thread.names, thread.env
+
 	local shadow, inner_env = env:enter_block()
-	inner_env = inner_env:bind_local(terms.binding.annotated_lambda("#arg", params_group.types, syntax.anchor))
+	inner_env = inner_env:bind_local(terms.binding.annotated_lambda("#arg", thread.args, syntax.anchor))
 	local _, arg = inner_env:get("#arg")
-	inner_env = inner_env:bind_local(terms.binding.tuple_elim(params_group.names, arg))
+	if single then
+		inner_env = inner_env:bind_local(terms.binding.let(names, arg))
+	else
+		inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
+	end
 	local ok, expr, env = tail:match(
 		{ exprs.block(metalang.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env)) },
 		metalang.failure_handler,
@@ -717,12 +669,6 @@ local val_array = gen.declare_array(value)
 
 local function lit_term(val, typ)
 	return terms.inferrable_term.typed(typ, usage_array(), terms.typed_term.literal(val))
-end
-local function unrestricted(x)
-	return value.qtype(value.quantity(terms.quantity.unrestricted), x)
-end
-local function unrestricted_typed(term)
-	return typed.qtype(typed.literal(value.quantity(terms.quantity.unrestricted)), term)
 end
 
 local function startype_impl(syntax, env)
@@ -767,57 +713,37 @@ local function build_wrap(body_fn, type_fn)
 			typed.tuple_elim(names_todo_1, typed.bound_variable(1), 2, body_fn(typed.bound_variable(3))),
 			terms.runtime_context()
 		),
-		unrestricted(
-			value.pi(
-				unrestricted(
-					value.tuple_type(
+		value.pi(
+			value.tuple_type(
+				val_desc_elem(
+					val_tup_cons(
 						val_desc_elem(
 							val_tup_cons(
-								val_desc_elem(
-									val_tup_cons(
-										val_desc_empty,
-										value.closure(
-											typed.tuple_elim(
-												names_todo_2,
-												typed.bound_variable(1),
-												0,
-												typed.qtype(
-													typed.literal(value.quantity(terms.quantity.erased)),
-													typed.star(1)
-												)
-											),
-											terms.runtime_context()
-										)
-									)
-								),
+								val_desc_empty,
 								value.closure(
-									terms.typed_term.tuple_elim(
-										names_todo_3,
-										terms.typed_term.bound_variable(1),
-										1,
-										typed.bound_variable(2)
-									),
+									typed.tuple_elim(names_todo_2, typed.bound_variable(1), 0, typed.star(1)),
 									terms.runtime_context()
 								)
 							)
+						),
+						value.closure(
+							terms.typed_term.tuple_elim(
+								names_todo_3,
+								terms.typed_term.bound_variable(1),
+								1,
+								typed.bound_variable(2)
+							),
+							terms.runtime_context()
 						)
 					)
-				),
-				value.param_info(value.visibility(terms.visibility.explicit)),
-				value.closure(
-					typed.tuple_elim(
-						names_todo_4,
-						typed.bound_variable(1),
-						2,
-						typed.qtype(
-							typed.literal(value.quantity(terms.quantity.unrestricted)),
-							type_fn(typed.bound_variable(2))
-						)
-					),
-					terms.runtime_context()
-				),
-				value.result_info(terms.result_info(terms.purity.pure))
-			)
+				)
+			),
+			value.param_info(value.visibility(terms.visibility.explicit)),
+			value.closure(
+				typed.tuple_elim(names_todo_4, typed.bound_variable(1), 2, type_fn(typed.bound_variable(2))),
+				terms.runtime_context()
+			),
+			value.result_info(terms.result_info(terms.purity.pure))
 		)
 	)
 end
@@ -834,52 +760,37 @@ local function build_unwrap(body_fn, type_fn)
 			typed.tuple_elim(names_todo_1, typed.bound_variable(1), 2, body_fn(typed.bound_variable(3))),
 			terms.runtime_context()
 		),
-		unrestricted(
-			value.pi(
-				unrestricted(
-					value.tuple_type(
+		value.pi(
+			value.tuple_type(
+				val_desc_elem(
+					val_tup_cons(
 						val_desc_elem(
 							val_tup_cons(
-								val_desc_elem(
-									val_tup_cons(
-										val_desc_empty,
-										value.closure(
-											typed.tuple_elim(
-												names_todo_2,
-												typed.bound_variable(1),
-												0,
-												typed.qtype(
-													typed.literal(value.quantity(terms.quantity.erased)),
-													typed.star(1)
-												)
-											),
-											terms.runtime_context()
-										)
-									)
-								),
+								val_desc_empty,
 								value.closure(
-									terms.typed_term.tuple_elim(
-										names_todo_3,
-										terms.typed_term.bound_variable(1),
-										1,
-										typed.qtype(
-											typed.literal(value.quantity(terms.quantity.unrestricted)),
-											type_fn(typed.bound_variable(2))
-										)
-									),
+									typed.tuple_elim(names_todo_2, typed.bound_variable(1), 0, typed.star(1)),
 									terms.runtime_context()
 								)
 							)
+						),
+						value.closure(
+							terms.typed_term.tuple_elim(
+								names_todo_3,
+								terms.typed_term.bound_variable(1),
+								1,
+								type_fn(typed.bound_variable(2))
+							),
+							terms.runtime_context()
 						)
 					)
-				),
-				value.param_info(value.visibility(terms.visibility.explicit)),
-				value.closure(
-					typed.tuple_elim(names_todo_4, typed.bound_variable(1), 2, typed.bound_variable(2)),
-					terms.runtime_context()
-				),
-				value.result_info(terms.result_info(terms.purity.pure))
-			)
+				)
+			),
+			value.param_info(value.visibility(terms.visibility.explicit)),
+			value.closure(
+				typed.tuple_elim(names_todo_4, typed.bound_variable(1), 2, typed.bound_variable(2)),
+				terms.runtime_context()
+			),
+			value.result_info(terms.result_info(terms.purity.pure))
 		)
 	)
 end
@@ -892,55 +803,27 @@ local function build_wrapped(body_fn)
 	local names_todo_3 = names("TOD12")
 	return lit_term(
 		value.closure(
-			typed.tuple_elim(
-				names_todo_1,
-				typed.bound_variable(1),
-				1,
-				typed.qtype(
-					typed.literal(value.quantity(terms.quantity.unrestricted)),
-					body_fn(typed.bound_variable(2))
-				)
-			),
+			typed.tuple_elim(names_todo_1, typed.bound_variable(1), 1, body_fn(typed.bound_variable(2))),
 			terms.runtime_context()
 		),
-		unrestricted(
-			value.pi(
-				unrestricted(
-					value.tuple_type(
-						val_desc_elem(
-							val_tup_cons(
-								val_desc_empty,
-								value.closure(
-									typed.tuple_elim(
-										names_todo_2,
-										typed.bound_variable(1),
-										0,
-										typed.qtype(
-											typed.literal(value.quantity(terms.quantity.unrestricted)),
-											typed.star(1)
-										)
-									),
-									terms.runtime_context()
-								)
-							)
+		value.pi(
+			value.tuple_type(
+				val_desc_elem(
+					val_tup_cons(
+						val_desc_empty,
+						value.closure(
+							typed.tuple_elim(names_todo_2, typed.bound_variable(1), 0, typed.star(1)),
+							terms.runtime_context()
 						)
 					)
-				),
-				value.param_info(value.visibility(terms.visibility.explicit)),
-				value.closure(
-					typed.tuple_elim(
-						names_todo_3,
-						typed.bound_variable(1),
-						1,
-						typed.qtype(
-							typed.literal(value.quantity(terms.quantity.unrestricted)),
-							typed.literal(value.prim_type_type)
-						)
-					),
-					terms.runtime_context()
-				),
-				value.result_info(terms.result_info(terms.purity.pure))
-			)
+				)
+			),
+			value.param_info(value.visibility(terms.visibility.explicit)),
+			value.closure(
+				typed.tuple_elim(names_todo_3, typed.bound_variable(1), 1, typed.literal(value.prim_type_type)),
+				terms.runtime_context()
+			),
+			value.result_info(terms.result_info(terms.purity.pure))
 		)
 	)
 end
@@ -976,10 +859,10 @@ local core_operations = {
 	let = exprs.primitive_operative(let_bind, "let_bind"),
 	record = exprs.primitive_operative(record_build, "record_build"),
 	intrinsic = exprs.primitive_operative(intrinsic, "intrinsic"),
-	["prim-number"] = lit_term(unrestricted(value.prim_number_type), unrestricted(value.prim_type_type)),
-	["prim-type"] = lit_term(unrestricted(value.prim_type_type), unrestricted(value.star(1))),
+	["prim-number"] = lit_term(value.prim_number_type, value.prim_type_type),
+	["prim-type"] = lit_term(value.prim_type_type, value.star(1)),
 	["prim-func-type"] = exprs.primitive_operative(prim_func_type_impl, "prim_func_type_impl"),
-	type = lit_term(unrestricted(value.star(0)), unrestricted(value.star(1))),
+	type = lit_term(value.star(0), value.star(1)),
 	type_ = exprs.primitive_operative(startype_impl, "startype_impl"),
 	["forall"] = exprs.primitive_operative(forall_type_impl, "forall_type_impl"),
 	lambda = exprs.primitive_operative(lambda_impl, "lambda_impl"),

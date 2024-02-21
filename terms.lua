@@ -443,12 +443,6 @@ inferrable_term:define_enum("inferrable", {
 			gen.anchor_type,
 		},
 	},
-	{ "qtype", {
-		"quantity",
-		inferrable_term,
-		"type",
-		inferrable_term,
-	} },
 	{
 		"pi",
 		{
@@ -786,12 +780,6 @@ typed_term:define_enum("typed", {
 		"param_name",
 		gen.builtin_string,
 		"body",
-		typed_term,
-	} },
-	{ "qtype", {
-		"quantity",
-		typed_term,
-		"type",
 		typed_term,
 	} },
 	{
@@ -1132,19 +1120,6 @@ free:define_enum("free", {
 	-- TODO: axiom
 })
 
--- erased - - - - never used at runtime
---              - can only be placed in other erased slots
---              - e.g. the type Array(u8, 42) has length information that is relevant for typechecking
---              -      but not for runtime. the constructor of Array(u8, 42) marks the 42 as erased,
---              -      and it's dropped after compile time.
--- linear - - - - used once during runtime
---              - e.g. world
--- unrestricted - used arbitrarily many times during runtime
-local quantity = gen.declare_enum("quantity", {
-	{ "erased" },
-	{ "linear" },
-	{ "unrestricted" },
-})
 -- implicit arguments are filled in through unification
 -- e.g. fn append(t : star(0), n : nat, xs : Array(t, n), val : t) -> Array(t, n+1)
 --      t and n can be implicit, given the explicit argument xs, as they're filled in by unification
@@ -1173,20 +1148,9 @@ local result_info = gen.declare_record("result_info", { "purity", purity })
 -- values must all be finite in size and must not have loops.
 -- i.e. destructuring values always (eventually) terminates.
 value:define_enum("value", {
-	-- erased, linear, unrestricted / none, one, many
-	{ "quantity_type" },
-	{ "quantity", { "quantity", quantity } },
 	-- explicit, implicit,
 	{ "visibility_type" },
 	{ "visibility", { "visibility", visibility } },
-	-- a type with a quantity
-	{ "qtype_type", { "level", gen.builtin_number } },
-	{ "qtype", {
-		"quantity",
-		value,
-		"type",
-		value,
-	} },
 	-- info about the parameter (is it implicit / what are the usage restrictions?)
 	-- quantity/visibility should be restricted to free or (quantity/visibility) rather than any value
 	{ "param_info_type" },
@@ -1199,11 +1163,11 @@ value:define_enum("value", {
 		"pi",
 		{
 			"param_type",
-			value, -- qtype
+			value,
 			"param_info",
 			value, -- param_info
 			"result_type",
-			value, -- closure from input -> qtype of result
+			value, -- closure from input -> result
 			"result_info",
 			value, -- result_info
 		},
@@ -1501,7 +1465,6 @@ for _, deriver in ipairs { derivers.as, derivers.eq } do
 	checkable_term:derive(deriver)
 	inferrable_term:derive(deriver)
 	typed_term:derive(deriver)
-	quantity:derive(deriver)
 	visibility:derive(deriver)
 	free:derive(deriver)
 	value:derive(deriver)
@@ -1546,7 +1509,6 @@ local terms = {
 	inferrable_term = inferrable_term, -- {}
 	typed_term = typed_term, -- {}
 	free = free,
-	quantity = quantity,
 	visibility = visibility,
 	purity = purity,
 	result_info = result_info,

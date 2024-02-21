@@ -27,11 +27,8 @@ local lit = terms.typed_term.literal
 local array = gen.declare_array
 local usage_array = array(gen.builtin_number)
 
-local function unrestricted(t)
-	return terms.value.qtype(terms.value.quantity(terms.quantity.unrestricted), t)
-end
 local function inf_typ(t, typ)
-	return terms.inferrable_term.typed(unrestricted(t), usage_array(), typ)
+	return terms.inferrable_term.typed(t, usage_array(), typ)
 end
 
 local value_array = array(terms.value)
@@ -45,16 +42,10 @@ p("tup_val!", tup_val())
 local empty = terms.value.enum_value("empty", tup_val())
 
 local t_prim_num = terms.value.prim_number_type
-local two_tuple_decl = unrestricted(
-	terms.value.prim_tuple_type(
-		cons(
-			cons(empty, evaluator.const_combinator(unrestricted(t_prim_num))),
-			evaluator.const_combinator(unrestricted(t_prim_num))
-		)
-	)
+local two_tuple_decl = terms.value.prim_tuple_type(
+	cons(cons(empty, evaluator.const_combinator(t_prim_num)), evaluator.const_combinator(t_prim_num))
 )
-local tuple_decl =
-	unrestricted(terms.value.prim_tuple_type(cons(empty, evaluator.const_combinator(unrestricted(t_prim_num)))))
+local tuple_decl = terms.value.prim_tuple_type(cons(empty, evaluator.const_combinator(t_prim_num)))
 
 local function prim_f(f)
 	return lit(terms.value.prim(f))

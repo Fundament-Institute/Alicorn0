@@ -5,7 +5,6 @@ local checkable_term = terms.checkable_term
 local inferrable_term = terms.inferrable_term
 local typed_term = terms.typed_term
 local free = terms.free
-local quantity = terms.quantity
 local visibility = terms.visibility
 local purity = terms.purity
 local result_info = terms.result_info
@@ -30,32 +29,6 @@ local string_array = array(gen.builtin_string)
 
 local internals_interface = require "./internals-interface"
 
---DEBUG
-do
-	local qtype = terms.value.qtype
-	terms.value.qtype = function(q, v)
-		if v.kind == "value_qtype" then
-			error "qtype in qtype"
-		end
-		return qtype(q, v)
-	end
-end
-
-local function qtype(q, val)
-	return value.qtype(value.quantity(q), val)
-end
-local function unrestricted(val)
-	return qtype(quantity.unrestricted, val)
-end
-local function unrestricted_typed(term)
-	return typed_term.qtype(typed_term.literal(value.quantity(quantity.unrestricted)), term)
-end
-local function linear(val)
-	return qtype(quantity.linear, val)
-end
-local function erased(val)
-	return qtype(quantity.erased, val)
-end
 local param_info_explicit = value.param_info(value.visibility(visibility.explicit))
 local param_info_implicit = value.param_info(value.visibility(visibility.implicit))
 local result_info_pure = value.result_info(result_info(purity.pure))
@@ -100,21 +73,10 @@ end
 ---@param context_len integer number of bindings in the runtime context already used - needed for closures
 ---@return unknown a typed term
 local function substitute_inner(val, mappings, context_len)
-	if val:is_quantity_type() then
-		return typed_term.literal(val)
-	elseif val:is_quantity() then
-		return typed_term.literal(val)
-	elseif val:is_visibility_type() then
+	if val:is_visibility_type() then
 		return typed_term.literal(val)
 	elseif val:is_visibility() then
 		return typed_term.literal(val)
-	elseif val:is_qtype_type() then
-		return typed_term.literal(val)
-	elseif val:is_qtype() then
-		local quantity, type = val:unwrap_qtype()
-		quantity = typed_term.literal(quantity)
-		type = substitute_inner(type, mappings, context_len)
-		return typed_term.qtype(quantity, type)
 	elseif val:is_param_info_type() then
 		return typed_term.literal(val)
 	elseif val:is_param_info() then
@@ -334,11 +296,7 @@ local function substitute_type_variables(val, index)
 end
 
 local function is_type_of_types(val)
-	if not val:is_qtype() then
-		error "val expected to be a qtype but wasn't"
-	end
-	local quantity, type = val:unwrap_qtype()
-	return type:is_qtype_type() or type:is_star() or type:is_prop() or type:is_prim_type_type()
+	return val:is_star() or val:is_prop() or val:is_prim_type_type()
 end
 
 local make_inner_context
@@ -362,7 +320,7 @@ local fitsinto_fail_mt = {
 			message = table.concat(message, "")
 		end
 		if self.cause then
-			return message .. "." .. tostring(self.cause)
+			return message .. " because:\n" .. tostring(self.cause)
 		end
 		return message
 	end,
@@ -475,12 +433,6 @@ add_comparer("value.prim_wrapped_type", "value.prim_wrapped_type", function(a, b
 	return ok, err
 end)
 
-local function quantities_fitsinto(qa, qb)
-	if qa == qb or qa == terms.quantity.unrestricted or qb == terms.quantity.erased then
-		return true
-	end
-	return false, qa.kind .. " doesn't fit into " .. qb.kind
-end
 function fitsinto_qless(tya, tyb)
 	if not fitsinto_comparers[tya.kind] then
 		error("fitsinto given value a which isn't a type or NYI " .. tya.kind)
@@ -493,9 +445,10 @@ function fitsinto_qless(tya, tyb)
 		return false, "no comparer for " .. tya.kind .. " with " .. tyb.kind
 	end
 
-	ok, err = comparer(tya, tyb)
+	local ok, err = comparer(tya, tyb)
 	if not ok then
-		return false, ".value" .. err
+		print("comparer failure: " .. tostring(err))
+		return false, err
 	end
 	return true
 end
@@ -506,17 +459,8 @@ function fitsinto(a, b)
 		end
 		return false, "both values are neutral, but they aren't equal: " .. tostring(a) .. " ~= " .. tostring(b)
 	end
-	if not a:is_qtype() then
-		print(a)
-		error("fitsinto given value a which isn't a qtype " .. a.kind)
-	end
-	if not b:is_qtype() then
-		print(b)
-		error("fitsinto given value b which isn't a qtype " .. b.kind)
-	end
 
-	local qa, tya = a:unwrap_qtype()
-	local qb, tyb = b:unwrap_qtype()
+	local tya, tyb = a, b
 
 	if not fitsinto_comparers[tya.kind] then
 		error("fitsinto given value a which isn't a type or NYI " .. tya.kind)
@@ -524,19 +468,15 @@ function fitsinto(a, b)
 		error("fitsinto given value b which isn't a type or NYI " .. tyb.kind)
 	end
 
-	local ok, err = quantities_fitsinto(qa.quantity, qb.quantity)
-	if not ok then
-		return false, ".quantity " .. err
-	end
-
 	local comparer = (fitsinto_comparers[tya.kind] or {})[tyb.kind]
 	if not comparer then
 		return false, "no comparer for " .. tya.kind .. " with " .. tyb.kind
 	end
 
-	ok, err = comparer(tya, tyb)
+	local ok, err = comparer(tya, tyb)
 	if not ok then
-		return false, ".value" .. err
+		print("comparer failure: " .. tostring(err))
+		return false, err
 	end
 	return true
 end
@@ -673,19 +613,10 @@ local function check(
 		print("goal_type", goal_type)
 		error("check, goal_type: expected a goal type (as an alicorn value)")
 	end
-	if not goal_type:is_qtype() and not goal_type:is_neutral() then
-		print("goal_type", goal_type)
-		error("check, goal_type: expected goal type to be a qtype")
-	end
 
 	if checkable_term:is_inferrable() then
 		local inferrable_term = checkable_term:unwrap_inferrable()
 		local inferred_type, inferred_usages, typed_term = infer(inferrable_term, typechecking_context)
-		if not inferred_type:is_qtype() and not inferred_type:is_neutral() then
-			print(inferrable_term)
-			print(inferred_type)
-			error("check: infer didn't return a qtype for " .. inferrable_term.kind)
-		end
 		-- TODO: unify!!!!
 		if inferred_type ~= goal_type then
 			local ok, err
@@ -714,7 +645,7 @@ local function check(
 	elseif checkable_term:is_tuple_cons() then
 		local elements = checkable_term:unwrap_tuple_cons()
 
-		local goal_tuple_type_elements = goal_type.type:unwrap_tuple_type()
+		local goal_tuple_type_elements = goal_type:unwrap_tuple_type()
 		local elem_type_closures = extract_tuple_elem_type_closures(goal_tuple_type_elements, value_array())
 		if #elem_type_closures ~= #elements then
 			print("goal_type", goal_type)
@@ -736,12 +667,11 @@ local function check(
 			local new_elem = evaluate(el_term, typechecking_context.runtime_context)
 			tuple_elems:append(new_elem)
 		end
-		-- TODO: handle quantities
 		return usages, typed_term.tuple_cons(new_elements)
 	elseif checkable_term:is_prim_tuple_cons() then
 		local elements = checkable_term:unwrap_prim_tuple_cons()
 
-		local goal_tuple_type_elements = goal_type.type:unwrap_prim_tuple_type()
+		local goal_tuple_type_elements = goal_type:unwrap_prim_tuple_type()
 		local elem_type_closures = extract_tuple_elem_type_closures(goal_tuple_type_elements, value_array())
 		if #elem_type_closures ~= #elements then
 			print("goal_type", goal_type)
@@ -764,7 +694,6 @@ local function check(
 			local new_elem = evaluate(el_term, typechecking_context.runtime_context)
 			tuple_elems:append(new_elem)
 		end
-		-- TODO: handle quantities
 		return usages, typed_term.prim_tuple_cons(new_elements)
 	elseif checkable_term:is_lambda() then
 		local param_name, body = checkable_term:unwrap_lambda()
@@ -948,13 +877,8 @@ function infer_tuple_type_unwrapped(subject_type, subject_value)
 end
 
 function infer_tuple_type(subject_type, subject_value)
-	if not subject_type:is_qtype() then
-		print("missing qtype wrapping tuple type")
-		print(subject_type:pretty_print())
-	end
 	-- define how the type of each tuple element should be evaluated
-	local qty, base = subject_type:unwrap_qtype()
-	return infer_tuple_type_unwrapped(base, subject_value)
+	return infer_tuple_type_unwrapped(subject_type, subject_value)
 end
 
 local function nearest_star_level(typ)
@@ -1004,70 +928,28 @@ function infer(
 	elseif inferrable_term:is_annotated_lambda() then
 		local param_name, param_annotation, body, anchor = inferrable_term:unwrap_annotated_lambda()
 		local _, _, param_term = infer(param_annotation, typechecking_context)
-		local param_qtype = evaluate(param_term, typechecking_context:get_runtime_context())
-		-- TODO: also handle neutral values, for inference of qtype
-		local param_quantity, param_type = param_qtype:unwrap_qtype()
-		local param_quantity = param_quantity:unwrap_quantity()
-		local inner_context = typechecking_context:append(param_name, param_qtype, nil, anchor)
+		local param_type = evaluate(param_term, typechecking_context:get_runtime_context())
+		local inner_context = typechecking_context:append(param_name, param_type, nil, anchor)
 		local body_type, body_usages, body_term = infer(body, inner_context)
-
-		-- FIXME: remove me after the qtype refactor that fixes inferring the type of a qtype
-		-- this is a bodge
-		if body_type:is_qtype() and body_type.type:is_qtype() then
-			body_type = body_type.type
-		end
 
 		local result_type = substitute_type_variables(body_type, #inner_context)
 		local body_usages_param = body_usages[#body_usages]
 		local lambda_usages = body_usages:copy(1, #body_usages - 1)
-		if param_quantity:is_erased() then
-			if body_usages_param > 0 then
-				error("infer: trying to use an erased parameter")
-			end
-		elseif param_quantity:is_linear() then
-			if body_usages_param > 1 then
-				error("infer: trying to use a linear parameter multiple times")
-			end
-		elseif param_quantity:is_unrestricted() then
-		-- nwn
-		else
-			error("infer: unknown quantity")
-		end
-		local lambda_type = value.pi(param_qtype, param_info_explicit, result_type, result_info_pure)
+		local lambda_type = value.pi(param_type, param_info_explicit, result_type, result_info_pure)
 		local lambda_term = typed_term.lambda(param_name, body_term)
-		-- TODO: handle quantities
-		return unrestricted(lambda_type), lambda_usages, lambda_term
-	elseif inferrable_term:is_qtype() then
-		local quantity, t = inferrable_term:unwrap_qtype()
-		local quantity_type, quantity_usages, quantity_term = infer(quantity, typechecking_context)
-		local type_type, type_usages, type_term = infer(t, typechecking_context)
-		if type_type:is_qtype_type() then
-			error("inferrable_term.qtype wrapping another qtype")
-		end
-		local qtype_usages = usage_array()
-		add_arrays(qtype_usages, quantity_usages)
-		add_arrays(qtype_usages, type_usages)
-		local qtype = typed_term.qtype(quantity_term, type_term)
-		local qtype_type = value.qtype_type(get_level(type_type))
-		-- print("inferring a qtype")
-		-- print(inferrable_term:pretty_print())
-		-- print(qtype:pretty_print())
-		return unrestricted(type_type), qtype_usages, qtype
+		return lambda_type, lambda_usages, lambda_term
 	elseif inferrable_term:is_pi() then
 		local param_type, param_info, result_type, result_info = inferrable_term:unwrap_pi()
 		local param_type_type, param_type_usages, param_type_term = infer(param_type, typechecking_context)
-		local param_info_usages, param_info_term =
-			check(param_info, typechecking_context, unrestricted(value.param_info_type))
+		local param_info_usages, param_info_term = check(param_info, typechecking_context, value.param_info_type)
 		local result_type_type, result_type_usages, result_type_term = infer(result_type, typechecking_context)
-		local result_info_usages, result_info_term =
-			check(result_info, typechecking_context, unrestricted(value.result_info_type))
-		local result_type_type_quantity, result_type_type_base = result_type_type:unwrap_qtype()
-		if not result_type_type_base:is_pi() then
+		local result_info_usages, result_info_term = check(result_info, typechecking_context, value.result_info_type)
+		if not result_type_type:is_pi() then
 			error "result type of a pi term must infer to a pi because it must be callable"
 			-- TODO: switch to using a mechanism term system
 		end
 		local result_type_param_type, result_type_param_info, result_type_result_type, result_type_result_info =
-			result_type_type_base:unwrap_pi()
+			result_type_type:unwrap_pi()
 
 		if not result_type_result_info:unwrap_result_info().purity:is_pure() then
 			error "result type computation must be pure for now"
@@ -1082,13 +964,8 @@ function infer(
 		end
 		local result_type_result_type_result =
 			apply_value(result_type_result_type, evaluate(param_type_term, typechecking_context.runtime_context))
-		-- FIXME: remove the .type bodges once qtype issues are fixed
 		local sort = value.star(
-			math.max(
-				nearest_star_level(param_type_type.type.type),
-				nearest_star_level(result_type_result_type_result.type),
-				0
-			)
+			math.max(nearest_star_level(param_type_type), nearest_star_level(result_type_result_type_result), 0)
 		)
 
 		local term = typed_term.pi(param_type_term, param_info_term, result_type_term, result_info_term)
@@ -1103,8 +980,6 @@ function infer(
 	elseif inferrable_term:is_application() then
 		local f, arg = inferrable_term:unwrap_application()
 		local f_type, f_usages, f_term = infer(f, typechecking_context)
-		--FIXME: f_quantity is unused
-		local f_quantity, f_type = f_type:unwrap_qtype()
 
 		if f_type:is_pi() then
 			local f_param_type, f_param_info, f_result_type, f_result_info = f_type:unwrap_pi()
@@ -1182,8 +1057,7 @@ function infer(
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
 		end
-		-- TODO: handle quantities
-		return unrestricted(value.tuple_type(type_data)), usages, typed_term.tuple_cons(new_elements)
+		return value.tuple_type(type_data), usages, typed_term.tuple_cons(new_elements)
 	elseif inferrable_term:is_prim_tuple_cons() then
 		print "inferring tuple construction"
 		print(inferrable_term:pretty_print())
@@ -1210,12 +1084,10 @@ function infer(
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
 		end
-		-- TODO: handle quantities
-		return unrestricted(value.prim_tuple_type(type_data)), usages, typed_term.prim_tuple_cons(new_elements)
+		return value.prim_tuple_type(type_data), usages, typed_term.prim_tuple_cons(new_elements)
 	elseif inferrable_term:is_tuple_elim() then
 		local names, subject, body = inferrable_term:unwrap_tuple_elim()
 		local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
-		--local subject_quantity, subject_type = subject_type:unwrap_qtype()
 
 		-- evaluating the subject is necessary for inferring the type of the body
 		local subject_value = evaluate(subject_term, typechecking_context:get_runtime_context())
@@ -1237,11 +1109,10 @@ function infer(
 	elseif inferrable_term:is_tuple_type() then
 		local definition = inferrable_term:unwrap_tuple_type()
 		local definition_type, definition_usages, definition_term = infer(definition, typechecking_context)
-		--local def_qty, def_base = definition_type:unwrap_qtype()
 		if definition_type ~= terms.value.tuple_defn_type then
 			error "argument to tuple_type is not a tuple_defn"
 		end
-		return unrestricted(terms.value.star(0)), definition_usages, terms.typed_term.tuple_type(definition_term)
+		return terms.value.star(0), definition_usages, terms.typed_term.tuple_type(definition_term)
 	elseif inferrable_term:is_record_cons() then
 		local fields = inferrable_term:unwrap_record_cons()
 		-- type_data is either "empty", an empty tuple,
@@ -1259,12 +1130,10 @@ function infer(
 			add_arrays(usages, field_usages)
 			new_fields[k] = field_term
 		end
-		-- TODO: handle quantities
-		return unrestricted(value.record_type(type_data)), usages, typed_term.record_cons(new_fields)
+		return value.record_type(type_data), usages, typed_term.record_cons(new_fields)
 	elseif inferrable_term:is_record_elim() then
 		local subject, field_names, body = inferrable_term:unwrap_record_elim()
 		local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
-		local subject_quantity, subject_type = subject_type:unwrap_qtype()
 		local ok, decls = subject_type:as_record_type()
 		if not ok then
 			error("infer, is_record_elim, subject_type: expected a term with a record type")
@@ -1342,7 +1211,6 @@ function infer(
 	elseif inferrable_term:is_enum_elim() then
 		local subject, mechanism = inferrable_term:unwrap_enum_elim()
 		local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
-		-- local subject_quantity, subject_type = subject_type:unwrap_qtype()
 		-- local ok, decls = subject_type:as_enum_type()
 		-- if not ok then
 		--   error("infer, is_enum_elim, subject_type: expected a term with an enum type")
@@ -1360,7 +1228,7 @@ function infer(
 			new_methods[k] = method_term
 		end
 		-- TODO: usages
-		return unrestricted(value.object_type(type_data)), usages_array(), typed_term.object_cons(new_methods)
+		return value.object_type(type_data), usages_array(), typed_term.object_cons(new_methods)
 	elseif inferrable_term:is_object_elim() then
 		local subject, mechanism = inferrable_term:unwrap_object_elim()
 		error("nyi")
@@ -1390,36 +1258,29 @@ function infer(
 		end
 		local empty = value.enum_value("empty", tup_val())
 		local handler, userdata_type = inferrable_term:unwrap_operative_type_cons()
-		local goal_type = unrestricted(value.pi(
-			unrestricted(
-				value.tuple_type(
+		local goal_type = value.pi(
+			value.tuple_type(
+				cons(
 					cons(
-						cons(
-							cons(
-								cons(empty, const_combinator(unrestricted(prim_syntax_type))),
-								const_combinator(unrestricted(prim_environment_type))
-							),
-							const_combinator(unrestricted(prim_typed_term_type))
-						),
-						const_combinator(unrestricted(prim_goal_type))
-					)
+						cons(cons(empty, const_combinator(prim_syntax_type)), const_combinator(prim_environment_type)),
+						const_combinator(prim_typed_term_type)
+					),
+					const_combinator(prim_goal_type)
 				)
 			),
 			--unrestricted(tup_val(unrestricted(prim_syntax_type), unrestricted(prim_environment_type))),
 			param_info_explicit,
 			const_combinator(
-				unrestricted(
-					value.tuple_type(
-						cons(
-							cons(empty, const_combinator(unrestricted(prim_inferrable_term_type))),
-							const_combinator(unrestricted(prim_environment_type))
-						)
+				value.tuple_type(
+					cons(
+						cons(empty, const_combinator(prim_inferrable_term_type)),
+						const_combinator(prim_environment_type)
 					)
 				)
 			),
 			--unrestricted(tup_val(unrestricted(prim_inferrable_term_type), unrestricted(prim_environment_type))),
 			result_info_pure
-		))
+		)
 		local handler_usages, handler_term = check(handler, typechecking_context, goal_type)
 		local userdata_type_type, userdata_type_usages, userdata_type_term = infer(userdata_type, typechecking_context)
 		local operative_type_usages = usage_array()
@@ -1448,36 +1309,27 @@ function infer(
 		if not is_type_of_types(content_type_type) then
 			error "infer: type being boxed must be a type"
 		end
-		local quantity, backing_type = content_type_type:unwrap_qtype()
-		return value.qtype(quantity, value.prim_type_type),
-			content_type_usages,
-			typed_term.prim_wrapped_type(content_type_term)
+		return value.prim_type_type, content_type_usages, typed_term.prim_wrapped_type(content_type_term)
 	elseif inferrable_term:is_prim_wrap() then
 		local content = inferrable_term:unwrap_prim_wrap()
 		local content_type, content_usages, content_term = infer(content, typechecking_context)
-		local quantity, backing_type = content_type:unwrap_qtype()
-		return value.qtype(quantity, value.prim_wrapped_type(backing_type)),
-			content_usages,
-			typed_term.prim_wrap(content_term)
+		return value.prim_wrapped_type(backing_type), content_usages, typed_term.prim_wrap(content_term)
 	elseif inferrable_term:is_prim_unstrict_wrap() then
 		local content = inferrable_term:unwrap_prim_wrap()
 		local content_type, content_usages, content_term = infer(content, typechecking_context)
-		local quantity, backing_type = content_type:unwrap_qtype()
-		return value.qtype(quantity, value.prim_unstrict_wrapped_type(backing_type)),
+		return value.prim_unstrict_wrapped_type(backing_type),
 			content_usages,
 			typed_term.prim_unstrict_wrap(content_term)
 	elseif inferrable_term:is_prim_unwrap() then
 		local container = inferrable_term:unwrap_prim_unwrap()
 		local container_type, container_usages, container_term = infer(container, typechecking_context)
-		local quantity, backing_type = container_type:unwrap_qtype()
-		local content_type = backing_type:unwrap_prim_wrapped_type()
-		return value.qtype(quantity, content_type), container_usages, typed_term.prim_unwrap(container_term)
+		local content_type = container_type:unwrap_prim_wrapped_type()
+		return content_type, container_usages, typed_term.prim_unwrap(container_term)
 	elseif inferrable_term:is_prim_unstrict_unwrap() then
 		local container = inferrable_term:unwrap_prim_unwrap()
 		local container_type, container_usages, container_term = infer(container, typechecking_context)
-		local quantity, backing_type = container_type:unwrap_qtype()
-		local content_type = backing_type:unwrap_prim_unstrict_wrapped_type()
-		return value.qtype(quantity, content_type), container_usages, typed_term.prim_unstrict_unwrap(container_term)
+		local content_type = container_type:unwrap_prim_unstrict_wrapped_type()
+		return content_type, container_usages, typed_term.prim_unstrict_unwrap(container_term)
 	elseif inferrable_term:is_prim_if() then
 		local subject, consequent, alternate = inferrable_term:unwrap_prim_if()
 		-- for each thing in typechecking context check if it == the subject, replace with literal true
@@ -1514,7 +1366,7 @@ function infer(
 		return bodytype, result_usages, terms.typed_term.let(name, exprterm, bodyterm)
 	elseif inferrable_term:is_prim_intrinsic() then
 		local source, type, anchor = inferrable_term:unwrap_prim_intrinsic()
-		local source_usages, source_term = check(source, typechecking_context, unrestricted(value.prim_string_type))
+		local source_usages, source_term = check(source, typechecking_context, value.prim_string_type)
 		local type_type, type_usages, type_term = infer(type, typechecking_context) --check(type, typechecking_context, value.qtype_type(0))
 
 		print("prim intrinsic is inferring: (inferrable term follows)")
@@ -1615,16 +1467,6 @@ function evaluate(typed_term, runtime_context)
 	elseif typed_term:is_lambda() then
 		local param_name, body = typed_term:unwrap_lambda()
 		return value.closure(body, runtime_context)
-	elseif typed_term:is_qtype() then
-		local quantity, type_term = typed_term:unwrap_qtype()
-		local quantity_value = evaluate(quantity, runtime_context)
-		local type_value = evaluate(type_term, runtime_context)
-		if type_value:is_qtype() then
-			print("type_term", type_term)
-			print("type_value (evaluate(type_term))", type_value)
-			error "typed_term.qtype wrapping another qtype"
-		end
-		return value.qtype(quantity_value, type_value)
 	elseif typed_term:is_pi() then
 		local param_type, param_info, result_type, result_info = typed_term:unwrap_pi()
 		local param_type_value = evaluate(param_type, runtime_context)
@@ -1814,13 +1656,11 @@ function evaluate(typed_term, runtime_context)
 	elseif typed_term:is_prim_wrapped_type() then
 		local type_term = typed_term:unwrap_prim_wrapped_type()
 		local type_value = evaluate(type_term, runtime_context)
-		local quantity, backing_type = type_value:unwrap_qtype()
-		return value.prim_wrapped_type(backing_type)
+		return value.prim_wrapped_type(type_value)
 	elseif typed_term:is_prim_unstrict_wrapped_type() then
 		local type_term = typed_term:unwrap_prim_unstrict_wrapped_type()
 		local type_value = evaluate(type_term, runtime_context)
-		local quantity, backing_type = type_value:unwrap_qtype()
-		return value.prim_wrapped_type(backing_type)
+		return value.prim_wrapped_type(type_value)
 	elseif typed_term:is_prim_wrap() then
 		local content = typed_term:unwrap_prim_wrap()
 		local content_val = evaluate(content, runtime_context)

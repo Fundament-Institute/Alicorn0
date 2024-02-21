@@ -59,6 +59,16 @@ local function create_literal(elements)
 	return longstring_val
 end
 
+local function create_anchor(line, char, sourceid)
+	local newanchor = {
+		line = line,
+		char = char,
+		sourceid = sourceid,
+	}
+	setmetatable(newanchor, anchor_mt)
+	return newanchor
+end
+
 local grammar = P {
 	"ast",
 	ast = V "foreward" * V "file",
@@ -74,17 +84,31 @@ local grammar = P {
 	-- every time there's a newline, get it's position. construct a named group with the position
 	-- of the latest (numbered) newline
 	-- Cmt because of precedence requirements
-	newline = P "\r" ^ 0 * P "\n",
+	newline = (P "\r" ^ 0 * P "\n") * lpeg.Carg(1) * Cp() / function(table, position)
+		table.positions[#table.positions + 1] = { pos = position, line = table.positions[#table.positions].line + 1 }
+	end,
+
+	nextline = V "newline" + V "eof" + V "filestart",
 
 	-- either match the newline or match the beginning of the file
 	filestart = Cmt(Cp(), function(_, _, mypos)
 		return mypos == 1
 	end),
 
+	eof = P(-1),
+
+	textpos = lpeg.Carg(1) * Cp() / function(table, position)
+		local simple = create_anchor(
+			table.positions[#table.positions].line,
+			position - table.positions[#table.positions].pos + 1,
+			table.sourceid
+		)
+		return simple
+	end,
 	-- used by every element
 	-- TODO: make this propogate errors back up the stack
-	anchor = Cg(Cp(), "anchor"),
-	endpos = Cg(Cp(), "endpos"),
+	anchor = Cg(V "textpos", "anchor"),
+	endpos = Cg(V "textpos", "endpos"),
 
 	count_tabs = Cmt(Cp() * C(S "\t " ^ 1), function(_, _, anchor, indentstring)
 		-- only tabs are allowed
@@ -99,7 +123,7 @@ local grammar = P {
 
 			if (char == "\t") and (lookbehind_char == " ") then
 				print("error at ", anchor, ": tabs and spaces must not be interspersed")
-				return false
+				assert(false)
 			elseif char == "\t" then
 				numtabs = numtabs + 1
 			end
@@ -119,7 +143,7 @@ local grammar = P {
 
 	longstring_body = C((V "unicode_escape" + (1 - (V "newline" + V "splice"))) ^ 1),
 	longstring_newline = (
-		(V "newline" * Cc("\n") * ((Cs(V "subordinate_indent") * V "longstring_body") + (S "\t " ^ 0 * #V "newline")))
+		(Cc("\n") * ((V "newline" * (Cs(V "subordinate_indent") * V "longstring_body")) + V "empty_line"))
 		+ V "longstring_body"
 	),
 	longstring_literal = Ct(V "anchor" * (V "longstring_body" + V "longstring_newline") ^ 1) / create_literal,
@@ -130,17 +154,22 @@ local grammar = P {
 	),
 
 	comment_body = C((1 - V "newline") ^ 1),
+
 	comment = element(
 		"comment",
-		P "#"
-			* Cg(
-				Cs(
-					V "comment_body" ^ -1
-						* (V "newline" * ((V "subordinate_indent" * V "comment_body") + (S "\t " ^ 0 * #V "newline")))
-							^ 0
-				),
-				"val"
-			)
+		(
+			V "nextline"
+				* S "\t " ^ 0
+				* P "#"
+				* Cg(
+					Cs(
+						V "comment_body"
+							* ((V "newline" * V "subordinate_indent" * V "comment_body") + V "empty_line") ^ 0
+					),
+					"val"
+				)
+			+ (P "#" * Cg(Cs(V "comment_body"), "val"))
+		)
 	),
 
 	-- numbers are limited, they are not bignums, they are standard lua numbers. scopes shares the problem of files not having arbitrary precision
@@ -175,6 +204,18 @@ local grammar = P {
 	tokens = space_tokens(
 		V "comment" + V "function_call" + V "paren_list" + V "longstring" + V "string" + V "number" + V "symbol"
 	),
+
+	-- furthest_forward = ,
+	furthest_forward = lpeg.Carg(2) * V "textpos" * 1 ^ 1 / function(table, position)
+		if table.position then
+			if table.position < position then
+				table.position = position
+			end
+		else
+			table.position = position
+		end
+	end,
+
 	token_spacer = S "\t " ^ 0,
 
 	-- LIST SEPARATOR BEHAVIOR IS NOT CONSISTENT BETWEEN BRACED AND NAKED LISTS
@@ -216,24 +257,25 @@ local grammar = P {
 	-- subtly different from the base case
 	-- if there's a set of arguments provided that aren't comma separated, they are automatically interpreted as a child list
 	-- the base case will interpret such a thing as part of the normal list
-	function_call = list(V "symbol" * P "(" * (V "comma_sep_paren_body" + V "base_paren_body") * P ")"),
+	function_call = list(V "symbol" * P "(" * (V "comma_sep_paren_body" + V "base_paren_body") ^ -1 * P ")"),
 
-	empty_line = V "newline" * space_tokens(P "") * #(V "newline" + -1),
+	empty_line = V "newline" * space_tokens(P "") * #V "nextline",
 
 	file = list(
 		(
-			(V "tokens" * (V "newline" + -1) * V "isdedent")
-			+ (V "naked_list_line" ^ -1 * V "newline" * V "isdedent")
-			+ (V "naked_list")
+			V "comment"
+			+ (V "newline" * V "isdedent")
+			+ (V "tokens" * #(V "nextline" * V "isdedent"))
+			+ (V "naked_list_line" * #(V "newline" * V "isdedent"))
+			+ V "naked_list"
+			+ V "furthest_forward"
 		) ^ 1
 	) * -1,
 
 	naked_list_line = (list(V "tokens" ^ 0 * space_tokens(P ";"))) ^ 1 * V "naked_list" ^ 0,
 	naked_list = list( -- escape char terminates current list
-		((V "naked_list_line" + V "tokens" ^ 1) ^ 1)
-			* (V "empty_line" ^ 1 + (V "newline" * V "indent" * (((list(V "tokens" * space_tokens(P ";")) + V "tokens") * ((#(V "newline" * V "isdedent") * V "dedent") + (-P(
-					1
-				)))) + (V "naked_list" * V "dedent"))))
+		(V "naked_list_line" + V "tokens" ^ 1)
+			* (V "empty_line" + (V "newline" * V "indent" * (((list(V "tokens" * space_tokens(P ";")) + V "tokens") * #(V "nextline" * V "isdedent")) + (V "naked_list")) * V "dedent"))
 				^ 0
 	),
 
@@ -279,56 +321,32 @@ local grammar = P {
 	end),
 }
 
-local newlinegetter = P {
-	"newlines",
-	body = (1 - S "\r\n") ^ 1,
-	newline = P "\r" ^ 0 * P "\n",
-	newlines = Ct(Cp() * (V "body" + (V "newline" * Cp())) ^ 0),
-}
-
-local function create_anchor(anchor, newlines, cursor, sourceid)
-	local line_num = cursor
-
-	while (line_num + 1 <= #newlines) and (anchor >= newlines[line_num + 1]) do
-		line_num = line_num + 1
-	end
-	local newanchor = {
-		line = line_num,
-		char = anchor - newlines[line_num] + 1,
-		sourceid = sourceid,
-	}
-	setmetatable(newanchor, anchor_mt)
-
-	return newanchor, line_num
-end
-
-local function correct_anchors(ast, newlines, cursor, sourceid)
-	local revised_ast = ast
-	local line_num = cursor
-
-	assert(ast.anchor)
-	revised_ast.anchor, line_num = create_anchor(ast.anchor, newlines, line_num, sourceid)
-	if ast.kind == "list" or ast.kind == "string" then
-		for i, v in ipairs(ast.elements) do
-			revised_ast.elements[i], line_num = correct_anchors(v, newlines, line_num, sourceid)
-		end
-
-		revised_ast.endpos, line_num = create_anchor(ast.endpos, newlines, line_num, sourceid)
-	end
-
-	return revised_ast, line_num
-end
-
 local function parse(input, filename)
 	assert(filename)
-	local newline_list = lpeg.match(newlinegetter, input)
-	local initial_ast = lpeg.match(grammar, input)
 
-	local file_endpos = create_anchor(initial_ast.endpos, newline_list, #newline_list, filename)
-	local revised_ast = correct_anchors(initial_ast, newline_list, 1, filename)
-	revised_ast.endpos = file_endpos
+	if not (string.len(input) > 0) then
+		print("empty file")
+		return nil
+	end
 
-	return revised_ast
+	local newlinetable = {
+		sourceid = filename,
+		positions = { {
+			pos = 1,
+			line = 1,
+		} },
+	}
+	local furthest_forward = { position = nil }
+	local ast = lpeg.match(grammar, input, 1, newlinetable, furthest_forward)
+
+	assert(ast, "completely failed to parse format")
+
+	if furthest_forward.position then
+		print("error in " .. tostring(furthest_forward.position))
+		assert(false, "errors in file")
+	end
+
+	return ast
 end
 
 return { parse = parse }

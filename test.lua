@@ -10,7 +10,8 @@ local function simplify_list(list)
 		local simplified_list = {}
 
 		for i = 1, #list.elements do
-			table.insert(simplified_list, simplify_list(list.elements[i]))
+			local result = simplify_list(list.elements[i])
+			table.insert(simplified_list, result)
 		end
 
 		return simplified_list
@@ -534,6 +535,7 @@ function testcomma()
 		"[1 , 2, 1 + 2]",
 		"let (a, b) = f(x)",
 		"f(a)",
+		"f()",
 	}
 
 	local expected = {
@@ -548,6 +550,7 @@ function testcomma()
 		{ { "braced_list", 1, 2, { 1, "+", 2 } } },
 		{ { "let", { "a", "b" }, "=", { "f", "x" } } },
 		{ { "f", "a" } },
+		{ { "f" } },
 	}
 
 	for i = 1, #example do

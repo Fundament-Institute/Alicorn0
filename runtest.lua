@@ -14,7 +14,9 @@ print("read code")
 print(src)
 print("parsing code")
 local code = format.read(src, filename)
--- p(code)
+print("printing raw ast")
+print(format.lispy_print(code))
+print("end printing raw ast")
 
 local env = base_env.create()
 

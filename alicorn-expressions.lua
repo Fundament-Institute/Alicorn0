@@ -11,7 +11,6 @@ local typechecking_context = terms.typechecking_context
 local checkable_term = terms.checkable_term
 local inferrable_term = terms.inferrable_term
 local typed_term = terms.typed_term
-local quantity = terms.quantity
 local visibility = terms.visibility
 local purity = terms.purity
 local result_info = terms.result_info
@@ -29,24 +28,6 @@ local value_array = array(value)
 local usage_array = array(gen.builtin_number)
 local name_array = array(gen.builtin_string)
 
-local function qtype(q, val)
-	return value.qtype(value.quantity(q), val)
-end
-local function unrestricted(val)
-	return qtype(quantity.unrestricted, val)
-end
-local function default_unrestricted(val)
-	if val:is_qtype() then
-		return val
-	end
-	return qtype(quantity.unrestricted, val)
-end
-local function linear(val)
-	return qtype(quantity.linear, val)
-end
-local function erased(val)
-	return qtype(quantity.erased, val)
-end
 local param_info_explicit = value.param_info(value.visibility(visibility.explicit))
 local param_info_implicit = value.param_info(value.visibility(visibility.implicit))
 local result_info_pure = value.result_info(result_info(purity.pure))
@@ -278,13 +259,11 @@ local function expression_pairhandler(args, a, b)
 		end
 	end
 
-	if type_of_term:is_qtype() and type_of_term.type:is_pi() then
+	if type_of_term:is_pi() then
+		local param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
 		-- multiple quantity of usages in tuple with usage in function arguments
 		local ok, tuple, env = args:match({
-			collect_tuple(
-				metalanguage.accept_handler,
-				ExpressionArgs.new(expression_goal.check(type_of_term.type.param_type), env)
-			),
+			collect_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
 		}, metalanguage.failure_handler, nil)
 
 		if not ok then
@@ -294,15 +273,13 @@ local function expression_pairhandler(args, a, b)
 		return true, inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple), env
 	end
 
-	if type_of_term:is_qtype() and type_of_term.type:as_prim_function_type() then
+	if type_of_term:is_prim_function_type() then
+		local param_type, result_type = type_of_term:unwrap_prim_function_type()
 		print("checking prim_function_type call args with goal: (value term follows)")
 		print(type_of_term.type.param_type)
 		-- multiple quantity of usages in tuple with usage in function arguments
 		local ok, tuple, env = args:match({
-			collect_prim_tuple(
-				metalanguage.accept_handler,
-				ExpressionArgs.new(expression_goal.check(type_of_term.type.param_type), env)
-			),
+			collect_prim_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
 		}, metalanguage.failure_handler, nil)
 
 		if not ok then
@@ -318,9 +295,9 @@ local function expression_pairhandler(args, a, b)
 	end
 
 	print("!!! about to fail of invalid type")
-	print(combiner:pretty_print())
+	print(combiner)
 	print("infers to")
-	print(type_of_term:pretty_print())
+	print(type_of_term)
 	print("in")
 	env.typechecking_context:dump_names()
 	return false, "unknown type for pairhandler " .. type_of_term.kind, env
@@ -395,20 +372,12 @@ local function expression_valuehandler(args, val)
 	if val.type == "f64" then
 		p(val)
 		return true,
-			inferrable_term.typed(
-				unrestricted(value.prim_number_type),
-				usage_array(),
-				typed_term.literal(value.prim(val.val))
-			),
+			inferrable_term.typed(value.prim_number_type, usage_array(), typed_term.literal(value.prim(val.val))),
 			env
 	end
 	if val.type == "string" then
 		return true,
-			inferrable_term.typed(
-				unrestricted(value.prim_string_type),
-				usage_array(),
-				typed_term.literal(value.prim(val.val))
-			),
+			inferrable_term.typed(value.prim_string_type, usage_array(), typed_term.literal(value.prim(val.val))),
 			env
 	end
 	p("valuehandler error", val)
@@ -534,7 +503,7 @@ local function primitive_operative(fn, name)
 	-- this ensures variable 1 is the argument tuple
 	local value_fn = value.closure(tuple_to_tuple_fn, runtime_context())
 
-	local userdata_type = unrestricted(value.tuple_type(empty))
+	local userdata_type = value.tuple_type(empty)
 	return inferrable_term.typed(
 		value.operative_type(value_fn, userdata_type),
 		array(gen.builtin_number)(),
@@ -581,7 +550,7 @@ collect_tuple = metalanguage.reducer(function(syntax, args)
 	if goal:is_check() then
 		collected_terms = array(checkable_term)()
 		goal_type = goal:unwrap_check()
-		closures = evaluator.extract_tuple_elem_type_closures(goal_type.type:unwrap_tuple_type(), value_array())
+		closures = evaluator.extract_tuple_elem_type_closures(goal_type:unwrap_tuple_type(), value_array())
 	else
 		collected_terms = inferrable_array
 	end
@@ -659,7 +628,7 @@ collect_prim_tuple = metalanguage.reducer(function(syntax, args)
 	if goal:is_check() then
 		collected_terms = array(checkable_term)()
 		goal_type = goal:unwrap_check()
-		closures = evaluator.extract_tuple_elem_type_closures(goal_type.type:unwrap_prim_tuple_type(), value_array())
+		closures = evaluator.extract_tuple_elem_type_closures(goal_type:unwrap_prim_tuple_type(), value_array())
 	else
 		collected_terms = inferrable_array
 	end
@@ -790,24 +759,19 @@ end
 
 local function build_prim_type_tuple(elems)
 	local result = empty
-	local quantity = terms.value.quantity(terms.quantity.unrestricted)
-
-	if elems.is_qtype and elems:is_qtype() then
-		quantity, elems = elems:unwrap_qtype()
-	end
 
 	for i, v in ipairs(elems) do
-		result = cons(result, const_combinator(default_unrestricted(v)))
+		result = cons(result, const_combinator(v))
 	end
 
-	return terms.value.qtype(quantity, terms.value.prim_tuple_type(result))
+	return terms.value.prim_tuple_type(result)
 end
 
 local function primitive_applicative(fn, params, results)
 	local literal_prim_fn = terms.typed_term.literal(terms.value.prim(fn))
 	local prim_fn_type = terms.value.prim_function_type(build_prim_type_tuple(params), build_prim_type_tuple(results))
 
-	return terms.inferrable_term.typed(unrestricted(prim_fn_type), usage_array(), literal_prim_fn)
+	return terms.inferrable_term.typed(prim_fn_type, usage_array(), literal_prim_fn)
 end
 
 local function eval(syntax, environment)
