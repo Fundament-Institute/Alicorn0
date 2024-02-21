@@ -675,10 +675,6 @@ local inferrable_term_override_pretty = {
 
 		pp:_exit()
 	end,
-	qtype = function(self, pp)
-		local quantity, type = self:unwrap_qtype()
-		pp:any(type)
-	end,
 	tuple_elim = function(self, pp)
 		local names, subject, body = self:unwrap_tuple_elim()
 
@@ -986,10 +982,6 @@ local typed_term_override_pretty = {
 		pp:_dedent()
 
 		pp:_exit()
-	end,
-	qtype = function(self, pp)
-		local quantity, type = self:unwrap_qtype()
-		pp:any(type)
 	end,
 	pi = function(self, pp)
 		local param_type, param_info, result_type, result_info = self:unwrap_pi()
@@ -1299,10 +1291,6 @@ local function value_tuple_type_inner(decls, pp, depth)
 	end
 end
 local value_override_pretty = {
-	qtype = function(self, pp)
-		local quantity, type = self:unwrap_qtype()
-		pp:any(type)
-	end,
 	pi = function(self, pp)
 		local param_type, param_info, result_type, result_info = self:unwrap_pi()
 
@@ -1478,7 +1466,6 @@ end
 checkable_term:derive(derivers.pretty_print)
 inferrable_term:derive(derivers.pretty_print, inferrable_term_override_pretty)
 typed_term:derive(derivers.pretty_print, typed_term_override_pretty)
-quantity:derive(derivers.pretty_print)
 visibility:derive(derivers.pretty_print)
 free:derive(derivers.pretty_print)
 value:derive(derivers.pretty_print, value_override_pretty)

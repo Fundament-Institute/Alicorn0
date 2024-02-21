@@ -276,7 +276,7 @@ local function expression_pairhandler(args, a, b)
 	if type_of_term:is_prim_function_type() then
 		local param_type, result_type = type_of_term:unwrap_prim_function_type()
 		print("checking prim_function_type call args with goal: (value term follows)")
-		print(type_of_term.type.param_type)
+		print(param_type)
 		-- multiple quantity of usages in tuple with usage in function arguments
 		local ok, tuple, env = args:match({
 			collect_prim_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
