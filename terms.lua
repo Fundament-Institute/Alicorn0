@@ -599,7 +599,18 @@ inferrable_term:define_enum("inferrable", {
 	},
 })
 
+local function inferrable_lambda_helper(body)
+	local ok, names, subject, inner_body = body:as_tuple_elim()
+
+	-- !!!!!!!!!!!!!!!!FIXME!!!!!!!!!!!!!!!!!!!!!!!!!
+	-- how to tell when bound_variable refers to lambda parameter?
+	-- currently assuming this is always the case
+	local is_destructure = ok and subject:is_bound_variable() -- and variable == something
+
+	return is_destructure, names, inner_body
+end
 -- the only difference compared to typed_tuple_type_flatten is enum_type
+-- and lambda
 -- TODO: what is enum_type?
 local function inferrable_tuple_type_flatten(definition)
 	local enum_type, constructor, arg = definition:unwrap_enum_cons()
@@ -609,9 +620,17 @@ local function inferrable_tuple_type_flatten(definition)
 		local elements = arg:unwrap_tuple_cons()
 		local definition = elements[1]
 		local f = elements[2]
+		local ok, param_name, param_annotation, body, anchor = f:as_annotated_lambda()
+		if not ok then
+			error("override_pretty: inferrable.tuple_type: tuple decl must be a lambda")
+		end
+		local is_destructure, names, inner_body = inferrable_lambda_helper(body)
+		if is_destructure then
+			body = inner_body
+		end
 		local prev, n = inferrable_tuple_type_flatten(definition)
 		n = n + 1
-		prev[n] = f
+		prev[n] = body
 		return prev, n
 	else
 		error("override_pretty: inferrable.tuple_type: unknown tuple type data constructor")
@@ -643,6 +662,7 @@ local inferrable_term_override_pretty = {
 	end,
 	annotated_lambda = function(self, pp)
 		local param_name, param_annotation, body, anchor = self:unwrap_annotated_lambda()
+		local is_destructure, names, inner_body = inferrable_lambda_helper(body)
 
 		pp:_enter()
 
@@ -650,11 +670,7 @@ local inferrable_term_override_pretty = {
 		pp:unit("inferrable.\u{03BB} ")
 		pp:unit(pp:_resetcolor())
 
-		local ok, names, subject, inner_body = body:as_tuple_elim()
-		-- !!!!!!!!!!!!!!!!FIXME!!!!!!!!!!!!!!!!!!!!!!!!!
-		-- how to tell when bound_variable refers to lambda parameter?
-		-- currently assuming this is always the case
-		if ok and subject:is_bound_variable() then
+		if is_destructure then
 			body = inner_body
 
 			pp:unit(pp:_color())
@@ -952,7 +968,18 @@ typed_term:define_enum("typed", {
 	} },
 })
 
+local function typed_lambda_helper(body)
+	local ok, names, subject, length, inner_body = body:as_tuple_elim()
+
+	-- !!!!!!!!!!!!!!!!FIXME!!!!!!!!!!!!!!!!!!!!!!!!!
+	-- how to tell when bound_variable refers to lambda parameter?
+	-- currently assuming this is always the case
+	local is_destructure = ok and subject:is_bound_variable() -- and variable == something
+
+	return is_destructure, names, inner_body
+end
 -- the only difference compared to inferrable_tuple_type_flatten is lack of enum_type
+-- and lambda
 local function typed_tuple_type_flatten(definition)
 	local constructor, arg = definition:unwrap_enum_cons()
 	if constructor == "empty" then
@@ -961,9 +988,17 @@ local function typed_tuple_type_flatten(definition)
 		local elements = arg:unwrap_tuple_cons()
 		local definition = elements[1]
 		local f = elements[2]
+		local ok, param_name, body = f:as_lambda()
+		if not ok then
+			error("override_pretty: typed.tuple_type: tuple decl must be a lambda")
+		end
+		local is_destructure, names, inner_body = typed_lambda_helper(body)
+		if is_destructure then
+			body = inner_body
+		end
 		local prev, n = typed_tuple_type_flatten(definition)
 		n = n + 1
-		prev[n] = f
+		prev[n] = body
 		return prev, n
 	else
 		error("override_pretty: typed.tuple_type: unknown tuple type data constructor")
@@ -976,6 +1011,7 @@ local typed_term_override_pretty = {
 	end,
 	lambda = function(self, pp)
 		local param_name, body = self:unwrap_lambda()
+		local is_destructure, names, inner_body = typed_lambda_helper(body)
 
 		pp:_enter()
 
@@ -983,11 +1019,7 @@ local typed_term_override_pretty = {
 		pp:unit("typed.\u{03BB} ")
 		pp:unit(pp:_resetcolor())
 
-		local ok, names, subject, length, inner_body = body:as_tuple_elim()
-		-- !!!!!!!!!!!!!!!!FIXME!!!!!!!!!!!!!!!!!!!!!!!!!
-		-- how to tell when bound_variable refers to lambda parameter?
-		-- currently assuming this is always the case
-		if ok and subject:is_bound_variable() then
+		if is_destructure then
 			body = inner_body
 
 			pp:unit(pp:_color())
