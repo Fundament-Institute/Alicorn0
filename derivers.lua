@@ -112,10 +112,10 @@ local function record_prettyprintable_trait(info)
 	end
 	local chunk = string.format(
 		[[
-return function(self, pp)
+return function(self, pp, ...)
 	pp:record(%q, {
 		%s
-	})
+	}, ...)
 end
 ]],
 		info.kind,
@@ -185,11 +185,11 @@ local pretty_print = {
 
 		local chunk = [[
       local variant_printers = ...
-      return function(self, prefix)
+      return function(self, prefix, ...)
 		if not variant_printers[self.kind] then
 			error("missing variant_printer for" .. self.kind)
 		end
-        return variant_printers[self.kind](self, prefix)
+        return variant_printers[self.kind](self, prefix, ...)
       end
     ]]
 
