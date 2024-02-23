@@ -550,7 +550,7 @@ collect_tuple = metalanguage.reducer(function(syntax, args)
 		goal_type = goal:unwrap_check()
 		closures = evaluator.extract_tuple_elem_type_closures(goal_type:unwrap_tuple_type(), value_array())
 	else
-		collected_terms = inferrable_array
+		collected_terms = inferrable_array()
 	end
 
 	local tuple_type_elems = value_array()

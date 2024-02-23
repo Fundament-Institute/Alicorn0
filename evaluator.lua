@@ -751,6 +751,18 @@ local function index_tuple_value(subject, index)
 		return value.prim(elems[index])
 	elseif subject:is_neutral() then
 		local inner = subject:unwrap_neutral()
+		if inner:is_prim_tuple_stuck() then
+			local leading, stuck_elem, trailing = inner:unwrap_prim_tuple_stuck()
+			if #leading >= index then
+				return terms.value.prim(leading[index])
+			elseif #leading + 1 == index then
+				return terms.value.neutral(stuck_elem)
+			elseif #leading + 1 + #trailing >= index then
+				return trailing[index - #leading - 1]
+			else
+				error "tuple index out of bounds"
+			end
+		end
 		return value.neutral(neutral_value.tuple_element_access_stuck(inner, index))
 	end
 end
@@ -1513,6 +1525,8 @@ function evaluate(typed_term, runtime_context)
 		if subject_value:is_tuple_value() then
 			local subject_elements = subject_value:unwrap_tuple_value()
 			if #subject_elements ~= length then
+				print("tuple has only", #subject_elements, "elements but expected", length)
+				print("tuple being eliminated", subject_value)
 				error("evaluate: mismatch in tuple length from typechecking and evaluation")
 			end
 			for i = 1, length do
@@ -1521,17 +1535,15 @@ function evaluate(typed_term, runtime_context)
 		elseif subject_value:is_prim_tuple_value() then
 			local subject_elements = subject_value:unwrap_prim_tuple_value()
 			if #subject_elements ~= length then
-				p(#subject_elements, length)
+				print(#subject_elements, length)
 				error("evaluate: mismatch in tuple length from typechecking and evaluation")
 			end
 			for i = 1, length do
 				inner_context = inner_context:append(value.prim(subject_elements[i]))
 			end
 		elseif subject_value:is_neutral() then
-			local subject_neutral = subject_value:unwrap_neutral()
 			for i = 1, length do
-				inner_context =
-					inner_context:append(value.neutral(neutral_value.tuple_element_access_stuck(subject_neutral, i)))
+				inner_context = inner_context:append(index_tuple_value(subject_value, i))
 			end
 		else
 			p(subject_value)
