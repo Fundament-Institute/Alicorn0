@@ -15,7 +15,7 @@ let prim-string-wrap-get =
 		:
 		prim-func-type -> (res : (wrapped prim-type))
 let (prim-string-wrap) = (prim-string-wrap-get)
-let prim-string = (unwrap prim-type prim-string-wrap)
+let prim-string = unwrap prim-type prim-string-wrap
 
 let prim-array-type =
 	intrinsic
@@ -35,10 +35,9 @@ let prim-array-type =
 		:
 		prim-func-type (T : (unstrict-wrapped prim-type)) -> (array : (unstrict-wrapped prim-type))
 
-let array-type =
-	lambda ((T : prim-type))
-		let (typ) = (prim-array-type (unstrict-wrap prim-type T))
-		unwrap prim-type typ
+let array-type = lambda ((T : prim-type))
+	let (typ) = (prim-array-type (unstrict-wrap prim-type T))
+	unwrap prim-type typ
 
 let prim-array-set =
 	lambda ((T : prim-type))
@@ -91,10 +90,9 @@ let array-get =
 		let (elem) = typed-arr-get(arr, index)
 		(the T elem)
 
-let array-new = 
-	lambda ((T : prim-type))
-		let (elem) = (prim-array-new(T))
-		elem
+let array-new = lambda ((T : prim-type))
+	let (elem) = (prim-array-new(T))
+	elem
 
 let prim-file-read =
 	intrinsic
@@ -365,20 +363,18 @@ let (oldargs oldargs-valid) = get-prim-func-arg-inner(wrap(type, foo), prim-nil)
 let (newargs) = prim-tuple-type-to-tuple-type-inner(oldargs, oldargs-valid)
 newargs
 
-let id_type = (forall name : prim-number -> name : prim-number)
+let id_type = forall name : prim-number -> name : prim-number
 
-let id_num =
-	lambda (T : prim-number)
-		T
+let id_num = lambda (T : prim-number)
+	T
 
 (the id_type id_num)
 
-let sub =
-	lambda (x : prim-number, y : prim-number)
-		let (res) = prim-sub(x, y)
-		res
+let sub = lambda (x : prim-number, y : prim-number)
+	let (res) = prim-sub(x, y)
+	res
 
-let sub_type = (forall (x : prim-number) (y : prim-number) -> res : prim-number)
+let sub_type = forall (x : prim-number) (y : prim-number) -> res : prim-number
 
 (the sub_type sub)
 

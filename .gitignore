@@ -3,3 +3,4 @@
 /luvit.exe
 /.direnv/
 /.pre-commit-config.yaml
+/deps/
