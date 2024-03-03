@@ -291,6 +291,7 @@ local function substitute_type_variables(val, index)
 		[index] = typed_term.bound_variable(1),
 	}, 1)
 	print("typed term after substitution (substituted): (typed term follows)")
+	print("TODO: where context?")
 	print(substituted)
 	return value.closure(substituted, runtime_context())
 end
@@ -1019,7 +1020,7 @@ function infer(
 			print("f_type: (value term follows)")
 			print(f_type)
 			print("arg: (checkable term follows)")
-			print(arg)
+			print(arg:pretty_print(typechecking_context))
 			local f_param_type, f_result_type_closure = f_type:unwrap_prim_function_type()
 
 			local arg_usages, arg_term = check(arg, typechecking_context, f_param_type)
@@ -1370,9 +1371,9 @@ function infer(
 		local type_type, type_usages, type_term = infer(type, typechecking_context) --check(type, typechecking_context, value.qtype_type(0))
 
 		print("prim intrinsic is inferring: (inferrable term follows)")
-		print(type)
+		print(type:pretty_print(typechecking_context))
 		print("lowers to: (typed term follows)")
-		print(type_term)
+		print(type_term:pretty_print(typechecking_context))
 		--error "weird type"
 		-- FIXME: type_type, source_type are ignored, need checked?
 		local type_val = evaluate(type_term, typechecking_context.runtime_context)

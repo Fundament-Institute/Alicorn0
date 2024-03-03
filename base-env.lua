@@ -471,6 +471,7 @@ local function prim_func_type_impl(syntax, env)
 	print("finished matching prim_func_type_impl and got:")
 	print("ok:", ok)
 	print("fn_type_term: (inferrable term follows)")
+	print("TODO: where context?")
 	print(fn_type_term)
 	if not env or not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl"

@@ -144,9 +144,9 @@ local pretty_print = {
 			pretty = prettyprintable_print
 		end
 		prettyprintable:implement_on(t, { print = pretty })
-		idx["pretty_print"] = function(self)
+		idx["pretty_print"] = function(self, ...)
 			local pp = require("./pretty-printer").PrettyPrint.new()
-			pretty(self, pp)
+			pretty(self, pp, ...)
 			return tostring(pp)
 		end
 
@@ -204,9 +204,9 @@ local pretty_print = {
 
 		local prettyprintable = require("./pretty-printer").prettyprintable
 		prettyprintable:implement_on(t, { print = prettyprintable_print })
-		idx["pretty_print"] = function(self)
+		idx["pretty_print"] = function(self, ...)
 			local pp = require("./pretty-printer").PrettyPrint.new()
-			prettyprintable_print(self, pp)
+			prettyprintable_print(self, pp, ...)
 			return tostring(pp)
 		end
 

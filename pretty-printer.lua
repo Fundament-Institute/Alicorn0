@@ -95,7 +95,7 @@ function PrettyPrint:_resetcolor()
 	return "\27[0m"
 end
 
-function PrettyPrint:array(array)
+function PrettyPrint:array(array, ...)
 	self:_enter()
 	self[#self + 1] = self:_color()
 	self[#self + 1] = "["
@@ -104,7 +104,7 @@ function PrettyPrint:array(array)
 		if i > 1 then
 			self[#self + 1] = ", "
 		end
-		self:any(v)
+		self:any(v, ...)
 	end
 	self[#self + 1] = self:_color()
 	self[#self + 1] = "]"
@@ -113,7 +113,7 @@ function PrettyPrint:array(array)
 end
 
 ---@param fields table
-function PrettyPrint:table(fields)
+function PrettyPrint:table(fields, ...)
 	self:_enter()
 
 	local count = 0
@@ -129,7 +129,7 @@ function PrettyPrint:table(fields)
 		self[#self + 1] = "["
 		self[#self + 1] = self:_resetcolor()
 		for i, v in ipairs(fields) do
-			self:any(v)
+			self:any(v, ...)
 		end
 		self[#self + 1] = self:_color()
 		self[#self + 1] = "]"
@@ -140,7 +140,7 @@ function PrettyPrint:table(fields)
 		self[#self + 1] = self:_resetcolor()
 		for k, v in pairs(fields) do
 			if not hidden_fields[k] and k ~= "kind" then
-				self:any(v)
+				self:any(v, ...)
 			end
 		end
 		self[#self + 1] = self:_color()
@@ -156,7 +156,7 @@ function PrettyPrint:table(fields)
 				self:_prefix()
 				self[#self + 1] = k
 				self[#self + 1] = " = "
-				self:any(v)
+				self:any(v, ...)
 				self[#self + 1] = ",\n"
 			end
 		end

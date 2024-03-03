@@ -73,7 +73,7 @@ end
 
 function environment:bind_local(binding)
 	print("bind_local: (binding term follows)")
-	print(binding)
+	print(binding:pretty_print(self.typechecking_context))
 	if binding:is_let() then
 		local name, expr = binding:unwrap_let()
 		local expr_type, expr_usages, expr_term = infer(expr, self.typechecking_context)
@@ -156,7 +156,7 @@ function environment:bind_local(binding)
 		end
 		local annotation_type, annotation_usages, annotation_term = infer(param_annotation, self.typechecking_context)
 		print("binding lambda annotation: (typed term follows)")
-		print(annotation_term)
+		print(annotation_term:pretty_print(self.typechecking_context))
 		local evaled = eval.evaluate(annotation_term, self.typechecking_context.runtime_context)
 		local bindings = self.bindings:append(binding)
 		local locals = self.locals:put(param_name, inferrable_term.bound_variable(#self.typechecking_context + 1))
