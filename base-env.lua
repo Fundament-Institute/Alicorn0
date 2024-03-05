@@ -618,6 +618,58 @@ local function the_operative_impl(syntax, env)
 	return ok, terms.inferrable_term.annotated(val, type_inferrable_term), env
 end
 
+---apply(fn, args) calls fn with an existing args tuple
+---@param syntax any
+---@param env Environment
+---@return boolean
+---@return unknown
+---@return unknown|nil
+local function apply_operative_impl(syntax, env)
+	local ok, fn, tail = syntax:match({ metalang.ispair(metalang.accept_handler) }, metalang.failure_handler, nil)
+	if not ok then
+		return ok, fn
+	end
+
+	local ok, fn_inferrable_term, env =
+		fn:match({ exprs.inferred_expression(metalang.accept_handler, env) }, metalang.failure_handler, nil)
+	if not ok then
+		return ok, fn_inferrable_term
+	end
+
+	local type_of_fn, usages, fn_typed_term = evaluator.infer(fn_inferrable_term, env.typechecking_context)
+
+	local param_type, _
+	if type_of_fn:is_pi() then
+		param_type, _, _, _ = type_of_fn:unwrap_pi()
+	elseif type_of_fn:is_prim_function_type() then
+		local param_type, _ = type_of_fn:unwrap_prim_function_type()
+	else
+		error "unknown fn type for apply operative"
+	end
+
+	local ok, args_inferrable_term = tail:match({
+		metalang.listmatch(
+			metalang.accept_handler,
+			exprs.expression(
+				utils.accept_with_env,
+				-- FIXME: do we infer here if evaled_type is stuck / a placeholder?
+				exprs.ExpressionArgs.new(terms.expression_goal.check(param_type), env)
+			)
+		),
+	}, metalang.failure_handler, nil)
+	if not ok then
+		return ok, fn_inferrable_term
+	end
+
+	local inf_term = args_inferrable_term.val
+	if terms.inferrable_term.value_check(inf_term) == true then
+		inf_term = terms.checkable_term.inferrable(inf_term)
+	end
+	return true,
+		terms.inferrable_term.application(terms.inferrable_term.typed(type_of_fn, usages, fn_typed_term), inf_term),
+		args_inferrable_term.env
+end
+
 ---@param syntax any
 ---@param env Environment
 ---@return boolean
@@ -842,6 +894,7 @@ local core_operations = {
 	["forall"] = exprs.primitive_operative(forall_type_impl, "forall_type_impl"),
 	lambda = exprs.primitive_operative(lambda_impl, "lambda_impl"),
 	the = exprs.primitive_operative(the_operative_impl, "the"),
+	apply = exprs.primitive_operative(apply_operative_impl, "apply"),
 	wrap = build_wrap(typed.prim_wrap, typed.prim_wrapped_type),
 	["unstrict-wrap"] = build_wrap(typed.prim_unstrict_wrap, typed.prim_unstrict_wrapped_type),
 	wrapped = build_wrapped(typed.prim_wrapped_type),
