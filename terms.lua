@@ -183,14 +183,23 @@ local function speculate(f, ...)
 	end
 end
 
+---@module "./types/checkable"
 local checkable_term = gen.declare_type()
+---@module "./types/inferrable"
 local inferrable_term = gen.declare_type()
+---@module "./types/typed"
 local typed_term = gen.declare_type()
+---@module "./types/free"
 local free = gen.declare_type()
+---@module "./types/placeholder"
 local placeholder_debug = gen.declare_type()
+---@module "./types/value"
 local value = gen.declare_type()
+---@module "./types/neutral"
 local neutral_value = gen.declare_type()
+---@module "./types/binding"
 local binding = gen.declare_type()
+---@module "./types/expression_goal"
 local expression_goal = gen.declare_type()
 
 local runtime_context_mt
@@ -706,6 +715,7 @@ free:define_enum("free", {
 -- implicit arguments are filled in through unification
 -- e.g. fn append(t : star(0), n : nat, xs : Array(t, n), val : t) -> Array(t, n+1)
 --      t and n can be implicit, given the explicit argument xs, as they're filled in by unification
+---@module "./types/visibility"
 local visibility = gen.declare_enum("visibility", {
 	{ "explicit" },
 	{ "implicit" },
@@ -714,10 +724,13 @@ local visibility = gen.declare_enum("visibility", {
 -- an effectful function must return a monad
 -- calling an effectful function implicitly inserts a monad bind between the
 -- function return and getting the result of the call
+---@module "./types/purity"
 local purity = gen.declare_enum("purity", {
 	{ "effectful" },
 	{ "pure" },
 })
+
+---@module "./types/result_info"
 local result_info = gen.declare_record("result_info", { "purity", purity })
 
 -- values must always be constructed in their simplest form, that cannot be reduced further.
@@ -934,10 +947,6 @@ neutral_value:define_enum("neutral_value", {
 	{ "prim_wrap_stuck", { "content", neutral_value } },
 	{ "prim_unwrap_stuck", { "container", neutral_value } },
 })
-
-neutral_value.free.metavariable = function(mv)
-	return neutral_value.free(free.metavariable(mv))
-end
 
 local prim_syntax_type = value.prim_user_defined_type({ name = "syntax" }, array(value)())
 local prim_environment_type = value.prim_user_defined_type({ name = "environment" }, array(value)())

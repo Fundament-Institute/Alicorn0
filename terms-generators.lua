@@ -15,7 +15,9 @@ local prettyprintable = require "./pretty-printable-trait"
 
 ---@class Type
 ---@field value_check ValueCheckFn
----@alias ValueCheckFn fun(val: Type): boolean
+---@field define_enum fun(Type, string, table)
+---@field derive fun(Type, table)
+---@alias ValueCheckFn fun(val: any): boolean
 
 ---@class Value
 ---@field kind string
@@ -140,6 +142,7 @@ local function define_record(self, kind, params_with_types)
 		return deriver.record(self, derive_info)
 	end
 	self.value_check = metatable_equality(self)
+	self.derive_info = derive_info
 	---@cast self Record
 	return self
 end
@@ -200,6 +203,7 @@ local function define_enum(self, name, variants)
 		return deriver.enum(self, derive_info)
 	end
 	self.value_check = metatable_equality(self)
+	self.derive_info = derive_info
 	---@cast self Enum
 	return self
 end
@@ -208,10 +212,15 @@ end
 
 ---@param self table
 ---@param value_check ValueCheckFn
+---@param lsp_type string
 ---@return Foreign self
-local function define_foreign(self, value_check)
+local function define_foreign(self, value_check, lsp_type)
 	setmetatable(self, nil)
 	self.value_check = value_check
+	self.derive_info = {
+		kind = "foreign",
+		lsp_type = lsp_type,
+	}
 	---@cast self Foreign
 	return self
 end
@@ -489,7 +498,7 @@ end
 local function gen_builtin(typename)
 	return define_foreign({}, function(val)
 		return type(val) == typename
-	end)
+	end, typename)
 end
 
 local terms_gen = {
