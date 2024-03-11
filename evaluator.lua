@@ -901,7 +901,7 @@ local function nearest_star_level(typ)
 	end
 end
 
----@param inferrable_term unknown
+---@param inferrable_term inferrable_term
 ---@param typechecking_context TypecheckingContext
 ---@return unknown, unknown, unknown
 function infer(
@@ -1437,9 +1437,9 @@ function infer(
 end
 
 ---Replace stuck sections in a value with a more concrete form, possibly causing cascading evaluation
----@param base Value
----@param original Value
----@param replacement Value
+---@param base value
+---@param original value
+---@param replacement value
 local function substitute_value(base, original, replacement)
 	if base == original then
 		return replacement
