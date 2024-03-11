@@ -36,7 +36,7 @@ $(
 )constructors
 return {}]],
 	unit_constructor = [[---@field $variant $typename]],
-	record_constructor = [[---@field $variant fun($(, )params): $typename ]],
+	record_constructor = [[---@field $variant fun($(, )params): $typename]],
 }
 
 function build_meta_file_for_enum(info)
@@ -117,7 +117,7 @@ local gen_type = {
 		-- p(info)
 	end,
 	enum = function(t, info)
-		local file = io.open("types/" .. info.name .. ".lua", "w")
+		local file = io.open("types/" .. info.name .. ".lua", "wb")
 		if file then
 			file:write(build_meta_file_for_enum(info))
 			file:close()
