@@ -1495,7 +1495,7 @@ function evaluate(typed_term, runtime_context)
 		local stuck = false
 		local stuck_element
 		local trailing_values
-		for _, v in ipairs(elements) do
+		for i, v in ipairs(elements) do
 			local element_value = evaluate(v, runtime_context)
 			if element_value == nil then
 				p("wtf", v.kind)
@@ -1509,6 +1509,8 @@ function evaluate(typed_term, runtime_context)
 				stuck_element = element_value:unwrap_neutral()
 				trailing_values = value_array()
 			else
+				print("term that fails", typed_term)
+				print("which element", i)
 				print("element_value", element_value)
 				error("evaluate, is_prim_tuple_cons, element_value: expected a primitive value")
 			end

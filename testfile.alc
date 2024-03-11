@@ -329,9 +329,11 @@ let get-prim-func-res-inner =
 				local typed_array = terms_gen.declare_array(terms.typed_term)
 				local tuple_build = terms.typed_term.tuple_cons(
 					typed_array(
-						terms.typed_term.application(
-							terms.typed_term.bound_variable(1),
-							terms.typed_term.bound_variable(2)
+						terms.typed_term.prim_wrap(
+							terms.typed_term.application(
+								terms.typed_term.bound_variable(1),
+								terms.typed_term.bound_variable(2)
+							)
 						),
 						terms.typed_term.literal(terms.value.prim(nil))
 					)
@@ -387,7 +389,7 @@ let new-results =
 		let ptuple = tuple-to-prim-tuple(oldargs, oldargs-valid, args)
 		let orig-results-res = apply(orig-results, ptuple)
 		let (newres valid) = orig-results-res
-		newres # WIP, more needs done
+		newres
 
 
 let syntax =
