@@ -709,8 +709,13 @@ local function build_wrap(body_fn, type_fn)
 	local names_todo_2 = names()
 	local names_todo_3 = names("TODO3")
 	local names_todo_4 = names("TODO4", "TODO5")
+	local pname_todo_1 = "TODO-A"
+	local pname_todo_2 = "TODO-B"
+	local pname_todo_3 = "TODO-C"
+	local pname_todo_4 = "TODO-D"
 	return lit_term(
 		value.closure(
+			pname_todo_1,
 			typed.tuple_elim(names_todo_1, typed.bound_variable(1), 2, body_fn(typed.bound_variable(3))),
 			terms.runtime_context()
 		),
@@ -722,12 +727,14 @@ local function build_wrap(body_fn, type_fn)
 							val_tup_cons(
 								val_desc_empty,
 								value.closure(
+									pname_todo_2,
 									typed.tuple_elim(names_todo_2, typed.bound_variable(1), 0, typed.star(1)),
 									terms.runtime_context()
 								)
 							)
 						),
 						value.closure(
+							pname_todo_3,
 							terms.typed_term.tuple_elim(
 								names_todo_3,
 								terms.typed_term.bound_variable(1),
@@ -741,6 +748,7 @@ local function build_wrap(body_fn, type_fn)
 			),
 			value.param_info(value.visibility(terms.visibility.explicit)),
 			value.closure(
+				pname_todo_4,
 				typed.tuple_elim(names_todo_4, typed.bound_variable(1), 2, type_fn(typed.bound_variable(2))),
 				terms.runtime_context()
 			),
@@ -756,8 +764,13 @@ local function build_unwrap(body_fn, type_fn)
 	local names_todo_2 = names()
 	local names_todo_3 = names("TODO8")
 	local names_todo_4 = names("TODO9", "TOD10")
+	local pname_todo_1 = "TODO-E"
+	local pname_todo_2 = "TODO-F"
+	local pname_todo_3 = "TODO-G"
+	local pname_todo_4 = "TODO-H"
 	return lit_term(
 		value.closure(
+			pname_todo_1,
 			typed.tuple_elim(names_todo_1, typed.bound_variable(1), 2, body_fn(typed.bound_variable(3))),
 			terms.runtime_context()
 		),
@@ -769,12 +782,14 @@ local function build_unwrap(body_fn, type_fn)
 							val_tup_cons(
 								val_desc_empty,
 								value.closure(
+									pname_todo_2,
 									typed.tuple_elim(names_todo_2, typed.bound_variable(1), 0, typed.star(1)),
 									terms.runtime_context()
 								)
 							)
 						),
 						value.closure(
+							pname_todo_3,
 							terms.typed_term.tuple_elim(
 								names_todo_3,
 								terms.typed_term.bound_variable(1),
@@ -788,6 +803,7 @@ local function build_unwrap(body_fn, type_fn)
 			),
 			value.param_info(value.visibility(terms.visibility.explicit)),
 			value.closure(
+				pname_todo_4,
 				typed.tuple_elim(names_todo_4, typed.bound_variable(1), 2, typed.bound_variable(2)),
 				terms.runtime_context()
 			),
@@ -802,8 +818,12 @@ local function build_wrapped(body_fn)
 	local names_todo_1 = names("TOD11")
 	local names_todo_2 = names()
 	local names_todo_3 = names("TOD12")
+	local pname_todo_1 = "TODO-I"
+	local pname_todo_2 = "TODO-J"
+	local pname_todo_3 = "TODO-K"
 	return lit_term(
 		value.closure(
+			pname_todo_1,
 			typed.tuple_elim(names_todo_1, typed.bound_variable(1), 1, body_fn(typed.bound_variable(2))),
 			terms.runtime_context()
 		),
@@ -813,6 +833,7 @@ local function build_wrapped(body_fn)
 					val_tup_cons(
 						val_desc_empty,
 						value.closure(
+							pname_todo_2,
 							typed.tuple_elim(names_todo_2, typed.bound_variable(1), 0, typed.star(1)),
 							terms.runtime_context()
 						)
@@ -821,6 +842,7 @@ local function build_wrapped(body_fn)
 			),
 			value.param_info(value.visibility(terms.visibility.explicit)),
 			value.closure(
+				pname_todo_3,
 				typed.tuple_elim(names_todo_3, typed.bound_variable(1), 1, typed.literal(value.prim_type_type)),
 				terms.runtime_context()
 			),

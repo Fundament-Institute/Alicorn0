@@ -724,10 +724,12 @@ local function inferrable_lambda_helper(body, context)
 	return is_destructure, names, inner_body, context
 end
 -- the only difference compared to typed_tuple_type_flatten is enum_type
--- TODO: what is enum_type?
 -- and lambda is different too
 local function inferrable_tuple_type_flatten(definition, context)
 	local enum_type, constructor, arg = definition:unwrap_enum_cons()
+	if enum_type ~= value.tuple_defn_type then
+		error("override_pretty: inferrable.tuple_type: enum_type must be tuple_defn_type")
+	end
 	if constructor == "empty" then
 		return {}, 0
 	elseif constructor == "cons" then
@@ -1553,12 +1555,17 @@ value:define_enum("value", {
 	},
 	-- closure is a type that contains a typed term corresponding to the body
 	-- and a runtime context representng the bound context where the closure was created
-	{ "closure", {
-		"code",
-		typed_term,
-		"capture",
-		runtime_context_type,
-	} },
+	{
+		"closure",
+		{
+			"param_name",
+			gen.builtin_string,
+			"code",
+			typed_term,
+			"capture",
+			runtime_context_type,
+		},
+	},
 
 	-- metaprogramming stuff
 	-- TODO: add types of terms, and type indices
@@ -1663,11 +1670,10 @@ local function value_tuple_type_flatten(definition)
 		local elements = arg:unwrap_tuple_value()
 		local definition = elements[1]
 		local f = elements[2]
-		local ok, code, capture = f:as_closure()
+		local ok, param_name, code, capture = f:as_closure()
 		if not ok then
 			error("override_pretty: value.tuple_type: tuple decl must be a closure")
 		end
-		local param_name = "fnuuy"
 		local context = ensure_context(capture)
 		local inner_context = context:append(param_name)
 		local is_destructure, names, inner_body, new_context = typed_lambda_helper(code, inner_context)
@@ -1704,8 +1710,7 @@ local value_override_pretty = {
 		pp:_exit()
 	end,
 	closure = function(self, pp)
-		local code, capture = self:unwrap_closure()
-		local param_name = "closure_param"
+		local param_name, code, capture = self:unwrap_closure()
 		local context = ensure_context(capture)
 		local inner_context = context:append(param_name)
 		local is_destructure, names, inner_body, new_context = typed_lambda_helper(code, inner_context)

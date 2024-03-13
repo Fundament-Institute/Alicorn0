@@ -59,7 +59,7 @@ local function add_arrays(onto, with)
 end
 
 local function const_combinator(v)
-	return value.closure(typed_term.bound_variable(1), runtime_context():append(v))
+	return value.closure("CONST_PARAM", typed_term.bound_variable(1), runtime_context():append(v))
 end
 
 local function get_level(t)
@@ -95,7 +95,7 @@ local function substitute_inner(val, mappings, context_len)
 		result_info = substitute_inner(result_info, mappings, context_len)
 		return typed_term.pi(param_type, param_info, result_type, result_info)
 	elseif val:is_closure() then
-		local ctxt = val.capture
+		local param_name, code, capture = val:unwrap_closure()
 		local unique = {}
 		local arg = value.neutral(neutral_value.free(free.unique(unique)))
 		val = apply_value(val, arg)
@@ -110,7 +110,7 @@ local function substitute_inner(val, mappings, context_len)
 		-- FIXME: this results in more captures every time we substitute a closure ->
 		--   can cause non-obvious memory leaks
 		--   since we don't yet remove unused captures from closure value
-		return typed_term.lambda("lam_param", val)
+		return typed_term.lambda(param_name, val)
 	elseif val:is_name_type() then
 		return typed_term.literal(val)
 	elseif val:is_name() then
@@ -284,7 +284,8 @@ local function substitute_inner(val, mappings, context_len)
 end
 
 --for substituting a single var at index
-local function substitute_type_variables(val, index)
+local function substitute_type_variables(param_name, val, index)
+	param_name = param_name or "SUB_PARAM"
 	print("value before substituting (val): (value term follows)")
 	print(val)
 	local substituted = substitute_inner(val, {
@@ -293,7 +294,7 @@ local function substitute_type_variables(val, index)
 	print("typed term after substitution (substituted): (typed term follows)")
 	print("TODO: where context?")
 	print(substituted)
-	return value.closure(substituted, runtime_context())
+	return value.closure(param_name, substituted, runtime_context())
 end
 
 local function is_type_of_types(val)
@@ -717,7 +718,7 @@ function apply_value(f, arg)
 	end
 
 	if f:is_closure() then
-		local code, capture = f:unwrap_closure()
+		local param_name, code, capture = f:unwrap_closure()
 		return evaluate(code, capture:append(arg))
 	elseif f:is_neutral() then
 		return value.neutral(neutral_value.application_stuck(f:unwrap_neutral(), arg))
@@ -933,7 +934,7 @@ function infer(
 		local inner_context = typechecking_context:append(param_name, param_type, nil, anchor)
 		local body_type, body_usages, body_term = infer(body, inner_context)
 
-		local result_type = substitute_type_variables(body_type, #inner_context)
+		local result_type = substitute_type_variables(param_name, body_type, #inner_context)
 		local body_usages_param = body_usages[#body_usages]
 		local lambda_usages = body_usages:copy(1, #body_usages - 1)
 		local lambda_type = value.pi(param_type, param_info_explicit, result_type, result_info_pure)
@@ -1053,7 +1054,7 @@ function infer(
 			local el_type, el_usages, el_term = infer(v, typechecking_context)
 			type_data = value.enum_value(
 				"cons",
-				tup_val(type_data, substitute_type_variables(el_type, #typechecking_context + 1))
+				tup_val(type_data, substitute_type_variables(nil, el_type, #typechecking_context + 1))
 			)
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
@@ -1080,7 +1081,7 @@ function infer(
 			print(el_type:pretty_print())
 			type_data = value.enum_value(
 				"cons",
-				tup_val(type_data, substitute_type_variables(el_type, #typechecking_context + 1))
+				tup_val(type_data, substitute_type_variables(nil, el_type, #typechecking_context + 1))
 			)
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
@@ -1126,7 +1127,7 @@ function infer(
 			local field_type, field_usages, field_term = infer(v, typechecking_context)
 			type_data = value.enum_value(
 				"cons",
-				tup_val(type_data, value.name(k), substitute_type_variables(field_type, #typechecking_context + 1))
+				tup_val(type_data, value.name(k), substitute_type_variables(nil, field_type, #typechecking_context + 1))
 			)
 			add_arrays(usages, field_usages)
 			new_fields[k] = field_term
@@ -1467,7 +1468,7 @@ function evaluate(typed_term, runtime_context)
 		return typed_term:unwrap_literal()
 	elseif typed_term:is_lambda() then
 		local param_name, body = typed_term:unwrap_lambda()
-		return value.closure(body, runtime_context)
+		return value.closure(param_name, body, runtime_context)
 	elseif typed_term:is_pi() then
 		local param_type, param_info, result_type, result_info = typed_term:unwrap_pi()
 		local param_type_value = evaluate(param_type, runtime_context)
@@ -1598,7 +1599,7 @@ function evaluate(typed_term, runtime_context)
 			if mechanism_value:is_object_value() then
 				local constructor, arg = subject_value:unwrap_enum_value()
 				local methods, capture = mechanism_value:unwrap_object_value()
-				local this_method = value.closure(methods[constructor], capture)
+				local this_method = value.closure("ENUM_PARAM", methods[constructor], capture)
 				return apply_value(this_method, arg)
 			elseif mechanism_value:is_neutral() then
 				-- objects and enums are categorical duals
@@ -1623,7 +1624,7 @@ function evaluate(typed_term, runtime_context)
 			if mechanism_value:is_enum_value() then
 				local methods, capture = subject_value:unwrap_object_value()
 				local constructor, arg = mechanism_value:unwrap_enum_value()
-				local this_method = value.closure(methods[constructor], capture)
+				local this_method = value.closure("OBJECT_PARAM", methods[constructor], capture)
 				return apply_value(this_method, arg)
 			elseif mechanism_value:is_neutral() then
 				-- objects and enums are categorical duals
