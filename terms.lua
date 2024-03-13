@@ -784,7 +784,6 @@ local inferrable_term_override_pretty = {
 
 		pp:_exit()
 	end,
-	--[=[
 	typed = function(self, pp, context)
 		local type, usage_counts, typed_term = self:unwrap_typed()
 		context = ensure_context(context)
@@ -807,15 +806,22 @@ local inferrable_term_override_pretty = {
 		pp:unit(")")
 		pp:unit(pp:_resetcolor())
 		--]]
-		--[[
 		pp:unit(pp:_color())
-		pp:unit("inferrable.the ")
+		pp:unit("inferrable.the (")
 		pp:unit(pp:_resetcolor())
 
 		pp:any(type)
-		pp:unit(" ")
+
+		pp:unit(pp:_color())
+		pp:unit(") (")
+		pp:unit(pp:_resetcolor())
+
 		pp:any(typed_term, context)
-		--]]
+
+		pp:unit(pp:_color())
+		pp:unit(")")
+		pp:unit(pp:_resetcolor())
+		--[[
 		pp:unit(pp:_color())
 		pp:unit("inferrable.the\n")
 		pp:unit(pp:_resetcolor())
@@ -831,10 +837,10 @@ local inferrable_term_override_pretty = {
 		pp:any(typed_term, context)
 
 		pp:_dedent()
+		--]]
 
 		pp:_exit()
 	end,
-	--]=]
 	annotated_lambda = function(self, pp, context)
 		local param_name, param_annotation, body, anchor = self:unwrap_annotated_lambda()
 		context = ensure_context(context)
