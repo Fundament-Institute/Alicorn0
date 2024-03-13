@@ -423,8 +423,8 @@ local function gen_array_fns(value_type)
 	return index, newindex
 end
 
-local function array_prettyprintable(self, printer)
-	return printer:array(self.array)
+local function array_prettyprintable(self, printer, ...)
+	return printer:array(self.array, ...)
 end
 
 ---@class Array: Type
