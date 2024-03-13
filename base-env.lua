@@ -596,7 +596,7 @@ local function the_operative_impl(syntax, env)
 	local evaled_type = evaluator.evaluate(type_typed_term, env.typechecking_context.runtime_context)
 
 	print("type_inferrable_term: (inferrable term follows)")
-	print(type_inferrable_term)
+	print(type_inferrable_term:pretty_print(env.typechecking_context))
 	print("evaled_type: (value term follows)")
 	print(evaled_type)
 	print("tail", tail)

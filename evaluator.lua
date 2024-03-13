@@ -1561,7 +1561,7 @@ function evaluate(typed_term, runtime_context)
 	elseif typed_term:is_tuple_element_access() then
 		local tuple_term, index = typed_term:unwrap_tuple_element_access()
 		print("tuple_element_access tuple_term: (typed term follows)")
-		print(tuple_term)
+		print(tuple_term:pretty_print(runtime_context))
 		local tuple = evaluate(tuple_term, runtime_context)
 		print("tuple_element_access tuple: (value term follows)")
 		print(tuple)

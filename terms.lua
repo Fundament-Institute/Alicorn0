@@ -762,6 +762,28 @@ local checkable_term_override_pretty = {
 	end,
 }
 local inferrable_term_override_pretty = {
+	bound_variable = function(self, pp, context)
+		local index = self:unwrap_bound_variable()
+		context = ensure_context(context)
+
+		pp:_enter()
+
+		if #context >= index then
+			pp:unit(context:get_name(index))
+		else
+			pp:unit(pp:_color())
+			pp:unit("inferrable.bound_variable(")
+			pp:unit(pp:_resetcolor())
+
+			pp:unit(tostring(index))
+
+			pp:unit(pp:_color())
+			pp:unit(")")
+			pp:unit(pp:_resetcolor())
+		end
+
+		pp:_exit()
+	end,
 	--[=[
 	typed = function(self, pp, context)
 		local type, usage_counts, typed_term = self:unwrap_typed()
@@ -1264,6 +1286,28 @@ local function typed_tuple_type_flatten(definition, context)
 	end
 end
 local typed_term_override_pretty = {
+	bound_variable = function(self, pp, context)
+		local index = self:unwrap_bound_variable()
+		context = ensure_context(context)
+
+		pp:_enter()
+
+		if #context >= index then
+			pp:unit(context:get_name(index))
+		else
+			pp:unit(pp:_color())
+			pp:unit("typed.bound_variable(")
+			pp:unit(pp:_resetcolor())
+
+			pp:unit(tostring(index))
+
+			pp:unit(pp:_color())
+			pp:unit(")")
+			pp:unit(pp:_resetcolor())
+		end
+
+		pp:_exit()
+	end,
 	literal = function(self, pp)
 		local literal_value = self:unwrap_literal()
 		pp:any(literal_value)
