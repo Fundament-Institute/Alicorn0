@@ -284,7 +284,7 @@ local function substitute_inner(val, mappings, context_len)
 end
 
 --for substituting a single var at index
-local function substitute_type_variables(param_name, val, index)
+local function substitute_type_variables(val, index, param_name, typechecking_context)
 	param_name = param_name or "SUB_PARAM"
 	print("value before substituting (val): (value term follows)")
 	print(val)
@@ -292,8 +292,7 @@ local function substitute_type_variables(param_name, val, index)
 		[index] = typed_term.bound_variable(1),
 	}, 1)
 	print("typed term after substitution (substituted): (typed term follows)")
-	print("TODO: where context?")
-	print(substituted)
+	print(substituted:pretty_print(typechecking_context))
 	return value.closure(param_name, substituted, runtime_context())
 end
 
@@ -934,7 +933,7 @@ function infer(
 		local inner_context = typechecking_context:append(param_name, param_type, nil, anchor)
 		local body_type, body_usages, body_term = infer(body, inner_context)
 
-		local result_type = substitute_type_variables(param_name, body_type, #inner_context)
+		local result_type = substitute_type_variables(body_type, #inner_context, param_name, typechecking_context)
 		local body_usages_param = body_usages[#body_usages]
 		local lambda_usages = body_usages:copy(1, #body_usages - 1)
 		local lambda_type = value.pi(param_type, param_info_explicit, result_type, result_info_pure)
@@ -1054,7 +1053,10 @@ function infer(
 			local el_type, el_usages, el_term = infer(v, typechecking_context)
 			type_data = value.enum_value(
 				"cons",
-				tup_val(type_data, substitute_type_variables(nil, el_type, #typechecking_context + 1))
+				tup_val(
+					type_data,
+					substitute_type_variables(el_type, #typechecking_context + 1, nil, typechecking_context)
+				)
 			)
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
@@ -1081,7 +1083,10 @@ function infer(
 			print(el_type:pretty_print())
 			type_data = value.enum_value(
 				"cons",
-				tup_val(type_data, substitute_type_variables(nil, el_type, #typechecking_context + 1))
+				tup_val(
+					type_data,
+					substitute_type_variables(el_type, #typechecking_context + 1, nil, typechecking_context)
+				)
 			)
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
@@ -1127,7 +1132,11 @@ function infer(
 			local field_type, field_usages, field_term = infer(v, typechecking_context)
 			type_data = value.enum_value(
 				"cons",
-				tup_val(type_data, value.name(k), substitute_type_variables(nil, field_type, #typechecking_context + 1))
+				tup_val(
+					type_data,
+					value.name(k),
+					substitute_type_variables(field_type, #typechecking_context + 1, nil, typechecking_context)
+				)
 			)
 			add_arrays(usages, field_usages)
 			new_fields[k] = field_term

@@ -430,8 +430,8 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	local shadowed, env = env:enter_block()
 
 	-- syntax.anchor can be nil so we fall back to the anchor for the start of this prim func type if needed
-	env = env:bind_local(terms.binding.annotated_lambda("#arg", args, syntax.anchor or pft_anchor))
-	local ok, arg = env:get("#arg")
+	env = env:bind_local(terms.binding.annotated_lambda("#arg_a", args, syntax.anchor or pft_anchor))
+	local ok, arg = env:get("#arg_a")
 	env = env:bind_local(terms.binding.tuple_elim(names, arg))
 
 	ok, thread, tail = syntax:match({
@@ -471,8 +471,7 @@ local function prim_func_type_impl(syntax, env)
 	print("finished matching prim_func_type_impl and got:")
 	print("ok:", ok)
 	print("fn_type_term: (inferrable term follows)")
-	print("TODO: where context?")
-	print(fn_type_term)
+	print(fn_type_term:pretty_print(env.typechecking_context))
 	if not env or not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl"
 	end
@@ -504,8 +503,8 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 
 	local shadowed, env = env:enter_block()
 
-	env = env:bind_local(terms.binding.annotated_lambda("#arg", args, syntax.anchor))
-	local ok, arg = env:get("#arg")
+	env = env:bind_local(terms.binding.annotated_lambda("#arg_b", args, syntax.anchor))
+	local ok, arg = env:get("#arg_b")
 	if single then
 		env = env:bind_local(terms.binding.let(names, arg))
 	else
@@ -566,7 +565,7 @@ local function forall_type_impl(syntax, env)
 		return ok, fn_type_term
 	end
 	print("finished matching prim_func_type_impl and got")
-	print(fn_type_term:pretty_print())
+	print(fn_type_term:pretty_print(env.typechecking_context))
 	if not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl"
 	end
@@ -643,8 +642,8 @@ local function lambda_impl(syntax, env)
 	local single, args, names, env = thread.single, thread.args, thread.names, thread.env
 
 	local shadow, inner_env = env:enter_block()
-	inner_env = inner_env:bind_local(terms.binding.annotated_lambda("#arg", thread.args, syntax.anchor))
-	local _, arg = inner_env:get("#arg")
+	inner_env = inner_env:bind_local(terms.binding.annotated_lambda("#arg_c", thread.args, syntax.anchor))
+	local _, arg = inner_env:get("#arg_c")
 	if single then
 		inner_env = inner_env:bind_local(terms.binding.let(names, arg))
 	else
