@@ -431,6 +431,9 @@ add_comparer("value.prim_wrapped_type", "value.prim_wrapped_type", function(a, b
 end)
 
 function fitsinto_qless(tya, tyb)
+	if tya == tyb then
+		return true
+	end -- temporary workaround for neutrals
 	if not fitsinto_comparers[tya.kind] then
 		error("fitsinto given value a which isn't a type or NYI " .. tya.kind)
 	elseif not fitsinto_comparers[tyb.kind] then
@@ -1687,7 +1690,11 @@ function evaluate(typed_term, runtime_context)
 			return unwrap_val:unwrap_prim()
 		elseif unwrap_val:is_neutral() then
 			local nval = unwrap_val:unwrap_neutral()
-			return value.neutral(neutral_value.prim_unwrap_stuck(nval))
+			if nval:is_prim_wrap_stuck() then
+				return value.neutral(nval:unwrap_prim_wrap_stuck())
+			else
+				return value.neutral(neutral_value.prim_unwrap_stuck(nval))
+			end
 		else
 			print("unrecognized value in unbox", unwrap_val)
 			error "invalid value in unbox, must be prim or neutral"

@@ -731,11 +731,8 @@ local function startype_impl(syntax, env)
 	if level_val.val % 1 ~= 0 then
 		return false, "literal must be an integer for type levels"
 	end
-	local term = terms.inferrable_term.typed(
-		unrestricted(value.star(level_val.val + 1)),
-		usage_array(),
-		unrestricted_typed(terms.typed_term.star(level_val.val))
-	)
+	local term =
+		terms.inferrable_term.typed(value.star(level_val.val + 1), usage_array(), terms.typed_term.star(level_val.val))
 
 	return true, term, env
 end
@@ -763,7 +760,7 @@ local function build_wrap(body_fn, type_fn)
 							val_tup_cons(
 								val_desc_empty,
 								value.closure(
-									typed.tuple_elim(typed.bound_variable(1), 0, typed.star(1)),
+									typed.tuple_elim(typed.bound_variable(1), 0, typed.star(10)),
 									terms.runtime_context()
 								)
 							)
@@ -800,7 +797,7 @@ local function build_unwrap(body_fn, type_fn)
 							val_tup_cons(
 								val_desc_empty,
 								value.closure(
-									typed.tuple_elim(typed.bound_variable(1), 0, typed.star(1)),
+									typed.tuple_elim(typed.bound_variable(1), 0, typed.star(10)),
 									terms.runtime_context()
 								)
 							)
@@ -839,7 +836,7 @@ local function build_wrapped(body_fn)
 					val_tup_cons(
 						val_desc_empty,
 						value.closure(
-							typed.tuple_elim(typed.bound_variable(1), 0, typed.star(1)),
+							typed.tuple_elim(typed.bound_variable(1), 0, typed.star(10)),
 							terms.runtime_context()
 						)
 					)
