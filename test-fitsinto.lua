@@ -132,16 +132,16 @@ local passed, failed, total = (require "tap")(function(test)
 						val_tup_cons(
 							val_desc_empty,
 							value.closure(
-								"A",
+								"#A",
 								typed.tuple_elim(names(), typed.bound_variable(1), 0, typed.star(1)),
 								terms.runtime_context()
 							)
 						)
 					),
 					value.closure(
-						"B",
+						"#B",
 						terms.typed_term.tuple_elim(
-							names("FOO"),
+							names("#FOO"),
 							terms.typed_term.bound_variable(1),
 							1,
 							typed.bound_variable(2)
@@ -158,16 +158,16 @@ local passed, failed, total = (require "tap")(function(test)
 						val_tup_cons(
 							val_desc_empty,
 							value.closure(
-								"C",
+								"#C",
 								typed.tuple_elim(names(), typed.bound_variable(1), 0, typed.star(1)),
 								terms.runtime_context()
 							)
 						)
 					),
 					value.closure(
-						"D",
+						"#D",
 						terms.typed_term.tuple_elim(
-							names("BAR"),
+							names("#BAR"),
 							terms.typed_term.bound_variable(1),
 							1,
 							typed.bound_variable(2)

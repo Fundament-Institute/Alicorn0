@@ -704,14 +704,14 @@ local val_desc_empty = value.enum_value("empty", val_tup_cons())
 -- eg typed.prim_wrap, typed.prim_wrapped_type
 local function build_wrap(body_fn, type_fn)
 	local names = gen.declare_array(gen.builtin_string)
-	local names_todo_1 = names("TODO1", "TODO2")
+	local names_todo_1 = names("#TODO1", "#TODO2")
 	local names_todo_2 = names()
-	local names_todo_3 = names("TODO3")
-	local names_todo_4 = names("TODO4", "TODO5")
-	local pname_todo_1 = "TODO-A"
-	local pname_todo_2 = "TODO-B"
-	local pname_todo_3 = "TODO-C"
-	local pname_todo_4 = "TODO-D"
+	local names_todo_3 = names("#TODO3")
+	local names_todo_4 = names("#TODO4", "#TODO5")
+	local pname_todo_1 = "#TODO-A"
+	local pname_todo_2 = "#TODO-B"
+	local pname_todo_3 = "#TODO-C"
+	local pname_todo_4 = "#TODO-D"
 	return lit_term(
 		value.closure(
 			pname_todo_1,
@@ -759,14 +759,14 @@ end
 -- eg typed.prim_unwrap, typed.prim_wrapped_type
 local function build_unwrap(body_fn, type_fn)
 	local names = gen.declare_array(gen.builtin_string)
-	local names_todo_1 = names("TODO6", "TODO7")
+	local names_todo_1 = names("#TODO6", "#TODO7")
 	local names_todo_2 = names()
-	local names_todo_3 = names("TODO8")
-	local names_todo_4 = names("TODO9", "TOD10")
-	local pname_todo_1 = "TODO-E"
-	local pname_todo_2 = "TODO-F"
-	local pname_todo_3 = "TODO-G"
-	local pname_todo_4 = "TODO-H"
+	local names_todo_3 = names("#TODO8")
+	local names_todo_4 = names("#TODO9", "#TOD10")
+	local pname_todo_1 = "#TODO-E"
+	local pname_todo_2 = "#TODO-F"
+	local pname_todo_3 = "#TODO-G"
+	local pname_todo_4 = "#TODO-H"
 	return lit_term(
 		value.closure(
 			pname_todo_1,
@@ -814,12 +814,12 @@ end
 -- eg typed.prim_wrapped_type,
 local function build_wrapped(body_fn)
 	local names = gen.declare_array(gen.builtin_string)
-	local names_todo_1 = names("TOD11")
+	local names_todo_1 = names("#TOD11")
 	local names_todo_2 = names()
-	local names_todo_3 = names("TOD12")
-	local pname_todo_1 = "TODO-I"
-	local pname_todo_2 = "TODO-J"
-	local pname_todo_3 = "TODO-K"
+	local names_todo_3 = names("#TOD12")
+	local pname_todo_1 = "#TODO-I"
+	local pname_todo_2 = "#TODO-J"
+	local pname_todo_3 = "#TODO-K"
 	return lit_term(
 		value.closure(
 			pname_todo_1,

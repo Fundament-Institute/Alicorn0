@@ -493,15 +493,15 @@ local function primitive_operative(fn, name)
 	end
 	local tuple_conv = typed_term.tuple_cons(tuple_conv_elements)
 	local prim_tuple_conv = typed_term.prim_tuple_cons(prim_tuple_conv_elements)
-	local param_names = name_array("syntax", "env", "goal", "userdata")
+	local param_names = name_array("#syntax", "#env", "#goal", "#userdata")
 	local tuple_to_prim_tuple =
 		typed_term.tuple_elim(param_names, typed_term.bound_variable(1), nparams, prim_tuple_conv)
 	local tuple_to_prim_tuple_fn = typed_term.application(typed_prim_fn, tuple_to_prim_tuple)
-	local result_names = name_array("term", "env")
+	local result_names = name_array("#term", "#env")
 	local tuple_to_tuple_fn = typed_term.tuple_elim(result_names, tuple_to_prim_tuple_fn, 2, tuple_conv)
 	-- 3: wrap it in a closure with an empty capture, not a typed lambda
 	-- this ensures variable 1 is the argument tuple
-	local value_fn = value.closure("OPERATIVE_PARAM", tuple_to_tuple_fn, runtime_context())
+	local value_fn = value.closure("#OPERATIVE_PARAM", tuple_to_tuple_fn, runtime_context())
 
 	local userdata_type = value.tuple_type(empty)
 	return inferrable_term.typed(

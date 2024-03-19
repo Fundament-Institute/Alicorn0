@@ -59,7 +59,7 @@ local function add_arrays(onto, with)
 end
 
 local function const_combinator(v)
-	return value.closure("CONST_PARAM", typed_term.bound_variable(1), runtime_context():append(v))
+	return value.closure("#CONST_PARAM", typed_term.bound_variable(1), runtime_context():append(v))
 end
 
 local function get_level(t)
@@ -285,7 +285,7 @@ end
 
 --for substituting a single var at index
 local function substitute_type_variables(val, index, param_name, typechecking_context)
-	param_name = param_name or "SUB_PARAM"
+	param_name = param_name or "#SUB_PARAM"
 	print("value before substituting (val): (value term follows)")
 	print(val)
 	local substituted = substitute_inner(val, {
@@ -1608,7 +1608,7 @@ function evaluate(typed_term, runtime_context)
 			if mechanism_value:is_object_value() then
 				local constructor, arg = subject_value:unwrap_enum_value()
 				local methods, capture = mechanism_value:unwrap_object_value()
-				local this_method = value.closure("ENUM_PARAM", methods[constructor], capture)
+				local this_method = value.closure("#ENUM_PARAM", methods[constructor], capture)
 				return apply_value(this_method, arg)
 			elseif mechanism_value:is_neutral() then
 				-- objects and enums are categorical duals
@@ -1633,7 +1633,7 @@ function evaluate(typed_term, runtime_context)
 			if mechanism_value:is_enum_value() then
 				local methods, capture = subject_value:unwrap_object_value()
 				local constructor, arg = mechanism_value:unwrap_enum_value()
-				local this_method = value.closure("OBJECT_PARAM", methods[constructor], capture)
+				local this_method = value.closure("#OBJECT_PARAM", methods[constructor], capture)
 				return apply_value(this_method, arg)
 			elseif mechanism_value:is_neutral() then
 				-- objects and enums are categorical duals
