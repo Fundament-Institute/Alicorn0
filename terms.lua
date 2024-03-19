@@ -356,13 +356,17 @@ local function array_helper(pp, array)
 	--	pp:unit(pp:_resetcolor())
 	else
 		pp:unit(pp:_color())
-		pp:unit("[\n")
+		pp:unit("[")
 		pp:unit(pp:_resetcolor())
+		pp:unit("\n")
 		pp:_indent()
 		for i, v in ipairs(array) do
 			pp:_prefix()
 			pp:any(v[1], v[2])
-			pp:unit(",\n")
+			pp:unit(pp:_color())
+			pp:unit(",")
+			pp:unit(pp:_resetcolor())
+			pp:unit("\n")
 		end
 		pp:_dedent()
 		pp:_prefix()
@@ -370,6 +374,46 @@ local function array_helper(pp, array)
 		pp:unit("]")
 		pp:unit(pp:_resetcolor())
 	end
+end
+local function let_helper(pp, name, expr, context)
+	pp:unit(name)
+
+	pp:unit(pp:_color())
+	pp:unit(" = ")
+	pp:unit(pp:_resetcolor())
+
+	pp:any(expr, context)
+
+	context = context:append(name)
+
+	return context
+end
+local function tuple_elim_helper(pp, names, subject, context)
+	local inner_context = context
+
+	pp:unit(pp:_color())
+	pp:unit("(")
+	pp:unit(pp:_resetcolor())
+
+	for i, name in names:ipairs() do
+		inner_context = inner_context:append(name)
+
+		if i > 1 then
+			pp:unit(pp:_color())
+			pp:unit(", ")
+			pp:unit(pp:_resetcolor())
+		end
+
+		pp:unit(name)
+	end
+
+	pp:unit(pp:_color())
+	pp:unit(") = ")
+	pp:unit(pp:_resetcolor())
+
+	pp:any(subject, context)
+
+	return inner_context
 end
 local function as_any_tuple_type(term)
 	local ok, decls = term:as_tuple_type()
@@ -444,14 +488,7 @@ local binding_override_pretty = {
 		pp:unit(pp:_color())
 		pp:unit("binding.let ")
 		pp:unit(pp:_resetcolor())
-
-		pp:unit(name)
-
-		pp:unit(pp:_color())
-		pp:unit(" = ")
-		pp:unit(pp:_resetcolor())
-
-		pp:any(expr, context)
+		let_helper(pp, name, expr, context)
 
 		pp:_exit()
 	end,
@@ -462,21 +499,9 @@ local binding_override_pretty = {
 		pp:_enter()
 
 		pp:unit(pp:_color())
-		pp:unit("binding.let (")
+		pp:unit("binding.let ")
 		pp:unit(pp:_resetcolor())
-
-		for i, name in names:ipairs() do
-			if i > 1 then
-				pp:unit(", ")
-			end
-			pp:unit(name)
-		end
-
-		pp:unit(pp:_color())
-		pp:unit(") = ")
-		pp:unit(pp:_resetcolor())
-
-		pp:any(subject, context)
+		tuple_elim_helper(pp, names, subject, context)
 
 		pp:_exit()
 	end,
@@ -695,6 +720,39 @@ inferrable_term:define_enum("inferrable", {
 	},
 })
 
+local function inferrable_let_or_tuple_elim(pp, term, context)
+	pp:_enter()
+
+	local name, expr, names, subject
+	while true do
+		if term:is_let() then
+			name, expr, term = term:unwrap_let()
+
+			-- rear-loading prefix to cheaply handle first loop not needing prefix
+			pp:unit(pp:_color())
+			pp:unit("inferrable.let ")
+			pp:unit(pp:_resetcolor())
+			context = let_helper(pp, name, expr, context)
+			pp:unit("\n")
+			pp:_prefix()
+		elseif term:is_tuple_elim() then
+			names, subject, term = term:unwrap_tuple_elim()
+
+			pp:unit(pp:_color())
+			pp:unit("inferrable.let ")
+			pp:unit(pp:_resetcolor())
+			context = tuple_elim_helper(pp, names, subject, context)
+			pp:unit("\n")
+			pp:_prefix()
+		else
+			break
+		end
+	end
+
+	pp:any(term, context)
+
+	pp:_exit()
+end
 -- the only difference compared to typed_lambda_helper is lack of length
 local function inferrable_lambda_helper(body, context)
 	local ok, names, subject, inner_body = body:as_tuple_elim()
@@ -771,6 +829,7 @@ local inferrable_term_override_pretty = {
 		if #context >= index then
 			pp:unit(context:get_name(index))
 		else
+			-- TODO: warn on context too short?
 			pp:unit(pp:_color())
 			pp:unit("inferrable.bound_variable(")
 			pp:unit(pp:_resetcolor())
@@ -823,8 +882,9 @@ local inferrable_term_override_pretty = {
 		pp:unit(pp:_resetcolor())
 		--[[
 		pp:unit(pp:_color())
-		pp:unit("inferrable.the\n")
+		pp:unit("inferrable.the")
 		pp:unit(pp:_resetcolor())
+		pp:unit("\n")
 
 		pp:_indent()
 
@@ -949,42 +1009,8 @@ local inferrable_term_override_pretty = {
 	end,
 	--]]
 	tuple_elim = function(self, pp, context)
-		local names, subject, body = self:unwrap_tuple_elim()
 		context = ensure_context(context)
-		local inner_context = context
-
-		pp:_enter()
-
-		pp:unit(pp:_color())
-		pp:unit("inferrable.let (")
-		pp:unit(pp:_resetcolor())
-
-		for i, name in names:ipairs() do
-			inner_context = inner_context:append(name)
-
-			if i > 1 then
-				pp:unit(", ")
-			end
-			pp:unit(name)
-		end
-
-		pp:unit(pp:_color())
-		pp:unit(") = ")
-		pp:unit(pp:_resetcolor())
-
-		pp:any(subject, context)
-
-		pp:unit(pp:_color())
-		pp:unit(" in")
-		pp:unit(pp:_resetcolor())
-		pp:unit("\n")
-
-		pp:_indent()
-		pp:_prefix()
-		pp:any(body, inner_context)
-		pp:_dedent()
-
-		pp:_exit()
+		inferrable_let_or_tuple_elim(pp, self, context)
 	end,
 	tuple_type = function(self, pp, context)
 		local definition = self:unwrap_tuple_type()
@@ -1003,35 +1029,8 @@ local inferrable_term_override_pretty = {
 		pp:_exit()
 	end,
 	let = function(self, pp, context)
-		local name, expr, body = self:unwrap_let()
 		context = ensure_context(context)
-		local inner_context = context:append(name)
-
-		pp:_enter()
-
-		pp:unit(pp:_color())
-		pp:unit("inferrable.let ")
-		pp:unit(pp:_resetcolor())
-
-		pp:unit(name)
-
-		pp:unit(pp:_color())
-		pp:unit(" = ")
-		pp:unit(pp:_resetcolor())
-
-		pp:any(expr, context)
-
-		pp:unit(pp:_color())
-		pp:unit(" in")
-		pp:unit(pp:_resetcolor())
-		pp:unit("\n")
-
-		pp:_indent()
-		pp:_prefix()
-		pp:any(body, inner_context)
-		pp:_dedent()
-
-		pp:_exit()
+		inferrable_let_or_tuple_elim(pp, self, context)
 	end,
 	prim_tuple_type = function(self, pp, context)
 		local decls = self:unwrap_prim_tuple_type()
@@ -1235,6 +1234,39 @@ typed_term:define_enum("typed", {
 	} },
 })
 
+local function typed_let_or_tuple_elim(pp, term, context)
+	pp:_enter()
+
+	local name, expr, names, subject, length
+	while true do
+		if term:is_let() then
+			name, expr, term = term:unwrap_let()
+
+			-- rear-loading prefix to cheaply handle first loop not needing prefix
+			pp:unit(pp:_color())
+			pp:unit("typed.let ")
+			pp:unit(pp:_resetcolor())
+			context = let_helper(pp, name, expr, context)
+			pp:unit("\n")
+			pp:_prefix()
+		elseif term:is_tuple_elim() then
+			names, subject, length, term = term:unwrap_tuple_elim()
+
+			pp:unit(pp:_color())
+			pp:unit("typed.let ")
+			pp:unit(pp:_resetcolor())
+			context = tuple_elim_helper(pp, names, subject, context)
+			pp:unit("\n")
+			pp:_prefix()
+		else
+			break
+		end
+	end
+
+	pp:any(term, context)
+
+	pp:_exit()
+end
 -- the only difference compared to inferrable_lambda_helper is length
 local function typed_lambda_helper(body, context)
 	local ok, names, subject, length, inner_body = body:as_tuple_elim()
@@ -1301,6 +1333,7 @@ local typed_term_override_pretty = {
 		if #context >= index then
 			pp:unit(context:get_name(index))
 		else
+			-- TODO: warn on context too short?
 			pp:unit(pp:_color())
 			pp:unit("typed.bound_variable(")
 			pp:unit(pp:_resetcolor())
@@ -1411,73 +1444,12 @@ local typed_term_override_pretty = {
 	end,
 	--]]
 	let = function(self, pp, context)
-		local name, expr, body = self:unwrap_let()
 		context = ensure_context(context)
-		local inner_context = context:append(name)
-
-		pp:_enter()
-
-		pp:unit(pp:_color())
-		pp:unit("typed.let ")
-		pp:unit(pp:_resetcolor())
-
-		pp:unit(name)
-
-		pp:unit(pp:_color())
-		pp:unit(" = ")
-		pp:unit(pp:_resetcolor())
-
-		pp:any(expr, context)
-
-		pp:unit(pp:_color())
-		pp:unit(" in")
-		pp:unit(pp:_resetcolor())
-		pp:unit("\n")
-
-		pp:_indent()
-		pp:_prefix()
-		pp:any(body, inner_context)
-		pp:_dedent()
-
-		pp:_exit()
+		typed_let_or_tuple_elim(pp, self, context)
 	end,
 	tuple_elim = function(self, pp, context)
-		local names, subject, length, body = self:unwrap_tuple_elim()
 		context = ensure_context(context)
-		local inner_context = context
-
-		pp:_enter()
-
-		pp:unit(pp:_color())
-		pp:unit("typed.let (")
-		pp:unit(pp:_resetcolor())
-
-		for i, name in names:ipairs() do
-			inner_context = inner_context:append(name)
-
-			if i > 1 then
-				pp:unit(", ")
-			end
-			pp:unit(name)
-		end
-
-		pp:unit(pp:_color())
-		pp:unit(") = ")
-		pp:unit(pp:_resetcolor())
-
-		pp:any(subject, context)
-
-		pp:unit(pp:_color())
-		pp:unit(" in")
-		pp:unit(pp:_resetcolor())
-		pp:unit("\n")
-
-		pp:_indent()
-		pp:_prefix()
-		pp:any(body, inner_context)
-		pp:_dedent()
-
-		pp:_exit()
+		typed_let_or_tuple_elim(pp, self, context)
 	end,
 	tuple_type = function(self, pp, context)
 		local definition = self:unwrap_tuple_type()
