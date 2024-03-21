@@ -285,7 +285,7 @@ end
 
 --for substituting a single var at index
 local function substitute_type_variables(val, index, param_name, typechecking_context)
-	param_name = param_name or "#SUB_PARAM"
+	param_name = param_name and "#sub-" .. param_name or "#sub-param"
 	print("value before substituting (val): (value term follows)")
 	print(val)
 	local substituted = substitute_inner(val, {

@@ -430,8 +430,8 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	local shadowed, env = env:enter_block()
 
 	-- syntax.anchor can be nil so we fall back to the anchor for the start of this prim func type if needed
-	env = env:bind_local(terms.binding.annotated_lambda("#arg_a", args, syntax.anchor or pft_anchor))
-	local ok, arg = env:get("#arg_a")
+	env = env:bind_local(terms.binding.annotated_lambda("#prim-func-arguments", args, syntax.anchor or pft_anchor))
+	local ok, arg = env:get("#prim-func-arguments")
 	env = env:bind_local(terms.binding.tuple_elim(names, arg))
 
 	ok, thread, tail = syntax:match({
@@ -503,8 +503,9 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 
 	local shadowed, env = env:enter_block()
 
-	env = env:bind_local(terms.binding.annotated_lambda("#arg_b", args, syntax.anchor))
-	local ok, arg = env:get("#arg_b")
+	-- TODO: use correct name in lambda parameter instead of adding an extra let
+	env = env:bind_local(terms.binding.annotated_lambda("#forall-arguments", args, syntax.anchor))
+	local ok, arg = env:get("#forall-arguments")
 	if single then
 		env = env:bind_local(terms.binding.let(names, arg))
 	else
@@ -642,8 +643,9 @@ local function lambda_impl(syntax, env)
 	local single, args, names, env = thread.single, thread.args, thread.names, thread.env
 
 	local shadow, inner_env = env:enter_block()
-	inner_env = inner_env:bind_local(terms.binding.annotated_lambda("#arg_c", thread.args, syntax.anchor))
-	local _, arg = inner_env:get("#arg_c")
+	-- TODO: use correct name in lambda parameter instead of adding an extra let
+	inner_env = inner_env:bind_local(terms.binding.annotated_lambda("#lambda-arguments", thread.args, syntax.anchor))
+	local _, arg = inner_env:get("#lambda-arguments")
 	if single then
 		inner_env = inner_env:bind_local(terms.binding.let(names, arg))
 	else

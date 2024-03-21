@@ -36,6 +36,10 @@ end
 
 local env, bound_expr = env:exit_block(expr, shadowed)
 
+print("got a term!")
+print("bound_expr: (inferrable term follows)")
+print(bound_expr)
+
 print("Inferring")
 local type, usages, term = evaluator.infer(bound_expr, terms.typechecking_context())
 print("Inferred!")
