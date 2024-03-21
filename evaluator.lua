@@ -1452,6 +1452,8 @@ local function substitute_value(base, original, replacement)
 	end
 end
 
+local intrinsic_memo = setmetatable({}, { __mode = "v" })
+
 function evaluate(typed_term, runtime_context)
 	-- -> an alicorn value
 	-- TODO: typecheck typed_term and runtime_context?
@@ -1724,6 +1726,9 @@ function evaluate(typed_term, runtime_context)
 		local source_val = evaluate(source, runtime_context)
 		if source_val:is_prim() then
 			local source_str = source_val:unwrap_prim()
+			if intrinsic_memo[source_str] then
+				return value.prim(intrinsic_memo[source_str])
+			end
 			local load_env = {}
 			for k, v in pairs(_G) do
 				load_env[k] = v
@@ -1733,7 +1738,9 @@ function evaluate(typed_term, runtime_context)
 			end
 			local require_generator = require "require"
 			load_env.require = require_generator(anchor.sourceid)
-			return value.prim(assert(load(source_str, "prim_intrinsic", "t", load_env))())
+			local res = assert(load(source_str, "prim_intrinsic", "t", load_env))()
+			intrinsic_memo[source_str] = res
+			return value.prim(res)
 		elseif source_val:is_neutral() then
 			local source_neutral = source_val:unwrap_neutral()
 			return value.neutral(neutral_value.prim_intrinsic_stuck(source_neutral, anchor))
