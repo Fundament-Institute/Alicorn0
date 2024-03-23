@@ -6,7 +6,7 @@ local prettyprintable = require "./pretty-printable-trait"
 
 local kind_field = "kind"
 local hidden_fields = {
-	--[kind_field] = true,
+	[kind_field] = true,
 	capture = function(capture)
 		if capture.bindings and capture.bindings.len then
 			-- FIXME: we can't print all the bindings for a capture currently because we
@@ -126,7 +126,6 @@ function PrettyPrint:table(fields)
 		return
 	end
 	self.table_tracker[fields] = true
-	self[#self + 1] = " "
 
 	self:_enter()
 
@@ -134,8 +133,8 @@ function PrettyPrint:table(fields)
 	local num = 0
 	for k, v in pairs(fields) do
 		if k == "kind" then
-			self[#self + 1] = fields.kind
 			self[#self + 1] = " "
+			self[#self + 1] = fields.kind
 		elseif hidden_fields[k] then
 			-- nothing
 		elseif type(k) == "number" then
@@ -162,7 +161,7 @@ function PrettyPrint:table(fields)
 		self[#self + 1] = "{"
 		self[#self + 1] = self:_resetcolor()
 		for k, v in pairs(fields) do
-			if k ~= "kind" and not hidden_fields[k] then
+			if not hidden_fields[k] then
 				self:any(v)
 			end
 		end
@@ -171,11 +170,11 @@ function PrettyPrint:table(fields)
 		self[#self + 1] = self:_resetcolor()
 	else
 		self[#self + 1] = self:_color()
-		self[#self + 1] = "{\n"
+		self[#self + 1] = " {\n"
 		self[#self + 1] = self:_resetcolor()
 		self:_indent()
 		for k, v in pairs(fields) do
-			if k ~= "kind" and not hidden_fields[k] then
+			if not hidden_fields[k] then
 				self:_prefix()
 				self[#self + 1] = k
 				self[#self + 1] = " = "
