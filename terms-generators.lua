@@ -225,7 +225,11 @@ end
 ---@param lsp_type string
 ---@return Foreign self
 local function define_foreign(self, value_check, lsp_type)
-	setmetatable(self, nil)
+	setmetatable(self, {
+		__tostring = function()
+			return "terms-gen foreign " .. (lsp_type or "unknown")
+		end,
+	})
 	self.value_check = value_check
 	self.derive_info = {
 		kind = "foreign",
