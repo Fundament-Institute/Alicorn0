@@ -473,7 +473,7 @@ local function primitive_operative(fn, name)
 		return res, env
 	end
 	-- what we're going for:
-	-- (s : syntax, e : environment, g : goal, u : wrapped_typed_term(userdata)) -> (goal_to_term(g), environment)
+	-- (s : syntax, e : environment, u : wrapped_typed_term(userdata), g : goal) -> (goal_to_term(g), environment)
 	--   goal one of inferable, mechanism, checkable
 
 	-- 1: wrap fn as a typed prim

@@ -341,6 +341,46 @@ binding:define_enum("binding", {
 	},
 })
 
+local function let_helper(pp, name, expr, context)
+	pp:unit(name)
+
+	pp:unit(pp:_color())
+	pp:unit(" = ")
+	pp:unit(pp:_resetcolor())
+
+	pp:any(expr, context)
+
+	context = context:append(name)
+
+	return context
+end
+local function tuple_elim_helper(pp, names, subject, context)
+	local inner_context = context
+
+	pp:unit(pp:_color())
+	pp:unit("(")
+	pp:unit(pp:_resetcolor())
+
+	for i, name in names:ipairs() do
+		inner_context = inner_context:append(name)
+
+		if i > 1 then
+			pp:unit(pp:_color())
+			pp:unit(", ")
+			pp:unit(pp:_resetcolor())
+		end
+
+		pp:unit(name)
+	end
+
+	pp:unit(pp:_color())
+	pp:unit(") = ")
+	pp:unit(pp:_resetcolor())
+
+	pp:any(subject, context)
+
+	return inner_context
+end
 local function tuple_type_helper(pp, members, names)
 	local m = #members
 
@@ -381,46 +421,6 @@ local function tuple_type_helper(pp, members, names)
 		pp:unit(")")
 		pp:unit(pp:_resetcolor())
 	end
-end
-local function let_helper(pp, name, expr, context)
-	pp:unit(name)
-
-	pp:unit(pp:_color())
-	pp:unit(" = ")
-	pp:unit(pp:_resetcolor())
-
-	pp:any(expr, context)
-
-	context = context:append(name)
-
-	return context
-end
-local function tuple_elim_helper(pp, names, subject, context)
-	local inner_context = context
-
-	pp:unit(pp:_color())
-	pp:unit("(")
-	pp:unit(pp:_resetcolor())
-
-	for i, name in names:ipairs() do
-		inner_context = inner_context:append(name)
-
-		if i > 1 then
-			pp:unit(pp:_color())
-			pp:unit(", ")
-			pp:unit(pp:_resetcolor())
-		end
-
-		pp:unit(name)
-	end
-
-	pp:unit(pp:_color())
-	pp:unit(") = ")
-	pp:unit(pp:_resetcolor())
-
-	pp:any(subject, context)
-
-	return inner_context
 end
 local function as_any_tuple_type(term)
 	local ok, decls = term:as_tuple_type()
@@ -969,12 +969,17 @@ local inferrable_term_override_pretty = {
 		pp:unit(pp:_color())
 		pp:unit(" ->")
 		pp:unit(pp:_resetcolor())
-		pp:unit("\n")
 
-		pp:_indent()
-		pp:_prefix()
-		pp:any(body, inner_context)
-		pp:_dedent()
+		if body:is_let() or body:is_tuple_elim() then
+			pp:unit("\n")
+			pp:_indent()
+			pp:_prefix()
+			pp:any(body, inner_context)
+			pp:_dedent()
+		else
+			pp:unit(" ")
+			pp:any(body, inner_context)
+		end
 
 		pp:_exit()
 	end,
@@ -1524,12 +1529,17 @@ local typed_term_override_pretty = {
 		pp:unit(pp:_color())
 		pp:unit(" ->")
 		pp:unit(pp:_resetcolor())
-		pp:unit("\n")
 
-		pp:_indent()
-		pp:_prefix()
-		pp:any(body, inner_context)
-		pp:_dedent()
+		if body:is_let() or body:is_tuple_elim() then
+			pp:unit("\n")
+			pp:_indent()
+			pp:_prefix()
+			pp:any(body, inner_context)
+			pp:_dedent()
+		else
+			pp:unit(" ")
+			pp:any(body, inner_context)
+		end
 
 		pp:_exit()
 	end,
@@ -1756,6 +1766,45 @@ local typed_term_override_pretty = {
 		else
 			tuple_type_helper(pp, members)
 		end
+
+		pp:_exit()
+	end,
+	prim_intrinsic = function(self, pp)
+		local source, anchor = self:unwrap_prim_intrinsic()
+		local ok, source_val = source:as_literal()
+		if not ok then
+			error("override_pretty: typed.prim_intrinsic: source must be a literal prim string")
+		end
+		local ok, source_text = source_val:as_prim()
+		if not ok or type(source_text) ~= "string" then
+			error("override_pretty: typed.prim_intrinsic: source must be a literal prim string")
+		end
+
+		-- trim initial newlines
+		-- get first line
+		-- ellipsize further lines
+		local source_print = string.gsub(source_text, "^%c*(%C*)(.*)", function(visible, rest)
+			if #rest > 0 then
+				return visible .. " ..."
+			else
+				return visible
+			end
+		end)
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("typed.prim_intrinsic ")
+		pp:unit(pp:_resetcolor())
+
+		pp:any(source_print)
+
+		--[[
+		pp:unit(pp:_color())
+		pp:unit(" ")
+		pp:any(anchor)
+		pp:unit(pp:_resetcolor())
+		--]]
 
 		pp:_exit()
 	end,
@@ -2088,12 +2137,17 @@ local value_override_pretty = {
 		pp:unit(pp:_color())
 		pp:unit(" ->")
 		pp:unit(pp:_resetcolor())
-		pp:unit("\n")
 
-		pp:_indent()
-		pp:_prefix()
-		pp:any(code, inner_context)
-		pp:_dedent()
+		if code:is_let() or code:is_tuple_elim() then
+			pp:unit("\n")
+			pp:_indent()
+			pp:_prefix()
+			pp:any(code, inner_context)
+			pp:_dedent()
+		else
+			pp:unit(" ")
+			pp:any(code, inner_context)
+		end
 
 		pp:_exit()
 	end,
