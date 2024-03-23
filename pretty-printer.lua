@@ -135,6 +135,7 @@ function PrettyPrint:table(fields)
 	for k, v in pairs(fields) do
 		if k == "kind" then
 			self[#self + 1] = fields.kind
+			self[#self + 1] = " "
 		elseif hidden_fields[k] then
 			-- nothing
 		elseif type(k) == "number" then
@@ -170,7 +171,7 @@ function PrettyPrint:table(fields)
 		self[#self + 1] = self:_resetcolor()
 	else
 		self[#self + 1] = self:_color()
-		self[#self + 1] = " {\n"
+		self[#self + 1] = "{\n"
 		self[#self + 1] = self:_resetcolor()
 		self:_indent()
 		for k, v in pairs(fields) do
