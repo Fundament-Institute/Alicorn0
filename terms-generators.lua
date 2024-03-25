@@ -113,8 +113,7 @@ local function gen_record(self, cons, kind, params_with_types)
 				if params_types[i].value_check(argi) ~= true then
 					print("value of parameter " .. v .. ": (follows)")
 					p(argi)
-					print("expected type of parameter " .. v .. " is: (follows)")
-					p(params_types[i])
+					print("expected type of parameter " .. v .. " is :", params_types[i])
 					error("wrong argument type passed to constructor " .. kind .. ", parameter '" .. v .. "'")
 				end
 				val[v] = argi
@@ -122,6 +121,11 @@ local function gen_record(self, cons, kind, params_with_types)
 			setmetatable(val, self)
 			return val
 		end,
+		setmetatable(self, {
+			__tostring = function()
+				return "terms-gen record " .. kind
+			end,
+		}),
 	})
 	local derive_info = {
 		kind = kind,
@@ -197,6 +201,11 @@ local function define_enum(self, name, variants)
 			}
 		end
 	end
+	setmetatable(self, {
+		__tostring = function()
+			return "terms-gen enum " .. name
+		end,
+	})
 	local derive_info = {
 		name = name,
 		variants = derive_variants,
@@ -217,7 +226,11 @@ end
 ---@param lsp_type string
 ---@return Foreign self
 local function define_foreign(self, value_check, lsp_type)
-	setmetatable(self, nil)
+	setmetatable(self, {
+		__tostring = function()
+			return "terms-gen foreign " .. (lsp_type or "unknown")
+		end,
+	})
 	self.value_check = value_check
 	self.derive_info = {
 		kind = "foreign",
