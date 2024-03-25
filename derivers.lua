@@ -135,26 +135,36 @@ local pretty_print = {
 	record = function(t, info, override_pretty)
 		local idx = t.__index or {}
 		t.__index = idx
-		local prettyprintable = require("./pretty-printer").prettyprintable
+
 		local prettyprintable_print = record_prettyprintable_trait(info)
-		local pretty
-		if override_pretty then
-			pretty = override_pretty
-		else
-			pretty = prettyprintable_print
+		local function pretty(self, pp, ...)
+			if override_pretty and not pp.force_default then
+				override_pretty(self, pp, ...)
+			else
+				prettyprintable_print(self, pp, ...)
+			end
 		end
+
+		local prettyprintable = require("./pretty-printer").prettyprintable
 		prettyprintable:implement_on(t, { print = pretty })
-		idx["pretty_print"] = function(self, ...)
+
+		local function pretty_print(self, ...)
 			local pp = require("./pretty-printer").PrettyPrint.new()
 			pretty(self, pp, ...)
 			return tostring(pp)
 		end
+		idx["pretty_print"] = pretty_print
+
+		local function default_print(self, ...)
+			local pp = require("./pretty-printer").PrettyPrint.new()
+			pp.force_default = true
+			pretty(self, pp, ...)
+			return tostring(pp)
+		end
+		idx["default_print"] = default_print
 
 		if not t["__tostring"] then
-			t["__tostring"] = idx["pretty_print"]
-		end
-		if not t["__tostring"] then
-			t["__tostring"] = idx["pretty_print"]
+			t["__tostring"] = pretty_print
 		end
 	end,
 	enum = function(t, info, override_pretty)
@@ -170,16 +180,22 @@ local pretty_print = {
 			local vtype = vdata.type
 			local vinfo = vdata.info
 			local override_pretty_v = override_pretty and override_pretty[vname]
-			if override_pretty_v then
-				variant_printers[vkind] = override_pretty_v
-			elseif vtype == "record" then
-				variant_printers[vkind] = record_prettyprintable_trait(vinfo)
+			local variant_prettyprintable_print
+			if vtype == "record" then
+				variant_prettyprintable_print = record_prettyprintable_trait(vinfo)
 			elseif vtype == "unit" then
-				variant_printers[vkind] = function(self, printer)
-					return printer:unit(self.kind)
+				variant_prettyprintable_print = function(self, pp)
+					pp:unit(self.kind)
 				end
 			else
 				error("unknown variant type: " .. vtype)
+			end
+			variant_printers[vkind] = function(self, pp, ...)
+				if override_pretty_v and not pp.force_default then
+					override_pretty_v(self, pp, ...)
+				else
+					variant_prettyprintable_print(self, pp, ...)
+				end
 			end
 		end
 
@@ -204,14 +220,24 @@ local pretty_print = {
 
 		local prettyprintable = require("./pretty-printer").prettyprintable
 		prettyprintable:implement_on(t, { print = prettyprintable_print })
-		idx["pretty_print"] = function(self, ...)
+
+		local function pretty_print(self, ...)
 			local pp = require("./pretty-printer").PrettyPrint.new()
 			prettyprintable_print(self, pp, ...)
 			return tostring(pp)
 		end
+		idx["pretty_print"] = pretty_print
+
+		local function default_print(self, ...)
+			local pp = require("./pretty-printer").PrettyPrint.new()
+			pp.force_default = true
+			prettyprintable_print(self, pp, ...)
+			return tostring(pp)
+		end
+		idx["default_print"] = default_print
 
 		if not t["__tostring"] then
-			t["__tostring"] = idx["pretty_print"]
+			t["__tostring"] = pretty_print
 		end
 	end,
 }
