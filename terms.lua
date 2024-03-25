@@ -784,7 +784,7 @@ local function inferrable_destructure_helper(term, context)
 		local is_destructure = ok and index == #context
 		if is_destructure then
 			context = context:append(name)
-			return is_destructure, true, name, body, context
+			return true, true, name, body, context
 		end
 	elseif term:is_tuple_elim() then
 		local names, subject, body = term:unwrap_tuple_elim()
@@ -794,7 +794,7 @@ local function inferrable_destructure_helper(term, context)
 			for i, name in names:ipairs() do
 				context = context:append(name)
 			end
-			return is_destructure, false, names, body, context
+			return true, false, names, body, context
 		end
 	end
 	return false, false, nil, term, context
@@ -1082,32 +1082,86 @@ local inferrable_term_override_pretty = {
 
 		pp:_exit()
 	end,
-	--[[
 	application = function(self, pp, context)
 		local f, arg = self:unwrap_application()
 		context = ensure_context(context)
 
-		pp:_enter()
+		-- handle nested applications
+		local function application_inner(f, arg)
+			local f_is_application, f_f, f_arg = f:as_application()
+			local f_is_typed, f_type, f_usage_counts, f_typed_term = f:as_typed()
+			local f_is_bound_variable, f_index = false
+			if f_is_typed then
+				f_is_bound_variable, f_index = f_typed_term:as_bound_variable()
+			end
 
-		pp:unit(pp:_color())
-		pp:unit("(")
-		pp:unit(pp:_resetcolor())
+			pp:_enter()
 
-		pp:any(f, context)
+			-- print pretty on certain conditions, or fall back to apply()
+			if
+				(f_is_application or (f_is_typed and f_is_bound_variable and #context >= f_index))
+				and (arg:is_tuple_cons() or arg:is_prim_tuple_cons())
+			then
+				if f_is_application then
+					application_inner(f_f, f_arg)
+				else
+					pp:unit(context:get_name(f_index))
+				end
 
-		pp:unit(pp:_color())
-		pp:unit(") inferrable.@ (")
-		pp:unit(pp:_resetcolor())
+				local ok, elements = arg:as_tuple_cons()
+				elements = ok and elements or arg:unwrap_prim_tuple_cons()
 
-		pp:any(arg, context)
+				pp:unit(pp:_color())
+				pp:unit("(")
+				pp:unit(pp:_resetcolor())
 
-		pp:unit(pp:_color())
-		pp:unit(")")
-		pp:unit(pp:_resetcolor())
+				for i, arg in ipairs(elements) do
+					if i > 1 then
+						pp:unit(pp:_color())
+						pp:unit(", ")
+						pp:unit(pp:_resetcolor())
+					end
 
-		pp:_exit()
+					pp:any(arg, context)
+				end
+
+				pp:unit(pp:_color())
+				pp:unit(")")
+				pp:unit(pp:_resetcolor())
+			else
+				-- if we're here then the args are probably horrible
+				-- add some newlines
+				pp:unit(pp:_color())
+				pp:unit("inferrable.apply(")
+				pp:unit(pp:_resetcolor())
+				pp:unit("\n")
+
+				pp:_indent()
+
+				pp:_prefix()
+				pp:any(f, context)
+				pp:unit(pp:_color())
+				pp:unit(",")
+				pp:unit(pp:_resetcolor())
+				pp:unit("\n")
+
+				pp:_prefix()
+				pp:any(arg, context)
+				pp:unit("\n")
+
+				pp:_dedent()
+
+				pp:_prefix()
+				pp:unit(pp:_color())
+				pp:unit(")")
+				pp:unit(pp:_resetcolor())
+			end
+
+			pp:_exit()
+		end
+
+		application_inner(f, arg)
 	end,
-	--]]
 	tuple_elim = function(self, pp, context)
 		context = ensure_context(context)
 		inferrable_let_or_tuple_elim(pp, self, context)
@@ -1647,32 +1701,83 @@ local typed_term_override_pretty = {
 
 		pp:_exit()
 	end,
-	--[[
+	-- copypaste from inferrable.application
 	application = function(self, pp, context)
 		local f, arg = self:unwrap_application()
 		context = ensure_context(context)
 
-		pp:_enter()
+		-- handle nested applications
+		local function application_inner(f, arg)
+			local f_is_application, f_f, f_arg = f:as_application()
+			local f_is_bound_variable, f_index = f:as_bound_variable()
 
-		pp:unit(pp:_color())
-		pp:unit("(")
-		pp:unit(pp:_resetcolor())
+			pp:_enter()
 
-		pp:any(f, context)
+			-- print pretty on certain conditions, or fall back to apply()
+			if
+				(f_is_application or (f_is_bound_variable and #context >= f_index))
+				and (arg:is_tuple_cons() or arg:is_prim_tuple_cons())
+			then
+				if f_is_application then
+					application_inner(f_f, f_arg)
+				else
+					pp:unit(context:get_name(f_index))
+				end
 
-		pp:unit(pp:_color())
-		pp:unit(") typed.@ (")
-		pp:unit(pp:_resetcolor())
+				local ok, elements = arg:as_tuple_cons()
+				elements = ok and elements or arg:unwrap_prim_tuple_cons()
 
-		pp:any(arg, context)
+				pp:unit(pp:_color())
+				pp:unit("(")
+				pp:unit(pp:_resetcolor())
 
-		pp:unit(pp:_color())
-		pp:unit(")")
-		pp:unit(pp:_resetcolor())
+				for i, arg in ipairs(elements) do
+					if i > 1 then
+						pp:unit(pp:_color())
+						pp:unit(", ")
+						pp:unit(pp:_resetcolor())
+					end
 
-		pp:_exit()
+					pp:any(arg, context)
+				end
+
+				pp:unit(pp:_color())
+				pp:unit(")")
+				pp:unit(pp:_resetcolor())
+			else
+				-- if we're here then the args are probably horrible
+				-- add some newlines
+				pp:unit(pp:_color())
+				pp:unit("typed.apply(")
+				pp:unit(pp:_resetcolor())
+				pp:unit("\n")
+
+				pp:_indent()
+
+				pp:_prefix()
+				pp:any(f, context)
+				pp:unit(pp:_color())
+				pp:unit(",")
+				pp:unit(pp:_resetcolor())
+				pp:unit("\n")
+
+				pp:_prefix()
+				pp:any(arg, context)
+				pp:unit("\n")
+
+				pp:_dedent()
+
+				pp:_prefix()
+				pp:unit(pp:_color())
+				pp:unit(")")
+				pp:unit(pp:_resetcolor())
+			end
+
+			pp:_exit()
+		end
+
+		application_inner(f, arg)
 	end,
-	--]]
 	let = function(self, pp, context)
 		context = ensure_context(context)
 		typed_let_or_tuple_elim(pp, self, context)
@@ -1680,6 +1785,28 @@ local typed_term_override_pretty = {
 	tuple_elim = function(self, pp, context)
 		context = ensure_context(context)
 		typed_let_or_tuple_elim(pp, self, context)
+	end,
+	-- some copypaste from typed.application
+	tuple_element_access = function(self, pp, context)
+		local subject, index = self:unwrap_tuple_element_access()
+		context = ensure_context(context)
+		local subject_is_bound_variable, subject_index = subject:as_bound_variable()
+
+		if subject_is_bound_variable and #context >= subject_index then
+			pp:_enter()
+
+			pp:unit(context:get_name(subject_index))
+
+			pp:unit(pp:_color())
+			pp:unit(".")
+			pp:unit(pp:_resetcolor())
+
+			pp:unit(tostring(index))
+
+			pp:_exit()
+		else
+			pp:record("typed.tuple_element_access", { { "subject", subject }, { "index", index } }, context)
+		end
 	end,
 	tuple_type = function(self, pp, context)
 		local definition = self:unwrap_tuple_type()
