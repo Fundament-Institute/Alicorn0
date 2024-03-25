@@ -552,7 +552,7 @@ collect_tuple = metalanguage.reducer(function(syntax, args)
 		goal_type = goal:unwrap_check()
 		closures = evaluator.extract_tuple_elem_type_closures(goal_type:unwrap_tuple_type(), value_array())
 	else
-		collected_terms = inferrable_array
+		collected_terms = inferrable_array()
 	end
 
 	local tuple_type_elems = value_array()
@@ -570,9 +570,9 @@ collect_tuple = metalanguage.reducer(function(syntax, args)
 				}, metalanguage.failure_handler, ExpressionArgs.new(goal, env))
 			else
 				local next_elem_type = evaluator.apply_value(closures[i], value.tuple_value(tuple_symbolic_elems))
-				if next_elem_type:is_neutral() then
-					error "neutral goal type"
-				end
+				-- if next_elem_type:is_neutral() then
+				-- 	error "neutral goal type"
+				-- end
 
 				ok, continue, next_term, syntax, env = syntax:match({
 					metalanguage.ispair(collect_tuple_pair_handler),

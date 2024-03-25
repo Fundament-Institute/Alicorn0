@@ -6,7 +6,7 @@ local prettyprintable = require "./pretty-printable-trait"
 
 local kind_field = "kind"
 local hidden_fields = {
-	--[kind_field] = true,
+	[kind_field] = true,
 	capture = function(capture)
 		if capture.bindings and capture.bindings.len then
 			-- FIXME: we can't print all the bindings for a capture currently because we
@@ -114,32 +114,54 @@ end
 
 ---@param fields table
 function PrettyPrint:table(fields, ...)
+	-- i considered keeping track of a path of tables
+	-- but it turned really horrible
+	-- just grep its address until you find the original
+	self[#self + 1] = "<"
+	self[#self + 1] = tostring(fields)
+	self[#self + 1] = ">"
+
+	self.table_tracker = self.table_tracker or {}
+	if self.table_tracker[fields] then
+		return
+	end
+	self.table_tracker[fields] = true
+
 	self:_enter()
 
 	local count = 0
+	local num = 0
 	for k, v in pairs(fields) do
 		if k == "kind" then
+			self[#self + 1] = " "
 			self[#self + 1] = fields.kind
+		elseif hidden_fields[k] then
+			-- nothing
+		elseif type(k) == "number" then
+			num = num + 1
 		else
 			count = count + 1
 		end
 	end
-	if #fields > 0 and count == 0 then
+	if count == 0 then
 		self[#self + 1] = self:_color()
 		self[#self + 1] = "["
 		self[#self + 1] = self:_resetcolor()
 		for i, v in ipairs(fields) do
+			if i > 1 then
+				self[#self + 1] = ", "
+			end
 			self:any(v, ...)
 		end
 		self[#self + 1] = self:_color()
 		self[#self + 1] = "]"
 		self[#self + 1] = self:_resetcolor()
-	elseif count <= 1 then
+	elseif num == 0 and count == 1 then
 		self[#self + 1] = self:_color()
 		self[#self + 1] = "{"
 		self[#self + 1] = self:_resetcolor()
 		for k, v in pairs(fields) do
-			if not hidden_fields[k] and k ~= "kind" then
+			if not hidden_fields[k] then
 				self:any(v, ...)
 			end
 		end
@@ -152,7 +174,7 @@ function PrettyPrint:table(fields, ...)
 		self[#self + 1] = self:_resetcolor()
 		self:_indent()
 		for k, v in pairs(fields) do
-			if not hidden_fields[k] and k ~= "kind" then
+			if not hidden_fields[k] then
 				self:_prefix()
 				self[#self + 1] = k
 				self[#self + 1] = " = "

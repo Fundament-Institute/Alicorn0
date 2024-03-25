@@ -133,7 +133,7 @@ let prim-nil =
 		:
 		prim-unit
 
-let only-accept-prim-tuples-inner =
+let only-accept-prim-tuples-inner-prim =
 	intrinsic
 		""""
 			local function check_prim_tuple(subject, consequent, alternate)
@@ -152,14 +152,20 @@ let only-accept-prim-tuples-inner =
 			->
 			result : wrapped(prim-type)
 
-let only-accept-prim-tuples =
+let only-accept-prim-tuples-inner =
 	lambda (subject : wrapped(type), consequent : prim-type, alternate : prim-type)
 		let (res) =
-			only-accept-prim-tuples-inner
+			only-accept-prim-tuples-inner-prim
 				subject
 				wrap prim-type consequent
 				wrap prim-type alternate
 		unwrap prim-type res
+let only-accept-prim-tuples =
+	lambda ((subject : wrapped(type)))
+		only-accept-prim-tuples-inner
+			subject
+			prim-unit
+			wrapped void
 
 let prim-tuple-type-to-tuple-type-inner =
 	intrinsic
@@ -174,15 +180,80 @@ let prim-tuple-type-to-tuple-type-inner =
 		:
 		prim-func-type
 			t : wrapped(type)
-			valid :
-				only-accept-prim-tuples
-					t
-					prim-unit
-					wrapped(void)
+			valid : only-accept-prim-tuples(t)
 			->
 			res : wrapped(type)
 
-let only-accept-prim-funcs-inner =
+let prim-tuple-type-to-tuple-type =
+	lambda (t : wrapped(type), valid : only-accept-prim-tuples(t))
+		let (res) = prim-tuple-type-to-tuple-type-inner(t, valid)
+		res
+
+let prim-tuple-to-tuple-inner =
+	intrinsic
+		""""
+			return function(_type, _valid, val)
+				local elems = val:unwrap_prim_tuple_value()
+				local vals = terms_gen.delcare_array(terms.value)()
+				for _, v in ipairs(elems) do
+					vals:append(terms.value.prim(v))
+				end
+				return terms.value.tuple_value(vals)
+			end
+		:
+		prim-func-type
+			t : wrapped(type)
+			valid : only-accept-prim-tuples(t)
+			val : wrapped(unwrap(type, t))
+			->
+			res : wrapped(unwrap(type, prim-tuple-type-to-tuple-type(t, valid)))
+
+let prim-tuple-to-tuple =
+	lambda (t : wrapped(type), valid : only-accept-prim-tuples(t), val : unwrap(type, t))
+		let (res) = prim-tuple-to-tuple-inner(t, valid, wrap(unwrap(type, t), val))
+		unwrap(unwrap(type, prim-tuple-type-to-tuple-type(t, valid)), res)
+
+let tuple-to-prim-tuple-inner =
+	intrinsic
+		""""
+			return function(_type, _valid, val)
+				local elems = val:unwrap_tuple_value()
+				local leading = terms_gen.declare_array(terms_gen.any_lua_type)()
+				local stuck = false
+				local stuck_elem = nil
+				local trailing = terms_gen.declare_ array(terms.value)()
+				for _, v in ipairs(elems) do
+					if stuck then
+						trailing:append(v)
+					elseif v:is_prim() then
+						leading:append(v:unwrap_prim())
+					elseif v:is_neutral() then
+						stuck, stuck_elem = true, v:unwrap_neutral()
+					else
+						error "found an element in a tuple being converted to prim-tuple that was neither prim nor neutral"
+					end
+				end
+				if not stuck then
+					return terms.value.prim_tuple_value(leading)
+				else
+					return terms.value.neutral(terms.neutral_value.prim_tuple_stuck(leading, stuck_elem, trailing))
+				end
+			end
+		:
+		prim-func-type
+			t : wrapped(type)
+			valid : only-accept-prim-tuples(t)
+			val : wrapped(unwrap(type, prim-tuple-type-to-tuple-type(t, valid)))
+			->
+			res : wrapped(unwrap(type, t))
+
+let tuple-to-prim-tuple =
+	lambda (t : wrapped(type), valid : only-accept-prim-tuples(t), val : unwrap(type, prim-tuple-type-to-tuple-type(t, valid)))
+		let (res) =
+			tuple-to-prim-tuple-inner(t, valid, wrap(unwrap(type, prim-tuple-type-to-tuple-type(t, valid)), val))
+		unwrap(unwrap(type, t), res)
+
+let only-accept-prim-funcs-inner-prim =
 	intrinsic
 		""""
 			local function check_prim_func(subject, consequent, alternate)
@@ -201,14 +272,20 @@ let only-accept-prim-funcs-inner =
 			->
 			result : wrapped(prim-type)
 
-let only-accept-prim-funcs =
+let only-accept-prim-funcs-inner =
 	lambda (subject : wrapped(type), consequent : prim-type, alternate : prim-type)
 		let (res) =
-			only-accept-prim-funcs-inner
+			only-accept-prim-funcs-inner-prim
 				subject
 				wrap prim-type consequent
 				wrap prim-type alternate
 		unwrap prim-type res
+let only-accept-prim-funcs =
+	lambda ((subject : wrapped(type)))
+		only-accept-prim-funcs-inner
+			subject
+			prim-unit
+			wrapped void
 
 let get-prim-func-arg-inner =
 	intrinsic
@@ -224,23 +301,67 @@ let get-prim-func-arg-inner =
 			valid :
 				only-accept-prim-funcs
 					subject
-					prim-unit
-					wrapped void
 			->
 			result : wrapped(type)
 			valid :
 				only-accept-prim-tuples
 					result
-					prim-unit
-					wrapped void
+
+let just-args =
+	lambda (subject : wrapped(type), valid : only-accept-prim-funcs(subject))
+		let (result, valid) = get-prim-func-arg-inner(subject, valid)
+		result
+
+let func-conv-res-type = 
+	lambda ((argtype : wrapped(type)))
+		forall arg : unwrap(type, argtype)
+			->
+			res : wrapped(type)
+			valid :
+				only-accept-prim-tuples
+					res
+
+let get-prim-func-res-inner =
+	intrinsic
+		""""
+			local function get_prim_func_res(subject, valid)
+				local param_type, result_type = subject:unwrap_prim_function_type()
+				local typed_array = terms_gen.declare_array(terms.typed_term)
+				local tuple_build = terms.typed_term.tuple_cons(
+					typed_array(
+						terms.typed_term.prim_wrap(
+							terms.typed_term.application(
+								terms.typed_term.bound_variable(1),
+								terms.typed_term.bound_variable(2)
+							)
+						),
+						terms.typed_term.literal(terms.value.prim(nil))
+					)
+				)
+				local ctx = terms.runtime_context():append(result_type)
+				return terms.value.closure(tuple_build, ctx)
+			end
+			return get_prim_func_res
+		:
+		prim-func-type
+			subject : wrapped(type)
+			valid :
+				only-accept-prim-funcs
+					subject
+			->
+			results :
+				wrapped
+					func-conv-res-type
+						just-args(subject, valid)
+						
 
 let foo =
 	prim-func-type (x : prim-number) (y : prim-number) -> (res : prim-number)
 
 foo
 
-let (args valid) = get-prim-func-arg-inner(wrap(type, foo), prim-nil)
-let (newargs) = prim-tuple-type-to-tuple-type-inner(args, valid)
+let (oldargs oldargs-valid) = get-prim-func-arg-inner(wrap(type, foo), prim-nil)
+let (newargs) = prim-tuple-type-to-tuple-type-inner(oldargs, oldargs-valid)
 newargs
 
 let id_type = forall name : prim-number -> name : prim-number
@@ -257,3 +378,153 @@ let sub = lambda (x : prim-number, y : prim-number)
 let sub_type = forall (x : prim-number) (y : prim-number) -> res : prim-number
 
 (the sub_type sub)
+
+# FIXME: adding comments immediately before let ptuple = tuple-to-prim-tuple(oldargs, oldargs-valid, args)
+# is breaking the lambda operative
+
+let (orig-results) = get-prim-func-res-inner(wrap(type, foo), prim-nil)
+let orig-results = unwrap(func-conv-res-type(oldargs), orig-results)
+let new-results =
+	lambda ((args : unwrap(type, newargs)))
+		let ptuple = tuple-to-prim-tuple(oldargs, oldargs-valid, args)
+		let orig-results-res = apply(orig-results, ptuple)
+		let (newres valid) = orig-results-res
+		newres
+
+let prim-func-type-to-func-type =
+	lambda (T : type, valid : only-accept-prim-funcs(wrap(type, T)))
+		let (oldargs oldargs-valid) = get-prim-func-arg-inner(wrap(type, T), valid)
+		let (newargs) = prim-tuple-type-to-tuple-type-inner(oldargs, oldargs-valid)
+		let (orig-results-wrapped) = get-prim-func-res-inner(wrap(type, T), valid)
+		let orig-results = unwrap(func-conv-res-type(oldargs), orig-results-wrapped)
+		
+		let new-results =
+			lambda ((args : unwrap(type, newargs)))
+				let ptuple = tuple-to-prim-tuple(oldargs, oldargs-valid, args)
+				let (oldres oldres-valid) = apply(orig-results, ptuple)
+				let (newres) = prim-tuple-type-to-tuple-type-inner(oldres, oldres-valid)
+				newres
+
+		forall x : unwrap(type, newargs) -> y : unwrap(type, new-results(x))
+
+prim-func-type-to-func-type foo prim-nil
+
+let func-to-prim-func =
+	intrinsic
+		""""
+			return function(_type, _valid, afn)
+				return function(...)
+					local args = {...}
+					local nargs = select("#", ...)
+					local conv_args = terms_gen.declare_array(terms.value)()
+					for i = 1, nargs do
+						conv_args:append(terms.value.prim(args[i]))
+					end
+					local res = evaluator.apply_value(afn, terms.value.tuple_value(conv_args))
+					if not res:is_prim() then
+						error "alicorn function converted to native function has failed to create a real value"
+					end
+					return res:unwrap_prim()
+				end
+			end
+		:
+		prim-func-type
+			T : type
+			valid : only-accept-prim-funcs(wrap(type, T))
+			fn : prim-func-type-to-func-type(T, valid)
+			->
+			res-fn : T
+
+let syntax =
+	unwrap
+		prim-type
+		intrinsic
+			""""
+				local unique_id = {name = "syntax"}
+				local value_array = terms_gen.declare_array(terms.value)
+				local basetype = terms.value.prim_user_defined_type(unique_id, value_array())
+				return basetype
+			:
+			wrapped(prim-type)
+
+let new-prim-type-family-inner =
+	intrinsic
+		""""
+			local function new_prim_type_family(name, nparams, sig)
+				local unique_id = {name = name}
+				local typed_array = terms_gen.declare_array(terms.typed_term)
+				local params = typed_array()
+				for i = 1, nparams do
+					params:append(terms.typed_term.bound_variable(i + 1))
+				end
+				local body = terms.typed_term.tuple_elim(
+					terms.typed_term.bound_variable(1),
+					nparams,
+					terms.typed_term.prim_user_defined_type(
+						unique_id,
+						params
+					)
+				)
+				return terms.value.closure(body, terms.runtime_context())
+			end
+			return new_prim_type_family
+		:
+		prim-func-type
+			name : prim-string
+			nparams : prim-number
+			signature : wrapped(type_(1))
+			->
+			family : wrapped(unwrap(type_(1), signature))
+
+let new-prim-type-family =
+	lambda 
+		(name : prim-string) (nparams : prim-number) (signature : type_(1)) #TODO make nparams not exist by deriving it from the signature
+		let (family) = new-prim-type-family-inner(name, nparams, wrap(type_(1), signature))
+		unwrap(signature, family)
+
+let matcher =
+	new-prim-type-family
+		"matcher"
+		2
+		forall (ud : prim-type) (res : prim-type) -> res : prim-type
+
+let prim-matcher-is-symbol =
+	intrinsic
+		""""
+			local function is_symbol(_ud, _res, accept_handler)
+				return metalang.is_symbol(accept_handler)
+			end
+			return is_symbol
+		:
+		prim-func-type
+			ud : wrapped(prim-type)
+			res : wrapped(prim-type)
+			accept-handler :
+				prim-func-type
+					userdata : unwrap(prim-type, ud)
+					symbol : prim-string
+					->
+					r : unwrap(prim-type, res)
+			->
+			m : matcher(unwrap(prim-type, ud), unwrap(prim-type, res))
+
+let prim-matcher-is-pair =
+	intrinsic
+		""""
+			local function is_pair(_ud, _res, accept_handler)
+				return metalang.is_pair(accept_handler)
+			end
+			return is_pair
+		:
+		prim-func-type
+			ud : wrapped(prim-type)
+			res : wrapped(prim-type)
+			accept-handler :
+				prim-func-type
+					userdata : unwrap(prim-type, ud)
+					a : syntax
+					b : syntax
+					->
+					r : unwrap(prim-type, res)
+			->
+			m : matcher(unwrap(prim-type, ud), unwrap(prim-type, res))

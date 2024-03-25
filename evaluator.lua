@@ -435,6 +435,9 @@ add_comparer("value.prim_wrapped_type", "value.prim_wrapped_type", function(a, b
 end)
 
 function fitsinto_qless(tya, tyb)
+	if tya == tyb then
+		return true
+	end -- temporary workaround for neutrals
 	if not fitsinto_comparers[tya.kind] then
 		error("fitsinto given value a which isn't a type or NYI " .. tya.kind)
 	elseif not fitsinto_comparers[tyb.kind] then
@@ -755,6 +758,18 @@ local function index_tuple_value(subject, index)
 		return value.prim(elems[index])
 	elseif subject:is_neutral() then
 		local inner = subject:unwrap_neutral()
+		if inner:is_prim_tuple_stuck() then
+			local leading, stuck_elem, trailing = inner:unwrap_prim_tuple_stuck()
+			if #leading >= index then
+				return terms.value.prim(leading[index])
+			elseif #leading + 1 == index then
+				return terms.value.neutral(stuck_elem)
+			elseif #leading + 1 + #trailing >= index then
+				return trailing[index - #leading - 1]
+			else
+				error "tuple index out of bounds"
+			end
+		end
 		return value.neutral(neutral_value.tuple_element_access_stuck(inner, index))
 	end
 end
@@ -893,7 +908,7 @@ local function nearest_star_level(typ)
 	end
 end
 
----@param inferrable_term unknown
+---@param inferrable_term inferrable_term
 ---@param typechecking_context TypecheckingContext
 ---@return unknown, unknown, unknown
 function infer(
@@ -1116,7 +1131,7 @@ function infer(
 	elseif inferrable_term:is_tuple_type() then
 		local definition = inferrable_term:unwrap_tuple_type()
 		local definition_type, definition_usages, definition_term = infer(definition, typechecking_context)
-		if definition_type ~= terms.value.tuple_defn_type then
+		if not definition_type:is_tuple_defn_type() then
 			error "argument to tuple_type is not a tuple_defn"
 		end
 		return terms.value.star(0), definition_usages, terms.typed_term.tuple_type(definition_term)
@@ -1444,9 +1459,9 @@ function infer(
 end
 
 ---Replace stuck sections in a value with a more concrete form, possibly causing cascading evaluation
----@param base Value
----@param original Value
----@param replacement Value
+---@param base value
+---@param original value
+---@param replacement value
 local function substitute_value(base, original, replacement)
 	if base == original then
 		return replacement
@@ -1455,6 +1470,8 @@ local function substitute_value(base, original, replacement)
 		local param_type, param_info, result_type, result_info = base:unwrap_pi()
 	end
 end
+
+local intrinsic_memo = setmetatable({}, { __mode = "v" })
 
 function evaluate(typed_term, runtime_context)
 	-- -> an alicorn value
@@ -1503,7 +1520,7 @@ function evaluate(typed_term, runtime_context)
 		local stuck = false
 		local stuck_element
 		local trailing_values
-		for _, v in ipairs(elements) do
+		for i, v in ipairs(elements) do
 			local element_value = evaluate(v, runtime_context)
 			if element_value == nil then
 				p("wtf", v.kind)
@@ -1517,6 +1534,8 @@ function evaluate(typed_term, runtime_context)
 				stuck_element = element_value:unwrap_neutral()
 				trailing_values = value_array()
 			else
+				print("term that fails", typed_term)
+				print("which element", i)
 				print("element_value", element_value)
 				error("evaluate, is_prim_tuple_cons, element_value: expected a primitive value")
 			end
@@ -1533,6 +1552,8 @@ function evaluate(typed_term, runtime_context)
 		if subject_value:is_tuple_value() then
 			local subject_elements = subject_value:unwrap_tuple_value()
 			if #subject_elements ~= length then
+				print("tuple has only", #subject_elements, "elements but expected", length)
+				print("tuple being eliminated", subject_value)
 				error("evaluate: mismatch in tuple length from typechecking and evaluation")
 			end
 			for i = 1, length do
@@ -1541,17 +1562,15 @@ function evaluate(typed_term, runtime_context)
 		elseif subject_value:is_prim_tuple_value() then
 			local subject_elements = subject_value:unwrap_prim_tuple_value()
 			if #subject_elements ~= length then
-				p(#subject_elements, length)
+				print(#subject_elements, length)
 				error("evaluate: mismatch in tuple length from typechecking and evaluation")
 			end
 			for i = 1, length do
 				inner_context = inner_context:append(value.prim(subject_elements[i]))
 			end
 		elseif subject_value:is_neutral() then
-			local subject_neutral = subject_value:unwrap_neutral()
 			for i = 1, length do
-				inner_context =
-					inner_context:append(value.neutral(neutral_value.tuple_element_access_stuck(subject_neutral, i)))
+				inner_context = inner_context:append(index_tuple_value(subject_value, i))
 			end
 		else
 			p(subject_value)
@@ -1695,7 +1714,11 @@ function evaluate(typed_term, runtime_context)
 			return unwrap_val:unwrap_prim()
 		elseif unwrap_val:is_neutral() then
 			local nval = unwrap_val:unwrap_neutral()
-			return value.neutral(neutral_value.prim_unwrap_stuck(nval))
+			if nval:is_prim_wrap_stuck() then
+				return value.neutral(nval:unwrap_prim_wrap_stuck())
+			else
+				return value.neutral(neutral_value.prim_unwrap_stuck(nval))
+			end
 		else
 			print("unrecognized value in unbox", unwrap_val)
 			error "invalid value in unbox, must be prim or neutral"
@@ -1725,6 +1748,9 @@ function evaluate(typed_term, runtime_context)
 		local source_val = evaluate(source, runtime_context)
 		if source_val:is_prim() then
 			local source_str = source_val:unwrap_prim()
+			if intrinsic_memo[source_str] then
+				return value.prim(intrinsic_memo[source_str])
+			end
 			local load_env = {}
 			for k, v in pairs(_G) do
 				load_env[k] = v
@@ -1734,7 +1760,9 @@ function evaluate(typed_term, runtime_context)
 			end
 			local require_generator = require "require"
 			load_env.require = require_generator(anchor.sourceid)
-			return value.prim(assert(load(source_str, "prim_intrinsic", "t", load_env))())
+			local res = assert(load(source_str, "prim_intrinsic", "t", load_env))()
+			intrinsic_memo[source_str] = res
+			return value.prim(res)
 		elseif source_val:is_neutral() then
 			local source_neutral = source_val:unwrap_neutral()
 			return value.neutral(neutral_value.prim_intrinsic_stuck(source_neutral, anchor))
