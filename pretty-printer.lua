@@ -262,7 +262,7 @@ _G["p"] = function(...)
 		pp:any(v)
 		res[i] = tostring(pp)
 	end
-	print(table.concat(res))
+	print(table.concat(res, "    "))
 end
 
 return {
