@@ -111,8 +111,10 @@ local function gen_record(self, cons, kind, params_with_types)
 				local argi = args[i]
 				-- type-check constructor arguments
 				if params_types[i].value_check(argi) ~= true then
-					p("value of parameter " .. v .. ":", argi)
-					p("expected type of parameter " .. v .. " is :", params_types[i])
+					print("value of parameter " .. v .. ": (follows)")
+					p(argi)
+					print("expected type of parameter " .. v .. " is: (follows)")
+					p(params_types[i])
 					error("wrong argument type passed to constructor " .. kind .. ", parameter '" .. v .. "'")
 				end
 				val[v] = argi
