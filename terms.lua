@@ -805,7 +805,9 @@ end
 -- - lambda is different
 local function inferrable_tuple_type_flatten(definition, context)
 	local enum_type, constructor, arg = definition:unwrap_enum_cons()
-	if enum_type ~= value.tuple_defn_type then
+	local ok, universe = enum_type:as_tuple_defn_type()
+	-- TODO: what is universe?
+	if not ok then
 		error("override_pretty: inferrable.tuple_type: enum_type must be tuple_defn_type")
 	end
 	if constructor == "empty" then
