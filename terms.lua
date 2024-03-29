@@ -2524,6 +2524,7 @@ binding:derive(derivers.pretty_print, binding_override_pretty)
 expression_goal:derive(derivers.pretty_print)
 placeholder_debug:derive(derivers.pretty_print)
 purity:derive(derivers.pretty_print)
+result_info:derive(derivers.pretty_print)
 
 --[[
 local tuple_defn = value.enum_value("variant",
