@@ -70,8 +70,8 @@ local function let_bind(syntax, env)
 	end
 
 	if type(name) == "table" then
-		print("binding destructuring with let")
-		p(name)
+		--print("binding destructuring with let")
+		--p(name)
 		local tupletype = gen.declare_array(gen.builtin_string)
 		env = env:bind_local(terms.binding.tuple_elim(tupletype(unpack(name)), bind.val))
 	else
@@ -426,7 +426,7 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	local args = thread.args
 	local names = thread.names
 
-	print("moving on to return type")
+	--print("moving on to return type")
 	local shadowed, env = env:enter_block()
 
 	-- syntax.anchor can be nil so we fall back to the anchor for the start of this prim func type if needed
@@ -448,7 +448,7 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 
 	local env, fn_res_term = env:exit_block(results, shadowed)
 	local fn_type_term = terms.inferrable_term.prim_function_type(args, fn_res_term)
-	print("reached end of function type construction")
+	--print("reached end of function type construction")
 	if not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl_reducer"
 	end
@@ -462,13 +462,13 @@ end, "prim_func_type_impl")
 ---@return unknown
 ---@return unknown|nil
 local function prim_func_type_impl(syntax, env)
-	print("in prim_func_type_impl")
+	--print("in prim_func_type_impl")
 	local ok, fn_type_term, env =
 		syntax:match({ prim_func_type_impl_reducer(metalang.accept_handler, env) }, metalang.failure_handler, env)
 	if not ok then
 		return ok, fn_type_term
 	end
-	print("finished matching prim_func_type_impl and got (ok, fn_type_term)", ok, fn_type_term)
+	--print("finished matching prim_func_type_impl and got (ok, fn_type_term)", ok, fn_type_term)
 	if not env or not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl"
 	end
@@ -496,7 +496,7 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 	end
 	single, args, names, env = thread.single, thread.args, thread.names, thread.env
 
-	print("moving on to return type")
+	--print("moving on to return type")
 
 	local shadowed, env = env:enter_block()
 
@@ -541,7 +541,7 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 		)
 	)
 
-	print("reached end of function type construction")
+	--print("reached end of function type construction")
 	if not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl_reducer"
 	end
@@ -555,14 +555,14 @@ end, "forall_type_impl")
 ---@return unknown
 ---@return unknown|nil
 local function forall_type_impl(syntax, env)
-	print("in forall_type_impl")
+	--print("in forall_type_impl")
 	local ok, fn_type_term, env =
 		syntax:match({ forall_type_impl_reducer(metalang.accept_handler, env) }, metalang.failure_handler, env)
 	if not ok then
 		return ok, fn_type_term
 	end
-	print("finished matching prim_func_type_impl and got")
-	print(fn_type_term:pretty_print())
+	--print("finished matching prim_func_type_impl and got")
+	--print(fn_type_term:pretty_print())
 	if not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl"
 	end
@@ -592,9 +592,9 @@ local function the_operative_impl(syntax, env)
 	local type_of_typed_term, usages, type_typed_term = evaluator.infer(type_inferrable_term, env.typechecking_context)
 	local evaled_type = evaluator.evaluate(type_typed_term, env.typechecking_context.runtime_context)
 
-	print("type_inferrable_term", type_inferrable_term)
-	print("evaled_type", evaled_type)
-	print("tail", tail)
+	--print("type_inferrable_term", type_inferrable_term)
+	--print("evaled_type", evaled_type)
+	--print("tail", tail)
 	local ok, val, tail = tail:match({
 		metalang.ispair(metalang.accept_handler),
 	}, metalang.failure_handler, nil)

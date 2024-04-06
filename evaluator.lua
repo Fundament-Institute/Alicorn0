@@ -99,7 +99,7 @@ local function substitute_inner(val, mappings, context_len)
 		local unique = {}
 		local arg = value.neutral(neutral_value.free(free.unique(unique)))
 		val = apply_value(val, arg)
-		print("applied closure during substitution", val)
+		--print("applied closure during substitution", val)
 
 		-- Here we need to add the new arg placeholder to a map of things to substitute
 		-- otherwise it would be left as a free.unique in the result
@@ -284,11 +284,11 @@ end
 
 --for substituting a single var at index
 local function substitute_type_variables(val, index)
-	print("value before substituting (val)", val)
+	--print("value before substituting (val)", val)
 	local substituted = substitute_inner(val, {
 		[index] = typed_term.bound_variable(1),
 	}, 1)
-	print("typed term after substitution (substituted)", substituted)
+	--print("typed term after substitution (substituted)", substituted)
 	return value.closure(substituted, runtime_context())
 end
 
@@ -1010,9 +1010,9 @@ function infer(
 			local arg_value = evaluate(arg_term, typechecking_context:get_runtime_context())
 			local application_result_type = apply_value(f_result_type, arg_value)
 
-			print("arg_value", arg_value)
-			print("f_result_type", f_result_type)
-			print("application_result_type", application_result_type)
+			--print("arg_value", arg_value)
+			--print("f_result_type", f_result_type)
+			--print("application_result_type", application_result_type)
 			if value.value_check(application_result_type) ~= true then
 				local bindings = typechecking_context:get_runtime_context().bindings
 				-- for i = 1, bindings:len() do
@@ -1022,11 +1022,11 @@ function infer(
 			end
 			return application_result_type, application_usages, application
 		elseif f_type:is_prim_function_type() then
-			print "inferring application of primitive function"
-			print("typechecking_context")
-			typechecking_context:dump_names()
-			print(f_type:pretty_print())
-			print(arg:pretty_print())
+			--print "inferring application of primitive function"
+			--print("typechecking_context")
+			--typechecking_context:dump_names()
+			--print(f_type:pretty_print())
+			--print(arg:pretty_print())
 			local f_param_type, f_result_type_closure = f_type:unwrap_prim_function_type()
 
 			local arg_usages, arg_term = check(arg, typechecking_context, f_param_type)
@@ -1376,10 +1376,10 @@ function infer(
 		local source_usages, source_term = check(source, typechecking_context, value.prim_string_type)
 		local type_type, type_usages, type_term = infer(type, typechecking_context) --check(type, typechecking_context, value.qtype_type(0))
 
-		print "prim intrinsic is inferring"
-		print(type:pretty_print())
-		print("lowers to")
-		print(type_term:pretty_print())
+		--print "prim intrinsic is inferring"
+		--print(type:pretty_print())
+		--print("lowers to")
+		--print(type_term:pretty_print())
 		--error "weird type"
 		-- FIXME: type_type, source_type are ignored, need checked?
 		local type_val = evaluate(type_term, typechecking_context.runtime_context)
@@ -1559,9 +1559,9 @@ function evaluate(typed_term, runtime_context)
 		return evaluate(body, inner_context)
 	elseif typed_term:is_tuple_element_access() then
 		local tuple_term, index = typed_term:unwrap_tuple_element_access()
-		print("tuple_element_access tuple_term", tuple_term)
+		--print("tuple_element_access tuple_term", tuple_term)
 		local tuple = evaluate(tuple_term, runtime_context)
-		print("tuple_element_access tuple_term", tuple)
+		--print("tuple_element_access tuple_term", tuple)
 		return index_tuple_value(tuple, index)
 	elseif typed_term:is_tuple_type() then
 		local definition_term = typed_term:unwrap_tuple_type()

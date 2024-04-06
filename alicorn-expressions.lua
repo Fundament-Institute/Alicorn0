@@ -275,7 +275,7 @@ local function expression_pairhandler(args, a, b)
 
 	if type_of_term:is_prim_function_type() then
 		local param_type, result_type = type_of_term:unwrap_prim_function_type()
-		print("checking prim_function_type call args with goal ", param_type)
+		--print("checking prim_function_type call args with goal ", param_type)
 		-- multiple quantity of usages in tuple with usage in function arguments
 		local ok, tuple, env = args:match({
 			collect_prim_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
@@ -315,7 +315,7 @@ local function expression_symbolhandler(args, name)
 	local goal, env = args:unwrap()
 	--print("looking up symbol", name)
 	--p(env)
-	print(name, split_dot_accessors(name))
+	--print(name, split_dot_accessors(name))
 	local front, rest = split_dot_accessors(name)
 	if not front then
 		local ok, val = env:get(name)
@@ -369,7 +369,7 @@ local function expression_valuehandler(args, val)
 	end
 
 	if val.type == "f64" then
-		p(val)
+		--p(val)
 		return true,
 			inferrable_term.typed(value.prim_number_type, usage_array(), typed_term.literal(value.prim(val.val))),
 			env
@@ -578,8 +578,8 @@ collect_tuple = metalanguage.reducer(function(syntax, args)
 				}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
 				if ok and continue then
 					collected_terms:append(next_term)
-					print("goal type for next element in tuple", next_elem_type)
-					print("term we are checking", next_term)
+					--print("goal type for next element in tuple", next_elem_type)
+					--print("term we are checking", next_term)
 					local usages, typed_elem_term = evaluator.check(next_term, env.typechecking_context, next_elem_type)
 					local elem_value = evaluator.evaluate(typed_elem_term, env.typechecking_context.runtime_context)
 					tuple_symbolic_elems:append(elem_value)
@@ -652,7 +652,7 @@ collect_prim_tuple = metalanguage.reducer(function(syntax, args)
 				}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
 				if ok and continue then
 					collected_terms:append(next_term)
-					print("trying to check tuple element as ", next_elem_type)
+					--print("trying to check tuple element as ", next_elem_type)
 					local usages, typed_elem_term = evaluator.check(next_term, env.typechecking_context, next_elem_type)
 					local elem_value = evaluator.evaluate(typed_elem_term, env.typechecking_context.runtime_context)
 					tuple_symbolic_elems:append(elem_value)
