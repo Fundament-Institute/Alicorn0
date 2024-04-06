@@ -1,6 +1,9 @@
 let prim-string-wrap = intrinsic "return terms.value.prim_string_type" : wrapped(prim-type)
 let prim-string = unwrap(prim-type, prim-string-wrap)
 
+
+
+
 let new-prim-type-inner =
 	intrinsic
 		""""
@@ -20,6 +23,9 @@ let new-prim-type =
 let syntax = new-prim-type("syntax")
 let literal = new-prim-type("literal")
 
+
+
+
 let new-prim-type-family-inner =
 	intrinsic
 		""""
@@ -33,7 +39,7 @@ let new-prim-type-family-inner =
 				local body = terms.typed_term.tuple_elim(
 					terms.typed_term.bound_variable(1),
 					nparams,
-					terms.typed_term.prim_user_defined_type(
+					terms.typed_term.prim_user_defined_type_cons(
 						unique_id,
 						params
 					)
@@ -53,6 +59,11 @@ let new-prim-type-family =
 		(name : prim-string) (nparams : prim-number) (signature : type_(1)) #TODO make nparams not exist by deriving it from the signature
 		let (family) = new-prim-type-family-inner(name, nparams, wrap(type_(1), signature))
 		unwrap(signature, family)
+let array-type =
+	new-prim-type-family
+		"array"
+		1
+		forall (T : prim-type) -> res : prim-type
 let matcher =
 	new-prim-type-family
 		"matcher"
@@ -63,6 +74,64 @@ let reducer =
 		"reducer"
 		3
 		forall (store : prim-type) (res : prim-type) (err : prim-type) -> res : prim-type
+
+
+
+
+let prim-array-new =
+	lambda ((T : prim-type))
+		intrinsic
+			""""
+				local function array_new()
+					return {}
+				end
+				return array_new
+			:
+			prim-func-type -> (arr : (array-type T))
+
+let prim-array-set =
+	lambda ((T : prim-type))
+		intrinsic
+			""""
+				local function array_set(array, index, elem)
+					-- we have to clone because can't guarantee input array isn't reused
+					-- Yet. growth mindset.
+					cloned = {}
+					for i, v in ipairs(array) do
+						cloned[i] = v
+					end
+					cloned[index] = elem
+					return cloned
+				end
+				return array_set
+			:
+			prim-func-type (arr : (array-type T)) (index : prim-number) (elem : T) -> (arr : (array-type T))
+
+let prim-array-get = 
+	lambda ((T : prim-type))
+		intrinsic
+			""""
+				local function array_get(array, index)
+					return array[index]
+				end
+				return array_get
+			:
+			prim-func-type (arr : (array-type T)) (index : prim-number) ->  (elem : T)
+
+let array-set = 
+	lambda (T : prim-type, arr : (array-type T), index : prim-number, elem : T)
+		let (arr) = (prim-array-set(T) arr index elem)
+		arr
+
+let array-get = 
+	lambda (T : prim-type, arr : (array-type T), index : prim-number)
+		let typed-arr-get = (prim-array-get T)
+		let (elem) = typed-arr-get(arr, index)
+		(the T elem)
+
+let array-new = lambda ((T : prim-type))
+	let (elem) = (prim-array-new(T))
+	elem
 
 
 
@@ -153,20 +222,20 @@ let prim-matcher-is-value =
 			->
 			m : prim-matcher(ud, res)
 
-#let prim-reducer =
+let prim-reducer =
 	lambda ((store-wrap : wrapped(prim-type)) (res-wrap : wrapped(prim-type)) (err-wrap : wrapped(prim-type)))
 		let store = unwrap(prim-type, store-wrap)
 		let res = unwrap(prim-type, res-wrap)
 		let err = unwrap(prim-type, err-wrap)
 		reducer(store, res, err)
 
-#let prim-reducible-handler =
+let prim-reducible-handler =
 	lambda ((ud-wrap : wrapped(prim-type)) (prod-wrap : wrapped(prim-type)) (res-wrap : wrapped(prim-type)))
 		let ud = unwrap(prim-type, ud-wrap)
 		let prod = unwrap(prim-type, prod-wrap)
 		let res = unwrap(prim-type, res-wrap)
 		prim-func-type (userdata : ud) (product : prod) -> (r : res)
-#let prim-matcher-reducible =
+let prim-matcher-reducible =
 	intrinsic
 		""""
 			local function reducible(_store, _prod, _err, _ud, _res, red, storage, accept_handler)
@@ -185,3 +254,29 @@ let prim-matcher-is-value =
 			accept-handler : prim-reducible-handler(ud, prod, res)
 			->
 			m : prim-matcher(ud, res)
+
+
+
+
+let prim-failure-handler =
+	lambda ((ud-wrap : wrapped(prim-type)) (res-wrap : wrapped(prim-type)))
+		let ud = unwrap(prim-type, ud-wrap)
+		let res = unwrap(prim-type, res-wrap)
+		prim-func-type (userdata : ud) -> (r : res)
+let match-syntax =
+	intrinsic
+		""""
+			local function match_syntax(_ud, _res, matchers, failure_handler, syn, userdata)
+				return syn:match(matchers, failure_handler, userdata)
+			end
+			return match_syntax
+		:
+		prim-func-type
+			ud : wrapped(prim-type)
+			res : wrapped(prim-type)
+			matchers : array-type(prim-matcher(ud, res))
+			failure-handler : prim-failure-handler(ud, res)
+			syn : wrapped(syntax)
+			userdata : wrapped(unwrap(prim-type, ud))
+			->
+			result : wrapped(unwrap(prim-type, res))
