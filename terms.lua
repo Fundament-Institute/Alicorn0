@@ -867,23 +867,7 @@ local inferrable_term_override_pretty = {
 		context = ensure_context(context)
 
 		pp:_enter()
-		--[[
-		pp:unit(pp:_color())
-		pp:unit("(")
-		pp:unit(pp:_resetcolor())
 
-		pp:any(typed_term, context)
-
-		pp:unit(pp:_color())
-		pp:unit(" : ")
-		pp:unit(pp:_resetcolor())
-
-		pp:any(type)
-
-		pp:unit(pp:_color())
-		pp:unit(")")
-		pp:unit(pp:_resetcolor())
-		--]]
 		pp:unit(pp:_color())
 		pp:unit("inferrable.the (")
 		pp:unit(pp:_resetcolor())
@@ -899,24 +883,6 @@ local inferrable_term_override_pretty = {
 		pp:unit(pp:_color())
 		pp:unit(")")
 		pp:unit(pp:_resetcolor())
-		--[[
-		pp:unit(pp:_color())
-		pp:unit("inferrable.the")
-		pp:unit(pp:_resetcolor())
-		pp:unit("\n")
-
-		pp:_indent()
-
-		pp:_prefix()
-		pp:any(type)
-
-		pp:unit("\n")
-
-		pp:_prefix()
-		pp:any(typed_term, context)
-
-		pp:_dedent()
-		--]]
 
 		pp:_exit()
 	end,
@@ -1942,13 +1908,6 @@ local typed_term_override_pretty = {
 		pp:unit(pp:_resetcolor())
 
 		pp:any(source_print)
-
-		--[[
-		pp:unit(pp:_color())
-		pp:unit(" ")
-		pp:any(anchor)
-		pp:unit(pp:_resetcolor())
-		--]]
 
 		pp:_exit()
 	end,
