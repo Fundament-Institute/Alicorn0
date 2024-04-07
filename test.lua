@@ -243,6 +243,40 @@ end
 function testsinglelist()
 	local example = {
 		[[
+lambda
+	;
+		x : i32
+		y : i32
+		z : some_complicated_type(x, y)
+	body body body
+	body body
+	result
+]],
+		[[
+f a
+	g b
+	g c
+		g d
+]],
+		[[
+f a;
+	g b
+	g c;
+		g d
+]],
+		[[
+f a; w
+	g b
+	g c;
+		g d
+]],
+		[[
+f a; w;
+	g b
+	g c;
+		g d
+]],
+		[[
 
 dump-env
 number2
@@ -261,15 +295,9 @@ something else
 ]],
 		[[
 ;
-    print a; print b
-    ;
-        print c; print d
-]],
-		[[
-;
-    (1 x)
-    (2 y)
-    (3 z)
+	(1 x)
+	(2 y)
+	(3 z)
 ]],
 		[[
 a b c
@@ -277,25 +305,40 @@ a b c
 		g h i
 	j k l
 ]],
+		[[
+print a; print b;
+	print c; print d;
+]],
 	}
 
 	local expected = {
+		{
+			{
+				"lambda",
+				{ { "x", ":", "i32" }, { "y", ":", "i32" }, { "z", ":", { "some_complicated_type", "x", "y" } } },
+				{ "body", "body", "body" },
+				{ "body", "body" },
+				"result",
+			},
+		},
+
+		{ { "f", "a", { "g", "b" }, { "g", "c", { "g", "d" } } } },
+		{ { { "f", "a" }, { "g", "b" }, { { "g", "c" }, { "g", "d" } } } },
+		{ { { "f", "a" }, "w", { "g", "b" }, { { "g", "c" }, { "g", "d" } } } },
+		{ { { "f", "a" }, { "w" }, { "g", "b" }, { { "g", "c" }, { "g", "d" } } } },
+
 		{
 			"dump-env",
 			"number2",
 			"anotherthing",
 			{ "something", "else", { "hello", "friend", { "hi", "again" } } },
 		},
-		{ { {}, { 1, "x" }, { 2, "y" }, { 3, "z" } } },
-		{
-			{},
-			{ "print", "a" },
-			{ "print", "b" },
-			{},
-			{ { "print", "c" }, { "print", "d" } },
-		},
-		{ {}, { 1, "x" }, { 2, "y" }, { 3, "z" } },
+		{ { { 1, "x" }, { 2, "y" }, { 3, "z" } } },
+		{ { { 1, "x" }, { 2, "y" }, { 3, "z" } } },
 		{ { "a", "b", "c", { "d", "e", "f", { "g", "h", "i" } }, { "j", "k", "l" } } },
+		{
+			{ { "print", "a" }, { "print", "b" }, { { "print", "c" }, { "print", "d" } } },
+		},
 	}
 
 	for i = 1, #example do
@@ -756,7 +799,7 @@ a test)
 			}),
 		}),
 		create_list(create_anchor(1, 1), create_anchor(4, 1), {
-			create_list(create_anchor(1, 1), create_anchor(4, 1), {
+			create_list(create_anchor(1, 1), create_anchor(3, 8), {
 				create_symbol(create_anchor(1, 1), "hello"),
 				create_list(create_anchor(2, 2), create_anchor(3, 8), {
 					create_symbol(create_anchor(2, 3), "this"),
