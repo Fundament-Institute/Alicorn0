@@ -32,11 +32,15 @@ let new-prim-type-family-inner =
 			local function new_prim_type_family(name, nparams, sig)
 				local unique_id = { name = name }
 				local typed_array = terms_gen.declare_array(terms.typed_term)
+				local string_array = terms_gen.declare_array(terms_gen.builtin_string)
 				local params = typed_array()
+				local param_names = string_array()
 				for i = 1, nparams do
 					params:append(terms.typed_term.bound_variable(i + 1))
+					param_names:append("#TEST-2-" .. tostring(i))
 				end
 				local body = terms.typed_term.tuple_elim(
+					param_names,
 					terms.typed_term.bound_variable(1),
 					nparams,
 					terms.typed_term.prim_user_defined_type_cons(
@@ -44,7 +48,7 @@ let new-prim-type-family-inner =
 						params
 					)
 				)
-				return terms.value.closure(body, terms.runtime_context())
+				return terms.value.closure("#TEST-3", body, terms.runtime_context())
 			end
 			return new_prim_type_family
 		:

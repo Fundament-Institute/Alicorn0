@@ -27,7 +27,7 @@ function PrettyPrint.new()
 	return setmetatable({}, PrettyPrint_mt)
 end
 
-function PrettyPrint:any(unknown)
+function PrettyPrint:any(unknown, ...)
 	local ty = type(unknown)
 	if ty == "string" then
 		self[#self + 1] = string.format("%q", unknown)
@@ -39,7 +39,7 @@ function PrettyPrint:any(unknown)
 		local mt = getmetatable(unknown)
 		local via_trait = mt and prettyprintable[mt]
 		if via_trait and via_trait.print then
-			via_trait.print(unknown, self)
+			via_trait.print(unknown, self, ...)
 		elseif mt and mt.__tostring then
 			self[#self + 1] = tostring(unknown)
 		else
@@ -95,7 +95,7 @@ function PrettyPrint:_resetcolor()
 	return "\27[0m"
 end
 
-function PrettyPrint:array(array)
+function PrettyPrint:array(array, ...)
 	self:_enter()
 	self[#self + 1] = self:_color()
 	self[#self + 1] = "["
@@ -104,7 +104,7 @@ function PrettyPrint:array(array)
 		if i > 1 then
 			self[#self + 1] = ", "
 		end
-		self:any(v)
+		self:any(v, ...)
 	end
 	self[#self + 1] = self:_color()
 	self[#self + 1] = "]"
@@ -113,7 +113,7 @@ function PrettyPrint:array(array)
 end
 
 ---@param fields table
-function PrettyPrint:table(fields)
+function PrettyPrint:table(fields, ...)
 	-- i considered keeping track of a path of tables
 	-- but it turned really horrible
 	-- just grep its address until you find the original
@@ -151,7 +151,7 @@ function PrettyPrint:table(fields)
 			if i > 1 then
 				self[#self + 1] = ", "
 			end
-			self:any(v)
+			self:any(v, ...)
 		end
 		self[#self + 1] = self:_color()
 		self[#self + 1] = "]"
@@ -162,7 +162,7 @@ function PrettyPrint:table(fields)
 		self[#self + 1] = self:_resetcolor()
 		for k, v in pairs(fields) do
 			if not hidden_fields[k] then
-				self:any(v)
+				self:any(v, ...)
 			end
 		end
 		self[#self + 1] = self:_color()
@@ -178,7 +178,7 @@ function PrettyPrint:table(fields)
 				self:_prefix()
 				self[#self + 1] = k
 				self[#self + 1] = " = "
-				self:any(v)
+				self:any(v, ...)
 				self[#self + 1] = ",\n"
 			end
 		end
@@ -193,7 +193,7 @@ function PrettyPrint:table(fields)
 end
 
 ---@param fields table
-function PrettyPrint:record(kind, fields)
+function PrettyPrint:record(kind, fields, ...)
 	local startLen = #self
 	self:_enter()
 
@@ -210,7 +210,7 @@ function PrettyPrint:record(kind, fields)
 		end
 		self[#self + 1] = "("
 		self[#self + 1] = self:_resetcolor()
-		self:any(v)
+		self:any(v, ...)
 		self[#self + 1] = self:_color()
 		self[#self + 1] = ")"
 	else
@@ -226,7 +226,7 @@ function PrettyPrint:record(kind, fields)
 			self:_prefix()
 			self[#self + 1] = k
 			self[#self + 1] = " = "
-			self:any(v)
+			self:any(v, ...)
 			self[#self + 1] = ",\n"
 		end
 		self[#self + 1] = self:_color()
@@ -262,7 +262,7 @@ _G["p"] = function(...)
 		pp:any(v)
 		res[i] = tostring(pp)
 	end
-	print(table.concat(res))
+	print(table.concat(res, "    "))
 end
 
 return {

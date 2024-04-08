@@ -59,7 +59,7 @@ local function add_arrays(onto, with)
 end
 
 local function const_combinator(v)
-	return value.closure(typed_term.bound_variable(1), runtime_context():append(v))
+	return value.closure("#CONST_PARAM", typed_term.bound_variable(1), runtime_context():append(v))
 end
 
 local function get_level(t)
@@ -95,11 +95,12 @@ local function substitute_inner(val, mappings, context_len)
 		result_info = substitute_inner(result_info, mappings, context_len)
 		return typed_term.pi(param_type, param_info, result_type, result_info)
 	elseif val:is_closure() then
-		local ctxt = val.capture
+		local param_name, code, capture = val:unwrap_closure()
 		local unique = {}
 		local arg = value.neutral(neutral_value.free(free.unique(unique)))
 		val = apply_value(val, arg)
-		--print("applied closure during substitution", val)
+		--print("applied closure during substitution: (value term follows)")
+		--print(val)
 
 		-- Here we need to add the new arg placeholder to a map of things to substitute
 		-- otherwise it would be left as a free.unique in the result
@@ -109,7 +110,7 @@ local function substitute_inner(val, mappings, context_len)
 		-- FIXME: this results in more captures every time we substitute a closure ->
 		--   can cause non-obvious memory leaks
 		--   since we don't yet remove unused captures from closure value
-		return typed_term.lambda(val)
+		return typed_term.lambda(param_name, val)
 	elseif val:is_name_type() then
 		return typed_term.literal(val)
 	elseif val:is_name() then
@@ -283,13 +284,16 @@ local function substitute_inner(val, mappings, context_len)
 end
 
 --for substituting a single var at index
-local function substitute_type_variables(val, index)
-	--print("value before substituting (val)", val)
+local function substitute_type_variables(val, index, param_name, typechecking_context)
+	param_name = param_name and "#sub-" .. param_name or "#sub-param"
+	--print("value before substituting (val): (value term follows)")
+	--print(val)
 	local substituted = substitute_inner(val, {
 		[index] = typed_term.bound_variable(1),
 	}, 1)
-	--print("typed term after substitution (substituted)", substituted)
-	return value.closure(substituted, runtime_context())
+	--print("typed term after substitution (substituted): (typed term follows)")
+	--print(substituted:pretty_print(typechecking_context))
+	return value.closure(param_name, substituted, runtime_context())
 end
 
 local function is_type_of_types(val)
@@ -716,7 +720,7 @@ function apply_value(f, arg)
 	end
 
 	if f:is_closure() then
-		local code, capture = f:unwrap_closure()
+		local param_name, code, capture = f:unwrap_closure()
 		return evaluate(code, capture:append(arg))
 	elseif f:is_neutral() then
 		return value.neutral(neutral_value.application_stuck(f:unwrap_neutral(), arg))
@@ -944,11 +948,11 @@ function infer(
 		local inner_context = typechecking_context:append(param_name, param_type, nil, anchor)
 		local body_type, body_usages, body_term = infer(body, inner_context)
 
-		local result_type = substitute_type_variables(body_type, #inner_context)
+		local result_type = substitute_type_variables(body_type, #inner_context, param_name, typechecking_context)
 		local body_usages_param = body_usages[#body_usages]
 		local lambda_usages = body_usages:copy(1, #body_usages - 1)
 		local lambda_type = value.pi(param_type, param_info_explicit, result_type, result_info_pure)
-		local lambda_term = typed_term.lambda(body_term)
+		local lambda_term = typed_term.lambda(param_name, body_term)
 		return lambda_type, lambda_usages, lambda_term
 	elseif inferrable_term:is_pi() then
 		local param_type, param_info, result_type, result_info = inferrable_term:unwrap_pi()
@@ -1010,9 +1014,12 @@ function infer(
 			local arg_value = evaluate(arg_term, typechecking_context:get_runtime_context())
 			local application_result_type = apply_value(f_result_type, arg_value)
 
-			--print("arg_value", arg_value)
-			--print("f_result_type", f_result_type)
-			--print("application_result_type", application_result_type)
+			--print("arg_value: (value term follows)")
+			--print(arg_value)
+			--print("f_result_type: (value term follows)")
+			--print(f_result_type)
+			--print("application_result_type: (value term follows)")
+			--print(application_result_type)
 			if value.value_check(application_result_type) ~= true then
 				local bindings = typechecking_context:get_runtime_context().bindings
 				-- for i = 1, bindings:len() do
@@ -1025,8 +1032,10 @@ function infer(
 			--print "inferring application of primitive function"
 			--print("typechecking_context")
 			--typechecking_context:dump_names()
-			--print(f_type:pretty_print())
-			--print(arg:pretty_print())
+			--print("f_type: (value term follows)")
+			--print(f_type)
+			--print("arg: (checkable term follows)")
+			--print(arg:pretty_print(typechecking_context))
 			local f_param_type, f_result_type_closure = f_type:unwrap_prim_function_type()
 
 			local arg_usages, arg_term = check(arg, typechecking_context, f_param_type)
@@ -1059,7 +1068,10 @@ function infer(
 			local el_type, el_usages, el_term = infer(v, typechecking_context)
 			type_data = value.enum_value(
 				"cons",
-				tup_val(type_data, substitute_type_variables(el_type, #typechecking_context + 1))
+				tup_val(
+					type_data,
+					substitute_type_variables(el_type, #typechecking_context + 1, nil, typechecking_context)
+				)
 			)
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
@@ -1086,14 +1098,17 @@ function infer(
 			print(el_type:pretty_print())
 			type_data = value.enum_value(
 				"cons",
-				tup_val(type_data, substitute_type_variables(el_type, #typechecking_context + 1))
+				tup_val(
+					type_data,
+					substitute_type_variables(el_type, #typechecking_context + 1, nil, typechecking_context)
+				)
 			)
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
 		end
 		return value.prim_tuple_type(type_data), usages, typed_term.prim_tuple_cons(new_elements)
 	elseif inferrable_term:is_tuple_elim() then
-		local subject, body = inferrable_term:unwrap_tuple_elim()
+		local names, subject, body = inferrable_term:unwrap_tuple_elim()
 		local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
 
 		-- evaluating the subject is necessary for inferring the type of the body
@@ -1112,7 +1127,7 @@ function infer(
 		local result_usages = usage_array()
 		add_arrays(result_usages, subject_usages)
 		add_arrays(result_usages, body_usages)
-		return body_type, result_usages, typed_term.tuple_elim(subject_term, n_elements, body_term)
+		return body_type, result_usages, typed_term.tuple_elim(names, subject_term, n_elements, body_term)
 	elseif inferrable_term:is_tuple_type() then
 		local definition = inferrable_term:unwrap_tuple_type()
 		local definition_type, definition_usages, definition_term = infer(definition, typechecking_context)
@@ -1132,7 +1147,11 @@ function infer(
 			local field_type, field_usages, field_term = infer(v, typechecking_context)
 			type_data = value.enum_value(
 				"cons",
-				tup_val(type_data, value.name(k), substitute_type_variables(field_type, #typechecking_context + 1))
+				tup_val(
+					type_data,
+					value.name(k),
+					substitute_type_variables(field_type, #typechecking_context + 1, nil, typechecking_context)
+				)
 			)
 			add_arrays(usages, field_usages)
 			new_fields[k] = field_term
@@ -1370,16 +1389,16 @@ function infer(
 		-- NYI usages are fucky, should remove ones not used in body
 		add_arrays(result_usages, exprusages)
 		add_arrays(result_usages, bodyusages)
-		return bodytype, result_usages, terms.typed_term.let(exprterm, bodyterm)
+		return bodytype, result_usages, terms.typed_term.let(name, exprterm, bodyterm)
 	elseif inferrable_term:is_prim_intrinsic() then
 		local source, type, anchor = inferrable_term:unwrap_prim_intrinsic()
 		local source_usages, source_term = check(source, typechecking_context, value.prim_string_type)
 		local type_type, type_usages, type_term = infer(type, typechecking_context) --check(type, typechecking_context, value.qtype_type(0))
 
-		--print "prim intrinsic is inferring"
-		--print(type:pretty_print())
-		--print("lowers to")
-		--print(type_term:pretty_print())
+		--print("prim intrinsic is inferring: (inferrable term follows)")
+		--print(type:pretty_print(typechecking_context))
+		--print("lowers to: (typed term follows)")
+		--print(type_term:pretty_print(typechecking_context))
 		--error "weird type"
 		-- FIXME: type_type, source_type are ignored, need checked?
 		local type_val = evaluate(type_term, typechecking_context.runtime_context)
@@ -1474,7 +1493,8 @@ function evaluate(typed_term, runtime_context)
 	elseif typed_term:is_literal() then
 		return typed_term:unwrap_literal()
 	elseif typed_term:is_lambda() then
-		return value.closure(typed_term:unwrap_lambda(), runtime_context)
+		local param_name, body = typed_term:unwrap_lambda()
+		return value.closure(param_name, body, runtime_context)
 	elseif typed_term:is_pi() then
 		local param_type, param_info, result_type, result_info = typed_term:unwrap_pi()
 		local param_type_value = evaluate(param_type, runtime_context)
@@ -1526,7 +1546,7 @@ function evaluate(typed_term, runtime_context)
 			return value.prim_tuple_value(new_elements)
 		end
 	elseif typed_term:is_tuple_elim() then
-		local subject, length, body = typed_term:unwrap_tuple_elim()
+		local names, subject, length, body = typed_term:unwrap_tuple_elim()
 		local subject_value = evaluate(subject, runtime_context)
 		local inner_context = runtime_context
 		if subject_value:is_tuple_value() then
@@ -1559,9 +1579,11 @@ function evaluate(typed_term, runtime_context)
 		return evaluate(body, inner_context)
 	elseif typed_term:is_tuple_element_access() then
 		local tuple_term, index = typed_term:unwrap_tuple_element_access()
-		--print("tuple_element_access tuple_term", tuple_term)
+		--print("tuple_element_access tuple_term: (typed term follows)")
+		--print(tuple_term:pretty_print(runtime_context))
 		local tuple = evaluate(tuple_term, runtime_context)
-		--print("tuple_element_access tuple_term", tuple)
+		--print("tuple_element_access tuple: (value term follows)")
+		--print(tuple)
 		return index_tuple_value(tuple, index)
 	elseif typed_term:is_tuple_type() then
 		local definition_term = typed_term:unwrap_tuple_type()
@@ -1605,7 +1627,7 @@ function evaluate(typed_term, runtime_context)
 			if mechanism_value:is_object_value() then
 				local constructor, arg = subject_value:unwrap_enum_value()
 				local methods, capture = mechanism_value:unwrap_object_value()
-				local this_method = value.closure(methods[constructor], capture)
+				local this_method = value.closure("#ENUM_PARAM", methods[constructor], capture)
 				return apply_value(this_method, arg)
 			elseif mechanism_value:is_neutral() then
 				-- objects and enums are categorical duals
@@ -1630,7 +1652,7 @@ function evaluate(typed_term, runtime_context)
 			if mechanism_value:is_enum_value() then
 				local methods, capture = subject_value:unwrap_object_value()
 				local constructor, arg = mechanism_value:unwrap_enum_value()
-				local this_method = value.closure(methods[constructor], capture)
+				local this_method = value.closure("#OBJECT_PARAM", methods[constructor], capture)
 				return apply_value(this_method, arg)
 			elseif mechanism_value:is_neutral() then
 				-- objects and enums are categorical duals
@@ -1718,7 +1740,7 @@ function evaluate(typed_term, runtime_context)
 			error "invalid value in unbox, must be prim or neutral"
 		end
 	elseif typed_term:is_let() then
-		local expr, body = typed_term:unwrap_let()
+		local name, expr, body = typed_term:unwrap_let()
 		local expr_value = evaluate(expr, runtime_context)
 		return evaluate(body, runtime_context:append(expr_value))
 	elseif typed_term:is_prim_intrinsic() then
