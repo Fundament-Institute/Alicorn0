@@ -500,6 +500,42 @@ function testcomments()
 		"1\n# list of one\n1",
 		"# i am a normal comment created by a normal human\n\tand this comment is intended to be useful\n\t\tsee?\n\n\tall of this is on one line ",
 		"# i",
+
+		-- goal: ensure indenting rules are followed
+		"# comment A\ntoken",
+		"# comment B\n\ttoken",
+		"token\n# comment C\n\ttoken",
+		"token\n\ttoken\n\t# comment D\n\ttoken",
+		"# comment G\n\t\ttoken",
+		"# comment H\n\t\t\ttoken",
+		"# comment I\n\ttoken\n\ttoken",
+		"# comment J\n\t\ttoken\n\ttoken",
+		"# comment K\n\t\ttoken\n\t\ttoken",
+		"# comment L\n\ttoken\n\t\ttoken",
+		"token\n\t# comment M\n\ttoken\n\t\ttoken",
+		"token\n\t# comment N\n\ttoken\ntoken",
+		"token\n\t# comment O\n\t\ttoken\ntoken",
+		"token\n\t# comment P\n\t\ttoken\n\ttoken",
+		"token\n\t# comment Q\n\t\ttoken\n\t\ttoken",
+		"token\n\t# comment R\n\t\ttoken\n\t\t\ttoken",
+		"token # comment S1\ntoken",
+		"token # comment S2\n\ttoken",
+		"token # comment S3\n\ttoken\n\ttoken",
+		"token # comment S4\n\ttoken\n\t\ttoken",
+		"token # comment T# comment # comment",
+		'# comment U\n\t""""',
+
+		-- motivating indent fail example, probably redundant with above -- currently fails
+		[[let (orig-results) = get-prim-func-res-inner(wrap(type, foo), prim-nil)
+let orig-results = unwrap(func-conv-res-type(oldargs), orig-results)
+let new-results =
+	lambda ((args : unwrap(type, newargs)))
+		# comment
+		let ptuple = tuple-to-prim-tuple(oldargs, oldargs-valid, args)
+		let orig-results-res = apply(orig-results, ptuple)
+		let (newres valid) = orig-results-res
+		newres
+]],
 		-- [[
 		-- # aaaaa
 		-- 	Ma'am is acceptable in a crunch, but I prefer Captain.
@@ -513,12 +549,99 @@ function testcomments()
 			" i am a normal comment created by a normal human\nand this comment is intended to be useful\n\tsee?\n\nall of this is on one line ",
 		},
 		{ " i" },
+		{ " comment A", "token" },
+		{ " comment B\ntoken" },
+		{ "token", " comment C\ntoken" },
+		{ { "token", "token", " comment D", "token" } },
+		{ " comment G\n\ttoken" },
+		{ " comment H\n\t\ttoken" },
+		{ " comment I\ntoken\ntoken" },
+		{ " comment J\n\ttoken\ntoken" },
+		{ " comment K\n\ttoken\n\ttoken" },
+		{ " comment L\ntoken\n\ttoken" },
+		{ { "token", " comment M", { "token", "token" } } },
+		{ { "token", " comment N", "token" }, "token" },
+		{ { "token", " comment O\n\ttoken" }, "token" },
+		{ { "token", " comment P\n\ttoken", "token" } },
+		{ { "token", " comment Q\n\ttoken\n\ttoken" } },
+		{ { "token", " comment R\n\ttoken\n\t\ttoken" } },
+		{ { "token", " comment S1" }, "token" },
+		{ { "token", " comment S2", "token" } },
+		{ { "token", " comment S3", "token", "token" } },
+		{ { "token", " comment S4", { "token", "token" } } },
+		{ { "token", " comment T# comment # comment" } },
+		{ ' comment U\n""""' },
+		{
+			{ "let", { "orig-results" }, "=", { "get-prim-func-res-inner", { "wrap", "type", "foo" }, "prim-nil" } },
+			{ "let", "orig-results", "=", { "unwrap", { "func-conv-res-type", "oldargs" }, "orig-results" } },
+			{
+				"let",
+				"new-results",
+				"=",
+				{
+					"lambda",
+					{ { "args", ":", { "unwrap", "type", "newargs" } } },
+					" comment",
+					{ "let", "ptuple", "=", { "tuple-to-prim-tuple", "oldargs", "oldargs-valid", "args" } },
+					{ "let", "orig-results-res", "=", { "apply", "orig-results", "ptuple" } },
+					{ "let", { "newres", "valid" }, "=", "orig-results-res" },
+					"newres",
+				},
+			},
+		},
 	}
 
 	for i = 1, #example do
 		local results = format.parse(example[i], "inline")
 		luaunit.assertTrue(samelength_testfile_list(example[i], results))
 		luaunit.assertEquals(simplify_list(results), expected[i])
+	end
+end
+
+-- contains things that should not parse
+function testfailedparse()
+	local example = {
+		"\ttoken\ntoken",
+		"\ttoken # comment\ntoken",
+		'\t""""',
+
+		-- presently these all succeed when they shouldn't:
+		"\t# comment E1\n\ttoken",
+		"\t# comment F1\n\t\ttoken",
+		"\t# comment C1\ntoken",
+		"\t#comment",
+		"# comment\n    token",
+		"token\n    #comment",
+		"    token\n    #comment",
+		"    # comment\n    #comment",
+		"token\n    \ttoken",
+		"token\n\t    token",
+		"token\n        token",
+		"token\n    #comment",
+		"token\n    \n",
+		"# comment\n    \n",
+		" ",
+		"    ",
+		"\t",
+		"\t\t",
+		" \t \t \t \t",
+		" #",
+		" A",
+		"\n ",
+		"\n\n \n\n\n",
+	}
+	for i = 1, #example do
+		function assertFunction()
+			local results = format.parse(example[i], "inline")
+		end
+
+		local success, errorMessage = pcall(assertFunction)
+
+		if not success then
+			-- pass
+		else
+			luaunit.fail("Test testwrongcomments 'succeeded' when it should have failed:\n" .. example[i])
+		end
 	end
 end
 
@@ -674,6 +797,15 @@ let array-type =
 		prim-func-type (T : prim-type) -> (array : prim-type)
 
 ]],
+		-- goal: ensure indenting rules are followed
+		'""""\n\ttoken',
+		'""""something\n\tblahblahblah', -- may or may not be legal
+		'""""\n\t# comment',
+		'token\n""""\n\ttoken',
+		'token\n\t""""\n\ttoken',
+		'token\n\t""""\n\t\ttoken',
+		'token\n\t""""\ntoken',
+		'token\n\t""""\n\t\ttoken\ntoken',
 	}
 
 	local expected = {
@@ -703,6 +835,14 @@ return mktype]],
 				},
 			},
 		},
+		{ { elements = { "\ntoken" }, kind = "string" } },
+		{ { elements = { "something\nblahblahblah" }, kind = "string" } },
+		{ { elements = { "\n# comment" }, kind = "string" } },
+		{ "token", { elements = { "\ntoken" }, kind = "string" } },
+		{ { "token", { elements = { "" }, kind = "string" }, "token" } },
+		{ { "token", { elements = { "\ntoken" }, kind = "string" } } },
+		{ { "token", { elements = { "" }, kind = "string" } }, "token" },
+		{ { "token", { elements = { "\ntoken" }, kind = "string" } }, "token" },
 	}
 
 	assert(#expected == #example)

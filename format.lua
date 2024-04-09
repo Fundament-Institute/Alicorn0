@@ -171,7 +171,6 @@ local grammar = P {
 			+ (P "#" * Cg(Cs(V "comment_body"), "val"))
 		)
 	),
-
 	-- numbers are limited, they are not bignums, they are standard lua numbers. scopes shares the problem of files not having arbitrary precision
 	-- so it probably doesn't matter.
 	number = element("literal", Cg((V "float_special" + V "hex" + V "big_e") / tonumber, "val") * V "types"),
@@ -342,8 +341,7 @@ local function parse(input, filename)
 	assert(ast, "completely failed to parse format")
 
 	if furthest_forward.position then
-		print("error in " .. tostring(furthest_forward.position))
-		assert(false, "errors in file")
+		assert(false, "errors in file" .. " error in " .. tostring(furthest_forward.position))
 	end
 
 	return ast
