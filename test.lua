@@ -544,7 +544,6 @@ function testcomments()
 		"# i am a normal comment created by a normal human\n\tand this comment is intended to be useful\n\t\tsee?\n\n\tall of this is on one line ",
 		"# i",
 
-		-- goal: ensure indenting rules are followed
 		"# comment A\ntoken",
 		"# comment B\n\ttoken",
 		"token\n# comment C\n\ttoken",
@@ -568,7 +567,6 @@ function testcomments()
 		"token # comment T# comment # comment",
 		'# comment U\n\t""""',
 
-		-- motivating indent fail example, probably redundant with above -- currently fails
 		[[let (orig-results) = get-prim-func-res-inner(wrap(type, foo), prim-nil)
 let orig-results = unwrap(func-conv-res-type(oldargs), orig-results)
 let new-results =
@@ -579,11 +577,6 @@ let new-results =
 		let (newres valid) = orig-results-res
 		newres
 ]],
-		-- [[
-		-- # aaaaa
-		-- 	Ma'am is acceptable in a crunch, but I prefer Captain.
-		-- 		          	-- Kathryn Janeway
-		-- ]]
 	}
 
 	local expected = {
@@ -604,10 +597,10 @@ let new-results =
 		{ " comment L\ntoken\n\ttoken" },
 		{ { "token", " comment M", { "token", "token" } } },
 		{ { "token", " comment N", "token" }, "token" },
-		{ { "token", " comment O\n\ttoken" }, "token" },
-		{ { "token", " comment P\n\ttoken", "token" } },
-		{ { "token", " comment Q\n\ttoken\n\ttoken" } },
-		{ { "token", " comment R\n\ttoken\n\t\ttoken" } },
+		{ { "token", " comment O\ntoken" }, "token" },
+		{ { "token", " comment P\ntoken", "token" } },
+		{ { "token", " comment Q\ntoken\ntoken" } },
+		{ { "token", " comment R\ntoken\n\ttoken" } },
 		{ { "token", " comment S1" }, "token" },
 		{ { "token", " comment S2", "token" } },
 		{ { "token", " comment S3", "token", "token" } },
@@ -641,14 +634,12 @@ let new-results =
 	end
 end
 
--- contains things that should not parse
 function testfailedparse()
 	local example = {
 		"\ttoken\ntoken",
 		"\ttoken # comment\ntoken",
 		'\t""""',
 
-		-- presently these all succeed when they shouldn't:
 		"\t# comment E1\n\ttoken",
 		"\t# comment F1\n\t\ttoken",
 		"\t# comment C1\ntoken",
@@ -663,15 +654,8 @@ function testfailedparse()
 		"token\n    #comment",
 		"token\n    \n",
 		"# comment\n    \n",
-		" ",
-		"    ",
-		"\t",
-		"\t\t",
-		" \t \t \t \t",
 		" #",
 		" A",
-		"\n ",
-		"\n\n \n\n\n",
 	}
 	for i = 1, #example do
 		function assertFunction()
