@@ -415,6 +415,25 @@ add_comparer("value.pi", "value.pi", function(a, b)
 	end
 	return true
 end)
+add_comparer("value.prim_function_type", "value.prim_function_type", function(a, b)
+	if a == b then
+		return true
+	end
+	local ok, err
+	ok, err = fitsinto(a.param_type, b.param_type)
+	if not ok then
+		return false, fitsinto_fail("param_type", err)
+	end
+
+	local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
+	local a_res = apply_value(a.result_type, unique_placeholder)
+	local b_res = apply_value(b.result_type, unique_placeholder)
+	ok, err = fitsinto(a_res, b_res)
+	if not ok then
+		return false, fitsinto_fail("result_type", err)
+	end
+	return true
+end)
 
 for _, type_of_type in ipairs({
 	value.prim_type_type,
@@ -469,6 +488,12 @@ function fitsinto(a, b)
 	if not fitsinto_comparers[tya.kind] then
 		error("fitsinto given value a which isn't a type or NYI " .. tya.kind)
 	elseif not fitsinto_comparers[tyb.kind] then
+		print("fitsinto error:")
+		print("tya:")
+		print(tya:pretty_print())
+		print("tyb:")
+		print(tyb:pretty_print())
+		--p(debug.getinfo(getmetatable(tyb.neutral.container.subject["function"]).__call))
 		error("fitsinto given value b which isn't a type or NYI " .. tyb.kind)
 	end
 

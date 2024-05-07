@@ -58,7 +58,13 @@ local semantic_error_mt = {
 		if self.terms then
 			message = message .. " with terms\n"
 			for k, term in pairs(self.terms) do
-				message = message .. k .. " = " .. tostring(term) .. "\n"
+				local s = nil
+				if term.pretty_print and self.env then
+					s = term:pretty_print(self.env.typechecking_context)
+				else
+					s = tostring(term)
+				end
+				message = message .. k .. " = " .. s .. "\n"
 			end
 		end
 		if self.env then
@@ -571,6 +577,11 @@ collect_tuple = metalanguage.reducer(function(syntax, args)
 			else
 				local next_elem_type = evaluator.apply_value(closures[i], value.tuple_value(tuple_symbolic_elems))
 				-- if next_elem_type:is_neutral() then
+				-- 	print("collect_tuple: neutral goal type")
+				-- 	print("from application of: (value term follows)")
+				-- 	print(closures[i]:pretty_print())
+				-- 	print("applied to: (value term follows)")
+				-- 	print(value.tuple_value(tuple_symbolic_elems))
 				-- 	error "neutral goal type"
 				-- end
 

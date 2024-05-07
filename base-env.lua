@@ -383,7 +383,8 @@ local ascribed_segment = metalang.reducer(function(syntax, env, termination)
 		}, metalang.failure_handler, nil)
 
 		if not ok then
-			return ok, thread
+			--return ok, thread
+			return single, name
 		end
 
 		env = thread.env
