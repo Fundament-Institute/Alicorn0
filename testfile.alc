@@ -306,7 +306,7 @@ let tuple-def-elem =
 					return tuple_def_elem
 				:
 				prim-func-type
-					defn : wrapped(tuple-def-type(U))
+					defn_ : wrapped(tuple-def-type(U))
 					elem : (wrapped (forall rest : tuple-type(U, defn) -> next : U))
 					->
 					res : wrapped(tuple-def-type(U))
