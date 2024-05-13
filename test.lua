@@ -686,6 +686,8 @@ function testcomma()
 		"let (a, b) = f(x)",
 		"f(a)",
 		"f()",
+		"f()()",
+		"f(x, y)(x)",
 	}
 
 	local expected = {
@@ -701,6 +703,8 @@ function testcomma()
 		{ { "let", { "a", "b" }, "=", { "f", "x" } } },
 		{ { "f", "a" } },
 		{ { "f" } },
+		{ { { "f" } } },
+		{ { { "f", "x", "y" }, "x" } },
 	}
 
 	for i = 1, #example do

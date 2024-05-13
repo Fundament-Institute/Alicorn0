@@ -261,7 +261,23 @@ local grammar = P {
 	-- subtly different from the base case
 	-- if there's a set of arguments provided that aren't comma separated, they are automatically interpreted as a child list
 	-- the base case will interpret such a thing as part of the normal list
-	function_call = list(V "symbol" * P "(" * (V "comma_sep_paren_body" + V "base_paren_body") ^ -1 * P ")"),
+	function_call = V "symbol"
+		* Ct(list(P "(" * (V "comma_sep_paren_body" + V "base_paren_body") ^ -1 * P ")") ^ 1)
+		/ function(symbol, argcalls)
+			local acc = {}
+
+			acc = table.remove(argcalls, 1)
+			table.insert(acc.elements, 1, symbol)
+			acc.anchor = symbol.anchor
+
+			for _, v in ipairs(argcalls) do
+				table.insert(v.elements, 1, acc)
+				v.anchor = acc.anchor
+				acc = v
+			end
+
+			return acc
+		end,
 
 	file = list(
 		(
