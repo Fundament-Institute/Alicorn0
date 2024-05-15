@@ -312,23 +312,26 @@ let tuple-def-elem =
 					res : wrapped(tuple-def-type(U))
 		let (result) = inner(wrap(tuple-def-type(U), defn), (wrap (forall rest : tuple-type(U, defn) -> next : U) elem))
 		unwrap(tuple-def-type(U), result)
-let prim-tuple-def-type = tuple-def-type(prim-type)
-#let prim-tuple-def-elem =
-	lambda (rest : prim-tuple-def-type, next : (forall args : tuple-type(rest) -> t : prim-type))
-#let prim-tuple-def-elem-wrap =
-#	forall
-#		rest : prim-tuple-def-type
-#		next : (forall args : tuple-type(rest) -> t : prim-type)
-#		->
-#		res : prim-tuple-def-type
-#	U ; universe
-#	defn : tuple defn
-#	elem : forall tuple_type u defn -> u
-#let prim-tuple-def-elem = unwrap(forall prim-tuple-def-type -> prim-tuple-def-type, prim-tuple-def-elem-wrap)
 
 
 
 
-#let expression-args = new-prim-type("expression-args")
-#let syntax-error = new-prim-type("syntax-error")
-#let block-reducer = intrinsic "return alicorn_expressions.block" : reducer(expression-args, ???, syntax-error)
+let expression-args = new-prim-type("expression-args")
+let inferrable-term = new-prim-type("inferrable-term")
+let environment = new-prim-type("environment")
+let syntax-error = new-prim-type("syntax-error")
+let block-reducer = intrinsic "return alicorn_expressions.block" :
+	reducer
+		expression-args
+		tuple-type
+			prim-type
+			tuple-def-elem
+				prim-type
+				tuple-def-elem
+					prim-type
+					tuple-def-empty(prim-type)
+					lambda (())
+						inferrable-term
+				lambda ((_ : inferrable-term))
+					environment
+		syntax-error
