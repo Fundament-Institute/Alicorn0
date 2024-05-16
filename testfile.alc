@@ -339,6 +339,3 @@ let block-reducer = intrinsic "return alicorn_expressions.block" :
 				lambda ((_ : prim-inferrable-term))
 					prim-environment
 		prim-lua-error
-
-let syntax = quote what good fun i'm having
-syntax

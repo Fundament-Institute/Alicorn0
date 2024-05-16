@@ -716,23 +716,6 @@ local function lambda_impl(syntax, env)
 	return true, term, resenv
 end
 
-local function quote_impl(syntax, env, goal)
-	local val = terms.value.prim(syntax)
-	local typed = terms.typed_term.literal(val)
-	local t = terms.prim_syntax_type
-	local usages = gen.declare_array(gen.builtin_number)()
-	local inf = terms.inferrable_term.typed(t, usages, typed)
-	if goal:is_infer() then
-		return true, inf, env
-	elseif goal:is_check() then
-		local goal_type = goal:unwrap_check()
-		local chk = terms.checkable_term.inferrable(inf)
-		return true, chk, env
-	else
-		error("goal needs to be inferrable or checkable")
-	end
-end
-
 local value = terms.value
 local typed = terms.typed_term
 
@@ -962,7 +945,6 @@ local core_operations = {
 	--tuple = evaluator.primitive_operative(tuple_type_impl),
 	--["tuple-of"] = evaluator.primitive_operative(tuple_of_impl),
 	--number = { type = types.type, val = types.number }
-	quote = exprs.primitive_operative(quote_impl, "quote_impl"),
 }
 
 -- FIXME: use these once reimplemented with terms
