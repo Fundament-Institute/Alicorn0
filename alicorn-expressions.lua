@@ -499,7 +499,7 @@ local function primitive_operative(fn, name)
 	end
 	local tuple_conv = typed_term.tuple_cons(tuple_conv_elements)
 	local prim_tuple_conv = typed_term.prim_tuple_cons(prim_tuple_conv_elements)
-	local param_names = name_array("#syntax", "#env", "#goal", "#userdata")
+	local param_names = name_array("#syntax", "#env", "#userdata", "#goal")
 	local tuple_to_prim_tuple =
 		typed_term.tuple_elim(param_names, typed_term.bound_variable(1), nparams, prim_tuple_conv)
 	local tuple_to_prim_tuple_fn = typed_term.application(typed_prim_fn, tuple_to_prim_tuple)
