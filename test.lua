@@ -520,7 +520,7 @@ function testbracedlist()
 		"(hello hi greetings)",
 		"(hello (hi (another)) greetings)",
 		"(hello; (greetings;); anothertest)",
-		"(hello\n failure \n\n\t\t \t\n(hi (another)) greetings)",
+		"(hello\n\tfailure \n\n\t\t\t\n\t\t(hi (another)) greetings)",
 	}
 
 	local expected = {
@@ -686,6 +686,8 @@ function testcomma()
 		"let (a, b) = f(x)",
 		"f(a)",
 		"f()",
+		"f()()",
+		"f(x, y)(x)",
 	}
 
 	local expected = {
@@ -701,6 +703,8 @@ function testcomma()
 		{ { "let", { "a", "b" }, "=", { "f", "x" } } },
 		{ { "f", "a" } },
 		{ { "f" } },
+		{ { { "f" } } },
+		{ { { "f", "x", "y" }, "x" } },
 	}
 
 	for i = 1, #example do
@@ -728,12 +732,12 @@ hi
 		[[
 hello
 (this is
-a test)
+	a test)
 ]],
 		[[
 hello
 	(this is
-a test)
+		a test)
 ]],
 		-- 		[[
 		-- toplevel
@@ -775,21 +779,21 @@ a test)
 
 		create_list(create_anchor(1, 1), create_anchor(4, 1), {
 			create_symbol(create_anchor(1, 1), "hello"),
-			create_list(create_anchor(2, 1), create_anchor(3, 8), {
+			create_list(create_anchor(2, 1), create_anchor(3, 9), {
 				create_symbol(create_anchor(2, 2), "this"),
 				create_symbol(create_anchor(2, 7), "is"),
-				create_symbol(create_anchor(3, 1), "a"),
-				create_symbol(create_anchor(3, 3), "test"),
+				create_symbol(create_anchor(3, 2), "a"),
+				create_symbol(create_anchor(3, 4), "test"),
 			}),
 		}),
 		create_list(create_anchor(1, 1), create_anchor(4, 1), {
-			create_list(create_anchor(1, 1), create_anchor(3, 8), {
+			create_list(create_anchor(1, 1), create_anchor(3, 10), {
 				create_symbol(create_anchor(1, 1), "hello"),
-				create_list(create_anchor(2, 2), create_anchor(3, 8), {
+				create_list(create_anchor(2, 2), create_anchor(3, 10), {
 					create_symbol(create_anchor(2, 3), "this"),
 					create_symbol(create_anchor(2, 8), "is"),
-					create_symbol(create_anchor(3, 1), "a"),
-					create_symbol(create_anchor(3, 3), "test"),
+					create_symbol(create_anchor(3, 3), "a"),
+					create_symbol(create_anchor(3, 5), "test"),
 				}),
 			}),
 		}),

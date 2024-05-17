@@ -59,6 +59,10 @@ local function create_literal(elements)
 	return longstring_val
 end
 
+local function erase(pattern)
+	return pattern / {}
+end
+
 local function create_anchor(line, char, sourceid)
 	local newanchor = {
 		line = line,
@@ -145,13 +149,13 @@ local grammar = P {
 		return math.max(tabscount, 0) <= prev_indent
 	end),
 
-	subordinate_indent = Cs(Cmt(Cb("indent_level") * V "count_tabs", function(_, _, prev_indent, tabscount)
+	subordinate_indent = Cmt(Cb("indent_level") * V "count_tabs", function(_, _, prev_indent, tabscount)
 		local normalized_tabs = string.rep("\t", tabscount - prev_indent - 1)
 
 		return tabscount > prev_indent, normalized_tabs
-	end)),
+	end),
 
-	longstring_body = ((Cc("\n") * ((V "newline" * Cs(V "subordinate_indent")) + V "empty_line")) + C(
+	longstring_body = ((Cc("\n") * ((V "newline" * V "subordinate_indent") + V "empty_line")) + C(
 		(V "unicode_escape" + (1 - (V "newline" + V "splice")))
 	)),
 
@@ -220,9 +224,11 @@ local grammar = P {
 	permitted_paren_tokens = (
 		(space_tokens(P [[\]]) * V "naked_list") -- \ escape char enters naked list mode from inside a paren list. there's probably an edge case here, indentation is going to be wacky
 		+ V "tokens"
-		+ V "newline"
+		+ (V "newline" * erase(V "subordinate_indent"))
+		+ V "empty_line"
 		+ S "\t " ^ 1
 	),
+
 	base_paren_body = list(V "permitted_paren_tokens" ^ 1 * P ";") -- ; control character splits list-up-to-point into child list
 		+ V "permitted_paren_tokens",
 
@@ -255,7 +261,23 @@ local grammar = P {
 	-- subtly different from the base case
 	-- if there's a set of arguments provided that aren't comma separated, they are automatically interpreted as a child list
 	-- the base case will interpret such a thing as part of the normal list
-	function_call = list(V "symbol" * P "(" * (V "comma_sep_paren_body" + V "base_paren_body") ^ -1 * P ")"),
+	function_call = V "symbol"
+		* Ct(list(P "(" * (V "comma_sep_paren_body" + V "base_paren_body") ^ -1 * P ")") ^ 1)
+		/ function(symbol, argcalls)
+			local acc = {}
+
+			acc = table.remove(argcalls, 1)
+			table.insert(acc.elements, 1, symbol)
+			acc.anchor = symbol.anchor
+
+			for _, v in ipairs(argcalls) do
+				table.insert(v.elements, 1, acc)
+				v.anchor = acc.anchor
+				acc = v
+			end
+
+			return acc
+		end,
 
 	file = list(
 		(
