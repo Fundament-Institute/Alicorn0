@@ -418,6 +418,7 @@ let block-match-result-type =
 				lambda ((success : prim-bool))
 					prim-if(success, prim-inferrable-term, prim-lua-error)
 			lambda (success : prim-bool, _ : prim-if(success, prim-inferrable-term, prim-lua-error))
+				# hacky way to do variable-length prim tuples
 				prim-if(success, prim-environment, prim-unit)
 let block-reducer = intrinsic "return alicorn_expressions.block" :
 	prim-reducer(prim-expression-args, block-reducer-result2-type, prim-lua-error)
