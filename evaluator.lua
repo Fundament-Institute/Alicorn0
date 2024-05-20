@@ -486,13 +486,18 @@ function fitsinto(a, b)
 	local tya, tyb = a, b
 
 	if not fitsinto_comparers[tya.kind] then
+		print("fitsinto error:")
+		print("tya:")
+		print(tya:pretty_print())
+		print("tyb:")
+		print(tyb:pretty_print())
 		error("fitsinto given value a which isn't a type or NYI " .. tya.kind)
 	elseif not fitsinto_comparers[tyb.kind] then
-		--print("fitsinto error:")
-		--print("tya:")
-		--print(tya:pretty_print())
-		--print("tyb:")
-		--print(tyb:pretty_print())
+		print("fitsinto error:")
+		print("tya:")
+		print(tya:pretty_print())
+		print("tyb:")
+		print(tyb:pretty_print())
 		--p(debug.getinfo(getmetatable(tyb.neutral.container.subject["function"]).__call))
 		error("fitsinto given value b which isn't a type or NYI " .. tyb.kind)
 	end
