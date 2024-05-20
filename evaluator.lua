@@ -1764,6 +1764,29 @@ function evaluate(typed_term, runtime_context)
 			print("unrecognized value in unbox", unwrap_val)
 			error "invalid value in unbox, must be prim or neutral"
 		end
+	elseif typed_term:is_prim_if() then
+		local subject, consequent, alternate = typed_term:unwrap_prim_if()
+		local sval = evaluate(subject, runtime_context)
+		-- TODO TODO TODO TODO TODO TODO TODO TODO
+		-- replace runtime context in each case to replace terms equal to subject with true/false
+		local cval = evaluate(consequent, runtime_context)
+		local aval = evaluate(alternate, runtime_context)
+		if sval:is_prim() then
+			local sbool = sval:unwrap_prim()
+			if type(sbool) ~= "boolean" then
+				error("subject of prim_if must be a primitive bool")
+			end
+			if sbool then
+				return cval
+			else
+				return aval
+			end
+		elseif sval:is_neutral() then
+			local sval_neutral = sval:unwrap_neutral()
+			return value.neutral(neutral_value.prim_if_stuck(sval_neutral, cval, aval))
+		else
+			error("subject of prim_if must be prim or neutral")
+		end
 	elseif typed_term:is_let() then
 		local name, expr, body = typed_term:unwrap_let()
 		local expr_value = evaluate(expr, runtime_context)

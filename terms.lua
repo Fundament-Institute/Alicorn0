@@ -1180,10 +1180,7 @@ local inferrable_term_override_pretty = {
 		local param_type, result_type = self:unwrap_prim_function_type()
 		context = ensure_context(context)
 		local result_context = context
-		local ok, param_decls = param_type:as_prim_tuple_type()
-		if not ok then
-			error("override_pretty: inferrable.prim_function_type: param_type must be a prim_tuple_type")
-		end
+		local param_is_tuple_type, param_decls = param_type:as_prim_tuple_type()
 		local ok, param_name, param_annotation, result_body, result_anchor = result_type:as_annotated_lambda()
 		if not ok then
 			error("override_pretty: inferrable.prim_function_type: result_type must be a lambda")
@@ -1195,10 +1192,7 @@ local inferrable_term_override_pretty = {
 			param_name = param_names
 			result_is_destructure = false
 		end
-		local ok, result_decls = result_body:as_prim_tuple_type()
-		if not ok then
-			error("override_pretty: inferrable.prim_function_type: result_type must be a prim_tuple_type")
-		end
+		local result_is_tuple_type, result_decls = result_body:as_prim_tuple_type()
 
 		pp:_enter()
 
@@ -1206,7 +1200,7 @@ local inferrable_term_override_pretty = {
 		pp:unit("inferrable.prim-\u{03A0} ")
 		pp:unit(pp:_resetcolor())
 
-		if result_is_destructure then
+		if param_is_tuple_type and result_is_destructure then
 			local members = inferrable_tuple_type_flatten(param_decls, context)
 
 			if #members == 0 then
@@ -1216,6 +1210,25 @@ local inferrable_term_override_pretty = {
 			else
 				tuple_type_helper(pp, members, param_names)
 			end
+		elseif result_is_destructure then
+			-- tuple_elim on params but params aren't a tuple type???
+			-- probably shouldn't happen, but here's a handler
+			pp:unit(pp:_color())
+			pp:unit("(")
+			pp:unit(pp:_resetcolor())
+
+			for i, name in param_names:ipairs() do
+				if i > 1 then
+					pp:unit(" ")
+				end
+				pp:unit(name)
+			end
+
+			pp:unit(pp:_color())
+			pp:unit(") : ")
+			pp:unit(pp:_resetcolor())
+
+			pp:any(param_type, context)
 		else
 			pp:unit(param_name)
 
@@ -1230,14 +1243,18 @@ local inferrable_term_override_pretty = {
 		pp:unit(" -> ")
 		pp:unit(pp:_resetcolor())
 
-		local members = inferrable_tuple_type_flatten(result_decls, result_context)
+		if result_is_tuple_type then
+			local members = inferrable_tuple_type_flatten(result_decls, result_context)
 
-		if #members == 0 then
-			pp:unit(pp:_color())
-			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			if #members == 0 then
+				pp:unit(pp:_color())
+				pp:unit("()")
+				pp:unit(pp:_resetcolor())
+			else
+				tuple_type_helper(pp, members)
+			end
 		else
-			tuple_type_helper(pp, members)
+			pp:any(result_body, result_context)
 		end
 
 		pp:_exit()
@@ -1402,6 +1419,8 @@ typed_term:define_enum("typed", {
 	} },
 	{ "prim_if", {
 		"subject",
+		typed_term,
+		"consequent",
 		typed_term,
 		"alternate",
 		typed_term,
@@ -1817,10 +1836,7 @@ local typed_term_override_pretty = {
 		local param_type, result_type = self:unwrap_prim_function_type()
 		context = ensure_context(context)
 		local result_context = context
-		local ok, param_decls = param_type:as_prim_tuple_type()
-		if not ok then
-			error("override_pretty: typed.prim_function_type: param_type must be a prim_tuple_type")
-		end
+		local param_is_tuple_type, param_decls = param_type:as_prim_tuple_type()
 		local ok, param_name, result_body = result_type:as_lambda()
 		if not ok then
 			error("override_pretty: typed.prim_function_type: result_type must be a lambda")
@@ -1832,10 +1848,7 @@ local typed_term_override_pretty = {
 			param_name = param_names
 			result_is_destructure = false
 		end
-		local ok, result_decls = result_body:as_prim_tuple_type()
-		if not ok then
-			error("override_pretty: typed.prim_function_type: result_type must be a prim_tuple_type")
-		end
+		local result_is_tuple_type, result_decls = result_body:as_prim_tuple_type()
 
 		pp:_enter()
 
@@ -1843,7 +1856,7 @@ local typed_term_override_pretty = {
 		pp:unit("typed.prim-\u{03A0} ")
 		pp:unit(pp:_resetcolor())
 
-		if result_is_destructure then
+		if param_is_tuple_type and result_is_destructure then
 			local members = typed_tuple_type_flatten(param_decls, context)
 
 			if #members == 0 then
@@ -1853,6 +1866,25 @@ local typed_term_override_pretty = {
 			else
 				tuple_type_helper(pp, members, param_names)
 			end
+		elseif result_is_destructure then
+			-- tuple_elim on params but params aren't a tuple type???
+			-- probably shouldn't happen, but here's a handler
+			pp:unit(pp:_color())
+			pp:unit("(")
+			pp:unit(pp:_resetcolor())
+
+			for i, name in param_names:ipairs() do
+				if i > 1 then
+					pp:unit(" ")
+				end
+				pp:unit(name)
+			end
+
+			pp:unit(pp:_color())
+			pp:unit(") : ")
+			pp:unit(pp:_resetcolor())
+
+			pp:any(param_type, context)
 		else
 			pp:unit(param_name)
 
@@ -1867,14 +1899,18 @@ local typed_term_override_pretty = {
 		pp:unit(" -> ")
 		pp:unit(pp:_resetcolor())
 
-		local members = typed_tuple_type_flatten(result_decls, result_context)
+		if result_is_tuple_type then
+			local members = typed_tuple_type_flatten(result_decls, result_context)
 
-		if #members == 0 then
-			pp:unit(pp:_color())
-			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			if #members == 0 then
+				pp:unit(pp:_color())
+				pp:unit("()")
+				pp:unit(pp:_resetcolor())
+			else
+				tuple_type_helper(pp, members)
+			end
 		else
-			tuple_type_helper(pp, members)
+			pp:any(result_body, result_context)
 		end
 
 		pp:_exit()
@@ -2281,10 +2317,7 @@ local value_override_pretty = {
 	-- copypaste of typed.prim_function_type
 	prim_function_type = function(self, pp)
 		local param_type, result_type = self:unwrap_prim_function_type()
-		local ok, param_decls = param_type:as_prim_tuple_type()
-		if not ok then
-			error("override_pretty: value.prim_function_type: param_type must be a prim_tuple_type")
-		end
+		local param_is_tuple_type, param_decls = param_type:as_prim_tuple_type()
 		local ok, param_name, result_code, result_capture = result_type:as_closure()
 		if not ok then
 			error("override_pretty: value.prim_function_type: result_type must be a closure")
@@ -2297,10 +2330,7 @@ local value_override_pretty = {
 			param_name = param_names
 			result_is_destructure = false
 		end
-		local ok, result_decls = result_code:as_prim_tuple_type()
-		if not ok then
-			error("override_pretty: value.prim_function_type: result_type must be a prim_tuple_type")
-		end
+		local result_is_tuple_type, result_decls = result_code:as_prim_tuple_type()
 
 		pp:_enter()
 
@@ -2308,7 +2338,7 @@ local value_override_pretty = {
 		pp:unit("value.prim-\u{03A0} ")
 		pp:unit(pp:_resetcolor())
 
-		if result_is_destructure then
+		if param_is_tuple_type and result_is_destructure then
 			local members = value_tuple_type_flatten(param_decls, context)
 
 			if #members == 0 then
@@ -2318,6 +2348,25 @@ local value_override_pretty = {
 			else
 				tuple_type_helper(pp, members, param_names)
 			end
+		elseif result_is_destructure then
+			-- tuple_elim on params but params aren't a tuple type???
+			-- probably shouldn't happen, but here's a handler
+			pp:unit(pp:_color())
+			pp:unit("(")
+			pp:unit(pp:_resetcolor())
+
+			for i, name in param_names:ipairs() do
+				if i > 1 then
+					pp:unit(" ")
+				end
+				pp:unit(name)
+			end
+
+			pp:unit(pp:_color())
+			pp:unit(") : ")
+			pp:unit(pp:_resetcolor())
+
+			pp:any(param_type, context)
 		else
 			pp:unit(param_name)
 
@@ -2332,14 +2381,18 @@ local value_override_pretty = {
 		pp:unit(" -> ")
 		pp:unit(pp:_resetcolor())
 
-		local members = typed_tuple_type_flatten(result_decls, result_context)
+		if result_is_tuple_type then
+			local members = typed_tuple_type_flatten(result_decls, result_context)
 
-		if #members == 0 then
-			pp:unit(pp:_color())
-			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			if #members == 0 then
+				pp:unit(pp:_color())
+				pp:unit("()")
+				pp:unit(pp:_resetcolor())
+			else
+				tuple_type_helper(pp, members)
+			end
 		else
-			tuple_type_helper(pp, members)
+			pp:any(result_code, result_context)
 		end
 
 		pp:_exit()

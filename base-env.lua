@@ -395,6 +395,52 @@ local ascribed_segment = metalang.reducer(function(syntax, env, termination)
 	return true, { single = single, names = names, args = args, env = env }, tail
 end, "ascribed_segment")
 
+-- bad horrible lazy use of copy-paste
+local prim_ascribed_segment = metalang.reducer(function(syntax, env, termination)
+	local single, tail, name, type_val, type_env
+
+	local ok = true
+
+	single, name, type_val, type_env, tail = syntax:match({
+		pure_ascribed_name_with_tail(metalang.accept_handler, env),
+	}, metalang.failure_handler, nil)
+
+	local names, args
+
+	if single then
+		ok, tail = tail:match({
+			metalang.listtail(metalang.accept_handler, termination),
+			-- if termination is nil listtail will fail to match. so this is redundant and SHOULDN'T activate
+			-- but I don't know how to make it not necessary
+			termination,
+		}, metalang.failure_handler, env)
+
+		if not ok then
+			return false, "only one bare ascribed name permitted"
+		end
+
+		env = type_env
+		args = type_val
+		names = name
+	elseif not single then
+		local thread
+		ok, thread, tail = syntax:match({
+			prim_tupleof_ascribed_names(metalang.accept_handler, env, termination),
+		}, metalang.failure_handler, nil)
+
+		if not ok then
+			return ok, thread
+			--return single, name
+		end
+
+		env = thread.env
+		args = thread.args
+		names = thread.names
+	end
+
+	return true, { single = single, names = names, args = args, env = env }, tail
+end, "ascribed_segment")
+
 local function prim_func_type_pair_handler(env, a, b)
 	local ok, val, env =
 		a:match({ exprs.inferred_expression(metalang.accept_handler, env) }, metalang.failure_handler, nil)
@@ -415,8 +461,9 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 		error "env isn't an environment in prim_func_type_impl_reducer"
 	end
 
-	local ok, thread, syntax = syntax:match({
-		prim_tupleof_ascribed_names(metalang.accept_handler, env, metalang.symbol_exact(metalang.accept_handler, "->")),
+	local ok, thread, single, args, names
+	ok, thread, syntax = syntax:match({
+		prim_ascribed_segment(metalang.accept_handler, env, metalang.symbol_exact(metalang.accept_handler, "->")),
 	}, metalang.failure_handler, nil)
 
 	if not ok then
@@ -424,8 +471,9 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	end
 
 	env = thread.env
-	local args = thread.args
-	local names = thread.names
+	single = thread.single
+	args = thread.args
+	names = thread.names
 
 	--print("moving on to return type")
 	local shadowed, env = env:enter_block()
@@ -433,10 +481,16 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	-- syntax.anchor can be nil so we fall back to the anchor for the start of this prim func type if needed
 	env = env:bind_local(terms.binding.annotated_lambda("#prim-func-arguments", args, syntax.anchor or pft_anchor))
 	local ok, arg = env:get("#prim-func-arguments")
-	env = env:bind_local(terms.binding.tuple_elim(names, arg))
+	if single then
+		env = env:bind_local(terms.binding.let(names, arg))
+	else
+		env = env:bind_local(terms.binding.tuple_elim(names, arg))
+	end
+
+	local results
 
 	ok, thread, tail = syntax:match({
-		prim_tupleof_ascribed_names(metalang.accept_handler, env, metalang.isnil(metalang.accept_handler)),
+		prim_ascribed_segment(metalang.accept_handler, env, metalang.isnil(metalang.accept_handler)),
 	}, metalang.failure_handler, nil)
 
 	if not ok then
@@ -444,8 +498,9 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	end
 
 	env = thread.env
-	local results = thread.args
-	local names = thread.names
+	single = thread.single
+	results = thread.args
+	names = thread.names
 
 	local env, fn_res_term = env:exit_block(results, shadowed)
 	local fn_type_term = terms.inferrable_term.prim_function_type(args, fn_res_term)
