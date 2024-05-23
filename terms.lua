@@ -2320,7 +2320,10 @@ local value_override_pretty = {
 		local param_is_tuple_type, param_decls = param_type:as_prim_tuple_type()
 		local ok, param_name, result_code, result_capture = result_type:as_closure()
 		if not ok then
-			error("override_pretty: value.prim_function_type: result_type must be a closure")
+			--error("override_pretty: value.prim_function_type: result_type must be a closure")
+			-- allow printing cursed things that contain manually-written (broken) prim-func-types
+			pp:unit("<BROKEN prim_function_type>")
+			return
 		end
 		local result_context = ensure_context(result_capture)
 		result_context = result_context:append(param_name)

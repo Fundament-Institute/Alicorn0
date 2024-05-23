@@ -1,3 +1,11 @@
+# FIXME: type of universe
+# we need to wrap this, and wrap takes a type in star-10
+# so we have to settle for star-9
+let universe = type_(9)
+
+
+
+
 # types that need just a little convincing to exist
 
 let prim-bool-wrap            = intrinsic "return terms.value.prim_bool_type"      : wrapped(prim-type)
@@ -16,10 +24,8 @@ let prim-goal            = unwrap(prim-type, prim-goal-wrap)
 let prim-inferrable-term = unwrap(prim-type, prim-inferrable-term-wrap)
 let prim-lua-error       = unwrap(prim-type, prim-lua-error-wrap)
 
-# FIXME: type of universe
-# we need to wrap this, and wrap takes a type in star-10
-# so we have to settle for star-9
-let universe = type_(9)
+
+
 
 let prim-if-type = forall (subject : prim-bool) (consequent : prim-type) (alternate : prim-type) -> T : prim-type
 let prim-if-wrap =
@@ -30,10 +36,18 @@ let prim-if-wrap =
 			return terms.value.closure(
 				"#prim-if-param",
 				typed.tuple_elim(
-					string_array("#prim-if-subject", "#prim-if-consequent", "#prim-if-alternate"),
+					string_array(
+						"#prim-if-subject",
+						"#prim-if-consequent",
+						"#prim-if-alternate"
+					),
 					typed.bound_variable(1),
 					3,
-					typed.prim_if(typed.bound_variable(2), typed.bound_variable(3), typed.bound_variable(4))
+					typed.prim_if(
+						typed.bound_variable(2),
+						typed.bound_variable(3),
+						typed.bound_variable(4)
+					)
 				),
 				terms.runtime_context()
 			)
@@ -66,6 +80,7 @@ let new-prim-type =
 		let (T) = new-prim-type-inner(name)
 		unwrap(prim-type, T)
 
+# TODO: make nparams not exist by deriving it from the signature
 let new-prim-type-family-inner =
 	intrinsic
 		""""
@@ -99,8 +114,7 @@ let new-prim-type-family-inner =
 			->
 			family    : wrapped(unwrap(type_(1), signature))
 let new-prim-type-family =
-	lambda 
-		(name : prim-string) (nparams : prim-number) (signature : type_(1)) #TODO make nparams not exist by deriving it from the signature
+	lambda (name : prim-string, nparams : prim-number, signature : type_(1))
 		let (family) = new-prim-type-family-inner(name, nparams, wrap(type_(1), signature))
 		unwrap(signature, family)
 
@@ -109,7 +123,13 @@ let new-prim-type-family =
 
 let prim-unit = new-prim-type("prim-unit")
 let prim-nil = intrinsic "return nil" : prim-unit
+
 let prim-literal = new-prim-type("literal")
+
+# FIXME: this should be in terms.lua probably
+let prim-expression-args = new-prim-type("expression-args")
+let expression-args-new = intrinsic "return alicorn_expressions.ExpressionArgs.new" :
+	prim-func-type (goal : prim-goal) (env : prim-environment) -> (args : prim-expression-args)
 
 let prim-array-type = new-prim-type-family "array" 1
 	forall (T : prim-type) -> T : prim-type
@@ -136,7 +156,6 @@ let prim-array-new =
 				prim-func-type -> (arr : prim-array-type(T))
 		let (arr) = inner()
 		arr
-
 let prim-array-set =
 	lambda (T : prim-type, arr : prim-array-type(T), index : prim-number, elem : T)
 		let inner =
@@ -162,7 +181,6 @@ let prim-array-set =
 					arr   : prim-array-type(T)
 		let (arr) = inner(arr, index, elem)
 		arr
-
 let prim-array-get = 
 	lambda (T : prim-type, arr : prim-array-type(T), index : prim-number)
 		let inner =
@@ -233,6 +251,7 @@ let prim-matcher-is-value =
 		m
 
 # the way result2 is put in the prim-func-type here is actually completely wrong
+# we want the elements of result2 to be individual parameters of the handler
 # but it's really hard to do this type properly
 # and it's all for type-checking intrinsics so hopefully it doesn't matter
 let reducible-handler-type =
@@ -253,17 +272,19 @@ let prim-matcher-reducible =
 			intrinsic
 				""""
 					local function reducible(red, s, accept_handler)
-						return red(accept_handler, table.unpack(s))
+						-- FIXME: s!
+						--return red(accept_handler, table.unpack(s))
+						return red(accept_handler, s)
 					end
 					return reducible
 				:
 				prim-func-type
 					red            : prim-reducer(storage, result2, error)
-					s              : wrapped(storage)
+					s              : storage
 					accept-handler : reducible-handler-type(userdata, result2, result)
 					->
 					m              : prim-matcher(userdata, result)
-		let (m) = inner(red, wrap(storage, s), accept-handler)
+		let (m) = inner(red, s, accept-handler)
 		m
 
 let failure-handler-type =
@@ -293,9 +314,11 @@ let match-syntax =
 					syn             : prim-syntax
 					ud              : wrapped(userdata)
 					->
-					r               : wrapped(result)
-		let (r) = inner(matchers, failure-handler, syn, wrap(userdata, ud))
-		unwrap(result, r)
+					# ugly syntax hack
+					r
+					:
+					result
+		inner(matchers, failure-handler, syn, wrap(userdata, ud))
 
 
 
@@ -351,14 +374,139 @@ let tuple-def-elem =
 					elem  : (wrapped (forall rest : tuple-type(U, defn) -> next : U))
 					->
 					T     : wrapped(tuple-def-type(U))
-		let (T) = inner(wrap(tuple-def-type(U), defn), (wrap (forall rest : tuple-type(U, defn) -> next : U) elem))
+		let (T) =
+			inner
+				wrap(tuple-def-type(U), defn)
+				wrap (forall rest : tuple-type(U, defn) -> next : U) elem
 		unwrap(tuple-def-type(U), T)
 let tuple-of =
 	lambda (U : universe, defn : tuple-def-type(U))
 		# ATTN: single parens here means bare lambda syntax
 		lambda (t : tuple-type(U, defn))
 			t
+let prim-tuple-of =
+	lambda (U : universe, defn : tuple-def-type(U))
+		intrinsic "return function(x) return x end" :
+			prim-func-type t : prim-tuple-type(U, defn) -> t : prim-tuple-type(U, defn)
 
+
+
+
+let prim-term-of =
+	lambda ((goal : prim-goal))
+		# TODO: inferrable or checkable based on goal
+		prim-inferrable-term
+
+let operative-handler-type =
+	lambda ((userdata : prim-type))
+		forall
+			syn : prim-syntax
+			env : prim-environment
+			ud : userdata
+			goal : prim-goal
+			->
+			term : prim-term-of(goal)
+			env : prim-environment
+
+let new-operative =
+	lambda (userdata : prim-type, ud : userdata, handler : operative-handler-type(userdata))
+		let inner =
+			intrinsic
+				""""
+					local function new_operative(userdata, ud, handler)
+						return
+							terms.value.operative_type(handler, userdata),
+							terms.value.operative_value(ud)
+					end
+					return new_operative
+				:
+				prim-func-type
+					userdata_ : wrapped(prim-type)
+					ud : wrapped(userdata)
+					handler : wrapped(operative-handler-type(userdata))
+					->
+					op-type : wrapped(prim-type)
+					op : wrapped(unwrap(prim-type, op-type))
+		let (op-type, op) =
+			inner
+				wrap(prim-type, userdata)
+				wrap(userdata, ud)
+				wrap(operative-handler-type(userdata), handler)
+
+		let op-type = unwrap(prim-type, op-type)
+		let op = unwrap(op-type, op)
+
+		# lol look how horrible tuple types are
+		let result-defn =
+			tuple-def-elem type_(1)
+				tuple-def-elem type_(1)
+					tuple-def-empty type_(1)
+					lambda (())
+						prim-type
+				lambda ((op-type : prim-type))
+					op-type
+		tuple-of(type_(1), result-defn)(op-type, op)
+
+
+
+
+# to start, we'll pull a reducer from lua
+
+let block-reducer-result2-type =
+	lambda ((goal : prim-goal))
+		# read as: (_ : prim-term-of(goal), _ : prim-environment)
+		prim-tuple-type prim-type
+			tuple-def-elem prim-type
+				tuple-def-elem prim-type
+					tuple-def-empty prim-type
+					lambda (())
+						prim-term-of(goal)
+				lambda ((_ : prim-term-of(goal)))
+					prim-environment
+
+let block-reducer =
+	lambda ((goal : prim-goal))
+		intrinsic "return alicorn_expressions.block" :
+			prim-reducer(prim-expression-args, block-reducer-result2-type(goal), prim-lua-error)
+
+# supposing a particular handler configuration
+
+let block-match-result-type =
+	lambda ((goal : prim-goal))
+		# read as: (ok : prim-bool, _ : prim-if(ok, prim-term-of(goal), prim-lua-error), _ : prim-if(ok, prim-environment, prim-unit))
+		# or, more logically: (ok : prim-bool, ...) where:
+		# - ok == true:  `...` is prim-term-of(goal), prim-environment
+		# - ok == false: `...` is prim-lua-error
+		# FIXME: similar caveat to block-reducer-result2-type
+		# block reducer may handle checkable in the future
+		prim-tuple-type prim-type
+			tuple-def-elem prim-type
+				tuple-def-elem prim-type
+					tuple-def-elem prim-type
+						tuple-def-empty prim-type
+						lambda (())
+							prim-bool
+					lambda ((ok : prim-bool))
+						prim-if(ok, prim-term-of(goal), prim-lua-error)
+				lambda (ok : prim-bool, _ : prim-if(ok, prim-term-of(goal), prim-lua-error))
+					# hacky way to do variable-length prim tuples
+					prim-if(ok, prim-environment, prim-unit)
+
+# these handlers actually allow (and drop) anything in the userdata parameter
+# to keep things simple they just take unit
+let block-match-accept-handler =
+	lambda ((goal : prim-goal))
+		intrinsic "return metalanguage.accept_handler" :
+			prim-func-type (ud : prim-unit) (r2 : block-reducer-result2-type(goal)) -> r : block-match-result-type(goal)
+let block-match-failure-handler =
+	lambda ((goal : prim-goal))
+		intrinsic "return metalanguage.failure_handler" :
+			prim-func-type (ud : prim-unit) (exception : prim-lua-error) -> r : block-match-result-type(goal)
+
+
+
+
+# alicorn doesn't have conds or branches yet so...
 let error-filter =
 	lambda (Tt : prim-type, Tf : prim-type, ok : prim-bool, val-or-err : prim-if(ok, Tt, Tf))
 		let inner =
@@ -379,93 +527,86 @@ let error-filter =
 
 
 
-# FIXME: this should be in terms.lua probably
-let prim-expression-args = new-prim-type("expression-args")
-let expression-args-new = intrinsic "return alicorn_expressions.ExpressionArgs.new" :
-	prim-func-type (goal : prim-goal) (env : prim-environment) -> (args : prim-expression-args)
-# lol look how horrible tuple types are
-# FIXME: currently assuming block returns always inferrable
-# this is true now, but a task is out to fix this in lua
-# when that happens this should be fixed here too
-let block-reducer-result2-type =
-	prim-tuple-type prim-type
-		tuple-def-elem prim-type
-			tuple-def-elem prim-type
-				tuple-def-empty prim-type
-				lambda (())
-					prim-inferrable-term
-			lambda ((_ : prim-inferrable-term))
-				prim-environment
-let block-match-result-type =
-	prim-tuple-type prim-type
-		tuple-def-elem prim-type
-			tuple-def-elem prim-type
-				tuple-def-elem prim-type
-					tuple-def-empty prim-type
-					lambda (())
-						prim-bool
-				lambda ((success : prim-bool))
-					prim-if(success, prim-inferrable-term, prim-lua-error)
-			lambda (success : prim-bool, _ : prim-if(success, prim-inferrable-term, prim-lua-error))
-				# hacky way to do variable-length prim tuples
-				prim-if(success, prim-environment, prim-unit)
-let operative-result-defn =
-	tuple-def-elem prim-type
-		tuple-def-elem prim-type
-			tuple-def-empty prim-type
-			lambda (())
-				prim-inferrable-term
-		lambda ((_ : prim-inferrable-term))
-			prim-environment
-let block-reducer = intrinsic "return alicorn_expressions.block" :
-	prim-reducer(prim-expression-args, block-reducer-result2-type, prim-lua-error)
-
 # let's make the `do` operative!
-let do-impl-type = forall (syn : prim-syntax) (env : prim-environment) (ud : prim-unit) (goal : prim-goal) -> (term : prim-inferrable-term) (env : prim-environment)
+# finally
+
+let do-impl-type = operative-handler-type(prim-unit)
+
 let do-impl =
 	lambda (syn : prim-syntax, env : prim-environment, ud : prim-unit, goal : prim-goal)
 		let userdata = prim-unit
-		let (args) = expression-args-new(goal, env)
-		# these lua functions are used in a very polymorphic way
-		# for a few simplicity reasons, they are defined here instead of generically
-		let accept-handler = intrinsic "return metalanguage.accept_handler" :
-			prim-func-type (ud : userdata) (r2 : block-reducer-result2-type) -> r : block-match-result-type
-		let failure-handler = intrinsic "return metalanguage.failure_handler" :
-			prim-func-type (ud : userdata) (exception : prim-lua-error) -> r : block-match-result-type
-		let matcher = prim-matcher-reducible(prim-expression-args, block-reducer-result2-type, prim-lua-error, userdata, block-match-result-type, block-reducer, args, accept-handler)
-		let matcher-t = prim-matcher(userdata, block-match-result-type)
+
+		let storage-defn =
+			tuple-def-elem prim-type
+				tuple-def-empty prim-type
+				lambda (())
+					prim-expression-args
+		#let storage = prim-tuple-type(prim-type, storage-defn)
+		#let (args) = expression-args-new(goal, env)
+		#let s = prim-tuple-of(prim-type, storage-defn)(args)
+		let storage = prim-expression-args
+		let (s) = expression-args-new(goal, env)
+
+		let matcher-t = prim-matcher(userdata, block-match-result-type(goal))
+		let matcher =
+			prim-matcher-reducible
+				storage
+				block-reducer-result2-type(goal)
+				prim-lua-error
+				userdata
+				block-match-result-type(goal)
+				block-reducer(goal)
+				s
+				block-match-accept-handler(goal)
+
 		let matchers =
 			prim-array-set matcher-t
 				prim-array-new matcher-t
 				1
 				matcher
-		let (ok, term, env) = match-syntax(userdata, block-match-result-type, matchers, failure-handler, syn, ud)
-		let term = error-filter(prim-inferrable-term, prim-lua-error, ok, term)
+
+		let (ok, term, env) =
+			match-syntax
+				userdata
+				block-match-result-type(goal)
+				matchers
+				block-match-failure-handler(goal)
+				syn
+				ud
+
+		let term = error-filter(prim-term-of(goal), prim-lua-error, ok, term)
 		let env = error-filter(prim-environment, prim-unit, ok, env)
-		tuple-of(prim-type, operative-result-defn)(term, env)
 
-let operator-handler-type =
-	lambda (userdata : prim-type, result : prim-type)
-		forall (syn : prim-syntax) (env : prim-environment) (ud : userdata) (goal : prim-goal) -> (res : result) (env : prim-environment)
-let new-operative =
-	lambda (userdata : prim-type, result : prim-type, ud : userdata, handler : operator-handler-type(userdata, result))
-		let inner =
-			intrinsic
-				""""
-					local function new_operative(userdata, result, ud, handler)
-						return terms.value.operative_type(handler, userdata), terms.value.operative_value(ud)
-					end
-					return new_operative
-				:
-				prim-func-type (userdata_ : wrapped(prim-type)) (result_ : wrapped(prim-type)) (ud : wrapped(userdata)) (handler : wrapped(operator-handler-type(userdata, result))) -> (op-type : wrapped(prim-type)) (op : wrapped(unwrap(prim-type, op-type)))
-		inner(wrap(prim-type, userdata), wrap(prim-type, result), wrap(userdata, ud), wrap(operator-handler-type(userdata, result), handler))
+		let result-defn =
+			tuple-def-elem prim-type
+				tuple-def-elem prim-type
+					tuple-def-empty prim-type
+					lambda (())
+						prim-term-of(goal)
+				lambda ((_ : prim-term-of(goal)))
+					prim-environment
+		tuple-of(prim-type, result-defn)(term, env)
 
-let (do-type-wrap, do-wrap) = new-operative(prim-unit, prim-inferrable-term, prim-nil, do-impl)
-let do-type = unwrap(prim-type, do-type-wrap)
-let do = unwrap(do-type, do-wrap)
+let (do-type, do) = new-operative(prim-unit, prim-nil, do-impl)
 
 let x =
 	do
-		let foo = 5
-		foo + 2
+		let concat =
+			intrinsic
+				""""
+					local function concat(a, b, ...)
+						local n = select("#", ...)
+						if n > 0 then
+							return concat(a .. b, ...)
+						else
+							return a .. b
+						end
+					end
+					return concat
+				:
+				prim-func-type (a : prim-string) (b : prim-string) -> (c : prim-string)
+
+		let foo = "foo"
+		let (foobar) = concat(foo, "bar")
+		foobar
 x

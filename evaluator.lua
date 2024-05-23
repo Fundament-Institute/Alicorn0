@@ -241,6 +241,14 @@ local function substitute_inner(val, mappings, context_len)
 			return result
 		end
 
+		if nval:is_prim_if_stuck() then
+			local subject, consequent, alternate = nval:unwrap_prim_if_stuck()
+			subject = substitute_inner(value.neutral(subject), mappings, context_len)
+			consequent = substitute_inner(consequent, mappings, context_len)
+			alternate = substitute_inner(alternate, mappings, context_len)
+			return typed_term.prim_if(subject, consequent, alternate)
+		end
+
 		-- TODO: deconstruct nuetral value or something
 		print("nval", nval)
 		error("substitute_inner not implemented yet val:is_neutral")
@@ -443,6 +451,9 @@ end
 
 add_comparer(value.star(0).kind, value.star(0).kind, function(a, b)
 	if a.level > b.level then
+		print("star-comparer error:")
+		print("a:", a.level)
+		print("b:", b.level)
 		return false, "a.level > b.level"
 	end
 	return true
@@ -1591,12 +1602,28 @@ function evaluate(typed_term, runtime_context)
 			end
 		elseif subject_value:is_prim_tuple_value() then
 			local subject_elements = subject_value:unwrap_prim_tuple_value()
-			if #subject_elements ~= length then
+			local real_length = #subject_elements
+			if real_length ~= length then
+				print("evaluating typed tuple_elim error")
+				print("got, expected:")
 				print(#subject_elements, length)
-				error("evaluate: mismatch in tuple length from typechecking and evaluation")
+				print("names:")
+				print(names:pretty_print())
+				print("subject:")
+				print(subject:pretty_print(runtime_context))
+				print("subject value:")
+				print(subject_value:pretty_print(runtime_context))
+				print("body:")
+				print(body:pretty_print(runtime_context))
+				print("error commented out to allow for variable-length prim tuples via the prim-unit hack")
+				print("if you're having issues check this!!!")
+				--error("evaluate: mismatch in tuple length from typechecking and evaluation")
 			end
-			for i = 1, length do
+			for i = 1, real_length do
 				inner_context = inner_context:append(value.prim(subject_elements[i]))
+			end
+			for i = real_length + 1, length do
+				inner_context = inner_context:append(value.prim(nil))
 			end
 		elseif subject_value:is_neutral() then
 			for i = 1, length do
@@ -1773,6 +1800,7 @@ function evaluate(typed_term, runtime_context)
 		local subject, consequent, alternate = typed_term:unwrap_prim_if()
 		local sval = evaluate(subject, runtime_context)
 		-- TODO TODO TODO TODO TODO TODO TODO TODO
+		print("TODO TODO TODO TODO TODO hit in evaluator.lua")
 		-- replace runtime context in each case to replace terms equal to subject with true/false
 		local cval = evaluate(consequent, runtime_context)
 		local aval = evaluate(alternate, runtime_context)
