@@ -357,7 +357,9 @@ local function let_helper(pp, name, expr, context)
 	pp:unit(" = ")
 	pp:unit(pp:_resetcolor())
 
+	pp:_indent()
 	pp:any(expr, context)
+	pp:_dedent()
 
 	context = context:append(name)
 
