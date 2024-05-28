@@ -6,7 +6,8 @@ let universe = type_(9)
 
 
 
-# types that need just a little convincing to exist
+# types defined in lua that need just a little convincing to exist
+# others are filled in below new-prim-type and new-prim-type-family
 
 let prim-bool-wrap            = intrinsic "return terms.value.prim_bool_type"      : wrapped(prim-type)
 let prim-string-wrap          = intrinsic "return terms.value.prim_string_type"    : wrapped(prim-type)
@@ -58,8 +59,10 @@ let prim-if = unwrap(prim-if-type, prim-if-wrap)
 
 
 
-# explicit tuple types (horrible to use)
+# explicit tuple types
 
+# these are the building blocks
+# horrible to use by themselves
 let tuple-def-type-inner = intrinsic "return terms.value.tuple_defn_type" :
 	prim-func-type (U : wrapped(universe)) -> (T : wrapped(prim-type))
 let tuple-def-type =
@@ -123,6 +126,96 @@ let prim-tuple-of =
 	lambda (U : universe, defn : tuple-def-type(U))
 		intrinsic "return function(x) return x end" :
 			prim-func-type t : prim-tuple-type(U, defn) -> t : prim-tuple-type(U, defn)
+
+# tools that make simple tuple defs slightly easier to write and manipulate
+let tuple-def-singleton =
+	lambda (U : universe, T : U)
+		tuple-def-elem U
+			tuple-def-empty U
+			lambda (())
+				T
+let tuple-def-concat =
+	lambda (U : universe, head : tuple-def-type(U), tail : tuple-def-type(U))
+		# woah huge intrinsic
+		let inner =
+			intrinsic
+				""""
+					local typed = terms.typed_term
+					local typed_array = terms_gen.declare_array(typed)
+					local value_array = terms_gen.declare_array(terms.value)
+					local string_array = terms_gen.declare_array(terms_gen.builtin_string)
+					local function traverse(defn, len, elems)
+						len = len or 0
+						elems = elems or {}
+						local constructor, arg = defn:unwrap_enum_value()
+						if constructor == "empty" then
+							return len, elems
+						elseif constructor == "cons" then
+							local elements = arg:unwrap_tuple_value()
+							local next_defn = elements[1]
+							len = len + 1
+							elems[len] = elements[2]
+							return traverse(next_defn, len, elems)
+						else
+							error("tuple-def-concat: unknown tuple defn constructor")
+						end
+					end
+					-- defn is head + (gradually) parts of tail
+					-- elem expects only parts of tail, need to wrap to handle head
+					-- head_n and tail_n are the lengths of the head and tail component of defn
+					local function tuple_def_elem(defn, elem, head_n, head_names, tail_n, tail_names)
+						-- in theory the only placeholder name will be in reference to the last
+						-- element of head, which is always lost (and sometimes not even asked for)
+						local names = string_array()
+						for _, name in head_names:ipairs() do
+							names:append(name)
+						end
+						names:append("#_")
+						for _, name in tail_names:ipairs() do
+							names:append(name)
+						end
+						-- convert to just tuple of tail
+						local tail_args = typed_array()
+						for i = 1, tail_n do
+							-- 1 for closure argument (passed to tuple_elim)
+							-- head_n for head
+							tail_args:append(typed.bound_variable(1 + head_n + i))
+						end
+						local body = typed.tuple_elim(
+							names,
+							typed.bound_variable(1),
+							head_n + tail_n,
+							typed.application(typed.literal(elem), typed.tuple_cons(tail_args))
+						)
+						local elem_wrap = terms.value.closure("#tuple-def-concat", body, terms.runtime_context())
+						return terms.value.enum_value("cons", terms.value.tuple_value(value_array(defn, elem_wrap)))
+					end
+					local function tuple_def_concat(head, tail)
+						local head_n, head_elems = traverse(head)
+						local tail_n, tail_elems = traverse(tail)
+						local head_last = head_elems[1]
+						local _, head_code, _ = head_last:unwrap_closure()
+						local head_names, _, _, _ = head_code:unwrap_tuple_elim()
+						local defn = head
+						for i = tail_n, 1, -1 do
+							local tail_n_now = tail_n - i
+							local elem = tail_elems[i]
+							local _, tail_code, _ = elem:unwrap_closure()
+							local tail_names, _, _, _ = tail_code:unwrap_tuple_elim()
+							defn = tuple_def_elem(defn, elem, head_n, head_names, tail_n_now, tail_names)
+						end
+						return defn
+					end
+					return tuple_def_concat
+				:
+				prim-func-type
+					head : wrapped(tuple-def-type(U))
+					tail : wrapped(tuple-def-type(U))
+					->
+					cat : wrapped(tuple-def-type(U))
+		let (cat) = inner(wrap(tuple-def-type(U), head), wrap(tuple-def-type(U), tail))
+		unwrap(tuple-def-type(U), cat)
+# TODO: tuple-concat
 
 
 
@@ -195,7 +288,6 @@ let prim-nil = intrinsic "return nil" : prim-unit
 
 let prim-literal = new-prim-type("literal")
 
-# FIXME: this should be in terms.lua probably
 let prim-expression-args = new-prim-type("expression-args")
 let expression-args-new = intrinsic "return alicorn_expressions.ExpressionArgs.new" :
 	prim-func-type (goal : prim-goal) (env : prim-environment) -> (args : prim-expression-args)
@@ -205,9 +297,6 @@ let prim-array-type = new-prim-type-family "array" 1
 
 let prim-matcher = new-prim-type-family "matcher" 2
 	forall (userdata : prim-type) (result : tuple-def-type(prim-type)) -> T : prim-type
-
-let prim-reducer = new-prim-type-family "reducer" 3
-	forall (storage : tuple-def-type(prim-type)) (result : tuple-def-type(prim-type)) (error : prim-type) -> T : prim-type
 
 
 
@@ -273,10 +362,6 @@ let prim-array-get =
 
 # primitive and reducible matchers, the building blocks of syntax matching
 # essentially a lot of busywork making trivial intrinsics and giving them proper types
-# notes: reducers (in lua) must return a bool to decide whether the match succeeded or failed
-# thus adding this bool to the alicorn prim-reducer type is just noise
-# handlers needn't, but may, for example to let the match caller know whether the syntax was accepted or not
-# thus it's useful to represent this in the types in alicorn
 
 let nil-handler-type =
 	lambda (userdata : prim-type, result : tuple-def-type(prim-type))
@@ -318,24 +403,38 @@ let prim-matcher-is-value =
 		let (m) = inner(accept-handler)
 		m
 
-# the way result2 is put in the prim-func-type here is actually completely wrong
-# we want the elements of result2 to be individual parameters of the handler
-# but it's really hard to do this type properly
-# and it's all for type-checking intrinsics so hopefully it doesn't matter
 let reducible-handler-type =
 	lambda (userdata : prim-type, result2 : tuple-def-type(prim-type), result : tuple-def-type(prim-type))
+		# prepend userdata to result2
+		#let params = tuple-def-concat(prim-type, tuple-def-singleton(prim-type, userdata), result2)
+		#prim-func-type p : prim-tuple-type(prim-type, params) -> r : prim-tuple-type(prim-type, result)
+		# above is commented out due to alicorn bug, workaround follows
+		# the way result2 is put in the following prim-func-type is completely wrong
+		# we want the elements of result2 to be individual parameters of the handler
 		prim-func-type (ud : userdata) (r2 : prim-tuple-type(prim-type, result2)) -> r : prim-tuple-type(prim-type, result)
+let reducer-type =
+	lambda (userdata : prim-type, storage : tuple-def-type(prim-type), result2 : tuple-def-type(prim-type), result : tuple-def-type(prim-type))
+		let accept-handler-type = reducible-handler-type(userdata, result2, result)
+		# prepend accept-handler-type to storage
+		#let params = tuple-def-concat(prim-type, tuple-def-singleton(prim-type, accept-handler-type), storage)
+		#prim-func-type p : prim-tuple-type(prim-type, params) -> (m : prim-matcher(userdata, result))
+		# above is commented out for the same reason and with the same issue as reducible-handler-type
+		prim-func-type
+			accept-handler : accept-handler-type
+			s : prim-tuple-type(prim-type, storage)
+			->
+			m : prim-matcher(userdata, result)
 let prim-matcher-reducible =
 	lambda (
 		userdata       : prim-type,
-		error          : prim-type,
 		storage        : tuple-def-type(prim-type),
 		result2        : tuple-def-type(prim-type),
 		result         : tuple-def-type(prim-type),
-		red            : prim-reducer(storage, result2, error),
+		red            : reducer-type(userdata, storage, result2, result),
 		s              : prim-tuple-type(prim-type, storage),
 		accept-handler : reducible-handler-type(userdata, result2, result))
 
+		# TODO: (after impl tuple-concat) fix this mess
 		let inner =
 			intrinsic
 				""""
@@ -346,7 +445,7 @@ let prim-matcher-reducible =
 					return reducible
 				:
 				prim-func-type
-					red            : prim-reducer(storage, result2, error)
+					red            : reducer-type(userdata, storage, result2, result)
 					s              : wrapped(prim-tuple-type(prim-type, storage))
 					accept-handler : reducible-handler-type(userdata, result2, result)
 					->
@@ -406,6 +505,13 @@ let operative-handler-type =
 			term : prim-term-of(goal)
 			env : prim-environment
 
+let operative-result-defn =
+	lambda ((goal : prim-goal))
+		# read as: (_ : prim-term-of(goal), _ : prim-environment)
+		tuple-def-concat prim-type
+			tuple-def-singleton(prim-type, prim-term-of(goal))
+			tuple-def-singleton(prim-type, prim-environment)
+
 let new-operative =
 	lambda (userdata : prim-type, ud : userdata, handler : operative-handler-type(userdata))
 		let inner =
@@ -449,31 +555,11 @@ let new-operative =
 
 
 # to start, we'll pull a reducer from lua
-
-let block-reducer-storage-defn =
-	# read as: (prim-expression-args)
-	tuple-def-elem prim-type
-		tuple-def-empty prim-type
-		lambda (())
-			prim-expression-args
-
-let block-reducer-result2-defn =
-	lambda ((goal : prim-goal))
-		# read as: (_ : prim-term-of(goal), _ : prim-environment)
-		tuple-def-elem prim-type
-			tuple-def-elem prim-type
-				tuple-def-empty prim-type
-				lambda (())
-					prim-term-of(goal)
-			lambda ((_ : prim-term-of(goal)))
-				prim-environment
-
-let block-reducer =
-	lambda ((goal : prim-goal))
-		intrinsic "return alicorn_expressions.block" :
-			prim-reducer(block-reducer-storage-defn, block-reducer-result2-defn(goal), prim-lua-error)
-
 # supposing a particular handler configuration
+
+let block-reducer-storage-defn = tuple-def-singleton(prim-type, prim-expression-args)
+
+let block-reducer-result2-defn = operative-result-defn # incidentally the same
 
 let block-match-result-defn =
 	lambda ((goal : prim-goal))
@@ -481,8 +567,6 @@ let block-match-result-defn =
 		# or, more logically: (ok : prim-bool, ...) where:
 		# - ok == true:  `...` is prim-term-of(goal), prim-environment
 		# - ok == false: `...` is prim-lua-error
-		# FIXME: similar caveat to block-reducer-result2-defn
-		# block reducer may handle checkable in the future
 		tuple-def-elem prim-type
 			tuple-def-elem prim-type
 				tuple-def-elem prim-type
@@ -495,16 +579,21 @@ let block-match-result-defn =
 				# hacky way to do variable-length prim tuples
 				prim-if(ok, prim-environment, prim-unit)
 
+let block-reducer =
+	lambda ((goal : prim-goal))
+		intrinsic "return alicorn_expressions.block" :
+			reducer-type(prim-unit, block-reducer-storage-defn, block-reducer-result2-defn(goal), block-match-result-defn(goal))
+
 # these handlers actually allow (and drop) anything in the userdata parameter
 # to keep things simple they just take unit
 let block-match-accept-handler =
 	lambda ((goal : prim-goal))
 		intrinsic "return metalanguage.accept_handler" :
-			prim-func-type (ud : prim-unit) (r2 : prim-tuple-type(prim-type, block-reducer-result2-defn(goal))) -> r : prim-tuple-type(prim-type, block-match-result-defn(goal))
+			reducible-handler-type(prim-unit, block-reducer-result2-defn(goal), block-match-result-defn(goal))
 let block-match-failure-handler =
 	lambda ((goal : prim-goal))
 		intrinsic "return metalanguage.failure_handler" :
-			prim-func-type (ud : prim-unit) (exception : prim-lua-error) -> r : prim-tuple-type(prim-type, block-match-result-defn(goal))
+			failure-handler-type(prim-unit, block-match-result-defn(goal))
 
 
 
@@ -545,7 +634,6 @@ let do-impl =
 		let matcher =
 			prim-matcher-reducible
 				prim-unit
-				prim-lua-error
 				block-reducer-storage-defn
 				block-reducer-result2-defn(goal)
 				block-match-result-defn(goal)
@@ -571,15 +659,7 @@ let do-impl =
 		let term = error-filter(prim-term-of(goal), prim-lua-error, ok, term)
 		let env = error-filter(prim-environment, prim-unit, ok, env)
 
-		let result-defn =
-			tuple-def-elem prim-type
-				tuple-def-elem prim-type
-					tuple-def-empty prim-type
-					lambda (())
-						prim-term-of(goal)
-				lambda ((_ : prim-term-of(goal)))
-					prim-environment
-		tuple-of(prim-type, result-defn)(term, env)
+		tuple-of(prim-type, operative-result-defn(goal))(term, env)
 
 let (do-type, do) = new-operative(prim-unit, prim-nil, do-impl)
 
@@ -596,6 +676,7 @@ let concat =
 			end
 			return concat
 		:
+		# TODO: varargs?
 		prim-func-type (a : prim-string) (b : prim-string) -> (c : prim-string)
 
 let foo = "baz"
@@ -606,3 +687,26 @@ let x =
 		foobar
 let (foobarbaz) = concat(x, foo)
 foobarbaz
+
+let prim-true  = intrinsic "return true"  : prim-bool
+let prim-false = intrinsic "return false" : prim-bool
+let tupletest-a =
+	tuple-def-elem prim-type
+		tuple-def-elem prim-type
+			tuple-def-elem prim-type
+				tuple-def-empty prim-type
+				lambda (())
+					prim-bool
+			lambda ((_ : prim-bool))
+				prim-string
+		lambda (_ : prim-bool, _ : prim-string)
+			prim-string
+let tupletest-b =
+	tuple-def-concat prim-type
+		tuple-def-concat prim-type
+			tuple-def-singleton prim-type prim-bool
+			tuple-def-singleton prim-type prim-string
+		tuple-def-singleton prim-type prim-string
+let tupletype-a = tuple-type(prim-type, tupletest-a)
+let tupletype-b = tuple-type(prim-type, tupletest-b)
+tuple-of(prim-type, tupletest-b)(prim-true, "awa!", "foobar!")
