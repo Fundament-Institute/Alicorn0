@@ -2515,7 +2515,7 @@ local empty = value.enum_value("empty", tup_val())
 local unit_type = value.tuple_type(empty)
 local unit_val = tup_val()
 
-for _, deriver in ipairs { derivers.as, derivers.eq } do
+for _, deriver in ipairs { derivers.as, derivers.eq, derivers.diff } do
 	checkable_term:derive(deriver)
 	inferrable_term:derive(deriver)
 	typed_term:derive(deriver)

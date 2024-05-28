@@ -491,6 +491,8 @@ function fitsinto(a, b)
 		if a == b then
 			return true
 		end
+		print("fitsinto neutral comparison error")
+		a:diff(b)
 		return false, "both values are neutral, but they aren't equal: " .. tostring(a) .. " ~= " .. tostring(b)
 	end
 

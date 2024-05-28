@@ -393,6 +393,46 @@ local array_methods = {
 		end
 		return string.format("[%s]", table.concat(parts, ", "))
 	end,
+	diff = function(self, other)
+		print("diffing array...")
+		if #self ~= #other then
+			print("unequal lengths!")
+			print(#self)
+			print(#other)
+			print("stopping diff")
+			return
+		end
+		local n = 0
+		local diff_elems = {}
+		for i = 1, #self do
+			if self[i] ~= other[i] then
+				n = n + 1
+				diff_elems[n] = i
+			end
+		end
+		if n == 0 then
+			print("no difference")
+			print("stopping diff")
+			return
+		elseif n == 1 then
+			local d = diff_elems[1]
+			print("difference in element: " .. tostring(d))
+			if self[d].diff then
+				print("descending...")
+				self[d]:diff(other[d])
+			else
+				print("stopping diff (missing diff method)")
+			end
+			return
+		else
+			print("difference in multiple elements:")
+			for i = 1, n do
+				print(diff_elems[i])
+			end
+			print("stopping diff")
+			return
+		end
+	end,
 }
 
 local function gen_array_fns(value_type)
