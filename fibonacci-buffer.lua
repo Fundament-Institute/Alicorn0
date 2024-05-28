@@ -43,7 +43,7 @@ function FibonacciBuffer:append(value)
 		merged_partition = {}
 		local merged_length = 0
 		for i = merge_from, n_partitions do
-			local partition_length = #self[i]
+			local partition_length = self[i].n
 			table.move(self[i], 1, partition_length, merged_length + 1, merged_partition)
 			merged_length = merged_length + partition_length
 		end
