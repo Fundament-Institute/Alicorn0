@@ -242,13 +242,28 @@ let new-prim-type =
 		let (T) = new-prim-type-inner(name)
 		unwrap(prim-type, T)
 
-# TODO: make nparams not exist by deriving it from the signature
 let new-prim-type-family-inner =
 	intrinsic
 		""""
 			local typed_array = terms_gen.declare_array(terms.typed_term)
 			local string_array = terms_gen.declare_array(terms_gen.builtin_string)
-			local function new_prim_type_family(name, nparams, sig)
+			local function length(defn, len)
+				len = len or 0
+				local constructor, arg = defn:unwrap_enum_value()
+				if constructor == "empty" then
+					return len
+				elseif constructor == "cons" then
+					local elements = arg:unwrap_tuple_value()
+					local next_defn = elements[1]
+					return length(next_defn, len + 1)
+				else
+					error("tuple-def-concat: unknown tuple defn constructor")
+				end
+			end
+			local function new_prim_type_family(name, sig)
+				local param_type, _, _, _ = sig:unwrap_pi()
+				local param_decls = param_type:unwrap_tuple_type()
+				local nparams = length(param_decls)
 				local unique_id = { name = name }
 				local params = typed_array()
 				local param_names = string_array()
@@ -271,13 +286,12 @@ let new-prim-type-family-inner =
 		:
 		prim-func-type
 			name      : prim-string
-			nparams   : prim-number
 			signature : wrapped(type_(1))
 			->
 			family    : wrapped(unwrap(type_(1), signature))
 let new-prim-type-family =
-	lambda (name : prim-string, nparams : prim-number, signature : type_(1))
-		let (family) = new-prim-type-family-inner(name, nparams, wrap(type_(1), signature))
+	lambda (name : prim-string, signature : type_(1))
+		let (family) = new-prim-type-family-inner(name, wrap(type_(1), signature))
 		unwrap(signature, family)
 
 
@@ -292,10 +306,32 @@ let prim-expression-args = new-prim-type("expression-args")
 let expression-args-new = intrinsic "return alicorn_expressions.ExpressionArgs.new" :
 	prim-func-type (goal : prim-goal) (env : prim-environment) -> (args : prim-expression-args)
 
-let prim-array-type = new-prim-type-family "array" 1
+let prim-shadow-environment = new-prim-type("shadow-environment")
+let enter-block =
+	intrinsic
+		""""
+			-- wish environment.enter_block was accessible from internals
+			local function enter_block(env)
+				return env:enter_block()
+			end
+			return enter_block
+		:
+		prim-func-type (env : prim-environment) -> (shadowed : prim-shadow-environment) (inner : prim-environment)
+let exit-block =
+	intrinsic
+		""""
+			-- wish environment.exit_block was accessible from internals
+			local function exit_block(inner, term, shadowed)
+				return inner:exit_block(term, shadowed)
+			end
+			return exit_block
+		:
+		prim-func-type (inner : prim-environment) (term : prim-inferrable-term) (shadowed : prim-shadow-environment) -> (env : prim-environment) (wrapped : prim-inferrable-term)
+
+let prim-array-type = new-prim-type-family "array"
 	forall (T : prim-type) -> T : prim-type
 
-let prim-matcher = new-prim-type-family "matcher" 2
+let prim-matcher = new-prim-type-family "matcher"
 	forall (userdata : prim-type) (result : tuple-def-type(prim-type)) -> T : prim-type
 
 
@@ -408,7 +444,7 @@ let reducible-handler-type =
 		# prepend userdata to result2
 		#let params = tuple-def-concat(prim-type, tuple-def-singleton(prim-type, userdata), result2)
 		#prim-func-type p : prim-tuple-type(prim-type, params) -> r : prim-tuple-type(prim-type, result)
-		# above is commented out due to alicorn bug, workaround follows
+		# FIXME: above is commented out due to alicorn bug, workaround follows
 		# the way result2 is put in the following prim-func-type is completely wrong
 		# we want the elements of result2 to be individual parameters of the handler
 		prim-func-type (ud : userdata) (r2 : prim-tuple-type(prim-type, result2)) -> r : prim-tuple-type(prim-type, result)
@@ -418,7 +454,7 @@ let reducer-type =
 		# prepend accept-handler-type to storage
 		#let params = tuple-def-concat(prim-type, tuple-def-singleton(prim-type, accept-handler-type), storage)
 		#prim-func-type p : prim-tuple-type(prim-type, params) -> (m : prim-matcher(userdata, result))
-		# above is commented out for the same reason and with the same issue as reducible-handler-type
+		# FIXME: above is commented out for the same reason and with the same issue as reducible-handler-type
 		prim-func-type
 			accept-handler : accept-handler-type
 			s : prim-tuple-type(prim-type, storage)
@@ -626,8 +662,9 @@ let do-impl-type = operative-handler-type(prim-unit)
 
 let do-impl =
 	lambda (syn : prim-syntax, env : prim-environment, ud : prim-unit, goal : prim-goal)
-		# FIXME: needs env enter block, exit block
-		let (args) = expression-args-new(goal, env)
+		let (shadowed, inner_env) = enter-block(env)
+
+		let (args) = expression-args-new(goal, inner_env)
 		let s = prim-tuple-of(prim-type, block-reducer-storage-defn)(args)
 
 		let matcher-t = prim-matcher(prim-unit, block-match-result-defn(goal))
@@ -647,7 +684,7 @@ let do-impl =
 				1
 				matcher
 
-		let (ok, term, env) =
+		let (ok, term, inner_env) =
 			match-syntax
 				prim-unit
 				block-match-result-defn(goal)
@@ -657,9 +694,11 @@ let do-impl =
 				ud
 
 		let term = error-filter(prim-term-of(goal), prim-lua-error, ok, term)
-		let env = error-filter(prim-environment, prim-unit, ok, env)
+		let inner_env = error-filter(prim-environment, prim-unit, ok, inner_env)
 
-		tuple-of(prim-type, operative-result-defn(goal))(term, env)
+		let (env, wrapped) = exit-block(inner_env, term, shadowed)
+
+		tuple-of(prim-type, operative-result-defn(goal))(wrapped, env)
 
 let (do-type, do) = new-operative(prim-unit, prim-nil, do-impl)
 
@@ -688,9 +727,9 @@ let x =
 let (foobarbaz) = concat(x, foo)
 foobarbaz
 
-let prim-true  = intrinsic "return true"  : prim-bool
-let prim-false = intrinsic "return false" : prim-bool
-let tupletest-a =
+#let prim-true  = intrinsic "return true"  : prim-bool
+#let prim-false = intrinsic "return false" : prim-bool
+#let tupletest-a =
 	tuple-def-elem prim-type
 		tuple-def-elem prim-type
 			tuple-def-elem prim-type
@@ -701,12 +740,12 @@ let tupletest-a =
 				prim-string
 		lambda (_ : prim-bool, _ : prim-string)
 			prim-string
-let tupletest-b =
+#let tupletest-b =
 	tuple-def-concat prim-type
 		tuple-def-concat prim-type
 			tuple-def-singleton prim-type prim-bool
 			tuple-def-singleton prim-type prim-string
 		tuple-def-singleton prim-type prim-string
-let tupletype-a = tuple-type(prim-type, tupletest-a)
-let tupletype-b = tuple-type(prim-type, tupletest-b)
-tuple-of(prim-type, tupletest-b)(prim-true, "awa!", "foobar!")
+#let tupletype-a = tuple-type(prim-type, tupletest-a)
+#let tupletype-b = tuple-type(prim-type, tupletest-b)
+#tuple-of(prim-type, tupletest-b)(prim-true, "awa!", "foobar!")
