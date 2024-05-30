@@ -388,6 +388,8 @@ local ascribed_segment = metalang.reducer(function(syntax, env, termination)
 
 		if not ok then
 			return ok, thread
+			-- if you want to see an error from the 'single' branch of syntax matching
+			-- comment above and uncomment below
 			--return single, name
 		end
 
@@ -399,7 +401,6 @@ local ascribed_segment = metalang.reducer(function(syntax, env, termination)
 	return true, { single = single, names = names, args = args, env = env }, tail
 end, "ascribed_segment")
 
--- bad horrible lazy use of copy-paste
 local prim_ascribed_segment = metalang.reducer(function(syntax, env, termination)
 	local single, tail, name, type_val, type_env
 
@@ -434,6 +435,8 @@ local prim_ascribed_segment = metalang.reducer(function(syntax, env, termination
 
 		if not ok then
 			return ok, thread
+			-- if you want to see an error from the 'single' branch of syntax matching
+			-- comment above and uncomment below
 			--return single, name
 		end
 
