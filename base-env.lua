@@ -443,7 +443,7 @@ local prim_ascribed_segment = metalang.reducer(function(syntax, env, termination
 	end
 
 	return true, { single = single, names = names, args = args, env = env }, tail
-end, "ascribed_segment")
+end, "prim_ascribed_segment")
 
 local function prim_func_type_pair_handler(env, a, b)
 	local ok, val, env =
