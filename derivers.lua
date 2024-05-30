@@ -346,6 +346,14 @@ local diff = {
 		local function diff_fn(left, right)
 			print("diffing...")
 			print("kind: " .. left.kind)
+			local rt = getmetatable(right)
+			if t ~= rt then
+				print("unequal types!")
+				print(t)
+				print(rt)
+				print("stopping diff")
+				return
+			end
 			if left.kind ~= right.kind then
 				print("unequal kinds!")
 				print(left.kind)
@@ -369,11 +377,12 @@ local diff = {
 				local d = diff_params[1]
 				print("difference in param: " .. d)
 				if left[d].diff then
-					left[d]:diff(right[d])
+					-- tail call
+					return left[d]:diff(right[d])
 				else
 					print("stopping diff (missing diff method)")
+					return
 				end
-				return
 			else
 				print("difference in multiple params:")
 				for i = 1, n do
@@ -415,11 +424,12 @@ local diff = {
 					local d = diff_params[1]
 					print("difference in param: " .. d)
 					if left[d].diff then
-						left[d]:diff(right[d])
+						-- tail call
+						return left[d]:diff(right[d])
 					else
 						print("stopping diff (missing diff method)")
+						return
 					end
-					return
 				else
 					print("difference in multiple params:")
 					for i = 1, n do
@@ -434,6 +444,14 @@ local diff = {
 		local function diff_fn(left, right)
 			print("diffing...")
 			print("kind: " .. left.kind)
+			local rt = getmetatable(right)
+			if t ~= rt then
+				print("unequal types!")
+				print(t)
+				print(rt)
+				print("stopping diff")
+				return
+			end
 			if left.kind ~= right.kind then
 				print("unequal kinds!")
 				print(left.kind)

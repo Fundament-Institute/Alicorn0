@@ -363,10 +363,10 @@ local array_methods = {
 		self[self.n + 1] = val
 	end,
 	eq = function(self, other)
-		if #self ~= #other then
+		if self:len() ~= other:len() then
 			return false
 		end
-		for i = 1, #self do
+		for i = 1, self:len() do
 			if self[i] ~= other[i] then
 				return false
 			end
@@ -375,7 +375,7 @@ local array_methods = {
 	end,
 	copy = function(self, first, last)
 		local first = first or 1
-		local last = last or #self
+		local last = last or self:len()
 		local mt = getmetatable(self)
 		local new = mt()
 		for i = first, last do
@@ -395,16 +395,26 @@ local array_methods = {
 	end,
 	diff = function(self, other)
 		print("diffing array...")
-		if #self ~= #other then
+		local st = getmetatable(self)
+		local ot = getmetatable(other)
+		print("value_type: " .. tostring(st.value_type))
+		if st ~= ot then
+			print("unequal types!")
+			print(st)
+			print(ot)
+			print("stopping diff")
+			return
+		end
+		if self:len() ~= other:len() then
 			print("unequal lengths!")
-			print(#self)
-			print(#other)
+			print(self:len())
+			print(other:len())
 			print("stopping diff")
 			return
 		end
 		local n = 0
 		local diff_elems = {}
-		for i = 1, #self do
+		for i = 1, self:len() do
 			if self[i] ~= other[i] then
 				n = n + 1
 				diff_elems[n] = i
@@ -418,12 +428,12 @@ local array_methods = {
 			local d = diff_elems[1]
 			print("difference in element: " .. tostring(d))
 			if self[d].diff then
-				print("descending...")
-				self[d]:diff(other[d])
+				-- tail call
+				return self[d]:diff(other[d])
 			else
 				print("stopping diff (missing diff method)")
+				return
 			end
-			return
 		else
 			print("difference in multiple elements:")
 			for i = 1, n do
