@@ -8,15 +8,42 @@ local exprs = require "./alicorn-expressions"
 local fs = require "fs"
 local path = require "path"
 
+local opts = process.argv[2]
+local print_src = false
+local print_ast = false
+local print_inferrable = false
+local print_typed = false
+if opts then
+	if string.find(opts, "S") then
+		print_src = true
+	end
+	if string.find(opts, "A") then
+		print_ast = true
+	end
+	if string.find(opts, "i") then
+		print_inferrable = true
+	end
+	if string.find(opts, "t") then
+		print_typed = true
+	end
+end
+
 local filename = path.resolve("testfile.alc")
 local src = fs.readFileSync(filename)
 print("read code")
-print(src)
+
+if print_src then
+	print(src)
+end
+
 print("parsing code")
 local code = format.read(src, filename)
-print("printing raw ast")
-print(format.lispy_print(code))
-print("end printing raw ast")
+
+if print_ast then
+	print("printing raw ast")
+	print(format.lispy_print(code))
+	print("end printing raw ast")
+end
 
 local env = base_env.create()
 
@@ -37,17 +64,21 @@ end
 local env, bound_expr = env:exit_block(expr, shadowed)
 
 print("got a term!")
-print("bound_expr: (inferrable term follows)")
-print(bound_expr:pretty_print(terms.typechecking_context()))
+if print_inferrable then
+	print("bound_expr: (inferrable term follows)")
+	print(bound_expr:pretty_print(terms.typechecking_context()))
+end
 
 print("Inferring")
 local type, usages, term = evaluator.infer(bound_expr, terms.typechecking_context())
 print("Inferred!")
-print("type: (value term follows)")
-print(type)
-print("usages:", usages)
-print("term: (typed term follows)")
-print(term:pretty_print(terms.runtime_context()))
+if print_typed then
+	print("type: (value term follows)")
+	print(type)
+	print("usages:", usages)
+	print("term: (typed term follows)")
+	print(term:pretty_print(terms.runtime_context()))
+end
 
 print("Evaluating")
 local result = evaluator.evaluate(term, terms.runtime_context())
