@@ -1802,7 +1802,7 @@ function evaluate(typed_term, runtime_context)
 		local subject, consequent, alternate = typed_term:unwrap_prim_if()
 		local sval = evaluate(subject, runtime_context)
 		-- TODO TODO TODO TODO TODO TODO TODO TODO
-		print("TODO TODO TODO TODO TODO hit in evaluator.lua")
+		print("TODO TODO TODO TODO TODO hit while evaluating prim_if")
 		-- replace runtime context in each case to replace terms equal to subject with true/false
 		local cval = evaluate(consequent, runtime_context)
 		local aval = evaluate(alternate, runtime_context)

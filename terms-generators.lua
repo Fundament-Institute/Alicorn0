@@ -114,6 +114,10 @@ local function gen_record(self, cons, kind, params_with_types)
 					print("value of parameter " .. v .. ": (follows)")
 					p(argi)
 					print("expected type of parameter " .. v .. " is :", params_types[i])
+					--for i = 2, 25 do
+					--	local d = debug.getinfo(i, "Sln")
+					--	print(string.format("%s %s %s: %s:%d", d.what, d.namewhat, d.name, d.source, d.currentline))
+					--end
 					error("wrong argument type passed to constructor " .. kind .. ", parameter '" .. v .. "'")
 				end
 				val[v] = argi

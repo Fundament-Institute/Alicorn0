@@ -257,7 +257,11 @@ local ascribed_name_with_tail = metalang.reducer(function(syntax, env, prev, nam
 	-- print(env.enter_block)
 	---@cast env Environment
 	local shadowed, env = env:enter_block()
-	env = env:bind_local(terms.binding.annotated_lambda("#prev", prev, syntax.anchor))
+	local anchor = syntax.anchor
+	if not anchor then
+		anchor = "bug in ascribed_name_with_tail"
+	end
+	env = env:bind_local(terms.binding.annotated_lambda("#prev", prev, anchor))
 	local ok, prev_binding = env:get("#prev")
 	if not ok then
 		error "#prev should always be bound, was just added"
