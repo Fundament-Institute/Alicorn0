@@ -462,23 +462,26 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	end
 
 	local ok, thread, single, args, names
+
 	ok, thread, syntax = syntax:match({
 		prim_ascribed_segment(metalang.accept_handler, env, metalang.symbol_exact(metalang.accept_handler, "->")),
 	}, metalang.failure_handler, nil)
 
 	if not ok then
-		return ok, thread
+		return false, thread
 	end
 
-	env = thread.env
 	single = thread.single
 	args = thread.args
 	names = thread.names
+	env = thread.env
 
 	--print("moving on to return type")
+
 	local shadowed, env = env:enter_block()
 
 	-- syntax.anchor can be nil so we fall back to the anchor for the start of this prim func type if needed
+	-- TODO: use correct name in lambda parameter instead of adding an extra let
 	env = env:bind_local(terms.binding.annotated_lambda("#prim-func-arguments", args, syntax.anchor or pft_anchor))
 	local ok, arg = env:get("#prim-func-arguments")
 	if single then
@@ -489,21 +492,22 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 
 	local results
 
-	ok, thread, tail = syntax:match({
+	ok, thread, syntax = syntax:match({
 		prim_ascribed_segment(metalang.accept_handler, env, metalang.isnil(metalang.accept_handler)),
 	}, metalang.failure_handler, nil)
 
 	if not ok then
-		return ok, thread
+		return false, thread
 	end
 
-	env = thread.env
 	single = thread.single
 	results = thread.args
 	names = thread.names
+	env = thread.env
 
 	local env, fn_res_term = env:exit_block(results, shadowed)
 	local fn_type_term = terms.inferrable_term.prim_function_type(args, fn_res_term)
+
 	--print("reached end of function type construction")
 	if not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl_reducer"
@@ -535,14 +539,13 @@ local function prim_func_type_impl(syntax, env)
 end
 
 local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
-	local usage_array = gen.declare_array(gen.builtin_number)
+	local pft_anchor = syntax.anchor
 
-	if not env.enter_block then
+	if not env or not env.enter_block then
 		error "env isn't an environment in forall_type_impl_reducer"
 	end
 
-	local single, args, names, thread
-	local ok = true
+	local ok, thread, single, args, names
 
 	ok, thread, syntax = syntax:match(
 		{ ascribed_segment(metalang.accept_handler, env, metalang.symbol_exact(metalang.accept_handler, "->")) },
@@ -553,14 +556,19 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 	if not ok then
 		return false, thread
 	end
-	single, args, names, env = thread.single, thread.args, thread.names, thread.env
+
+	single = thread.single
+	args = thread.args
+	names = thread.names
+	env = thread.env
 
 	--print("moving on to return type")
 
 	local shadowed, env = env:enter_block()
 
+	-- syntax.anchor can be nil so we fall back to the anchor for the start of this forall type if needed
 	-- TODO: use correct name in lambda parameter instead of adding an extra let
-	env = env:bind_local(terms.binding.annotated_lambda("#forall-arguments", args, syntax.anchor))
+	env = env:bind_local(terms.binding.annotated_lambda("#forall-arguments", args, syntax.anchor or pft_anchor))
 	local ok, arg = env:get("#forall-arguments")
 	if single then
 		env = env:bind_local(terms.binding.let(names, arg))
@@ -579,9 +587,14 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 	if not ok then
 		return false, thread
 	end
-	single, results, names, env = thread.single, thread.args, thread.names, thread.env
+
+	single = thread.single
+	results = thread.args
+	names = thread.names
+	env = thread.env
 
 	local env, fn_res_term = env:exit_block(results, shadowed)
+	local usage_array = gen.declare_array(gen.builtin_number)
 	local fn_type_term = terms.inferrable_term.pi(
 		args,
 		terms.checkable_term.inferrable(
@@ -603,7 +616,7 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 
 	--print("reached end of function type construction")
 	if not env.enter_block then
-		error "env isn't an environment at end in prim_func_type_impl_reducer"
+		error "env isn't an environment at end in forall_type_impl_reducer"
 	end
 	return true, fn_type_term, env
 end, "forall_type_impl")
@@ -621,10 +634,10 @@ local function forall_type_impl(syntax, env)
 	if not ok then
 		return ok, fn_type_term
 	end
-	--print("finished matching prim_func_type_impl and got")
+	--print("finished matching forall_type_impl and got")
 	--print(fn_type_term:pretty_print(env.typechecking_context))
 	if not env.enter_block then
-		error "env isn't an environment at end in prim_func_type_impl"
+		error "env isn't an environment at end in forall_type_impl"
 	end
 	return ok, fn_type_term, env
 	-- parse sequence of ascribed names, arrow, then sequence of ascribed names
