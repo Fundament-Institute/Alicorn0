@@ -215,9 +215,27 @@ function RuntimeContext:append(value)
 	local copy = { bindings = self.bindings:append(value) }
 	return setmetatable(copy, runtime_context_mt)
 end
+function RuntimeContext:eq(other)
+	local omt = getmetatable(other)
+	if omt ~= runtime_context_mt then
+		return false
+	end
+	local sb, ob = self.bindings, other.bindings
+	local n, on = sb:len(), ob:len()
+	if n ~= on then
+		return false
+	end
+	for i = 1, n do
+		if sb:get(i) ~= ob:get(i) then
+			return false
+		end
+	end
+	return true
+end
 
 runtime_context_mt = {
 	__index = RuntimeContext,
+	__eq = RuntimeContext.eq,
 }
 
 local function runtime_context()

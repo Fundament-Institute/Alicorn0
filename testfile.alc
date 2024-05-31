@@ -444,22 +444,12 @@ let reducible-handler-type =
 		# prepend userdata to result2
 		let params = tuple-def-concat(prim-type, tuple-def-singleton(prim-type, userdata), result2)
 		prim-func-type p : prim-tuple-type(prim-type, params) -> r : prim-tuple-type(prim-type, result)
-		# FIXME: above is commented out due to alicorn bug, workaround follows
-		# the way result2 is put in the following prim-func-type is completely wrong
-		# we want the elements of result2 to be individual parameters of the handler
-		#prim-func-type (ud : userdata) (r2 : prim-tuple-type(prim-type, result2)) -> r : prim-tuple-type(prim-type, result)
 let reducer-type =
 	lambda (userdata : prim-type, storage : tuple-def-type(prim-type), result2 : tuple-def-type(prim-type), result : tuple-def-type(prim-type))
 		let accept-handler-type = reducible-handler-type(userdata, result2, result)
 		# prepend accept-handler-type to storage
-		#let params = tuple-def-concat(prim-type, tuple-def-singleton(prim-type, accept-handler-type), storage)
-		#prim-func-type p : prim-tuple-type(prim-type, params) -> (m : prim-matcher(userdata, result))
-		# FIXME: above is commented out for the same reason and with the same issue as reducible-handler-type
-		prim-func-type
-			accept-handler : accept-handler-type
-			s : prim-tuple-type(prim-type, storage)
-			->
-			m : prim-matcher(userdata, result)
+		let params = tuple-def-concat(prim-type, tuple-def-singleton(prim-type, accept-handler-type), storage)
+		prim-func-type p : prim-tuple-type(prim-type, params) -> (m : prim-matcher(userdata, result))
 let prim-matcher-reducible =
 	lambda (
 		userdata       : prim-type,
