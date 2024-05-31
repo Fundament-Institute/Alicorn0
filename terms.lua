@@ -2520,6 +2520,7 @@ local prim_environment_type = value.prim_user_defined_type({ name = "environment
 local prim_typed_term_type = value.prim_user_defined_type({ name = "typed_term" }, array(value)())
 local prim_goal_type = value.prim_user_defined_type({ name = "goal" }, array(value)())
 local prim_inferrable_term_type = value.prim_user_defined_type({ name = "inferrable_term" }, array(value)())
+local prim_checkable_term_type = value.prim_user_defined_type({ name = "checkable_term" }, array(value)())
 -- return ok, err
 local prim_lua_error_type = value.prim_user_defined_type({ name = "lua_error_type" }, array(value)())
 
@@ -2594,6 +2595,7 @@ local terms = {
 	prim_typed_term_type = prim_typed_term_type,
 	prim_goal_type = prim_goal_type,
 	prim_inferrable_term_type = prim_inferrable_term_type,
+	prim_checkable_term_type = prim_checkable_term_type,
 	prim_lua_error_type = prim_lua_error_type,
 	unit_val = unit_val,
 	unit_type = unit_type,
