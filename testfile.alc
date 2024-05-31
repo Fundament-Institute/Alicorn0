@@ -124,7 +124,7 @@ let tuple-of =
 			t
 let prim-tuple-of =
 	lambda (U : universe, defn : tuple-def-type(U))
-		intrinsic "return function(x) return x end" :
+		intrinsic "return function(...) return ... end" :
 			prim-func-type t : prim-tuple-type(U, defn) -> t : prim-tuple-type(U, defn)
 
 # tools that make simple tuple defs slightly easier to write and manipulate
@@ -215,7 +215,72 @@ let tuple-def-concat =
 					cat : wrapped(tuple-def-type(U))
 		let (cat) = inner(wrap(tuple-def-type(U), head), wrap(tuple-def-type(U), tail))
 		unwrap(tuple-def-type(U), cat)
-# TODO: tuple-concat
+let tuple-concat =
+	lambda (
+		U    : universe,
+		head : tuple-def-type(U),
+		tail : tuple-def-type(U),
+		hd   : tuple-type(U, head),
+		tl   : tuple-type(U, tail))
+
+		let inner =
+			intrinsic
+				""""
+					local value_array = terms_gen.declare_array(terms.value)
+					local function tuple_concat(head, tail)
+						local head_elements = head:unwrap_tuple_value()
+						local tail_elements = tail:unwrap_tuple_value()
+						local new_elements = value_array()
+						for _, e in head_elements:ipairs() do
+							new_elements:append(e)
+						end
+						for _, e in tail_elements:ipairs() do
+							new_elements:append(e)
+						end
+						return terms.value.tuple_value(new_elements)
+					end
+					return tuple_concat
+				:
+				prim-func-type
+					hd : wrapped(tuple-type(U, head))
+					tl : wrapped(tuple-type(U, tail))
+					->
+					cat : wrapped(tuple-type(U, tuple-def-concat(U, head, tail)))
+		let (cat) = inner(wrap(tuple-type(U, head), hd), wrap(tuple-type(U, tail), tl))
+		unwrap(tuple-type(U, tuple-def-concat(U, head, tail)), cat)
+let prim-tuple-concat =
+	lambda (
+		U    : universe,
+		head : tuple-def-type(U),
+		tail : tuple-def-type(U),
+		hd   : prim-tuple-type(U, head),
+		tl   : prim-tuple-type(U, tail))
+
+		let inner =
+			intrinsic
+				""""
+					local value_array = terms_gen.declare_array(terms_gen.any_lua_type)
+					local function prim_tuple_concat(head, tail)
+						local head_elements = head:unwrap_prim_tuple_value()
+						local tail_elements = tail:unwrap_prim_tuple_value()
+						local new_elements = value_array()
+						for _, e in head_elements:ipairs() do
+							new_elements:append(e)
+						end
+						for _, e in tail_elements:ipairs() do
+							new_elements:append(e)
+						end
+						return terms.value.prim_tuple_value(new_elements)
+					end
+					return prim_tuple_concat
+				:
+				prim-func-type
+					hd : wrapped(prim-tuple-type(U, head))
+					tl : wrapped(prim-tuple-type(U, tail))
+					->
+					cat : wrapped(prim-tuple-type(U, tuple-def-concat(U, head, tail)))
+		let (cat) = inner(wrap(prim-tuple-type(U, head), hd), wrap(prim-tuple-type(U, tail), tl))
+		unwrap(prim-tuple-type(U, tuple-def-concat(U, head, tail)), cat)
 
 
 
@@ -316,7 +381,11 @@ let enter-block =
 			end
 			return enter_block
 		:
-		prim-func-type (env : prim-environment) -> (shadowed : prim-shadow-environment) (inner : prim-environment)
+		prim-func-type
+			env : prim-environment
+			->
+			shadowed : prim-shadow-environment
+			inner : prim-environment
 let exit-block =
 	intrinsic
 		""""
@@ -326,7 +395,13 @@ let exit-block =
 			end
 			return exit_block
 		:
-		prim-func-type (inner : prim-environment) (term : prim-inferrable-term) (shadowed : prim-shadow-environment) -> (env : prim-environment) (wrapped : prim-inferrable-term)
+		prim-func-type
+			inner : prim-environment
+			term : prim-inferrable-term
+			shadowed : prim-shadow-environment
+			->
+			env : prim-environment
+			wrapped : prim-inferrable-term
 
 let prim-array-type = new-prim-type-family "array"
 	forall (T : prim-type) -> T : prim-type
@@ -442,13 +517,15 @@ let prim-matcher-is-value =
 let reducible-handler-type =
 	lambda (userdata : prim-type, result2 : tuple-def-type(prim-type), result : tuple-def-type(prim-type))
 		# prepend userdata to result2
-		let params = tuple-def-concat(prim-type, tuple-def-singleton(prim-type, userdata), result2)
+		let userdata-defn = tuple-def-singleton(prim-type, userdata)
+		let params = tuple-def-concat(prim-type, userdata-defn, result2)
 		prim-func-type p : prim-tuple-type(prim-type, params) -> r : prim-tuple-type(prim-type, result)
 let reducer-type =
 	lambda (userdata : prim-type, storage : tuple-def-type(prim-type), result2 : tuple-def-type(prim-type), result : tuple-def-type(prim-type))
 		let accept-handler-type = reducible-handler-type(userdata, result2, result)
 		# prepend accept-handler-type to storage
-		let params = tuple-def-concat(prim-type, tuple-def-singleton(prim-type, accept-handler-type), storage)
+		let accept-handler-defn = tuple-def-singleton(prim-type, accept-handler-type)
+		let params = tuple-def-concat(prim-type, accept-handler-defn, storage)
 		prim-func-type p : prim-tuple-type(prim-type, params) -> (m : prim-matcher(userdata, result))
 let prim-matcher-reducible =
 	lambda (
@@ -460,23 +537,16 @@ let prim-matcher-reducible =
 		s              : prim-tuple-type(prim-type, storage),
 		accept-handler : reducible-handler-type(userdata, result2, result))
 
-		# TODO: (after impl tuple-concat) fix this mess
-		let inner =
-			intrinsic
-				""""
-					local function reducible(red, s, accept_handler)
-						local elements = s:unwrap_prim_tuple_value()
-						return red(accept_handler, elements:unpack())
-					end
-					return reducible
-				:
-				prim-func-type
-					red            : reducer-type(userdata, storage, result2, result)
-					s              : wrapped(prim-tuple-type(prim-type, storage))
-					accept-handler : reducible-handler-type(userdata, result2, result)
-					->
-					m              : prim-matcher(userdata, result)
-		let (m) = inner(red, wrap(prim-tuple-type(prim-type, storage), s), accept-handler)
+		let accept-handler-type = reducible-handler-type(userdata, result2, result)
+		let accept-handler-defn = tuple-def-singleton(prim-type, accept-handler-type)
+		let red-param-defn = tuple-def-concat(prim-type, accept-handler-defn, storage)
+		let red-result-defn = tuple-def-singleton(prim-type, prim-matcher(userdata, result))
+
+		let accept-handler-tuple = prim-tuple-of(prim-type, accept-handler-defn)(accept-handler)
+		let red-param = prim-tuple-concat(prim-type, accept-handler-defn, storage, accept-handler-tuple, s)
+
+		# look ma, no intrinsics!
+		let (m) = apply(red, red-param)
 		m
 
 let failure-handler-type =
@@ -716,26 +786,3 @@ let x =
 		foobar
 let (foobarbaz) = concat(x, foo)
 foobarbaz
-
-#let prim-true  = intrinsic "return true"  : prim-bool
-#let prim-false = intrinsic "return false" : prim-bool
-#let tupletest-a =
-	tuple-def-elem prim-type
-		tuple-def-elem prim-type
-			tuple-def-elem prim-type
-				tuple-def-empty prim-type
-				lambda (())
-					prim-bool
-			lambda ((_ : prim-bool))
-				prim-string
-		lambda (_ : prim-bool, _ : prim-string)
-			prim-string
-#let tupletest-b =
-	tuple-def-concat prim-type
-		tuple-def-concat prim-type
-			tuple-def-singleton prim-type prim-bool
-			tuple-def-singleton prim-type prim-string
-		tuple-def-singleton prim-type prim-string
-#let tupletype-a = tuple-type(prim-type, tupletest-a)
-#let tupletype-b = tuple-type(prim-type, tupletest-b)
-#tuple-of(prim-type, tupletest-b)(prim-true, "awa!", "foobar!")

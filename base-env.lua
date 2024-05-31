@@ -724,7 +724,7 @@ local function apply_operative_impl(syntax, env)
 	if type_of_fn:is_pi() then
 		param_type, _, _, _ = type_of_fn:unwrap_pi()
 	elseif type_of_fn:is_prim_function_type() then
-		local param_type, _ = type_of_fn:unwrap_prim_function_type()
+		param_type, _ = type_of_fn:unwrap_prim_function_type()
 	else
 		error "unknown fn type for apply operative"
 	end
