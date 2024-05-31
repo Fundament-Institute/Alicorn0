@@ -400,18 +400,18 @@ add_comparer("value.pi", "value.pi", function(a, b)
 	local ok, err
 	ok, err = fitsinto(a.param_type, b.param_type)
 	if not ok then
-		return false, fitsinto_fail("param_type", err)
+		return false, fitsinto_fail("pi param_type", err)
 	end
 	local avis = a.param_info.visibility.visibility
 	local bvis = b.param_info.visibility.visibility
 	if avis ~= bvis and avis ~= terms.visibility.implicit then
-		return false, fitsinto_fail("param_info")
+		return false, fitsinto_fail("pi param_info")
 	end
 
 	local apurity = a.result_info.purity
 	local bpurity = b.result_info.purity
 	if apurity ~= bpurity then
-		return false, fitsinto_fail("result_info")
+		return false, fitsinto_fail("pi result_info")
 	end
 
 	local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
@@ -419,7 +419,7 @@ add_comparer("value.pi", "value.pi", function(a, b)
 	local b_res = apply_value(b.result_type, unique_placeholder)
 	ok, err = fitsinto(a_res, b_res)
 	if not ok then
-		return false, fitsinto_fail("result_type", err)
+		return false, fitsinto_fail("pi result_type", err)
 	end
 	return true
 end)
@@ -430,7 +430,7 @@ add_comparer("value.prim_function_type", "value.prim_function_type", function(a,
 	local ok, err
 	ok, err = fitsinto(a.param_type, b.param_type)
 	if not ok then
-		return false, fitsinto_fail("param_type", err)
+		return false, fitsinto_fail("prim-func-type param_type", err)
 	end
 
 	local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
@@ -438,7 +438,7 @@ add_comparer("value.prim_function_type", "value.prim_function_type", function(a,
 	local b_res = apply_value(b.result_type, unique_placeholder)
 	ok, err = fitsinto(a_res, b_res)
 	if not ok then
-		return false, fitsinto_fail("result_type", err)
+		return false, fitsinto_fail("prim-func-type result_type", err)
 	end
 	return true
 end)
@@ -522,7 +522,9 @@ function fitsinto(a, b)
 
 	local ok, err = comparer(tya, tyb)
 	if not ok then
-		print("comparer failure: " .. tostring(err))
+		-- the error will probably get reported elsewhere
+		-- uncomment for way-too-verbose errors
+		--print("comparer failure: " .. tostring(err))
 		return false, err
 	end
 	return true
@@ -676,7 +678,11 @@ local function check(
 			end
 			if not ok then
 				print "attempting to check if terms fit for checkable_term.inferrable"
-				print("checkable_term", checkable_term)
+				--for i = 2, 49 do
+				--	local d = debug.getinfo(i, "Sln")
+				--	print(string.format("%s %s %s: %s:%d", d.what, d.namewhat, d.name, d.source, d.currentline))
+				--end
+				print("checkable_term", checkable_term:pretty_print(typechecking_context))
 				print("inferred_type", inferred_type)
 				print("goal_type", goal_type)
 				print("typechecking_context", typechecking_context:format_names())
