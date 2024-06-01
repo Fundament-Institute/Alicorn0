@@ -481,7 +481,9 @@ function fitsinto_qless(tya, tyb)
 
 	local ok, err = comparer(tya, tyb)
 	if not ok then
-		print("comparer failure: " .. tostring(err))
+		-- the error will probably get reported elsewhere
+		-- uncomment for way-too-verbose errors
+		--print("comparer failure: " .. tostring(err))
 		return false, err
 	end
 	return true
