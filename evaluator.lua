@@ -313,7 +313,7 @@ local infer_tuple_type, infer_tuple_type_unwrapped
 local terms = require "./terms"
 local value = terms.value
 
-local fitsinto, fitsinto_qless
+local fitsinto
 -- indexed by kind x kind
 local fitsinto_comparers = {}
 
@@ -460,34 +460,10 @@ add_comparer(value.star(0).kind, value.star(0).kind, function(a, b)
 end)
 
 add_comparer("value.prim_wrapped_type", "value.prim_wrapped_type", function(a, b)
-	local ok, err = fitsinto_qless(a:unwrap_prim_wrapped_type(), b:unwrap_prim_wrapped_type())
+	local ok, err = fitsinto(a:unwrap_prim_wrapped_type(), b:unwrap_prim_wrapped_type())
 	return ok, err
 end)
 
-function fitsinto_qless(tya, tyb)
-	if tya == tyb then
-		return true
-	end -- temporary workaround for neutrals
-	if not fitsinto_comparers[tya.kind] then
-		error("fitsinto given value a which isn't a type or NYI " .. tya.kind)
-	elseif not fitsinto_comparers[tyb.kind] then
-		error("fitsinto given value b which isn't a type or NYI " .. tyb.kind)
-	end
-
-	local comparer = (fitsinto_comparers[tya.kind] or {})[tyb.kind]
-	if not comparer then
-		return false, "no comparer for " .. tya.kind .. " with " .. tyb.kind
-	end
-
-	local ok, err = comparer(tya, tyb)
-	if not ok then
-		-- the error will probably get reported elsewhere
-		-- uncomment for way-too-verbose errors
-		--print("comparer failure: " .. tostring(err))
-		return false, err
-	end
-	return true
-end
 function fitsinto(a, b)
 	if a:is_neutral() and b:is_neutral() then
 		if a == b then
