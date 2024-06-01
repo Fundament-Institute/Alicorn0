@@ -12,7 +12,7 @@ function typed:is_literal() end
 function typed:unwrap_literal() end
 ---@return boolean
 function typed:is_lambda() end
----@return typed
+---@return string, typed
 function typed:unwrap_lambda() end
 ---@return boolean
 function typed:is_pi() end
@@ -24,7 +24,7 @@ function typed:is_application() end
 function typed:unwrap_application() end
 ---@return boolean
 function typed:is_let() end
----@return typed, typed
+---@return string, typed, typed
 function typed:unwrap_let() end
 ---@return boolean
 function typed:is_level_type() end
@@ -52,7 +52,7 @@ function typed:is_tuple_cons() end
 function typed:unwrap_tuple_cons() end
 ---@return boolean
 function typed:is_tuple_elim() end
----@return typed, number, typed
+---@return any, typed, number, typed
 function typed:unwrap_tuple_elim() end
 ---@return boolean
 function typed:is_tuple_element_access() end
@@ -152,7 +152,7 @@ function typed:is_prim_user_defined_type() end
 function typed:unwrap_prim_user_defined_type() end
 ---@return boolean
 function typed:is_prim_if() end
----@return typed, typed
+---@return typed, typed, typed
 function typed:unwrap_prim_if() end
 ---@return boolean
 function typed:is_prim_intrinsic() end
@@ -161,10 +161,10 @@ function typed:unwrap_prim_intrinsic() end
 ---@class (exact) typedType:Type
 ---@field bound_variable fun(index:number): typed
 ---@field literal fun(literal_value:value): typed
----@field lambda fun(body:typed): typed
+---@field lambda fun(param_name:string, body:typed): typed
 ---@field pi fun(param_type:typed, param_info:typed, result_type:typed, result_info:typed): typed
 ---@field application fun(f:typed, arg:typed): typed
----@field let fun(expr:typed, body:typed): typed
+---@field let fun(name:string, expr:typed, body:typed): typed
 ---@field level_type typed
 ---@field level0 typed
 ---@field level_suc fun(previous_level:typed): typed
@@ -172,7 +172,7 @@ function typed:unwrap_prim_intrinsic() end
 ---@field star fun(level:number): typed
 ---@field prop fun(level:number): typed
 ---@field tuple_cons fun(elements:any): typed
----@field tuple_elim fun(subject:typed, length:number, body:typed): typed
+---@field tuple_elim fun(names:any, subject:typed, length:number, body:typed): typed
 ---@field tuple_element_access fun(subject:typed, index:number): typed
 ---@field tuple_type fun(definition:typed): typed
 ---@field record_cons fun(fields:any): typed
@@ -197,6 +197,6 @@ function typed:unwrap_prim_intrinsic() end
 ---@field prim_unstrict_wrap fun(content:typed): typed
 ---@field prim_unstrict_unwrap fun(container:typed): typed
 ---@field prim_user_defined_type fun(id:any, family_args:any): typed
----@field prim_if fun(subject:typed, alternate:typed): typed
+---@field prim_if fun(subject:typed, consequent:typed, alternate:typed): typed
 ---@field prim_intrinsic fun(source:typed, anchor:any): typed
 return {}

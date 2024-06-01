@@ -28,7 +28,7 @@ function inferrable:is_tuple_cons() end
 function inferrable:unwrap_tuple_cons() end
 ---@return boolean
 function inferrable:is_tuple_elim() end
----@return inferrable, inferrable
+---@return any, inferrable, inferrable
 function inferrable:unwrap_tuple_elim() end
 ---@return boolean
 function inferrable:is_tuple_type() end
@@ -145,7 +145,7 @@ function inferrable:unwrap_prim_intrinsic() end
 ---@field pi fun(param_type:inferrable, param_info:checkable, result_type:inferrable, result_info:checkable): inferrable
 ---@field application fun(f:inferrable, arg:checkable): inferrable
 ---@field tuple_cons fun(elements:any): inferrable
----@field tuple_elim fun(subject:inferrable, body:inferrable): inferrable
+---@field tuple_elim fun(names:any, subject:inferrable, body:inferrable): inferrable
 ---@field tuple_type fun(definition:inferrable): inferrable
 ---@field record_cons fun(fields:any): inferrable
 ---@field record_elim fun(subject:inferrable, field_names:any, body:inferrable): inferrable
