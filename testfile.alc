@@ -396,8 +396,8 @@ let get-prim-func-res-inner =
 						
 
 # FIXME: things here (down to the comment "end fence") are very slow to evaluate for some reason
-# uncommenting this code causes the process to pin a single core of a r7 5700g for really long
-# possibly up to 8 minutes
+# uncommenting this code causes the process to pin a single core for a really long and variable amount of time
+# as of commit 0102b3e18bab30d53e7c6240cefe2c3e515fca8b on a r7 5700g this can be between 3m30s and 8m
 
 #let foo =
 #	prim-func-type (x : prim-number) (y : prim-number) -> (res : prim-number)
