@@ -1,4 +1,3 @@
-package.path = "/nix/store/h7al5kqkjq2c6rrgr6vgflp1gfrfxr2s-luajit-2.1.0-beta3/share/lua/5.1/?.lua"
 local metalanguage = require "./metalanguage"
 local evaluator = require "./evaluator"
 local format = require "./format-adapter"

@@ -108,7 +108,9 @@
               (luajit.withPackages
                 (ps: with ps; [ luasocket lpeg inspect luaunit tl lqc ]))
             ];
-            inherit (self.checks.${system}.pre-commit-check) shellHook;
+            shellHook = self.checks.${system}.pre-commit-check.shellHook + ''
+              export LUA_PATH='${luajit}/share/lua/5.1/?.lua'
+            '';
           };
           default = alicorn;
         };
