@@ -1,3 +1,4 @@
+package.path = "/nix/store/h7al5kqkjq2c6rrgr6vgflp1gfrfxr2s-luajit-2.1.0-beta3/share/lua/5.1/?.lua"
 local metalanguage = require "./metalanguage"
 local evaluator = require "./evaluator"
 local format = require "./format-adapter"
@@ -13,6 +14,8 @@ local print_src = false
 local print_ast = false
 local print_inferrable = false
 local print_typed = false
+local profile_run = false
+local profile_file = ""
 if opts then
 	if string.find(opts, "S") then
 		print_src = true
@@ -25,6 +28,10 @@ if opts then
 	end
 	if string.find(opts, "t") then
 		print_typed = true
+	end
+	if string.find(opts, "p") then
+		profile_run = true
+		profile_file = process.argv[3]
 	end
 end
 
@@ -70,7 +77,15 @@ if print_inferrable then
 end
 
 print("Inferring")
+local profiler = nil
+if profile_run then
+	profiler = require("jit.p")
+	profiler.start("G", profile_file)
+end
 local type, usages, term = evaluator.infer(bound_expr, terms.typechecking_context())
+if profile_run then
+	profiler.stop()
+end
 print("Inferred!")
 if print_typed then
 	print("type: (value term follows)")

@@ -20,6 +20,15 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+        luajit = pkgs.luajit.override {
+          version = "2.1.0-beta3";
+          src = pkgs.fetchFromGitHub {
+            owner = "LuaJIT";
+            repo = "LuaJIT";
+            rev = "50936d784474747b4569d988767f1b5bab8bb6d0";
+            hash = "sha256-oPU3hwSgL+d/4yW7r7maugDi+LA8QmvFN7ssEgC9B70=";
+          };
+        };
         alicorn-check = file:
           pkgs.runCommandNoCC "alicorn-check-${file}" { } ''
             set -euo pipefail
@@ -29,7 +38,7 @@
             ${pkgs.lib.getExe luvitpkgs.packages.${system}.luvit} ${file}
           '';
 
-        lqc = pkgs.luajit.pkgs.buildLuarocksPackage rec {
+        lqc = luajit.pkgs.buildLuarocksPackage rec {
           pname = "lua-quickcheck";
           version = "0.2-4";
           src = pkgs.fetchFromGitHub {
@@ -41,10 +50,10 @@
 
           knownRockspec = "${src}/rockspecs/lua-quickcheck-${version}.rockspec";
 
-          propagatedBuildInputs = with pkgs; [
+          propagatedBuildInputs = [
             luajit
-            luajitPackages.luafilesystem
-            luajitPackages.argparse
+            luajit.pkgs.luafilesystem
+            luajit.pkgs.argparse
           ];
         };
 
@@ -95,8 +104,9 @@
               luvitpkgs.packages.${system}.luvit
               pkgs.stylua
 
-              (pkgs.luajit.withPackages
-                (ps: with ps; [ luasocket lpeg inspect luaunit tl lqc ]))
+              #(luajit.withPackages
+              #  (ps: with ps; [ luasocket lpeg inspect luaunit tl lqc ]))
+              luajit
             ];
             inherit (self.checks.${system}.pre-commit-check) shellHook;
           };
