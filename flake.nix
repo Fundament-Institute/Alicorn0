@@ -21,6 +21,7 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
         luajit = pkgs.luajit.override {
+          self = luajit;
           version = "2.1.0-beta3";
           src = pkgs.fetchFromGitHub {
             owner = "LuaJIT";
@@ -104,9 +105,8 @@
               luvitpkgs.packages.${system}.luvit
               pkgs.stylua
 
-              #(luajit.withPackages
-              #  (ps: with ps; [ luasocket lpeg inspect luaunit tl lqc ]))
-              luajit
+              (luajit.withPackages
+                (ps: with ps; [ luasocket lpeg inspect luaunit tl lqc ]))
             ];
             inherit (self.checks.${system}.pre-commit-check) shellHook;
           };
