@@ -1935,27 +1935,8 @@ local typed_term_override_pretty = {
 
 		pp:_exit()
 	end,
-	prim_intrinsic = function(self, pp)
+	prim_intrinsic = function(self, pp, context)
 		local source, anchor = self:unwrap_prim_intrinsic()
-		local ok, source_val = source:as_literal()
-		if not ok then
-			error("override_pretty: typed.prim_intrinsic: source must be a literal prim string")
-		end
-		local ok, source_text = source_val:as_prim()
-		if not ok or type(source_text) ~= "string" then
-			error("override_pretty: typed.prim_intrinsic: source must be a literal prim string")
-		end
-
-		-- trim initial newlines
-		-- get first line
-		-- ellipsize further lines
-		local source_print = string.gsub(source_text, "^%c*(%C*)(.*)", function(visible, rest)
-			if #rest > 0 then
-				return visible .. " ..."
-			else
-				return visible
-			end
-		end)
 
 		pp:_enter()
 
@@ -1963,7 +1944,28 @@ local typed_term_override_pretty = {
 		pp:unit("typed.prim_intrinsic ")
 		pp:unit(pp:_resetcolor())
 
-		pp:any(source_print)
+		local ok, source_val = source:as_literal()
+		if ok then
+			local ok, source_text = source_val:as_prim()
+			if not ok or type(source_text) ~= "string" then
+				error("override_pretty: typed.prim_intrinsic: source must be a prim string")
+			end
+
+			-- trim initial newlines
+			-- get first line
+			-- ellipsize further lines
+			local source_print = string.gsub(source_text, "^%c*(%C*)(.*)", function(visible, rest)
+				if #rest > 0 then
+					return visible .. " ..."
+				else
+					return visible
+				end
+			end)
+
+			pp:any(source_print)
+		else
+			pp:any(source, context)
+		end
 
 		pp:_exit()
 	end,
