@@ -14,6 +14,7 @@ local print_ast = false
 local print_inferrable = false
 local print_typed = false
 local profile_run = false
+local profile_flame = false
 local profile_file = ""
 if opts then
 	if string.find(opts, "S") then
@@ -30,6 +31,12 @@ if opts then
 	end
 	if string.find(opts, "p") then
 		profile_run = true
+		profile_flame = false
+		profile_file = process.argv[3]
+	end
+	if string.find(opts, "P") then
+		profile_run = true
+		profile_flame = true
 		profile_file = process.argv[3]
 	end
 end
@@ -100,6 +107,7 @@ if profile_run then
 			end
 			if check then
 				_, goal = debug.getlocal(thread, i, 3)
+				_, inferred_type = debug.getlocal(thread, i, 5)
 			end
 			stack_n = stack_n + 1
 			stack[stack_n] = {
@@ -118,6 +126,7 @@ if profile_run then
 				term = term,
 				context = context,
 				goal = goal,
+				inferred_type = inferred_type,
 			}
 		end
 		profile_n = profile_n + 1
@@ -134,15 +143,38 @@ if profile_run then
 	profile.stop()
 	local profile_out = io.open(profile_file, "w")
 	for n, sample in ipairs(profile_samples) do
-		local s = sample.stack
-		for i = sample.stack_n, 1, -1 do
-			local d = s[i]
-			profile_out:write(string.format("%s %s %s: %s:%d", d.what, d.namewhat, d.name, d.source, d.currentline))
-			if i > 1 then
-				profile_out:write(";")
+		if profile_flame then
+			local s = sample.stack
+			for i = sample.stack_n, 1, -1 do
+				local d = s[i]
+				profile_out:write(string.format("%s %s %s: %s:%d", d.what, d.namewhat, d.name, d.source, d.currentline))
+				if i > 1 then
+					profile_out:write(";")
+				end
+			end
+			profile_out:write(" ", sample.samples, "\n")
+		else
+			profile_out:write("sample: ", n, "\n")
+			local t = false
+			for _, d in ipairs(sample.stack) do
+				local depth = sample.stack_n - d.i
+				profile_out:write(
+					string.format("%d %s %s %s: %s:%d\n", depth, d.what, d.namewhat, d.name, d.source, d.currentline)
+				)
+				if not t and (d.infer or d.check) then
+					profile_out:write(d.context:format_names())
+					profile_out:write(d.term:pretty_print(d.context), "\n")
+					profile_out:write(d.term:default_print(), "\n")
+					if d.check then
+						profile_out:write(d.goal:pretty_print(d.context), "\n")
+						profile_out:write(d.goal:default_print(), "\n")
+						profile_out:write(d.inferred_type:pretty_print(d.context), "\n")
+						profile_out:write(d.inferred_type:default_print(), "\n")
+					end
+					t = true
+				end
 			end
 		end
-		profile_out:write(" ", sample.samples, "\n")
 	end
 	profile_out:close()
 end
