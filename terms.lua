@@ -220,17 +220,7 @@ function RuntimeContext:eq(other)
 	if omt ~= runtime_context_mt then
 		return false
 	end
-	local sb, ob = self.bindings, other.bindings
-	local n, on = sb:len(), ob:len()
-	if n ~= on then
-		return false
-	end
-	for i = 1, n do
-		if sb:get(i) ~= ob:get(i) then
-			return false
-		end
-	end
-	return true
+	return self.bindings == other.bindings
 end
 
 runtime_context_mt = {

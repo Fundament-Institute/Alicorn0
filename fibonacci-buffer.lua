@@ -4,10 +4,7 @@
 -- the two names are synonymous
 
 local FibonacciBuffer = {}
-
-local FibonacciBuffer_mt = {
-	__index = FibonacciBuffer,
-}
+local FibonacciBuffer_mt = {}
 
 local function new()
 	local fib_buf = { n = 0 }
@@ -76,6 +73,35 @@ function FibonacciBuffer:len()
 	return self.n
 end
 
+function FibonacciBuffer:eq(other)
+	local other_mt = getmetatable(other)
+	if other_mt ~= FibonacciBuffer_mt then
+		return false
+	end
+	local n, other_n = self.n, other.n
+	if n ~= other_n then
+		return false
+	end
+	-- same length means same number of partitions
+	local n_partitions = #self
+	local cur = 0
+	-- compare physical equality of partitions first for efficiency
+	for i = 1, n_partitions do
+		if self[i] == other[i] then
+			cur = cur + self[i].n
+		else
+			break
+		end
+	end
+	-- then, if needed, handle the rest through structural equality
+	for i = cur + 1, n do
+		if self:get(i) ~= other:get(i) then
+			return false
+		end
+	end
+	return true
+end
+
 function FibonacciBuffer:debug_repr()
 	local partition_strings = {}
 	for i, p in ipairs(self) do
@@ -91,5 +117,8 @@ function FibonacciBuffer:debug_repr()
 		string.format('table="%s" n_partitions=%u %s', tostring(self), #self, table.concat(partition_strings, " "))
 	return output
 end
+
+FibonacciBuffer_mt.__index = FibonacciBuffer
+FibonacciBuffer_mt.__eq = FibonacciBuffer.eq
 
 return new
