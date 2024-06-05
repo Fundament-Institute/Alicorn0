@@ -63,11 +63,17 @@ function environment:get(name)
 end
 
 local function log_binding(name, type, value)
-	print("New let binding", name, "with type", type, "value", value)
+	print("New let binding")
+	print("name:", name)
+	print("type: (value term follows)")
+	print(type)
+	print("value: (value term follows)")
+	print(value)
 end
 
 function environment:bind_local(binding)
-	p(binding)
+	print("bind_local: (binding term follows)")
+	print(binding:pretty_print(self.typechecking_context))
 	if binding:is_let() then
 		local name, expr = binding:unwrap_let()
 		local expr_type, expr_usages, expr_term = infer(expr, self.typechecking_context)
@@ -149,8 +155,8 @@ function environment:bind_local(binding)
 			error "missing anchor for annotated lambda binding"
 		end
 		local annotation_type, annotation_usages, annotation_term = infer(param_annotation, self.typechecking_context)
-		print("binding lambda annotation")
-		print(annotation_term:pretty_print())
+		print("binding lambda annotation: (typed term follows)")
+		print(annotation_term:pretty_print(self.typechecking_context))
 		local evaled = eval.evaluate(annotation_term, self.typechecking_context.runtime_context)
 		local bindings = self.bindings:append(binding)
 		local locals = self.locals:put(param_name, inferrable_term.bound_variable(#self.typechecking_context + 1))
@@ -242,7 +248,7 @@ function environment:exit_block(term, shadowed)
 			wrapped = terms.inferrable_term.let(name, expr, wrapped)
 		elseif binding:is_tuple_elim() then
 			local names, subject = binding:unwrap_tuple_elim()
-			wrapped = terms.inferrable_term.tuple_elim(subject, wrapped)
+			wrapped = terms.inferrable_term.tuple_elim(names, subject, wrapped)
 		elseif binding:is_annotated_lambda() then
 			local name, annotation, anchor = binding:unwrap_annotated_lambda()
 			wrapped = terms.inferrable_term.annotated_lambda(name, annotation, wrapped, anchor)

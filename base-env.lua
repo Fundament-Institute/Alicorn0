@@ -430,8 +430,8 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	local shadowed, env = env:enter_block()
 
 	-- syntax.anchor can be nil so we fall back to the anchor for the start of this prim func type if needed
-	env = env:bind_local(terms.binding.annotated_lambda("#arg", args, syntax.anchor or pft_anchor))
-	local ok, arg = env:get("#arg")
+	env = env:bind_local(terms.binding.annotated_lambda("#prim-func-arguments", args, syntax.anchor or pft_anchor))
+	local ok, arg = env:get("#prim-func-arguments")
 	env = env:bind_local(terms.binding.tuple_elim(names, arg))
 
 	ok, thread, tail = syntax:match({
@@ -468,7 +468,10 @@ local function prim_func_type_impl(syntax, env)
 	if not ok then
 		return ok, fn_type_term
 	end
-	print("finished matching prim_func_type_impl and got (ok, fn_type_term)", ok, fn_type_term)
+	print("finished matching prim_func_type_impl and got:")
+	print("ok:", ok)
+	print("fn_type_term: (inferrable term follows)")
+	print(fn_type_term:pretty_print(env.typechecking_context))
 	if not env or not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl"
 	end
@@ -500,8 +503,9 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 
 	local shadowed, env = env:enter_block()
 
-	env = env:bind_local(terms.binding.annotated_lambda("#arg", args, syntax.anchor))
-	local ok, arg = env:get("#arg")
+	-- TODO: use correct name in lambda parameter instead of adding an extra let
+	env = env:bind_local(terms.binding.annotated_lambda("#forall-arguments", args, syntax.anchor))
+	local ok, arg = env:get("#forall-arguments")
 	if single then
 		env = env:bind_local(terms.binding.let(names, arg))
 	else
@@ -562,7 +566,7 @@ local function forall_type_impl(syntax, env)
 		return ok, fn_type_term
 	end
 	print("finished matching prim_func_type_impl and got")
-	print(fn_type_term:pretty_print())
+	print(fn_type_term:pretty_print(env.typechecking_context))
 	if not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl"
 	end
@@ -592,8 +596,10 @@ local function the_operative_impl(syntax, env)
 	local type_of_typed_term, usages, type_typed_term = evaluator.infer(type_inferrable_term, env.typechecking_context)
 	local evaled_type = evaluator.evaluate(type_typed_term, env.typechecking_context.runtime_context)
 
-	print("type_inferrable_term", type_inferrable_term)
-	print("evaled_type", evaled_type)
+	print("type_inferrable_term: (inferrable term follows)")
+	print(type_inferrable_term:pretty_print(env.typechecking_context))
+	print("evaled_type: (value term follows)")
+	print(evaled_type)
 	print("tail", tail)
 	local ok, val, tail = tail:match({
 		metalang.ispair(metalang.accept_handler),
@@ -689,8 +695,9 @@ local function lambda_impl(syntax, env)
 	local single, args, names, env = thread.single, thread.args, thread.names, thread.env
 
 	local shadow, inner_env = env:enter_block()
-	inner_env = inner_env:bind_local(terms.binding.annotated_lambda("#arg", thread.args, syntax.anchor))
-	local _, arg = inner_env:get("#arg")
+	-- TODO: use correct name in lambda parameter instead of adding an extra let
+	inner_env = inner_env:bind_local(terms.binding.annotated_lambda("#lambda-arguments", thread.args, syntax.anchor))
+	local _, arg = inner_env:get("#lambda-arguments")
 	if single then
 		inner_env = inner_env:bind_local(terms.binding.let(names, arg))
 	else
@@ -747,9 +754,16 @@ local val_desc_empty = value.enum_value("empty", val_tup_cons())
 
 -- eg typed.prim_wrap, typed.prim_wrapped_type
 local function build_wrap(body_fn, type_fn)
+	local names = gen.declare_array(gen.builtin_string)
+	local names0 = names()
+	local names1 = names("#wrap-TODO1")
+	local names2 = names("#wrap-TODO1", "#wrap-TODO2")
+	local pname_arg = "#wrap-arguments"
+	local pname_type = "#wrap-prev"
 	return lit_term(
 		value.closure(
-			typed.tuple_elim(typed.bound_variable(1), 2, body_fn(typed.bound_variable(3))),
+			pname_arg,
+			typed.tuple_elim(names2, typed.bound_variable(1), 2, body_fn(typed.bound_variable(3))),
 			terms.runtime_context()
 		),
 		value.pi(
@@ -760,13 +774,20 @@ local function build_wrap(body_fn, type_fn)
 							val_tup_cons(
 								val_desc_empty,
 								value.closure(
-									typed.tuple_elim(typed.bound_variable(1), 0, typed.star(10)),
+									pname_type,
+									typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(10)),
 									terms.runtime_context()
 								)
 							)
 						),
 						value.closure(
-							terms.typed_term.tuple_elim(terms.typed_term.bound_variable(1), 1, typed.bound_variable(2)),
+							pname_type,
+							terms.typed_term.tuple_elim(
+								names1,
+								terms.typed_term.bound_variable(1),
+								1,
+								typed.bound_variable(2)
+							),
 							terms.runtime_context()
 						)
 					)
@@ -774,7 +795,8 @@ local function build_wrap(body_fn, type_fn)
 			),
 			value.param_info(value.visibility(terms.visibility.explicit)),
 			value.closure(
-				typed.tuple_elim(typed.bound_variable(1), 2, type_fn(typed.bound_variable(2))),
+				pname_type,
+				typed.tuple_elim(names2, typed.bound_variable(1), 2, type_fn(typed.bound_variable(2))),
 				terms.runtime_context()
 			),
 			value.result_info(terms.result_info(terms.purity.pure))
@@ -784,9 +806,16 @@ end
 
 -- eg typed.prim_unwrap, typed.prim_wrapped_type
 local function build_unwrap(body_fn, type_fn)
+	local names = gen.declare_array(gen.builtin_string)
+	local names0 = names()
+	local names1 = names("#unwrap-TODO1")
+	local names2 = names("#unwrap-TODO1", "#unwrap-TODO2")
+	local pname_arg = "#unwrap-arguments"
+	local pname_type = "#unwrap-prev"
 	return lit_term(
 		value.closure(
-			typed.tuple_elim(typed.bound_variable(1), 2, body_fn(typed.bound_variable(3))),
+			pname_arg,
+			typed.tuple_elim(names2, typed.bound_variable(1), 2, body_fn(typed.bound_variable(3))),
 			terms.runtime_context()
 		),
 		value.pi(
@@ -797,13 +826,16 @@ local function build_unwrap(body_fn, type_fn)
 							val_tup_cons(
 								val_desc_empty,
 								value.closure(
-									typed.tuple_elim(typed.bound_variable(1), 0, typed.star(10)),
+									pname_type,
+									typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(10)),
 									terms.runtime_context()
 								)
 							)
 						),
 						value.closure(
+							pname_type,
 							terms.typed_term.tuple_elim(
+								names1,
 								terms.typed_term.bound_variable(1),
 								1,
 								type_fn(typed.bound_variable(2))
@@ -815,7 +847,8 @@ local function build_unwrap(body_fn, type_fn)
 			),
 			value.param_info(value.visibility(terms.visibility.explicit)),
 			value.closure(
-				typed.tuple_elim(typed.bound_variable(1), 2, typed.bound_variable(2)),
+				pname_type,
+				typed.tuple_elim(names2, typed.bound_variable(1), 2, typed.bound_variable(2)),
 				terms.runtime_context()
 			),
 			value.result_info(terms.result_info(terms.purity.pure))
@@ -825,9 +858,15 @@ end
 
 -- eg typed.prim_wrapped_type,
 local function build_wrapped(body_fn)
+	local names = gen.declare_array(gen.builtin_string)
+	local names0 = names()
+	local names1 = names("#wrapped-TODO1")
+	local pname_arg = "#wrapped-arguments"
+	local pname_type = "#wrapped-prev"
 	return lit_term(
 		value.closure(
-			typed.tuple_elim(typed.bound_variable(1), 1, body_fn(typed.bound_variable(2))),
+			pname_arg,
+			typed.tuple_elim(names1, typed.bound_variable(1), 1, body_fn(typed.bound_variable(2))),
 			terms.runtime_context()
 		),
 		value.pi(
@@ -836,7 +875,8 @@ local function build_wrapped(body_fn)
 					val_tup_cons(
 						val_desc_empty,
 						value.closure(
-							typed.tuple_elim(typed.bound_variable(1), 0, typed.star(10)),
+							pname_type,
+							typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(10)),
 							terms.runtime_context()
 						)
 					)
@@ -844,7 +884,8 @@ local function build_wrapped(body_fn)
 			),
 			value.param_info(value.visibility(terms.visibility.explicit)),
 			value.closure(
-				typed.tuple_elim(typed.bound_variable(1), 1, typed.literal(value.prim_type_type)),
+				pname_type,
+				typed.tuple_elim(names1, typed.bound_variable(1), 1, typed.literal(value.prim_type_type)),
 				terms.runtime_context()
 			),
 			value.result_info(terms.result_info(terms.purity.pure))

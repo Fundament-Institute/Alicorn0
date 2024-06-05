@@ -349,6 +349,200 @@ binding:define_enum("binding", {
 		},
 	},
 })
+
+local function let_helper(pp, name, expr, context)
+	pp:unit(name)
+
+	pp:unit(pp:_color())
+	pp:unit(" = ")
+	pp:unit(pp:_resetcolor())
+
+	pp:any(expr, context)
+
+	context = context:append(name)
+
+	return context
+end
+local function tuple_elim_helper(pp, names, subject, context)
+	local inner_context = context
+
+	pp:unit(pp:_color())
+	pp:unit("(")
+	pp:unit(pp:_resetcolor())
+
+	for i, name in names:ipairs() do
+		inner_context = inner_context:append(name)
+
+		if i > 1 then
+			pp:unit(pp:_color())
+			pp:unit(", ")
+			pp:unit(pp:_resetcolor())
+		end
+
+		pp:unit(name)
+	end
+
+	pp:unit(pp:_color())
+	pp:unit(") = ")
+	pp:unit(pp:_resetcolor())
+
+	pp:any(subject, context)
+
+	return inner_context
+end
+local function tuple_type_helper(pp, members, names)
+	local m = #members
+
+	if m == 0 then
+		return
+	end
+
+	if not names then
+		-- get them from last (outermost) decl
+		-- the name of the last member is lost in this case
+		names = members[m][1]
+	end
+
+	local n = type(names) == "table" and #names or 0
+
+	for i, mem in ipairs(members) do
+		if i > 1 then
+			pp:unit(" ")
+		end
+
+		pp:unit(pp:_color())
+		pp:unit("(")
+		pp:unit(pp:_resetcolor())
+
+		if i > n then
+			pp:unit(string.format("#unk%d", i))
+		else
+			pp:unit(names[i])
+		end
+
+		pp:unit(pp:_color())
+		pp:unit(" : ")
+		pp:unit(pp:_resetcolor())
+
+		pp:any(mem[2], mem[3])
+
+		pp:unit(pp:_color())
+		pp:unit(")")
+		pp:unit(pp:_resetcolor())
+	end
+end
+local function as_any_tuple_type(term)
+	local ok, decls = term:as_tuple_type()
+	if ok then
+		return ok, decls
+	end
+
+	local ok, decls = term:as_prim_tuple_type()
+	if ok then
+		return ok, decls
+	end
+
+	return false
+end
+local prettyprinting_context_mt = {}
+local PrettyprintingContext = {}
+function PrettyprintingContext.new()
+	local self = {}
+	self.bindings = fibbuf()
+	return setmetatable(self, prettyprinting_context_mt)
+end
+function PrettyprintingContext.from_typechecking_context(context)
+	local self = {}
+	self.bindings = context.bindings
+	return setmetatable(self, prettyprinting_context_mt)
+end
+function PrettyprintingContext.from_runtime_context(context)
+	local self = {}
+	local bindings = fibbuf()
+	for i = 1, context.bindings:len() do
+		bindings = bindings:append({ name = string.format("#rctx%d", i) })
+	end
+	self.bindings = bindings
+	return setmetatable(self, prettyprinting_context_mt)
+end
+function PrettyprintingContext:get_name(index)
+	return self.bindings:get(index).name
+end
+function PrettyprintingContext:append(name)
+	if type(name) ~= "string" then
+		error("PrettyprintingContext:append must append string name")
+	end
+	local copy = {}
+	copy.bindings = self.bindings:append({ name = name })
+	return setmetatable(copy, prettyprinting_context_mt)
+end
+prettyprinting_context_mt.__index = PrettyprintingContext
+function prettyprinting_context_mt:__len()
+	return self.bindings:len()
+end
+local prettyprinting_context_type = gen.declare_foreign(gen.metatable_equality(prettyprinting_context_mt))
+local function ensure_context(context)
+	if prettyprinting_context_type.value_check(context) == true then
+		return context
+	elseif typechecking_context_type.value_check(context) == true then
+		return PrettyprintingContext.from_typechecking_context(context)
+	elseif runtime_context_type.value_check(context) == true then
+		return PrettyprintingContext.from_runtime_context(context)
+	else
+		print("!!!!!!!!!! MISSING CONTEXT !!!!!!!!!!!!!!")
+		print("making something up")
+		return PrettyprintingContext.new()
+	end
+end
+local binding_override_pretty = {
+	let = function(self, pp, context)
+		local name, expr = self:unwrap_let()
+		context = ensure_context(context)
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("binding.let ")
+		pp:unit(pp:_resetcolor())
+		let_helper(pp, name, expr, context)
+
+		pp:_exit()
+	end,
+	tuple_elim = function(self, pp, context)
+		local names, subject = self:unwrap_tuple_elim()
+		context = ensure_context(context)
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("binding.let ")
+		pp:unit(pp:_resetcolor())
+		tuple_elim_helper(pp, names, subject, context)
+
+		pp:_exit()
+	end,
+	annotated_lambda = function(self, pp, context)
+		local param_name, param_annotation, anchor = self:unwrap_annotated_lambda()
+		context = ensure_context(context)
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("binding.\u{03BB} ")
+		pp:unit(pp:_resetcolor())
+
+		pp:unit(param_name)
+
+		pp:unit(pp:_color())
+		pp:unit(" : ")
+		pp:unit(pp:_resetcolor())
+
+		pp:any(param_annotation, context)
+
+		pp:_exit()
+	end,
+}
+
 -- checkable terms need a goal type to typecheck against
 checkable_term:define_enum("checkable", {
 	{ "inferrable", { "inferrable_term", inferrable_term } },
@@ -406,12 +600,17 @@ inferrable_term:define_enum("inferrable", {
 		checkable_term,
 	} },
 	{ "tuple_cons", { "elements", array(inferrable_term) } },
-	{ "tuple_elim", {
-		"subject",
-		inferrable_term,
-		"body",
-		inferrable_term,
-	} },
+	{
+		"tuple_elim",
+		{
+			"names",
+			array(gen.builtin_string),
+			"subject",
+			inferrable_term,
+			"body",
+			inferrable_term,
+		},
+	},
 	{ "tuple_type", { "definition", inferrable_term } },
 	{ "record_cons", { "fields", map(gen.builtin_string, inferrable_term) } },
 	{
@@ -536,11 +735,525 @@ inferrable_term:define_enum("inferrable", {
 		},
 	},
 })
+
+-- the only difference compared to typed_let_or_tuple_elim is lack of length
+local function inferrable_let_or_tuple_elim(pp, term, context)
+	pp:_enter()
+
+	local name, expr, names, subject
+	while true do
+		if term:is_let() then
+			name, expr, term = term:unwrap_let()
+
+			-- rear-loading prefix to cheaply handle first loop not needing prefix
+			pp:unit(pp:_color())
+			pp:unit("inferrable.let ")
+			pp:unit(pp:_resetcolor())
+			context = let_helper(pp, name, expr, context)
+			pp:unit("\n")
+			pp:_prefix()
+		elseif term:is_tuple_elim() then
+			names, subject, term = term:unwrap_tuple_elim()
+
+			pp:unit(pp:_color())
+			pp:unit("inferrable.let ")
+			pp:unit(pp:_resetcolor())
+			context = tuple_elim_helper(pp, names, subject, context)
+			pp:unit("\n")
+			pp:_prefix()
+		else
+			break
+		end
+	end
+
+	pp:any(term, context)
+
+	pp:_exit()
+end
+-- the only difference compared to typed_destructure_helper is lack of length
+local function inferrable_destructure_helper(term, context)
+	if term:is_let() then
+		-- destructuring with a let effectively just renames the parameter
+		-- thus it's usually superfluous to write code like this
+		-- and probably unwise to elide the let
+		-- but some operatives that are generic over lets and tuple-elims do this
+		-- e.g. forall, lambda
+		-- so we pretty this anyway
+		local name, expr, body = term:unwrap_let()
+		local ok, index = expr:as_bound_variable()
+		local is_destructure = ok and index == #context
+		if is_destructure then
+			context = context:append(name)
+			return true, true, name, body, context
+		end
+	elseif term:is_tuple_elim() then
+		local names, subject, body = term:unwrap_tuple_elim()
+		local ok, index = subject:as_bound_variable()
+		local is_destructure = ok and index == #context
+		if is_destructure then
+			for i, name in names:ipairs() do
+				context = context:append(name)
+			end
+			return true, false, names, body, context
+		end
+	end
+	return false, false, nil, term, context
+end
+-- mostly the same as typed_tuple_type_flatten
+-- differences:
+-- - enum_type existing and checking
+-- - lambda is different
+local function inferrable_tuple_type_flatten(definition, context)
+	local enum_type, constructor, arg = definition:unwrap_enum_cons()
+	local ok, universe = enum_type:as_tuple_defn_type()
+	-- TODO: what is universe?
+	if not ok then
+		error("override_pretty: inferrable.tuple_type: enum_type must be tuple_defn_type")
+	end
+	if constructor == "empty" then
+		return {}, 0
+	elseif constructor == "cons" then
+		local elements = arg:unwrap_tuple_cons()
+		local definition = elements[1]
+		local f = elements[2]
+		local ok, param_name, param_annotation, body, anchor = f:as_annotated_lambda()
+		if not ok then
+			error("override_pretty: inferrable.tuple_type: tuple decl must be a lambda")
+		end
+		local inner_context = context:append(param_name)
+		local is_destructure, is_rename, names, body, inner_context = inferrable_destructure_helper(body, inner_context)
+		local prev, n = inferrable_tuple_type_flatten(definition, context)
+		n = n + 1
+		prev[n] = { names, body, inner_context }
+		return prev, n
+	else
+		error("override_pretty: inferrable.tuple_type: unknown tuple type data constructor")
+	end
+end
+local checkable_term_override_pretty = {
+	inferrable = function(self, pp, context)
+		local inferrable_term = self:unwrap_inferrable()
+		context = ensure_context(context)
+		pp:any(inferrable_term, context)
+	end,
+}
+local inferrable_term_override_pretty = {
+	-- copypaste of typed.bound_variable
+	bound_variable = function(self, pp, context)
+		local index = self:unwrap_bound_variable()
+		context = ensure_context(context)
+
+		pp:_enter()
+
+		if #context >= index then
+			pp:unit(context:get_name(index))
+		else
+			-- TODO: warn on context too short?
+			pp:unit(pp:_color())
+			pp:unit("inferrable.bound_variable(")
+			pp:unit(pp:_resetcolor())
+
+			pp:unit(tostring(index))
+
+			pp:unit(pp:_color())
+			pp:unit(")")
+			pp:unit(pp:_resetcolor())
+		end
+
+		pp:_exit()
+	end,
+	typed = function(self, pp, context)
+		local type, usage_counts, typed_term = self:unwrap_typed()
+		context = ensure_context(context)
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("inferrable.the (")
+		pp:unit(pp:_resetcolor())
+
+		pp:any(type)
+
+		pp:unit(pp:_color())
+		pp:unit(") (")
+		pp:unit(pp:_resetcolor())
+
+		pp:any(typed_term, context)
+
+		pp:unit(pp:_color())
+		pp:unit(")")
+		pp:unit(pp:_resetcolor())
+
+		pp:_exit()
+	end,
+	-- some similarities to inferrable.pi and typed.lambda
+	annotated_lambda = function(self, pp, context)
+		local param_name, param_annotation, body, anchor = self:unwrap_annotated_lambda()
+		context = ensure_context(context)
+		local inner_context = context:append(param_name)
+		local is_tuple_type, decls = as_any_tuple_type(param_annotation)
+		local is_destructure, is_rename, names, body, inner_context = inferrable_destructure_helper(body, inner_context)
+		if is_rename then
+			param_name = names
+			is_destructure = false
+		end
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("inferrable.\u{03BB} ")
+		pp:unit(pp:_resetcolor())
+
+		if is_tuple_type and is_destructure then
+			local members = inferrable_tuple_type_flatten(decls, context)
+
+			if #members == 0 then
+				pp:unit(pp:_color())
+				pp:unit("()")
+				pp:unit(pp:_resetcolor())
+			else
+				tuple_type_helper(pp, members, names)
+			end
+		elseif is_destructure then
+			-- tuple_elim on param but its type isn't a tuple type???
+			-- probably shouldn't happen, but here's a handler
+			pp:unit(pp:_color())
+			pp:unit("(")
+			pp:unit(pp:_resetcolor())
+
+			for i, name in names:ipairs() do
+				if i > 1 then
+					pp:unit(" ")
+				end
+				pp:unit(name)
+			end
+
+			pp:unit(pp:_color())
+			pp:unit(") : ")
+			pp:unit(pp:_resetcolor())
+
+			pp:any(param_annotation, context)
+		else
+			pp:unit(param_name)
+
+			pp:unit(pp:_color())
+			pp:unit(" : ")
+			pp:unit(pp:_resetcolor())
+
+			pp:any(param_annotation, context)
+		end
+
+		pp:unit(pp:_color())
+		pp:unit(" ->")
+		pp:unit(pp:_resetcolor())
+
+		if body:is_let() or body:is_tuple_elim() then
+			pp:unit("\n")
+			pp:_indent()
+			pp:_prefix()
+			pp:any(body, inner_context)
+			pp:_dedent()
+		else
+			pp:unit(" ")
+			pp:any(body, inner_context)
+		end
+
+		pp:_exit()
+	end,
+	-- some similarities to inferrable.annotated_lambda and inferrable.prim_function_type
+	-- copypaste of typed.pi
+	pi = function(self, pp, context)
+		-- extracting parameter names from the destructure of the result
+		-- so that we get the name of the last parameter
+		-- name of the last result is still lost
+		local param_type, param_info, result_type, result_info = self:unwrap_pi()
+		context = ensure_context(context)
+		local result_context = context
+		local param_is_tuple_type, param_decls = as_any_tuple_type(param_type)
+		local ok, param_name, param_annotation, result_body, result_anchor = result_type:as_annotated_lambda()
+		if not ok then
+			error("override_pretty: inferrable.pi: result_type must be a lambda")
+		end
+		result_context = result_context:append(param_name)
+		local result_is_destructure, result_is_rename, param_names, result_body, result_context =
+			inferrable_destructure_helper(result_body, result_context)
+		if result_is_rename then
+			param_name = param_names
+			result_is_destructure = false
+		end
+		local result_is_tuple_type, result_decls = as_any_tuple_type(result_body)
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("inferrable.\u{03A0} ")
+		pp:unit(pp:_resetcolor())
+
+		if param_is_tuple_type and result_is_destructure then
+			local members = inferrable_tuple_type_flatten(param_decls, context)
+
+			if #members == 0 then
+				pp:unit(pp:_color())
+				pp:unit("()")
+				pp:unit(pp:_resetcolor())
+			else
+				tuple_type_helper(pp, members, param_names)
+			end
+		elseif result_is_destructure then
+			-- tuple_elim on params but params aren't a tuple type???
+			-- probably shouldn't happen, but here's a handler
+			pp:unit(pp:_color())
+			pp:unit("(")
+			pp:unit(pp:_resetcolor())
+
+			for i, name in param_names:ipairs() do
+				if i > 1 then
+					pp:unit(" ")
+				end
+				pp:unit(name)
+			end
+
+			pp:unit(pp:_color())
+			pp:unit(") : ")
+			pp:unit(pp:_resetcolor())
+
+			pp:any(param_type, context)
+		else
+			pp:unit(param_name)
+
+			pp:unit(pp:_color())
+			pp:unit(" : ")
+			pp:unit(pp:_resetcolor())
+
+			pp:any(param_type, context)
+		end
+
+		pp:unit(pp:_color())
+		pp:unit(" -> ")
+		pp:unit(pp:_resetcolor())
+
+		if result_is_tuple_type then
+			local members = inferrable_tuple_type_flatten(result_decls, result_context)
+
+			if #members == 0 then
+				pp:unit(pp:_color())
+				pp:unit("()")
+				pp:unit(pp:_resetcolor())
+			else
+				tuple_type_helper(pp, members)
+			end
+		else
+			pp:any(result_body, result_context)
+		end
+
+		pp:_exit()
+	end,
+	application = function(self, pp, context)
+		local f, arg = self:unwrap_application()
+		context = ensure_context(context)
+
+		-- handle nested applications
+		local function application_inner(f, arg)
+			local f_is_application, f_f, f_arg = f:as_application()
+			local f_is_typed, f_type, f_usage_counts, f_typed_term = f:as_typed()
+			local f_is_bound_variable, f_index = false
+			if f_is_typed then
+				f_is_bound_variable, f_index = f_typed_term:as_bound_variable()
+			end
+
+			pp:_enter()
+
+			-- print pretty on certain conditions, or fall back to apply()
+			if
+				(f_is_application or (f_is_typed and f_is_bound_variable and #context >= f_index))
+				and (arg:is_tuple_cons() or arg:is_prim_tuple_cons())
+			then
+				if f_is_application then
+					application_inner(f_f, f_arg)
+				else
+					pp:unit(context:get_name(f_index))
+				end
+
+				local ok, elements = arg:as_tuple_cons()
+				elements = ok and elements or arg:unwrap_prim_tuple_cons()
+
+				pp:unit(pp:_color())
+				pp:unit("(")
+				pp:unit(pp:_resetcolor())
+
+				for i, arg in ipairs(elements) do
+					if i > 1 then
+						pp:unit(pp:_color())
+						pp:unit(", ")
+						pp:unit(pp:_resetcolor())
+					end
+
+					pp:any(arg, context)
+				end
+
+				pp:unit(pp:_color())
+				pp:unit(")")
+				pp:unit(pp:_resetcolor())
+			else
+				-- if we're here then the args are probably horrible
+				-- add some newlines
+				pp:unit(pp:_color())
+				pp:unit("inferrable.apply(")
+				pp:unit(pp:_resetcolor())
+				pp:unit("\n")
+
+				pp:_indent()
+
+				pp:_prefix()
+				pp:any(f, context)
+				pp:unit(pp:_color())
+				pp:unit(",")
+				pp:unit(pp:_resetcolor())
+				pp:unit("\n")
+
+				pp:_prefix()
+				pp:any(arg, context)
+				pp:unit("\n")
+
+				pp:_dedent()
+
+				pp:_prefix()
+				pp:unit(pp:_color())
+				pp:unit(")")
+				pp:unit(pp:_resetcolor())
+			end
+
+			pp:_exit()
+		end
+
+		application_inner(f, arg)
+	end,
+	tuple_elim = function(self, pp, context)
+		context = ensure_context(context)
+		inferrable_let_or_tuple_elim(pp, self, context)
+	end,
+	tuple_type = function(self, pp, context)
+		local definition = self:unwrap_tuple_type()
+		context = ensure_context(context)
+		local members = inferrable_tuple_type_flatten(definition, context)
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("inferrable.tuple_type[")
+		pp:unit(pp:_resetcolor())
+
+		tuple_type_helper(pp, members)
+
+		pp:unit(pp:_color())
+		pp:unit("]")
+		pp:unit(pp:_resetcolor())
+
+		pp:_exit()
+	end,
+	let = function(self, pp, context)
+		context = ensure_context(context)
+		inferrable_let_or_tuple_elim(pp, self, context)
+	end,
+	prim_tuple_type = function(self, pp, context)
+		local decls = self:unwrap_prim_tuple_type()
+		context = ensure_context(context)
+		local members = inferrable_tuple_type_flatten(decls, context)
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("inferrable.prim_tuple_type[")
+		pp:unit(pp:_resetcolor())
+
+		tuple_type_helper(pp, members)
+
+		pp:unit(pp:_color())
+		pp:unit("]")
+		pp:unit(pp:_resetcolor())
+
+		pp:_exit()
+	end,
+	-- some similarities to inferrable.pi
+	-- copypaste of typed.prim_function_type
+	prim_function_type = function(self, pp, context)
+		local param_type, result_type = self:unwrap_prim_function_type()
+		context = ensure_context(context)
+		local result_context = context
+		local ok, param_decls = param_type:as_prim_tuple_type()
+		if not ok then
+			error("override_pretty: inferrable.prim_function_type: param_type must be a prim_tuple_type")
+		end
+		local ok, param_name, param_annotation, result_body, result_anchor = result_type:as_annotated_lambda()
+		if not ok then
+			error("override_pretty: inferrable.prim_function_type: result_type must be a lambda")
+		end
+		result_context = result_context:append(param_name)
+		local result_is_destructure, result_is_rename, param_names, result_body, result_context =
+			inferrable_destructure_helper(result_body, result_context)
+		if result_is_rename then
+			param_name = param_names
+			result_is_destructure = false
+		end
+		local ok, result_decls = result_body:as_prim_tuple_type()
+		if not ok then
+			error("override_pretty: inferrable.prim_function_type: result_type must be a prim_tuple_type")
+		end
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("inferrable.prim-\u{03A0} ")
+		pp:unit(pp:_resetcolor())
+
+		if result_is_destructure then
+			local members = inferrable_tuple_type_flatten(param_decls, context)
+
+			if #members == 0 then
+				pp:unit(pp:_color())
+				pp:unit("()")
+				pp:unit(pp:_resetcolor())
+			else
+				tuple_type_helper(pp, members, param_names)
+			end
+		else
+			pp:unit(param_name)
+
+			pp:unit(pp:_color())
+			pp:unit(" : ")
+			pp:unit(pp:_resetcolor())
+
+			pp:any(param_type, context)
+		end
+
+		pp:unit(pp:_color())
+		pp:unit(" -> ")
+		pp:unit(pp:_resetcolor())
+
+		local members = inferrable_tuple_type_flatten(result_decls, result_context)
+
+		if #members == 0 then
+			pp:unit(pp:_color())
+			pp:unit("()")
+			pp:unit(pp:_resetcolor())
+		else
+			tuple_type_helper(pp, members)
+		end
+
+		pp:_exit()
+	end,
+}
+
 -- typed terms have been typechecked but do not store their type internally
 typed_term:define_enum("typed", {
 	{ "bound_variable", { "index", gen.builtin_number } },
 	{ "literal", { "literal_value", value } },
-	{ "lambda", { "body", typed_term } },
+	{ "lambda", {
+		"param_name",
+		gen.builtin_string,
+		"body",
+		typed_term,
+	} },
 	{
 		"pi",
 		{
@@ -561,6 +1274,8 @@ typed_term:define_enum("typed", {
 		typed_term,
 	} },
 	{ "let", {
+		"name",
+		gen.builtin_string,
 		"expr",
 		typed_term,
 		"body",
@@ -579,14 +1294,19 @@ typed_term:define_enum("typed", {
 	{ "prop", { "level", gen.builtin_number } },
 	{ "tuple_cons", { "elements", array(typed_term) } },
 	--{"tuple_extend", {"base", typed_term, "fields", array(typed_term)}}, -- maybe?
-	{ "tuple_elim", {
-		"subject",
-		typed_term,
-		"length",
-		gen.builtin_number,
-		"body",
-		typed_term,
-	} },
+	{
+		"tuple_elim",
+		{
+			"names",
+			array(gen.builtin_string),
+			"subject",
+			typed_term,
+			"length",
+			gen.builtin_number,
+			"body",
+			typed_term,
+		},
+	},
 	{ "tuple_element_access", {
 		"subject",
 		typed_term,
@@ -694,6 +1414,505 @@ typed_term:define_enum("typed", {
 	} },
 })
 
+-- the only difference compared to inferrable_let_or_tuple_elim is length
+local function typed_let_or_tuple_elim(pp, term, context)
+	pp:_enter()
+
+	local name, expr, names, subject, length
+	while true do
+		if term:is_let() then
+			name, expr, term = term:unwrap_let()
+
+			-- rear-loading prefix to cheaply handle first loop not needing prefix
+			pp:unit(pp:_color())
+			pp:unit("typed.let ")
+			pp:unit(pp:_resetcolor())
+			context = let_helper(pp, name, expr, context)
+			pp:unit("\n")
+			pp:_prefix()
+		elseif term:is_tuple_elim() then
+			names, subject, length, term = term:unwrap_tuple_elim()
+
+			pp:unit(pp:_color())
+			pp:unit("typed.let ")
+			pp:unit(pp:_resetcolor())
+			context = tuple_elim_helper(pp, names, subject, context)
+			pp:unit("\n")
+			pp:_prefix()
+		else
+			break
+		end
+	end
+
+	pp:any(term, context)
+
+	pp:_exit()
+end
+-- the only difference compared to inferrable_destructure_helper is length
+local function typed_destructure_helper(term, context)
+	if term:is_let() then
+		-- destructuring with a let effectively just renames the parameter
+		-- thus it's usually superfluous to write code like this
+		-- and probably unwise to elide the let
+		-- but some operatives that are generic over lets and tuple-elims do this
+		-- e.g. forall, lambda
+		-- so we pretty this anyway
+		local name, expr, body = term:unwrap_let()
+		local ok, index = expr:as_bound_variable()
+		local is_destructure = ok and index == #context
+		if is_destructure then
+			context = context:append(name)
+			return is_destructure, true, name, body, context
+		end
+	elseif term:is_tuple_elim() then
+		local names, subject, length, body = term:unwrap_tuple_elim()
+		local ok, index = subject:as_bound_variable()
+		local is_destructure = ok and index == #context
+		if is_destructure then
+			for i, name in names:ipairs() do
+				context = context:append(name)
+			end
+			return is_destructure, false, names, body, context
+		end
+	end
+	return false, false, nil, term, context
+end
+-- mostly the same as inferrable_tuple_type_flatten
+local function typed_tuple_type_flatten(definition, context)
+	local constructor, arg = definition:unwrap_enum_cons()
+	if constructor == "empty" then
+		return {}, 0
+	elseif constructor == "cons" then
+		local elements = arg:unwrap_tuple_cons()
+		local definition = elements[1]
+		local f = elements[2]
+		local ok, param_name, body = f:as_lambda()
+		if not ok then
+			error("override_pretty: typed.tuple_type: tuple decl must be a lambda")
+		end
+		local inner_context = context:append(param_name)
+		local is_destructure, is_rename, names, body, inner_context = typed_destructure_helper(body, inner_context)
+		local prev, n = typed_tuple_type_flatten(definition, context)
+		n = n + 1
+		prev[n] = { names, body, inner_context }
+		return prev, n
+	else
+		error("override_pretty: typed.tuple_type: unknown tuple type data constructor")
+	end
+end
+local typed_term_override_pretty = {
+	-- copypaste of inferrable.bound_variable
+	bound_variable = function(self, pp, context)
+		local index = self:unwrap_bound_variable()
+		context = ensure_context(context)
+
+		pp:_enter()
+
+		if #context >= index then
+			pp:unit(context:get_name(index))
+		else
+			-- TODO: warn on context too short?
+			pp:unit(pp:_color())
+			pp:unit("typed.bound_variable(")
+			pp:unit(pp:_resetcolor())
+
+			pp:unit(tostring(index))
+
+			pp:unit(pp:_color())
+			pp:unit(")")
+			pp:unit(pp:_resetcolor())
+		end
+
+		pp:_exit()
+	end,
+	literal = function(self, pp)
+		local literal_value = self:unwrap_literal()
+		pp:any(literal_value)
+	end,
+	-- some similarities to inferrable.annotated_lambda
+	lambda = function(self, pp, context)
+		local param_name, body = self:unwrap_lambda()
+		context = ensure_context(context)
+		local inner_context = context:append(param_name)
+		local is_destructure, is_rename, names, body, inner_context = typed_destructure_helper(body, inner_context)
+		if is_rename then
+			param_name = names
+			is_destructure = false
+		end
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("typed.\u{03BB} ")
+		pp:unit(pp:_resetcolor())
+
+		if is_destructure then
+			if #names == 0 then
+				pp:unit(pp:_color())
+				pp:unit("()")
+				pp:unit(pp:_resetcolor())
+			end
+
+			for i, name in names:ipairs() do
+				if i > 1 then
+					pp:unit(" ")
+				end
+				pp:unit(name)
+			end
+		else
+			pp:unit(param_name)
+		end
+
+		pp:unit(pp:_color())
+		pp:unit(" ->")
+		pp:unit(pp:_resetcolor())
+
+		if body:is_let() or body:is_tuple_elim() then
+			pp:unit("\n")
+			pp:_indent()
+			pp:_prefix()
+			pp:any(body, inner_context)
+			pp:_dedent()
+		else
+			pp:unit(" ")
+			pp:any(body, inner_context)
+		end
+
+		pp:_exit()
+	end,
+	-- copypaste of inferrable.pi
+	pi = function(self, pp, context)
+		-- extracting parameter names from the destructure of the result
+		-- so that we get the name of the last parameter
+		-- name of the last result is still lost
+		local param_type, param_info, result_type, result_info = self:unwrap_pi()
+		context = ensure_context(context)
+		local result_context = context
+		local param_is_tuple_type, param_decls = as_any_tuple_type(param_type)
+		local ok, param_name, result_body = result_type:as_lambda()
+		if not ok then
+			error("override_pretty: typed.pi: result_type must be a lambda")
+		end
+		result_context = result_context:append(param_name)
+		local result_is_destructure, result_is_rename, param_names, result_body, result_context =
+			typed_destructure_helper(result_body, result_context)
+		if result_is_rename then
+			param_name = param_names
+			result_is_destructure = false
+		end
+		local result_is_tuple_type, result_decls = as_any_tuple_type(result_body)
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("typed.\u{03A0} ")
+		pp:unit(pp:_resetcolor())
+
+		if param_is_tuple_type and result_is_destructure then
+			local members = typed_tuple_type_flatten(param_decls, context)
+
+			if #members == 0 then
+				pp:unit(pp:_color())
+				pp:unit("()")
+				pp:unit(pp:_resetcolor())
+			else
+				tuple_type_helper(pp, members, param_names)
+			end
+		elseif result_is_destructure then
+			-- tuple_elim on params but params aren't a tuple type???
+			-- probably shouldn't happen, but here's a handler
+			pp:unit(pp:_color())
+			pp:unit("(")
+			pp:unit(pp:_resetcolor())
+
+			for i, name in param_names:ipairs() do
+				if i > 1 then
+					pp:unit(" ")
+				end
+				pp:unit(name)
+			end
+
+			pp:unit(pp:_color())
+			pp:unit(") : ")
+			pp:unit(pp:_resetcolor())
+
+			pp:any(param_type, context)
+		else
+			pp:unit(param_name)
+
+			pp:unit(pp:_color())
+			pp:unit(" : ")
+			pp:unit(pp:_resetcolor())
+
+			pp:any(param_type, context)
+		end
+
+		pp:unit(pp:_color())
+		pp:unit(" -> ")
+		pp:unit(pp:_resetcolor())
+
+		if result_is_tuple_type then
+			local members = typed_tuple_type_flatten(result_decls, result_context)
+
+			if #members == 0 then
+				pp:unit(pp:_color())
+				pp:unit("()")
+				pp:unit(pp:_resetcolor())
+			else
+				tuple_type_helper(pp, members)
+			end
+		else
+			pp:any(result_body, result_context)
+		end
+
+		pp:_exit()
+	end,
+	-- copypaste from inferrable.application
+	application = function(self, pp, context)
+		local f, arg = self:unwrap_application()
+		context = ensure_context(context)
+
+		-- handle nested applications
+		local function application_inner(f, arg)
+			local f_is_application, f_f, f_arg = f:as_application()
+			local f_is_bound_variable, f_index = f:as_bound_variable()
+
+			pp:_enter()
+
+			-- print pretty on certain conditions, or fall back to apply()
+			if
+				(f_is_application or (f_is_bound_variable and #context >= f_index))
+				and (arg:is_tuple_cons() or arg:is_prim_tuple_cons())
+			then
+				if f_is_application then
+					application_inner(f_f, f_arg)
+				else
+					pp:unit(context:get_name(f_index))
+				end
+
+				local ok, elements = arg:as_tuple_cons()
+				elements = ok and elements or arg:unwrap_prim_tuple_cons()
+
+				pp:unit(pp:_color())
+				pp:unit("(")
+				pp:unit(pp:_resetcolor())
+
+				for i, arg in ipairs(elements) do
+					if i > 1 then
+						pp:unit(pp:_color())
+						pp:unit(", ")
+						pp:unit(pp:_resetcolor())
+					end
+
+					pp:any(arg, context)
+				end
+
+				pp:unit(pp:_color())
+				pp:unit(")")
+				pp:unit(pp:_resetcolor())
+			else
+				-- if we're here then the args are probably horrible
+				-- add some newlines
+				pp:unit(pp:_color())
+				pp:unit("typed.apply(")
+				pp:unit(pp:_resetcolor())
+				pp:unit("\n")
+
+				pp:_indent()
+
+				pp:_prefix()
+				pp:any(f, context)
+				pp:unit(pp:_color())
+				pp:unit(",")
+				pp:unit(pp:_resetcolor())
+				pp:unit("\n")
+
+				pp:_prefix()
+				pp:any(arg, context)
+				pp:unit("\n")
+
+				pp:_dedent()
+
+				pp:_prefix()
+				pp:unit(pp:_color())
+				pp:unit(")")
+				pp:unit(pp:_resetcolor())
+			end
+
+			pp:_exit()
+		end
+
+		application_inner(f, arg)
+	end,
+	let = function(self, pp, context)
+		context = ensure_context(context)
+		typed_let_or_tuple_elim(pp, self, context)
+	end,
+	tuple_elim = function(self, pp, context)
+		context = ensure_context(context)
+		typed_let_or_tuple_elim(pp, self, context)
+	end,
+	-- some copypaste from typed.application
+	tuple_element_access = function(self, pp, context)
+		local subject, index = self:unwrap_tuple_element_access()
+		context = ensure_context(context)
+		local subject_is_bound_variable, subject_index = subject:as_bound_variable()
+
+		if subject_is_bound_variable and #context >= subject_index then
+			pp:_enter()
+
+			pp:unit(context:get_name(subject_index))
+
+			pp:unit(pp:_color())
+			pp:unit(".")
+			pp:unit(pp:_resetcolor())
+
+			pp:unit(tostring(index))
+
+			pp:_exit()
+		else
+			pp:record("typed.tuple_element_access", { { "subject", subject }, { "index", index } }, context)
+		end
+	end,
+	tuple_type = function(self, pp, context)
+		local definition = self:unwrap_tuple_type()
+		context = ensure_context(context)
+		local members = typed_tuple_type_flatten(definition, context)
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("typed.tuple_type[")
+		pp:unit(pp:_resetcolor())
+
+		tuple_type_helper(pp, members)
+
+		pp:unit(pp:_color())
+		pp:unit("]")
+		pp:unit(pp:_resetcolor())
+
+		pp:_exit()
+	end,
+	prim_tuple_type = function(self, pp, context)
+		local decls = self:unwrap_prim_tuple_type()
+		context = ensure_context(context)
+		local members = typed_tuple_type_flatten(decls, context)
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("typed.prim_tuple_type[")
+		pp:unit(pp:_resetcolor())
+
+		tuple_type_helper(pp, members)
+
+		pp:unit(pp:_color())
+		pp:unit("]")
+		pp:unit(pp:_resetcolor())
+
+		pp:_exit()
+	end,
+	-- copypaste of inferrable.prim_function_type
+	prim_function_type = function(self, pp, context)
+		local param_type, result_type = self:unwrap_prim_function_type()
+		context = ensure_context(context)
+		local result_context = context
+		local ok, param_decls = param_type:as_prim_tuple_type()
+		if not ok then
+			error("override_pretty: typed.prim_function_type: param_type must be a prim_tuple_type")
+		end
+		local ok, param_name, result_body = result_type:as_lambda()
+		if not ok then
+			error("override_pretty: typed.prim_function_type: result_type must be a lambda")
+		end
+		result_context = result_context:append(param_name)
+		local result_is_destructure, result_is_rename, param_names, result_body, result_context =
+			typed_destructure_helper(result_body, result_context)
+		if result_is_rename then
+			param_name = param_names
+			result_is_destructure = false
+		end
+		local ok, result_decls = result_body:as_prim_tuple_type()
+		if not ok then
+			error("override_pretty: typed.prim_function_type: result_type must be a prim_tuple_type")
+		end
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("typed.prim-\u{03A0} ")
+		pp:unit(pp:_resetcolor())
+
+		if result_is_destructure then
+			local members = typed_tuple_type_flatten(param_decls, context)
+
+			if #members == 0 then
+				pp:unit(pp:_color())
+				pp:unit("()")
+				pp:unit(pp:_resetcolor())
+			else
+				tuple_type_helper(pp, members, param_names)
+			end
+		else
+			pp:unit(param_name)
+
+			pp:unit(pp:_color())
+			pp:unit(" : ")
+			pp:unit(pp:_resetcolor())
+
+			pp:any(param_type, context)
+		end
+
+		pp:unit(pp:_color())
+		pp:unit(" -> ")
+		pp:unit(pp:_resetcolor())
+
+		local members = typed_tuple_type_flatten(result_decls, result_context)
+
+		if #members == 0 then
+			pp:unit(pp:_color())
+			pp:unit("()")
+			pp:unit(pp:_resetcolor())
+		else
+			tuple_type_helper(pp, members)
+		end
+
+		pp:_exit()
+	end,
+	prim_intrinsic = function(self, pp)
+		local source, anchor = self:unwrap_prim_intrinsic()
+		local ok, source_val = source:as_literal()
+		if not ok then
+			error("override_pretty: typed.prim_intrinsic: source must be a literal prim string")
+		end
+		local ok, source_text = source_val:as_prim()
+		if not ok or type(source_text) ~= "string" then
+			error("override_pretty: typed.prim_intrinsic: source must be a literal prim string")
+		end
+
+		-- trim initial newlines
+		-- get first line
+		-- ellipsize further lines
+		local source_print = string.gsub(source_text, "^%c*(%C*)(.*)", function(visible, rest)
+			if #rest > 0 then
+				return visible .. " ..."
+			else
+				return visible
+			end
+		end)
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("typed.prim_intrinsic ")
+		pp:unit(pp:_resetcolor())
+
+		pp:any(source_print)
+
+		pp:_exit()
+	end,
+}
+
 local unique_id = gen.declare_foreign(function(val)
 	return type(val) == "table"
 end)
@@ -770,12 +1989,17 @@ value:define_enum("value", {
 	},
 	-- closure is a type that contains a typed term corresponding to the body
 	-- and a runtime context representng the bound context where the closure was created
-	{ "closure", {
-		"code",
-		typed_term,
-		"capture",
-		runtime_context_type,
-	} },
+	{
+		"closure",
+		{
+			"param_name",
+			gen.builtin_string,
+			"code",
+			typed_term,
+			"capture",
+			runtime_context_type,
+		},
+	},
 
 	-- metaprogramming stuff
 	-- TODO: add types of terms, and type indices
@@ -873,6 +2097,273 @@ value:define_enum("value", {
 	-- {"prim_table_type"},
 })
 
+-- mostly the same as typed_tuple_type_flatten
+-- differences:
+-- - enum_value / tuple_value (as opposed to *_cons)
+-- - closure instead of lambda
+-- - context comes from closure
+local function value_tuple_type_flatten(definition)
+	local constructor, arg = definition:unwrap_enum_value()
+	if constructor == "empty" then
+		return {}, 0
+	elseif constructor == "cons" then
+		local elements = arg:unwrap_tuple_value()
+		local definition = elements[1]
+		local f = elements[2]
+		local ok, param_name, code, capture = f:as_closure()
+		if not ok then
+			error("override_pretty: value.tuple_type: tuple decl must be a closure")
+		end
+		local context = ensure_context(capture)
+		local inner_context = context:append(param_name)
+		local is_destructure, is_rename, names, code, inner_context = typed_destructure_helper(code, inner_context)
+		local prev, n = value_tuple_type_flatten(definition)
+		n = n + 1
+		prev[n] = { names, code, inner_context }
+		return prev, n
+	else
+		error("override_pretty: value.tuple_type: unknown tuple type data constructor")
+	end
+end
+local value_override_pretty = {
+	-- copypaste of typed.pi
+	pi = function(self, pp)
+		local param_type, param_info, result_type, result_info = self:unwrap_pi()
+		local param_is_tuple_type, param_decls = as_any_tuple_type(param_type)
+		local ok, param_name, result_code, result_capture = result_type:as_closure()
+		if not ok then
+			error("override_pretty: value.pi: result_type must be a closure")
+		end
+		local result_context = ensure_context(result_capture)
+		result_context = result_context:append(param_name)
+		local result_is_destructure, result_is_rename, param_names, result_code, result_context =
+			typed_destructure_helper(result_code, result_context)
+		if result_is_rename then
+			param_name = param_names
+			result_is_destructure = false
+		end
+		local result_is_tuple_type, result_decls = as_any_tuple_type(result_code)
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("value.\u{03A0} ")
+		pp:unit(pp:_resetcolor())
+
+		if param_is_tuple_type and result_is_destructure then
+			local members = value_tuple_type_flatten(param_decls, context)
+
+			if #members == 0 then
+				pp:unit(pp:_color())
+				pp:unit("()")
+				pp:unit(pp:_resetcolor())
+			else
+				tuple_type_helper(pp, members, param_names)
+			end
+		elseif result_is_destructure then
+			-- tuple_elim on params but params aren't a tuple type???
+			-- probably shouldn't happen, but here's a handler
+			pp:unit(pp:_color())
+			pp:unit("(")
+			pp:unit(pp:_resetcolor())
+
+			for i, name in param_names:ipairs() do
+				if i > 1 then
+					pp:unit(" ")
+				end
+				pp:unit(name)
+			end
+
+			pp:unit(pp:_color())
+			pp:unit(") : ")
+			pp:unit(pp:_resetcolor())
+
+			pp:any(param_type, context)
+		else
+			pp:unit(param_name)
+
+			pp:unit(pp:_color())
+			pp:unit(" : ")
+			pp:unit(pp:_resetcolor())
+
+			pp:any(param_type, context)
+		end
+
+		pp:unit(pp:_color())
+		pp:unit(" -> ")
+		pp:unit(pp:_resetcolor())
+
+		if result_is_tuple_type then
+			local members = typed_tuple_type_flatten(result_decls, result_context)
+
+			if #members == 0 then
+				pp:unit(pp:_color())
+				pp:unit("()")
+				pp:unit(pp:_resetcolor())
+			else
+				tuple_type_helper(pp, members)
+			end
+		else
+			pp:any(result_code, result_context)
+		end
+
+		pp:_exit()
+	end,
+	-- the only difference compared to typed.lambda is context coming from within the closure
+	closure = function(self, pp)
+		local param_name, code, capture = self:unwrap_closure()
+		local context = ensure_context(capture)
+		local inner_context = context:append(param_name)
+		local is_destructure, is_rename, names, code, inner_context = typed_destructure_helper(code, inner_context)
+		if is_rename then
+			param_name = names
+			is_destructure = false
+		end
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("value.closure ")
+		pp:unit(pp:_resetcolor())
+
+		if is_destructure then
+			if #names == 0 then
+				pp:unit(pp:_color())
+				pp:unit("()")
+				pp:unit(pp:_resetcolor())
+			end
+
+			for i, name in names:ipairs() do
+				if i > 1 then
+					pp:unit(" ")
+				end
+				pp:unit(name)
+			end
+		else
+			pp:unit(param_name)
+		end
+
+		pp:unit(pp:_color())
+		pp:unit(" ->")
+		pp:unit(pp:_resetcolor())
+
+		if code:is_let() or code:is_tuple_elim() then
+			pp:unit("\n")
+			pp:_indent()
+			pp:_prefix()
+			pp:any(code, inner_context)
+			pp:_dedent()
+		else
+			pp:unit(" ")
+			pp:any(code, inner_context)
+		end
+
+		pp:_exit()
+	end,
+	tuple_type = function(self, pp)
+		local decls = self:unwrap_tuple_type()
+		local members = value_tuple_type_flatten(decls)
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("value.tuple_type[")
+		pp:unit(pp:_resetcolor())
+
+		tuple_type_helper(pp, members)
+
+		pp:unit(pp:_color())
+		pp:unit("]")
+		pp:unit(pp:_resetcolor())
+
+		pp:_exit()
+	end,
+	-- copypaste of typed.prim_function_type
+	prim_function_type = function(self, pp)
+		local param_type, result_type = self:unwrap_prim_function_type()
+		local ok, param_decls = param_type:as_prim_tuple_type()
+		if not ok then
+			error("override_pretty: value.prim_function_type: param_type must be a prim_tuple_type")
+		end
+		local ok, param_name, result_code, result_capture = result_type:as_closure()
+		if not ok then
+			error("override_pretty: value.prim_function_type: result_type must be a closure")
+		end
+		local result_context = ensure_context(result_capture)
+		result_context = result_context:append(param_name)
+		local result_is_destructure, result_is_rename, param_names, result_code, result_context =
+			typed_destructure_helper(result_code, result_context)
+		if result_is_rename then
+			param_name = param_names
+			result_is_destructure = false
+		end
+		local ok, result_decls = result_code:as_prim_tuple_type()
+		if not ok then
+			error("override_pretty: value.prim_function_type: result_type must be a prim_tuple_type")
+		end
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("value.prim-\u{03A0} ")
+		pp:unit(pp:_resetcolor())
+
+		if result_is_destructure then
+			local members = value_tuple_type_flatten(param_decls, context)
+
+			if #members == 0 then
+				pp:unit(pp:_color())
+				pp:unit("()")
+				pp:unit(pp:_resetcolor())
+			else
+				tuple_type_helper(pp, members, param_names)
+			end
+		else
+			pp:unit(param_name)
+
+			pp:unit(pp:_color())
+			pp:unit(" : ")
+			pp:unit(pp:_resetcolor())
+
+			pp:any(param_type, context)
+		end
+
+		pp:unit(pp:_color())
+		pp:unit(" -> ")
+		pp:unit(pp:_resetcolor())
+
+		local members = typed_tuple_type_flatten(result_decls, result_context)
+
+		if #members == 0 then
+			pp:unit(pp:_color())
+			pp:unit("()")
+			pp:unit(pp:_resetcolor())
+		else
+			tuple_type_helper(pp, members)
+		end
+
+		pp:_exit()
+	end,
+	prim_tuple_type = function(self, pp)
+		local decls = self:unwrap_prim_tuple_type()
+		local members = value_tuple_type_flatten(decls)
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("value.prim_tuple_type[")
+		pp:unit(pp:_resetcolor())
+
+		tuple_type_helper(pp, members)
+
+		pp:unit(pp:_color())
+		pp:unit("]")
+		pp:unit(pp:_resetcolor())
+
+		pp:_exit()
+	end,
+}
+
 neutral_value:define_enum("neutral_value", {
 	-- fn(free_value) and table of functions eg free.metavariable(metavariable)
 	-- value should be constructed w/ free.something()
@@ -966,7 +2457,7 @@ local empty = value.enum_value("empty", tup_val())
 local unit_type = value.tuple_type(empty)
 local unit_val = tup_val()
 
-for _, deriver in ipairs { derivers.as, derivers.pretty_print, derivers.eq } do
+for _, deriver in ipairs { derivers.as, derivers.eq } do
 	checkable_term:derive(deriver)
 	inferrable_term:derive(deriver)
 	typed_term:derive(deriver)
@@ -978,7 +2469,21 @@ for _, deriver in ipairs { derivers.as, derivers.pretty_print, derivers.eq } do
 	expression_goal:derive(deriver)
 	placeholder_debug:derive(deriver)
 	purity:derive(deriver)
+	result_info:derive(deriver)
 end
+
+checkable_term:derive(derivers.pretty_print, checkable_term_override_pretty)
+inferrable_term:derive(derivers.pretty_print, inferrable_term_override_pretty)
+typed_term:derive(derivers.pretty_print, typed_term_override_pretty)
+visibility:derive(derivers.pretty_print)
+free:derive(derivers.pretty_print)
+value:derive(derivers.pretty_print, value_override_pretty)
+neutral_value:derive(derivers.pretty_print)
+binding:derive(derivers.pretty_print, binding_override_pretty)
+expression_goal:derive(derivers.pretty_print)
+placeholder_debug:derive(derivers.pretty_print)
+purity:derive(derivers.pretty_print)
+result_info:derive(derivers.pretty_print)
 
 --[[
 local tuple_defn = value.enum_value("variant",

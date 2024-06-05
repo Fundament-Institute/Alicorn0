@@ -111,8 +111,9 @@ local function gen_record(self, cons, kind, params_with_types)
 				local argi = args[i]
 				-- type-check constructor arguments
 				if params_types[i].value_check(argi) ~= true then
-					p("value of parameter " .. v .. ":", argi)
-					p("expected type of parameter " .. v .. " is :", params_types[i])
+					print("value of parameter " .. v .. ": (follows)")
+					p(argi)
+					print("expected type of parameter " .. v .. " is :", params_types[i])
 					error("wrong argument type passed to constructor " .. kind .. ", parameter '" .. v .. "'")
 				end
 				val[v] = argi
@@ -120,6 +121,11 @@ local function gen_record(self, cons, kind, params_with_types)
 			setmetatable(val, self)
 			return val
 		end,
+		setmetatable(self, {
+			__tostring = function()
+				return "terms-gen record " .. kind
+			end,
+		}),
 	})
 	local derive_info = {
 		kind = kind,
@@ -138,8 +144,8 @@ end
 ---@return Record self
 local function define_record(self, kind, params_with_types)
 	local self, derive_info = gen_record(self, self, kind, params_with_types)
-	function self:derive(deriver)
-		return deriver.record(self, derive_info)
+	function self:derive(deriver, ...)
+		return deriver.record(self, derive_info, ...)
 	end
 	self.value_check = metatable_equality(self)
 	self.derive_info = derive_info
@@ -195,12 +201,17 @@ local function define_enum(self, name, variants)
 			}
 		end
 	end
+	setmetatable(self, {
+		__tostring = function()
+			return "terms-gen enum " .. name
+		end,
+	})
 	local derive_info = {
 		name = name,
 		variants = derive_variants,
 	}
-	function self:derive(deriver)
-		return deriver.enum(self, derive_info)
+	function self:derive(deriver, ...)
+		return deriver.enum(self, derive_info, ...)
 	end
 	self.value_check = metatable_equality(self)
 	self.derive_info = derive_info
@@ -215,7 +226,11 @@ end
 ---@param lsp_type string
 ---@return Foreign self
 local function define_foreign(self, value_check, lsp_type)
-	setmetatable(self, nil)
+	setmetatable(self, {
+		__tostring = function()
+			return "terms-gen foreign " .. (lsp_type or "unknown")
+		end,
+	})
 	self.value_check = value_check
 	self.derive_info = {
 		kind = "foreign",
@@ -432,8 +447,8 @@ local function gen_array_fns(value_type)
 	return index, newindex
 end
 
-local function array_prettyprintable(self, printer)
-	return printer:array(self.array)
+local function array_prettyprintable(self, printer, ...)
+	return printer:array(self.array, ...)
 end
 
 ---@class Array: Type

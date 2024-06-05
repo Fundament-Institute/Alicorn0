@@ -275,7 +275,8 @@ local function expression_pairhandler(args, a, b)
 
 	if type_of_term:is_prim_function_type() then
 		local param_type, result_type = type_of_term:unwrap_prim_function_type()
-		print("checking prim_function_type call args with goal ", param_type)
+		print("checking prim_function_type call args with goal: (value term follows)")
+		print(param_type)
 		-- multiple quantity of usages in tuple with usage in function arguments
 		local ok, tuple, env = args:match({
 			collect_prim_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
@@ -474,8 +475,6 @@ local function primitive_operative(fn, name)
 	-- what we're going for:
 	-- (s : syntax, e : environment, u : wrapped_typed_term(userdata), g : goal) -> (goal_to_term(g), environment)
 	--   goal one of inferable, mechanism, checkable
-	-- what we have:
-	-- (s : syntax, e : environment) -> (inferrable_term, environment)
 
 	-- 1: wrap fn as a typed prim
 	-- this way it can take a prim tuple and return a prim tuple
@@ -494,12 +493,15 @@ local function primitive_operative(fn, name)
 	end
 	local tuple_conv = typed_term.tuple_cons(tuple_conv_elements)
 	local prim_tuple_conv = typed_term.prim_tuple_cons(prim_tuple_conv_elements)
-	local tuple_to_prim_tuple = typed_term.tuple_elim(typed_term.bound_variable(1), nparams, prim_tuple_conv)
+	local param_names = name_array("#syntax", "#env", "#goal", "#userdata")
+	local tuple_to_prim_tuple =
+		typed_term.tuple_elim(param_names, typed_term.bound_variable(1), nparams, prim_tuple_conv)
 	local tuple_to_prim_tuple_fn = typed_term.application(typed_prim_fn, tuple_to_prim_tuple)
-	local tuple_to_tuple_fn = typed_term.tuple_elim(tuple_to_prim_tuple_fn, 2, tuple_conv)
+	local result_names = name_array("#term", "#env")
+	local tuple_to_tuple_fn = typed_term.tuple_elim(result_names, tuple_to_prim_tuple_fn, 2, tuple_conv)
 	-- 3: wrap it in a closure with an empty capture, not a typed lambda
 	-- this ensures variable 1 is the argument tuple
-	local value_fn = value.closure(tuple_to_tuple_fn, runtime_context())
+	local value_fn = value.closure("#OPERATIVE_PARAM", tuple_to_tuple_fn, runtime_context())
 
 	local userdata_type = value.tuple_type(empty)
 	return inferrable_term.typed(
@@ -578,8 +580,10 @@ collect_tuple = metalanguage.reducer(function(syntax, args)
 				}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
 				if ok and continue then
 					collected_terms:append(next_term)
-					print("goal type for next element in tuple", next_elem_type)
-					print("term we are checking", next_term)
+					print("goal type for next element in tuple: (value term follows)")
+					print(next_elem_type)
+					print("term we are checking: (checkable term follows)")
+					print(next_term:pretty_print(env.typechecking_context))
 					local usages, typed_elem_term = evaluator.check(next_term, env.typechecking_context, next_elem_type)
 					local elem_value = evaluator.evaluate(typed_elem_term, env.typechecking_context.runtime_context)
 					tuple_symbolic_elems:append(elem_value)
@@ -652,7 +656,8 @@ collect_prim_tuple = metalanguage.reducer(function(syntax, args)
 				}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
 				if ok and continue then
 					collected_terms:append(next_term)
-					print("trying to check tuple element as ", next_elem_type)
+					print("trying to check tuple element as: (value term follows)")
+					print(next_elem_type)
 					local usages, typed_elem_term = evaluator.check(next_term, env.typechecking_context, next_elem_type)
 					local elem_value = evaluator.evaluate(typed_elem_term, env.typechecking_context.runtime_context)
 					tuple_symbolic_elems:append(elem_value)

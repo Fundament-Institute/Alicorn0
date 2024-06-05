@@ -28,6 +28,26 @@
             >&2 echo "Checking ${file}"
             ${pkgs.lib.getExe luvitpkgs.packages.${system}.luvit} ${file}
           '';
+
+        lqc = pkgs.luajit.pkgs.buildLuarocksPackage rec {
+          pname = "lua-quickcheck";
+          version = "0.2-4";
+          src = pkgs.fetchFromGitHub {
+            owner = "luc-tielen";
+            repo = "lua-quickcheck";
+            rev = "v${version}";
+            hash = "sha256-B3Gz0emI3MBwp2Bg149KU02RlzVzbKdVPM+B7ZFH+80";
+          };
+
+          knownRockspec = "${src}/rockspecs/lua-quickcheck-${version}.rockspec";
+
+          propagatedBuildInputs = with pkgs; [
+            luajit
+            luajitPackages.luafilesystem
+            luajitPackages.argparse
+          ];
+        };
+
       in
       {
         packages = rec {
@@ -76,7 +96,7 @@
               pkgs.stylua
 
               (pkgs.luajit.withPackages
-                (ps: with ps; [ luasocket lpeg inspect luaunit tl ]))
+                (ps: with ps; [ luasocket lpeg inspect luaunit tl lqc ]))
             ];
             inherit (self.checks.${system}.pre-commit-check) shellHook;
           };
