@@ -29,10 +29,6 @@ let prim-inferrable-term = unwrap(prim-type, prim-inferrable-term-wrap)
 let prim-checkable-term  = unwrap(prim-type, prim-checkable-term-wrap)
 let prim-lua-error       = unwrap(prim-type, prim-lua-error-wrap)
 
-# FIXME: this line is pulled way away from where it should be
-# to work around slow closure capture comparisons in alicorn
-let prim-if-type = forall (subject : prim-bool) (consequent : prim-type) (alternate : prim-type) -> T : prim-type
-
 let prim-string-concat = intrinsic "return function(a, b) return a .. b end" :
 	prim-func-type (a : prim-string) (b : prim-string) -> (c : prim-string)
 
@@ -482,6 +478,8 @@ let func-to-prim-func =
 
 
 
+
+let prim-if-type = forall (subject : prim-bool) (consequent : prim-type) (alternate : prim-type) -> T : prim-type
 
 let prim-if-wrap = intrinsic
 	""""
