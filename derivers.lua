@@ -8,6 +8,24 @@
 
 local derive_print = function(...) end -- can make this call derive_print(...) if you want to debug
 
+local memo_meta = { __mode = "k" }
+local function make_memo_table()
+	return setmetatable({}, memo_meta)
+end
+local eq_memoizer = { memo = make_memo_table() }
+function eq_memoizer:check(a, b)
+	local memoa = self.memo[a]
+	if memoa then
+		return memoa[b]
+	end
+end
+function eq_memoizer:set(a, b)
+	if not self.memo[a] then
+		self.memo[a] = make_memo_table()
+	end
+	self.memo[a][b] = true
+end
+
 ---@type Deriver
 local eq = {
 	record = function(t, info)
@@ -19,7 +37,14 @@ local eq = {
 			checks[i] = string.format("left[%q] == right[%q]", param, param)
 		end
 		local all_checks = table.concat(checks, " and ")
-		local chunk = "return function(left, right) return " .. all_checks .. " end"
+		local chunk = "\z
+			local eq_memoizer = ... \n\z
+			return function(left, right)\n\z
+				if eq_memoizer:check(left, right) then return true end\n\z
+				if " .. all_checks .. " then\n\z
+					eq_memoizer:set(left, right)\n\z
+					return true\n\z
+				end return false end"
 
 		derive_print("derive eq: record chunk: " .. kind)
 		derive_print("###")
@@ -28,7 +53,7 @@ local eq = {
 
 		local compiled, message = load(chunk, "derive-eq_record", "t")
 		assert(compiled, message)
-		local eq_fn = compiled()
+		local eq_fn = compiled(eq_memoizer)
 		t.__eq = eq_fn
 	end,
 	enum = function(t, info)
@@ -62,8 +87,16 @@ local eq = {
 		local kind_check_expression = "left.kind == right.kind"
 		local variant_check_expression = "all_variants_checks[left.kind](left, right)"
 		local check_expression = kind_check_expression .. " and " .. variant_check_expression
-		local check_function = "function(left, right) return " .. check_expression .. " end"
-		local chunk = define_all_variants_checks .. "\nreturn " .. check_function
+
+		local chunk = "\z
+			local eq_memoizer = ... \n\z
+			" .. define_all_variants_checks .. "\n\z
+			return function(left, right)\n\z
+				if eq_memoizer:check(left, right) then return true end\n\z
+				if " .. check_expression .. " then\n\z
+					eq_memoizer:set(left, right)\n\z
+					return true\n\z
+				end return false end"
 
 		derive_print("derive eq: enum chunk: " .. name)
 		derive_print("###")
@@ -72,7 +105,7 @@ local eq = {
 
 		local compiled, message = load(chunk, "derive-eq_enum", "t")
 		assert(compiled, message)
-		local eq_fn = compiled()
+		local eq_fn = compiled(eq_memoizer)
 		t.__eq = eq_fn
 	end,
 }
