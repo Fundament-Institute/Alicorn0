@@ -26,7 +26,7 @@ function value:is_pi() end
 function value:unwrap_pi() end
 ---@return boolean
 function value:is_closure() end
----@return typed, any
+---@return string, typed, any
 function value:unwrap_closure() end
 ---@return boolean
 function value:is_name_type() end
@@ -160,7 +160,7 @@ function value:unwrap_prim_tuple_type() end
 ---@field result_info_type value
 ---@field result_info fun(result_info:any): value
 ---@field pi fun(param_type:value, param_info:value, result_type:value, result_info:value): value
----@field closure fun(code:typed, capture:any): value
+---@field closure fun(param_name:string, code:typed, capture:any): value
 ---@field name_type value
 ---@field name fun(name:string): value
 ---@field operative_value fun(userdata:value): value
