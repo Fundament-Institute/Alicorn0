@@ -58,6 +58,9 @@ local function add_arrays(onto, with)
 	end
 end
 
+---make an alicorn function that returns the specified values
+---@param v value
+---@return value
 local function const_combinator(v)
 	return value.closure("#CONST_PARAM", typed_term.bound_variable(1), runtime_context():append(v))
 end
@@ -68,10 +71,10 @@ local function get_level(t)
 	return 0
 end
 
----@param val any an alicorn value
+---@param val value an alicorn value
 ---@param mappings table the placeholder we are trying to get rid of by substituting
 ---@param context_len integer number of bindings in the runtime context already used - needed for closures
----@return unknown a typed term
+---@return typed a typed term
 local function substitute_inner(val, mappings, context_len)
 	if val:is_visibility_type() then
 		return typed_term.literal(val)
@@ -121,9 +124,9 @@ local function substitute_inner(val, mappings, context_len)
 		return typed_term.operative_cons(userdata)
 	elseif val:is_operative_type() then
 		local handler, userdata_type = val:unwrap_operative_type()
-		handler = substitute_inner(handler, mappings, context_len)
-		userdata_type = substitute_inner(userdata_type, mappings, context_len)
-		return typed_term.operative_type_cons(handler, userdata_type)
+		local typed_handler = substitute_inner(handler, mappings, context_len)
+		local typed_userdata_type = substitute_inner(userdata_type, mappings, context_len)
+		return typed_term.operative_type_cons(typed_handler, typed_userdata_type)
 	elseif val:is_tuple_value() then
 		local elems = val:unwrap_tuple_value()
 		local res = typed_array()
@@ -456,6 +459,12 @@ function fitsinto_qless(tya, tyb)
 	end
 	return true
 end
+
+---check if one type fits into another
+---@param a value
+---@param b value
+---@return boolean
+---@return string
 function fitsinto(a, b)
 	if a:is_neutral() and b:is_neutral() then
 		if a == b then
@@ -600,7 +609,10 @@ result_info:derive(unifier)
 
 value:derive(derivers.eq)
 
+---@param checkable_term checkable
 ---@param typechecking_context TypecheckingContext
+---@param goal_type value
+---@return unknown, typed
 local function check(
 	checkable_term, -- constructed from checkable_term
 	typechecking_context, -- todo
@@ -711,6 +723,10 @@ local function check(
 	error("unreachable!?")
 end
 
+---apply an alicorn function to an alicorn value
+---@param f value
+---@param arg value
+---@return value
 function apply_value(f, arg)
 	if terms.value.value_check(f) ~= true then
 		error("apply_value, f: expected an alicorn value")
@@ -951,7 +967,8 @@ function infer(
 		local result_type = substitute_type_variables(body_type, #inner_context, param_name, typechecking_context)
 		local body_usages_param = body_usages[#body_usages]
 		local lambda_usages = body_usages:copy(1, #body_usages - 1)
-		local lambda_type = value.pi(param_type, value.param_info(value.visibility(param_visibility)), result_type, result_info_pure)
+		local lambda_type =
+			value.pi(param_type, value.param_info(value.visibility(param_visibility)), result_type, result_info_pure)
 		local lambda_term = typed_term.lambda(param_name, body_term)
 		return lambda_type, lambda_usages, lambda_term
 	elseif inferrable_term:is_pi() then
@@ -1473,6 +1490,10 @@ end
 
 local intrinsic_memo = setmetatable({}, { __mode = "v" })
 
+---evaluate a typed term in a contextual
+---@param typed_term typed
+---@param runtime_context RuntimeContext
+---@return value
 function evaluate(typed_term, runtime_context)
 	-- -> an alicorn value
 	-- TODO: typecheck typed_term and runtime_context?
