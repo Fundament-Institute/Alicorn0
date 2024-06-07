@@ -532,3 +532,8 @@ let prim-matcher-is-pair =
 					r : unwrap(prim-type, res)
 			->
 			m : matcher(unwrap(prim-type, ud), unwrap(prim-type, res))
+
+let implicit-unwrap =
+	lambda_implicit (T : type_(10))
+		lambda (x : wrapped(T))
+			unwrap(T, x)

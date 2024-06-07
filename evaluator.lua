@@ -942,7 +942,7 @@ function infer(
 	elseif inferrable_term:is_typed() then
 		return inferrable_term:unwrap_typed()
 	elseif inferrable_term:is_annotated_lambda() then
-		local param_name, param_annotation, body, anchor = inferrable_term:unwrap_annotated_lambda()
+		local param_name, param_annotation, body, anchor, param_visibility = inferrable_term:unwrap_annotated_lambda()
 		local _, _, param_term = infer(param_annotation, typechecking_context)
 		local param_type = evaluate(param_term, typechecking_context:get_runtime_context())
 		local inner_context = typechecking_context:append(param_name, param_type, nil, anchor)
@@ -951,7 +951,7 @@ function infer(
 		local result_type = substitute_type_variables(body_type, #inner_context, param_name, typechecking_context)
 		local body_usages_param = body_usages[#body_usages]
 		local lambda_usages = body_usages:copy(1, #body_usages - 1)
-		local lambda_type = value.pi(param_type, param_info_explicit, result_type, result_info_pure)
+		local lambda_type = value.pi(param_type, value.param_info(value.visibility(param_visibility)), result_type, result_info_pure)
 		local lambda_term = typed_term.lambda(param_name, body_term)
 		return lambda_type, lambda_usages, lambda_term
 	elseif inferrable_term:is_pi() then

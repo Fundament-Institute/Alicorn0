@@ -12,7 +12,7 @@ function inferrable:is_typed() end
 function inferrable:unwrap_typed() end
 ---@return boolean
 function inferrable:is_annotated_lambda() end
----@return string, inferrable, inferrable, any
+---@return string, inferrable, inferrable, any, visibility
 function inferrable:unwrap_annotated_lambda() end
 ---@return boolean
 function inferrable:is_pi() end
@@ -28,7 +28,7 @@ function inferrable:is_tuple_cons() end
 function inferrable:unwrap_tuple_cons() end
 ---@return boolean
 function inferrable:is_tuple_elim() end
----@return inferrable, inferrable
+---@return any, inferrable, inferrable
 function inferrable:unwrap_tuple_elim() end
 ---@return boolean
 function inferrable:is_tuple_type() end
@@ -141,11 +141,11 @@ function inferrable:unwrap_prim_intrinsic() end
 ---@class (exact) inferrableType:Type
 ---@field bound_variable fun(index:number): inferrable
 ---@field typed fun(type:value, usage_counts:any, typed_term:typed): inferrable
----@field annotated_lambda fun(param_name:string, param_annotation:inferrable, body:inferrable, anchor:any): inferrable
+---@field annotated_lambda fun(param_name:string, param_annotation:inferrable, body:inferrable, anchor:any, visible:visibility): inferrable
 ---@field pi fun(param_type:inferrable, param_info:checkable, result_type:inferrable, result_info:checkable): inferrable
 ---@field application fun(f:inferrable, arg:checkable): inferrable
 ---@field tuple_cons fun(elements:any): inferrable
----@field tuple_elim fun(subject:inferrable, body:inferrable): inferrable
+---@field tuple_elim fun(names:any, subject:inferrable, body:inferrable): inferrable
 ---@field tuple_type fun(definition:inferrable): inferrable
 ---@field record_cons fun(fields:any): inferrable
 ---@field record_elim fun(subject:inferrable, field_names:any, body:inferrable): inferrable
