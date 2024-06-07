@@ -174,7 +174,7 @@ end
 ---@param a Syntax
 ---@param b Syntax
 ---@return boolean
----@return InferrableTerm | CheckableTerm
+---@return inferrable | checkable
 ---@return Environment
 local function expression_pairhandler(args, a, b)
 	-- local ok, ifx, op, args = b:match(
@@ -188,10 +188,11 @@ local function expression_pairhandler(args, a, b)
 	local goal, env = args:unwrap()
 	local orig_env = env
 	local ok, ifx = true, false
+	local sargs
 
 	local combiner
 	if ok and ifx then
-		combiner = env:get("_" + op + "_")
+		ok, combiner = env:get("_" + op + "_")
 	else
 		ok, combiner, env = a:match(
 			{ expression(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.infer, env)) },
@@ -201,7 +202,7 @@ local function expression_pairhandler(args, a, b)
 		if not ok then
 			return false, combiner
 		end
-		args = b
+		sargs = b
 	end
 
 	-- resolve first of the pair as an expression
@@ -231,7 +232,7 @@ local function expression_pairhandler(args, a, b)
 			return false, semantic_error.operative_apply_failed(operative_result_val.data, { a.anchor, b.anchor })
 		end
 
-		-- temporary, whFAILile it isn't a Maybe
+		-- temporary, while it isn't a Maybe
 		local data = operative_result_val.elements[1].primitive_value
 		local env = operative_result_val.elements[2].primitive_value
 		if not env then

@@ -908,9 +908,9 @@ local function nearest_star_level(typ)
 	end
 end
 
----@param inferrable_term inferrable_term
+---@param inferrable_term inferrable
 ---@param typechecking_context TypecheckingContext
----@return unknown, unknown, unknown
+---@return value, unknown, typed
 function infer(
 	inferrable_term, -- constructed from inferrable
 	typechecking_context -- todo
