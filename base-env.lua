@@ -36,6 +36,12 @@ local function do_block(syntax, env)
 	return ok, val, env:exit_child_scope(newenv)
 end
 
+---handle a let binding
+---@param syntax Syntax
+---@param env Environment
+---@return boolean
+---@return checkable | inferrable
+---@return Environment
 local function let_bind(syntax, env)
 	local ok, name, tail = syntax:match({
 		metalang.listtail(
@@ -430,7 +436,14 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 	local shadowed, env = env:enter_block()
 
 	-- syntax.anchor can be nil so we fall back to the anchor for the start of this prim func type if needed
-	env = env:bind_local(terms.binding.annotated_lambda("#prim-func-arguments", args, syntax.anchor or pft_anchor, terms.visibility.explicit))
+	env = env:bind_local(
+		terms.binding.annotated_lambda(
+			"#prim-func-arguments",
+			args,
+			syntax.anchor or pft_anchor,
+			terms.visibility.explicit
+		)
+	)
 	local ok, arg = env:get("#prim-func-arguments")
 	env = env:bind_local(terms.binding.tuple_elim(names, arg))
 
@@ -504,7 +517,9 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 	local shadowed, env = env:enter_block()
 
 	-- TODO: use correct name in lambda parameter instead of adding an extra let
-	env = env:bind_local(terms.binding.annotated_lambda("#forall-arguments", args, syntax.anchor, terms.visibility.explicit))
+	env = env:bind_local(
+		terms.binding.annotated_lambda("#forall-arguments", args, syntax.anchor, terms.visibility.explicit)
+	)
 	local ok, arg = env:get("#forall-arguments")
 	if single then
 		env = env:bind_local(terms.binding.let(names, arg))
@@ -696,7 +711,9 @@ local function lambda_impl(syntax, env)
 
 	local shadow, inner_env = env:enter_block()
 	-- TODO: use correct name in lambda parameter instead of adding an extra let
-	inner_env = inner_env:bind_local(terms.binding.annotated_lambda("#lambda-arguments", thread.args, syntax.anchor, terms.visibility.explicit))
+	inner_env = inner_env:bind_local(
+		terms.binding.annotated_lambda("#lambda-arguments", thread.args, syntax.anchor, terms.visibility.explicit)
+	)
 	local _, arg = inner_env:get("#lambda-arguments")
 	if single then
 		inner_env = inner_env:bind_local(terms.binding.let(names, arg))
@@ -714,7 +731,6 @@ local function lambda_impl(syntax, env)
 	local resenv, term = env:exit_block(expr, shadow)
 	return true, term, resenv
 end
-
 
 ---@param syntax any
 ---@param env Environment
@@ -736,7 +752,9 @@ local function lambda_impl_implicit(syntax, env)
 
 	local shadow, inner_env = env:enter_block()
 	-- TODO: use correct name in lambda parameter instead of adding an extra let
-	inner_env = inner_env:bind_local(terms.binding.annotated_lambda("#lambda-arguments", thread.args, syntax.anchor, terms.visibility.implicit))
+	inner_env = inner_env:bind_local(
+		terms.binding.annotated_lambda("#lambda-arguments", thread.args, syntax.anchor, terms.visibility.implicit)
+	)
 	local _, arg = inner_env:get("#lambda-arguments")
 	if single then
 		inner_env = inner_env:bind_local(terms.binding.let(names, arg))

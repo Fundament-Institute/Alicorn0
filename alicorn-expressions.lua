@@ -214,11 +214,10 @@ local function expression_pairhandler(args, a, b)
 
 	-- combiner was an evaluated typed value, now it isn't
 	local type_of_term, usage_count, term = infer(combiner, env.typechecking_context)
-
-	local ok, handler, userdata_type = type_of_term:as_operative_type()
-	if ok then
+	if type_of_term:is_operative_type() then
+		local handler, userdata_type = type_of_term:unwrap_operative_type()
 		-- operative input: env, syntax tree, goal type (if checked)
-		local tuple_args = value_array(value.prim(args), value.prim(env), value.prim(term), value.prim(goal))
+		local tuple_args = value_array(value.prim(sargs), value.prim(env), value.prim(term), value.prim(goal))
 		local operative_result_val = evaluator.apply_value(handler, terms.value.tuple_value(tuple_args))
 		-- result should be able to be an inferred term, can fail
 		-- NYI: operative_cons in evaluator must use Maybe type once it exists
@@ -263,7 +262,7 @@ local function expression_pairhandler(args, a, b)
 	if type_of_term:is_pi() then
 		local param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
 		-- multiple quantity of usages in tuple with usage in function arguments
-		local ok, tuple, env = args:match({
+		local ok, tuple, env = sargs:match({
 			collect_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
 		}, metalanguage.failure_handler, nil)
 
@@ -279,7 +278,7 @@ local function expression_pairhandler(args, a, b)
 		print("checking prim_function_type call args with goal: (value term follows)")
 		print(param_type)
 		-- multiple quantity of usages in tuple with usage in function arguments
-		local ok, tuple, env = args:match({
+		local ok, tuple, env = sargs:match({
 			collect_prim_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
 		}, metalanguage.failure_handler, nil)
 
