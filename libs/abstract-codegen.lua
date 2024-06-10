@@ -1,7 +1,3 @@
--- EVIL HACK to bypass strict mode blocking LuLPeg when the _ENV local isn't present
---_G._ENV = nil
-
---local lpeg = require 'LuLPeg.lulpeg'
 local lpeg = require "lpeg"
 
 local M = {}

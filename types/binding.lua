@@ -12,10 +12,10 @@ function binding:is_tuple_elim() end
 function binding:unwrap_tuple_elim() end
 ---@return boolean
 function binding:is_annotated_lambda() end
----@return string, inferrable, any
+---@return string, inferrable, any, visibility
 function binding:unwrap_annotated_lambda() end
 ---@class (exact) bindingType:Type
 ---@field let fun(name:string, expr:inferrable): binding
 ---@field tuple_elim fun(names:any, subject:inferrable): binding
----@field annotated_lambda fun(param_name:string, param_annotation:inferrable, anchor:any): binding
+---@field annotated_lambda fun(param_name:string, param_annotation:inferrable, anchor:any, visible:visibility): binding
 return {}

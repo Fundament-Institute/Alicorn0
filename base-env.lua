@@ -36,6 +36,12 @@ local function do_block(syntax, env)
 	return ok, val, env:exit_child_scope(newenv)
 end
 
+---handle a let binding
+---@param syntax Syntax
+---@param env Environment
+---@return boolean
+---@return checkable | inferrable
+---@return Environment
 local function let_bind(syntax, env)
 	local ok, name, tail = syntax:match({
 		metalang.listtail(
@@ -261,7 +267,7 @@ local ascribed_name_with_tail = metalang.reducer(function(syntax, env, prev, nam
 	if not anchor then
 		anchor = "bug in ascribed_name_with_tail"
 	end
-	env = env:bind_local(terms.binding.annotated_lambda("#prev", prev, anchor))
+	env = env:bind_local(terms.binding.annotated_lambda("#prev", prev, anchor, terms.visibility.explicit))
 	local ok, prev_binding = env:get("#prev")
 	if not ok then
 		error "#prev should always be bound, was just added"
@@ -489,7 +495,14 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 
 	-- syntax.anchor can be nil so we fall back to the anchor for the start of this prim func type if needed
 	-- TODO: use correct name in lambda parameter instead of adding an extra let
-	env = env:bind_local(terms.binding.annotated_lambda("#prim-func-arguments", args, syntax.anchor or pft_anchor))
+	env = env:bind_local(
+		terms.binding.annotated_lambda(
+			"#prim-func-arguments",
+			args,
+			syntax.anchor or pft_anchor,
+			terms.visibility.explicit
+		)
+	)
 	local ok, arg = env:get("#prim-func-arguments")
 	if single then
 		env = env:bind_local(terms.binding.let(names, arg))
@@ -575,7 +588,14 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 
 	-- syntax.anchor can be nil so we fall back to the anchor for the start of this forall type if needed
 	-- TODO: use correct name in lambda parameter instead of adding an extra let
-	env = env:bind_local(terms.binding.annotated_lambda("#forall-arguments", args, syntax.anchor or pft_anchor))
+	env = env:bind_local(
+		terms.binding.annotated_lambda(
+			"#forall-arguments",
+			args,
+			syntax.anchor or pft_anchor,
+			terms.visibility.explicit
+		)
+	)
 	local ok, arg = env:get("#forall-arguments")
 	if single then
 		env = env:bind_local(terms.binding.let(names, arg))
@@ -772,7 +792,50 @@ local function lambda_impl(syntax, env)
 
 	local shadow, inner_env = env:enter_block()
 	-- TODO: use correct name in lambda parameter instead of adding an extra let
-	inner_env = inner_env:bind_local(terms.binding.annotated_lambda("#lambda-arguments", thread.args, syntax.anchor))
+	inner_env = inner_env:bind_local(
+		terms.binding.annotated_lambda("#lambda-arguments", thread.args, syntax.anchor, terms.visibility.explicit)
+	)
+	local _, arg = inner_env:get("#lambda-arguments")
+	if single then
+		inner_env = inner_env:bind_local(terms.binding.let(names, arg))
+	else
+		inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
+	end
+	local ok, expr, env = tail:match(
+		{ exprs.block(metalang.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env)) },
+		metalang.failure_handler,
+		nil
+	)
+	if not ok then
+		return ok, expr
+	end
+	local resenv, term = env:exit_block(expr, shadow)
+	return true, term, resenv
+end
+
+---@param syntax any
+---@param env Environment
+---@return boolean
+---@return unknown
+---@return unknown|nil
+local function lambda_impl_implicit(syntax, env)
+	local ok, thread, tail = syntax:match({
+		metalang.listtail(
+			metalang.accept_handler,
+			ascribed_segment(metalang.accept_handler, env, metalang.isnil(metalang.accept_handler))
+		),
+	}, metalang.failure_handler, nil)
+	if not ok then
+		return ok, thread
+	end
+
+	local single, args, names, env = thread.single, thread.args, thread.names, thread.env
+
+	local shadow, inner_env = env:enter_block()
+	-- TODO: use correct name in lambda parameter instead of adding an extra let
+	inner_env = inner_env:bind_local(
+		terms.binding.annotated_lambda("#lambda-arguments", thread.args, syntax.anchor, terms.visibility.implicit)
+	)
 	local _, arg = inner_env:get("#lambda-arguments")
 	if single then
 		inner_env = inner_env:bind_local(terms.binding.let(names, arg))
@@ -1007,6 +1070,7 @@ local core_operations = {
 	type_ = exprs.primitive_operative(startype_impl, "startype_impl"),
 	["forall"] = exprs.primitive_operative(forall_type_impl, "forall_type_impl"),
 	lambda = exprs.primitive_operative(lambda_impl, "lambda_impl"),
+	lambda_implicit = exprs.primitive_operative(lambda_impl_implicit, "lambda_impl_implicit"),
 	the = exprs.primitive_operative(the_operative_impl, "the"),
 	apply = exprs.primitive_operative(apply_operative_impl, "apply"),
 	wrap = build_wrap(typed.prim_wrap, typed.prim_wrapped_type),

@@ -149,7 +149,7 @@ function environment:bind_local(binding)
 			typechecking_context = typechecking_context,
 		})
 	elseif binding:is_annotated_lambda() then
-		local param_name, param_annotation, anchor = binding:unwrap_annotated_lambda()
+		local param_name, param_annotation, anchor, visible = binding:unwrap_annotated_lambda()
 		if not anchor or not anchor.sourceid then
 			print("binding", binding)
 			error "missing anchor for annotated lambda binding"
@@ -250,8 +250,8 @@ function environment:exit_block(term, shadowed)
 			local names, subject = binding:unwrap_tuple_elim()
 			wrapped = terms.inferrable_term.tuple_elim(names, subject, wrapped)
 		elseif binding:is_annotated_lambda() then
-			local name, annotation, anchor = binding:unwrap_annotated_lambda()
-			wrapped = terms.inferrable_term.annotated_lambda(name, annotation, wrapped, anchor)
+			local name, annotation, anchor, visible = binding:unwrap_annotated_lambda()
+			wrapped = terms.inferrable_term.annotated_lambda(name, annotation, wrapped, anchor, visible)
 		end
 	end
 

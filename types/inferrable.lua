@@ -12,7 +12,7 @@ function inferrable:is_typed() end
 function inferrable:unwrap_typed() end
 ---@return boolean
 function inferrable:is_annotated_lambda() end
----@return string, inferrable, inferrable, any
+---@return string, inferrable, inferrable, any, visibility
 function inferrable:unwrap_annotated_lambda() end
 ---@return boolean
 function inferrable:is_pi() end
@@ -141,7 +141,7 @@ function inferrable:unwrap_prim_intrinsic() end
 ---@class (exact) inferrableType:Type
 ---@field bound_variable fun(index:number): inferrable
 ---@field typed fun(type:value, usage_counts:any, typed_term:typed): inferrable
----@field annotated_lambda fun(param_name:string, param_annotation:inferrable, body:inferrable, anchor:any): inferrable
+---@field annotated_lambda fun(param_name:string, param_annotation:inferrable, body:inferrable, anchor:any, visible:visibility): inferrable
 ---@field pi fun(param_type:inferrable, param_info:checkable, result_type:inferrable, result_info:checkable): inferrable
 ---@field application fun(f:inferrable, arg:checkable): inferrable
 ---@field tuple_cons fun(elements:any): inferrable

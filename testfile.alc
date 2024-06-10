@@ -1010,3 +1010,8 @@ let x = do
 	foobar
 let (foobarbaz) = prim-string-concat(x, foo)
 foobarbaz
+
+let implicit-unwrap =
+	lambda_implicit (T : type_(10))
+		lambda (x : wrapped(T))
+			unwrap(T, x)

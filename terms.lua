@@ -313,6 +313,15 @@ local prim_user_defined_id = gen.declare_foreign(function(val)
 	return type(val) == "table" and type(val.name) == "string"
 end)
 
+-- implicit arguments are filled in through unification
+-- e.g. fn append(t : star(0), n : nat, xs : Array(t, n), val : t) -> Array(t, n+1)
+--      t and n can be implicit, given the explicit argument xs, as they're filled in by unification
+---@module "./types/visibility"
+local visibility = gen.declare_enum("visibility", {
+	{ "explicit" },
+	{ "implicit" },
+})
+
 expression_goal:define_enum("expression_goal", {
 	-- infer
 	{ "infer" },
@@ -354,6 +363,8 @@ binding:define_enum("binding", {
 			inferrable_term,
 			"anchor",
 			gen.anchor_type,
+			"visible",
+			visibility,
 		},
 	},
 })
@@ -532,7 +543,7 @@ local binding_override_pretty = {
 		pp:_exit()
 	end,
 	annotated_lambda = function(self, pp, context)
-		local param_name, param_annotation, anchor = self:unwrap_annotated_lambda()
+		local param_name, param_annotation, anchor, visible = self:unwrap_annotated_lambda()
 		context = ensure_context(context)
 
 		pp:_enter()
@@ -588,6 +599,8 @@ inferrable_term:define_enum("inferrable", {
 			inferrable_term,
 			"anchor",
 			gen.anchor_type,
+			"visible",
+			visibility,
 		},
 	},
 	{
@@ -898,7 +911,7 @@ local inferrable_term_override_pretty = {
 	end,
 	-- some similarities to inferrable.pi and typed.lambda
 	annotated_lambda = function(self, pp, context)
-		local param_name, param_annotation, body, anchor = self:unwrap_annotated_lambda()
+		local param_name, param_annotation, body, anchor, visible = self:unwrap_annotated_lambda()
 		context = ensure_context(context)
 		local inner_context = context:append(param_name)
 		local is_tuple_type, decls = as_any_tuple_type(param_annotation)
@@ -1979,14 +1992,6 @@ free:define_enum("free", {
 	-- TODO: axiom
 })
 
--- implicit arguments are filled in through unification
--- e.g. fn append(t : star(0), n : nat, xs : Array(t, n), val : t) -> Array(t, n+1)
---      t and n can be implicit, given the explicit argument xs, as they're filled in by unification
----@module "./types/visibility"
-local visibility = gen.declare_enum("visibility", {
-	{ "explicit" },
-	{ "implicit" },
-})
 -- whether a function is effectful or pure
 -- an effectful function must return a monad
 -- calling an effectful function implicitly inserts a monad bind between the
