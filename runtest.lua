@@ -100,7 +100,7 @@ if profile_run then
 			end
 			local infer = d.func == evaluator.infer
 			local check = d.func == evaluator.check
-			local term, context, goal
+			local term, context, goal, inferred_type
 			if infer or check then
 				_, term = debug.getlocal(thread, i, 1)
 				_, context = debug.getlocal(thread, i, 2)
