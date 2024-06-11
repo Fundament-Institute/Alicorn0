@@ -158,6 +158,8 @@ let prim-file-read =
 		:
 		prim-func-type (fname : prim-string) -> (content : prim-string)
 
+let terms-gen-array = new-prim-type(new-prim-unique-id("terms-gen-array"))
+
 let void =
 	unwrap
 		type
@@ -868,7 +870,7 @@ let operative-handler-type = lambda ((userdata : prim-type))
 		env : prim-environment
 
 let operative-result-defn = lambda ((goal : prim-goal))
-	# read as: (_ : prim-term-of(goal), _ : prim-environment)
+	# read as: (term : prim-term-of(goal), env : prim-environment)
 	tuple-def-concat prim-type
 		tuple-def-singleton(prim-type, prim-term-of(goal))
 		tuple-def-singleton(prim-type, prim-environment)
@@ -900,6 +902,7 @@ let new-operative = lambda (userdata : prim-type, ud : userdata, handler : opera
 	let op = unwrap(op-type, op)
 
 	# lol look how horrible tuple types are
+	# read as: (op-type : prim-type, op : op-type)
 	let result-defn =
 		tuple-def-elem type_(1)
 			tuple-def-elem type_(1)
@@ -945,18 +948,17 @@ let block-match-failure-handler = lambda ((goal : prim-goal))
 # alicorn doesn't have conds or branches yet so...
 let error-filter =
 	lambda (Tt : prim-type, Tf : prim-type, ok : prim-bool, val-or-err : prim-if(ok, Tt, Tf))
-		let inner =
-			intrinsic
-				""""
-					local function error_filter(ok, val_or_err)
-						if not ok then
-							error(val_or_err)
-						end
-						return val_or_err
+		let inner = intrinsic
+			""""
+				local function error_filter(ok, val_or_err)
+					if not ok then
+						error(val_or_err)
 					end
-					return error_filter
-				:
-				prim-func-type (ok : prim-bool) (val-or-err : prim-if(ok, Tt, Tf)) -> (val : Tt)
+					return val_or_err
+				end
+				return error_filter
+			:
+			prim-func-type (ok : prim-bool) (val-or-err : prim-if(ok, Tt, Tf)) -> (val : Tt)
 		let (val) = inner(ok, val-or-err)
 		val
 
@@ -992,7 +994,7 @@ let do-impl = lambda (syn : prim-syntax, env : prim-environment, ud : prim-unit,
 			matchers
 			block-match-failure-handler(goal)
 			syn
-			ud
+			prim-nil
 
 	let term = error-filter(prim-term-of(goal), prim-lua-error, ok, term)
 	let inner_env = error-filter(prim-environment, prim-unit, ok, inner_env)
@@ -1015,3 +1017,113 @@ let implicit-unwrap =
 	lambda_implicit (T : type_(10))
 		lambda (x : wrapped(T))
 			unwrap(T, x)
+
+let tupleof-ascribed-names-reducer-thread-type = new-prim-type(new-prim-unique-id("tupleof-ascribed-names-reducer-thread"))
+let tupleof-ascribed-names-reducer-thread-type-get-names = intrinsic
+	""""
+		local function get_names(thread)
+			return thread.names
+		end
+		return get_names
+	:
+	prim-func-type (thread : tupleof-ascribed-names-reducer-thread-type) -> (names : terms-gen-array)
+let tupleof-ascribed-names-reducer-thread-type-get-args = intrinsic
+	""""
+		local function get_args(thread)
+			return thread.args
+		end
+		return get_args
+	:
+	prim-func-type (thread : tupleof-ascribed-names-reducer-thread-type) -> (args : prim-inferrable-term)
+let tupleof-ascribed-names-reducer-thread-type-get-env = intrinsic
+	""""
+		local function get_env(thread)
+			return thread.env
+		end
+		return get_env
+	:
+	prim-func-type (thread : tupleof-ascribed-names-reducer-thread-type) -> (env : prim-environment)
+
+let tupleof-ascribed-names-reducer-storage-defn =
+	# read as: (env : prim-environment, termination : prim-matcher(...))
+	tuple-def-concat prim-type
+		tuple-def-singleton(prim-type, prim-environment)
+		tuple-def-singleton(prim-type, prim-matcher(prim-unit, tuple-def-empty(prim-type)))
+
+let tupleof-ascribed-names-reducer-result2-defn =
+	# read as: (thread : tupleof-ascribed-names-reducer-thread-type, tail : prim-syntax)
+	tuple-def-concat prim-type
+		tuple-def-singleton(prim-type, tupleof-ascribed-names-reducer-thread-type)
+		tuple-def-singleton(prim-type, prim-syntax)
+
+let tupleof-ascribed-names-match-result-defn =
+	# read as: (ok : prim-bool, _ : prim-if(ok, tupleof-ascribed-names-reducer-thread-type, prim-lua-error), _ : prim-if(ok, prim-syntax, prim-unit))
+	# or, more logically: (ok : prim-bool, ...) where:
+	# - ok == true:  `...` is tupleof-ascribed-names-reducer-thread-type, prim-syntax
+	# - ok == false: `...` is prim-lua-error
+	tuple-def-elem prim-type
+		tuple-def-elem prim-type
+			tuple-def-elem prim-type
+				tuple-def-empty prim-type
+				lambda (())
+					prim-bool
+			lambda ((ok : prim-bool))
+				prim-if(ok, tupleof-ascribed-names-reducer-thread-type, prim-lua-error)
+		lambda (ok : prim-bool, _ : prim-if(ok, tupleof-ascribed-names-reducer-thread-type, prim-lua-error))
+			prim-if(ok, prim-syntax, prim-unit)
+
+let tupleof-ascribed-names-reducer = intrinsic "return base_env.tupleof_ascribed_names_inner" :
+	reducer-type(prim-unit, tupleof-ascribed-names-reducer-storage-defn, tupleof-ascribed-names-reducer-result2-defn, tupleof-ascribed-names-match-result-defn)
+
+let tupleof-ascribed-names-match-accept-handler = intrinsic "return metalanguage.accept_handler" :
+	reducible-handler-type(prim-unit, tupleof-ascribed-names-reducer-result2-defn, tupleof-ascribed-names-match-result-defn)
+let tupleof-ascribed-names-match-failure-handler = intrinsic "return metalanguage.failure_handler" :
+	failure-handler-type(prim-unit, tupleof-ascribed-names-match-result-defn)
+
+let nil-match-accept-handler = intrinsic "return metalanguage.accept_handler" :
+	nil-handler-type(prim-unit, tuple-def-empty(prim-type))
+
+let tuple-def-impl-type = operative-handler-type(prim-unit)
+
+let tuple-def-impl = lambda (syn : prim-syntax, env : prim-environment, ud : prim-unit, goal : prim-goal)
+	let s = prim-tuple-of(prim-type, tupleof-ascribed-names-reducer-storage-defn)(env, prim-matcher-is-nil(prim-unit, tuple-def-empty(prim-type), nil-match-accept-handler))
+
+	let matcher-t = prim-matcher(prim-unit, tupleof-ascribed-names-match-result-defn)
+	let matcher =
+		prim-matcher-reducible
+			prim-unit
+			tupleof-ascribed-names-reducer-storage-defn
+			tupleof-ascribed-names-reducer-result2-defn
+			tupleof-ascribed-names-match-result-defn
+			tupleof-ascribed-names-reducer
+			s
+			tupleof-ascribed-names-match-accept-handler
+
+	let matchers =
+		prim-array-set matcher-t
+			prim-array-new matcher-t
+			1
+			matcher
+
+	let (ok, thread, tail) =
+		match-syntax
+			prim-unit
+			tupleof-ascribed-names-match-result-defn
+			matchers
+			tupleof-ascribed-names-match-failure-handler
+			syn
+			prim-nil
+
+	let thread = error-filter(tupleof-ascribed-names-reducer-thread-type, prim-lua-error, ok, thread)
+	let tail = error-filter(prim-syntax, prim-unit, ok, tail)
+
+	let (args) = tupleof-ascribed-names-reducer-thread-type-get-args(thread)
+	let (env) = tupleof-ascribed-names-reducer-thread-type-get-env(thread)
+
+	tuple-of(prim-type, operative-result-defn(goal))(args, env)
+
+let (tuple-def-op-type, tuple-def-op) = new-operative(prim-unit, prim-nil, tuple-def-impl)
+
+let my-tuple-def = tuple-def-op(x : prim-number, y : prim-number)
+let my-tuple-type = tuple-type(type_(0), my-tuple-def)
+my-tuple-type

@@ -299,7 +299,10 @@ local ascribed_name = metalang.reducer(function(syntax, env, prev, names)
 	return true, name, val, env
 end, "ascribed_name")
 
-local tupleof_ascribed_names_inner = metalang.reducer(function(syntax, env, termination, build_type_term)
+local tupleof_ascribed_names_inner = metalang.reducer(function(syntax, env, termination)
+	local function build_type_term(args)
+		return terms.inferrable_term.tuple_type(args)
+	end
 	local inf_array = gen.declare_array(terms.inferrable_term)
 	local function tup_cons(...)
 		return terms.inferrable_term.tuple_cons(inf_array(...))
@@ -316,7 +319,7 @@ local tupleof_ascribed_names_inner = metalang.reducer(function(syntax, env, term
 
 	ok, names, args, env, tail = syntax:match({
 		metalang.list_many_threaded_until(function(_, vals, thread, tail)
-			return true, thread.names, build_type_term(thread.args), thread.env, tail
+			return true, thread.names, thread.args, thread.env, tail
 		end, function(thread)
 			return ascribed_name(function(_, name, type_val, type_env)
 				local names = thread.names:copy()
@@ -343,21 +346,25 @@ local tupleof_ascribed_names_inner = metalang.reducer(function(syntax, env, term
 end, "tupleof_ascribed_names_inner")
 
 local tupleof_ascribed_names = metalang.reducer(function(syntax, env, termination)
-	local function build_type_term(args)
-		return terms.inferrable_term.tuple_type(args)
-	end
-	return syntax:match({
-		tupleof_ascribed_names_inner(metalang.accept_handler, env, termination, build_type_term),
+	local ok, thread, tail = syntax:match({
+		tupleof_ascribed_names_inner(metalang.accept_handler, env, termination),
 	}, metalang.failure_handler, nil)
+	if not ok then
+		return ok, thread
+	end
+	thread.args = terms.inferrable_term.tuple_type(thread.args)
+	return ok, thread, tail
 end, "tupleof_ascribed_names")
 
 local prim_tupleof_ascribed_names = metalang.reducer(function(syntax, env, termination)
-	local function build_type_term(args)
-		return terms.inferrable_term.prim_tuple_type(args)
-	end
-	return syntax:match({
-		tupleof_ascribed_names_inner(metalang.accept_handler, env, termination, build_type_term),
+	local ok, thread, tail = syntax:match({
+		tupleof_ascribed_names_inner(metalang.accept_handler, env, termination),
 	}, metalang.failure_handler, nil)
+	if not ok then
+		return ok, thread
+	end
+	thread.args = terms.inferrable_term.prim_tuple_type(thread.args)
+	return ok, thread, tail
 end, "prim_tupleof_ascribed_names")
 
 local ascribed_segment = metalang.reducer(function(syntax, env, termination)
@@ -1102,6 +1109,10 @@ local function create()
 	return env
 end
 
-return {
+local base_env = {
+	tupleof_ascribed_names_inner = tupleof_ascribed_names_inner,
 	create = create,
 }
+local internals_interface = require "./internals-interface"
+internals_interface.base_env = base_env
+return base_env

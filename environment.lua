@@ -102,7 +102,7 @@ function environment:bind_local(binding)
 		--DEBUG:
 		if subject_type:is_enum_value() then
 			print "bad subject infer"
-			print(subject:pretty_print())
+			print(subject:pretty_print(self.typechecking_context))
 		end
 
 		-- evaluating the subject is necessary for inferring the type of the body

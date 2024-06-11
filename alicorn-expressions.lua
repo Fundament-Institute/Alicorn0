@@ -301,7 +301,7 @@ local function expression_pairhandler(args, a, b)
 	end
 
 	print("!!! about to fail of invalid type")
-	print(combiner)
+	print(combiner:pretty_print(env.typechecking_context))
 	print("infers to")
 	print(type_of_term)
 	print("in")
