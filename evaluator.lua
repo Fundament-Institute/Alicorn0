@@ -102,8 +102,8 @@ local function substitute_inner(val, mappings, context_len)
 		local unique = {}
 		local arg = value.neutral(neutral_value.free(free.unique(unique)))
 		val = apply_value(val, arg)
-		print("applied closure during substitution: (value term follows)")
-		print(val)
+		--print("applied closure during substitution: (value term follows)")
+		--print(val)
 
 		-- Here we need to add the new arg placeholder to a map of things to substitute
 		-- otherwise it would be left as a free.unique in the result
@@ -244,6 +244,14 @@ local function substitute_inner(val, mappings, context_len)
 			return result
 		end
 
+		if nval:is_prim_if_stuck() then
+			local subject, consequent, alternate = nval:unwrap_prim_if_stuck()
+			subject = substitute_inner(value.neutral(subject), mappings, context_len)
+			consequent = substitute_inner(consequent, mappings, context_len)
+			alternate = substitute_inner(alternate, mappings, context_len)
+			return typed_term.prim_if(subject, consequent, alternate)
+		end
+
 		-- TODO: deconstruct nuetral value or something
 		print("nval", nval)
 		error("substitute_inner not implemented yet val:is_neutral")
@@ -289,13 +297,13 @@ end
 --for substituting a single var at index
 local function substitute_type_variables(val, index, param_name, typechecking_context)
 	param_name = param_name and "#sub-" .. param_name or "#sub-param"
-	print("value before substituting (val): (value term follows)")
-	print(val)
+	--print("value before substituting (val): (value term follows)")
+	--print(val)
 	local substituted = substitute_inner(val, {
 		[index] = typed_term.bound_variable(1),
 	}, 1)
-	print("typed term after substitution (substituted): (typed term follows)")
-	print(substituted:pretty_print(typechecking_context))
+	--print("typed term after substitution (substituted): (typed term follows)")
+	--print(substituted:pretty_print(typechecking_context))
 	return value.closure(param_name, substituted, runtime_context())
 end
 
@@ -308,7 +316,7 @@ local infer_tuple_type, infer_tuple_type_unwrapped
 local terms = require "./terms"
 local value = terms.value
 
-local fitsinto, fitsinto_qless
+local fitsinto
 -- indexed by kind x kind
 local fitsinto_comparers = {}
 
@@ -395,18 +403,18 @@ add_comparer("value.pi", "value.pi", function(a, b)
 	local ok, err
 	ok, err = fitsinto(a.param_type, b.param_type)
 	if not ok then
-		return false, fitsinto_fail("param_type", err)
+		return false, fitsinto_fail("pi param_type", err)
 	end
 	local avis = a.param_info.visibility.visibility
 	local bvis = b.param_info.visibility.visibility
 	if avis ~= bvis and avis ~= terms.visibility.implicit then
-		return false, fitsinto_fail("param_info")
+		return false, fitsinto_fail("pi param_info")
 	end
 
 	local apurity = a.result_info.purity
 	local bpurity = b.result_info.purity
 	if apurity ~= bpurity then
-		return false, fitsinto_fail("result_info")
+		return false, fitsinto_fail("pi result_info")
 	end
 
 	local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
@@ -414,7 +422,26 @@ add_comparer("value.pi", "value.pi", function(a, b)
 	local b_res = apply_value(b.result_type, unique_placeholder)
 	ok, err = fitsinto(a_res, b_res)
 	if not ok then
-		return false, fitsinto_fail("result_type", err)
+		return false, fitsinto_fail("pi result_type", err)
+	end
+	return true
+end)
+add_comparer("value.prim_function_type", "value.prim_function_type", function(a, b)
+	if a == b then
+		return true
+	end
+	local ok, err
+	ok, err = fitsinto(a.param_type, b.param_type)
+	if not ok then
+		return false, fitsinto_fail("prim-func-type param_type", err)
+	end
+
+	local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
+	local a_res = apply_value(a.result_type, unique_placeholder)
+	local b_res = apply_value(b.result_type, unique_placeholder)
+	ok, err = fitsinto(a_res, b_res)
+	if not ok then
+		return false, fitsinto_fail("prim-func-type result_type", err)
 	end
 	return true
 end)
@@ -427,38 +454,18 @@ end
 
 add_comparer(value.star(0).kind, value.star(0).kind, function(a, b)
 	if a.level > b.level then
+		print("star-comparer error:")
+		print("a:", a.level)
+		print("b:", b.level)
 		return false, "a.level > b.level"
 	end
 	return true
 end)
 
 add_comparer("value.prim_wrapped_type", "value.prim_wrapped_type", function(a, b)
-	local ok, err = fitsinto_qless(a:unwrap_prim_wrapped_type(), b:unwrap_prim_wrapped_type())
+	local ok, err = fitsinto(a:unwrap_prim_wrapped_type(), b:unwrap_prim_wrapped_type())
 	return ok, err
 end)
-
-function fitsinto_qless(tya, tyb)
-	if tya == tyb then
-		return true
-	end -- temporary workaround for neutrals
-	if not fitsinto_comparers[tya.kind] then
-		error("fitsinto given value a which isn't a type or NYI " .. tya.kind)
-	elseif not fitsinto_comparers[tyb.kind] then
-		error("fitsinto given value b which isn't a type or NYI " .. tyb.kind)
-	end
-
-	local comparer = (fitsinto_comparers[tya.kind] or {})[tyb.kind]
-	if not comparer then
-		return false, "no comparer for " .. tya.kind .. " with " .. tyb.kind
-	end
-
-	local ok, err = comparer(tya, tyb)
-	if not ok then
-		print("comparer failure: " .. tostring(err))
-		return false, err
-	end
-	return true
-end
 
 ---check if one type fits into another
 ---@param a value
@@ -470,14 +477,27 @@ function fitsinto(a, b)
 		if a == b then
 			return true
 		end
+		print("fitsinto neutral comparison error")
+		a:diff(b)
 		return false, "both values are neutral, but they aren't equal: " .. tostring(a) .. " ~= " .. tostring(b)
 	end
 
 	local tya, tyb = a, b
 
 	if not fitsinto_comparers[tya.kind] then
+		print("fitsinto error:")
+		print("tya:")
+		print(tya:pretty_print())
+		print("tyb:")
+		print(tyb:pretty_print())
 		error("fitsinto given value a which isn't a type or NYI " .. tya.kind)
 	elseif not fitsinto_comparers[tyb.kind] then
+		print("fitsinto error:")
+		print("tya:")
+		print(tya:pretty_print())
+		print("tyb:")
+		print(tyb:pretty_print())
+		--p(debug.getinfo(getmetatable(tyb.neutral.container.subject["function"]).__call))
 		error("fitsinto given value b which isn't a type or NYI " .. tyb.kind)
 	end
 
@@ -488,7 +508,9 @@ function fitsinto(a, b)
 
 	local ok, err = comparer(tya, tyb)
 	if not ok then
-		print("comparer failure: " .. tostring(err))
+		-- the error will probably get reported elsewhere
+		-- uncomment for way-too-verbose errors
+		--print("comparer failure: " .. tostring(err))
 		return false, err
 	end
 	return true
@@ -645,7 +667,11 @@ local function check(
 			end
 			if not ok then
 				print "attempting to check if terms fit for checkable_term.inferrable"
-				print("checkable_term", checkable_term)
+				--for i = 2, 49 do
+				--	local d = debug.getinfo(i, "Sln")
+				--	print(string.format("%s %s %s: %s:%d", d.what, d.namewhat, d.name, d.source, d.currentline))
+				--end
+				print("checkable_term", checkable_term:pretty_print(typechecking_context))
 				print("inferred_type", inferred_type)
 				print("goal_type", goal_type)
 				print("typechecking_context", typechecking_context:format_names())
@@ -1031,12 +1057,12 @@ function infer(
 			local arg_value = evaluate(arg_term, typechecking_context:get_runtime_context())
 			local application_result_type = apply_value(f_result_type, arg_value)
 
-			print("arg_value: (value term follows)")
-			print(arg_value)
-			print("f_result_type: (value term follows)")
-			print(f_result_type)
-			print("application_result_type: (value term follows)")
-			print(application_result_type)
+			--print("arg_value: (value term follows)")
+			--print(arg_value)
+			--print("f_result_type: (value term follows)")
+			--print(f_result_type)
+			--print("application_result_type: (value term follows)")
+			--print(application_result_type)
 			if value.value_check(application_result_type) ~= true then
 				local bindings = typechecking_context:get_runtime_context().bindings
 				-- for i = 1, bindings:len() do
@@ -1046,13 +1072,13 @@ function infer(
 			end
 			return application_result_type, application_usages, application
 		elseif f_type:is_prim_function_type() then
-			print "inferring application of primitive function"
-			print("typechecking_context")
-			typechecking_context:dump_names()
-			print("f_type: (value term follows)")
-			print(f_type)
-			print("arg: (checkable term follows)")
-			print(arg:pretty_print(typechecking_context))
+			--print "inferring application of primitive function"
+			--print("typechecking_context")
+			--typechecking_context:dump_names()
+			--print("f_type: (value term follows)")
+			--print(f_type)
+			--print("arg: (checkable term follows)")
+			--print(arg:pretty_print(typechecking_context))
 			local f_param_type, f_result_type_closure = f_type:unwrap_prim_function_type()
 
 			local arg_usages, arg_term = check(arg, typechecking_context, f_param_type)
@@ -1412,10 +1438,10 @@ function infer(
 		local source_usages, source_term = check(source, typechecking_context, value.prim_string_type)
 		local type_type, type_usages, type_term = infer(type, typechecking_context) --check(type, typechecking_context, value.qtype_type(0))
 
-		print("prim intrinsic is inferring: (inferrable term follows)")
-		print(type:pretty_print(typechecking_context))
-		print("lowers to: (typed term follows)")
-		print(type_term:pretty_print(typechecking_context))
+		--print("prim intrinsic is inferring: (inferrable term follows)")
+		--print(type:pretty_print(typechecking_context))
+		--print("lowers to: (typed term follows)")
+		--print(type_term:pretty_print(typechecking_context))
 		--error "weird type"
 		-- FIXME: type_type, source_type are ignored, need checked?
 		local type_val = evaluate(type_term, typechecking_context.runtime_context)
@@ -1582,12 +1608,29 @@ function evaluate(typed_term, runtime_context)
 			end
 		elseif subject_value:is_prim_tuple_value() then
 			local subject_elements = subject_value:unwrap_prim_tuple_value()
-			if #subject_elements ~= length then
+			local real_length = #subject_elements
+			if real_length ~= length then
+				print("evaluating typed tuple_elim error")
+				print("got, expected:")
 				print(#subject_elements, length)
-				error("evaluate: mismatch in tuple length from typechecking and evaluation")
+				print("names:")
+				print(names:pretty_print())
+				print("subject:")
+				print(subject:pretty_print(runtime_context))
+				print("subject value:")
+				--print(subject_value:pretty_print(runtime_context))
+				print("<redacted>")
+				print("body:")
+				print(body:pretty_print(runtime_context))
+				print("error commented out to allow for variable-length prim tuples via the prim-unit hack")
+				print("if you're having issues check this!!!")
+				--error("evaluate: mismatch in tuple length from typechecking and evaluation")
 			end
-			for i = 1, length do
+			for i = 1, real_length do
 				inner_context = inner_context:append(value.prim(subject_elements[i]))
+			end
+			for i = real_length + 1, length do
+				inner_context = inner_context:append(value.prim(nil))
 			end
 		elseif subject_value:is_neutral() then
 			for i = 1, length do
@@ -1600,11 +1643,11 @@ function evaluate(typed_term, runtime_context)
 		return evaluate(body, inner_context)
 	elseif typed_term:is_tuple_element_access() then
 		local tuple_term, index = typed_term:unwrap_tuple_element_access()
-		print("tuple_element_access tuple_term: (typed term follows)")
-		print(tuple_term:pretty_print(runtime_context))
+		--print("tuple_element_access tuple_term: (typed term follows)")
+		--print(tuple_term:pretty_print(runtime_context))
 		local tuple = evaluate(tuple_term, runtime_context)
-		print("tuple_element_access tuple: (value term follows)")
-		print(tuple)
+		--print("tuple_element_access tuple: (value term follows)")
+		--print(tuple)
 		return index_tuple_value(tuple, index)
 	elseif typed_term:is_tuple_type() then
 		local definition_term = typed_term:unwrap_tuple_type()
@@ -1759,6 +1802,30 @@ function evaluate(typed_term, runtime_context)
 		else
 			print("unrecognized value in unbox", unwrap_val)
 			error "invalid value in unbox, must be prim or neutral"
+		end
+	elseif typed_term:is_prim_if() then
+		local subject, consequent, alternate = typed_term:unwrap_prim_if()
+		local sval = evaluate(subject, runtime_context)
+		-- TODO TODO TODO TODO TODO TODO TODO TODO
+		print("TODO TODO TODO TODO TODO hit while evaluating prim_if")
+		-- replace runtime context in each case to replace terms equal to subject with true/false
+		local cval = evaluate(consequent, runtime_context)
+		local aval = evaluate(alternate, runtime_context)
+		if sval:is_prim() then
+			local sbool = sval:unwrap_prim()
+			if type(sbool) ~= "boolean" then
+				error("subject of prim_if must be a primitive bool")
+			end
+			if sbool then
+				return cval
+			else
+				return aval
+			end
+		elseif sval:is_neutral() then
+			local sval_neutral = sval:unwrap_neutral()
+			return value.neutral(neutral_value.prim_if_stuck(sval_neutral, cval, aval))
+		else
+			error("subject of prim_if must be prim or neutral")
 		end
 	elseif typed_term:is_let() then
 		local name, expr, body = typed_term:unwrap_let()

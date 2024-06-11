@@ -5,18 +5,59 @@ local base_env = require "./base-env"
 local p = require "pretty-print".prettyPrint
 local terms = require "./terms"
 local exprs = require "./alicorn-expressions"
+local profile = require "./profile"
 local fs = require "fs"
 local path = require "path"
+
+local opts = process.argv[2]
+local print_src = false
+local print_ast = false
+local print_inferrable = false
+local print_typed = false
+local profile_run = false
+local profile_flame = false
+local profile_file = ""
+if opts then
+	if string.find(opts, "S") then
+		print_src = true
+	end
+	if string.find(opts, "A") then
+		print_ast = true
+	end
+	if string.find(opts, "i") then
+		print_inferrable = true
+	end
+	if string.find(opts, "t") then
+		print_typed = true
+	end
+	if string.find(opts, "p") then
+		profile_run = true
+		profile_flame = false
+		profile_file = process.argv[3]
+	end
+	if string.find(opts, "P") then
+		profile_run = true
+		profile_flame = true
+		profile_file = process.argv[3]
+	end
+end
 
 local filename = path.resolve("testfile.alc")
 local src = fs.readFileSync(filename)
 print("read code")
-print(src)
+
+if print_src then
+	print(src)
+end
+
 print("parsing code")
 local code = format.read(src, filename)
-print("printing raw ast")
-print(format.lispy_print(code))
-print("end printing raw ast")
+
+if print_ast then
+	print("printing raw ast")
+	print(format.lispy_print(code))
+	print("end printing raw ast")
+end
 
 local env = base_env.create()
 
@@ -37,17 +78,32 @@ end
 local env, bound_expr = env:exit_block(expr, shadowed)
 
 print("got a term!")
-print("bound_expr: (inferrable term follows)")
-print(bound_expr:pretty_print(terms.typechecking_context()))
+if print_inferrable then
+	print("bound_expr: (inferrable term follows)")
+	print(bound_expr:pretty_print(terms.typechecking_context()))
+end
 
 print("Inferring")
+if profile_run then
+	profile.start()
+end
 local type, usages, term = evaluator.infer(bound_expr, terms.typechecking_context())
+if profile_run then
+	profile.stop()
+	if profile_flame then
+		profile.dump_flame(profile_file)
+	else
+		profile.dump(profile_file)
+	end
+end
 print("Inferred!")
-print("type: (value term follows)")
-print(type)
-print("usages:", usages)
-print("term: (typed term follows)")
-print(term:pretty_print(terms.runtime_context()))
+if print_typed then
+	print("type: (value term follows)")
+	print(type)
+	print("usages:", usages)
+	print("term: (typed term follows)")
+	print(term:pretty_print(terms.runtime_context()))
+end
 
 print("Evaluating")
 local result = evaluator.evaluate(term, terms.runtime_context())

@@ -6,93 +6,149 @@ let prim-sub = (intrinsic "return function(a, b) return a - b end" : prim-arith-
 #let foo = (record (bar = 5) (baz = 6))
 #let subbed = prim-sub foo.bar y
 
-let prim-string-wrap-get =
-	intrinsic
-		""""
-			return function()
-				return terms.value.prim_string_type
+# FIXME: type of universe
+# we need to wrap this, and wrap takes a type in star-10
+# so we have to settle for star-9
+let universe = type_(9)
+
+let prim-bool-wrap            = intrinsic "return terms.value.prim_bool_type"      : wrapped(prim-type)
+let prim-string-wrap          = intrinsic "return terms.value.prim_string_type"    : wrapped(prim-type)
+let prim-syntax-wrap          = intrinsic "return terms.prim_syntax_type"          : wrapped(prim-type)
+let prim-environment-wrap     = intrinsic "return terms.prim_environment_type"     : wrapped(prim-type)
+let prim-goal-wrap            = intrinsic "return terms.prim_goal_type"            : wrapped(prim-type)
+let prim-inferrable-term-wrap = intrinsic "return terms.prim_inferrable_term_type" : wrapped(prim-type)
+let prim-checkable-term-wrap  = intrinsic "return terms.prim_checkable_term_type"  : wrapped(prim-type)
+let prim-lua-error-wrap       = intrinsic "return terms.prim_lua_error_type"       : wrapped(prim-type)
+
+let prim-bool            = unwrap(prim-type, prim-bool-wrap)
+let prim-string          = unwrap(prim-type, prim-string-wrap)
+let prim-syntax          = unwrap(prim-type, prim-syntax-wrap)
+let prim-environment     = unwrap(prim-type, prim-environment-wrap)
+let prim-goal            = unwrap(prim-type, prim-goal-wrap)
+let prim-inferrable-term = unwrap(prim-type, prim-inferrable-term-wrap)
+let prim-checkable-term  = unwrap(prim-type, prim-checkable-term-wrap)
+let prim-lua-error       = unwrap(prim-type, prim-lua-error-wrap)
+
+let prim-string-concat = intrinsic "return function(a, b) return a .. b end" :
+	prim-func-type (a : prim-string) (b : prim-string) -> (c : prim-string)
+
+# lmao bootstrapping problem
+let prim-unique-id-wrap = intrinsic
+	"return terms.value.prim_user_defined_type({ name = \"unique_id\" }, terms_gen.declare_array(terms.value)())"
+	:
+	wrapped(prim-type)
+let prim-unique-id = unwrap(prim-type, prim-unique-id-wrap)
+let new-prim-unique-id = lambda ((name : prim-string))
+	let source0 = "return { name = \""
+	let (source1) = prim-string-concat(source0, name)
+	let (source2) = prim-string-concat(source1, "\" }")
+	intrinsic source2 : prim-unique-id
+
+let new-prim-type-family-inner = intrinsic
+	""""
+		local typed_array = terms_gen.declare_array(terms.typed_term)
+		local string_array = terms_gen.declare_array(terms_gen.builtin_string)
+		local function length(defn, len)
+			len = len or 0
+			local constructor, arg = defn:unwrap_enum_value()
+			if constructor == "empty" then
+				return len
+			elseif constructor == "cons" then
+				local elements = arg:unwrap_tuple_value()
+				local next_defn = elements[1]
+				return length(next_defn, len + 1)
+			else
+				error("unknown tuple defn constructor")
 			end
-		:
-		prim-func-type -> (res : (wrapped prim-type))
-let (prim-string-wrap) = (prim-string-wrap-get)
-let prim-string = unwrap prim-type prim-string-wrap
-
-let prim-array-type =
-	intrinsic
-		""""
-			-- terms and terms_gen implicitly in env
-			local value = terms.value
-			assert(value and value.prim)
-			local value_array = terms_gen.declare_array(value)
-			local id = {name = "array"}
-			--value.prim_user_defined_type({name = "array"}, value_array())
-			local function mktype(elem)
-				print("mktype id", id)
-				print("mktype elem", elem)
-				return value.prim_user_defined_type(id, value_array(elem))
+		end
+		local function new_prim_type_family(unique_id, sig)
+			local param_type, _, _, _ = sig:unwrap_pi()
+			local param_decls = param_type:unwrap_tuple_type()
+			local nparams = length(param_decls)
+			local params = typed_array()
+			local param_names = string_array()
+			for i = 1, nparams do
+				params:append(terms.typed_term.bound_variable(i + 1))
+				param_names:append("#type-family-A-" .. tostring(i))
 			end
-			return mktype
+			local body = terms.typed_term.tuple_elim(
+				param_names,
+				terms.typed_term.bound_variable(1),
+				nparams,
+				terms.typed_term.prim_user_defined_type_cons(
+					unique_id,
+					params
+				)
+			)
+			return terms.value.closure("#type-family-B", body, terms.runtime_context())
+		end
+		return new_prim_type_family
+	:
+	prim-func-type
+		unique-id : prim-unique-id
+		signature : wrapped(type_(1))
+		->
+		family    : wrapped(unwrap(type_(1), signature))
+let new-prim-type-family = lambda (unique-id : prim-unique-id, signature : type_(1))
+	let (family) = new-prim-type-family-inner(unique-id, wrap(type_(1), signature))
+	unwrap(signature, family)
+let new-prim-type = lambda ((unique-id : prim-unique-id))
+	let Tfam = new-prim-type-family unique-id
+		forall -> T : prim-type
+	Tfam()
+
+let prim-array-type = new-prim-type-family new-prim-unique-id("array")
+	forall (T : prim-type) -> T : prim-type
+
+let prim-array-new = lambda ((T : prim-type))
+	let inner = intrinsic
+		""""
+			local function array_new()
+				return {}
+			end
+			return array_new
 		:
-		prim-func-type (T : (unstrict-wrapped prim-type)) -> (array : (unstrict-wrapped prim-type))
-
-let array-type = lambda ((T : prim-type))
-	let (typ) = (prim-array-type (unstrict-wrap prim-type T))
-	unwrap prim-type typ
-
-let prim-array-set =
-	lambda ((T : prim-type))
-		intrinsic
-			""""
-				local function array_set(array, index, elem)
-					-- we have to clone because can't guarantee input array isn't reused
-					-- Yet. growth mindset.
-					cloned = {}
-					for i, v in ipairs(array) do
-						cloned[i] = v
-					end
-					cloned[index] = elem
-					return cloned
+		prim-func-type -> (arr : prim-array-type(T))
+	let (arr) = inner()
+	arr
+let prim-array-set = lambda (T : prim-type, arr : prim-array-type(T), index : prim-number, elem : T)
+	let inner = intrinsic
+		""""
+			local function array_set(array, index, elem)
+				-- we have to clone because can't guarantee input array isn't reused
+				-- Yet. growth mindset.
+				cloned = {}
+				for i, v in ipairs(array) do
+					cloned[i] = v
 				end
-				return array_set
-			:
-			prim-func-type (arr : (array-type T)) (index : prim-number) (elem : T) -> (arr : (array-type T))
-
-let prim-array-get = 
-	lambda ((T : prim-type))
-		intrinsic
-			""""
-				local function array_get(array, index)
-					return array[index]
-				end
-				return array_get
-			:
-			prim-func-type (arr : (array-type T)) (index : prim-number) ->  (elem : T)
-
-let prim-array-new =
-	lambda ((T : prim-type))
-		intrinsic
-			""""
-				local function array_new(_elem_type)
-					return {}
-				end
-				return array_new
-			:
-			prim-func-type ->  (arr : (array-type T))
-
-let array-set = 
-	lambda (T : prim-type, arr : (array-type T), index : prim-number, elem : T)
-		let (arr) = (prim-array-set(T) arr index elem)
-		arr
-
-let array-get = 
-	lambda (T : prim-type, arr : (array-type T), index : prim-number)
-		let typed-arr-get = (prim-array-get T)
-		let (elem) = typed-arr-get(arr, index)
-		(the T elem)
-
-let array-new = lambda ((T : prim-type))
-	let (elem) = (prim-array-new(T))
-	elem
+				cloned[index] = elem
+				return cloned
+			end
+			return array_set
+		:
+		prim-func-type
+			arr   : prim-array-type(T)
+			index : prim-number
+			elem  : T
+			->
+			arr   : prim-array-type(T)
+	let (arr) = inner(arr, index, elem)
+	arr
+let prim-array-get = lambda (T : prim-type, arr : prim-array-type(T), index : prim-number)
+	let inner = intrinsic
+		""""
+			local function array_get(array, index)
+				return array[index]
+			end
+			return array_get
+		:
+		prim-func-type
+			arr   : prim-array-type(T)
+			index : prim-number
+			->
+			elem  : T
+	let (elem) = inner(arr, index)
+	(the T elem)
 
 let prim-file-read =
 	intrinsic
@@ -101,6 +157,8 @@ let prim-file-read =
 			return fs.readFileSync
 		:
 		prim-func-type (fname : prim-string) -> (content : prim-string)
+
+let terms-gen-array = new-prim-type(new-prim-unique-id("terms-gen-array"))
 
 let void =
 	unwrap
@@ -114,24 +172,8 @@ let void =
 			:
 			wrapped type
 
-let prim-unit =
-	unwrap
-		prim-type
-		intrinsic
-			""""
-				local unique_id = {name = "prim-unit"}
-				local value_array = terms_gen.declare_array(terms.value)
-				local basetype = terms.value.prim_user_defined_type(unique_id, value_array())
-				return basetype
-			:
-			wrapped prim-type
-
-let prim-nil =
-	intrinsic
-		""""
-			return nil
-		:
-		prim-unit
+let prim-unit = new-prim-type(new-prim-unique-id("prim-unit"))
+let prim-nil = intrinsic "return nil" : prim-unit
 
 let only-accept-prim-tuples-inner-prim =
 	intrinsic
@@ -435,105 +477,653 @@ let func-to-prim-func =
 			->
 			res-fn : T
 
-let syntax =
-	unwrap
-		prim-type
-		intrinsic
-			""""
-				local unique_id = {name = "syntax"}
-				local value_array = terms_gen.declare_array(terms.value)
-				local basetype = terms.value.prim_user_defined_type(unique_id, value_array())
-				return basetype
-			:
-			wrapped(prim-type)
 
-let new-prim-type-family-inner =
-	intrinsic
-		""""
-			local function new_prim_type_family(name, nparams, sig)
-				local unique_id = {name = name}
-				local typed_array = terms_gen.declare_array(terms.typed_term)
-				local string_array = terms_gen.declare_array(terms_gen.builtin_string)
-				local params = typed_array()
-				local param_names = string_array()
-				for i = 1, nparams do
-					params:append(terms.typed_term.bound_variable(i + 1))
-					param_names:append("#TEST-2-" .. tostring(i))
-				end
-				local body = terms.typed_term.tuple_elim(
-					param_names,
-					terms.typed_term.bound_variable(1),
-					nparams,
-					terms.typed_term.prim_user_defined_type(
-						unique_id,
-						params
-					)
+
+
+
+let prim-if-type = forall (subject : prim-bool) (consequent : prim-type) (alternate : prim-type) -> T : prim-type
+
+let prim-if-wrap = intrinsic
+	""""
+		local typed = terms.typed_term
+		local string_array = terms_gen.declare_array(terms_gen.builtin_string)
+		return terms.value.closure(
+			"#prim-if-param",
+			typed.tuple_elim(
+				string_array(
+					"#prim-if-subject",
+					"#prim-if-consequent",
+					"#prim-if-alternate"
+				),
+				typed.bound_variable(1),
+				3,
+				typed.prim_if(
+					typed.bound_variable(2),
+					typed.bound_variable(3),
+					typed.bound_variable(4)
 				)
-				return terms.value.closure("#TEST-3", body, terms.runtime_context())
-			end
-			return new_prim_type_family
-		:
-		prim-func-type
-			name : prim-string
-			nparams : prim-number
-			signature : wrapped(type_(1))
-			->
-			family : wrapped(unwrap(type_(1), signature))
+			),
+			terms.runtime_context()
+		)
+	:
+	wrapped(prim-if-type)
+let prim-if = unwrap(prim-if-type, prim-if-wrap)
 
-let new-prim-type-family =
-	lambda 
-		(name : prim-string) (nparams : prim-number) (signature : type_(1)) #TODO make nparams not exist by deriving it from the signature
-		let (family) = new-prim-type-family-inner(name, nparams, wrap(type_(1), signature))
-		unwrap(signature, family)
-
-let matcher =
-	new-prim-type-family
-		"matcher"
-		2
-		forall (ud : prim-type) (res : prim-type) -> res : prim-type
-
-let prim-matcher-is-symbol =
-	intrinsic
+let tuple-def-type-inner = intrinsic "return terms.value.tuple_defn_type" :
+	prim-func-type (U : wrapped(universe)) -> (T : wrapped(prim-type))
+let tuple-def-type = lambda ((U : universe))
+	let (T) = tuple-def-type-inner(wrap(universe, U))
+	unwrap(prim-type, T)
+let tuple-type = lambda (U : universe, decls : tuple-def-type(U))
+	let inner = intrinsic "return terms.value.tuple_type" :
+		prim-func-type (decls : wrapped(tuple-def-type(U))) -> (T : wrapped(prim-type))
+	let (T) = inner(wrap(tuple-def-type(U), decls))
+	unwrap(prim-type, T)
+let prim-tuple-type = lambda (U : universe, decls : tuple-def-type(U))
+	let inner = intrinsic "return terms.value.prim_tuple_type" :
+		prim-func-type (decls : wrapped(tuple-def-type(U))) -> (T : wrapped(prim-type))
+	let (T) = inner(wrap(tuple-def-type(U), decls))
+	unwrap(prim-type, T)
+let tuple-def-empty = lambda ((U : universe))
+	let T = tuple-def-type(U)
+	let empty = intrinsic
 		""""
-			local function is_symbol(_ud, _res, accept_handler)
-				return metalang.is_symbol(accept_handler)
-			end
-			return is_symbol
+			local value_array = terms_gen.declare_array(terms.value)
+			return terms.value.enum_value("empty", terms.value.tuple_value(value_array()))
 		:
-		prim-func-type
-			ud : wrapped(prim-type)
-			res : wrapped(prim-type)
-			accept-handler :
-				prim-func-type
-					userdata : unwrap(prim-type, ud)
-					symbol : prim-string
-					->
-					r : unwrap(prim-type, res)
-			->
-			m : matcher(unwrap(prim-type, ud), unwrap(prim-type, res))
-
-let prim-matcher-is-pair =
-	intrinsic
+		wrapped(T)
+	unwrap(T, empty)
+let tuple-def-elem = lambda (
+		U    : universe,
+		defn : tuple-def-type(U),
+		elem : (forall rest : tuple-type(U, defn) -> next : U))
+	let inner = intrinsic
 		""""
-			local function is_pair(_ud, _res, accept_handler)
-				return metalang.is_pair(accept_handler)
+			local value_array = terms_gen.declare_array(terms.value)
+			local function tuple_def_elem(defn, elem)
+				return terms.value.enum_value("cons", terms.value.tuple_value(value_array(defn, elem)))
 			end
-			return is_pair
+			return tuple_def_elem
 		:
 		prim-func-type
-			ud : wrapped(prim-type)
-			res : wrapped(prim-type)
-			accept-handler :
-				prim-func-type
-					userdata : unwrap(prim-type, ud)
-					a : syntax
-					b : syntax
-					->
-					r : unwrap(prim-type, res)
+			defn_ : wrapped(tuple-def-type(U)) # aaaa shadowing
+			elem  : (wrapped (forall rest : tuple-type(U, defn) -> next : U))
 			->
-			m : matcher(unwrap(prim-type, ud), unwrap(prim-type, res))
+			T     : wrapped(tuple-def-type(U))
+	let (T) =
+		inner
+			wrap(tuple-def-type(U), defn)
+			wrap (forall rest : tuple-type(U, defn) -> next : U) elem
+	unwrap(tuple-def-type(U), T)
+let tuple-of = lambda (U : universe, defn : tuple-def-type(U))
+	# ATTN: single parens here means bare lambda syntax
+	lambda (t : tuple-type(U, defn))
+		t
+let prim-tuple-of = lambda (U : universe, defn : tuple-def-type(U))
+	intrinsic "return function(...) return ... end" :
+		prim-func-type t : prim-tuple-type(U, defn) -> t : prim-tuple-type(U, defn)
+let tuple-def-singleton = lambda (U : universe, T : U)
+	tuple-def-elem U
+		tuple-def-empty U
+		lambda (())
+			T
+let tuple-def-concat = lambda (U : universe, head : tuple-def-type(U), tail : tuple-def-type(U))
+	# woah huge intrinsic
+	let inner = intrinsic
+		""""
+			local typed = terms.typed_term
+			local typed_array = terms_gen.declare_array(typed)
+			local value_array = terms_gen.declare_array(terms.value)
+			local string_array = terms_gen.declare_array(terms_gen.builtin_string)
+			local function traverse(defn, len, elems)
+				len = len or 0
+				elems = elems or {}
+				local constructor, arg = defn:unwrap_enum_value()
+				if constructor == "empty" then
+					return len, elems
+				elseif constructor == "cons" then
+					local elements = arg:unwrap_tuple_value()
+					local next_defn = elements[1]
+					len = len + 1
+					elems[len] = elements[2]
+					return traverse(next_defn, len, elems)
+				else
+					error("unknown tuple defn constructor")
+				end
+			end
+			-- defn is head + (gradually) parts of tail
+			-- elem expects only parts of tail, need to wrap to handle head
+			-- head_n and tail_n are the lengths of the head and tail component of defn
+			local function tuple_def_elem(defn, elem, head_n, head_names, tail_n, tail_names)
+				-- in theory the only placeholder name will be in reference to the last
+				-- element of head, which is always lost (and sometimes not even asked for)
+				local names = string_array()
+				for _, name in head_names:ipairs() do
+					names:append(name)
+				end
+				names:append("#_")
+				for _, name in tail_names:ipairs() do
+					names:append(name)
+				end
+				-- convert to just tuple of tail
+				local tail_args = typed_array()
+				for i = 1, tail_n do
+					-- 1 for closure argument (passed to tuple_elim)
+					-- head_n for head
+					tail_args:append(typed.bound_variable(1 + head_n + i))
+				end
+				local body = typed.tuple_elim(
+					names,
+					typed.bound_variable(1),
+					head_n + tail_n,
+					typed.application(typed.literal(elem), typed.tuple_cons(tail_args))
+				)
+				local elem_wrap = terms.value.closure("#tuple-def-concat", body, terms.runtime_context())
+				return terms.value.enum_value("cons", terms.value.tuple_value(value_array(defn, elem_wrap)))
+			end
+			local function tuple_def_concat(head, tail)
+				local head_n, head_elems = traverse(head)
+				local tail_n, tail_elems = traverse(tail)
+				local head_last = head_elems[1]
+				local _, head_code, _ = head_last:unwrap_closure()
+				local head_names, _, _, _ = head_code:unwrap_tuple_elim()
+				local defn = head
+				for i = tail_n, 1, -1 do
+					local tail_n_now = tail_n - i
+					local elem = tail_elems[i]
+					local _, tail_code, _ = elem:unwrap_closure()
+					local tail_names, _, _, _ = tail_code:unwrap_tuple_elim()
+					defn = tuple_def_elem(defn, elem, head_n, head_names, tail_n_now, tail_names)
+				end
+				return defn
+			end
+			return tuple_def_concat
+		:
+		prim-func-type
+			head : wrapped(tuple-def-type(U))
+			tail : wrapped(tuple-def-type(U))
+			->
+			cat : wrapped(tuple-def-type(U))
+	let (cat) = inner(wrap(tuple-def-type(U), head), wrap(tuple-def-type(U), tail))
+	unwrap(tuple-def-type(U), cat)
+let tuple-concat = lambda (
+		U    : universe,
+		head : tuple-def-type(U),
+		tail : tuple-def-type(U),
+		hd   : tuple-type(U, head),
+		tl   : tuple-type(U, tail))
+	let inner = intrinsic
+		""""
+			local value_array = terms_gen.declare_array(terms.value)
+			local function tuple_concat(head, tail)
+				local head_elements = head:unwrap_tuple_value()
+				local tail_elements = tail:unwrap_tuple_value()
+				local new_elements = value_array()
+				for _, e in head_elements:ipairs() do
+					new_elements:append(e)
+				end
+				for _, e in tail_elements:ipairs() do
+					new_elements:append(e)
+				end
+				return terms.value.tuple_value(new_elements)
+			end
+			return tuple_concat
+		:
+		prim-func-type
+			hd : wrapped(tuple-type(U, head))
+			tl : wrapped(tuple-type(U, tail))
+			->
+			cat : wrapped(tuple-type(U, tuple-def-concat(U, head, tail)))
+	let (cat) = inner(wrap(tuple-type(U, head), hd), wrap(tuple-type(U, tail), tl))
+	unwrap(tuple-type(U, tuple-def-concat(U, head, tail)), cat)
+let prim-tuple-concat = lambda (
+		U    : universe,
+		head : tuple-def-type(U),
+		tail : tuple-def-type(U),
+		hd   : prim-tuple-type(U, head),
+		tl   : prim-tuple-type(U, tail))
+	let inner = intrinsic
+		""""
+			local value_array = terms_gen.declare_array(terms_gen.any_lua_type)
+			local function prim_tuple_concat(head, tail)
+				local head_elements = head:unwrap_prim_tuple_value()
+				local tail_elements = tail:unwrap_prim_tuple_value()
+				local new_elements = value_array()
+				for _, e in head_elements:ipairs() do
+					new_elements:append(e)
+				end
+				for _, e in tail_elements:ipairs() do
+					new_elements:append(e)
+				end
+				return terms.value.prim_tuple_value(new_elements)
+			end
+			return prim_tuple_concat
+		:
+		prim-func-type
+			hd : wrapped(prim-tuple-type(U, head))
+			tl : wrapped(prim-tuple-type(U, tail))
+			->
+			cat : wrapped(prim-tuple-type(U, tuple-def-concat(U, head, tail)))
+	let (cat) = inner(wrap(prim-tuple-type(U, head), hd), wrap(prim-tuple-type(U, tail), tl))
+	unwrap(prim-tuple-type(U, tuple-def-concat(U, head, tail)), cat)
+
+let prim-literal = new-prim-type(new-prim-unique-id("literal"))
+
+let prim-expression-args = new-prim-type(new-prim-unique-id("expression-args"))
+let expression-args-new = intrinsic "return alicorn_expressions.ExpressionArgs.new" :
+	prim-func-type (goal : prim-goal) (env : prim-environment) -> (args : prim-expression-args)
+
+let prim-shadow-environment = new-prim-type(new-prim-unique-id("shadow-environment"))
+let enter-block = intrinsic
+	""""
+		-- wish environment.enter_block was accessible from internals
+		local function enter_block(env)
+			return env:enter_block()
+		end
+		return enter_block
+	:
+	prim-func-type
+		env : prim-environment
+		->
+		shadowed : prim-shadow-environment
+		inner : prim-environment
+let exit-block = intrinsic
+	""""
+		-- wish environment.exit_block was accessible from internals
+		local function exit_block(inner, term, shadowed)
+			return inner:exit_block(term, shadowed)
+		end
+		return exit_block
+	:
+	prim-func-type
+		inner : prim-environment
+		term : prim-inferrable-term
+		shadowed : prim-shadow-environment
+		->
+		env : prim-environment
+		wrapped : prim-inferrable-term
+
+let prim-matcher = new-prim-type-family new-prim-unique-id("matcher")
+	forall (userdata : prim-type) (result : tuple-def-type(prim-type)) -> T : prim-type
+
+let nil-handler-type = lambda (userdata : prim-type, result : tuple-def-type(prim-type))
+	prim-func-type (ud : userdata) -> r : prim-tuple-type(prim-type, result)
+let prim-matcher-is-nil = lambda (userdata : prim-type, result : tuple-def-type(prim-type), accept-handler : nil-handler-type(userdata, result))
+	let inner = intrinsic "return metalanguage.isnil" :
+		prim-func-type (accept-handler : nil-handler-type(userdata, result)) -> (m : prim-matcher(userdata, result))
+	let (m) = inner(accept-handler)
+	m
+
+let pair-handler-type = lambda (userdata : prim-type, result : tuple-def-type(prim-type))
+	prim-func-type (ud : userdata) (a : prim-syntax) (b : prim-syntax) -> r : prim-tuple-type(prim-type, result)
+let prim-matcher-is-pair = lambda (userdata : prim-type, result : tuple-def-type(prim-type), accept-handler : pair-handler-type(userdata, result))
+	let inner = intrinsic "return metalanguage.ispair" :
+		prim-func-type (accept-handler : pair-handler-type(userdata, result)) -> (m : prim-matcher(userdata, result))
+	let (m) = inner(accept-handler)
+	m
+
+let symbol-handler-type = lambda (userdata : prim-type, result : tuple-def-type(prim-type))
+	prim-func-type (ud : userdata) (symbol : prim-string) -> r : prim-tuple-type(prim-type, result)
+let prim-matcher-is-symbol = lambda (userdata : prim-type, result : tuple-def-type(prim-type), accept-handler : symbol-handler-type(userdata, result))
+	let inner = intrinsic "return metalanguage.issymbol" :
+		prim-func-type (accept-handler : symbol-handler-type(userdata, result)) -> (m : prim-matcher(userdata, result))
+	let (m) = inner(accept-handler)
+	m
+
+let value-handler-type = lambda (userdata : prim-type, result : tuple-def-type(prim-type))
+	prim-func-type (ud : userdata) (val : prim-literal) -> r : prim-tuple-type(prim-type, result)
+let prim-matcher-is-value = lambda (userdata : prim-type, result : tuple-def-type(prim-type), accept-handler : value-handler-type(userdata, result))
+	let inner = intrinsic "return metalanguage.isvalue" :
+		prim-func-type (accept-handler : value-handler-type(userdata, result)) -> (m : prim-matcher(userdata, result))
+	let (m) = inner(accept-handler)
+	m
+
+let reducible-handler-type = lambda (userdata : prim-type, result2 : tuple-def-type(prim-type), result : tuple-def-type(prim-type))
+	# prepend userdata to result2
+	let userdata-defn = tuple-def-singleton(prim-type, userdata)
+	let params = tuple-def-concat(prim-type, userdata-defn, result2)
+	prim-func-type p : prim-tuple-type(prim-type, params) -> r : prim-tuple-type(prim-type, result)
+let reducer-type = lambda (userdata : prim-type, storage : tuple-def-type(prim-type), result2 : tuple-def-type(prim-type), result : tuple-def-type(prim-type))
+	let accept-handler-type = reducible-handler-type(userdata, result2, result)
+	# prepend accept-handler-type to storage
+	let accept-handler-defn = tuple-def-singleton(prim-type, accept-handler-type)
+	let params = tuple-def-concat(prim-type, accept-handler-defn, storage)
+	prim-func-type p : prim-tuple-type(prim-type, params) -> (m : prim-matcher(userdata, result))
+let prim-matcher-reducible = lambda (
+		userdata       : prim-type,
+		storage        : tuple-def-type(prim-type),
+		result2        : tuple-def-type(prim-type),
+		result         : tuple-def-type(prim-type),
+		red            : reducer-type(userdata, storage, result2, result),
+		s              : prim-tuple-type(prim-type, storage),
+		accept-handler : reducible-handler-type(userdata, result2, result))
+	let accept-handler-type = reducible-handler-type(userdata, result2, result)
+	let accept-handler-defn = tuple-def-singleton(prim-type, accept-handler-type)
+	let red-param-defn = tuple-def-concat(prim-type, accept-handler-defn, storage)
+	let red-result-defn = tuple-def-singleton(prim-type, prim-matcher(userdata, result))
+
+	let accept-handler-tuple = prim-tuple-of(prim-type, accept-handler-defn)(accept-handler)
+	let red-param = prim-tuple-concat(prim-type, accept-handler-defn, storage, accept-handler-tuple, s)
+
+	# look ma, no intrinsics!
+	let (m) = apply(red, red-param)
+	m
+
+let failure-handler-type = lambda (userdata : prim-type, result : tuple-def-type(prim-type))
+	prim-func-type (ud : userdata) (exception : prim-lua-error) -> r : prim-tuple-type(prim-type, result)
+
+let match-syntax = lambda (
+		userdata        : prim-type,
+		result          : tuple-def-type(prim-type),
+		matchers        : prim-array-type(prim-matcher(userdata, result)),
+		failure-handler : failure-handler-type(userdata, result),
+		syn             : prim-syntax,
+		ud              : userdata)
+	let inner = intrinsic
+		""""
+			local function match_syntax(matchers, failure_handler, syn, ud)
+				return syn:match(matchers, failure_handler, ud)
+			end
+			return match_syntax
+		:
+		prim-func-type
+			matchers        : prim-array-type(prim-matcher(userdata, result))
+			failure-handler : failure-handler-type(userdata, result)
+			syn             : prim-syntax
+			ud              : wrapped(userdata)
+			->
+			# ugly syntax hack
+			r
+			:
+			prim-tuple-type(prim-type, result)
+	inner(matchers, failure-handler, syn, wrap(userdata, ud))
+
+let prim-term-of-inner = intrinsic
+	""""
+		local function prim_term_of(goal)
+			if goal:is_infer() then
+				return terms.prim_inferrable_term_type
+			elseif goal:is_check() then
+				return terms.prim_checkable_term_type
+			else
+				error("prim-term-of: unknown goal")
+			end
+		end
+		return prim_term_of
+	:
+	prim-func-type (goal : prim-goal) -> (t : prim-type)
+let prim-term-of = lambda ((goal : prim-goal))
+	#let (t) = prim-term-of-inner(goal)
+	#t
+	# FIXME: above errors with: inferred type is a neutral value
+	# stub below works for now
+	prim-inferrable-term
+
+let operative-handler-type = lambda ((userdata : prim-type))
+	forall
+		syn : prim-syntax
+		env : prim-environment
+		ud : userdata
+		goal : prim-goal
+		->
+		term : prim-term-of(goal)
+		env : prim-environment
+
+let operative-result-defn = lambda ((goal : prim-goal))
+	# read as: (term : prim-term-of(goal), env : prim-environment)
+	tuple-def-concat prim-type
+		tuple-def-singleton(prim-type, prim-term-of(goal))
+		tuple-def-singleton(prim-type, prim-environment)
+
+let new-operative = lambda (userdata : prim-type, ud : userdata, handler : operative-handler-type(userdata))
+	let inner = intrinsic
+		""""
+			local function new_operative(userdata, ud, handler)
+				return
+					terms.value.operative_type(handler, userdata),
+					terms.value.operative_value(ud)
+			end
+			return new_operative
+		:
+		prim-func-type
+			userdata_ : wrapped(prim-type)
+			ud : wrapped(userdata)
+			handler : wrapped(operative-handler-type(userdata))
+			->
+			op-type : wrapped(prim-type)
+			op : wrapped(unwrap(prim-type, op-type))
+	let (op-type, op) =
+		inner
+			wrap(prim-type, userdata)
+			wrap(userdata, ud)
+			wrap(operative-handler-type(userdata), handler)
+
+	let op-type = unwrap(prim-type, op-type)
+	let op = unwrap(op-type, op)
+
+	# lol look how horrible tuple types are
+	# read as: (op-type : prim-type, op : op-type)
+	let result-defn =
+		tuple-def-elem type_(1)
+			tuple-def-elem type_(1)
+				tuple-def-empty type_(1)
+				lambda (())
+					prim-type
+			lambda ((op-type : prim-type))
+				op-type
+	tuple-of(type_(1), result-defn)(op-type, op)
+
+let block-reducer-storage-defn = tuple-def-singleton(prim-type, prim-expression-args)
+
+let block-reducer-result2-defn = operative-result-defn # incidentally the same
+
+let block-match-result-defn = lambda ((goal : prim-goal))
+	# read as: (ok : prim-bool, _ : prim-if(ok, prim-term-of(goal), prim-lua-error), _ : prim-if(ok, prim-environment, prim-unit))
+	# or, more logically: (ok : prim-bool, ...) where:
+	# - ok == true:  `...` is prim-term-of(goal), prim-environment
+	# - ok == false: `...` is prim-lua-error
+	tuple-def-elem prim-type
+		tuple-def-elem prim-type
+			tuple-def-elem prim-type
+				tuple-def-empty prim-type
+				lambda (())
+					prim-bool
+			lambda ((ok : prim-bool))
+				prim-if(ok, prim-term-of(goal), prim-lua-error)
+		lambda (ok : prim-bool, _ : prim-if(ok, prim-term-of(goal), prim-lua-error))
+			# hacky way to do variable-length prim tuples
+			prim-if(ok, prim-environment, prim-unit)
+
+let block-reducer = lambda ((goal : prim-goal))
+	intrinsic "return alicorn_expressions.block" :
+		reducer-type(prim-unit, block-reducer-storage-defn, block-reducer-result2-defn(goal), block-match-result-defn(goal))
+
+let block-match-accept-handler = lambda ((goal : prim-goal))
+	intrinsic "return metalanguage.accept_handler" :
+		reducible-handler-type(prim-unit, block-reducer-result2-defn(goal), block-match-result-defn(goal))
+let block-match-failure-handler = lambda ((goal : prim-goal))
+	intrinsic "return metalanguage.failure_handler" :
+		failure-handler-type(prim-unit, block-match-result-defn(goal))
+
+# alicorn doesn't have conds or branches yet so...
+let error-filter =
+	lambda (Tt : prim-type, Tf : prim-type, ok : prim-bool, val-or-err : prim-if(ok, Tt, Tf))
+		let inner = intrinsic
+			""""
+				local function error_filter(ok, val_or_err)
+					if not ok then
+						error(val_or_err)
+					end
+					return val_or_err
+				end
+				return error_filter
+			:
+			prim-func-type (ok : prim-bool) (val-or-err : prim-if(ok, Tt, Tf)) -> (val : Tt)
+		let (val) = inner(ok, val-or-err)
+		val
+
+let do-impl-type = operative-handler-type(prim-unit)
+
+let do-impl = lambda (syn : prim-syntax, env : prim-environment, ud : prim-unit, goal : prim-goal)
+	let (shadowed, inner_env) = enter-block(env)
+
+	let (args) = expression-args-new(goal, inner_env)
+	let s = prim-tuple-of(prim-type, block-reducer-storage-defn)(args)
+
+	let matcher-t = prim-matcher(prim-unit, block-match-result-defn(goal))
+	let matcher =
+		prim-matcher-reducible
+			prim-unit
+			block-reducer-storage-defn
+			block-reducer-result2-defn(goal)
+			block-match-result-defn(goal)
+			block-reducer(goal)
+			s
+			block-match-accept-handler(goal)
+
+	let matchers =
+		prim-array-set matcher-t
+			prim-array-new matcher-t
+			1
+			matcher
+
+	let (ok, term, inner_env) =
+		match-syntax
+			prim-unit
+			block-match-result-defn(goal)
+			matchers
+			block-match-failure-handler(goal)
+			syn
+			prim-nil
+
+	let term = error-filter(prim-term-of(goal), prim-lua-error, ok, term)
+	let inner_env = error-filter(prim-environment, prim-unit, ok, inner_env)
+
+	let (env, wrapped) = exit-block(inner_env, term, shadowed)
+
+	tuple-of(prim-type, operative-result-defn(goal))(wrapped, env)
+
+let (do-type, do) = new-operative(prim-unit, prim-nil, do-impl)
+
+let foo = "baz"
+let x = do
+	let foo = "foo"
+	let (foobar) = prim-string-concat(foo, "bar")
+	foobar
+let (foobarbaz) = prim-string-concat(x, foo)
+foobarbaz
 
 let implicit-unwrap =
 	lambda_implicit (T : type_(10))
 		lambda (x : wrapped(T))
 			unwrap(T, x)
+
+let tupleof-ascribed-names-reducer-thread-type = new-prim-type(new-prim-unique-id("tupleof-ascribed-names-reducer-thread"))
+let tupleof-ascribed-names-reducer-thread-type-get-names = intrinsic
+	""""
+		local function get_names(thread)
+			return thread.names
+		end
+		return get_names
+	:
+	prim-func-type (thread : tupleof-ascribed-names-reducer-thread-type) -> (names : terms-gen-array)
+let tupleof-ascribed-names-reducer-thread-type-get-args = intrinsic
+	""""
+		local function get_args(thread)
+			return thread.args
+		end
+		return get_args
+	:
+	prim-func-type (thread : tupleof-ascribed-names-reducer-thread-type) -> (args : prim-inferrable-term)
+let tupleof-ascribed-names-reducer-thread-type-get-env = intrinsic
+	""""
+		local function get_env(thread)
+			return thread.env
+		end
+		return get_env
+	:
+	prim-func-type (thread : tupleof-ascribed-names-reducer-thread-type) -> (env : prim-environment)
+
+let tupleof-ascribed-names-reducer-storage-defn =
+	# read as: (env : prim-environment, termination : prim-matcher(...))
+	tuple-def-concat prim-type
+		tuple-def-singleton(prim-type, prim-environment)
+		tuple-def-singleton(prim-type, prim-matcher(prim-unit, tuple-def-empty(prim-type)))
+
+let tupleof-ascribed-names-reducer-result2-defn =
+	# read as: (thread : tupleof-ascribed-names-reducer-thread-type, tail : prim-syntax)
+	tuple-def-concat prim-type
+		tuple-def-singleton(prim-type, tupleof-ascribed-names-reducer-thread-type)
+		tuple-def-singleton(prim-type, prim-syntax)
+
+let tupleof-ascribed-names-match-result-defn =
+	# read as: (ok : prim-bool, _ : prim-if(ok, tupleof-ascribed-names-reducer-thread-type, prim-lua-error), _ : prim-if(ok, prim-syntax, prim-unit))
+	# or, more logically: (ok : prim-bool, ...) where:
+	# - ok == true:  `...` is tupleof-ascribed-names-reducer-thread-type, prim-syntax
+	# - ok == false: `...` is prim-lua-error
+	tuple-def-elem prim-type
+		tuple-def-elem prim-type
+			tuple-def-elem prim-type
+				tuple-def-empty prim-type
+				lambda (())
+					prim-bool
+			lambda ((ok : prim-bool))
+				prim-if(ok, tupleof-ascribed-names-reducer-thread-type, prim-lua-error)
+		lambda (ok : prim-bool, _ : prim-if(ok, tupleof-ascribed-names-reducer-thread-type, prim-lua-error))
+			prim-if(ok, prim-syntax, prim-unit)
+
+let tupleof-ascribed-names-reducer = intrinsic "return base_env.tupleof_ascribed_names_inner" :
+	reducer-type(prim-unit, tupleof-ascribed-names-reducer-storage-defn, tupleof-ascribed-names-reducer-result2-defn, tupleof-ascribed-names-match-result-defn)
+
+let tupleof-ascribed-names-match-accept-handler = intrinsic "return metalanguage.accept_handler" :
+	reducible-handler-type(prim-unit, tupleof-ascribed-names-reducer-result2-defn, tupleof-ascribed-names-match-result-defn)
+let tupleof-ascribed-names-match-failure-handler = intrinsic "return metalanguage.failure_handler" :
+	failure-handler-type(prim-unit, tupleof-ascribed-names-match-result-defn)
+
+let nil-match-accept-handler = intrinsic "return metalanguage.accept_handler" :
+	nil-handler-type(prim-unit, tuple-def-empty(prim-type))
+
+let tuple-def-impl-type = operative-handler-type(prim-unit)
+
+let tuple-def-impl = lambda (syn : prim-syntax, env : prim-environment, ud : prim-unit, goal : prim-goal)
+	let s = prim-tuple-of(prim-type, tupleof-ascribed-names-reducer-storage-defn)(env, prim-matcher-is-nil(prim-unit, tuple-def-empty(prim-type), nil-match-accept-handler))
+
+	let matcher-t = prim-matcher(prim-unit, tupleof-ascribed-names-match-result-defn)
+	let matcher =
+		prim-matcher-reducible
+			prim-unit
+			tupleof-ascribed-names-reducer-storage-defn
+			tupleof-ascribed-names-reducer-result2-defn
+			tupleof-ascribed-names-match-result-defn
+			tupleof-ascribed-names-reducer
+			s
+			tupleof-ascribed-names-match-accept-handler
+
+	let matchers =
+		prim-array-set matcher-t
+			prim-array-new matcher-t
+			1
+			matcher
+
+	let (ok, thread, tail) =
+		match-syntax
+			prim-unit
+			tupleof-ascribed-names-match-result-defn
+			matchers
+			tupleof-ascribed-names-match-failure-handler
+			syn
+			prim-nil
+
+	let thread = error-filter(tupleof-ascribed-names-reducer-thread-type, prim-lua-error, ok, thread)
+	let tail = error-filter(prim-syntax, prim-unit, ok, tail)
+
+	let (args) = tupleof-ascribed-names-reducer-thread-type-get-args(thread)
+	let (env) = tupleof-ascribed-names-reducer-thread-type-get-env(thread)
+
+	tuple-of(prim-type, operative-result-defn(goal))(args, env)
+
+let (tuple-def-op-type, tuple-def-op) = new-operative(prim-unit, prim-nil, tuple-def-impl)
+
+let my-tuple-def = tuple-def-op(x : prim-number, y : prim-number)
+let my-tuple-type = tuple-type(type_(0), my-tuple-def)
+my-tuple-type

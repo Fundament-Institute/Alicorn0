@@ -369,6 +369,136 @@ local as = {
 	record = function(t, info) end,
 }
 
+local diff = {
+	record = function(t, info)
+		local idx = t.__index or {}
+		t.__index = idx
+		local kind = info.kind
+		local params = info.params
+
+		local function diff_fn(left, right)
+			print("diffing...")
+			print("kind: " .. left.kind)
+			local rt = getmetatable(right)
+			if t ~= rt then
+				print("unequal types!")
+				print(t)
+				print(rt)
+				print("stopping diff")
+				return
+			end
+			if left.kind ~= right.kind then
+				print("unequal kinds!")
+				print(left.kind)
+				print(right.kind)
+				print("stopping diff")
+				return
+			end
+			local n = 0
+			local diff_params = {}
+			for _, param in ipairs(params) do
+				if left[param] ~= right[param] then
+					n = n + 1
+					diff_params[n] = param
+				end
+			end
+			if n == 0 then
+				print("no difference")
+				print("stopping diff")
+				return
+			elseif n == 1 then
+				local d = diff_params[1]
+				print("difference in param: " .. d)
+				if left[d].diff then
+					-- tail call
+					return left[d]:diff(right[d])
+				else
+					print("stopping diff (missing diff method)")
+					return
+				end
+			else
+				print("difference in multiple params:")
+				for i = 1, n do
+					print(diff_params[i])
+				end
+				print("stopping diff")
+				return
+			end
+		end
+
+		idx["diff"] = diff_fn
+	end,
+	enum = function(t, info)
+		local idx = t.__index or {}
+		t.__index = idx
+		local name = info.name
+		local variants = info.variants
+
+		local variants_checks = {}
+		for _, vname in ipairs(variants) do
+			local vkind = name .. "." .. vname
+			local vdata = variants[vname]
+			local vtype = vdata.type
+			local vinfo = vdata.info
+			variants_checks[vkind] = function(left, right)
+				local n = 0
+				local diff_params = {}
+				for _, param in ipairs(vinfo.params) do
+					if left[param] ~= right[param] then
+						n = n + 1
+						diff_params[n] = param
+					end
+				end
+				if n == 0 then
+					print("no difference")
+					print("stopping diff")
+					return
+				elseif n == 1 then
+					local d = diff_params[1]
+					print("difference in param: " .. d)
+					if left[d].diff then
+						-- tail call
+						return left[d]:diff(right[d])
+					else
+						print("stopping diff (missing diff method)")
+						return
+					end
+				else
+					print("difference in multiple params:")
+					for i = 1, n do
+						print(diff_params[i])
+					end
+					print("stopping diff")
+					return
+				end
+			end
+		end
+
+		local function diff_fn(left, right)
+			print("diffing...")
+			print("kind: " .. left.kind)
+			local rt = getmetatable(right)
+			if t ~= rt then
+				print("unequal types!")
+				print(t)
+				print(rt)
+				print("stopping diff")
+				return
+			end
+			if left.kind ~= right.kind then
+				print("unequal kinds!")
+				print(left.kind)
+				print(right.kind)
+				print("stopping diff")
+				return
+			end
+			variants_checks[left.kind](left, right)
+		end
+
+		idx["diff"] = diff_fn
+	end,
+}
+
 -- build_record_function = (trait, info) -> function that implements the trait method
 -- specializations - optional specialized implementations for particular variants
 local function trait_method(trait, method, build_record_function, specializations)
@@ -429,5 +559,6 @@ return {
 	unwrap = unwrap,
 	as = as,
 	pretty_print = pretty_print,
+	diff = diff,
 	trait_method = trait_method,
 }

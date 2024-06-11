@@ -58,7 +58,13 @@ local semantic_error_mt = {
 		if self.terms then
 			message = message .. " with terms\n"
 			for k, term in pairs(self.terms) do
-				message = message .. k .. " = " .. tostring(term) .. "\n"
+				local s = nil
+				if term.pretty_print and self.env then
+					s = term:pretty_print(self.env.typechecking_context)
+				else
+					s = tostring(term)
+				end
+				message = message .. k .. " = " .. s .. "\n"
 			end
 		end
 		if self.env then
@@ -275,8 +281,8 @@ local function expression_pairhandler(args, a, b)
 
 	if type_of_term:is_prim_function_type() then
 		local param_type, result_type = type_of_term:unwrap_prim_function_type()
-		print("checking prim_function_type call args with goal: (value term follows)")
-		print(param_type)
+		--print("checking prim_function_type call args with goal: (value term follows)")
+		--print(param_type)
 		-- multiple quantity of usages in tuple with usage in function arguments
 		local ok, tuple, env = sargs:match({
 			collect_prim_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
@@ -295,7 +301,7 @@ local function expression_pairhandler(args, a, b)
 	end
 
 	print("!!! about to fail of invalid type")
-	print(combiner)
+	print(combiner:pretty_print(env.typechecking_context))
 	print("infers to")
 	print(type_of_term)
 	print("in")
@@ -316,7 +322,7 @@ local function expression_symbolhandler(args, name)
 	local goal, env = args:unwrap()
 	--print("looking up symbol", name)
 	--p(env)
-	print(name, split_dot_accessors(name))
+	--print(name, split_dot_accessors(name))
 	local front, rest = split_dot_accessors(name)
 	if not front then
 		local ok, val = env:get(name)
@@ -370,7 +376,7 @@ local function expression_valuehandler(args, val)
 	end
 
 	if val.type == "f64" then
-		p(val)
+		--p(val)
 		return true,
 			inferrable_term.typed(value.prim_number_type, usage_array(), typed_term.literal(value.prim(val.val))),
 			env
@@ -493,7 +499,7 @@ local function primitive_operative(fn, name)
 	end
 	local tuple_conv = typed_term.tuple_cons(tuple_conv_elements)
 	local prim_tuple_conv = typed_term.prim_tuple_cons(prim_tuple_conv_elements)
-	local param_names = name_array("#syntax", "#env", "#goal", "#userdata")
+	local param_names = name_array("#syntax", "#env", "#userdata", "#goal")
 	local tuple_to_prim_tuple =
 		typed_term.tuple_elim(param_names, typed_term.bound_variable(1), nparams, prim_tuple_conv)
 	local tuple_to_prim_tuple_fn = typed_term.application(typed_prim_fn, tuple_to_prim_tuple)
@@ -571,6 +577,11 @@ collect_tuple = metalanguage.reducer(function(syntax, args)
 			else
 				local next_elem_type = evaluator.apply_value(closures[i], value.tuple_value(tuple_symbolic_elems))
 				-- if next_elem_type:is_neutral() then
+				-- 	print("collect_tuple: neutral goal type")
+				-- 	print("from application of: (value term follows)")
+				-- 	print(closures[i]:pretty_print())
+				-- 	print("applied to: (value term follows)")
+				-- 	print(value.tuple_value(tuple_symbolic_elems))
 				-- 	error "neutral goal type"
 				-- end
 
@@ -580,10 +591,10 @@ collect_tuple = metalanguage.reducer(function(syntax, args)
 				}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
 				if ok and continue then
 					collected_terms:append(next_term)
-					print("goal type for next element in tuple: (value term follows)")
-					print(next_elem_type)
-					print("term we are checking: (checkable term follows)")
-					print(next_term:pretty_print(env.typechecking_context))
+					--print("goal type for next element in tuple: (value term follows)")
+					--print(next_elem_type)
+					--print("term we are checking: (checkable term follows)")
+					--print(next_term:pretty_print(env.typechecking_context))
 					local usages, typed_elem_term = evaluator.check(next_term, env.typechecking_context, next_elem_type)
 					local elem_value = evaluator.evaluate(typed_elem_term, env.typechecking_context.runtime_context)
 					tuple_symbolic_elems:append(elem_value)
@@ -656,8 +667,8 @@ collect_prim_tuple = metalanguage.reducer(function(syntax, args)
 				}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
 				if ok and continue then
 					collected_terms:append(next_term)
-					print("trying to check tuple element as: (value term follows)")
-					print(next_elem_type)
+					--print("trying to check tuple element as: (value term follows)")
+					--print(next_elem_type)
 					local usages, typed_elem_term = evaluator.check(next_term, env.typechecking_context, next_elem_type)
 					local elem_value = evaluator.evaluate(typed_elem_term, env.typechecking_context.runtime_context)
 					tuple_symbolic_elems:append(elem_value)

@@ -152,7 +152,7 @@ function typed:is_prim_user_defined_type() end
 function typed:unwrap_prim_user_defined_type() end
 ---@return boolean
 function typed:is_prim_if() end
----@return typed, typed
+---@return typed, typed, typed
 function typed:unwrap_prim_if() end
 ---@return boolean
 function typed:is_prim_intrinsic() end
@@ -197,6 +197,6 @@ function typed:unwrap_prim_intrinsic() end
 ---@field prim_unstrict_wrap fun(content:typed): typed
 ---@field prim_unstrict_unwrap fun(container:typed): typed
 ---@field prim_user_defined_type fun(id:any, family_args:any): typed
----@field prim_if fun(subject:typed, alternate:typed): typed
+---@field prim_if fun(subject:typed, consequent:typed, alternate:typed): typed
 ---@field prim_intrinsic fun(source:typed, anchor:any): typed
 return {}

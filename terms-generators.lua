@@ -114,6 +114,10 @@ local function gen_record(self, cons, kind, params_with_types)
 					print("value of parameter " .. v .. ": (follows)")
 					p(argi)
 					print("expected type of parameter " .. v .. " is :", params_types[i])
+					--for i = 2, 25 do
+					--	local d = debug.getinfo(i, "Sln")
+					--	print(string.format("%s %s %s: %s:%d", d.what, d.namewhat, d.name, d.source, d.currentline))
+					--end
 					error("wrong argument type passed to constructor " .. kind .. ", parameter '" .. v .. "'")
 				end
 				val[v] = argi
@@ -363,10 +367,10 @@ local array_methods = {
 		self[self.n + 1] = val
 	end,
 	eq = function(self, other)
-		if #self ~= #other then
+		if self:len() ~= other:len() then
 			return false
 		end
-		for i = 1, #self do
+		for i = 1, self:len() do
 			if self[i] ~= other[i] then
 				return false
 			end
@@ -375,7 +379,7 @@ local array_methods = {
 	end,
 	copy = function(self, first, last)
 		local first = first or 1
-		local last = last or #self
+		local last = last or self:len()
 		local mt = getmetatable(self)
 		local new = mt()
 		for i = first, last do
@@ -392,6 +396,56 @@ local array_methods = {
 			parts[i] = ((type(v) == "table" and v.pretty_print) or tostring)(v, prefix)
 		end
 		return string.format("[%s]", table.concat(parts, ", "))
+	end,
+	diff = function(self, other)
+		print("diffing array...")
+		local st = getmetatable(self)
+		local ot = getmetatable(other)
+		print("value_type: " .. tostring(st.value_type))
+		if st ~= ot then
+			print("unequal types!")
+			print(st)
+			print(ot)
+			print("stopping diff")
+			return
+		end
+		if self:len() ~= other:len() then
+			print("unequal lengths!")
+			print(self:len())
+			print(other:len())
+			print("stopping diff")
+			return
+		end
+		local n = 0
+		local diff_elems = {}
+		for i = 1, self:len() do
+			if self[i] ~= other[i] then
+				n = n + 1
+				diff_elems[n] = i
+			end
+		end
+		if n == 0 then
+			print("no difference")
+			print("stopping diff")
+			return
+		elseif n == 1 then
+			local d = diff_elems[1]
+			print("difference in element: " .. tostring(d))
+			if self[d].diff then
+				-- tail call
+				return self[d]:diff(other[d])
+			else
+				print("stopping diff (missing diff method)")
+				return
+			end
+		else
+			print("difference in multiple elements:")
+			for i = 1, n do
+				print(diff_elems[i])
+			end
+			print("stopping diff")
+			return
+		end
 	end,
 }
 

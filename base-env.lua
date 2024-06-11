@@ -76,8 +76,8 @@ local function let_bind(syntax, env)
 	end
 
 	if type(name) == "table" then
-		print("binding destructuring with let")
-		p(name)
+		--print("binding destructuring with let")
+		--p(name)
 		local tupletype = gen.declare_array(gen.builtin_string)
 		env = env:bind_local(terms.binding.tuple_elim(tupletype(unpack(name)), bind.val))
 	else
@@ -263,7 +263,11 @@ local ascribed_name_with_tail = metalang.reducer(function(syntax, env, prev, nam
 	-- print(env.enter_block)
 	---@cast env Environment
 	local shadowed, env = env:enter_block()
-	env = env:bind_local(terms.binding.annotated_lambda("#prev", prev, syntax.anchor, terms.visibility.explicit))
+	local anchor = syntax.anchor
+	if not anchor then
+		anchor = "bug in ascribed_name_with_tail"
+	end
+	env = env:bind_local(terms.binding.annotated_lambda("#prev", prev, anchor, terms.visibility.explicit))
 	local ok, prev_binding = env:get("#prev")
 	if not ok then
 		error "#prev should always be bound, was just added"
@@ -295,7 +299,10 @@ local ascribed_name = metalang.reducer(function(syntax, env, prev, names)
 	return true, name, val, env
 end, "ascribed_name")
 
-local tupleof_ascribed_names_inner = metalang.reducer(function(syntax, env, termination, build_type_term)
+local tupleof_ascribed_names_inner = metalang.reducer(function(syntax, env, termination)
+	local function build_type_term(args)
+		return terms.inferrable_term.tuple_type(args)
+	end
 	local inf_array = gen.declare_array(terms.inferrable_term)
 	local function tup_cons(...)
 		return terms.inferrable_term.tuple_cons(inf_array(...))
@@ -312,7 +319,7 @@ local tupleof_ascribed_names_inner = metalang.reducer(function(syntax, env, term
 
 	ok, names, args, env, tail = syntax:match({
 		metalang.list_many_threaded_until(function(_, vals, thread, tail)
-			return true, thread.names, build_type_term(thread.args), thread.env, tail
+			return true, thread.names, thread.args, thread.env, tail
 		end, function(thread)
 			return ascribed_name(function(_, name, type_val, type_env)
 				local names = thread.names:copy()
@@ -339,21 +346,25 @@ local tupleof_ascribed_names_inner = metalang.reducer(function(syntax, env, term
 end, "tupleof_ascribed_names_inner")
 
 local tupleof_ascribed_names = metalang.reducer(function(syntax, env, termination)
-	local function build_type_term(args)
-		return terms.inferrable_term.tuple_type(args)
-	end
-	return syntax:match({
-		tupleof_ascribed_names_inner(metalang.accept_handler, env, termination, build_type_term),
+	local ok, thread, tail = syntax:match({
+		tupleof_ascribed_names_inner(metalang.accept_handler, env, termination),
 	}, metalang.failure_handler, nil)
+	if not ok then
+		return ok, thread
+	end
+	thread.args = terms.inferrable_term.tuple_type(thread.args)
+	return ok, thread, tail
 end, "tupleof_ascribed_names")
 
 local prim_tupleof_ascribed_names = metalang.reducer(function(syntax, env, termination)
-	local function build_type_term(args)
-		return terms.inferrable_term.prim_tuple_type(args)
-	end
-	return syntax:match({
-		tupleof_ascribed_names_inner(metalang.accept_handler, env, termination, build_type_term),
+	local ok, thread, tail = syntax:match({
+		tupleof_ascribed_names_inner(metalang.accept_handler, env, termination),
 	}, metalang.failure_handler, nil)
+	if not ok then
+		return ok, thread
+	end
+	thread.args = terms.inferrable_term.prim_tuple_type(thread.args)
+	return ok, thread, tail
 end, "prim_tupleof_ascribed_names")
 
 local ascribed_segment = metalang.reducer(function(syntax, env, termination)
@@ -390,6 +401,9 @@ local ascribed_segment = metalang.reducer(function(syntax, env, termination)
 
 		if not ok then
 			return ok, thread
+			-- if you want to see an error from the 'single' branch of syntax matching
+			-- comment above and uncomment below
+			--return single, name
 		end
 
 		env = thread.env
@@ -399,6 +413,53 @@ local ascribed_segment = metalang.reducer(function(syntax, env, termination)
 
 	return true, { single = single, names = names, args = args, env = env }, tail
 end, "ascribed_segment")
+
+local prim_ascribed_segment = metalang.reducer(function(syntax, env, termination)
+	local single, tail, name, type_val, type_env
+
+	local ok = true
+
+	single, name, type_val, type_env, tail = syntax:match({
+		pure_ascribed_name_with_tail(metalang.accept_handler, env),
+	}, metalang.failure_handler, nil)
+
+	local names, args
+
+	if single then
+		ok, tail = tail:match({
+			metalang.listtail(metalang.accept_handler, termination),
+			-- if termination is nil listtail will fail to match. so this is redundant and SHOULDN'T activate
+			-- but I don't know how to make it not necessary
+			termination,
+		}, metalang.failure_handler, env)
+
+		if not ok then
+			return false, "only one bare ascribed name permitted"
+		end
+
+		env = type_env
+		args = type_val
+		names = name
+	elseif not single then
+		local thread
+		ok, thread, tail = syntax:match({
+			prim_tupleof_ascribed_names(metalang.accept_handler, env, termination),
+		}, metalang.failure_handler, nil)
+
+		if not ok then
+			return ok, thread
+			-- if you want to see an error from the 'single' branch of syntax matching
+			-- comment above and uncomment below
+			--return single, name
+		end
+
+		env = thread.env
+		args = thread.args
+		names = thread.names
+	end
+
+	return true, { single = single, names = names, args = args, env = env }, tail
+end, "prim_ascribed_segment")
 
 local function prim_func_type_pair_handler(env, a, b)
 	local ok, val, env =
@@ -420,22 +481,27 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 		error "env isn't an environment in prim_func_type_impl_reducer"
 	end
 
-	local ok, thread, syntax = syntax:match({
-		prim_tupleof_ascribed_names(metalang.accept_handler, env, metalang.symbol_exact(metalang.accept_handler, "->")),
+	local ok, thread, single, args, names
+
+	ok, thread, syntax = syntax:match({
+		prim_ascribed_segment(metalang.accept_handler, env, metalang.symbol_exact(metalang.accept_handler, "->")),
 	}, metalang.failure_handler, nil)
 
 	if not ok then
-		return ok, thread
+		return false, thread
 	end
 
+	single = thread.single
+	args = thread.args
+	names = thread.names
 	env = thread.env
-	local args = thread.args
-	local names = thread.names
 
-	print("moving on to return type")
+	--print("moving on to return type")
+
 	local shadowed, env = env:enter_block()
 
 	-- syntax.anchor can be nil so we fall back to the anchor for the start of this prim func type if needed
+	-- TODO: use correct name in lambda parameter instead of adding an extra let
 	env = env:bind_local(
 		terms.binding.annotated_lambda(
 			"#prim-func-arguments",
@@ -445,23 +511,31 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 		)
 	)
 	local ok, arg = env:get("#prim-func-arguments")
-	env = env:bind_local(terms.binding.tuple_elim(names, arg))
+	if single then
+		env = env:bind_local(terms.binding.let(names, arg))
+	else
+		env = env:bind_local(terms.binding.tuple_elim(names, arg))
+	end
 
-	ok, thread, tail = syntax:match({
-		prim_tupleof_ascribed_names(metalang.accept_handler, env, metalang.isnil(metalang.accept_handler)),
+	local results
+
+	ok, thread, syntax = syntax:match({
+		prim_ascribed_segment(metalang.accept_handler, env, metalang.isnil(metalang.accept_handler)),
 	}, metalang.failure_handler, nil)
 
 	if not ok then
-		return ok, thread
+		return false, thread
 	end
 
+	single = thread.single
+	results = thread.args
+	names = thread.names
 	env = thread.env
-	local results = thread.args
-	local names = thread.names
 
 	local env, fn_res_term = env:exit_block(results, shadowed)
 	local fn_type_term = terms.inferrable_term.prim_function_type(args, fn_res_term)
-	print("reached end of function type construction")
+
+	--print("reached end of function type construction")
 	if not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl_reducer"
 	end
@@ -475,16 +549,16 @@ end, "prim_func_type_impl")
 ---@return unknown
 ---@return unknown|nil
 local function prim_func_type_impl(syntax, env)
-	print("in prim_func_type_impl")
+	--print("in prim_func_type_impl")
 	local ok, fn_type_term, env =
 		syntax:match({ prim_func_type_impl_reducer(metalang.accept_handler, env) }, metalang.failure_handler, env)
 	if not ok then
 		return ok, fn_type_term
 	end
-	print("finished matching prim_func_type_impl and got:")
-	print("ok:", ok)
-	print("fn_type_term: (inferrable term follows)")
-	print(fn_type_term:pretty_print(env.typechecking_context))
+	--print("finished matching prim_func_type_impl and got:")
+	--print("ok:", ok)
+	--print("fn_type_term: (inferrable term follows)")
+	--print(fn_type_term:pretty_print(env.typechecking_context))
 	if not env or not env.enter_block then
 		error "env isn't an environment at end in prim_func_type_impl"
 	end
@@ -492,14 +566,13 @@ local function prim_func_type_impl(syntax, env)
 end
 
 local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
-	local usage_array = gen.declare_array(gen.builtin_number)
+	local pft_anchor = syntax.anchor
 
-	if not env.enter_block then
+	if not env or not env.enter_block then
 		error "env isn't an environment in forall_type_impl_reducer"
 	end
 
-	local single, args, names, thread
-	local ok = true
+	local ok, thread, single, args, names
 
 	ok, thread, syntax = syntax:match(
 		{ ascribed_segment(metalang.accept_handler, env, metalang.symbol_exact(metalang.accept_handler, "->")) },
@@ -510,15 +583,25 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 	if not ok then
 		return false, thread
 	end
-	single, args, names, env = thread.single, thread.args, thread.names, thread.env
 
-	print("moving on to return type")
+	single = thread.single
+	args = thread.args
+	names = thread.names
+	env = thread.env
+
+	--print("moving on to return type")
 
 	local shadowed, env = env:enter_block()
 
+	-- syntax.anchor can be nil so we fall back to the anchor for the start of this forall type if needed
 	-- TODO: use correct name in lambda parameter instead of adding an extra let
 	env = env:bind_local(
-		terms.binding.annotated_lambda("#forall-arguments", args, syntax.anchor, terms.visibility.explicit)
+		terms.binding.annotated_lambda(
+			"#forall-arguments",
+			args,
+			syntax.anchor or pft_anchor,
+			terms.visibility.explicit
+		)
 	)
 	local ok, arg = env:get("#forall-arguments")
 	if single then
@@ -538,9 +621,14 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 	if not ok then
 		return false, thread
 	end
-	single, results, names, env = thread.single, thread.args, thread.names, thread.env
+
+	single = thread.single
+	results = thread.args
+	names = thread.names
+	env = thread.env
 
 	local env, fn_res_term = env:exit_block(results, shadowed)
+	local usage_array = gen.declare_array(gen.builtin_number)
 	local fn_type_term = terms.inferrable_term.pi(
 		args,
 		terms.checkable_term.inferrable(
@@ -560,9 +648,9 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 		)
 	)
 
-	print("reached end of function type construction")
+	--print("reached end of function type construction")
 	if not env.enter_block then
-		error "env isn't an environment at end in prim_func_type_impl_reducer"
+		error "env isn't an environment at end in forall_type_impl_reducer"
 	end
 	return true, fn_type_term, env
 end, "forall_type_impl")
@@ -574,16 +662,16 @@ end, "forall_type_impl")
 ---@return unknown
 ---@return unknown|nil
 local function forall_type_impl(syntax, env)
-	print("in forall_type_impl")
+	--print("in forall_type_impl")
 	local ok, fn_type_term, env =
 		syntax:match({ forall_type_impl_reducer(metalang.accept_handler, env) }, metalang.failure_handler, env)
 	if not ok then
 		return ok, fn_type_term
 	end
-	print("finished matching prim_func_type_impl and got")
-	print(fn_type_term:pretty_print(env.typechecking_context))
+	--print("finished matching forall_type_impl and got")
+	--print(fn_type_term:pretty_print(env.typechecking_context))
 	if not env.enter_block then
-		error "env isn't an environment at end in prim_func_type_impl"
+		error "env isn't an environment at end in forall_type_impl"
 	end
 	return ok, fn_type_term, env
 	-- parse sequence of ascribed names, arrow, then sequence of ascribed names
@@ -611,11 +699,11 @@ local function the_operative_impl(syntax, env)
 	local type_of_typed_term, usages, type_typed_term = evaluator.infer(type_inferrable_term, env.typechecking_context)
 	local evaled_type = evaluator.evaluate(type_typed_term, env.typechecking_context.runtime_context)
 
-	print("type_inferrable_term: (inferrable term follows)")
-	print(type_inferrable_term:pretty_print(env.typechecking_context))
-	print("evaled_type: (value term follows)")
-	print(evaled_type)
-	print("tail", tail)
+	--print("type_inferrable_term: (inferrable term follows)")
+	--print(type_inferrable_term:pretty_print(env.typechecking_context))
+	--print("evaled_type: (value term follows)")
+	--print(evaled_type)
+	--print("tail", tail)
 	local ok, val, tail = tail:match({
 		metalang.ispair(metalang.accept_handler),
 	}, metalang.failure_handler, nil)
@@ -663,7 +751,7 @@ local function apply_operative_impl(syntax, env)
 	if type_of_fn:is_pi() then
 		param_type, _, _, _ = type_of_fn:unwrap_pi()
 	elseif type_of_fn:is_prim_function_type() then
-		local param_type, _ = type_of_fn:unwrap_prim_function_type()
+		param_type, _ = type_of_fn:unwrap_prim_function_type()
 	else
 		error "unknown fn type for apply operative"
 	end
@@ -1021,6 +1109,10 @@ local function create()
 	return env
 end
 
-return {
+local base_env = {
+	tupleof_ascribed_names_inner = tupleof_ascribed_names_inner,
 	create = create,
 }
+local internals_interface = require "./internals-interface"
+internals_interface.base_env = base_env
+return base_env

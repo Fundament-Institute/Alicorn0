@@ -72,8 +72,8 @@ local function log_binding(name, type, value)
 end
 
 function environment:bind_local(binding)
-	print("bind_local: (binding term follows)")
-	print(binding:pretty_print(self.typechecking_context))
+	--print("bind_local: (binding term follows)")
+	--print(binding:pretty_print(self.typechecking_context))
 	if binding:is_let() then
 		local name, expr = binding:unwrap_let()
 		local expr_type, expr_usages, expr_term = infer(expr, self.typechecking_context)
@@ -87,7 +87,7 @@ function environment:bind_local(binding)
 		local evaled = eval.evaluate(expr_term, self.typechecking_context.runtime_context)
 		-- print "doing let binding"
 		-- print(expr:pretty_print())
-		log_binding(name, expr_type, evaled)
+		--log_binding(name, expr_type, evaled)
 		local typechecking_context = self.typechecking_context:append(name, expr_type, evaled)
 		local bindings = self.bindings:append(binding)
 		return update_env(self, {
@@ -102,7 +102,7 @@ function environment:bind_local(binding)
 		--DEBUG:
 		if subject_type:is_enum_value() then
 			print "bad subject infer"
-			print(subject:pretty_print())
+			print(subject:pretty_print(self.typechecking_context))
 		end
 
 		-- evaluating the subject is necessary for inferring the type of the body
@@ -139,7 +139,7 @@ function environment:bind_local(binding)
 			locals = locals:put(v, term)
 
 			local evaled = eval.index_tuple_value(subject_value, i)
-			log_binding(v, tupletypes[i], evaled)
+			--log_binding(v, tupletypes[i], evaled)
 			typechecking_context = typechecking_context:append(v, tupletypes[i], evaled)
 		end
 		local bindings = self.bindings:append(binding)
@@ -155,8 +155,8 @@ function environment:bind_local(binding)
 			error "missing anchor for annotated lambda binding"
 		end
 		local annotation_type, annotation_usages, annotation_term = infer(param_annotation, self.typechecking_context)
-		print("binding lambda annotation: (typed term follows)")
-		print(annotation_term:pretty_print(self.typechecking_context))
+		--print("binding lambda annotation: (typed term follows)")
+		--print(annotation_term:pretty_print(self.typechecking_context))
 		local evaled = eval.evaluate(annotation_term, self.typechecking_context.runtime_context)
 		local bindings = self.bindings:append(binding)
 		local locals = self.locals:put(param_name, inferrable_term.bound_variable(#self.typechecking_context + 1))
@@ -204,8 +204,8 @@ end
 ---@return ShadowEnvironment
 ---@return Environment
 function environment:enter_block()
-	print "entering block"
-	self.typechecking_context:dump_names()
+	--print "entering block"
+	--self.typechecking_context:dump_names()
 	return { shadowed = self },
 		new_env {
 			-- locals = nil,
@@ -231,12 +231,12 @@ function environment:exit_block(term, shadowed)
 		typechecking_context = outer.typechecking_context,
 		bindings = outer.bindings,
 	}
-	print("exiting block and dropping " .. #self.bindings .. " bindings")
-	self.typechecking_context:dump_names()
-	print "outer"
-	outer.typechecking_context:dump_names()
-	print "new"
-	env.typechecking_context:dump_names()
+	--print("exiting block and dropping " .. #self.bindings .. " bindings")
+	--self.typechecking_context:dump_names()
+	--print "outer"
+	--outer.typechecking_context:dump_names()
+	--print "new"
+	--env.typechecking_context:dump_names()
 	local wrapped = term
 	for idx = self.bindings:len(), 1, -1 do
 		local binding = self.bindings:get(idx)
