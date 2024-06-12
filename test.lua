@@ -601,11 +601,11 @@ let new-results =
 		{ { "token", " comment P\ntoken", "token" } },
 		{ { "token", " comment Q\ntoken\ntoken" } },
 		{ { "token", " comment R\ntoken\n\ttoken" } },
-		{ { "token", " comment S1" }, "token" },
+		{ "token", " comment S1", "token" },
 		{ { "token", " comment S2", "token" } },
 		{ { "token", " comment S3", "token", "token" } },
 		{ { "token", " comment S4", { "token", "token" } } },
-		{ { "token", " comment T# comment # comment" } },
+		{ "token", " comment T# comment # comment" },
 		{ ' comment U\n""""' },
 		{
 			{ "let", { "orig-results" }, "=", { "get-prim-func-res-inner", { "wrap", "type", "foo" }, "prim-nil" } },
@@ -688,6 +688,7 @@ function testcomma()
 		"f()",
 		"f()()",
 		"f(x, y)(x)",
+		"f(x + 1, y)(x)(z)",
 	}
 
 	local expected = {
@@ -705,6 +706,7 @@ function testcomma()
 		{ { "f" } },
 		{ { { "f" } } },
 		{ { { "f", "x", "y" }, "x" } },
+		{ { { { "f", { "x", "+", 1 }, "y" }, "x" }, "z" } },
 	}
 
 	for i = 1, #example do
