@@ -428,6 +428,7 @@ let (orig-results) = get-prim-func-res-inner(wrap(type, foo), prim-nil)
 let orig-results = unwrap(func-conv-res-type(oldargs), orig-results)
 let new-results =
 	lambda ((args : unwrap(type, newargs)))
+		# works now
 		let ptuple = tuple-to-prim-tuple(oldargs, oldargs-valid, args)
 		let orig-results-res = apply(orig-results, ptuple)
 		let (newres valid) = orig-results-res
@@ -442,6 +443,7 @@ let prim-func-type-to-func-type =
 		
 		let new-results =
 			lambda ((args : unwrap(type, newargs)))
+				# works now
 				let ptuple = tuple-to-prim-tuple(oldargs, oldargs-valid, args)
 				let (oldres oldres-valid) = apply(orig-results, ptuple)
 				let (newres) = prim-tuple-type-to-tuple-type-inner(oldres, oldres-valid)
@@ -1057,20 +1059,19 @@ let tupleof-ascribed-names-reducer-result2-defn =
 		tuple-def-singleton(prim-type, prim-syntax)
 
 let tupleof-ascribed-names-match-result-defn =
-	# read as: (ok : prim-bool, _ : prim-if(ok, tupleof-ascribed-names-reducer-thread-type, prim-lua-error), _ : prim-if(ok, prim-syntax, prim-unit))
+	# read as: (ok : prim-bool, _ : prim-if(ok, tupleof-ascribed-names-reducer-thread-type, prim-lua-error))
 	# or, more logically: (ok : prim-bool, ...) where:
-	# - ok == true:  `...` is tupleof-ascribed-names-reducer-thread-type, prim-syntax
+	# - ok == true:  `...` is tupleof-ascribed-names-reducer-thread-type
 	# - ok == false: `...` is prim-lua-error
+	# technically this should have a third element in the ok == true case, containing prim-syntax
+	# but the syntax will always be nil, and the errors are annoying
 	tuple-def-elem prim-type
 		tuple-def-elem prim-type
-			tuple-def-elem prim-type
-				tuple-def-empty prim-type
-				lambda (())
-					prim-bool
-			lambda ((ok : prim-bool))
-				prim-if(ok, tupleof-ascribed-names-reducer-thread-type, prim-lua-error)
-		lambda (ok : prim-bool, _ : prim-if(ok, tupleof-ascribed-names-reducer-thread-type, prim-lua-error))
-			prim-if(ok, prim-syntax, prim-unit)
+			tuple-def-empty prim-type
+			lambda (())
+				prim-bool
+		lambda ((ok : prim-bool))
+			prim-if(ok, tupleof-ascribed-names-reducer-thread-type, prim-lua-error)
 
 let tupleof-ascribed-names-reducer = intrinsic "return base_env.tupleof_ascribed_names_inner" :
 	reducer-type(prim-unit, tupleof-ascribed-names-reducer-storage-defn, tupleof-ascribed-names-reducer-result2-defn, tupleof-ascribed-names-match-result-defn)
@@ -1105,7 +1106,7 @@ let tuple-def-impl = lambda (syn : prim-syntax, env : prim-environment, ud : pri
 			1
 			matcher
 
-	let (ok, thread, tail) =
+	let (ok, thread) =
 		match-syntax
 			prim-unit
 			tupleof-ascribed-names-match-result-defn
@@ -1115,7 +1116,6 @@ let tuple-def-impl = lambda (syn : prim-syntax, env : prim-environment, ud : pri
 			prim-nil
 
 	let thread = error-filter(tupleof-ascribed-names-reducer-thread-type, prim-lua-error, ok, thread)
-	let tail = error-filter(prim-syntax, prim-unit, ok, tail)
 
 	let (args) = tupleof-ascribed-names-reducer-thread-type-get-args(thread)
 	let (env) = tupleof-ascribed-names-reducer-thread-type-get-env(thread)
