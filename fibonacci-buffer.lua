@@ -69,6 +69,33 @@ function FibonacciBuffer:get(index)
 	return nil
 end
 
+function FibonacciBuffer:set(index, value)
+	if index < 1 then
+		error("fibonacci buffer set() index out of bounds")
+	end
+	local n = self.n
+	for i, p in ipairs(self) do
+		local length = p.n
+		if index <= length then
+			-- build new output based on self
+			local fib_buf = new()
+			table.move(self, 1, n, 1, fib_buf)
+			fib_buf.n = n
+			-- recreate partition which is changing
+			local newp = {}
+			table.move(p, 1, length, 1, newp)
+			newp.n = length
+			-- now set
+			newp[index] = value
+			fib_buf[i] = newp
+			return fib_buf
+		else
+			index = index - length
+		end
+	end
+	error("fibonacci buffer set() index out of bounds")
+end
+
 function FibonacciBuffer:len()
 	return self.n
 end

@@ -1806,23 +1806,31 @@ function evaluate(typed_term, runtime_context)
 	elseif typed_term:is_prim_if() then
 		local subject, consequent, alternate = typed_term:unwrap_prim_if()
 		local sval = evaluate(subject, runtime_context)
-		-- TODO TODO TODO TODO TODO TODO TODO TODO
-		print("TODO TODO TODO TODO TODO hit while evaluating prim_if")
-		-- replace runtime context in each case to replace terms equal to subject with true/false
-		local cval = evaluate(consequent, runtime_context)
-		local aval = evaluate(alternate, runtime_context)
 		if sval:is_prim() then
 			local sbool = sval:unwrap_prim()
 			if type(sbool) ~= "boolean" then
 				error("subject of prim_if must be a primitive bool")
 			end
 			if sbool then
-				return cval
+				return evaluate(consequent, runtime_context)
 			else
-				return aval
+				return evaluate(alternate, runtime_context)
 			end
 		elseif sval:is_neutral() then
 			local sval_neutral = sval:unwrap_neutral()
+			local inner_context_c, inner_context_a = runtime_context, runtime_context
+			local ok, index = subject:as_bound_variable()
+			if ok then
+				inner_context_c = inner_context_c:set(index, value.prim(true))
+				inner_context_a = inner_context_a:set(index, value.prim(false))
+			else
+				print("strange prim-if case hit!")
+				print("subject expected to be a bound_variable, instead is a " .. subject.kind)
+				--print(subject:pretty_print(runtime_context))
+				--print(subject:default_print())
+			end
+			local cval = evaluate(consequent, inner_context_c)
+			local aval = evaluate(alternate, inner_context_a)
 			return value.neutral(neutral_value.prim_if_stuck(sval_neutral, cval, aval))
 		else
 			error("subject of prim_if must be prim or neutral")
