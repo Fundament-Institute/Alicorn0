@@ -215,6 +215,10 @@ function RuntimeContext:append(value)
 	local copy = { bindings = self.bindings:append(value) }
 	return setmetatable(copy, runtime_context_mt)
 end
+function RuntimeContext:set(index, value)
+	local copy = { bindings = self.bindings:set(index, value) }
+	return setmetatable(copy, runtime_context_mt)
+end
 function RuntimeContext:eq(other)
 	local omt = getmetatable(other)
 	if omt ~= runtime_context_mt then
