@@ -447,9 +447,9 @@ function OperativeError.new(cause, anchor, operative_name)
 	}, external_error_mt)
 end
 
----@param fn fun(syntax : any, env : Environment, goal : ExpressionGoal) : boolean, any, Environment
+---@param fn lua_operative
 ---@param name string
----@return inferrable_term.operative_cons
+---@return inferrable
 local function primitive_operative(fn, name)
 	local debuginfo = debug.getinfo(fn)
 	local debugstring = (name or error("name not passed to primitive_operative"))
