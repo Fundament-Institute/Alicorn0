@@ -10,6 +10,11 @@ local evaluator = require "./evaluator"
 
 local p = require "pretty-print".prettyPrint
 
+--- lua_operative is dependently typed and should produce inferrable vs checkable depending on the goal, and an error as the second return if it failed
+--- | unknown in the second return insufficiently constrains the non-error cases to be inferrable or checkable terms
+--- this can be fixed in the future if we swap to returning a Result type that can express the success/error constraint separately
+---@alias lua_operative fun(syntax : any, env : Environment, goal : expression_goal) : boolean, inferrable | checkable | unknown, Environment | nil
+
 local function do_block_pair_handler(env, a, b)
 	local ok, val, newenv = a:match({
 		evaluator.evaluates(metalang.accept_handler, env),
@@ -37,11 +42,7 @@ local function do_block(syntax, env)
 end
 
 ---handle a let binding
----@param syntax Syntax
----@param env Environment
----@return boolean
----@return checkable | inferrable
----@return Environment
+---@type lua_operative
 local function let_bind(syntax, env)
 	local ok, name, tail = syntax:match({
 		metalang.listtail(
@@ -120,11 +121,7 @@ local function record_build(syntax, env)
 	return true, terms.inferrable_term.record_cons(map), env
 end
 
----@param syntax any
----@param env Environment
----@return boolean
----@return any
----@return Environment
+---@type lua_operative
 local function intrinsic(syntax, env)
 	local ok, str_env, syntax = syntax:match({
 		metalang.listtail(
@@ -543,11 +540,7 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 end, "prim_func_type_impl")
 
 -- TODO: abstract so can reuse for func type and prim func type
----@param syntax any
----@param env Environment
----@return boolean
----@return unknown
----@return unknown|nil
+---@type lua_operative
 local function prim_func_type_impl(syntax, env)
 	--print("in prim_func_type_impl")
 	local ok, fn_type_term, env =
@@ -656,11 +649,7 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 end, "forall_type_impl")
 
 -- TODO: abstract so can reuse for func type and prim func type
----@param syntax any
----@param env Environment
----@return boolean
----@return unknown
----@return unknown|nil
+---@type lua_operative
 local function forall_type_impl(syntax, env)
 	--print("in forall_type_impl")
 	local ok, fn_type_term, env =
@@ -683,11 +672,7 @@ end
 
 ---Constrains a type by using a checked expression goal and producing an annotated inferrable term
 ---(the prim-number 5) -> produces inferrable_term.annotated(lit(5), lit(prim-number))
----@param syntax any
----@param env Environment
----@return boolean
----@return unknown
----@return unknown|nil
+---@type lua_operative
 local function the_operative_impl(syntax, env)
 	local ok, type_inferrable_term, tail = syntax:match({
 		metalang.listtail(metalang.accept_handler, exprs.inferred_expression(metalang.accept_handler, env)),
@@ -728,11 +713,7 @@ local function the_operative_impl(syntax, env)
 end
 
 ---apply(fn, args) calls fn with an existing args tuple
----@param syntax any
----@param env Environment
----@return boolean
----@return unknown
----@return unknown|nil
+---@type lua_operative
 local function apply_operative_impl(syntax, env)
 	local ok, fn, tail = syntax:match({ metalang.ispair(metalang.accept_handler) }, metalang.failure_handler, nil)
 	if not ok then
@@ -780,10 +761,7 @@ local function apply_operative_impl(syntax, env)
 end
 
 ---@param syntax any
----@param env Environment
----@return boolean
----@return unknown
----@return unknown|nil
+---@type lua_operative
 local function lambda_impl(syntax, env)
 	local ok, thread, tail = syntax:match({
 		metalang.listtail(
@@ -820,11 +798,7 @@ local function lambda_impl(syntax, env)
 	return true, term, resenv
 end
 
----@param syntax any
----@param env Environment
----@return boolean
----@return unknown
----@return unknown|nil
+---@type lua_operative
 local function lambda_impl_implicit(syntax, env)
 	local ok, thread, tail = syntax:match({
 		metalang.listtail(
@@ -871,6 +845,7 @@ local function lit_term(val, typ)
 	return terms.inferrable_term.typed(typ, usage_array(), terms.typed_term.literal(val))
 end
 
+---@type lua_operative
 local function startype_impl(syntax, env)
 	local ok, level_val = syntax:match({
 		metalang.listmatch(metalang.accept_handler, metalang.isvalue(metalang.accept_handler)),
