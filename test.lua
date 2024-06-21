@@ -689,6 +689,12 @@ function testcomma()
 		"f()()",
 		"f(x, y)(x)",
 		"f(x + 1, y)(x)(z)",
+		[[
+let(
+	letn't,
+	=,
+	let)
+]],
 	}
 
 	local expected = {
@@ -707,6 +713,7 @@ function testcomma()
 		{ { { "f" } } },
 		{ { { "f", "x", "y" }, "x" } },
 		{ { { { "f", { "x", "+", 1 }, "y" }, "x" }, "z" } },
+		{ { "let", "letn't", "=", "let" } },
 	}
 
 	for i = 1, #example do

@@ -39,6 +39,38 @@ local function list(pattern)
 	return element("list", Cg(Ct(space_tokens(pattern)), "elements") * Cg(V "textpos", "endpos"))
 end
 
+local function update_ffp(name, patt)
+	return patt
+		+ Cmt(lpeg.Carg(2) * V "textpos", function(_, _, ctx, position)
+			if ctx.position then
+				if ctx.position == position then
+					local acc = true
+					for i, v in ipairs(ctx.expected) do
+						acc = acc and not (v == name)
+					end
+					if acc then
+						table.insert(ctx.expected, name)
+					end
+				elseif ctx.position < position then
+					ctx.position = position
+					ctx.expected = { name }
+				end
+			else
+				ctx.position = position
+				ctx.expected = { name }
+			end
+
+			return false
+		end)
+end
+
+local function clear_ffp()
+	return lpeg.Carg(2) / function(ctx)
+		ctx.position = nil
+		ctx.expected = nil
+	end
+end
+
 local function create_literal(anchor, elements)
 	local val = {
 		anchor = anchor,
@@ -68,20 +100,14 @@ local function create_anchor(line, char, sourceid)
 	return newanchor
 end
 
-local function delimsep(pattern, delim)
-	return (pattern * delim) ^ 0 * pattern
-end
-
 local grammar = P {
 	"ast",
 	-- initializes empty capture groups at the start, remember to update when tracking new things!
 	foreward = Cg(Cc(0), "indent_level"),
 
 	ast = V "foreward" * list(
-		((V "empty_line" + (((V "newline") + V "filestart") * V "samedent" * V "naked_list")) ^ 0)
-			* V "furthest_forward" ^ -1
-			* V "eof"
-	),
+		((V "empty_line" + (((V "newline") + V "filestart") * V "samedent" * V "naked_list")) ^ 0) * V "eof"
+	) * clear_ffp(),
 
 	-- either match the newline or match the beginning of the file
 	filestart = Cmt(P "", function(_, mypos)
@@ -89,26 +115,43 @@ local grammar = P {
 	end),
 	eof = P(-1),
 
-	newline = (P "\r" ^ 0 * P "\n") * lpeg.Carg(1) * Cp() / function(table, position)
-		table.positions[#table.positions + 1] = { pos = position, line = table.positions[#table.positions].line + 1 }
-	end,
+	newline = (P "\r" ^ 0 * P "\n") * Cmt(lpeg.Carg(1), function(_, position, table)
+		if not (table.positions[#table.positions].pos == position) then
+			if table.positions[#table.positions].pos < position then
+				table.positions[#table.positions + 1] =
+					{ pos = position, line = table.positions[#table.positions].line + 1 }
+			end
+		end
+
+		return true
+	end),
 	empty_line = V "newline" * S "\t " ^ 0 * #(V "newline" + V "eof"),
 
-	textpos = lpeg.Carg(1) * Cp() / function(table, position)
-		local simple = create_anchor(
-			table.positions[#table.positions].line,
-			position - table.positions[#table.positions].pos + 1,
-			table.sourceid
-		)
-		return simple
-	end,
+	textpos = Cmt(lpeg.Carg(1), function(_, position, linectx)
+		-- assert(position > table.positions[#table.positions].pos)
+		local line_index = #linectx.positions
 
-	count_tabs = Cmt(V "textpos" * C(S "\t " ^ 0), function(_, _, anchor, indentstring)
-		if string.find(indentstring, " ") then
-			assert(false, "error at " .. tostring(anchor) .. ": tabs and spaces must not be interspersed")
+		while (position < linectx.positions[line_index].pos) and (line_index > 0) do
+			line_index = line_index - 1
 		end
-		return true, string.len(indentstring)
+		local simple = create_anchor(
+			linectx.positions[line_index].line,
+			position - linectx.positions[line_index].pos + 1,
+			linectx.sourceid
+		)
+		return true, simple
 	end),
+
+	count_tabs = update_ffp(
+		"spaces should not be used for indentation.",
+		Cmt(V "textpos" * C(S "\t " ^ 0), function(_, _, anchor, indentstring)
+			if string.find(indentstring, " ") then
+				assert(false, "error at " .. tostring(anchor) .. ": tabs and spaces must not be interspersed")
+				-- return false
+			end
+			return true, string.len(indentstring)
+		end)
+	),
 
 	-- use indent and dedent to control the expected indentation level of a context
 	-- samedent is the token that is consumed on a newline
@@ -120,18 +163,27 @@ local grammar = P {
 		return math.max(0, level - 1)
 	end, "indent_level"),
 
-	samedent = Cmt(Cb("indent_level") * V "count_tabs", function(_, _, prev_indent, tabscount)
-		return tabscount == prev_indent
-	end),
+	samedent = update_ffp(
+		"samedent",
+		Cmt(Cb("indent_level") * V "count_tabs", function(_, _, prev_indent, tabscount)
+			return tabscount == prev_indent
+		end)
+	),
 
-	superior_indent = Cmt(Cb("indent_level") * V "count_tabs", function(_, _, prev_indent, tabscount)
-		return tabscount <= prev_indent
-	end),
+	superior_indent = update_ffp(
+		"dedent",
+		Cmt(Cb("indent_level") * V "count_tabs", function(_, _, prev_indent, tabscount)
+			return tabscount <= prev_indent
+		end)
+	),
 
-	subordinate_indent = Cmt(Cb("indent_level") * V "count_tabs", function(_, _, prev_indent, tabscount)
-		local normalized_tabs = string.rep("\t", tabscount - prev_indent - 1)
-		return tabscount > prev_indent, normalized_tabs
-	end),
+	subordinate_indent = update_ffp(
+		"indent",
+		Cmt(Cb("indent_level") * V "count_tabs", function(_, _, prev_indent, tabscount)
+			local normalized_tabs = string.rep("\t", tabscount - prev_indent - 1)
+			return tabscount > prev_indent, normalized_tabs
+		end)
+	),
 
 	-- probably works but it doesn't have complex tests
 	splice = P "${" * V "naked_list" * P "}" + P "$" * V "symbol",
@@ -177,17 +229,17 @@ local grammar = P {
 		+ list(
 			(((list(V "tokens" ^ 1 * V "semicolon") + V "semicolon") ^ 1 * V "tokens" ^ 0) + V "tokens" ^ 1)
 				* V "indent"
-				* (V "newline" * V "samedent" * V "naked_list") ^ 0
+				* ((V "newline" * V "samedent" * V "naked_list") + V "empty_line") ^ 0
 		),
 
 	-- PARENTHETICAL LIST BEHAVIOR
-	paren_tokens = (
-		(V "newline" * erase(V "subordinate_indent"))
-		+ V "empty_line"
-		+ S "\t " ^ 1
-		+ (space_tokens(P [[\]]) * V "naked_list") -- \ escape char enters naked list mode from inside a paren list. there's probably an edge case here, indentation is going to be wacky
-		+ V "tokens"
-	),
+	paren_spacers = (V "newline" * erase(V "subordinate_indent")) + V "empty_line" + S "\t " ^ 1,
+	paren_tokens = V "paren_spacers" ^ 0
+		* (
+			(space_tokens(P [[\]]) * V "naked_list") -- \ escape char enters naked list mode from inside a paren list. there's probably an edge case here, indentation is going to be wacky
+			+ V "tokens"
+		)
+		* V "paren_spacers" ^ 0,
 
 	semicolon_body = list(V "paren_tokens" ^ 1 * V "semicolon") ^ 1 * V "paren_tokens" ^ 0,
 
@@ -197,35 +249,38 @@ local grammar = P {
 	open_brace = Cg(C(P "("), "bracetype")
 		+ (Cg(C(P "["), "bracetype") * symbol(Cc("braced_list")))
 		+ (Cg(C(P "{"), "bracetype") * symbol(Cc("curly-list"))),
-	close_brace = Cmt(Cb("bracetype") * C(S "])}"), function(_, _, bracetype, brace)
-		local matches = {
-			["("] = ")",
-			["["] = "]",
-			["{"] = "}",
-		}
-		return matches[bracetype] == brace
-	end),
+	close_brace = update_ffp(
+		")",
+		Cmt(Cb("bracetype") * C(S "])}"), function(_, _, bracetype, brace)
+			local matches = {
+				["("] = ")",
+				["["] = "]",
+				["{"] = "}",
+			}
+			return matches[bracetype] == brace
+		end)
+	),
 	paren_list = list(
-		V "open_brace" * (V "comma_paren_body" + V "semicolon_body" + V "paren_tokens" ^ 1) * V "close_brace"
+		V "open_brace" * (V "comma_paren_body" + V "semicolon_body" + V "paren_tokens" ^ 1) ^ -1 * V "close_brace"
 	),
 
-	function_call = V "symbol"
-		* Ct(list(P "(" * (V "comma_paren_body" + V "solo_token") ^ -1 * P ")") ^ 1)
-		/ function(symbol, argcalls)
-			local acc = {}
+	function_call = V "symbol" * Ct(
+		list(P "(" * (V "comma_paren_body" + V "solo_token") ^ -1 * update_ffp(")", P ")")) ^ 1
+	) / function(symbol, argcalls)
+		local acc = {}
 
-			acc = table.remove(argcalls, 1)
-			table.insert(acc.elements, 1, symbol)
-			acc.anchor = symbol.anchor
+		acc = table.remove(argcalls, 1)
+		table.insert(acc.elements, 1, symbol)
+		acc.anchor = symbol.anchor
 
-			for _, v in ipairs(argcalls) do
-				table.insert(v.elements, 1, acc)
-				v.anchor = acc.anchor
-				acc = v
-			end
+		for _, v in ipairs(argcalls) do
+			table.insert(v.elements, 1, acc)
+			v.anchor = acc.anchor
+			acc = v
+		end
 
-			return acc
-		end,
+		return acc
+	end,
 
 	-- numbers are limited, they are not bignums, they are standard lua numbers. scopes shares the problem of files not having arbitrary precision
 	-- so it probably doesn't matter.
@@ -242,17 +297,48 @@ local grammar = P {
 	float_special = P "+inf" + P "-inf" + P "nan",
 
 	symbol = symbol((1 - (S "\\#()[]{};,\t \n\r")) ^ 1),
-
-	furthest_forward = lpeg.Carg(2) * V "textpos" * P(1) ^ 1 / function(table, position)
-		if table.position then
-			if table.position < position then
-				table.position = position
-			end
-		else
-			table.position = position
-		end
-	end,
 }
+
+local function span_error(position, subject, msg)
+	local function split_lines(subject)
+		local lines = {}
+		for line in subject:gmatch("([^\n\r]*)\r*\n") do
+			table.insert(lines, line)
+		end
+
+		return lines
+	end
+
+	local lines = split_lines(subject)
+
+	local span = "error: "
+		.. msg
+		.. "\n--> "
+		.. position.sourceid
+		.. ":"
+		.. tostring(position.line)
+		.. ":"
+		.. tostring(position.char)
+		.. "\n"
+
+	print(position.line)
+	print(#lines)
+
+	local spacing = string.rep(" ", string.len(position.line)) .. " |"
+
+	span = span
+		.. spacing
+		.. "\n"
+		.. position.line
+		.. " |"
+		.. lines[position.line]
+		.. "\n"
+		.. spacing
+		.. string.rep(" ", position.char - 1)
+		.. "^"
+
+	return span
+end
 
 local function parse(input, filename)
 	assert(filename)
@@ -272,10 +358,14 @@ local function parse(input, filename)
 	local furthest_forward = { position = nil }
 	local ast = lpeg.match(grammar, input, 1, newlinetable, furthest_forward)
 
-	assert(ast, "completely failed to parse format")
-
 	if furthest_forward.position then
-		assert(false, "errors " .. tostring(furthest_forward.position))
+		local expected = "{"
+		for i, v in ipairs(furthest_forward.expected) do
+			expected = expected .. v .. ", "
+		end
+		expected = expected .. "}"
+
+		assert(false, span_error(furthest_forward.position, input, "expected " .. expected))
 	end
 
 	return ast
