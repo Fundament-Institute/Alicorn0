@@ -20,8 +20,15 @@ let prim-inferrable-term-wrap = intrinsic "return terms.prim_inferrable_term_typ
 let prim-checkable-term-wrap  = intrinsic "return terms.prim_checkable_term_type"  : wrapped(prim-type)
 let prim-lua-error-wrap       = intrinsic "return terms.prim_lua_error_type"       : wrapped(prim-type)
 
+let implicit-unwrap =
+	lambda_implicit (T : type_(10))
+		lambda ((x : wrapped(T)))
+			unwrap T x
+
+let prim-string = implicit-unwrap(prim-string-wrap)
+
 let prim-bool            = unwrap(prim-type, prim-bool-wrap)
-let prim-string          = unwrap(prim-type, prim-string-wrap)
+#let prim-string          = unwrap(prim-type, prim-string-wrap)
 let prim-syntax          = unwrap(prim-type, prim-syntax-wrap)
 let prim-environment     = unwrap(prim-type, prim-environment-wrap)
 let prim-goal            = unwrap(prim-type, prim-goal-wrap)

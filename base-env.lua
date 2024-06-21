@@ -896,7 +896,7 @@ local function build_wrap(body_fn, type_fn)
 								val_desc_empty,
 								value.closure(
 									pname_type,
-									typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(10)),
+									typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),
 									terms.runtime_context()
 								)
 							)
@@ -948,7 +948,7 @@ local function build_unwrap(body_fn, type_fn)
 								val_desc_empty,
 								value.closure(
 									pname_type,
-									typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(10)),
+									typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),
 									terms.runtime_context()
 								)
 							)
@@ -997,7 +997,7 @@ local function build_wrapped(body_fn)
 						val_desc_empty,
 						value.closure(
 							pname_type,
-							typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(10)),
+							typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),
 							terms.runtime_context()
 						)
 					)

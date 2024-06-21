@@ -106,9 +106,48 @@ local function augment_error(syntax, reducer_name, ok, err_msg, ...)
 	return err_msg, ...
 end
 
+local pdump = require "pretty-print".dump
+local tag = (require "./utils").tag
+
+local function custom_traceback(err, message, level)
+	if type(err) == "table" then
+		return err
+	end
+		local s = err
+		local i = 3
+		local info = debug.getinfo(i, "Sfln")
+		while info ~= nil do
+			if info.func == tag then
+				local _, name = debug.getlocal(i, 1)
+				local _, tag = debug.getlocal(i, 2)
+				local _, fn = debug.getlocal(i, 3)
+				--i = i + 1
+				--info = debug.getinfo(i, "Sfln")
+				s = s .. string.format("\n%s [%s:%d] (%s)", name, info.short_src, info.currentline, pdump(tag))
+			else
+				local name = info.name or string.format("<%s:%d>", info.short_src, info.linedefined)
+				local args = {}
+				local j = 1
+				local arg, v = debug.getlocal(i, j)
+				while arg ~= nil do
+					table.insert(args, (type(v) == "table") and "<"..arg..":table>" or string.sub(tostring(v), 1, 12))
+					j = j + 1
+					arg, v = debug.getlocal(i, j)
+				end
+
+				--s = s .. string.format("\n%s [%s:%d] (%s)", name, info.short_src, info.currentline, table.concat(args,","))
+				s = s .. string.format("\n%s [%s:%d]", name, info.short_src, info.currentline)
+			end
+			i = i + 1
+			info = debug.getinfo(i, "Sfln")
+		end
+
+		return s
+end
+
 local function reducer(func, name)
 	local function funcwrapper(syntax, matcher)
-		return augment_error(syntax, name, xpcall(func, debug.traceback, syntax, table.unpack(matcher.reducible)))
+		return augment_error(syntax, name, xpcall(func, custom_traceback, syntax, table.unpack(matcher.reducible)))
 	end
 
 	local reducer = {

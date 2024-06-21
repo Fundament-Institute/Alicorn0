@@ -42,6 +42,8 @@ end
 
 local derivers = require "./derivers"
 local traits = require "./traits"
+local U = require "./utils"
+local OMEGA = 10
 
 local evaluate, infer, fitsinto, check, apply_value
 
@@ -186,6 +188,8 @@ local function substitute_inner(val, mappings, context_len)
 				lookup = free:unwrap_placeholder()
 			elseif free:is_unique() then
 				lookup = free:unwrap_unique()
+			elseif free:is_metavariable() then
+				lookup = free:unwrap_metavariable()
 			else
 				error("substitute_inner NYI free with kind " .. free.kind)
 			end
@@ -378,15 +382,13 @@ local function tuple_compare(a, b)
 		local ta, tb = tuple_types_a[i], tuple_types_b[i]
 
 		if ta ~= tb then
+			local ok, err
 			if tb.kind == "value.neutral" then
-				print("value.tuple_type comparer a, b")
-				print(a)
-				print(b)
-				p("ta, tb")
-				p(ta)
-				p(tb)
+				ok, err = U.tag("fitsinto", {ta = ta, tb = tb, a = a, b = b }, fitsinto, ta, tb)
+			else
+				ok, err = fitsinto(ta, tb)
 			end
-			local ok, err = fitsinto(ta, tb)
+
 			if not ok then
 				return false, err
 			end
@@ -463,7 +465,8 @@ add_comparer(value.star(0).kind, value.star(0).kind, function(a, b)
 end)
 
 add_comparer("value.prim_wrapped_type", "value.prim_wrapped_type", function(a, b)
-	local ok, err = fitsinto(a:unwrap_prim_wrapped_type(), b:unwrap_prim_wrapped_type())
+	local ua, ub = a:unwrap_prim_wrapped_type(), b:unwrap_prim_wrapped_type()
+	local ok, err =  U.tag("fitsinto", { a = ua, b = ub }, fitsinto, ua, ub)
 	return ok, err
 end)
 
@@ -484,19 +487,20 @@ function fitsinto(a, b)
 
 	local tya, tyb = a, b
 
+	if tya:is_neutral() and tya:unwrap_neutral():is_free() and tya:unwrap_neutral():unwrap_free():is_metavariable() then
+		local mv = tya:unwrap_neutral():unwrap_free():unwrap_metavariable()
+		mv.typechecker_state.bind_value(mv, tyb)
+		return true
+	end
+	if tyb:is_neutral() and tyb:unwrap_neutral():is_free() and tyb:unwrap_neutral():unwrap_free():is_metavariable() then
+		local mv = tyb:unwrap_neutral():unwrap_free():unwrap_metavariable()
+		mv.typechecker_state.bind_value(mv, tya)
+		return true
+	end
+
 	if not fitsinto_comparers[tya.kind] then
-		print("fitsinto error:")
-		print("tya:")
-		print(tya:pretty_print())
-		print("tyb:")
-		print(tyb:pretty_print())
 		error("fitsinto given value a which isn't a type or NYI " .. tya.kind)
 	elseif not fitsinto_comparers[tyb.kind] then
-		print("fitsinto error:")
-		print("tya:")
-		print(tya:pretty_print())
-		print("tyb:")
-		print(tyb:pretty_print())
 		--p(debug.getinfo(getmetatable(tyb.neutral.container.subject["function"]).__call))
 		error("fitsinto given value b which isn't a type or NYI " .. tyb.kind)
 	end
@@ -663,7 +667,7 @@ local function check(
 				-- TODO: add debugging dump to typechecking context that looks for placeholders inside inferred_type
 				-- then shows matching types and values in env if relevant?
 			else
-				ok, err = fitsinto(inferred_type, goal_type)
+				ok, err = U.tag("fitsinto", { a = inferred_type, b = goal_type }, fitsinto, inferred_type, goal_type)
 			end
 			if not ok then
 				print "attempting to check if terms fit for checkable_term.inferrable"
@@ -1121,12 +1125,12 @@ function infer(
 		end
 		return value.tuple_type(type_data), usages, typed_term.tuple_cons(new_elements)
 	elseif inferrable_term:is_prim_tuple_cons() then
-		print "inferring tuple construction"
-		print(inferrable_term:pretty_print())
-		print "environment_names"
-		for i = 1, #typechecking_context do
-			print(i, typechecking_context:get_name(i))
-		end
+		--print "inferring tuple construction"
+		--print(inferrable_term:pretty_print())
+		--print "environment_names"
+		--for i = 1, #typechecking_context do
+		--	print(i, typechecking_context:get_name(i))
+		--end
 		local elements = inferrable_term:unwrap_prim_tuple_cons()
 		-- type_data is either "empty", an empty tuple,
 		-- or "cons", a tuple with the previous type_data and a function that
@@ -1137,8 +1141,8 @@ function infer(
 		local new_elements = typed_array()
 		for _, v in ipairs(elements) do
 			local el_type, el_usages, el_term = infer(v, typechecking_context)
-			print "inferring element of tuple construction"
-			print(el_type:pretty_print())
+			--print "inferring element of tuple construction"
+			--print(el_type:pretty_print())
 			type_data = value.enum_value(
 				"cons",
 				tup_val(
@@ -1544,21 +1548,21 @@ function evaluate(typed_term, runtime_context)
 		return value.closure(param_name, body, runtime_context)
 	elseif typed_term:is_pi() then
 		local param_type, param_info, result_type, result_info = typed_term:unwrap_pi()
-		local param_type_value = evaluate(param_type, runtime_context)
-		local param_info_value = evaluate(param_info, runtime_context)
-		local result_type_value = evaluate(result_type, runtime_context)
-		local result_info_value = evaluate(result_info, runtime_context)
+		local param_type_value = U.tag("evaluate", param_type, evaluate, param_type, runtime_context)
+		local param_info_value = U.tag("evaluate", param_info, evaluate, param_info, runtime_context)
+		local result_type_value = U.tag("evaluate", result_type, evaluate, result_type, runtime_context)
+		local result_info_value = U.tag("evaluate", result_info, evaluate, result_info, runtime_context)
 		return value.pi(param_type_value, param_info_value, result_type_value, result_info_value)
 	elseif typed_term:is_application() then
 		local f, arg = typed_term:unwrap_application()
-		local f_value = evaluate(f, runtime_context)
-		local arg_value = evaluate(arg, runtime_context)
+		local f_value = U.tag("evaluate", f, evaluate, f, runtime_context)
+		local arg_value = U.tag("evaluate", arg, evaluate, arg, runtime_context)
 		return apply_value(f_value, arg_value)
 	elseif typed_term:is_tuple_cons() then
 		local elements = typed_term:unwrap_tuple_cons()
 		local new_elements = value_array()
 		for _, v in ipairs(elements) do
-			new_elements:append(evaluate(v, runtime_context))
+			new_elements:append(U.tag("evaluate", v, evaluate, v, runtime_context))
 		end
 		return value.tuple_value(new_elements)
 	elseif typed_term:is_prim_tuple_cons() then
@@ -1568,7 +1572,7 @@ function evaluate(typed_term, runtime_context)
 		local stuck_element
 		local trailing_values
 		for i, v in ipairs(elements) do
-			local element_value = evaluate(v, runtime_context)
+			local element_value = U.tag("evaluate", v, evaluate, v, runtime_context)
 			if element_value == nil then
 				p("wtf", v.kind)
 			end
@@ -1594,7 +1598,7 @@ function evaluate(typed_term, runtime_context)
 		end
 	elseif typed_term:is_tuple_elim() then
 		local names, subject, length, body = typed_term:unwrap_tuple_elim()
-		local subject_value = evaluate(subject, runtime_context)
+		local subject_value = U.tag("evaluate", subject, evaluate, subject, runtime_context)
 		local inner_context = runtime_context
 		if subject_value:is_tuple_value() then
 			local subject_elements = subject_value:unwrap_tuple_value()
@@ -1640,29 +1644,29 @@ function evaluate(typed_term, runtime_context)
 			p(subject_value)
 			error("evaluate, is_tuple_elim, subject_value: expected a tuple")
 		end
-		return evaluate(body, inner_context)
+		return U.tag("evaluate", body, evaluate, body, inner_context)
 	elseif typed_term:is_tuple_element_access() then
 		local tuple_term, index = typed_term:unwrap_tuple_element_access()
 		--print("tuple_element_access tuple_term: (typed term follows)")
 		--print(tuple_term:pretty_print(runtime_context))
-		local tuple = evaluate(tuple_term, runtime_context)
+		local tuple = U.tag("evaluate", tuple_term, evaluate, tuple_term, runtime_context)
 		--print("tuple_element_access tuple: (value term follows)")
 		--print(tuple)
 		return index_tuple_value(tuple, index)
 	elseif typed_term:is_tuple_type() then
 		local definition_term = typed_term:unwrap_tuple_type()
-		local definition = evaluate(definition_term, runtime_context)
+		local definition = U.tag("evaluate", definition_term, evaluate, definition_term, runtime_context)
 		return terms.value.tuple_type(definition)
 	elseif typed_term:is_record_cons() then
 		local fields = typed_term:unwrap_record_cons()
 		local new_fields = string_value_map()
 		for k, v in pairs(fields) do
-			new_fields[k] = evaluate(v, runtime_context)
+			new_fields[k] = U.tag("evaluate", v, evaluate, v, runtime_context)
 		end
 		return value.record_value(new_fields)
 	elseif typed_term:is_record_elim() then
 		local subject, field_names, body = typed_term:unwrap_record_elim()
-		local subject_value = evaluate(subject, runtime_context)
+		local subject_value =  U.tag("evaluate", subject, evaluate, subject, runtime_context)
 		local inner_context = runtime_context
 		if subject_value:is_record_value() then
 			local subject_fields = subject_value:unwrap_record_value()
@@ -1678,15 +1682,15 @@ function evaluate(typed_term, runtime_context)
 		else
 			error("evaluate, is_record_elim, subject_value: expected a record")
 		end
-		return evaluate(body, inner_context)
+		return  U.tag("evaluate", body, evaluate, body, inner_context)
 	elseif typed_term:is_enum_cons() then
 		local constructor, arg = typed_term:unwrap_enum_cons()
-		local arg_value = evaluate(arg, runtime_context)
+		local arg_value =  U.tag("evaluate", arg, evaluate, arg, runtime_context)
 		return value.enum_value(constructor, arg_value)
 	elseif typed_term:is_enum_elim() then
 		local subject, mechanism = typed_term:unwrap_enum_elim()
-		local subject_value = evaluate(subject, runtime_context)
-		local mechanism_value = evaluate(mechanism, runtime_context)
+		local subject_value =  U.tag("evaluate", subject, evaluate, subject, runtime_context)
+		local mechanism_value =  U.tag("evaluate", mechanism, evaluate, mechanism, runtime_context)
 		if subject_value:is_enum_value() then
 			if mechanism_value:is_object_value() then
 				local constructor, arg = subject_value:unwrap_enum_value()
@@ -1823,11 +1827,6 @@ function evaluate(typed_term, runtime_context)
 			if ok then
 				inner_context_c = inner_context_c:set(index, value.prim(true))
 				inner_context_a = inner_context_a:set(index, value.prim(false))
-			else
-				print("strange prim-if case hit!")
-				print("subject expected to be a bound_variable, instead is a " .. subject.kind)
-				--print(subject:pretty_print(runtime_context))
-				--print(subject:default_print())
 			end
 			local cval = evaluate(consequent, inner_context_c)
 			local aval = evaluate(alternate, inner_context_a)
@@ -1878,7 +1877,7 @@ function evaluate(typed_term, runtime_context)
 			p(previous_level)
 			error "wrong type for previous_level"
 		end
-		if previous_level.level > 10 then
+		if previous_level.level > OMEGA then
 			error("NYI: level too high for typed_level_suc" .. tostring(previous_level.level))
 		end
 		return value.level(previous_level.level + 1)
@@ -1914,7 +1913,7 @@ function evaluate(typed_term, runtime_context)
       p(previous_level)
       error("wrong type for previous_level")
     end
-    if previous_level.level > 10 then
+    if previous_level.level > OMEGA then
       error("NYI: level too high for typed_level_suc" .. tostring(previous_level.level))
     end
     return value.level(previous_level.level + 1)
@@ -1937,7 +1936,95 @@ function evaluate(typed_term, runtime_context)
   ]]
 end
 
+local typechecker_state_mt
+
+typechecker_state_mt = {
+	__index = {
+		---@return MetaVariable
+		metavariable = function(self) -- -> metavariable instance
+			self.next_metavariable_id = self.next_metavariable_id + 1
+			self.mvs[self.next_metavariable_id] = {}
+			return setmetatable({
+				id = self.next_metavariable_id,
+				typechecker_state = self,
+			}, terms.metavariable_mt)
+		end,
+		---@param mv_id integer
+		---@return integer
+		get_canonical_id = function(self, mv_id)
+			local mvinfo = terms.metavariable_mt.getmvinfo(mv_id, self.mvs)
+			if mvinfo.bound_mv_id then
+				local final_id = self:get_canonical_id(mvinfo.bound_mv_id)
+				if final_id ~= mvinfo.bound_mv_id then
+					-- ok to mutate rather than setting in self.mvs here as collapsing chain is idempotent
+					mvinfo.bound_mv_id = final_id
+				end
+				return final_id
+			end
+			return mv_id
+		end,
+		-- this gets called to bind to any value that isn't another metavariable
+		bind_value = function(mv, value)
+			if value:is_neutral() and value:unwrap_neutral():is_free() and value:unwrap_neutral():unwrap_free():is_metavariable() then
+				local other = value:unwrap_neutral():unwrap_free():unwrap_metavariable()
+				return mv.typechecker_state.bind_metavariable(mv, other)
+			end
+			local canonical = mv:get_canonical()
+			local canonical_info = terms.metavariable_mt.getmvinfo(canonical.id, mv.typechecker_state.mvs)
+			if canonical_info.bound_value and canonical_info.bound_value ~= value then
+				-- This will throw an error if the two values can't be unified
+				value = fitsinto(canonical_info.bound_value, value)
+			end
+			mv.typechecker_state.mvs[canonical.id] = {
+				bound_value = value,
+			}
+			return value
+		end,
+		bind_metavariable = function(mv, other)
+			if mv == other then
+				return
+			end
+
+			if getmetatable(other) ~= terms.metavariable_mt then
+				p(mv, other, getmetatable(mv), getmetatable(other))
+				error("metavariable.bind should only be called with metavariable as arg")
+			end
+
+			if mv.typechecker_state ~= other.typechecker_state then
+				error("trying to mix metavariables from different typechecker_states")
+			end
+
+			if mv.id == other.id then
+				return
+			end
+
+			if mv.id < other.id then
+				return other:bind_metavariable(mv)
+			end
+
+			local this = terms.metavariable_mt.getmvinfo(mv.id, mv.typechecker_state.mvs)
+			if this.bound_value then
+				-- TODO: fitsinto isn't sufficient for full subtyping, need to properly implement that
+				local other_info = terms.metavariable_mt.getmvinfo(other.id, other.typechecker_state.mvs)
+				other_info.bound_value = fitsinto(canonical_info.bound_value, other_info.bound_value)
+			end
+
+			mv.typechecker_state.mvs[mv.id] = {
+				bound_mv_id = other.id,
+			}
+		end,
+	},
+}
+
+local function typechecker_state()
+	return setmetatable({
+		next_metavariable_id = 0,
+		mvs = { prev_mvs = nil },
+	}, typechecker_state_mt)
+end
+
 local evaluator = {
+	typechecker_state = typechecker_state,
 	fitsinto = fitsinto,
 	extract_tuple_elem_type_closures = extract_tuple_elem_type_closures,
 	const_combinator = const_combinator,
@@ -1947,6 +2034,7 @@ local evaluator = {
 	evaluate = evaluate,
 	apply_value = apply_value,
 	index_tuple_value = index_tuple_value,
+	OMEGA = OMEGA,
 }
 internals_interface.evaluator = evaluator
 return evaluator

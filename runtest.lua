@@ -1,3 +1,6 @@
+local endTime = os.time() + 3
+--while os.time() < endTime do end
+
 local metalanguage = require "./metalanguage"
 local evaluator = require "./evaluator"
 local format = require "./format-adapter"
@@ -107,5 +110,5 @@ end
 
 print("Evaluating")
 local result = evaluator.evaluate(term, terms.runtime_context())
-print("result: (value term follows)")
-print(result)
+--print("result: (value term follows)")
+--print(result)

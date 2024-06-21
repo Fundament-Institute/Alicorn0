@@ -8,36 +8,6 @@
 -- typechecker is allowed to fail, typechecker monad carries failures upwards
 --   for now fail fast, but design should vaguely support multiple failures
 
--- metavariable unification
---   a metavariable is like a variable butmore meta
---   create a set of variables -> feed into code -> evaluate with respect to them
---   in order for the values produced by these two invocations to be the same, what would the metavariales need to be bound to?
---   (this is like symbolic execution)
---
--- in the typechecking monad we create a metavariable which takes a type and produces a term or value of that type and
--- we can unfy two values against each other to solve their metavariables or it can fail
--- for now unification with equality is the only kind of constraint. eventuall may be others but that's hard/no need right now
-
--- we will use lua errors for handling here - use if, error not assert so JIT understands
--- metavariables = table, edit the table, this is the stateful bit the monad has
--- methods on metavariable that bind equal to some value, if it is already bound it has to unify which can fail, failure cascades
--- thing passed to bind equl method on metavariable is a 'value' - enumerated datatype, like term but less cases
---   scaffolding - need to add cases here foreach new value variant
---
--- create metavariable, pass in as arg to lambda, get back result, unify against another type
---   it's ok if a metavariable never gets constrained during part of typechecking
--- give metavariables sequential ids (tracked in typechecker_state)
-
--- metavariable state transitions, can skip steps but must always move down
-
--- unbound
--- vvv
--- bound to exactly another metavariable - have a reference to a metavariable
--- vvv
--- bound to a value - have a reference to a value
-
--- when binding to another metavariable bind the one with a greater index to the lesser index
-
 local metalang = require "./metalanguage"
 --local types = require "./typesystem"
 
@@ -45,25 +15,47 @@ local fibbuf = require "./fibonacci-buffer"
 
 local gen = require "./terms-generators"
 local derivers = require "./derivers"
+
 local map = gen.declare_map
 local array = gen.declare_array
 
-local function getmvinfo(id, mvs)
-	if mvs == nil then
-		return
-	end
-	-- if this is slow fixme later
-	return mvs[id] or getmvinfo(id, mvs.prev_mvs)
-end
+---@module "./types/checkable"
+local checkable_term = gen.declare_type()
+---@module "./types/inferrable"
+local inferrable_term = gen.declare_type()
+---@module "./types/typed"
+local typed_term = gen.declare_type()
+---@module "./types/free"
+local free = gen.declare_type()
+---@module "./types/placeholder"
+local placeholder_debug = gen.declare_type()
+---@module "./types/value"
+local value = gen.declare_type()
+---@module "./types/neutral"
+local neutral_value = gen.declare_type()
+---@module "./types/binding"
+local binding = gen.declare_type()
+---@module "./types/expression_goal"
+local expression_goal = gen.declare_type()
 
+local runtime_context_mt
 local metavariable_mt
+
+local function getmvinfo(id, mvs)
+  if mvs == nil then
+    return
+  end
+  -- if this is slow fixme later
+  return mvs[id] or getmvinfo(id, mvs.prev_mvs)
+end
 
 metavariable_mt = {
 	__index = {
+		---@return value
 		get_value = function(self)
 			local canonical = self:get_canonical()
 			local canonical_info = getmvinfo(canonical.id, self.typechecker_state.mvs)
-			return canonical_info.bound_value or values.free(free.metavariable(canonical))
+			return canonical_info.bound_value or value.neutral(neutral_value.free(free.metavariable(canonical)))
 		end,
 		get_canonical = function(self)
 			local canonical_id = self.typechecker_state:get_canonical_id(self.id)
@@ -76,88 +68,12 @@ metavariable_mt = {
 			end
 
 			return self
-		end,
-		-- this gets called to bind to any value that isn't another metavariable
-		bind_value = function(self, value)
-			-- FIXME: if value is a metavariable (free w/ metavariable) call bind_metavariable here?
-			local canonical = self:get_canonical()
-			local canonical_info = getmvinfo(canonical.id, self.typechecker_state.mvs)
-			if canonical_info.bound_value and canonical_info.bound_value ~= value then
-				-- unify the two values, throws lua error if can't
-				value = canonical_info.bound_value:unify(value)
-			end
-			self.typechecker_state.mvs[canonical.id] = {
-				bound_value = value,
-			}
-			return value
-		end,
-		bind_metavariable = function(self, other)
-			if self == other then
-				return
-			end
-
-			if getmetatable(other) ~= metavariable_mt then
-				p(self, other, getmetatable(self), getmetatable(other))
-				error("metavariable.bind should only be called with metavariable as arg")
-			end
-
-			if self.typechecker_state ~= other.typechecker_state then
-				error("trying to mix metavariables from different typechecker_states")
-			end
-
-			if self.id == other.id then
-				return
-			end
-
-			if self.id < other.id then
-				return other:bind_metavariable(self)
-			end
-
-			local this = getmvinfo(self.id, self.typechecker_state.mvs)
-			if this.bound_value then
-				error("metavariable is already bound to a value")
-			end
-
-			self.typechecker_state.mvs[self.id] = {
-				bound_mv_id = other.id,
-			}
-		end,
+		end
 	},
+	getmvinfo = getmvinfo
 }
+
 local metavariable_type = gen.declare_foreign(gen.metatable_equality(metavariable_mt))
-
-local typechecker_state_mt
-typechecker_state_mt = {
-	__index = {
-		metavariable = function(self) -- -> metavariable instance
-			self.next_metavariable_id = self.next_metavariable_id + 1
-			self.mvs[self.next_metavariable_id] = {}
-			return setmetatable({
-				id = self.next_metavariable_id,
-				typechecker_state = self,
-			}, metavariable_mt)
-		end,
-		get_canonical_id = function(self, mv_id) -- -> number
-			local mvinfo = getmvinfo(mv_id, self.mvs)
-			if mvinfo.bound_mv_id then
-				local final_id = self:get_canonical_id(mvinfo.bound_mv_id)
-				if final_id ~= mvinfo.bound_mv_id then
-					-- ok to mutate rather than setting in self.mvs here as collapsing chain is idempotent
-					mvinfo.bound_mv_id = final_id
-				end
-				return final_id
-			end
-			return mv_id
-		end,
-	},
-}
-
-local function typechecker_state()
-	return setmetatable({
-		next_metavariable_id = 0,
-		mvs = { prev_mvs = nil },
-	}, typechecker_state_mt)
-end
 
 -- freeze and then commit or revert
 -- like a transaction
@@ -182,27 +98,6 @@ local function speculate(f, ...)
 		return nil
 	end
 end
-
----@module "./types/checkable"
-local checkable_term = gen.declare_type()
----@module "./types/inferrable"
-local inferrable_term = gen.declare_type()
----@module "./types/typed"
-local typed_term = gen.declare_type()
----@module "./types/free"
-local free = gen.declare_type()
----@module "./types/placeholder"
-local placeholder_debug = gen.declare_type()
----@module "./types/value"
-local value = gen.declare_type()
----@module "./types/neutral"
-local neutral_value = gen.declare_type()
----@module "./types/binding"
-local binding = gen.declare_type()
----@module "./types/expression_goal"
-local expression_goal = gen.declare_type()
-
-local runtime_context_mt
 
 ---@class RuntimeContext
 ---@field bindings unknown
@@ -2579,7 +2474,7 @@ local tuple_defn = value.enum_value("variant",
 )]]
 
 local terms = {
-	typechecker_state = typechecker_state, -- fn (constructor)
+	metavariable_mt = metavariable_mt,
 	checkable_term = checkable_term, -- {}
 	inferrable_term = inferrable_term, -- {}
 	typed_term = typed_term, -- {}

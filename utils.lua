@@ -10,3 +10,8 @@ function M.concat(...)
 	end
 	return res
 end
+
+function M.notail(...) return ... end
+function M.tag(name, info, fn, ...) return M.notail(fn(...)) end
+
+return M
