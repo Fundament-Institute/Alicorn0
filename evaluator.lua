@@ -541,9 +541,17 @@ local function check(
 		if inferred_type ~= goal_type then
 			local ok, err
 			if inferred_type:is_neutral() then
-				ok, err = false, "inferred type is a neutral value"
-				-- TODO: add debugging dump to typechecking context that looks for placeholders inside inferred_type
-				-- then shows matching types and values in env if relevant?
+				if
+					inferred_type:is_neutral()
+					and inferred_type:unwrap_neutral():is_free()
+					and inferred_type:unwrap_neutral():unwrap_free():is_metavariable()
+				then
+					ok, err = typechecker_state:flow(inferred_type, goal_type)
+				else
+					ok, err = false, "inferred type is a neutral value"
+					-- TODO: add debugging dump to typechecking context that looks for placeholders inside inferred_type
+					-- then shows matching types and values in env if relevant?
+				end
 			else
 				ok, err = typechecker_state:flow(inferred_type, goal_type)
 			end
@@ -1861,7 +1869,7 @@ end
 ---@param context any
 function Reachability:add_edge(left, right, queue, context)
 	assert(type(left) == "number", "left isn't an integer!")
-	assert(type(right) == "number", "left isn't an integer!")
+	assert(type(right) == "number", "right isn't an integer!")
 	local work = { { left, right } }
 
 	while #work > 0 do
