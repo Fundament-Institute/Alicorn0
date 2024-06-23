@@ -177,8 +177,6 @@ local function check_infix_expression_handler(dat, a, b)
 	end
 end
 
-local typechecker_state = evaluator.typechecker_state()
-
 ---@param args ExpressionArgs
 ---@param a Syntax
 ---@param b Syntax
@@ -272,15 +270,15 @@ local function expression_pairhandler(args, a, b)
 		local param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
 
 		while param_info.visibility == value.visibility(visibility.implicit) do
-			local metavar = typechecker_state:metavariable()
-			local metavalue = metavar:get_value()
+			local metavar = evaluator.typechecker_state:metavariable()
+			local metavalue = metavar:as_value()
 			local metaresult = evaluator.apply_value(result_type, metavalue)
 			if not metaresult:is_pi() then
 				error("Result of applying function to a metavariable wasn't a pi type! This is bad for some reason!")
 			end
 
-			-- local new_term = inferrable_term.application(inferrable_term.typed(type_of_term, usage_array(), term), checkable_term.inferrable(inferrable_term.typed(param_type, usage_array(), terms.typed_term.literal(metavar:get_value()))))
-			term = typed_term.application(term, terms.typed_term.literal(metavar:get_value()))
+			-- local new_term = inferrable_term.application(inferrable_term.typed(type_of_term, usage_array(), term), checkable_term.inferrable(inferrable_term.typed(param_type, usage_array(), terms.typed_term.literal(metavar:as_value()))))
+			term = typed_term.application(term, terms.typed_term.literal(metavar:as_value()))
 			type_of_term = metaresult
 			param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
 		end

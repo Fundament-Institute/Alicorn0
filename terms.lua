@@ -39,40 +39,21 @@ local binding = gen.declare_type()
 local expression_goal = gen.declare_type()
 
 local runtime_context_mt
-local metavariable_mt
 
-local function getmvinfo(id, mvs)
-  if mvs == nil then
-    return
-  end
-  -- if this is slow fixme later
-  return mvs[id] or getmvinfo(id, mvs.prev_mvs)
+---@class Metavariable
+---@field value integer
+---@field use integer
+local Metavariable = {}
+
+---@return value
+function Metavariable:as_value()
+	return value.neutral(neutral_value.free(free.metavariable(self)))
+	--local canonical = self:get_canonical()
+	--local canonical_info = getmvinfo(canonical.id, self.typechecker_state.mvs)
+	--return canonical_info.bound_value or value.neutral(neutral_value.free(free.metavariable(canonical)))
 end
 
-metavariable_mt = {
-	__index = {
-		---@return value
-		get_value = function(self)
-			local canonical = self:get_canonical()
-			local canonical_info = getmvinfo(canonical.id, self.typechecker_state.mvs)
-			return canonical_info.bound_value or value.neutral(neutral_value.free(free.metavariable(canonical)))
-		end,
-		get_canonical = function(self)
-			local canonical_id = self.typechecker_state:get_canonical_id(self.id)
-
-			if canonical_id ~= self.id then
-				return setmetatable({
-					id = canonical_id,
-					typechecker_state = self.typechecker_state,
-				}, metavariable_mt):get_canonical()
-			end
-
-			return self
-		end
-	},
-	getmvinfo = getmvinfo
-}
-
+local metavariable_mt = {__index = Metavariable}
 local metavariable_type = gen.declare_foreign(gen.metatable_equality(metavariable_mt))
 
 -- freeze and then commit or revert

@@ -44,8 +44,8 @@ local derivers = require "./derivers"
 local traits = require "./traits"
 local U = require "./utils"
 local OMEGA = 10
-
-local evaluate, infer, fitsinto, check, apply_value
+local typechecker_state
+local evaluate, infer, check, apply_value
 
 local function add_arrays(onto, with)
 	local olen = #onto
@@ -320,16 +320,16 @@ local infer_tuple_type, infer_tuple_type_unwrapped
 local terms = require "./terms"
 local value = terms.value
 
-local fitsinto
+local check_concrete
 -- indexed by kind x kind
-local fitsinto_comparers = {}
+local concrete_comparers = {}
 
 local function add_comparer(ka, kb, comparer)
-	fitsinto_comparers[ka] = fitsinto_comparers[ka] or {}
-	fitsinto_comparers[ka][kb] = comparer
+	concrete_comparers[ka] = concrete_comparers[ka] or {}
+	concrete_comparers[ka][kb] = comparer
 end
 
-local fitsinto_fail_mt = {
+local concrete_fail_mt = {
 	__tostring = function(self)
 		local message = self.message
 		if type(message) == "table" then
@@ -341,20 +341,20 @@ local fitsinto_fail_mt = {
 		return message
 	end,
 }
-local function fitsinto_fail(message, cause)
+local function concrete_fail(message, cause)
 	if not cause and type(message) == "string" then
 		if not message then
-			error "missing error message for fitsinto_fail"
+			error "missing error message for concrete_fail"
 		end
 		return message
 	end
 	return setmetatable({
 		message = message,
 		cause = cause,
-	}, fitsinto_fail_mt)
+	}, concrete_fail_mt)
 end
 
-local function always_fits_comparer(a, b)
+local function always_fits_comparer(a, b, typechecker)
 	return true
 end
 
@@ -370,7 +370,7 @@ end
 
 -- types of types
 add_comparer(value.prim_type_type.kind, value.prim_type_type.kind, always_fits_comparer)
-local function tuple_compare(a, b)
+local function tuple_compare(a, b, typechecker)
 	-- fixme lol
 	local placeholder = value.neutral(neutral_value.free(free.unique({})))
 	local tuple_types_a, na = infer_tuple_type_unwrapped(a, placeholder)
@@ -384,9 +384,9 @@ local function tuple_compare(a, b)
 		if ta ~= tb then
 			local ok, err
 			if tb.kind == "value.neutral" then
-				ok, err = U.tag("fitsinto", {ta = ta, tb = tb, a = a, b = b }, fitsinto, ta, tb)
+				typechecker:queue_work(ta, tb, "Nuetral value in tuple_compare")
 			else
-				ok, err = fitsinto(ta, tb)
+				typechecker:queue_work(ta, tb, "tuple_compare")
 			end
 
 			if not ok then
@@ -398,53 +398,41 @@ local function tuple_compare(a, b)
 end
 add_comparer("value.tuple_type", "value.tuple_type", tuple_compare)
 add_comparer("value.prim_tuple_type", "value.prim_tuple_type", tuple_compare)
-add_comparer("value.pi", "value.pi", function(a, b)
+add_comparer("value.pi", "value.pi", function(a, b, typechecker)
 	if a == b then
 		return true
 	end
-	local ok, err
-	ok, err = fitsinto(a.param_type, b.param_type)
-	if not ok then
-		return false, fitsinto_fail("pi param_type", err)
-	end
+
 	local avis = a.param_info.visibility.visibility
 	local bvis = b.param_info.visibility.visibility
 	if avis ~= bvis and avis ~= terms.visibility.implicit then
-		return false, fitsinto_fail("pi param_info")
+		return false, concrete_fail("pi param_info")
 	end
 
 	local apurity = a.result_info.purity
 	local bpurity = b.result_info.purity
 	if apurity ~= bpurity then
-		return false, fitsinto_fail("pi result_info")
+		return false, concrete_fail("pi result_info")
 	end
 
 	local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
 	local a_res = apply_value(a.result_type, unique_placeholder)
 	local b_res = apply_value(b.result_type, unique_placeholder)
-	ok, err = fitsinto(a_res, b_res)
-	if not ok then
-		return false, fitsinto_fail("pi result_type", err)
-	end
+	typechecker:queue_work(a_res, b_res, "pi function results")
+	typechecker:queue_work(b.param_type, a.param_type, "pi function parameters")
+
 	return true
 end)
-add_comparer("value.prim_function_type", "value.prim_function_type", function(a, b)
+add_comparer("value.prim_function_type", "value.prim_function_type", function(a, b, typechecker)
 	if a == b then
 		return true
 	end
-	local ok, err
-	ok, err = fitsinto(a.param_type, b.param_type)
-	if not ok then
-		return false, fitsinto_fail("prim-func-type param_type", err)
-	end
 
 	local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
 	local a_res = apply_value(a.result_type, unique_placeholder)
 	local b_res = apply_value(b.result_type, unique_placeholder)
-	ok, err = fitsinto(a_res, b_res)
-	if not ok then
-		return false, fitsinto_fail("prim-func-type result_type", err)
-	end
+	typechecker:queue_work(a_res, b_res, "prim function results")
+	typechecker:queue_work(b.param_type, a.param_type, "prim function parameters")
 	return true
 end)
 
@@ -454,7 +442,7 @@ for _, type_of_type in ipairs({
 	add_comparer(type_of_type.kind, value.star(0).kind, always_fits_comparer)
 end
 
-add_comparer(value.star(0).kind, value.star(0).kind, function(a, b)
+add_comparer(value.star(0).kind, value.star(0).kind, function(a, b, typechecker)
 	if a.level > b.level then
 		print("star-comparer error:")
 		print("a:", a.level)
@@ -464,60 +452,41 @@ add_comparer(value.star(0).kind, value.star(0).kind, function(a, b)
 	return true
 end)
 
-add_comparer("value.prim_wrapped_type", "value.prim_wrapped_type", function(a, b)
+add_comparer("value.prim_wrapped_type", "value.prim_wrapped_type", function(a, b, typechecker)
 	local ua, ub = a:unwrap_prim_wrapped_type(), b:unwrap_prim_wrapped_type()
-	local ok, err =  U.tag("fitsinto", { a = ua, b = ub }, fitsinto, ua, ub)
-	return ok, err
+	check_concrete(ua, ub, typechecker)
+	return true
 end)
 
----check if one type fits into another
----@param a value
----@param b value
+-- Compares any non-metavariables, or defers any metavariable comparisons to the work queue
+---@param val value
+---@param use value
+---@param typechecker TypeCheckerState
 ---@return boolean
----@return string
-function fitsinto(a, b)
-	if a:is_neutral() and b:is_neutral() then
-		if a == b then
+---@return string | nil
+function check_concrete(val, use, typechecker)
+	assert(val and use, "nil value or usage passed into check_concrete!")
+
+	if val:is_neutral() and use:is_neutral() then
+		if val == use then
 			return true
 		end
-		print("fitsinto neutral comparison error")
-		a:diff(b)
-		return false, "both values are neutral, but they aren't equal: " .. tostring(a) .. " ~= " .. tostring(b)
+		val:diff(use)
+		return false, "both values are neutral, but they aren't equal: " .. tostring(val) .. " ~= " .. tostring(use)
 	end
 
-	local tya, tyb = a, b
-
-	if tya:is_neutral() and tya:unwrap_neutral():is_free() and tya:unwrap_neutral():unwrap_free():is_metavariable() then
-		local mv = tya:unwrap_neutral():unwrap_free():unwrap_metavariable()
-		mv.typechecker_state.bind_value(mv, tyb)
-		return true
-	end
-	if tyb:is_neutral() and tyb:unwrap_neutral():is_free() and tyb:unwrap_neutral():unwrap_free():is_metavariable() then
-		local mv = tyb:unwrap_neutral():unwrap_free():unwrap_metavariable()
-		mv.typechecker_state.bind_value(mv, tya)
-		return true
+	if not concrete_comparers[val.kind] then
+		error("No valid concrete type comparer found for value " .. val.kind)
+	elseif not concrete_comparers[use.kind] then
+		error("No valid concrete type comparer found for usage " .. use.kind)
 	end
 
-	if not fitsinto_comparers[tya.kind] then
-		error("fitsinto given value a which isn't a type or NYI " .. tya.kind)
-	elseif not fitsinto_comparers[tyb.kind] then
-		--p(debug.getinfo(getmetatable(tyb.neutral.container.subject["function"]).__call))
-		error("fitsinto given value b which isn't a type or NYI " .. tyb.kind)
-	end
-
-	local comparer = (fitsinto_comparers[tya.kind] or {})[tyb.kind]
+	local comparer = (concrete_comparers[val.kind] or {})[use.kind]
 	if not comparer then
-		return false, "no comparer for " .. tya.kind .. " with " .. tyb.kind
+		return false, "no valid concerete comparer between value " .. val.kind .. " and usage " .. use.kind
 	end
 
-	local ok, err = comparer(tya, tyb)
-	if not ok then
-		-- the error will probably get reported elsewhere
-		-- uncomment for way-too-verbose errors
-		--print("comparer failure: " .. tostring(err))
-		return false, err
-	end
-	return true
+	return comparer(val, use)
 end
 
 local function extract_tuple_elem_type_closures(enum_val, closures)
@@ -542,96 +511,6 @@ local function extract_tuple_elem_type_closures(enum_val, closures)
 	error "unknown enum constructor for value.tuple_type's enum_value, should not be reachable"
 end
 
---[[
-local function extract_value_metavariable(value) -- -> Option<metavariable>
-  if value.kind == "value_neutral" and value.neutral.kind == "neutral_value_free" and value.neutral.free.kind == "free_metavariable" then
-    return value.neutral.free.metavariable
-  end
-  return nil
-end
-
-local is_value = gen.metatable_equality(value)
-
-local function unify(
-    first_value,
-    params,
-    variant,
-    second_value)
-  -- -> unified value,
-  if first_value == second_value then
-    return first_value
-  end
-
-  local first_mv = extract_value_metavariable(first_value)
-  local second_mv = extract_value_metavariable(second_value)
-
-  if first_mv and second_mv then
-    first_mv:bind_metavariable(second_mv)
-    return first_mv:get_canonical()
-  elseif first_mv then
-    return first_mv:bind_value(second_value)
-  elseif second_mv then
-    return second_mv:bind_value(first_value)
-  end
-
-  if first_value.kind ~= second_value.kind then
-    error("can't unify values of kinds " .. first_value.kind .. " and " .. second_value.kind)
-  end
-
-  local unified_args = {}
-  local prefer_left = true
-  local prefer_right = true
-  for i, v in ipairs(params) do
-    local first_arg = first_value[v]
-    local second_arg = second_value[v]
-    if is_value(first_arg) then
-      local u = first_arg:unify(second_arg)
-      unified_args[i] = u
-      prefer_left = prefer_left and u == first_arg
-      prefer_right = prefer_right and u == second_arg
-    elseif first_arg == second_arg then
-      unified_args[i] = first_arg
-    else
-      p("unify args", first_value, second_value)
-      error("unification failure as " .. v .. " field value doesn't match")
-    end
-  end
-
-  if prefer_left then
-    return first_value
-  elseif prefer_right then
-    return second_value
-  else
-    -- create new value
-    local first_type = getmetatable(first_value)
-    local cons = first_type
-    if variant then
-      cons = first_type[variant]
-    end
-    local unified = cons(table.unpack(unified_args))
-    return unified
-  end
-end
-
-local unifier = {
-  record = function(t, info)
-    t.__index = t.__index or {}
-    function t.__index:unify(second_value)
-      return unify(self, info.params, nil, second_value)
-    end
-  end,
-  enum = function(t, info)
-    t.__index = t.__index or {}
-    function t.__index:unify(second_value)
-      local vname = string.sub(self.kind, #info.name + 2, -1)
-      return unify(self, info.variants[vname].info.params, vname, second_value)
-    end
-  end,
-}
-
-value:derive(unifier)
-result_info:derive(unifier)
-]]
 
 value:derive(derivers.eq)
 
@@ -667,7 +546,7 @@ local function check(
 				-- TODO: add debugging dump to typechecking context that looks for placeholders inside inferred_type
 				-- then shows matching types and values in env if relevant?
 			else
-				ok, err = U.tag("fitsinto", { a = inferred_type, b = goal_type }, fitsinto, inferred_type, goal_type)
+				ok, err =typechecker_state:flow(inferred_type, goal_type)
 			end
 			if not ok then
 				print "attempting to check if terms fit for checkable_term.inferrable"
@@ -1018,8 +897,8 @@ function infer(
 			error "result type computation must be pure for now"
 		end
 
-		local ok, err =
-			fitsinto(evaluate(param_type_term, typechecking_context.runtime_context), result_type_param_type)
+		local ok, err = 
+		typechecker_state:flow(evaluate(param_type_term, typechecking_context.runtime_context), result_type_param_type, "inferrable pi term")
 		if not ok then
 			error(
 				"inferrable pi type's param type doesn't fit into the result type function's parameters because " .. err
@@ -1057,32 +936,16 @@ function infer(
 			add_arrays(application_usages, arg_usages)
 			local application = typed_term.application(f_term, arg_term)
 
-			-- check already checked for us so no fitsinto
+			-- check already checked for us so no check_concrete
 			local arg_value = evaluate(arg_term, typechecking_context:get_runtime_context())
 			local application_result_type = apply_value(f_result_type, arg_value)
 
-			--print("arg_value: (value term follows)")
-			--print(arg_value)
-			--print("f_result_type: (value term follows)")
-			--print(f_result_type)
-			--print("application_result_type: (value term follows)")
-			--print(application_result_type)
 			if value.value_check(application_result_type) ~= true then
 				local bindings = typechecking_context:get_runtime_context().bindings
-				-- for i = 1, bindings:len() do
-				-- 	print("runtime_context.bindings." .. tostring(i), bindings:get(i))
-				-- end
 				error("application_result_type isn't a value inferring application of pi type")
 			end
 			return application_result_type, application_usages, application
 		elseif f_type:is_prim_function_type() then
-			--print "inferring application of primitive function"
-			--print("typechecking_context")
-			--typechecking_context:dump_names()
-			--print("f_type: (value term follows)")
-			--print(f_type)
-			--print("arg: (checkable term follows)")
-			--print(arg:pretty_print(typechecking_context))
 			local f_param_type, f_result_type_closure = f_type:unwrap_prim_function_type()
 
 			local arg_usages, arg_term = check(arg, typechecking_context, f_param_type)
@@ -1092,7 +955,7 @@ function infer(
 			add_arrays(application_usages, arg_usages)
 			local application = typed_term.application(f_term, arg_term)
 
-			-- check already checked for us so no fitsinto
+			-- check already checked for us so no check_concrete
 			local f_result_type =
 				apply_value(f_result_type_closure, evaluate(arg_term, typechecking_context:get_runtime_context()))
 			if value.value_check(f_result_type) ~= true then
@@ -1315,7 +1178,7 @@ function infer(
 		if not ok then
 			error("infer, is_operative_cons, operative_type_value: expected a term with an operative type")
 		end
-		if userdata_type ~= op_userdata_type and not fitsinto(userdata_type, op_userdata_type) then
+		if userdata_type ~= op_userdata_type and not typechecker_state:flow(userdata_type, op_userdata_type) then
 			p(userdata_type, op_userdata_type)
 			print(userdata_type:pretty_print())
 			print(op_userdata_type:pretty_print())
@@ -1408,22 +1271,21 @@ function infer(
 		-- for each thing in typechecking context check if it == the subject, replace with literal true
 		-- same for alternate but literal false
 
-		local stype, susages, sterm = check(terms.value.prim_bool_type, subject, typechecking_context)
+
+		-- TODO: Replace this with a metavariable that both branches are put into
+		local stype, susages, sterm = check(terms.value.prim_bool_type, typechecking_context, subject)
 		local ctype, cusages, cterm = infer(consequent, typechecking_context)
 		local atype, ausages, aterm = infer(alternate, typechecking_context)
-		local resulting_type
-		if ctype == atype or (fitsinto(ctype, atype) and fitsinto(atype, ctype)) then
-			resulting_type = ctype
-		else
-			p(ctype, atype)
-			error("types of sides of prim_if aren't castable")
-		end
+		local restype = typechecker_state:metavariable():as_value()
+		typechecker_state:flow(ctype, restype, "inferred prim if consequent")
+		typechecker_state:flow(atype, restype, "inferred prim if alternate")
+
 		local result_usages = usage_array()
 		add_arrays(result_usages, susages)
 		-- FIXME: max of cusages and ausages rather than adding?
 		add_arrays(result_usages, cusages)
 		add_arrays(result_usages, ausages)
-		return resulting_type, result_usages, typed_term.prim_if(sterm, cterm, aterm)
+		return restype, result_usages, typed_term.prim_if(sterm, cterm, aterm)
 	elseif inferrable_term:is_let() then
 		-- print(inferrable_term:pretty_print())
 		local name, expr, body = inferrable_term:unwrap_let()
@@ -1936,96 +1798,204 @@ function evaluate(typed_term, runtime_context)
   ]]
 end
 
-local typechecker_state_mt
+---@class OrderedSet
+---@field set table<any, integer>
+---@field array table<integer, any>
+local OrderedSet = {}
 
-typechecker_state_mt = {
-	__index = {
-		---@return MetaVariable
-		metavariable = function(self) -- -> metavariable instance
-			self.next_metavariable_id = self.next_metavariable_id + 1
-			self.mvs[self.next_metavariable_id] = {}
-			return setmetatable({
-				id = self.next_metavariable_id,
-				typechecker_state = self,
-			}, terms.metavariable_mt)
-		end,
-		---@param mv_id integer
-		---@return integer
-		get_canonical_id = function(self, mv_id)
-			local mvinfo = terms.metavariable_mt.getmvinfo(mv_id, self.mvs)
-			if mvinfo.bound_mv_id then
-				local final_id = self:get_canonical_id(mvinfo.bound_mv_id)
-				if final_id ~= mvinfo.bound_mv_id then
-					-- ok to mutate rather than setting in self.mvs here as collapsing chain is idempotent
-					mvinfo.bound_mv_id = final_id
-				end
-				return final_id
-			end
-			return mv_id
-		end,
-		-- this gets called to bind to any value that isn't another metavariable
-		bind_value = function(mv, value)
-			if value:is_neutral() and value:unwrap_neutral():is_free() and value:unwrap_neutral():unwrap_free():is_metavariable() then
-				local other = value:unwrap_neutral():unwrap_free():unwrap_metavariable()
-				return mv.typechecker_state.bind_metavariable(mv, other)
-			end
-			local canonical = mv:get_canonical()
-			local canonical_info = terms.metavariable_mt.getmvinfo(canonical.id, mv.typechecker_state.mvs)
-			if canonical_info.bound_value and canonical_info.bound_value ~= value then
-				-- This will throw an error if the two values can't be unified
-				value = fitsinto(canonical_info.bound_value, value)
-			end
-			mv.typechecker_state.mvs[canonical.id] = {
-				bound_value = value,
-			}
-			return value
-		end,
-		bind_metavariable = function(mv, other)
-			if mv == other then
-				return
-			end
+---@param t any
+---@return boolean
+function OrderedSet:insert(t)
+	if self.set[t] == nil then
+		return false
+	end
+	self.set[t] = #self.array + 1
+	table.insert(self.array, t)
+	return true
+end
 
-			if getmetatable(other) ~= terms.metavariable_mt then
-				p(mv, other, getmetatable(mv), getmetatable(other))
-				error("metavariable.bind should only be called with metavariable as arg")
-			end
+---@param t any
+---@return boolean
+function OrderedSet:insert_aux(t, ...)
+	if self.set[t] == nil then
+		return false
+	end
+	self.set[t] = #self.array + 1
+	table.insert(self.array, {t, ...})
+	return true
+end
 
-			if mv.typechecker_state ~= other.typechecker_state then
-				error("trying to mix metavariables from different typechecker_states")
-			end
+local ordered_set_mt = {__index = OrderedSet}
 
-			if mv.id == other.id then
-				return
-			end
+---@return OrderedSet
+local function ordered_set()
+	return setmetatable({ set = {}, count = 0}, ordered_set_mt)
+end
 
-			if mv.id < other.id then
-				return other:bind_metavariable(mv)
-			end
+---@class TypeCheckerState
+---@field pending table
+---@field graph Reachability
+---@field values table
+---@field valcheck table
+---@field usecheck table
+local TypeCheckerState = {}
 
-			local this = terms.metavariable_mt.getmvinfo(mv.id, mv.typechecker_state.mvs)
-			if this.bound_value then
-				-- TODO: fitsinto isn't sufficient for full subtyping, need to properly implement that
-				local other_info = terms.metavariable_mt.getmvinfo(other.id, other.typechecker_state.mvs)
-				other_info.bound_value = fitsinto(canonical_info.bound_value, other_info.bound_value)
-			end
+---@class Reachability
+---@field upsets table<integer, OrderedSet>
+---@field downsets table<integer, OrderedSet>
+local Reachability = {}
 
-			mv.typechecker_state.mvs[mv.id] = {
-				bound_mv_id = other.id,
-			}
-		end,
-	},
+---@return integer
+function Reachability:add_node() 
+	local i = #self.upsets + 1 -- Account for lua tables starting at 1
+  table.insert(self.upsets, ordered_set());
+  table.insert(self.downsets, ordered_set());
+	assert(#self.upsets == #self.downsets, "upsets must equal downsets!")
+  return i
+end
+
+---@param left integer
+---@param right integer
+---@param queue table
+---@param context any
+function Reachability:add_edge(left, right, queue, context) 
+	assert(type(left) == "number", "left isn't an integer!")
+	assert(type(right) == "number", "left isn't an integer!")
+	local work = {{left, right}}
+
+	while #work > 0 do
+		local l, r = table.unpack(table.remove(work))
+
+		assert(self.downsets[l], "Can't find " .. tostring(l))
+		if self.downsets[l]:insert(r) then 
+			assert(self.downsets[r], "Can't find " .. tostring(r))
+			self.upsets[r]:insert(l)
+			table.insert(queue, {l, r})
+
+			for i, l2 in ipairs(self.upsets[l].array) do
+				table.insert(work, {l2, r})
+			end
+			for i, r2 in ipairs(self.downsets[r].array) do
+				table.insert(work, {l, r2})
+			end
+		end
+	end
+end
+
+local reachability_mt = {__index = Reachability}
+
+---@return Reachability
+local function reachability()
+	return setmetatable({downsets = {}, upsets = {}}, reachability_mt)
+end
+
+---@class TypeCheckerTag
+local TypeCheckerTag = {
+	VALUE = {},
+	USAGE = {},
+	VAR = {},
 }
+---@param val value
+---@param use value
+---@param context any
+function TypeCheckerState:queue_work(val, use, context) 
+	local l = self:check_value(val, TypeCheckerTag.VALUE)
+	local r = self:check_value(use, TypeCheckerTag.USAGE)
+	assert(type(l) == "number", "l isn't number, instead found " .. tostring(l))
+	assert(type(r) == "number", "r isn't number, instead found " .. tostring(r))
+	table.insert(self.pending, {l, r, context})
+end
 
-local function typechecker_state()
+---@param v value
+---@param tag TypeCheckerTag
+---@return integer
+function TypeCheckerState:check_value(v, tag)
+	if v:is_neutral() and v:unwrap_neutral():is_free() and v:unwrap_neutral():unwrap_free():is_metavariable() then
+		local mv = v:unwrap_neutral():unwrap_free():unwrap_metavariable()
+		if tag == TypeCheckerTag.VALUE then
+			assert(mv.value ~= nil)
+			return mv.value
+		else
+			assert(mv.usage ~= nil)
+			return mv.usage
+		end
+	end
+
+	  --if v:is_neutral() then
+			--error("Don't know how to process nuetral value! " .. tostring(v))
+		--end
+
+		local checker = self.valcheck
+		if tag == TypeCheckerTag.USAGE then
+			checker = self.usecheck
+		end
+
+		if checker[v] then
+			return checker[v]
+		end
+
+		table.insert(self.values, {v, tag})
+		local i = self.graph:add_node()
+		assert(i == #self.values, "Value array and node array got out of sync!")
+		checker[v] = i
+		return i
+end
+
+---@return Metavariable
+function TypeCheckerState:metavariable()
+	local i = self.graph:add_node()
+  local mv = setmetatable({value = i, usage = i}, terms.metavariable_mt)
+	table.insert(self.values, {mv:as_value(), TypeCheckerTag.VAR})
+	assert(i == #self.values, "Value array and node array got out of sync!")
+	return mv
+end
+
+---@param val value
+---@param use value
+---@param context any
+function TypeCheckerState:flow(val, use, context)
+	assert(#self.pending == 0, "pending not empty at start of flow!")
+	self:queue_work(val, use, context)
+	local queue = {}
+
+	while #self.pending > 0 do
+		local left, right, context = table.unpack(table.remove(self.pending))
+		self.graph:add_edge(left,right, queue, context)
+
+		-- Check if adding that edge resulted in any new type pairs needing to be checked
+		while #queue > 0 do
+			local l, r = table.unpack(table.remove(queue))
+
+			local lvalue, ltag = table.unpack(self.values[l])
+			local rvalue, rtag = table.unpack(self.values[r])
+			if ltag == TypeCheckerTag.VALUE and rtag == TypeCheckerTag.USAGE then
+				check_concrete(lvalue, rvalue, self)
+			end
+		end
+	end
+		
+	assert(#queue == 0, "queue was not empty after flow!")
+	assert(#self.pending == 0, "pending was not drained!")
+	return true
+end
+
+local typechecker_state_mt = {__index = TypeCheckerState}
+
+---@return TypeCheckerState
+local function new_typechecker_state()
 	return setmetatable({
-		next_metavariable_id = 0,
-		mvs = { prev_mvs = nil },
+		pending = {},
+		graph = reachability(),
+		values = {},
+		valcheck = {},
+		usecheck = {},
 	}, typechecker_state_mt)
 end
 
+typechecker_state = new_typechecker_state()
+
 local evaluator = {
 	typechecker_state = typechecker_state,
-	fitsinto = fitsinto,
 	extract_tuple_elem_type_closures = extract_tuple_elem_type_closures,
 	const_combinator = const_combinator,
 	check = check,
