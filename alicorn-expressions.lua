@@ -282,7 +282,7 @@ local function expression_pairhandler(args, a, b)
 			type_of_term = metaresult
 			param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
 		end
-		
+
 		-- multiple quantity of usages in tuple with usage in function arguments
 		local ok, tuple, env = sargs:match({
 			collect_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),

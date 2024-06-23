@@ -511,7 +511,6 @@ local function extract_tuple_elem_type_closures(enum_val, closures)
 	error "unknown enum constructor for value.tuple_type's enum_value, should not be reachable"
 end
 
-
 value:derive(derivers.eq)
 
 ---@param checkable_term checkable
@@ -546,7 +545,7 @@ local function check(
 				-- TODO: add debugging dump to typechecking context that looks for placeholders inside inferred_type
 				-- then shows matching types and values in env if relevant?
 			else
-				ok, err =typechecker_state:flow(inferred_type, goal_type)
+				ok, err = typechecker_state:flow(inferred_type, goal_type)
 			end
 			if not ok then
 				print "attempting to check if terms fit for checkable_term.inferrable"
@@ -897,8 +896,11 @@ function infer(
 			error "result type computation must be pure for now"
 		end
 
-		local ok, err = 
-		typechecker_state:flow(evaluate(param_type_term, typechecking_context.runtime_context), result_type_param_type, "inferrable pi term")
+		local ok, err = typechecker_state:flow(
+			evaluate(param_type_term, typechecking_context.runtime_context),
+			result_type_param_type,
+			"inferrable pi term"
+		)
 		if not ok then
 			error(
 				"inferrable pi type's param type doesn't fit into the result type function's parameters because " .. err
@@ -1271,7 +1273,6 @@ function infer(
 		-- for each thing in typechecking context check if it == the subject, replace with literal true
 		-- same for alternate but literal false
 
-
 		-- TODO: Replace this with a metavariable that both branches are put into
 		local stype, susages, sterm = check(terms.value.prim_bool_type, typechecking_context, subject)
 		local ctype, cusages, cterm = infer(consequent, typechecking_context)
@@ -1528,7 +1529,7 @@ function evaluate(typed_term, runtime_context)
 		return value.record_value(new_fields)
 	elseif typed_term:is_record_elim() then
 		local subject, field_names, body = typed_term:unwrap_record_elim()
-		local subject_value =  U.tag("evaluate", subject, evaluate, subject, runtime_context)
+		local subject_value = U.tag("evaluate", subject, evaluate, subject, runtime_context)
 		local inner_context = runtime_context
 		if subject_value:is_record_value() then
 			local subject_fields = subject_value:unwrap_record_value()
@@ -1544,15 +1545,15 @@ function evaluate(typed_term, runtime_context)
 		else
 			error("evaluate, is_record_elim, subject_value: expected a record")
 		end
-		return  U.tag("evaluate", body, evaluate, body, inner_context)
+		return U.tag("evaluate", body, evaluate, body, inner_context)
 	elseif typed_term:is_enum_cons() then
 		local constructor, arg = typed_term:unwrap_enum_cons()
-		local arg_value =  U.tag("evaluate", arg, evaluate, arg, runtime_context)
+		local arg_value = U.tag("evaluate", arg, evaluate, arg, runtime_context)
 		return value.enum_value(constructor, arg_value)
 	elseif typed_term:is_enum_elim() then
 		local subject, mechanism = typed_term:unwrap_enum_elim()
-		local subject_value =  U.tag("evaluate", subject, evaluate, subject, runtime_context)
-		local mechanism_value =  U.tag("evaluate", mechanism, evaluate, mechanism, runtime_context)
+		local subject_value = U.tag("evaluate", subject, evaluate, subject, runtime_context)
+		local mechanism_value = U.tag("evaluate", mechanism, evaluate, mechanism, runtime_context)
 		if subject_value:is_enum_value() then
 			if mechanism_value:is_object_value() then
 				local constructor, arg = subject_value:unwrap_enum_value()
@@ -1821,15 +1822,15 @@ function OrderedSet:insert_aux(t, ...)
 		return false
 	end
 	self.set[t] = #self.array + 1
-	table.insert(self.array, {t, ...})
+	table.insert(self.array, { t, ... })
 	return true
 end
 
-local ordered_set_mt = {__index = OrderedSet}
+local ordered_set_mt = { __index = OrderedSet }
 
 ---@return OrderedSet
 local function ordered_set()
-	return setmetatable({ set = {}, count = 0}, ordered_set_mt)
+	return setmetatable({ set = {}, count = 0 }, ordered_set_mt)
 end
 
 ---@class TypeCheckerState
@@ -1846,47 +1847,47 @@ local TypeCheckerState = {}
 local Reachability = {}
 
 ---@return integer
-function Reachability:add_node() 
+function Reachability:add_node()
 	local i = #self.upsets + 1 -- Account for lua tables starting at 1
-  table.insert(self.upsets, ordered_set());
-  table.insert(self.downsets, ordered_set());
+	table.insert(self.upsets, ordered_set())
+	table.insert(self.downsets, ordered_set())
 	assert(#self.upsets == #self.downsets, "upsets must equal downsets!")
-  return i
+	return i
 end
 
 ---@param left integer
 ---@param right integer
 ---@param queue table
 ---@param context any
-function Reachability:add_edge(left, right, queue, context) 
+function Reachability:add_edge(left, right, queue, context)
 	assert(type(left) == "number", "left isn't an integer!")
 	assert(type(right) == "number", "left isn't an integer!")
-	local work = {{left, right}}
+	local work = { { left, right } }
 
 	while #work > 0 do
 		local l, r = table.unpack(table.remove(work))
 
 		assert(self.downsets[l], "Can't find " .. tostring(l))
-		if self.downsets[l]:insert(r) then 
+		if self.downsets[l]:insert(r) then
 			assert(self.downsets[r], "Can't find " .. tostring(r))
 			self.upsets[r]:insert(l)
-			table.insert(queue, {l, r})
+			table.insert(queue, { l, r })
 
 			for i, l2 in ipairs(self.upsets[l].array) do
-				table.insert(work, {l2, r})
+				table.insert(work, { l2, r })
 			end
 			for i, r2 in ipairs(self.downsets[r].array) do
-				table.insert(work, {l, r2})
+				table.insert(work, { l, r2 })
 			end
 		end
 	end
 end
 
-local reachability_mt = {__index = Reachability}
+local reachability_mt = { __index = Reachability }
 
 ---@return Reachability
 local function reachability()
-	return setmetatable({downsets = {}, upsets = {}}, reachability_mt)
+	return setmetatable({ downsets = {}, upsets = {} }, reachability_mt)
 end
 
 ---@class TypeCheckerTag
@@ -1898,12 +1899,12 @@ local TypeCheckerTag = {
 ---@param val value
 ---@param use value
 ---@param context any
-function TypeCheckerState:queue_work(val, use, context) 
+function TypeCheckerState:queue_work(val, use, context)
 	local l = self:check_value(val, TypeCheckerTag.VALUE)
 	local r = self:check_value(use, TypeCheckerTag.USAGE)
 	assert(type(l) == "number", "l isn't number, instead found " .. tostring(l))
 	assert(type(r) == "number", "r isn't number, instead found " .. tostring(r))
-	table.insert(self.pending, {l, r, context})
+	table.insert(self.pending, { l, r, context })
 end
 
 ---@param v value
@@ -1922,7 +1923,7 @@ function TypeCheckerState:check_value(v, tag)
 	end
 
 	--if v:is_neutral() then
-		--error("Don't know how to process nuetral value! " .. tostring(v))
+	--error("Don't know how to process nuetral value! " .. tostring(v))
 	--end
 
 	local checker = self.valcheck
@@ -1934,7 +1935,7 @@ function TypeCheckerState:check_value(v, tag)
 		return checker[v]
 	end
 
-	table.insert(self.values, {v, tag})
+	table.insert(self.values, { v, tag })
 	local i = self.graph:add_node()
 	assert(i == #self.values, "Value array and node array got out of sync!")
 	checker[v] = i
@@ -1944,8 +1945,8 @@ end
 ---@return Metavariable
 function TypeCheckerState:metavariable()
 	local i = self.graph:add_node()
-  local mv = setmetatable({value = i, usage = i}, terms.metavariable_mt)
-	table.insert(self.values, {mv:as_value(), TypeCheckerTag.VAR})
+	local mv = setmetatable({ value = i, usage = i }, terms.metavariable_mt)
+	table.insert(self.values, { mv:as_value(), TypeCheckerTag.VAR })
 	assert(i == #self.values, "Value array and node array got out of sync!")
 	return mv
 end
@@ -1960,7 +1961,7 @@ function TypeCheckerState:flow(val, use, context)
 
 	while #self.pending > 0 do
 		local left, right, context = table.unpack(table.remove(self.pending))
-		self.graph:add_edge(left,right, queue, context)
+		self.graph:add_edge(left, right, queue, context)
 
 		-- Check if adding that edge resulted in any new type pairs needing to be checked
 		while #queue > 0 do
@@ -1973,13 +1974,13 @@ function TypeCheckerState:flow(val, use, context)
 			end
 		end
 	end
-		
+
 	assert(#queue == 0, "queue was not empty after flow!")
 	assert(#self.pending == 0, "pending was not drained!")
 	return true
 end
 
-local typechecker_state_mt = {__index = TypeCheckerState}
+local typechecker_state_mt = { __index = TypeCheckerState }
 
 ---@return TypeCheckerState
 local function new_typechecker_state()

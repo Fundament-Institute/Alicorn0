@@ -53,7 +53,7 @@ function Metavariable:as_value()
 	--return canonical_info.bound_value or value.neutral(neutral_value.free(free.metavariable(canonical)))
 end
 
-local metavariable_mt = {__index = Metavariable}
+local metavariable_mt = { __index = Metavariable }
 local metavariable_type = gen.declare_foreign(gen.metatable_equality(metavariable_mt))
 
 -- freeze and then commit or revert
