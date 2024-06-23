@@ -13,7 +13,7 @@ local p = require "pretty-print".prettyPrint
 --- lua_operative is dependently typed and should produce inferrable vs checkable depending on the goal, and an error as the second return if it failed
 --- | unknown in the second return insufficiently constrains the non-error cases to be inferrable or checkable terms
 --- this can be fixed in the future if we swap to returning a Result type that can express the success/error constraint separately
----@alias lua_operative fun(syntax : any, env : Environment, goal : expression_goal) : boolean, inferrable | checkable | unknown, Environment | nil
+---@alias lua_operative fun(syntax : any, env : Environment, goal : expression_goal) : boolean, inferrable | checkable | unknown, Environment?
 
 local function do_block_pair_handler(env, a, b)
 	local ok, val, newenv = a:match({

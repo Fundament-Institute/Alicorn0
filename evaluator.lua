@@ -463,7 +463,7 @@ end)
 ---@param use value
 ---@param typechecker TypeCheckerState
 ---@return boolean
----@return string | nil
+---@return string?
 function check_concrete(val, use, typechecker)
 	assert(val and use, "nil value or usage passed into check_concrete!")
 
@@ -1799,8 +1799,8 @@ function evaluate(typed_term, runtime_context)
 end
 
 ---@class OrderedSet
----@field set table<any, integer>
----@field array table<integer, any>
+---@field set { [any]: integer }
+---@field array any[]
 local OrderedSet = {}
 
 ---@param t any
@@ -1841,8 +1841,8 @@ end
 local TypeCheckerState = {}
 
 ---@class Reachability
----@field upsets table<integer, OrderedSet>
----@field downsets table<integer, OrderedSet>
+---@field upsets OrderedSet[]
+---@field downsets OrderedSet[]
 local Reachability = {}
 
 ---@return integer
@@ -1921,24 +1921,24 @@ function TypeCheckerState:check_value(v, tag)
 		end
 	end
 
-	  --if v:is_neutral() then
-			--error("Don't know how to process nuetral value! " .. tostring(v))
-		--end
+	--if v:is_neutral() then
+		--error("Don't know how to process nuetral value! " .. tostring(v))
+	--end
 
-		local checker = self.valcheck
-		if tag == TypeCheckerTag.USAGE then
-			checker = self.usecheck
-		end
+	local checker = self.valcheck
+	if tag == TypeCheckerTag.USAGE then
+		checker = self.usecheck
+	end
 
-		if checker[v] then
-			return checker[v]
-		end
+	if checker[v] then
+		return checker[v]
+	end
 
-		table.insert(self.values, {v, tag})
-		local i = self.graph:add_node()
-		assert(i == #self.values, "Value array and node array got out of sync!")
-		checker[v] = i
-		return i
+	table.insert(self.values, {v, tag})
+	local i = self.graph:add_node()
+	assert(i == #self.values, "Value array and node array got out of sync!")
+	checker[v] = i
+	return i
 end
 
 ---@return Metavariable

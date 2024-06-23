@@ -6,6 +6,10 @@ local matcher_kinds = {
 	Reducible = true,
 }
 
+---@alias HandlerFn fun(a : any, b : any?, c : any?) : any
+
+---@param handler HandlerFn
+---@return table
 local function issymbol(handler)
 	return {
 		kind = "Symbol",
@@ -13,6 +17,8 @@ local function issymbol(handler)
 	}
 end
 
+---@param handler HandlerFn
+---@return table
 local function ispair(handler)
 	return {
 		kind = "Pair",
@@ -20,6 +26,8 @@ local function ispair(handler)
 	}
 end
 
+---@param handler HandlerFn
+---@return table
 local function isnil(handler)
 	return {
 		kind = "Nil",
@@ -27,6 +35,8 @@ local function isnil(handler)
 	}
 end
 
+---@param handler HandlerFn
+---@return table
 local function isvalue(handler)
 	return {
 		kind = "Value",
@@ -50,6 +60,14 @@ local function dispatch_reducer(handler_mapping, default, matcher)
 	end
 end
 
+---@class Reducible 
+---@field kind string
+---@field handler HandlerFn
+---@field reducible any
+
+---@param handler HandlerFn
+---@param ... any
+---@return Reducible
 local function create_reducible(self, handler, ...)
 	local funcnew = {
 		...,
@@ -73,6 +91,7 @@ local reducer_mt = { __call = create_reducible }
 ---@field anchor any
 ---@field reducer_name string
 local ExternalError = {}
+
 local external_error_mt = {
 	__tostring = function(self)
 		local message = "Lua error raised inside reducer "
@@ -98,6 +117,13 @@ function ExternalError.new(cause, anchor, reducer_name)
 	}, external_error_mt)
 end
 
+---@param syntax any
+---@param reducer_name string
+---@param ok boolean
+---@param err_msg any
+---@param ... any
+---@return boolean | any
+---@return ExternalError | any
 local function augment_error(syntax, reducer_name, ok, err_msg, ...)
 	if not ok then
 		return false, ExternalError.new(err_msg, syntax.anchor, reducer_name)
@@ -109,7 +135,9 @@ end
 local pdump = require "pretty-print".dump
 local tag = (require "./utils").tag
 
-local function custom_traceback(err, message, level)
+---@param err table | string
+---@return table | string
+local function custom_traceback(err)
 	if type(err) == "table" then
 		return err
 	end
@@ -145,6 +173,12 @@ local function custom_traceback(err, message, level)
 		return s
 end
 
+---@class Reducer
+---@field wrapper fun(syntax: any, matcher: Reducible)
+
+---@param func fun(syntax: any, ...)
+---@param name any
+---@return table
 local function reducer(func, name)
 	local function funcwrapper(syntax, matcher)
 		return augment_error(syntax, name, xpcall(func, custom_traceback, syntax, table.unpack(matcher.reducible)))
@@ -170,7 +204,28 @@ local function reducer(func, name)
 	return reducer
 end
 
+---@class Env
+---@field dict { [any]: any }
+local Env = {}
 local env_mt
+
+---comment
+---@param name any
+---@return any
+function Env:get(name)
+	return self.dict[name]
+end
+
+function Env:without(name)
+	local res = {}
+	for k, v in pairs(self.dict) do
+		if k ~= name then
+			res[k] = v
+		end
+	end
+	return setmetatable({ dict = res }, env_mt)
+end
+
 env_mt = {
 	__add = function(self, other)
 		local res = {}
@@ -185,20 +240,7 @@ env_mt = {
 		end
 		return setmetatable({ dict = res }, env_mt)
 	end,
-	__index = {
-		get = function(self, name)
-			return self.dict[name]
-		end,
-		without = function(self, name)
-			local res = {}
-			for k, v in pairs(self.dict) do
-				if k ~= name then
-					res[k] = v
-				end
-			end
-			return setmetatable({ dict = res }, env_mt)
-		end,
-	},
+	__index = Env,
 	__tostring = function(self)
 		local message = "env{"
 		local fields = {}
@@ -210,6 +252,8 @@ env_mt = {
 	end,
 }
 
+---@param dict any
+---@return Env
 local function newenv(dict)
 	return setmetatable({ dict = dict }, env_mt)
 end
@@ -286,37 +330,47 @@ local function syntax_error(matchers, anchor, cause)
 	}, syntax_error_mt)
 end
 
-local constructed_syntax_mt = {
-	__index = {
-		match = function(self, matchers, unmatched, extra)
-			if matchers.kind then
-				print(debug.traceback())
-			end
-			local lasterr = nil
-			for _, matcher in ipairs(matchers) do
-				if self.accepters[matcher.kind] then
-					--   print("accepting primitive handler on kind", matcher.kind)
-					return self.accepters[matcher.kind](self, matcher, extra)
-				elseif matcher.kind == "Reducible" then
-					--   print("trying syntax reduction on kind", matcher.kind)
-					local res = { matcher.reducible.reduce(self, matcher) }
-					if res[1] then
-						--print("accepted syntax reduction")
-						if not matcher.handler then
-							print("missing handler for ", matcher.kind, debug.traceback())
-						end
-						return matcher.handler(extra, table.unpack(res, 2))
-					end
-					--print("rejected syntax reduction")
-					lasterr = res[2]
+---@class ConstructedSyntax
+---@field accepters table
+---@field anchor table
+local ConstructedSyntax = {}
+
+function ConstructedSyntax:match(matchers, unmatched, extra)
+	if matchers.kind then
+		print(debug.traceback())
+	end
+	local lasterr = nil
+	for _, matcher in ipairs(matchers) do
+		if self.accepters[matcher.kind] then
+			--   print("accepting primitive handler on kind", matcher.kind)
+			return self.accepters[matcher.kind](self, matcher, extra)
+		elseif matcher.kind == "Reducible" then
+			--   print("trying syntax reduction on kind", matcher.kind)
+			local res = { matcher.reducible.reduce(self, matcher) }
+			if res[1] then
+				--print("accepted syntax reduction")
+				if not matcher.handler then
+					print("missing handler for ", matcher.kind, debug.traceback())
 				end
-				-- local name = getmetatable(matcher.reducible)
-				-- print("rejected syntax kind", matcher.kind, name)
+				return matcher.handler(extra, table.unpack(res, 2))
 			end
-			return unmatched(extra, syntax_error(matchers, self.anchor, lasterr))
-		end,
-	},
+			--print("rejected syntax reduction")
+			lasterr = res[2]
+		end
+		-- local name = getmetatable(matcher.reducible)
+		-- print("rejected syntax kind", matcher.kind, name)
+	end
+	return unmatched(extra, syntax_error(matchers, self.anchor, lasterr))
+end
+
+local constructed_syntax_mt = {
+	__index = ConstructedSyntax,
 }
+
+---@param accepters table
+---@param anchor table
+---@param ... any
+---@return ConstructedSyntax
 local function cons_syntax(accepters, anchor, ...)
 	return setmetatable({ accepters = accepters, anchor = anchor, ... }, constructed_syntax_mt)
 end
@@ -436,14 +490,6 @@ end
 local listtail = reducer(ListTail, "list+tail")
 
 local list_many
-
-local function list_many_pair_handler(rule, a, b)
-	local ok, val = a:match({ rule }, failure_handler, nil)
-	if not ok then
-		return ok, val
-	end
-	return ok, true, val, b
-end
 
 local function list_many_threaded_pair_handler(rule, a, b)
 	local ok, val, thread
