@@ -1145,7 +1145,7 @@ let tuple-of = lambda_implicit(T : type_(10))
 
 let point = lambda_implicit (U : type_(10))
 	lambda ((T : U))
-		tuple-type(tuple-def-op(x : T, y : T))
+		tuple-type(U, tuple-def-op(x : T, y : T))
 
 #let mkpoint = lambda_implicit (U : type_(10), T : U)
 #	lambda (x : T, y : T)
