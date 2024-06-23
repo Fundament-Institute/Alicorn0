@@ -40,28 +40,36 @@ local function list(pattern)
 end
 
 local function update_ffp(name, patt)
+	-- stage the error
+	-- if the pattern matches, erase the stage
+	-- if the pattern doesn't match, the stage persists
+
+	-- should there be some mechanism to not include the results of emptylines? ignore them?
+
 	return patt
-		+ Cmt(lpeg.Carg(2) * V "textpos", function(_, _, ctx, position)
-			if ctx.position then
-				if ctx.position == position then
-					local acc = true
-					for i, v in ipairs(ctx.expected) do
-						acc = acc and not (v == name)
+		+ (
+			Cmt(lpeg.Carg(2) * V "textpos", function(_, _, ctx, position)
+				if ctx.position then
+					if ctx.position == position then
+						local acc = true
+						for i, v in ipairs(ctx.expected) do
+							acc = acc and not (v == name)
+						end
+						if acc then
+							table.insert(ctx.expected, name)
+						end
+					elseif ctx.position < position then
+						ctx.position = position
+						ctx.expected = { name }
 					end
-					if acc then
-						table.insert(ctx.expected, name)
-					end
-				elseif ctx.position < position then
+				else
 					ctx.position = position
 					ctx.expected = { name }
 				end
-			else
-				ctx.position = position
-				ctx.expected = { name }
-			end
 
-			return false
-		end)
+				return false
+			end) * P(1)
+		)
 end
 
 local function clear_ffp()
@@ -106,7 +114,7 @@ local grammar = P {
 	foreward = Cg(Cc(0), "indent_level"),
 
 	ast = V "foreward" * list(
-		((V "empty_line" + (((V "newline") + V "filestart") * V "samedent" * V "naked_list")) ^ 0) * V "eof"
+		((V "empty_line" + (((V "newline") + V "filestart") * V "baselevel" * V "naked_list")) ^ 0) * V "eof"
 	) * clear_ffp(),
 
 	-- either match the newline or match the beginning of the file
@@ -143,7 +151,7 @@ local grammar = P {
 	end),
 
 	count_tabs = update_ffp(
-		"spaces should not be used for indentation.",
+		"spaces should not be interspersed in indentation",
 		Cmt(V "textpos" * C(S "\t " ^ 0), function(_, _, anchor, indentstring)
 			if string.find(indentstring, " ") then
 				assert(false, "error at " .. tostring(anchor) .. ": tabs and spaces must not be interspersed")
@@ -163,26 +171,36 @@ local grammar = P {
 		return math.max(0, level - 1)
 	end, "indent_level"),
 
-	samedent = update_ffp(
-		"samedent",
+	baselevel = update_ffp(
+		"filestart or newline",
 		Cmt(Cb("indent_level") * V "count_tabs", function(_, _, prev_indent, tabscount)
-			return tabscount == prev_indent
+			return (prev_indent == 0) and (tabscount == 0)
 		end)
+	),
+
+	blockline = update_ffp(
+		"block level newline",
+		V "newline"
+			* Cmt(Cb("indent_level") * V "count_tabs", function(_, _, prev_indent, tabscount)
+				return tabscount == prev_indent
+			end)
 	),
 
 	superior_indent = update_ffp(
 		"dedent",
-		Cmt(Cb("indent_level") * V "count_tabs", function(_, _, prev_indent, tabscount)
-			return tabscount <= prev_indent
-		end)
+		V "newline"
+			* Cmt(Cb("indent_level") * V "count_tabs", function(_, _, prev_indent, tabscount)
+				return tabscount <= prev_indent
+			end)
 	),
 
 	subordinate_indent = update_ffp(
 		"indent",
-		Cmt(Cb("indent_level") * V "count_tabs", function(_, _, prev_indent, tabscount)
-			local normalized_tabs = string.rep("\t", tabscount - prev_indent - 1)
-			return tabscount > prev_indent, normalized_tabs
-		end)
+		V "newline"
+			* Cmt(Cb("indent_level") * V "count_tabs", function(_, _, prev_indent, tabscount)
+				local normalized_tabs = string.rep("\t", tabscount - prev_indent - 1)
+				return tabscount > prev_indent, normalized_tabs
+			end)
 	),
 
 	-- probably works but it doesn't have complex tests
@@ -195,45 +213,52 @@ local grammar = P {
 	) / create_literal,
 	string = element(
 		"string",
-		P '"' * Cg(Ct((V "string_literal" + V "splice") ^ 0), "elements") * P '"' * Cg(V "textpos", "endpos")
+		P '"'
+			* Cg(Ct((V "string_literal" + V "splice") ^ 0), "elements")
+			* update_ffp('"', P '"')
+			* Cg(V "textpos", "endpos")
 	),
 
 	longstring_literal = V "textpos" * Cs(
-		(
-			((V "newline" * V "subordinate_indent") + V "empty_line")
-			+ C((V "unicode_escape" + (1 - (V "newline" + V "splice"))))
-		) ^ 1
+		((V "subordinate_indent" + V "empty_line") + C((V "unicode_escape" + (1 - (V "newline" + V "splice"))))) ^ 1
 	) / create_literal,
 	longstring = element("string", P '""""' * Cg(Ct((V "longstring_literal" + V "splice") ^ 0), "elements")),
 
 	comment_body = C((1 - V "newline") ^ 1),
-	line_comment = element("comment", (P "#" * Cg(V "comment_body", "val"))),
-	comment = element(
+	line_comment = update_ffp("comment", element("comment", (P "#" * Cg(V "comment_body", "val")))),
+	comment = update_ffp(
 		"comment",
-		(P "#" * Cg(Cs(((V "newline" * V "subordinate_indent") + V "comment_body" + V "empty_line") ^ 0), "val"))
+		element("comment", (P "#" * Cg(Cs((V "subordinate_indent" + V "comment_body" + V "empty_line") ^ 0), "val")))
 	),
 
-	tokens = space_tokens(
-		V "line_comment" + V "function_call" + V "paren_list" + V "longstring" + V "string" + V "number" + V "symbol"
+	tokens = update_ffp(
+		"token",
+		space_tokens(
+			V "line_comment"
+				+ V "function_call"
+				+ V "paren_list"
+				+ V "longstring"
+				+ V "string"
+				+ V "number"
+				+ V "symbol"
+		)
 	),
 
-	semicolon = space_tokens(P ";") * (V "line_comment" * #V "newline") ^ -1,
-	comma = space_tokens(P ",") * (V "line_comment" * #V "newline") ^ -1,
+	semicolon = update_ffp(";", space_tokens(P ";") * (V "line_comment" * #V "newline") ^ -1),
+	comma = update_ffp('","', space_tokens(P ",") * (V "line_comment" * #V "newline") ^ -1),
 
 	solo_token = V "tokens" * V "line_comment" ^ -1,
 
-	naked_list = V "empty_line"
-		+ (V "solo_token" * #((V "newline" * V "superior_indent") + V "eof"))
-		+ (V "comment")
-		+ (list(V "tokens" ^ 0 * V "semicolon") * #((V "newline" * V "samedent") + V "eof"))
-		+ list(
-			(((list(V "tokens" ^ 1 * V "semicolon") + V "semicolon") ^ 1 * V "tokens" ^ 0) + V "tokens" ^ 1)
-				* V "indent"
-				* ((V "newline" * V "samedent" * V "naked_list") + V "empty_line") ^ 0
-		),
+	naked_list = V "empty_line" + (V "solo_token" * #(V "superior_indent" + V "eof")) + (V "comment") + (list(
+		V "tokens" ^ 0 * V "semicolon"
+	) * #(V "blockline" + V "eof")) + list(
+		(((list(V "tokens" ^ 1 * V "semicolon") + V "semicolon") ^ 1 * V "tokens" ^ 0) + V "tokens" ^ 1)
+			* V "indent"
+			* ((V "blockline" * V "naked_list") + V "empty_line") ^ 0
+	),
 
 	-- PARENTHETICAL LIST BEHAVIOR
-	paren_spacers = (V "newline" * erase(V "subordinate_indent")) + V "empty_line" + S "\t " ^ 1,
+	paren_spacers = erase(V "subordinate_indent") + V "empty_line" + S "\t " ^ 1,
 	paren_tokens = V "paren_spacers" ^ 0
 		* (
 			(space_tokens(P [[\]]) * V "naked_list") -- \ escape char enters naked list mode from inside a paren list. there's probably an edge case here, indentation is going to be wacky
@@ -250,7 +275,7 @@ local grammar = P {
 		+ (Cg(C(P "["), "bracetype") * symbol(Cc("braced_list")))
 		+ (Cg(C(P "{"), "bracetype") * symbol(Cc("curly-list"))),
 	close_brace = update_ffp(
-		")",
+		"matching close brace",
 		Cmt(Cb("bracetype") * C(S "])}"), function(_, _, bracetype, brace)
 			local matches = {
 				["("] = ")",
@@ -265,7 +290,7 @@ local grammar = P {
 	),
 
 	function_call = V "symbol" * Ct(
-		list(P "(" * (V "comma_paren_body" + V "solo_token") ^ -1 * update_ffp(")", P ")")) ^ 1
+		list(P "(" * (V "comma_paren_body" + V "solo_token") ^ -1 * update_ffp("close brace", P ")")) ^ 1
 	) / function(symbol, argcalls)
 		local acc = {}
 
@@ -321,9 +346,6 @@ local function span_error(position, subject, msg)
 		.. tostring(position.char)
 		.. "\n"
 
-	print(position.line)
-	print(#lines)
-
 	local spacing = string.rep(" ", string.len(position.line)) .. " |"
 
 	span = span
@@ -331,7 +353,7 @@ local function span_error(position, subject, msg)
 		.. "\n"
 		.. position.line
 		.. " |"
-		.. lines[position.line]
+		.. lines[math.min(position.line, #lines)]
 		.. "\n"
 		.. spacing
 		.. string.rep(" ", position.char - 1)

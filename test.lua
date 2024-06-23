@@ -796,7 +796,7 @@ hello
 			}),
 		}),
 		create_list(create_anchor(1, 1), create_anchor(4, 1), {
-			create_list(create_anchor(1, 1), create_anchor(3, 10), {
+			create_list(create_anchor(1, 1), create_anchor(4, 1), {
 				create_symbol(create_anchor(1, 1), "hello"),
 				create_list(create_anchor(2, 2), create_anchor(3, 10), {
 					create_symbol(create_anchor(2, 3), "this"),
