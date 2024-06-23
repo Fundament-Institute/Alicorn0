@@ -1,3 +1,11 @@
+--[[
+Matcher(userdata : type, results : tuple-def) : type
+Syntax : type
+Literal : type
+Reducer(sig : tuple-def, res : tuple-def) : type
+Error : type
+--]]
+
 local matcher_kinds = {
 	Symbol = true,
 	Pair = true,
@@ -10,6 +18,14 @@ local matcher_kinds = {
 
 ---@param handler HandlerFn
 ---@return table
+--[[
+issymbol : forall
+	implicit userdata : type
+	implicit results : tuple-def
+	handler : (forall (u : userdata, s : string) -> res : tuple-type(results)))
+	->
+	Matcher(userdata, results)
+--]]
 local function issymbol(handler)
 	return {
 		kind = "Symbol",
@@ -19,6 +35,14 @@ end
 
 ---@param handler HandlerFn
 ---@return table
+--[[
+ispair : forall
+	implicit userdata : type
+	implicit results : tuple-def
+	handler : (forall (u : userdata, a : Syntax, b : Syntax) -> res : tuple-type(results)))
+	->
+	Matcher(userdata, results)
+--]]
 local function ispair(handler)
 	return {
 		kind = "Pair",
@@ -28,6 +52,14 @@ end
 
 ---@param handler HandlerFn
 ---@return table
+--[[
+isnil : forall
+	implicit userdata : type
+	implicit results : tuple-def
+	handler : (forall (u : userdata) -> res : tuple-type(results)))
+	->
+	Matcher(userdata, results)
+--]]
 local function isnil(handler)
 	return {
 		kind = "Nil",
@@ -37,6 +69,14 @@ end
 
 ---@param handler HandlerFn
 ---@return table
+--[[
+isvalue : forall
+	implicit userdata : type
+	implicit results : tuple-def
+	handler : (forall (u : userdata, v : Literal) -> res : tuple-type(results)))
+	->
+	Matcher(userdata, results)
+--]]
 local function isvalue(handler)
 	return {
 		kind = "Value",
@@ -68,6 +108,18 @@ end
 ---@param handler HandlerFn
 ---@param ... any
 ---@return Reducible
+--[[
+create_reducible : forall
+	implicit userdata : type
+	implicit reducer-sig : tuple-def
+	implicit reducer-res : tuple-def
+	implicit results : tuple-def
+	reducer : Reducer(reducer-sig)
+	handler : (forall (u : userdata, ...vals : reducer-res ) -> res : tuple-type(results))
+	...rest : reducer-sig
+	->
+	Matcher(userdata, results)
+]]
 local function create_reducible(self, handler, ...)
 	local funcnew = {
 		...,
@@ -141,36 +193,36 @@ local function custom_traceback(err)
 	if type(err) == "table" then
 		return err
 	end
-		local s = err
-		local i = 3
-		local info = debug.getinfo(i, "Sfln")
-		while info ~= nil do
-			if info.func == tag then
-				local _, name = debug.getlocal(i, 1)
-				local _, tag = debug.getlocal(i, 2)
-				local _, fn = debug.getlocal(i, 3)
-				--i = i + 1
-				--info = debug.getinfo(i, "Sfln")
-				s = s .. string.format("\n%s [%s:%d] (%s)", name, info.short_src, info.currentline, pdump(tag))
-			else
-				local name = info.name or string.format("<%s:%d>", info.short_src, info.linedefined)
-				local args = {}
-				local j = 1
-				local arg, v = debug.getlocal(i, j)
-				while arg ~= nil do
-					table.insert(args, (type(v) == "table") and "<"..arg..":table>" or string.sub(tostring(v), 1, 12))
-					j = j + 1
-					arg, v = debug.getlocal(i, j)
-				end
-
-				--s = s .. string.format("\n%s [%s:%d] (%s)", name, info.short_src, info.currentline, table.concat(args,","))
-				s = s .. string.format("\n%s [%s:%d]", name, info.short_src, info.currentline)
+	local s = err
+	local i = 3
+	local info = debug.getinfo(i, "Sfln")
+	while info ~= nil do
+		if info.func == tag then
+			local _, name = debug.getlocal(i, 1)
+			local _, tag = debug.getlocal(i, 2)
+			local _, fn = debug.getlocal(i, 3)
+			--i = i + 1
+			--info = debug.getinfo(i, "Sfln")
+			s = s .. string.format("\n%s [%s:%d] (%s)", name, info.short_src, info.currentline, pdump(tag))
+		else
+			local name = info.name or string.format("<%s:%d>", info.short_src, info.linedefined)
+			local args = {}
+			local j = 1
+			local arg, v = debug.getlocal(i, j)
+			while arg ~= nil do
+				table.insert(args, (type(v) == "table") and "<" .. arg .. ":table>" or string.sub(tostring(v), 1, 12))
+				j = j + 1
+				arg, v = debug.getlocal(i, j)
 			end
-			i = i + 1
-			info = debug.getinfo(i, "Sfln")
-		end
 
-		return s
+			--s = s .. string.format("\n%s [%s:%d] (%s)", name, info.short_src, info.currentline, table.concat(args,","))
+			s = s .. string.format("\n%s [%s:%d]", name, info.short_src, info.currentline)
+		end
+		i = i + 1
+		info = debug.getinfo(i, "Sfln")
+	end
+
+	return s
 end
 
 ---@class Reducer
@@ -179,6 +231,15 @@ end
 ---@param func fun(syntax: any, ...)
 ---@param name any
 ---@return table
+--[[
+reducer : forall
+	implicit storage : tuple-def
+	implicit results : tuple-def
+	defn : (forall (s : Syntax, ...extra : storage) -> (ok : bool, ...res : (if ok then results else tuple-def-singleton(Error))))
+	name : string
+	->
+	res : Reducer(storage, results)
+]]
 local function reducer(func, name)
 	local function funcwrapper(syntax, matcher)
 		return augment_error(syntax, name, xpcall(func, custom_traceback, syntax, table.unpack(matcher.reducible)))
@@ -335,6 +396,17 @@ end
 ---@field anchor table
 local ConstructedSyntax = {}
 
+--[[
+match : forall
+	self : Syntax
+	implicit userdata : type
+	implicit results : tuple-def
+	matchers : List(Matcher(userdata, results))
+	unmatched : (forall (u : userdata) -> res : tuple-type(results))
+	extra : userdata
+	->
+	res : tuple-type(results)
+]]
 function ConstructedSyntax:match(matchers, unmatched, extra)
 	if matchers.kind then
 		print(debug.traceback())
