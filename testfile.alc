@@ -6,6 +6,16 @@ let prim-sub = (intrinsic "return function(a, b) return a - b end" : prim-arith-
 #let foo = (record (bar = 5) (baz = 6))
 #let subbed = prim-sub foo.bar y
 
+let implicit-wrap =
+	lambda_implicit (T : type_(10))
+		lambda ((x : T))
+			wrap T x
+
+let implicit-unwrap =
+	lambda_implicit (T : type_(10))
+		lambda ((x : wrapped(T)))
+			unwrap T x
+
 # FIXME: type of universe
 # we need to wrap this, and wrap takes a type in star-10
 # so we have to settle for star-9
@@ -19,11 +29,6 @@ let prim-goal-wrap            = intrinsic "return terms.prim_goal_type"         
 let prim-inferrable-term-wrap = intrinsic "return terms.prim_inferrable_term_type" : wrapped(prim-type)
 let prim-checkable-term-wrap  = intrinsic "return terms.prim_checkable_term_type"  : wrapped(prim-type)
 let prim-lua-error-wrap       = intrinsic "return terms.prim_lua_error_type"       : wrapped(prim-type)
-
-let implicit-unwrap =
-	lambda_implicit (T : type_(10))
-		lambda ((x : wrapped(T)))
-			unwrap T x
 
 let prim-bool            = implicit-unwrap(prim-bool-wrap)
 let prim-string          = implicit-unwrap(prim-string-wrap)
@@ -95,7 +100,7 @@ let new-prim-type-family-inner = intrinsic
 		->
 		family    : wrapped(implicit-unwrap(signature))
 let new-prim-type-family = lambda (unique-id : prim-unique-id, signature : type_(1))
-	let (family) = new-prim-type-family-inner(unique-id, wrap(type_(1), signature))
+	let (family) = new-prim-type-family-inner(unique-id, implicit-wrap(signature))
 	# implicit-unwrap here causes new-prim-type to fail due to trying
 	# to call something whose type is a metavariable
 	unwrap(signature, family)
@@ -205,8 +210,8 @@ let only-accept-prim-tuples-inner =
 		let (res) =
 			only-accept-prim-tuples-inner-prim
 				subject
-				wrap prim-type consequent
-				wrap prim-type alternate
+				implicit-wrap consequent
+				implicit-wrap alternate
 		implicit-unwrap res
 let only-accept-prim-tuples =
 	lambda ((subject : wrapped(type)))
@@ -258,6 +263,7 @@ let prim-tuple-to-tuple-inner =
 
 let prim-tuple-to-tuple =
 	lambda (t : wrapped(type), valid : only-accept-prim-tuples(t), val : implicit-unwrap(t))
+		# implicit-wrap here causes typechecking issues
 		let (res) = prim-tuple-to-tuple-inner(t, valid, wrap(implicit-unwrap(t), val))
 		implicit-unwrap(res)
 
@@ -297,6 +303,7 @@ let tuple-to-prim-tuple-inner =
 
 let tuple-to-prim-tuple =
 	lambda (t : wrapped(type), valid : only-accept-prim-tuples(t), val : implicit-unwrap(prim-tuple-type-to-tuple-type(t, valid)))
+		# implicit-wrap here causes typechecking issues
 		let (res) =
 			tuple-to-prim-tuple-inner(t, valid, wrap(implicit-unwrap(prim-tuple-type-to-tuple-type(t, valid)), val))
 		implicit-unwrap(res)
@@ -325,8 +332,8 @@ let only-accept-prim-funcs-inner =
 		let (res) =
 			only-accept-prim-funcs-inner-prim
 				subject
-				wrap prim-type consequent
-				wrap prim-type alternate
+				implicit-wrap consequent
+				implicit-wrap alternate
 		implicit-unwrap res
 let only-accept-prim-funcs =
 	lambda ((subject : wrapped(type)))
@@ -409,7 +416,7 @@ let foo =
 
 foo
 
-let (oldargs oldargs-valid) = get-prim-func-arg-inner(wrap(type, foo), prim-nil)
+let (oldargs oldargs-valid) = get-prim-func-arg-inner(implicit-wrap(foo), prim-nil)
 let (newargs) = prim-tuple-type-to-tuple-type-inner(oldargs, oldargs-valid)
 newargs
 
@@ -431,7 +438,7 @@ let sub_type = forall (x : prim-number) (y : prim-number) -> res : prim-number
 # FIXME: adding comments immediately before let ptuple = tuple-to-prim-tuple(oldargs, oldargs-valid, args)
 # is breaking the lambda operative
 
-let (orig-results) = get-prim-func-res-inner(wrap(type, foo), prim-nil)
+let (orig-results) = get-prim-func-res-inner(implicit-wrap(foo), prim-nil)
 # implicit-unwrap here causes new-results to fail due to trying
 # to call something whose type is a metavariable
 let orig-results = unwrap(func-conv-res-type(oldargs), orig-results)
@@ -444,10 +451,10 @@ let new-results =
 		newres
 
 let prim-func-type-to-func-type =
-	lambda (T : type, valid : only-accept-prim-funcs(wrap(type, T)))
-		let (oldargs oldargs-valid) = get-prim-func-arg-inner(wrap(type, T), valid)
+	lambda (T : type, valid : only-accept-prim-funcs(implicit-wrap(T)))
+		let (oldargs oldargs-valid) = get-prim-func-arg-inner(implicit-wrap(T), valid)
 		let (newargs) = prim-tuple-type-to-tuple-type-inner(oldargs, oldargs-valid)
-		let (orig-results-wrapped) = get-prim-func-res-inner(wrap(type, T), valid)
+		let (orig-results-wrapped) = get-prim-func-res-inner(implicit-wrap(T), valid)
 		# implicit-unwrap here causes new-results to fail due to trying
 		# to call something whose type is a metavariable
 		let orig-results = unwrap(func-conv-res-type(oldargs), orig-results-wrapped)
@@ -486,7 +493,7 @@ let func-to-prim-func =
 		:
 		prim-func-type
 			T : type
-			valid : only-accept-prim-funcs(wrap(type, T))
+			valid : only-accept-prim-funcs(implicit-wrap(T))
 			fn : prim-func-type-to-func-type(T, valid)
 			->
 			res-fn : T
@@ -528,17 +535,19 @@ let prim-if = unwrap(prim-if-type, prim-if-wrap)
 let tuple-def-type-inner = intrinsic "return terms.value.tuple_defn_type" :
 	prim-func-type (U : wrapped(universe)) -> (T : wrapped(prim-type))
 let tuple-def-type = lambda ((U : universe))
-	let (T) = tuple-def-type-inner(wrap(universe, U))
+	let (T) = tuple-def-type-inner(implicit-wrap(U))
 	implicit-unwrap(T)
 let tuple-type = lambda (U : universe, decls : tuple-def-type(U))
 	let inner = intrinsic "return terms.value.tuple_type" :
 		prim-func-type (decls : wrapped(tuple-def-type(U))) -> (T : wrapped(prim-type))
+	# implicit-wrap here causes typechecking issues
 	let (T) = inner(wrap(tuple-def-type(U), decls))
 	# implicit-unwrap here causes nearest_star_level to fail in tuple-def-elem
 	unwrap(prim-type, T)
 let prim-tuple-type = lambda (U : universe, decls : tuple-def-type(U))
 	let inner = intrinsic "return terms.value.prim_tuple_type" :
 		prim-func-type (decls : wrapped(tuple-def-type(U))) -> (T : wrapped(prim-type))
+	# implicit-wrap here causes typechecking issues
 	let (T) = inner(wrap(tuple-def-type(U), decls))
 	implicit-unwrap(T)
 let tuple-def-empty = lambda ((U : universe))
@@ -569,8 +578,9 @@ let tuple-def-elem = lambda (
 			T     : wrapped(tuple-def-type(U))
 	let (T) =
 		inner
+			# implicit-wrap here causes typechecking issues
 			wrap(tuple-def-type(U), defn)
-			wrap (forall rest : tuple-type(U, defn) -> next : U) elem
+			implicit-wrap(elem)
 	implicit-unwrap(T)
 let tuple-of = lambda (U : universe, defn : tuple-def-type(U))
 	# ATTN: single parens here means bare lambda syntax
@@ -661,6 +671,7 @@ let tuple-def-concat = lambda (U : universe, head : tuple-def-type(U), tail : tu
 			tail : wrapped(tuple-def-type(U))
 			->
 			cat : wrapped(tuple-def-type(U))
+	# implicit-wrap here causes typechecking issues
 	let (cat) = inner(wrap(tuple-def-type(U), head), wrap(tuple-def-type(U), tail))
 	implicit-unwrap(cat)
 let tuple-concat = lambda (
@@ -691,6 +702,7 @@ let tuple-concat = lambda (
 			tl : wrapped(tuple-type(U, tail))
 			->
 			cat : wrapped(tuple-type(U, tuple-def-concat(U, head, tail)))
+	# implicit-wrap here causes typechecking issues
 	let (cat) = inner(wrap(tuple-type(U, head), hd), wrap(tuple-type(U, tail), tl))
 	implicit-unwrap(cat)
 let prim-tuple-concat = lambda (
@@ -721,6 +733,7 @@ let prim-tuple-concat = lambda (
 			tl : wrapped(prim-tuple-type(U, tail))
 			->
 			cat : wrapped(prim-tuple-type(U, tuple-def-concat(U, head, tail)))
+	# implicit-wrap here causes typechecking issues
 	let (cat) = inner(wrap(prim-tuple-type(U, head), hd), wrap(prim-tuple-type(U, tail), tl))
 	implicit-unwrap(cat)
 
@@ -853,6 +866,7 @@ let match-syntax = lambda (
 			r
 			:
 			prim-tuple-type(prim-type, result)
+	# implicit-wrap here causes typechecking issues
 	inner(matchers, failure-handler, syn, wrap(userdata, ud))
 
 let prim-term-of-inner = intrinsic
@@ -911,9 +925,10 @@ let new-operative = lambda (userdata : prim-type, ud : userdata, handler : opera
 			op : wrapped(implicit-unwrap(op-type))
 	let (op-type, op) =
 		inner
-			wrap(prim-type, userdata)
+			implicit-wrap(userdata)
+			# implicit-wrap here causes typechecking issues
 			wrap(userdata, ud)
-			wrap(operative-handler-type(userdata), handler)
+			implicit-wrap(handler)
 
 	let op-type = implicit-unwrap(op-type)
 	let op = implicit-unwrap(op)
