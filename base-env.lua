@@ -251,7 +251,7 @@ local pure_ascribed_name_with_tail = metalang.reducer(function(syntax, env)
 	return true, name, type_env.val, type_env.env, tail
 end, "pure_ascribed_name_with_tail")
 
-local ascribed_name_with_tail = metalang.reducer(function(syntax, env, prev, names)
+local ascribed_name_with_tail = metalang.reducer(function(syntax, env, prev, names, backup_anchor)
 	-- print("ascribed_name trying")
 	-- p(syntax)
 	-- print(prev:pretty_print())
@@ -260,11 +260,9 @@ local ascribed_name_with_tail = metalang.reducer(function(syntax, env, prev, nam
 	-- print(env.enter_block)
 	---@cast env Environment
 	local shadowed, env = env:enter_block()
-	local anchor = syntax.anchor
-	if not anchor then
-		anchor = "bug in ascribed_name_with_tail"
-	end
-	env = env:bind_local(terms.binding.annotated_lambda("#prev", prev, anchor, terms.visibility.explicit))
+	env = env:bind_local(
+		terms.binding.annotated_lambda("#prev", prev, syntax.anchor or backup_anchor, terms.visibility.explicit)
+	)
 	local ok, prev_binding = env:get("#prev")
 	if not ok then
 		error "#prev should always be bound, was just added"
@@ -283,11 +281,11 @@ local ascribed_name_with_tail = metalang.reducer(function(syntax, env, prev, nam
 	return true, name, val, env, tail
 end, "ascribed_name_with_tail")
 
-local ascribed_name = metalang.reducer(function(syntax, env, prev, names)
+local ascribed_name = metalang.reducer(function(syntax, env, prev, names, backup_anchor)
 	local ok, name, val, env = syntax:match({
 		metalang.list_tail_ends(
 			metalang.accept_handler,
-			ascribed_name_with_tail(metalang.accept_handler, env, prev, names)
+			ascribed_name_with_tail(metalang.accept_handler, env, prev, names, syntax.anchor or backup_anchor)
 		),
 	}, metalang.failure_handler, nil)
 	if not ok then
@@ -312,6 +310,8 @@ local tupleof_ascribed_names_inner = metalang.reducer(function(syntax, env, term
 
 	local names = gen.declare_array(gen.builtin_string)()
 
+	local close_enough = syntax.anchor
+
 	local ok = true
 
 	ok, names, args, env, tail = syntax:match({
@@ -327,7 +327,7 @@ local tupleof_ascribed_names_inner = metalang.reducer(function(syntax, env, term
 					env = type_env,
 				}
 				return true, { name = name, type = type_val }, newthread
-			end, thread.env, build_type_term(thread.args), thread.names)
+			end, thread.env, build_type_term(thread.args), thread.names, close_enough)
 		end, {
 			names = names,
 			args = empty,

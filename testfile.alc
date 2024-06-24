@@ -437,6 +437,7 @@ let (orig-results) = get-prim-func-res-inner(wrap(type, foo), prim-nil)
 let orig-results = unwrap(func-conv-res-type(oldargs), orig-results)
 let new-results =
 	lambda ((args : implicit-unwrap(newargs)))
+		# works now
 		let ptuple = tuple-to-prim-tuple(oldargs, oldargs-valid, args)
 		let orig-results-res = apply(orig-results, ptuple)
 		let (newres valid) = orig-results-res
@@ -453,6 +454,7 @@ let prim-func-type-to-func-type =
 		
 		let new-results =
 			lambda ((args : implicit-unwrap(newargs)))
+				# works now
 				let ptuple = tuple-to-prim-tuple(oldargs, oldargs-valid, args)
 				let (oldres oldres-valid) = apply(orig-results, ptuple)
 				let (newres) = prim-tuple-type-to-tuple-type-inner(oldres, oldres-valid)
@@ -1067,20 +1069,19 @@ let tupleof-ascribed-names-reducer-result2-defn =
 		tuple-def-singleton(prim-type, prim-syntax)
 
 let tupleof-ascribed-names-match-result-defn =
-	# read as: (ok : prim-bool, _ : prim-if(ok, tupleof-ascribed-names-reducer-thread-type, prim-lua-error), _ : prim-if(ok, prim-syntax, prim-unit))
+	# read as: (ok : prim-bool, _ : prim-if(ok, tupleof-ascribed-names-reducer-thread-type, prim-lua-error))
 	# or, more logically: (ok : prim-bool, ...) where:
-	# - ok == true:  `...` is tupleof-ascribed-names-reducer-thread-type, prim-syntax
+	# - ok == true:  `...` is tupleof-ascribed-names-reducer-thread-type
 	# - ok == false: `...` is prim-lua-error
+	# technically this should have a third element in the ok == true case, containing prim-syntax
+	# but the syntax will always be nil, and the errors are annoying
 	tuple-def-elem prim-type
 		tuple-def-elem prim-type
-			tuple-def-elem prim-type
-				tuple-def-empty prim-type
-				lambda (())
-					prim-bool
-			lambda ((ok : prim-bool))
-				prim-if(ok, tupleof-ascribed-names-reducer-thread-type, prim-lua-error)
-		lambda (ok : prim-bool, _ : prim-if(ok, tupleof-ascribed-names-reducer-thread-type, prim-lua-error))
-			prim-if(ok, prim-syntax, prim-unit)
+			tuple-def-empty prim-type
+			lambda (())
+				prim-bool
+		lambda ((ok : prim-bool))
+			prim-if(ok, tupleof-ascribed-names-reducer-thread-type, prim-lua-error)
 
 let tupleof-ascribed-names-reducer = intrinsic "return base_env.tupleof_ascribed_names_inner" :
 	reducer-type(prim-unit, tupleof-ascribed-names-reducer-storage-defn, tupleof-ascribed-names-reducer-result2-defn, tupleof-ascribed-names-match-result-defn)
@@ -1115,7 +1116,7 @@ let tuple-def-impl = lambda (syn : prim-syntax, env : prim-environment, ud : pri
 			1
 			matcher
 
-	let (ok, thread, tail) =
+	let (ok, thread) =
 		match-syntax
 			prim-unit
 			tupleof-ascribed-names-match-result-defn
@@ -1125,7 +1126,6 @@ let tuple-def-impl = lambda (syn : prim-syntax, env : prim-environment, ud : pri
 			prim-nil
 
 	let thread = error-filter(tupleof-ascribed-names-reducer-thread-type, prim-lua-error, ok, thread)
-	let tail = error-filter(prim-syntax, prim-unit, ok, tail)
 
 	let (args) = tupleof-ascribed-names-reducer-thread-type-get-args(thread)
 	let (env) = tupleof-ascribed-names-reducer-thread-type-get-env(thread)
@@ -1137,6 +1137,50 @@ let (tuple-def-op-type, tuple-def-op) = new-operative(prim-unit, prim-nil, tuple
 let my-tuple-def = tuple-def-op(x : prim-number, y : prim-number)
 let my-tuple-type = tuple-type(type_(0), my-tuple-def)
 my-tuple-type
+
+let prim-if-2-type = forall (result : prim-type) (c2 : prim-type) (a1 : prim-type) (subject : prim-bool) (consequent : prim-if(subject, result, c2)) (alternate : prim-if(subject, a1, result)) -> r : result
+
+let prim-if-2-wrap = intrinsic
+	""""
+		local typed = terms.typed_term
+		local string_array = terms_gen.declare_array(terms_gen.builtin_string)
+		return terms.value.closure(
+			"#prim-if-param",
+			typed.tuple_elim(
+				string_array(
+					"#prim-if-result",
+					"#prim-if-c2",
+					"#prim-if-a1",
+					"#prim-if-subject",
+					"#prim-if-consequent",
+					"#prim-if-alternate"
+				),
+				typed.bound_variable(1),
+				6,
+				typed.prim_if(
+					typed.bound_variable(5),
+					typed.bound_variable(6),
+					typed.bound_variable(7)
+				)
+			),
+			terms.runtime_context()
+		)
+	:
+	wrapped(prim-if-2-type)
+let prim-if-2 = unwrap(prim-if-2-type, prim-if-2-wrap)
+
+let prim-true = intrinsic "return true" : prim-bool
+let prim-false = intrinsic "return false" : prim-bool
+
+let prim-if-test = lambda (
+		b : prim-bool,
+		x : prim-if(b, prim-string, prim-unit))
+	let default = intrinsic "return 'default'" : prim-if(b, prim-string, prim-string)
+	let foo = prim-if-2(prim-string, prim-unit, prim-string, b, x, default)
+	the prim-string foo
+
+prim-if-test(prim-true, "foobar")
+prim-if-test(prim-false, prim-nil)
 
 let id = lambda_implicit (T : type_(10))
 	lambda ((x : T))
