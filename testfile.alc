@@ -54,54 +54,54 @@ let new-prim-unique-id = lambda ((name : prim-string))
 	let (source2) = prim-string-concat(source1, "\" }")
 	intrinsic source2 : prim-unique-id
 
-let new-prim-type-family-inner = intrinsic
-	""""
-		local typed_array = terms_gen.declare_array(terms.typed_term)
-		local string_array = terms_gen.declare_array(terms_gen.builtin_string)
-		local function length(defn, len)
-			len = len or 0
-			local constructor, arg = defn:unwrap_enum_value()
-			if constructor == "empty" then
-				return len
-			elseif constructor == "cons" then
-				local elements = arg:unwrap_tuple_value()
-				local next_defn = elements[1]
-				return length(next_defn, len + 1)
-			else
-				error("unknown tuple defn constructor")
-			end
-		end
-		local function new_prim_type_family(unique_id, sig)
-			local param_type, _, _, _ = sig:unwrap_pi()
-			local param_decls = param_type:unwrap_tuple_type()
-			local nparams = length(param_decls)
-			local params = typed_array()
-			local param_names = string_array()
-			for i = 1, nparams do
-				params:append(terms.typed_term.bound_variable(i + 1))
-				param_names:append("#type-family-A-" .. tostring(i))
-			end
-			local body = terms.typed_term.tuple_elim(
-				param_names,
-				terms.typed_term.bound_variable(1),
-				nparams,
-				terms.typed_term.prim_user_defined_type_cons(
-					unique_id,
-					params
-				)
-			)
-			return terms.value.closure("#type-family-B", body, terms.runtime_context())
-		end
-		return new_prim_type_family
-	:
-	prim-func-type
-		unique-id : prim-unique-id
-		signature : wrapped(type_(1))
-		->
-		family    : wrapped(implicit-unwrap(signature))
 let new-prim-type-family = lambda (unique-id : prim-unique-id, signature : type_(1))
-	let (family) = new-prim-type-family-inner(unique-id, implicit-wrap(signature))
-	# implicit-unwrap here causes new-prim-type to fail due to trying
+	let inner = intrinsic
+		""""
+			local typed_array = terms_gen.declare_array(terms.typed_term)
+			local string_array = terms_gen.declare_array(terms_gen.builtin_string)
+			local function length(defn, len)
+				len = len or 0
+				local constructor, arg = defn:unwrap_enum_value()
+				if constructor == "empty" then
+					return len
+				elseif constructor == "cons" then
+					local elements = arg:unwrap_tuple_value()
+					local next_defn = elements[1]
+					return length(next_defn, len + 1)
+				else
+					error("unknown tuple defn constructor")
+				end
+			end
+			local function new_prim_type_family(unique_id, sig)
+				local param_type, _, _, _ = sig:unwrap_pi()
+				local param_decls = param_type:unwrap_tuple_type()
+				local nparams = length(param_decls)
+				local params = typed_array()
+				local param_names = string_array()
+				for i = 1, nparams do
+					params:append(terms.typed_term.bound_variable(i + 1))
+					param_names:append("#type-family-A-" .. tostring(i))
+				end
+				local body = terms.typed_term.tuple_elim(
+					param_names,
+					terms.typed_term.bound_variable(1),
+					nparams,
+					terms.typed_term.prim_user_defined_type_cons(
+						unique_id,
+						params
+					)
+				)
+				return terms.value.closure("#type-family-B", body, terms.runtime_context())
+			end
+			return new_prim_type_family
+		:
+		prim-func-type
+			unique-id : prim-unique-id
+			signature_ : wrapped(type_(1))
+			->
+			family    : wrapped(signature)
+	let (family) = inner(unique-id, implicit-wrap(signature))
+	# FIXME: implicit-unwrap here causes new-prim-type to fail due to trying
 	# to call something whose type is a metavariable
 	unwrap(signature, family)
 let new-prim-type = lambda ((unique-id : prim-unique-id))
@@ -123,44 +123,46 @@ let prim-array-new = lambda ((T : prim-type))
 		prim-func-type -> (arr : prim-array-type(T))
 	let (arr) = inner()
 	arr
-let prim-array-set = lambda (T : prim-type, arr : prim-array-type(T), index : prim-number, elem : T)
-	let inner = intrinsic
-		""""
-			local function array_set(array, index, elem)
-				-- we have to clone because can't guarantee input array isn't reused
-				-- Yet. growth mindset.
-				cloned = {}
-				for i, v in ipairs(array) do
-					cloned[i] = v
+let prim-array-set = lambda_implicit (T : prim-type)
+	lambda (arr : prim-array-type(T), index : prim-number, elem : T)
+		let inner = intrinsic
+			""""
+				local function array_set(array, index, elem)
+					-- we have to clone because can't guarantee input array isn't reused
+					-- Yet. growth mindset.
+					cloned = {}
+					for i, v in ipairs(array) do
+						cloned[i] = v
+					end
+					cloned[index] = elem
+					return cloned
 				end
-				cloned[index] = elem
-				return cloned
-			end
-			return array_set
-		:
-		prim-func-type
-			arr   : prim-array-type(T)
-			index : prim-number
-			elem  : T
-			->
-			arr   : prim-array-type(T)
-	let (arr) = inner(arr, index, elem)
-	arr
-let prim-array-get = lambda (T : prim-type, arr : prim-array-type(T), index : prim-number)
-	let inner = intrinsic
-		""""
-			local function array_get(array, index)
-				return array[index]
-			end
-			return array_get
-		:
-		prim-func-type
-			arr   : prim-array-type(T)
-			index : prim-number
-			->
-			elem  : T
-	let (elem) = inner(arr, index)
-	(the T elem)
+				return array_set
+			:
+			prim-func-type
+				arr   : prim-array-type(T)
+				index : prim-number
+				elem  : T
+				->
+				arr   : prim-array-type(T)
+		let (arr) = inner(arr, index, elem)
+		arr
+let prim-array-get = lambda_implicit (T : prim-type)
+	lambda (arr : prim-array-type(T), index : prim-number)
+		let inner = intrinsic
+			""""
+				local function array_get(array, index)
+					return array[index]
+				end
+				return array_get
+			:
+			prim-func-type
+				arr   : prim-array-type(T)
+				index : prim-number
+				->
+				elem  : T
+		let (elem) = inner(arr, index)
+		(the T elem)
 
 let prim-file-read =
 	intrinsic
@@ -263,7 +265,7 @@ let prim-tuple-to-tuple-inner =
 
 let prim-tuple-to-tuple =
 	lambda (t : wrapped(type), valid : only-accept-prim-tuples(t), val : implicit-unwrap(t))
-		# implicit-wrap here causes typechecking issues
+		# FIXME: implicit-wrap here causes typechecking issues
 		let (res) = prim-tuple-to-tuple-inner(t, valid, wrap(implicit-unwrap(t), val))
 		implicit-unwrap(res)
 
@@ -303,7 +305,7 @@ let tuple-to-prim-tuple-inner =
 
 let tuple-to-prim-tuple =
 	lambda (t : wrapped(type), valid : only-accept-prim-tuples(t), val : implicit-unwrap(prim-tuple-type-to-tuple-type(t, valid)))
-		# implicit-wrap here causes typechecking issues
+		# FIXME: implicit-wrap here causes typechecking issues
 		let (res) =
 			tuple-to-prim-tuple-inner(t, valid, wrap(implicit-unwrap(prim-tuple-type-to-tuple-type(t, valid)), val))
 		implicit-unwrap(res)
@@ -369,7 +371,7 @@ let just-args =
 
 let func-conv-res-type = 
 	lambda ((argtype : wrapped(type)))
-		# implicit-unwrap here causes nearest_star_level to fail
+		# FIXME: implicit-unwrap here causes nearest_star_level to fail
 		forall arg : unwrap(type, argtype)
 			->
 			res : wrapped(type)
@@ -439,7 +441,7 @@ let sub_type = forall (x : prim-number) (y : prim-number) -> res : prim-number
 # is breaking the lambda operative
 
 let (orig-results) = get-prim-func-res-inner(implicit-wrap(foo), prim-nil)
-# implicit-unwrap here causes new-results to fail due to trying
+# FIXME: implicit-unwrap here causes new-results to fail due to trying
 # to call something whose type is a metavariable
 let orig-results = unwrap(func-conv-res-type(oldargs), orig-results)
 let new-results =
@@ -455,7 +457,7 @@ let prim-func-type-to-func-type =
 		let (oldargs oldargs-valid) = get-prim-func-arg-inner(implicit-wrap(T), valid)
 		let (newargs) = prim-tuple-type-to-tuple-type-inner(oldargs, oldargs-valid)
 		let (orig-results-wrapped) = get-prim-func-res-inner(implicit-wrap(T), valid)
-		# implicit-unwrap here causes new-results to fail due to trying
+		# FIXME: implicit-unwrap here causes new-results to fail due to trying
 		# to call something whose type is a metavariable
 		let orig-results = unwrap(func-conv-res-type(oldargs), orig-results-wrapped)
 		
@@ -467,7 +469,7 @@ let prim-func-type-to-func-type =
 				let (newres) = prim-tuple-type-to-tuple-type-inner(oldres, oldres-valid)
 				newres
 
-		# implicit-unwrap here causes nearest_star_level to fail
+		# FIXME: implicit-unwrap here causes nearest_star_level to fail
 		forall x : unwrap(type, newargs) -> y : unwrap(type, new-results(x))
 
 prim-func-type-to-func-type foo prim-nil
@@ -528,7 +530,7 @@ let prim-if-wrap = intrinsic
 		)
 	:
 	wrapped(prim-if-type)
-# implicit-unwrap here causes its usages to fail due to trying
+# FIXME: implicit-unwrap here causes its usages to fail due to trying
 # to call something whose type is a metavariable
 let prim-if = unwrap(prim-if-type, prim-if-wrap)
 
@@ -540,16 +542,32 @@ let tuple-def-type = lambda ((U : universe))
 let tuple-type = lambda (U : universe, decls : tuple-def-type(U))
 	let inner = intrinsic "return terms.value.tuple_type" :
 		prim-func-type (decls : wrapped(tuple-def-type(U))) -> (T : wrapped(prim-type))
-	# implicit-wrap here causes typechecking issues
+	# FIXME: implicit-wrap here causes typechecking issues
 	let (T) = inner(wrap(tuple-def-type(U), decls))
-	# implicit-unwrap here causes nearest_star_level to fail in tuple-def-elem
+	# FIXME: implicit-unwrap here causes nearest_star_level to fail in tuple-def-elem
 	unwrap(prim-type, T)
 let prim-tuple-type = lambda (U : universe, decls : tuple-def-type(U))
 	let inner = intrinsic "return terms.value.prim_tuple_type" :
 		prim-func-type (decls : wrapped(tuple-def-type(U))) -> (T : wrapped(prim-type))
-	# implicit-wrap here causes typechecking issues
+	# FIXME: implicit-wrap here causes typechecking issues
 	let (T) = inner(wrap(tuple-def-type(U), decls))
 	implicit-unwrap(T)
+# FIXME: these implicit functions don't seem to work at all
+let tuple-type-implicit = lambda_implicit (U : universe)
+	lambda (decls : tuple-def-type(U))
+		let inner = intrinsic "return terms.value.tuple_type" :
+			prim-func-type (decls : wrapped(tuple-def-type(U))) -> (T : wrapped(prim-type))
+		# FIXME: implicit-wrap here causes typechecking issues
+		let (T) = inner(wrap(tuple-def-type(U), decls))
+		# FIXME: implicit-unwrap here causes nearest_star_level to fail in tuple-def-elem
+		unwrap(prim-type, T)
+let prim-tuple-type-implicit = lambda_implicit (U : universe)
+	lambda (decls : tuple-def-type(U))
+		let inner = intrinsic "return terms.value.prim_tuple_type" :
+			prim-func-type (decls : wrapped(tuple-def-type(U))) -> (T : wrapped(prim-type))
+		# FIXME: implicit-wrap here causes typechecking issues
+		let (T) = inner(wrap(tuple-def-type(U), decls))
+		implicit-unwrap(T)
 let tuple-def-empty = lambda ((U : universe))
 	let T = tuple-def-type(U)
 	let empty = intrinsic
@@ -578,7 +596,7 @@ let tuple-def-elem = lambda (
 			T     : wrapped(tuple-def-type(U))
 	let (T) =
 		inner
-			# implicit-wrap here causes typechecking issues
+			# FIXME: implicit-wrap here causes typechecking issues
 			wrap(tuple-def-type(U), defn)
 			implicit-wrap(elem)
 	implicit-unwrap(T)
@@ -671,7 +689,7 @@ let tuple-def-concat = lambda (U : universe, head : tuple-def-type(U), tail : tu
 			tail : wrapped(tuple-def-type(U))
 			->
 			cat : wrapped(tuple-def-type(U))
-	# implicit-wrap here causes typechecking issues
+	# FIXME: implicit-wrap here causes typechecking issues
 	let (cat) = inner(wrap(tuple-def-type(U), head), wrap(tuple-def-type(U), tail))
 	implicit-unwrap(cat)
 let tuple-concat = lambda (
@@ -702,7 +720,7 @@ let tuple-concat = lambda (
 			tl : wrapped(tuple-type(U, tail))
 			->
 			cat : wrapped(tuple-type(U, tuple-def-concat(U, head, tail)))
-	# implicit-wrap here causes typechecking issues
+	# FIXME: implicit-wrap here causes typechecking issues
 	let (cat) = inner(wrap(tuple-type(U, head), hd), wrap(tuple-type(U, tail), tl))
 	implicit-unwrap(cat)
 let prim-tuple-concat = lambda (
@@ -733,7 +751,7 @@ let prim-tuple-concat = lambda (
 			tl : wrapped(prim-tuple-type(U, tail))
 			->
 			cat : wrapped(prim-tuple-type(U, tuple-def-concat(U, head, tail)))
-	# implicit-wrap here causes typechecking issues
+	# FIXME: implicit-wrap here causes typechecking issues
 	let (cat) = inner(wrap(prim-tuple-type(U, head), hd), wrap(prim-tuple-type(U, tail), tl))
 	implicit-unwrap(cat)
 
@@ -866,7 +884,7 @@ let match-syntax = lambda (
 			r
 			:
 			prim-tuple-type(prim-type, result)
-	# implicit-wrap here causes typechecking issues
+	# FIXME: implicit-wrap here causes typechecking issues
 	inner(matchers, failure-handler, syn, wrap(userdata, ud))
 
 let prim-term-of-inner = intrinsic
@@ -926,7 +944,7 @@ let new-operative = lambda (userdata : prim-type, ud : userdata, handler : opera
 	let (op-type, op) =
 		inner
 			implicit-wrap(userdata)
-			# implicit-wrap here causes typechecking issues
+			# FIXME: implicit-wrap here causes typechecking issues
 			wrap(userdata, ud)
 			implicit-wrap(handler)
 
@@ -1014,7 +1032,7 @@ let do-impl = lambda (syn : prim-syntax, env : prim-environment, ud : prim-unit,
 			block-match-accept-handler(goal)
 
 	let matchers =
-		prim-array-set matcher-t
+		prim-array-set
 			prim-array-new matcher-t
 			1
 			matcher
@@ -1126,7 +1144,7 @@ let tuple-def-impl = lambda (syn : prim-syntax, env : prim-environment, ud : pri
 			tupleof-ascribed-names-match-accept-handler
 
 	let matchers =
-		prim-array-set matcher-t
+		prim-array-set
 			prim-array-new matcher-t
 			1
 			matcher
