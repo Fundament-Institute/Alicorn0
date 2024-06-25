@@ -765,20 +765,20 @@ local block = metalanguage.reducer(function(syntax, args)
 	return true, lastval, env
 end, "block")
 
-local function primitive_apply(self, operands, environment)
-	local ok, args, env = operands:match({
-		collect_tuple(metalanguage.accept_handler, environment),
-	}, metalanguage.failure_handler, nil)
-	if not ok then
-		return false, args
-	end
-	local ok, err = types.typeident(self.type.params[1], args.type)
-	if not ok then
-		return false, semantic_error.function_args_mismatch(err)
-	end
-	local res = self.val(args.val)
-	return true, { val = res, type = self.type.params[2] }, env
-end
+--local function primitive_apply(self, operands, environment)
+--	local ok, args, env = operands:match({
+--		collect_tuple(metalanguage.accept_handler, environment),
+--	}, metalanguage.failure_handler, nil)
+--	if not ok then
+--		return false, args
+--	end
+--	local ok, err = types.typeident(self.type.params[1], args.type)
+--	if not ok then
+--		return false, semantic_error.function_args_mismatch(err)
+--	end
+--	local res = self.val(args.val)
+--	return true, { val = res, type = self.type.params[2] }, env
+--end
 
 -- operate_behavior[types.primap_kind] = primitive_apply
 

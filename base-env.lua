@@ -186,55 +186,55 @@ end
 --    return ok, res, environment.new_env {locals = env.locals, nonlocals = env.nonlocals, carrier = resenv.carrier, perms = env.perms}
 --
 --end)
-
-local function basic_fn(syntax, env)
-	local ok, args, body = syntax:match({
-		metalang.ispair(metalang.accept_handler),
-	}, metalang.failure_handler, nil)
-	if not ok then
-		return false, args
-	end
-	-- print "defining function"
-	-- p(args)
-	-- p(body)
-	local ok, names = args:match({
-		metalang.list_many(metalang.accept_handler, metalang.issymbol(metalang.accept_handler)),
-	}, metalang.failure_handler, nil)
-	if not ok then
-		return ok, names
-	end
-	local defn = {
-		enclosing_bindings = env.bindings,
-		enclosing_perms = env.perms,
-		body = body,
-		argnames = names,
-	}
-	return true, { type = basic_fn_type, val = defn }, env
-end
-
-local function tuple_type_impl(syntax, env)
-	local ok, typeargs, env = syntax:match({
-		evaluator.collect_tuple(metalang.accept_handler, env),
-	}, metalang.failure_handler, nil)
-	if not ok then
-		return ok, typeargs
-	end
-	for i, t in ipairs(typeargs.type.params) do
-		if t ~= types.type then
-			return false, "tuple-type was provided something that wasn't a type"
-		end
-	end
-	return true, { type = types.type, val = types.tuple(typeargs.val) }, env
-end
-local function tuple_of_impl(syntax, env)
-	local ok, components, env = syntax:match({
-		evaluator.collect_tuple(metalang.accept_handler, env),
-	}, metalang.failure_handler, nil)
-	if not ok then
-		return ok, components
-	end
-	return true, components, env
-end
+--
+--local function basic_fn(syntax, env)
+--	local ok, args, body = syntax:match({
+--		metalang.ispair(metalang.accept_handler),
+--	}, metalang.failure_handler, nil)
+--	if not ok then
+--		return false, args
+--	end
+--	-- print "defining function"
+--	-- p(args)
+--	-- p(body)
+--	local ok, names = args:match({
+--		metalang.list_many(metalang.accept_handler, metalang.issymbol(metalang.accept_handler)),
+--	}, metalang.failure_handler, nil)
+--	if not ok then
+--		return ok, names
+--	end
+--	local defn = {
+--		enclosing_bindings = env.bindings,
+--		enclosing_perms = env.perms,
+--		body = body,
+--		argnames = names,
+--	}
+--	return true, { type = basic_fn_type, val = defn }, env
+--end
+--
+--local function tuple_type_impl(syntax, env)
+--	local ok, typeargs, env = syntax:match({
+--		evaluator.collect_tuple(metalang.accept_handler, env),
+--	}, metalang.failure_handler, nil)
+--	if not ok then
+--		return ok, typeargs
+--	end
+--	for i, t in ipairs(typeargs.type.params) do
+--		if t ~= types.type then
+--			return false, "tuple-type was provided something that wasn't a type"
+--		end
+--	end
+--	return true, { type = types.type, val = types.tuple(typeargs.val) }, env
+--end
+--local function tuple_of_impl(syntax, env)
+--	local ok, components, env = syntax:match({
+--		evaluator.collect_tuple(metalang.accept_handler, env),
+--	}, metalang.failure_handler, nil)
+--	if not ok then
+--		return ok, components
+--	end
+--	return true, components, env
+--end
 
 local pure_ascribed_name_with_tail = metalang.reducer(function(syntax, env)
 	local ok, name, type_env, tail = syntax:match({
