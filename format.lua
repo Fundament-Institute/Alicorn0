@@ -7,8 +7,13 @@ local P, C, Cg, Cc, Cmt, Ct, Cb, Cp, Cf, Cs, S, V, R =
 -- documentation for the SLN: https://scopes.readthedocs.io/en/latest/dataformat/
 -- a python SLN parser: https://github.com/salotz/python-sln/blob/master/src/sln/parser.py
 
-local anchor_mt = {
+---@class Anchor
+---@field line integer
+---@field char integer
+---@field sourceid string
+local Anchor = {}
 
+local anchor_mt = {
 	__lt = function(fst, snd)
 		return snd.line > fst.line or (snd.line == fst.line and snd.char > fst.char)
 	end,
@@ -21,6 +26,7 @@ local anchor_mt = {
 	__tostring = function(self)
 		return "in file " .. self.sourceid .. ", line " .. self.line .. " character " .. self.char
 	end,
+	__index = Anchor,
 }
 
 local function element(kind, pattern)
@@ -39,6 +45,15 @@ end
 local function list(pattern)
 	return element("list", Cg(Ct(space_tokens(pattern)), "elements") * V "endpos")
 end
+
+---@class Literal
+---@field anchor Anchor
+---@field kind LiteralKind
+---@field literaltype LiteralType?
+---@field val number | table | nil
+
+---@alias LiteralKind "list" | "symbol" | "string" | "literal"
+---@alias LiteralType
 
 local function create_literal(elements)
 	local val = {}
@@ -63,6 +78,10 @@ local function erase(pattern)
 	return pattern / {}
 end
 
+---@param line integer
+---@param char integer
+---@param sourceid string
+---@return Anchor
 local function create_anchor(line, char, sourceid)
 	local newanchor = {
 		line = line,
@@ -307,6 +326,15 @@ local grammar = P {
 	),
 }
 
+---@class FormatList
+---@field anchor Anchor
+---@field endpos Anchor
+---@field kind LiteralKind
+---@field elements table[]
+
+---@param input string
+---@param filename string
+---@return FormatList?
 local function parse(input, filename)
 	assert(filename)
 

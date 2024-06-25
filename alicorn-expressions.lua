@@ -80,17 +80,21 @@ local semantic_error_mt = {
 }
 
 local semantic_error = {
+	---@param cause any
 	function_args_mismatch = function(cause)
 		return {
 			text = "function args mismatch",
 			cause = cause,
 		}
 	end,
+	---@param t any
 	non_operable_combiner = function(t)
 		return {
 			text = "value in combiner slot that can't operate of type " .. types.type_name(t),
 		}
 	end,
+	---@param cause any
+	---@param anchors Anchor[]
 	operative_apply_failed = function(cause, anchors)
 		return {
 			text = "operative apply failed",
@@ -98,6 +102,11 @@ local semantic_error = {
 			anchors = anchors,
 		}
 	end,
+	---@param cause any
+	---@param anchors Anchor[]
+	---@param terms any
+	---@param env any
+	---@return table
 	prim_function_argument_collect_failed = function(cause, anchors, terms, env)
 		return {
 			text = "prim_function_argument_collect_failed",
@@ -178,11 +187,11 @@ local function check_infix_expression_handler(dat, a, b)
 end
 
 ---@param args ExpressionArgs
----@param a Syntax
----@param b Syntax
+---@param a ConstructedSyntax
+---@param b ConstructedSyntax
 ---@return boolean
 ---@return inferrable | checkable
----@return Environment
+---@return Environment?
 local function expression_pairhandler(args, a, b)
 	-- local ok, ifx, op, args = b:match(
 	--   {
@@ -332,7 +341,7 @@ end
 ---@param args ExpressionArgs
 ---@param name string
 ---@return boolean
----@return InferrableTerm | CheckableTerm
+---@return inferrable | checkable
 ---@return Environment
 local function expression_symbolhandler(args, name)
 	local goal, env = args:unwrap()
@@ -373,7 +382,7 @@ end
 ---@param args ExpressionArgs
 ---@param val any
 ---@return boolean
----@return InferrableTerm | CheckableTerm
+---@return inferrable | checkable
 ---@return Environment
 local function expression_valuehandler(args, val)
 	local goal, env = args:unwrap()
@@ -384,6 +393,7 @@ local function expression_valuehandler(args, val)
 		if not ok then
 			return false, inf_term, env
 		end
+		---@cast inf_term -checkable
 		return true, checkable_term.inferrable(inf_term), env
 	end
 

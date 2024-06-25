@@ -23,10 +23,13 @@ local hidden_fields = {
 	end,
 }
 
+---@return PrettyPrint
 function PrettyPrint.new()
 	return setmetatable({}, PrettyPrint_mt)
 end
 
+---@param unknown any
+---@param ... any
 function PrettyPrint:any(unknown, ...)
 	local ty = type(unknown)
 	if ty == "string" then
@@ -95,6 +98,7 @@ function PrettyPrint:_resetcolor()
 	return "\27[0m"
 end
 
+---@param array any[]
 function PrettyPrint:array(array, ...)
 	self:_enter()
 	self[#self + 1] = self:_color()

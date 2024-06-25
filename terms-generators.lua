@@ -17,7 +17,7 @@ local prettyprintable = require "./pretty-printable-trait"
 ---@field value_check ValueCheckFn
 ---@field define_enum fun(Type, string, table)
 ---@field derive fun(Type, table)
----@alias ValueCheckFn fun(val: any): boolean
+---@alias ValueCheckFn fun(val: table): boolean
 
 ---@class Value
 ---@field kind string
@@ -227,7 +227,7 @@ end
 
 ---@param self table
 ---@param value_check ValueCheckFn
----@param lsp_type string
+---@param lsp_type string?
 ---@return Foreign self
 local function define_foreign(self, value_check, lsp_type)
 	setmetatable(self, {

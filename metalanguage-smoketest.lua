@@ -1,6 +1,60 @@
-local metalang = require "metalanguage"
-local testlang = require "testlanguage"
-local format = require "test-format-adapter"
+local metalang = require "./metalanguage"
+local testlang = require "./testlanguage"
+local format = require "./test-format-adapter"
+
+---@class Env
+---@field dict { [any]: any }
+local Env = {}
+local env_mt
+
+---comment
+---@param name any
+---@return any
+function Env:get(name)
+	return self.dict[name]
+end
+
+function Env:without(name)
+	local res = {}
+	for k, v in pairs(self.dict) do
+		if k ~= name then
+			res[k] = v
+		end
+	end
+	return setmetatable({ dict = res }, env_mt)
+end
+
+env_mt = {
+	__add = function(self, other)
+		local res = {}
+		for k, v in pairs(self.dict) do
+			res[k] = v
+		end
+		for k, v in pairs(other.dict) do
+			if res[k] ~= nil then
+				error("names in environments being merged must be disjoint, but both environments have " .. k)
+			end
+			res[k] = v
+		end
+		return setmetatable({ dict = res }, env_mt)
+	end,
+	__index = Env,
+	__tostring = function(self)
+		local message = "env{"
+		local fields = {}
+		for k, v in pairs(self.dict) do
+			fields[#fields + 1] = tostring(k) .. " = " .. tostring(v)
+		end
+		message = message .. table.concat(fields, ", ") .. "}"
+		return message
+	end,
+}
+
+---@param dict any
+---@return Env
+local function newenv(dict)
+	return setmetatable({ dict = dict }, env_mt)
+end
 
 -- for k, v in pairs(lang) do print(k, v) end
 
@@ -66,10 +120,10 @@ local function val_bind(syntax, env)
 	if not ok then
 		return false, name
 	end
-	return true, value(nil), env + metalang.newenv { [name] = val }
+	return true, value(nil), env + newenv { [name] = val }
 end
 
-local env = metalang.newenv {
+local env = newenv {
 	["+"] = testlang.primitive_applicative(function(a, b)
 		return a + b
 	end),
