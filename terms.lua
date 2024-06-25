@@ -53,7 +53,7 @@ function Metavariable:as_value()
 	--return canonical_info.bound_value or value.neutral(neutral_value.free(free.metavariable(canonical)))
 end
 
-local metavariable_mt = {__index = Metavariable}
+local metavariable_mt = { __index = Metavariable }
 local metavariable_type = gen.declare_foreign(gen.metatable_equality(metavariable_mt))
 
 -- freeze and then commit or revert
@@ -460,14 +460,17 @@ checkable_term:define_enum("checkable", {
 -- inferrable terms can have their type inferred / don't need a goal type
 inferrable_term:define_enum("inferrable", {
 	{ "bound_variable", { "index", gen.builtin_number } },
-	{ "typed", {
-		"type",
-		value,
-		"usage_counts",
-		array(gen.builtin_number),
-		"typed_term",
-		typed_term,
-	} },
+	{
+		"typed",
+		{
+			"type",
+			value,
+			"usage_counts",
+			array(gen.builtin_number),
+			"typed_term",
+			typed_term,
+		},
+	},
 	{
 		"annotated_lambda",
 		{
@@ -527,14 +530,17 @@ inferrable_term:define_enum("inferrable", {
 			inferrable_term,
 		},
 	},
-	{ "enum_cons", {
-		"enum_type",
-		value,
-		"constructor",
-		gen.builtin_string,
-		"arg",
-		inferrable_term,
-	} },
+	{
+		"enum_cons",
+		{
+			"enum_type",
+			value,
+			"constructor",
+			gen.builtin_string,
+			"arg",
+			inferrable_term,
+		},
+	},
 	{ "enum_elim", {
 		"subject",
 		inferrable_term,
@@ -1981,12 +1987,15 @@ value:define_enum("value", {
 		"extension",
 		map(gen.builtin_string, value),
 	} },
-	{ "object_value", {
-		"methods",
-		map(gen.builtin_string, typed_term),
-		"capture",
-		runtime_context_type,
-	} },
+	{
+		"object_value",
+		{
+			"methods",
+			map(gen.builtin_string, typed_term),
+			"capture",
+			runtime_context_type,
+		},
+	},
 	{ "object_type", { "decls", value } },
 	{ "level_type" },
 	{ "number_type" },

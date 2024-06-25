@@ -100,7 +100,7 @@ local function dispatch_reducer(handler_mapping, default, matcher)
 	end
 end
 
----@class Reducible 
+---@class Reducible
 ---@field kind string
 ---@field handler HandlerFn
 ---@field reducible any
