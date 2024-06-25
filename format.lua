@@ -68,7 +68,7 @@ local function update_ffp(name, patt)
 				end
 
 				return false
-			end) * P(1)
+			end) * P(1) -- this segment always fails, so P(1) is to assure lpeg that this isn't an empty loop
 		)
 end
 
@@ -114,7 +114,7 @@ local grammar = P {
 	foreward = Cg(Cc(0), "indent_level"),
 
 	ast = V "foreward" * list(
-		((V "empty_line" + (((V "newline") + V "filestart") * V "baselevel" * V "naked_list")) ^ 0) * V "eof"
+		((V "empty_line" + ((V "newline" + V "filestart") * V "baselevel" * V "naked_list")) ^ 0) * V "eof"
 	) * clear_ffp(),
 
 	-- either match the newline or match the beginning of the file
@@ -154,8 +154,7 @@ local grammar = P {
 		"spaces should not be interspersed in indentation",
 		Cmt(V "textpos" * C(S "\t " ^ 0), function(_, _, anchor, indentstring)
 			if string.find(indentstring, " ") then
-				assert(false, "error at " .. tostring(anchor) .. ": tabs and spaces must not be interspersed")
-				-- return false
+				return false
 			end
 			return true, string.len(indentstring)
 		end)
@@ -195,7 +194,7 @@ local grammar = P {
 	),
 
 	subordinate_indent = update_ffp(
-		"indent",
+		"subordinate indent",
 		V "newline"
 			* Cmt(Cb("indent_level") * V "count_tabs", function(_, _, prev_indent, tabscount)
 				local normalized_tabs = string.rep("\t", tabscount - prev_indent - 1)
@@ -244,30 +243,36 @@ local grammar = P {
 		)
 	),
 
-	semicolon = update_ffp(";", space_tokens(P ";") * (V "line_comment" * #V "newline") ^ -1),
-	comma = update_ffp('","', space_tokens(P ",") * (V "line_comment" * #V "newline") ^ -1),
-
-	solo_token = V "tokens" * V "line_comment" ^ -1,
-
-	naked_list = V "empty_line" + (V "solo_token" * #(V "superior_indent" + V "eof")) + (V "comment") + (list(
-		V "tokens" ^ 0 * V "semicolon"
-	) * #(V "blockline" + V "eof")) + list(
-		(((list(V "tokens" ^ 1 * V "semicolon") + V "semicolon") ^ 1 * V "tokens" ^ 0) + V "tokens" ^ 1)
-			* V "indent"
-			* ((V "blockline" * V "naked_list") + V "empty_line") ^ 0
-	),
+	semicolon = update_ffp(";", space_tokens(P ";") * (V "line_comment" * #(V "newline" + V "eof")) ^ -1),
+	naked_list = V "empty_line"
+		+ (V "tokens" * V "line_comment" ^ -1 * #(V "superior_indent" + V "eof"))
+		+ (V "comment") --
+		+ (list(V "tokens" ^ 0 * V "semicolon") * #(V "blockline" + V "eof"))
+		+ list(
+			(((list(V "tokens" ^ 1 * V "semicolon") + V "semicolon") ^ 1 * V "tokens" ^ 0) + V "tokens" ^ 1)
+				* V "indent"
+				* ((V "blockline" * V "naked_list") + V "empty_line") ^ 0
+		),
 
 	-- PARENTHETICAL LIST BEHAVIOR
-	paren_spacers = erase(V "subordinate_indent") + V "empty_line" + S "\t " ^ 1,
-	paren_tokens = V "paren_spacers" ^ 0
-		* (
-			(space_tokens(P [[\]]) * V "naked_list") -- \ escape char enters naked list mode from inside a paren list. there's probably an edge case here, indentation is going to be wacky
+	paren_spacers = (
+		erase(V "subordinate_indent") --
+		+ (V "line_comment" * #(V "newline" + V "eof"))
+		+ V "empty_line"
+		+ S "\t " ^ 1
+	) ^ 0,
+	paren_tokens = update_ffp(
+		"tokens",
+		(
+			(P [[\]] * V "paren_spacers" * V "naked_list") -- \ escape char enters naked list mode from inside a paren list. there's probably an edge case here, indentation is going to be wacky
 			+ V "tokens"
-		)
-		* V "paren_spacers" ^ 0,
+		) * V "paren_spacers"
+	),
 
-	semicolon_body = list(V "paren_tokens" ^ 1 * V "semicolon") ^ 1 * V "paren_tokens" ^ 0,
+	psemicolon = update_ffp(";", P ";" * V "paren_spacers"),
+	semicolon_body = list(V "paren_tokens" ^ 1 * V "psemicolon") ^ 1 * V "paren_tokens" ^ 0,
 
+	comma = update_ffp('","', P "," * V "paren_spacers"),
 	comma_paren_body = ((list(V "paren_tokens" ^ 2) + V "paren_tokens") * V "comma") ^ 1
 		* (list(V "paren_tokens" ^ 2) + V "paren_tokens"),
 
@@ -286,11 +291,19 @@ local grammar = P {
 		end)
 	),
 	paren_list = list(
-		V "open_brace" * (V "comma_paren_body" + V "semicolon_body" + V "paren_tokens" ^ 1) ^ -1 * V "close_brace"
+		V "open_brace"
+			* V "paren_spacers"
+			* (V "comma_paren_body" + V "semicolon_body" + V "paren_tokens" ^ 1) ^ -1
+			* V "close_brace"
 	),
 
 	function_call = V "symbol" * Ct(
-		list(P "(" * (V "comma_paren_body" + V "solo_token") ^ -1 * update_ffp("close brace", P ")")) ^ 1
+		list(
+			P "("
+				* V "paren_spacers"
+				* (V "comma_paren_body" + V "paren_tokens") ^ -1
+				* update_ffp("close brace", P ")")
+		) ^ 1
 	) / function(symbol, argcalls)
 		local acc = {}
 

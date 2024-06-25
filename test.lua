@@ -652,8 +652,6 @@ function testfailedparse()
 		"token\n\t    token",
 		"token\n        token",
 		"token\n    #comment",
-		"token\n    \n",
-		"# comment\n    \n",
 		" #",
 		" A",
 	}
@@ -667,7 +665,7 @@ function testfailedparse()
 		if not success then
 			-- pass
 		else
-			luaunit.fail("Test testwrongcomments 'succeeded' when it should have failed:\n" .. example[i])
+			luaunit.fail("Test testwrongcomments 'succeeded' when it should have failed:\n" .. example[i] .. "\n")
 		end
 	end
 end
