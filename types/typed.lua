@@ -6,26 +6,38 @@ typed = {}
 function typed:is_bound_variable() end
 ---@return number
 function typed:unwrap_bound_variable() end
+---@return boolean, number
+function typed:as_bound_variable() end
 ---@return boolean
 function typed:is_literal() end
 ---@return value
 function typed:unwrap_literal() end
+---@return boolean, value
+function typed:as_literal() end
 ---@return boolean
 function typed:is_lambda() end
 ---@return string, typed
 function typed:unwrap_lambda() end
+---@return boolean, string, typed
+function typed:as_lambda() end
 ---@return boolean
 function typed:is_pi() end
 ---@return typed, typed, typed, typed
 function typed:unwrap_pi() end
+---@return boolean, typed, typed, typed, typed
+function typed:as_pi() end
 ---@return boolean
 function typed:is_application() end
 ---@return typed, typed
 function typed:unwrap_application() end
+---@return boolean, typed, typed
+function typed:as_application() end
 ---@return boolean
 function typed:is_let() end
 ---@return string, typed, typed
 function typed:unwrap_let() end
+---@return boolean, string, typed, typed
+function typed:as_let() end
 ---@return boolean
 function typed:is_level_type() end
 ---@return boolean
@@ -34,130 +46,194 @@ function typed:is_level0() end
 function typed:is_level_suc() end
 ---@return typed
 function typed:unwrap_level_suc() end
+---@return boolean, typed
+function typed:as_level_suc() end
 ---@return boolean
 function typed:is_level_max() end
 ---@return typed, typed
 function typed:unwrap_level_max() end
+---@return boolean, typed, typed
+function typed:as_level_max() end
 ---@return boolean
 function typed:is_star() end
 ---@return number
 function typed:unwrap_star() end
+---@return boolean, number
+function typed:as_star() end
 ---@return boolean
 function typed:is_prop() end
 ---@return number
 function typed:unwrap_prop() end
+---@return boolean, number
+function typed:as_prop() end
 ---@return boolean
 function typed:is_tuple_cons() end
 ---@return any
 function typed:unwrap_tuple_cons() end
+---@return boolean, any
+function typed:as_tuple_cons() end
 ---@return boolean
 function typed:is_tuple_elim() end
 ---@return any, typed, number, typed
 function typed:unwrap_tuple_elim() end
+---@return boolean, any, typed, number, typed
+function typed:as_tuple_elim() end
 ---@return boolean
 function typed:is_tuple_element_access() end
 ---@return typed, number
 function typed:unwrap_tuple_element_access() end
+---@return boolean, typed, number
+function typed:as_tuple_element_access() end
 ---@return boolean
 function typed:is_tuple_type() end
 ---@return typed
 function typed:unwrap_tuple_type() end
+---@return boolean, typed
+function typed:as_tuple_type() end
 ---@return boolean
 function typed:is_record_cons() end
 ---@return any
 function typed:unwrap_record_cons() end
+---@return boolean, any
+function typed:as_record_cons() end
 ---@return boolean
 function typed:is_record_extend() end
 ---@return typed, any
 function typed:unwrap_record_extend() end
+---@return boolean, typed, any
+function typed:as_record_extend() end
 ---@return boolean
 function typed:is_record_elim() end
 ---@return typed, any, typed
 function typed:unwrap_record_elim() end
+---@return boolean, typed, any, typed
+function typed:as_record_elim() end
 ---@return boolean
 function typed:is_enum_cons() end
 ---@return string, typed
 function typed:unwrap_enum_cons() end
+---@return boolean, string, typed
+function typed:as_enum_cons() end
 ---@return boolean
 function typed:is_enum_elim() end
 ---@return typed, typed
 function typed:unwrap_enum_elim() end
+---@return boolean, typed, typed
+function typed:as_enum_elim() end
 ---@return boolean
 function typed:is_enum_rec_elim() end
 ---@return typed, typed
 function typed:unwrap_enum_rec_elim() end
+---@return boolean, typed, typed
+function typed:as_enum_rec_elim() end
 ---@return boolean
 function typed:is_object_cons() end
 ---@return any
 function typed:unwrap_object_cons() end
+---@return boolean, any
+function typed:as_object_cons() end
 ---@return boolean
 function typed:is_object_corec_cons() end
 ---@return any
 function typed:unwrap_object_corec_cons() end
+---@return boolean, any
+function typed:as_object_corec_cons() end
 ---@return boolean
 function typed:is_object_elim() end
 ---@return typed, typed
 function typed:unwrap_object_elim() end
+---@return boolean, typed, typed
+function typed:as_object_elim() end
 ---@return boolean
 function typed:is_operative_cons() end
 ---@return typed
 function typed:unwrap_operative_cons() end
+---@return boolean, typed
+function typed:as_operative_cons() end
 ---@return boolean
 function typed:is_operative_type_cons() end
 ---@return typed, typed
 function typed:unwrap_operative_type_cons() end
+---@return boolean, typed, typed
+function typed:as_operative_type_cons() end
 ---@return boolean
 function typed:is_prim_tuple_cons() end
 ---@return any
 function typed:unwrap_prim_tuple_cons() end
+---@return boolean, any
+function typed:as_prim_tuple_cons() end
 ---@return boolean
 function typed:is_prim_user_defined_type_cons() end
 ---@return any, any
 function typed:unwrap_prim_user_defined_type_cons() end
+---@return boolean, any, any
+function typed:as_prim_user_defined_type_cons() end
 ---@return boolean
 function typed:is_prim_tuple_type() end
 ---@return typed
 function typed:unwrap_prim_tuple_type() end
+---@return boolean, typed
+function typed:as_prim_tuple_type() end
 ---@return boolean
 function typed:is_prim_function_type() end
 ---@return typed, typed
 function typed:unwrap_prim_function_type() end
+---@return boolean, typed, typed
+function typed:as_prim_function_type() end
 ---@return boolean
 function typed:is_prim_wrapped_type() end
 ---@return typed
 function typed:unwrap_prim_wrapped_type() end
+---@return boolean, typed
+function typed:as_prim_wrapped_type() end
 ---@return boolean
 function typed:is_prim_unstrict_wrapped_type() end
 ---@return typed
 function typed:unwrap_prim_unstrict_wrapped_type() end
+---@return boolean, typed
+function typed:as_prim_unstrict_wrapped_type() end
 ---@return boolean
 function typed:is_prim_wrap() end
 ---@return typed
 function typed:unwrap_prim_wrap() end
+---@return boolean, typed
+function typed:as_prim_wrap() end
 ---@return boolean
 function typed:is_prim_unwrap() end
 ---@return typed
 function typed:unwrap_prim_unwrap() end
+---@return boolean, typed
+function typed:as_prim_unwrap() end
 ---@return boolean
 function typed:is_prim_unstrict_wrap() end
 ---@return typed
 function typed:unwrap_prim_unstrict_wrap() end
+---@return boolean, typed
+function typed:as_prim_unstrict_wrap() end
 ---@return boolean
 function typed:is_prim_unstrict_unwrap() end
 ---@return typed
 function typed:unwrap_prim_unstrict_unwrap() end
+---@return boolean, typed
+function typed:as_prim_unstrict_unwrap() end
 ---@return boolean
 function typed:is_prim_user_defined_type() end
 ---@return any, any
 function typed:unwrap_prim_user_defined_type() end
+---@return boolean, any, any
+function typed:as_prim_user_defined_type() end
 ---@return boolean
 function typed:is_prim_if() end
 ---@return typed, typed, typed
 function typed:unwrap_prim_if() end
+---@return boolean, typed, typed, typed
+function typed:as_prim_if() end
 ---@return boolean
 function typed:is_prim_intrinsic() end
 ---@return typed, any
 function typed:unwrap_prim_intrinsic() end
+---@return boolean, typed, any
+function typed:as_prim_intrinsic() end
 ---@class (exact) typedType:Type
 ---@field bound_variable fun(index:number): typed
 ---@field literal fun(literal_value:value): typed

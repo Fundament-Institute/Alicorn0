@@ -8,88 +8,128 @@ function value:is_visibility_type() end
 function value:is_visibility() end
 ---@return visibility
 function value:unwrap_visibility() end
+---@return boolean, visibility
+function value:as_visibility() end
 ---@return boolean
 function value:is_param_info_type() end
 ---@return boolean
 function value:is_param_info() end
 ---@return value
 function value:unwrap_param_info() end
+---@return boolean, value
+function value:as_param_info() end
 ---@return boolean
 function value:is_result_info_type() end
 ---@return boolean
 function value:is_result_info() end
 ---@return any
 function value:unwrap_result_info() end
+---@return boolean, any
+function value:as_result_info() end
 ---@return boolean
 function value:is_pi() end
 ---@return value, value, value, value
 function value:unwrap_pi() end
+---@return boolean, value, value, value, value
+function value:as_pi() end
 ---@return boolean
 function value:is_closure() end
 ---@return string, typed, any
 function value:unwrap_closure() end
+---@return boolean, string, typed, any
+function value:as_closure() end
 ---@return boolean
 function value:is_name_type() end
 ---@return boolean
 function value:is_name() end
 ---@return string
 function value:unwrap_name() end
+---@return boolean, string
+function value:as_name() end
 ---@return boolean
 function value:is_operative_value() end
 ---@return value
 function value:unwrap_operative_value() end
+---@return boolean, value
+function value:as_operative_value() end
 ---@return boolean
 function value:is_operative_type() end
 ---@return value, value
 function value:unwrap_operative_type() end
+---@return boolean, value, value
+function value:as_operative_type() end
 ---@return boolean
 function value:is_tuple_value() end
 ---@return any
 function value:unwrap_tuple_value() end
+---@return boolean, any
+function value:as_tuple_value() end
 ---@return boolean
 function value:is_tuple_type() end
 ---@return value
 function value:unwrap_tuple_type() end
+---@return boolean, value
+function value:as_tuple_type() end
 ---@return boolean
 function value:is_tuple_defn_type() end
 ---@return value
 function value:unwrap_tuple_defn_type() end
+---@return boolean, value
+function value:as_tuple_defn_type() end
 ---@return boolean
 function value:is_enum_value() end
 ---@return string, value
 function value:unwrap_enum_value() end
+---@return boolean, string, value
+function value:as_enum_value() end
 ---@return boolean
 function value:is_enum_type() end
 ---@return value
 function value:unwrap_enum_type() end
+---@return boolean, value
+function value:as_enum_type() end
 ---@return boolean
 function value:is_enum_defn_type() end
 ---@return value
 function value:unwrap_enum_defn_type() end
+---@return boolean, value
+function value:as_enum_defn_type() end
 ---@return boolean
 function value:is_record_value() end
 ---@return any
 function value:unwrap_record_value() end
+---@return boolean, any
+function value:as_record_value() end
 ---@return boolean
 function value:is_record_type() end
 ---@return value
 function value:unwrap_record_type() end
+---@return boolean, value
+function value:as_record_type() end
 ---@return boolean
 function value:is_record_defn_type() end
 ---@return value
 function value:unwrap_record_defn_type() end
+---@return boolean, value
+function value:as_record_defn_type() end
 ---@return boolean
 function value:is_record_extend_stuck() end
 ---@return neutral_value, any
 function value:unwrap_record_extend_stuck() end
+---@return boolean, neutral_value, any
+function value:as_record_extend_stuck() end
 ---@return boolean
 function value:is_object_value() end
 ---@return any, any
 function value:unwrap_object_value() end
+---@return boolean, any, any
+function value:as_object_value() end
 ---@return boolean
 function value:is_object_type() end
 ---@return value
 function value:unwrap_object_type() end
+---@return boolean, value
+function value:as_object_type() end
 ---@return boolean
 function value:is_level_type() end
 ---@return boolean
@@ -98,26 +138,38 @@ function value:is_number_type() end
 function value:is_number() end
 ---@return number
 function value:unwrap_number() end
+---@return boolean, number
+function value:as_number() end
 ---@return boolean
 function value:is_level() end
 ---@return number
 function value:unwrap_level() end
+---@return boolean, number
+function value:as_level() end
 ---@return boolean
 function value:is_star() end
 ---@return number
 function value:unwrap_star() end
+---@return boolean, number
+function value:as_star() end
 ---@return boolean
 function value:is_prop() end
 ---@return number
 function value:unwrap_prop() end
+---@return boolean, number
+function value:as_prop() end
 ---@return boolean
 function value:is_neutral() end
 ---@return neutral_value
 function value:unwrap_neutral() end
+---@return boolean, neutral_value
+function value:as_neutral() end
 ---@return boolean
 function value:is_prim() end
 ---@return any
 function value:unwrap_prim() end
+---@return boolean, any
+function value:as_prim() end
 ---@return boolean
 function value:is_prim_type_type() end
 ---@return boolean
@@ -130,28 +182,40 @@ function value:is_prim_string_type() end
 function value:is_prim_function_type() end
 ---@return value, value
 function value:unwrap_prim_function_type() end
+---@return boolean, value, value
+function value:as_prim_function_type() end
 ---@return boolean
 function value:is_prim_wrapped_type() end
 ---@return value
 function value:unwrap_prim_wrapped_type() end
+---@return boolean, value
+function value:as_prim_wrapped_type() end
 ---@return boolean
 function value:is_prim_unstrict_wrapped_type() end
 ---@return value
 function value:unwrap_prim_unstrict_wrapped_type() end
+---@return boolean, value
+function value:as_prim_unstrict_wrapped_type() end
 ---@return boolean
 function value:is_prim_user_defined_type() end
 ---@return any, any
 function value:unwrap_prim_user_defined_type() end
+---@return boolean, any, any
+function value:as_prim_user_defined_type() end
 ---@return boolean
 function value:is_prim_nil_type() end
 ---@return boolean
 function value:is_prim_tuple_value() end
 ---@return any
 function value:unwrap_prim_tuple_value() end
+---@return boolean, any
+function value:as_prim_tuple_value() end
 ---@return boolean
 function value:is_prim_tuple_type() end
 ---@return value
 function value:unwrap_prim_tuple_type() end
+---@return boolean, value
+function value:as_prim_tuple_type() end
 ---@class (exact) valueType:Type
 ---@field visibility_type value
 ---@field visibility fun(visibility:visibility): value

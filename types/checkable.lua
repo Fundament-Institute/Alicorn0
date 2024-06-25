@@ -6,18 +6,26 @@ checkable = {}
 function checkable:is_inferrable() end
 ---@return inferrable
 function checkable:unwrap_inferrable() end
+---@return boolean, inferrable
+function checkable:as_inferrable() end
 ---@return boolean
 function checkable:is_tuple_cons() end
 ---@return any
 function checkable:unwrap_tuple_cons() end
+---@return boolean, any
+function checkable:as_tuple_cons() end
 ---@return boolean
 function checkable:is_prim_tuple_cons() end
 ---@return any
 function checkable:unwrap_prim_tuple_cons() end
+---@return boolean, any
+function checkable:as_prim_tuple_cons() end
 ---@return boolean
 function checkable:is_lambda() end
 ---@return string, checkable
 function checkable:unwrap_lambda() end
+---@return boolean, string, checkable
+function checkable:as_lambda() end
 ---@class (exact) checkableType:Type
 ---@field inferrable fun(inferrable_term:inferrable): checkable
 ---@field tuple_cons fun(elements:any): checkable

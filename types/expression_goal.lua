@@ -8,10 +8,14 @@ function expression_goal:is_infer() end
 function expression_goal:is_check() end
 ---@return value
 function expression_goal:unwrap_check() end
+---@return boolean, value
+function expression_goal:as_check() end
 ---@return boolean
 function expression_goal:is_mechanism() end
 ---@return value
 function expression_goal:unwrap_mechanism() end
+---@return boolean, value
+function expression_goal:as_mechanism() end
 ---@class (exact) expression_goalType:Type
 ---@field infer expression_goal
 ---@field check fun(goal_type:value): expression_goal
