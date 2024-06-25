@@ -6,14 +6,20 @@ free = {}
 function free:is_metavariable() end
 ---@return any
 function free:unwrap_metavariable() end
+---@return boolean, any
+function free:as_metavariable() end
 ---@return boolean
 function free:is_placeholder() end
 ---@return number, any
 function free:unwrap_placeholder() end
+---@return boolean, number, any
+function free:as_placeholder() end
 ---@return boolean
 function free:is_unique() end
 ---@return any
 function free:unwrap_unique() end
+---@return boolean, any
+function free:as_unique() end
 ---@class (exact) freeType:Type
 ---@field metavariable fun(metavariable:any): free
 ---@field placeholder fun(index:number, debug:any): free

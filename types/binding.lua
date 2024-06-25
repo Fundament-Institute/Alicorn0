@@ -6,14 +6,20 @@ binding = {}
 function binding:is_let() end
 ---@return string, inferrable
 function binding:unwrap_let() end
+---@return boolean, string, inferrable
+function binding:as_let() end
 ---@return boolean
 function binding:is_tuple_elim() end
 ---@return any, inferrable
 function binding:unwrap_tuple_elim() end
+---@return boolean, any, inferrable
+function binding:as_tuple_elim() end
 ---@return boolean
 function binding:is_annotated_lambda() end
 ---@return string, inferrable, any, visibility
 function binding:unwrap_annotated_lambda() end
+---@return boolean, string, inferrable, any, visibility
+function binding:as_annotated_lambda() end
 ---@class (exact) bindingType:Type
 ---@field let fun(name:string, expr:inferrable): binding
 ---@field tuple_elim fun(names:any, subject:inferrable): binding
