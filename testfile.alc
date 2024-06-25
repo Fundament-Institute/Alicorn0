@@ -569,10 +569,13 @@ let tuple-def-empty = lambda ((U : universe))
 		:
 		wrapped(T)
 	implicit-unwrap(empty)
+let jank-it-up = lambda (U : universe, defn : tuple-def-type(U))
+	forall rest : tuple-type(U, defn) -> next : U
+	#forall rest : tuple-type-implicit(defn) -> next : U
 let tuple-def-elem = lambda (
 		U    : universe,
 		defn : tuple-def-type(U),
-		elem : (forall rest : tuple-type(U, defn) -> next : U))
+		elem : jank-it-up(U, defn))
 	let inner = intrinsic
 		""""
 			local value_array = terms_gen.declare_array(terms.value)
