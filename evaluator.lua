@@ -539,6 +539,9 @@ local function check(
 		local inferred_type, inferred_usages, typed_term = infer(inferrable_term, typechecking_context)
 		-- TODO: unify!!!!
 		if inferred_type ~= goal_type then
+			-- FIXME: needs context to avoid bugs where inferred and goal are the same neutral structurally
+			-- but come from different context thus are different
+			-- but erroneously compare equal
 			local ok, err = typechecker_state:flow(inferred_type, goal_type)
 			if not ok then
 				print "attempting to check if terms fit for checkable_term.inferrable"
