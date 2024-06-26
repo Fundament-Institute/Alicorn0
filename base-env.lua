@@ -94,7 +94,6 @@ local function let_bind(syntax, env)
 		env
 end
 
----comment
 ---@param _ any
 ---@param name any
 ---@param exprenv { val:value, env:Environment }

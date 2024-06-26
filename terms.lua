@@ -802,7 +802,6 @@ end
 -- differences:
 -- - enum_type existing and checking
 -- - lambda is different
----comment
 ---@param definition inferrable
 ---@param context PrettyPrintingContext
 ---@return table
@@ -1084,7 +1083,6 @@ function inferrable_term_override_pretty:application(pp, context)
 	context = ensure_context(context)
 
 	-- handle nested applications
-	---comment
 	---@param f inferrable
 	---@param arg checkable
 	local function application_inner(f, arg)
@@ -1523,7 +1521,6 @@ local function typed_let_or_tuple_elim(pp, term, context)
 end
 
 -- the only difference compared to inferrable_destructure_helper is length
----comment
 ---@param term typed
 ---@param context PrettyPrintingContext
 ---@return boolean
@@ -1561,7 +1558,6 @@ local function typed_destructure_helper(term, context)
 end
 
 --- mostly the same as inferrable_tuple_type_flatten
----comment
 ---@param definition typed
 ---@param context PrettyPrintingContext
 ---@return table

@@ -7,7 +7,6 @@ local format = require "./test-format-adapter"
 local Env = {}
 local env_mt
 
----comment
 ---@param name any
 ---@return any
 function Env:get(name)

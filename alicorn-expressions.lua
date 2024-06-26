@@ -598,7 +598,6 @@ local function collect_tuple_nil_handler(args)
 	return true, false, nil, nil, env
 end
 
----comment
 ---@param args any
 ---@return boolean
 ---@return string
@@ -829,7 +828,6 @@ local block = metalanguage.reducer(function(syntax, args)
 	return true, lastval, env
 end, "block")
 
----comment
 ---@param self any
 ---@param operands ConstructedSyntax
 ---@param environment Environment
@@ -907,7 +905,7 @@ local function eval_block(syntax, environment)
 	)
 end
 
----comment Convenience wrapper inferred_expression(handler, env) -> expression(handler, expression_args(expression_goal.infer, env))
+---Convenience wrapper inferred_expression(handler, env) -> expression(handler, expression_args(expression_goal.infer, env))
 ---@generic T
 ---@param handler fun(u: T, ...):...
 ---@param env Environment
