@@ -28,6 +28,7 @@ function $typename:is_$variant() end]],
 	unwrap_method = [[---@return $(, )parts
 function $typename:unwrap_$variant() end]],
 	enum_definition = [[---@class (exact) $typename
+---@field kind string
 $typename = {}
 $(
 )methods
