@@ -54,7 +54,7 @@ local environment = {}
 
 ---@param name string
 ---@return boolean
----@return binding|string
+---@return inferrable|string
 function environment:get(name)
 	local present, binding = self.in_scope:get(name)
 	if not present then

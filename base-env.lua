@@ -296,6 +296,7 @@ local ascribed_name_with_tail = metalang.reducer(
 		if not ok then
 			error "#prev should always be bound, was just added"
 		end
+		---@cast prev_binding -string
 		env = env:bind_local(terms.binding.tuple_elim(names, prev_binding))
 		local ok, name, val, env, tail =
 			syntax:match({ pure_ascribed_name_with_tail(metalang.accept_handler, env) }, metalang.failure_handler, nil)

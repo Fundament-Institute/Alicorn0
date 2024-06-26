@@ -229,6 +229,7 @@ local function expression_pairhandler(args, a, b)
 	--   pass it into the operative's arguments
 
 	-- combiner was an evaluated typed value, now it isn't
+	---@cast combiner inferrable
 	local type_of_term, usage_count, term = infer(combiner, env.typechecking_context)
 	if type_of_term:is_operative_type() then
 		local handler, userdata_type = type_of_term:unwrap_operative_type()
@@ -357,6 +358,7 @@ local function expression_symbolhandler(args, name)
 			---@cast val string
 			return ok, val, env
 		end
+		---@cast val -string
 		if goal:is_check() then
 			return true, checkable_term.inferrable(val), env
 		end
@@ -367,6 +369,7 @@ local function expression_symbolhandler(args, name)
 			---@cast part string
 			return false, part, env
 		end
+		---@cast part -string
 		while front do
 			name = rest
 			front, rest = split_dot_accessors(name)
@@ -871,7 +874,7 @@ local function build_prim_type_tuple(elems)
 	return terms.value.prim_tuple_type(result)
 end
 
----@param fn fun(primitive_value:any): value
+---@param fn function
 ---@param params value[]
 ---@param results value[]
 ---@return inferrable
