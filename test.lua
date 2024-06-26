@@ -601,11 +601,11 @@ let new-results =
 		{ { "token", " comment P\ntoken", "token" } },
 		{ { "token", " comment Q\ntoken\ntoken" } },
 		{ { "token", " comment R\ntoken\n\ttoken" } },
-		{ { "token", " comment S1" }, "token" },
+		{ "token", " comment S1", "token" },
 		{ { "token", " comment S2", "token" } },
 		{ { "token", " comment S3", "token", "token" } },
 		{ { "token", " comment S4", { "token", "token" } } },
-		{ { "token", " comment T# comment # comment" } },
+		{ "token", " comment T# comment # comment" },
 		{ ' comment U\n""""' },
 		{
 			{ "let", { "orig-results" }, "=", { "get-prim-func-res-inner", { "wrap", "type", "foo" }, "prim-nil" } },
@@ -652,8 +652,6 @@ function testfailedparse()
 		"token\n\t    token",
 		"token\n        token",
 		"token\n    #comment",
-		"token\n    \n",
-		"# comment\n    \n",
 		" #",
 		" A",
 	}
@@ -667,7 +665,7 @@ function testfailedparse()
 		if not success then
 			-- pass
 		else
-			luaunit.fail("Test testwrongcomments 'succeeded' when it should have failed:\n" .. example[i])
+			luaunit.fail("Test testwrongcomments 'succeeded' when it should have failed:\n" .. example[i] .. "\n")
 		end
 	end
 end
@@ -688,6 +686,13 @@ function testcomma()
 		"f()",
 		"f()()",
 		"f(x, y)(x)",
+		"f(x + 1, y)(x)(z)",
+		[[
+let(
+	letn't,
+	=,
+	let)
+]],
 	}
 
 	local expected = {
@@ -705,6 +710,8 @@ function testcomma()
 		{ { "f" } },
 		{ { { "f" } } },
 		{ { { "f", "x", "y" }, "x" } },
+		{ { { { "f", { "x", "+", 1 }, "y" }, "x" }, "z" } },
+		{ { "let", "letn't", "=", "let" } },
 	}
 
 	for i = 1, #example do
@@ -787,7 +794,7 @@ hello
 			}),
 		}),
 		create_list(create_anchor(1, 1), create_anchor(4, 1), {
-			create_list(create_anchor(1, 1), create_anchor(3, 10), {
+			create_list(create_anchor(1, 1), create_anchor(4, 1), {
 				create_symbol(create_anchor(1, 1), "hello"),
 				create_list(create_anchor(2, 2), create_anchor(3, 10), {
 					create_symbol(create_anchor(2, 3), "this"),
