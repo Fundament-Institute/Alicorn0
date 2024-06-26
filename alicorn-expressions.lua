@@ -343,7 +343,7 @@ end
 ---@param args ExpressionArgs
 ---@param name string
 ---@return boolean
----@return inferrable | checkable
+---@return inferrable | checkable | string
 ---@return Environment
 local function expression_symbolhandler(args, name)
 	local goal, env = args:unwrap()
@@ -354,6 +354,7 @@ local function expression_symbolhandler(args, name)
 	if not front then
 		local ok, val = env:get(name)
 		if not ok then
+			---@cast val string
 			return ok, val, env
 		end
 		if goal:is_check() then
@@ -363,6 +364,7 @@ local function expression_symbolhandler(args, name)
 	else
 		local ok, part = env:get(front)
 		if not ok then
+			---@cast part string
 			return false, part, env
 		end
 		while front do
