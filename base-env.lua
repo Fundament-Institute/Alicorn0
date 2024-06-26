@@ -13,7 +13,7 @@ local p = require "pretty-print".prettyPrint
 --- lua_operative is dependently typed and should produce inferrable vs checkable depending on the goal, and an error as the second return if it failed
 --- | unknown in the second return insufficiently constrains the non-error cases to be inferrable or checkable terms
 --- this can be fixed in the future if we swap to returning a Result type that can express the success/error constraint separately
----@alias lua_operative fun(syntax : any, env : Environment, goal : expression_goal) : boolean, inferrable | checkable | unknown, Environment?
+---@alias lua_operative fun(syntax : ConstructedSyntax, env : Environment, goal : expression_goal) : boolean, inferrable | checkable | unknown, Environment?
 
 local function do_block_pair_handler(env, a, b)
 	local ok, val, newenv = a:match({
@@ -80,7 +80,7 @@ local function let_bind(syntax, env)
 		--print("binding destructuring with let")
 		--p(name)
 		local tupletype = gen.declare_array(gen.builtin_string)
-		env = env:bind_local(terms.binding.tuple_elim(tupletype(unpack(name)), bind.val))
+		env = env:bind_local(terms.binding.tuple_elim(tupletype(table.unpack(name)), bind.val))
 	else
 		env = env:bind_local(terms.binding.let(name, bind.val))
 	end
@@ -94,10 +94,19 @@ local function let_bind(syntax, env)
 		env
 end
 
+---comment
+---@param _ any
+---@param name any
+---@param exprenv { val:value, env:Environment }
+---@return boolean
+---@return { name:string, expr:value }
+---@return Environment
 local function record_threaded_element_acceptor(_, name, exprenv)
 	return true, { name = name, expr = exprenv.val }, exprenv.env
 end
 
+---@param env Environment
+---@return unknown
 local function record_threaded_element(env)
 	return metalang.listmatch(
 		record_threaded_element_acceptor,
@@ -107,6 +116,7 @@ local function record_threaded_element(env)
 	)
 end
 
+---@type lua_operative
 local function record_build(syntax, env)
 	local ok, defs, env = syntax:match({
 		metalang.list_many_threaded(metalang.accept_handler, record_threaded_element, env),
@@ -187,6 +197,7 @@ end
 --
 --end)
 
+---@type lua_operative
 local function basic_fn(syntax, env)
 	local ok, args, body = syntax:match({
 		metalang.ispair(metalang.accept_handler),
@@ -212,6 +223,7 @@ local function basic_fn(syntax, env)
 	return true, { type = basic_fn_type, val = defn }, env
 end
 
+---@type lua_operative
 local function tuple_type_impl(syntax, env)
 	local ok, typeargs, env = syntax:match({
 		evaluator.collect_tuple(metalang.accept_handler, env),
@@ -226,6 +238,8 @@ local function tuple_type_impl(syntax, env)
 	end
 	return true, { type = types.type, val = types.tuple(typeargs.val) }, env
 end
+
+---@type lua_operative
 local function tuple_of_impl(syntax, env)
 	local ok, components, env = syntax:match({
 		evaluator.collect_tuple(metalang.accept_handler, env),
@@ -236,52 +250,67 @@ local function tuple_of_impl(syntax, env)
 	return true, components, env
 end
 
-local pure_ascribed_name_with_tail = metalang.reducer(function(syntax, env)
-	local ok, name, type_env, tail = syntax:match({
-		metalang.listtail(
-			metalang.accept_handler,
-			metalang.issymbol(metalang.accept_handler),
-			metalang.symbol_exact(metalang.accept_handler, ":"),
-			exprs.inferred_expression(utils.accept_with_env, env)
-		),
-	}, metalang.failure_handler, nil)
-	if not ok then
-		return ok, name
-	end
-	return true, name, type_env.val, type_env.env, tail
-end, "pure_ascribed_name_with_tail")
+local pure_ascribed_name_with_tail = metalang.reducer(
+	---@type lua_operative
+	function(syntax, env)
+		local ok, name, type_env, tail = syntax:match({
+			metalang.listtail(
+				metalang.accept_handler,
+				metalang.issymbol(metalang.accept_handler),
+				metalang.symbol_exact(metalang.accept_handler, ":"),
+				exprs.inferred_expression(utils.accept_with_env, env)
+			),
+		}, metalang.failure_handler, nil)
+		if not ok then
+			return ok, name
+		end
+		return true, name, type_env.val, type_env.env, tail
+	end,
+	"pure_ascribed_name_with_tail"
+)
 
-local ascribed_name_with_tail = metalang.reducer(function(syntax, env, prev, names)
-	-- print("ascribed_name trying")
-	-- p(syntax)
-	-- print(prev:pretty_print())
-	-- print("is env an environment? (start of ascribed name)")
-	-- print(env.get)
-	-- print(env.enter_block)
-	---@cast env Environment
-	local shadowed, env = env:enter_block()
-	local anchor = syntax.anchor
-	if not anchor then
-		anchor = "bug in ascribed_name_with_tail"
-	end
-	env = env:bind_local(terms.binding.annotated_lambda("#prev", prev, anchor, terms.visibility.explicit))
-	local ok, prev_binding = env:get("#prev")
-	if not ok then
-		error "#prev should always be bound, was just added"
-	end
-	env = env:bind_local(terms.binding.tuple_elim(names, prev_binding))
-	local ok, name, val, env, tail =
-		syntax:match({ pure_ascribed_name_with_tail(metalang.accept_handler, env) }, metalang.failure_handler, nil)
-	if not ok then
-		return ok, name
-	end
-	---@type Environment
-	local env, val = env:exit_block(val, shadowed)
-	-- print("is env an environment? (end of ascribed name)")
-	-- print(env.get)
-	-- print(env.enter_block)
-	return true, name, val, env, tail
-end, "ascribed_name_with_tail")
+local ascribed_name_with_tail = metalang.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@param prev inferrable
+	---@param names string[]
+	---@return boolean
+	---@return string
+	---@return unknown
+	---@return Environment?
+	---@return unknown
+	function(syntax, env, prev, names)
+		-- print("ascribed_name trying")
+		-- p(syntax)
+		-- print(prev:pretty_print())
+		-- print("is env an environment? (start of ascribed name)")
+		-- print(env.get)
+		-- print(env.enter_block)
+		local shadowed, env = env:enter_block()
+		local anchor = syntax.anchor
+		if not anchor then
+			anchor = "bug in ascribed_name_with_tail"
+		end
+		env = env:bind_local(terms.binding.annotated_lambda("#prev", prev, anchor, terms.visibility.explicit))
+		local ok, prev_binding = env:get("#prev")
+		if not ok then
+			error "#prev should always be bound, was just added"
+		end
+		env = env:bind_local(terms.binding.tuple_elim(names, prev_binding))
+		local ok, name, val, env, tail =
+			syntax:match({ pure_ascribed_name_with_tail(metalang.accept_handler, env) }, metalang.failure_handler, nil)
+		if not ok then
+			return ok, name
+		end
+		---@cast env Environment
+		local env, val = env:exit_block(val, shadowed)
+		-- print("is env an environment? (end of ascribed name)")
+		-- print(env.get)
+		-- print(env.enter_block)
+		return true, name, val, env, tail
+	end,
+	"ascribed_name_with_tail"
+)
 
 local ascribed_name = metalang.reducer(function(syntax, env, prev, names)
 	local ok, name, val, env = syntax:match({
@@ -471,73 +500,77 @@ local function prim_func_type_empty_handler(env)
 	return true, false, nil, nil, env
 end
 
-local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
-	local pft_anchor = syntax.anchor
+local prim_func_type_impl_reducer = metalang.reducer(
+	---@type lua_operative
+	function(syntax, env)
+		local pft_anchor = syntax.anchor
 
-	if not env or not env.enter_block then
-		error "env isn't an environment in prim_func_type_impl_reducer"
-	end
+		if not env or not env.enter_block then
+			error "env isn't an environment in prim_func_type_impl_reducer"
+		end
 
-	local ok, thread, single, args, names
+		local ok, thread, single, args, names
 
-	ok, thread, syntax = syntax:match({
-		prim_ascribed_segment(metalang.accept_handler, env, metalang.symbol_exact(metalang.accept_handler, "->")),
-	}, metalang.failure_handler, nil)
+		ok, thread, syntax = syntax:match({
+			prim_ascribed_segment(metalang.accept_handler, env, metalang.symbol_exact(metalang.accept_handler, "->")),
+		}, metalang.failure_handler, nil)
 
-	if not ok then
-		return false, thread
-	end
+		if not ok then
+			return false, thread
+		end
 
-	single = thread.single
-	args = thread.args
-	names = thread.names
-	env = thread.env
+		single = thread.single
+		args = thread.args
+		names = thread.names
+		env = thread.env
 
-	--print("moving on to return type")
+		--print("moving on to return type")
 
-	local shadowed, env = env:enter_block()
+		local shadowed, env = env:enter_block()
 
-	-- syntax.anchor can be nil so we fall back to the anchor for the start of this prim func type if needed
-	-- TODO: use correct name in lambda parameter instead of adding an extra let
-	env = env:bind_local(
-		terms.binding.annotated_lambda(
-			"#prim-func-arguments",
-			args,
-			syntax.anchor or pft_anchor,
-			terms.visibility.explicit
+		-- syntax.anchor can be nil so we fall back to the anchor for the start of this prim func type if needed
+		-- TODO: use correct name in lambda parameter instead of adding an extra let
+		env = env:bind_local(
+			terms.binding.annotated_lambda(
+				"#prim-func-arguments",
+				args,
+				syntax.anchor or pft_anchor,
+				terms.visibility.explicit
+			)
 		)
-	)
-	local ok, arg = env:get("#prim-func-arguments")
-	if single then
-		env = env:bind_local(terms.binding.let(names, arg))
-	else
-		env = env:bind_local(terms.binding.tuple_elim(names, arg))
-	end
+		local ok, arg = env:get("#prim-func-arguments")
+		if single then
+			env = env:bind_local(terms.binding.let(names, arg))
+		else
+			env = env:bind_local(terms.binding.tuple_elim(names, arg))
+		end
 
-	local results
+		local results
 
-	ok, thread, syntax = syntax:match({
-		prim_ascribed_segment(metalang.accept_handler, env, metalang.isnil(metalang.accept_handler)),
-	}, metalang.failure_handler, nil)
+		ok, thread, syntax = syntax:match({
+			prim_ascribed_segment(metalang.accept_handler, env, metalang.isnil(metalang.accept_handler)),
+		}, metalang.failure_handler, nil)
 
-	if not ok then
-		return false, thread
-	end
+		if not ok then
+			return false, thread
+		end
 
-	single = thread.single
-	results = thread.args
-	names = thread.names
-	env = thread.env
+		single = thread.single
+		results = thread.args
+		names = thread.names
+		env = thread.env
 
-	local env, fn_res_term = env:exit_block(results, shadowed)
-	local fn_type_term = terms.inferrable_term.prim_function_type(args, fn_res_term)
+		local env, fn_res_term = env:exit_block(results, shadowed)
+		local fn_type_term = terms.inferrable_term.prim_function_type(args, fn_res_term)
 
-	--print("reached end of function type construction")
-	if not env.enter_block then
-		error "env isn't an environment at end in prim_func_type_impl_reducer"
-	end
-	return true, fn_type_term, env
-end, "prim_func_type_impl")
+		--print("reached end of function type construction")
+		if not env.enter_block then
+			error "env isn't an environment at end in prim_func_type_impl_reducer"
+		end
+		return true, fn_type_term, env
+	end,
+	"prim_func_type_impl"
+)
 
 -- TODO: abstract so can reuse for func type and prim func type
 ---@type lua_operative
@@ -558,95 +591,99 @@ local function prim_func_type_impl(syntax, env)
 	return ok, fn_type_term, env
 end
 
-local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
-	local pft_anchor = syntax.anchor
+local forall_type_impl_reducer = metalang.reducer(
+	---@type lua_operative
+	function(syntax, env)
+		local pft_anchor = syntax.anchor
 
-	if not env or not env.enter_block then
-		error "env isn't an environment in forall_type_impl_reducer"
-	end
+		if not env or not env.enter_block then
+			error "env isn't an environment in forall_type_impl_reducer"
+		end
 
-	local ok, thread, single, args, names
+		local ok, thread, single, args, names
 
-	ok, thread, syntax = syntax:match(
-		{ ascribed_segment(metalang.accept_handler, env, metalang.symbol_exact(metalang.accept_handler, "->")) },
-		metalang.failure_handler,
-		nil
-	)
+		ok, thread, syntax = syntax:match(
+			{ ascribed_segment(metalang.accept_handler, env, metalang.symbol_exact(metalang.accept_handler, "->")) },
+			metalang.failure_handler,
+			nil
+		)
 
-	if not ok then
-		return false, thread
-	end
+		if not ok then
+			return false, thread
+		end
 
-	single = thread.single
-	args = thread.args
-	names = thread.names
-	env = thread.env
+		single = thread.single
+		args = thread.args
+		names = thread.names
+		env = thread.env
 
-	--print("moving on to return type")
+		--print("moving on to return type")
 
-	local shadowed, env = env:enter_block()
+		local shadowed, env = env:enter_block()
 
-	-- syntax.anchor can be nil so we fall back to the anchor for the start of this forall type if needed
-	-- TODO: use correct name in lambda parameter instead of adding an extra let
-	env = env:bind_local(
-		terms.binding.annotated_lambda(
-			"#forall-arguments",
+		-- syntax.anchor can be nil so we fall back to the anchor for the start of this forall type if needed
+		-- TODO: use correct name in lambda parameter instead of adding an extra let
+		env = env:bind_local(
+			terms.binding.annotated_lambda(
+				"#forall-arguments",
+				args,
+				syntax.anchor or pft_anchor,
+				terms.visibility.explicit
+			)
+		)
+		local ok, arg = env:get("#forall-arguments")
+		if single then
+			env = env:bind_local(terms.binding.let(names, arg))
+		else
+			env = env:bind_local(terms.binding.tuple_elim(names, arg))
+		end
+
+		local results
+
+		ok, thread, syntax = syntax:match(
+			{ ascribed_segment(metalang.accept_handler, env, metalang.isnil(metalang.accept_handler)) },
+			metalang.failure_handler,
+			nil
+		)
+
+		if not ok then
+			return false, thread
+		end
+
+		single = thread.single
+		results = thread.args
+		names = thread.names
+		env = thread.env
+
+		local env, fn_res_term = env:exit_block(results, shadowed)
+		local usage_array = gen.declare_array(gen.builtin_number)
+		local fn_type_term = terms.inferrable_term.pi(
 			args,
-			syntax.anchor or pft_anchor,
-			terms.visibility.explicit
-		)
-	)
-	local ok, arg = env:get("#forall-arguments")
-	if single then
-		env = env:bind_local(terms.binding.let(names, arg))
-	else
-		env = env:bind_local(terms.binding.tuple_elim(names, arg))
-	end
-
-	local results
-
-	ok, thread, syntax = syntax:match(
-		{ ascribed_segment(metalang.accept_handler, env, metalang.isnil(metalang.accept_handler)) },
-		metalang.failure_handler,
-		nil
-	)
-
-	if not ok then
-		return false, thread
-	end
-
-	single = thread.single
-	results = thread.args
-	names = thread.names
-	env = thread.env
-
-	local env, fn_res_term = env:exit_block(results, shadowed)
-	local usage_array = gen.declare_array(gen.builtin_number)
-	local fn_type_term = terms.inferrable_term.pi(
-		args,
-		terms.checkable_term.inferrable(
-			terms.inferrable_term.typed(
-				terms.value.param_info_type,
-				usage_array(),
-				terms.typed_term.literal(terms.value.param_info(terms.value.visibility(terms.visibility.explicit)))
-			)
-		),
-		fn_res_term,
-		terms.checkable_term.inferrable(
-			terms.inferrable_term.typed(
-				terms.value.result_info_type,
-				usage_array(),
-				terms.typed_term.literal(terms.value.result_info(terms.result_info(terms.purity.pure)))
+			terms.checkable_term.inferrable(
+				terms.inferrable_term.typed(
+					terms.value.param_info_type,
+					usage_array(),
+					terms.typed_term.literal(terms.value.param_info(terms.value.visibility(terms.visibility.explicit)))
+				)
+			),
+			fn_res_term,
+			terms.checkable_term.inferrable(
+				terms.inferrable_term.typed(
+					terms.value.result_info_type,
+					usage_array(),
+					terms.typed_term.literal(terms.value.result_info(terms.result_info(terms.purity.pure)))
+				)
 			)
 		)
-	)
 
-	--print("reached end of function type construction")
-	if not env.enter_block then
-		error "env isn't an environment at end in forall_type_impl_reducer"
-	end
-	return true, fn_type_term, env
-end, "forall_type_impl")
+		--print("reached end of function type construction")
+		if not env.enter_block then
+			error "env isn't an environment at end in forall_type_impl_reducer"
+		end
+		return true, fn_type_term, env
+	end,
+	"forall_type_impl"
+)
 
 -- TODO: abstract so can reuse for func type and prim func type
 ---@type lua_operative

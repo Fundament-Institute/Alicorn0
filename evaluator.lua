@@ -33,9 +33,15 @@ local param_info_explicit = value.param_info(value.visibility(visibility.explici
 local param_info_implicit = value.param_info(value.visibility(visibility.implicit))
 local result_info_pure = value.result_info(result_info(purity.pure))
 local result_info_effectful = value.result_info(result_info(purity.effectful))
+
+---@param ... any
+---@return value
 local function tup_val(...)
 	return value.tuple_value(value_array(...))
 end
+
+---@param ... any
+---@return value
 local function prim_tup_val(...)
 	return value.prim_tuple_value(primitive_array(...))
 end
@@ -47,6 +53,8 @@ local OMEGA = 10
 local typechecker_state
 local evaluate, infer, check, apply_value
 
+---@param onto Array
+---@param with Array
 local function add_arrays(onto, with)
 	local olen = #onto
 	for i, n in ipairs(with) do
@@ -67,6 +75,8 @@ local function const_combinator(v)
 	return value.closure("#CONST_PARAM", typed_term.bound_variable(1), runtime_context():append(v))
 end
 
+---@param t any
+---@return integer
 local function get_level(t)
 	-- TODO: this
 	-- TODO: typecheck
@@ -94,10 +104,10 @@ local function substitute_inner(val, mappings, context_len)
 		return typed_term.literal(val)
 	elseif val:is_pi() then
 		local param_type, param_info, result_type, result_info = val:unwrap_pi()
-		param_type = substitute_inner(param_type, mappings, context_len)
-		param_info = substitute_inner(param_info, mappings, context_len)
-		result_type = substitute_inner(result_type, mappings, context_len)
-		result_info = substitute_inner(result_info, mappings, context_len)
+		local param_type = substitute_inner(param_type, mappings, context_len)
+		local param_info = substitute_inner(param_info, mappings, context_len)
+		local result_type = substitute_inner(result_type, mappings, context_len)
+		local result_info = substitute_inner(result_info, mappings, context_len)
 		return typed_term.pi(param_type, param_info, result_type, result_info)
 	elseif val:is_closure() then
 		local param_name, code, capture = val:unwrap_closure()
@@ -110,19 +120,19 @@ local function substitute_inner(val, mappings, context_len)
 		-- Here we need to add the new arg placeholder to a map of things to substitute
 		-- otherwise it would be left as a free.unique in the result
 		mappings[unique] = typed_term.bound_variable(context_len + 1)
-		val = substitute_inner(val, mappings, context_len + 1)
+		local val_typed = substitute_inner(val, mappings, context_len + 1)
 
 		-- FIXME: this results in more captures every time we substitute a closure ->
 		--   can cause non-obvious memory leaks
 		--   since we don't yet remove unused captures from closure value
-		return typed_term.lambda(param_name, val)
+		return typed_term.lambda(param_name, val_typed)
 	elseif val:is_name_type() then
 		return typed_term.literal(val)
 	elseif val:is_name() then
 		return typed_term.literal(val)
 	elseif val:is_operative_value() then
 		local userdata = val:unwrap_operative_value()
-		userdata = substitute_inner(userdata, mappings, context_len)
+		local userdata = substitute_inner(userdata, mappings, context_len)
 		return typed_term.operative_cons(userdata)
 	elseif val:is_operative_type() then
 		local handler, userdata_type = val:unwrap_operative_type()
@@ -138,13 +148,13 @@ local function substitute_inner(val, mappings, context_len)
 		return typed_term.tuple_cons(res)
 	elseif val:is_tuple_type() then
 		local decls = val:unwrap_tuple_type()
-		decls = substitute_inner(decls, mappings, context_len)
+		local decls = substitute_inner(decls, mappings, context_len)
 		return typed_term.tuple_type(decls)
 	elseif val:is_tuple_defn_type() then
 		return typed_term.literal(val)
 	elseif val:is_enum_value() then
 		local constructor, arg = val:unwrap_enum_value()
-		arg = substitute_inner(arg, mappings, context_len)
+		local arg = substitute_inner(arg, mappings, context_len)
 		return typed_term.enum_cons(constructor, arg)
 	elseif val:is_enum_type() then
 		local decls = val:unwrap_enum_type()
@@ -250,9 +260,9 @@ local function substitute_inner(val, mappings, context_len)
 
 		if nval:is_prim_if_stuck() then
 			local subject, consequent, alternate = nval:unwrap_prim_if_stuck()
-			subject = substitute_inner(value.neutral(subject), mappings, context_len)
-			consequent = substitute_inner(consequent, mappings, context_len)
-			alternate = substitute_inner(alternate, mappings, context_len)
+			local subject = substitute_inner(value.neutral(subject), mappings, context_len)
+			local consequent = substitute_inner(consequent, mappings, context_len)
+			local alternate = substitute_inner(alternate, mappings, context_len)
 			return typed_term.prim_if(subject, consequent, alternate)
 		end
 
@@ -271,12 +281,12 @@ local function substitute_inner(val, mappings, context_len)
 		return typed_term.literal(val)
 	elseif val:is_prim_function_type() then
 		local param_type, result_type = val:unwrap_prim_function_type()
-		param_type = substitute_inner(param_type, mappings, context_len)
-		result_type = substitute_inner(result_type, mappings, context_len)
+		local param_type = substitute_inner(param_type, mappings, context_len)
+		local result_type = substitute_inner(result_type, mappings, context_len)
 		return typed_term.prim_function_type(param_type, result_type)
 	elseif val:is_prim_wrapped_type() then
 		local type = val:unwrap_prim_wrapped_type()
-		type = substitute_inner(type, mappings, context_len)
+		local type = substitute_inner(type, mappings, context_len)
 		return typed_term.prim_wrapped_type(type)
 	elseif val:is_prim_user_defined_type() then
 		local id, family_args = val:unwrap_prim_user_defined_type()
@@ -291,7 +301,7 @@ local function substitute_inner(val, mappings, context_len)
 		return typed_term.literal(val)
 	elseif val:is_prim_tuple_type() then
 		local decls = val:unwrap_prim_tuple_type()
-		decls = substitute_inner(decls, mappings, context_len)
+		local decls = substitute_inner(decls, mappings, context_len)
 		return typed_term.prim_tuple_type(decls)
 	else
 		error("Unhandled value kind in substitute_inner: " .. val.kind)
@@ -516,7 +526,7 @@ value:derive(derivers.eq)
 ---@param checkable_term checkable
 ---@param typechecking_context TypecheckingContext
 ---@param goal_type value
----@return unknown, typed
+---@return Array, typed
 local function check(
 	checkable_term, -- constructed from checkable_term
 	typechecking_context, -- todo
@@ -834,7 +844,7 @@ end
 
 ---@param inferrable_term inferrable
 ---@param typechecking_context TypecheckingContext
----@return value, unknown, typed
+---@return value, Array, typed
 function infer(
 	inferrable_term, -- constructed from inferrable
 	typechecking_context -- todo

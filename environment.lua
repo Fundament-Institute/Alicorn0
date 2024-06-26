@@ -11,6 +11,10 @@ local infer = eval.infer
 
 local environment_mt
 
+---Takes a table resembling an old environment (can be missing fields, it doesn't matter) and turns it into a new environment
+---@param old_env table
+---@param opts table?
+---@return Environment
 local function update_env(old_env, opts)
 	local new_env = {}
 	if opts then
@@ -38,16 +42,19 @@ local new_env = update_env
 
 ---@class Environment
 ---@field typechecking_context TypecheckingContext
----@field locals unknown
----@field in_scope unknown
----@field nonlocals unknown
----@field bindings unknown
----@field perms unknown
+---@field locals PrefixTree
+---@field nonlocals PrefixTree
+---@field in_scope PrefixTree
+---@field bindings FibonacciBuffer
+---@field perms table
 local environment = {}
 
 ---@class ShadowEnvironment
 ---@field shadowed Environment
 
+---@param name string
+---@return boolean
+---@return binding|string
 function environment:get(name)
 	local present, binding = self.in_scope:get(name)
 	if not present then
@@ -62,6 +69,9 @@ function environment:get(name)
 	return true, binding
 end
 
+---@param name string
+---@param type value
+---@param value value
 local function log_binding(name, type, value)
 	print("New let binding")
 	print("name:", name)
@@ -71,6 +81,8 @@ local function log_binding(name, type, value)
 	print(value)
 end
 
+---@param binding binding
+---@return Environment
 function environment:bind_local(binding)
 	--print("bind_local: (binding term follows)")
 	--print(binding:pretty_print(self.typechecking_context))
@@ -173,10 +185,17 @@ function environment:bind_local(binding)
 	error("unreachable!?")
 end
 
+---@class Module
+---@field bindings PrefixTree
+
+---@return Environment
+---@return Module
 function environment:gather_module()
 	return self, setmetatable({ bindings = self.locals }, module_mt)
 end
 
+---@param module Module
+---@return Environment
 function environment:open_module(module)
 	return new_env {
 		locals = self.locals:extend(module.bindings),
@@ -184,6 +203,9 @@ function environment:open_module(module)
 		perms = self.perms,
 	}
 end
+
+---@param module Module
+---@return Environment
 function environment:use_module(module)
 	return new_env {
 		locals = self.locals,
@@ -192,6 +214,8 @@ function environment:use_module(module)
 	}
 end
 
+---@param name string
+---@return Environment
 function environment:unlet_local(name)
 	return new_env {
 		locals = self.locals:remove(name),
@@ -216,10 +240,10 @@ function environment:enter_block()
 end
 
 ---exit a block, resolving the bindings in that block and restoring the shadowed locals
----@param term unknown
+---@param term inferrable
 ---@param shadowed ShadowEnvironment
 ---@return Environment
----@return unknown
+---@return inferrable
 function environment:exit_block(term, shadowed)
 	-- -> env, term
 	local outer = shadowed.shadowed or error "shadowed.shadowed missing"
@@ -260,6 +284,8 @@ end
 
 environment_mt = { __index = environment }
 
+---@param env Environment
+---@return string
 local function dump_env(env)
 	return "Environment" .. "\nlocals: " .. trie.dump_map(env.locals) .. "\nnonlocals: " .. trie.dump_map(env.nonlocals)
 end

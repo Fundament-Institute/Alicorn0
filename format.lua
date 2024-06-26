@@ -53,7 +53,7 @@ end
 ---@field val number | table | nil
 
 ---@alias LiteralKind "list" | "symbol" | "string" | "literal"
----@alias LiteralType
+---@alias LiteralType "u8" | "u16" | "u32" | "u64" | "i8" | "i16" | "i32" | "i64"  | "f32" | "f64" | "bytes" | "unit"
 
 local function update_ffp(name, patt)
 	-- stage the error

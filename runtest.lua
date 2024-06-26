@@ -1,6 +1,5 @@
 local endTime = os.time() + 3
-while os.time() < endTime do
-end
+--while os.time() < endTime do end
 
 local metalanguage = require "./metalanguage"
 local evaluator = require "./evaluator"

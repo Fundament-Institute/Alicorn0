@@ -3,8 +3,8 @@
 ---@alias EnumDeriveInfo { name: string, variants: { [number]: string, [string]: { type: string, info: RecordDeriveInfo | UnitDeriveInfo } } }
 
 ---@class (exact) Deriver
----@field record fun(t: Record, info: RecordDeriveInfo)
----@field enum fun(t: Enum, info: EnumDeriveInfo)
+---@field record fun(t: Record, info: RecordDeriveInfo, override_pretty: fun(Deriver, PrettyPrint, ...))
+---@field enum fun(t: Enum, info: EnumDeriveInfo, override_pretty: fun(Deriver, PrettyPrint, ...))
 
 local derive_print = function(...) end -- can make this call derive_print(...) if you want to debug
 
@@ -135,6 +135,8 @@ local is = {
 	record = function(t, info) end,
 }
 
+---@param info RecordDeriveInfo
+---@return any
 local function record_prettyprintable_trait(info)
 	local kind = info.kind
 	local params = info.params
@@ -212,12 +214,13 @@ local pretty_print = {
 			local vdata = variants[vname]
 			local vtype = vdata.type
 			local vinfo = vdata.info
+			---@cast vinfo RecordDeriveInfo
 			local override_pretty_v = override_pretty and override_pretty[vname]
 			local variant_prettyprintable_print
 			if vtype == "record" then
 				variant_prettyprintable_print = record_prettyprintable_trait(vinfo)
 			elseif vtype == "unit" then
-				variant_prettyprintable_print = function(self, pp)
+				variant_prettyprintable_print = function(self, pp, ...)
 					pp:unit(self.kind)
 				end
 			else

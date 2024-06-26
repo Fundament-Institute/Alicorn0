@@ -273,9 +273,9 @@ binding:define_enum("binding", {
 
 ---@param pp PrettyPrint
 ---@param name string
----@param expr any
+---@param expr inferrable | typed
 ---@param context PrettyPrintingContext
----@return unknown
+---@return PrettyPrintingContext
 local function let_helper(pp, name, expr, context)
 	pp:unit(name)
 
@@ -294,9 +294,9 @@ end
 
 ---@param pp PrettyPrint
 ---@param names string[]
----@param subject any
+---@param subject inferrable | typed
 ---@param context PrettyPrintingContext
----@return unknown
+---@return PrettyPrintingContext
 local function tuple_elim_helper(pp, names, subject, context)
 	local inner_context = context
 
@@ -370,10 +370,12 @@ local function tuple_type_helper(pp, members, names)
 	end
 end
 
----@param term any
+---@generic T
+---@param term T
 ---@return boolean
----@return unknown
+---@return T?
 local function as_any_tuple_type(term)
+	---@cast term inferrable|value|typed
 	local ok, decls = term:as_tuple_type()
 	if ok then
 		return ok, decls
@@ -448,13 +450,13 @@ local prettyprinting_context_type = gen.declare_foreign(gen.metatable_equality(p
 ---@return PrettyPrintingContext
 local function ensure_context(context)
 	if prettyprinting_context_type.value_check(context) == true then
-		---@cast context -TypecheckingContext, -RuntimeContext
+		---@cast context PrettyPrintingContext
 		return context
 	elseif typechecking_context_type.value_check(context) == true then
-		---@cast context -PrettyPrintingContext, -RuntimeContext
+		---@cast context TypecheckingContext
 		return PrettyprintingContext.from_typechecking_context(context)
 	elseif runtime_context_type.value_check(context) == true then
-		---@cast context -PrettyPrintingContext, -TypecheckingContext
+		---@cast context RuntimeContext
 		return PrettyprintingContext.from_runtime_context(context)
 	else
 		print("!!!!!!!!!! MISSING PRETTYPRINTER CONTEXT !!!!!!!!!!!!!!")
@@ -800,6 +802,11 @@ end
 -- differences:
 -- - enum_type existing and checking
 -- - lambda is different
+---comment
+---@param definition inferrable
+---@param context PrettyPrintingContext
+---@return table
+---@return integer
 local function inferrable_tuple_type_flatten(definition, context)
 	local enum_type, constructor, arg = definition:unwrap_enum_cons()
 	local ok, universe = enum_type:as_tuple_defn_type()
@@ -1077,10 +1084,13 @@ function inferrable_term_override_pretty:application(pp, context)
 	context = ensure_context(context)
 
 	-- handle nested applications
+	---comment
+	---@param f inferrable
+	---@param arg checkable
 	local function application_inner(f, arg)
 		local f_is_application, f_f, f_arg = f:as_application()
 		local f_is_typed, f_type, f_usage_counts, f_typed_term = f:as_typed()
-		local f_is_bound_variable, f_index = false
+		local f_is_bound_variable, f_index = false, 0
 		if f_is_typed then
 			f_is_bound_variable, f_index = f_typed_term:as_bound_variable()
 		end
@@ -1519,7 +1529,7 @@ end
 ---@return boolean
 ---@return boolean
 ---@return string | string[]?
----@return any
+---@return typed
 ---@return PrettyPrintingContext
 local function typed_destructure_helper(term, context)
 	if term:is_let() then
@@ -1767,7 +1777,9 @@ function typed_term_override_pretty:application(pp, context)
 	local f, arg = self:unwrap_application()
 	context = ensure_context(context)
 
-	-- handle nested applications
+	--- handle nested applications
+	---@param f typed
+	---@param arg typed
 	local function application_inner(f, arg)
 		local f_is_application, f_f, f_arg = f:as_application()
 		local f_is_bound_variable, f_index = f:as_bound_variable()
@@ -2255,267 +2267,281 @@ local function value_tuple_type_flatten(definition)
 end
 
 ---@class ValueOverridePretty : value
-local value_override_pretty = {
-	-- copypaste of typed.pi
-	pi = function(self, pp)
-		local param_type, param_info, result_type, result_info = self:unwrap_pi()
-		local param_is_tuple_type, param_decls = as_any_tuple_type(param_type)
-		local ok, param_name, result_code, result_capture = result_type:as_closure()
-		if not ok then
-			error("override_pretty: value.pi: result_type must be a closure")
-		end
-		local result_context = ensure_context(result_capture)
-		result_context = result_context:append(param_name)
-		local result_is_destructure, result_is_rename, param_names, result_code, result_context =
-			typed_destructure_helper(result_code, result_context)
-		if result_is_rename then
-			---@cast param_names string
-			param_name = param_names
-			result_is_destructure = false
-		end
-		local result_is_tuple_type, result_decls = as_any_tuple_type(result_code)
+local value_override_pretty = {}
 
-		pp:_enter()
+-- copypaste of typed.pi
+---@param pp PrettyPrint
+function value_override_pretty:pi(pp)
+	local param_type, param_info, result_type, result_info = self:unwrap_pi()
+	local param_is_tuple_type, param_decls = as_any_tuple_type(param_type)
+	local ok, param_name, result_code, result_capture = result_type:as_closure()
+	if not ok then
+		error("override_pretty: value.pi: result_type must be a closure")
+	end
+	local result_context = ensure_context(result_capture)
+	result_context = result_context:append(param_name)
+	local result_is_destructure, result_is_rename, param_names, result_code, result_context =
+		typed_destructure_helper(result_code, result_context)
+	if result_is_rename then
+		---@cast param_names string
+		param_name = param_names
+		result_is_destructure = false
+	end
+	local result_is_tuple_type, result_decls = as_any_tuple_type(result_code)
 
-		pp:unit(pp:_color())
-		pp:unit("value.\u{03A0} ")
-		pp:unit(pp:_resetcolor())
+	pp:_enter()
 
-		if param_is_tuple_type and result_is_destructure then
-			---@cast param_names string[]
-			local members = value_tuple_type_flatten(param_decls, context)
+	pp:unit(pp:_color())
+	pp:unit("value.\u{03A0} ")
+	pp:unit(pp:_resetcolor())
 
-			if #members == 0 then
-				pp:unit(pp:_color())
-				pp:unit("()")
-				pp:unit(pp:_resetcolor())
-			else
-				tuple_type_helper(pp, members, param_names)
-			end
-		elseif result_is_destructure then
-			---@cast param_names string[]
-			-- tuple_elim on params but params aren't a tuple type???
-			-- probably shouldn't happen, but here's a handler
+	if param_is_tuple_type and result_is_destructure then
+		---@cast param_names string[]
+		local members = value_tuple_type_flatten(param_decls)
+
+		if #members == 0 then
 			pp:unit(pp:_color())
-			pp:unit("(")
+			pp:unit("()")
 			pp:unit(pp:_resetcolor())
+		else
+			tuple_type_helper(pp, members, param_names)
+		end
+	elseif result_is_destructure then
+		---@cast param_names string[]
+		-- tuple_elim on params but params aren't a tuple type???
+		-- probably shouldn't happen, but here's a handler
+		pp:unit(pp:_color())
+		pp:unit("(")
+		pp:unit(pp:_resetcolor())
 
-			for i, name in ipairs(param_names) do
-				if i > 1 then
-					pp:unit(" ")
-				end
-				pp:unit(name)
+		for i, name in ipairs(param_names) do
+			if i > 1 then
+				pp:unit(" ")
 			end
+			pp:unit(name)
+		end
 
+		pp:unit(pp:_color())
+		pp:unit(") : ")
+		pp:unit(pp:_resetcolor())
+
+		pp:any(param_type)
+	else
+		pp:unit(param_name)
+
+		pp:unit(pp:_color())
+		pp:unit(" : ")
+		pp:unit(pp:_resetcolor())
+
+		pp:any(param_type)
+	end
+
+	pp:unit(pp:_color())
+	pp:unit(" -> ")
+	pp:unit(pp:_resetcolor())
+
+	if result_is_tuple_type then
+		local members = typed_tuple_type_flatten(result_decls, result_context)
+
+		if #members == 0 then
 			pp:unit(pp:_color())
-			pp:unit(") : ")
+			pp:unit("()")
 			pp:unit(pp:_resetcolor())
-
-			pp:any(param_type, context)
 		else
-			pp:unit(param_name)
+			tuple_type_helper(pp, members)
+		end
+	else
+		pp:any(result_code, result_context)
+	end
 
+	pp:_exit()
+end
+
+-- the only difference compared to typed.lambda is context coming from within the closure
+---@param pp PrettyPrint
+function value_override_pretty:closure(pp)
+	local param_name, code, capture = self:unwrap_closure()
+	local context = ensure_context(capture)
+	local inner_context = context:append(param_name)
+	local is_destructure, is_rename, names, code, inner_context = typed_destructure_helper(code, inner_context)
+	if is_rename then
+		---@cast names string
+		param_name = names
+		is_destructure = false
+	end
+
+	pp:_enter()
+
+	pp:unit(pp:_color())
+	pp:unit("value.closure ")
+	pp:unit(pp:_resetcolor())
+
+	if is_destructure then
+		---@cast names string[]
+		if #names == 0 then
 			pp:unit(pp:_color())
-			pp:unit(" : ")
+			pp:unit("()")
 			pp:unit(pp:_resetcolor())
-
-			pp:any(param_type, context)
 		end
 
-		pp:unit(pp:_color())
-		pp:unit(" -> ")
-		pp:unit(pp:_resetcolor())
-
-		if result_is_tuple_type then
-			local members = typed_tuple_type_flatten(result_decls, result_context)
-
-			if #members == 0 then
-				pp:unit(pp:_color())
-				pp:unit("()")
-				pp:unit(pp:_resetcolor())
-			else
-				tuple_type_helper(pp, members)
+		for i, name in ipairs(names) do
+			if i > 1 then
+				pp:unit(" ")
 			end
-		else
-			pp:any(result_code, result_context)
+			pp:unit(name)
 		end
+	else
+		pp:unit(param_name)
+	end
 
-		pp:_exit()
-	end,
-	-- the only difference compared to typed.lambda is context coming from within the closure
-	closure = function(self, pp)
-		local param_name, code, capture = self:unwrap_closure()
-		local context = ensure_context(capture)
-		local inner_context = context:append(param_name)
-		local is_destructure, is_rename, names, code, inner_context = typed_destructure_helper(code, inner_context)
-		if is_rename then
-			param_name = names
-			is_destructure = false
-		end
+	pp:unit(pp:_color())
+	pp:unit(" ->")
+	pp:unit(pp:_resetcolor())
 
-		pp:_enter()
+	if code:is_let() or code:is_tuple_elim() then
+		pp:unit("\n")
+		pp:_indent()
+		pp:_prefix()
+		pp:any(code, inner_context)
+		pp:_dedent()
+	else
+		pp:unit(" ")
+		pp:any(code, inner_context)
+	end
 
-		pp:unit(pp:_color())
-		pp:unit("value.closure ")
-		pp:unit(pp:_resetcolor())
+	pp:_exit()
+end
 
-		if is_destructure then
-			if #names == 0 then
-				pp:unit(pp:_color())
-				pp:unit("()")
-				pp:unit(pp:_resetcolor())
-			end
+---@param pp PrettyPrint
+function value_override_pretty:tuple_type(pp)
+	local decls = self:unwrap_tuple_type()
+	local members = value_tuple_type_flatten(decls)
 
-			for i, name in ipairs(names) do
-				if i > 1 then
-					pp:unit(" ")
-				end
-				pp:unit(name)
-			end
-		else
-			pp:unit(param_name)
-		end
+	pp:_enter()
 
-		pp:unit(pp:_color())
-		pp:unit(" ->")
-		pp:unit(pp:_resetcolor())
+	pp:unit(pp:_color())
+	pp:unit("value.tuple_type[")
+	pp:unit(pp:_resetcolor())
 
-		if code:is_let() or code:is_tuple_elim() then
-			pp:unit("\n")
-			pp:_indent()
-			pp:_prefix()
-			pp:any(code, inner_context)
-			pp:_dedent()
-		else
-			pp:unit(" ")
-			pp:any(code, inner_context)
-		end
+	tuple_type_helper(pp, members)
 
-		pp:_exit()
-	end,
-	tuple_type = function(self, pp)
-		local decls = self:unwrap_tuple_type()
-		local members = value_tuple_type_flatten(decls)
+	pp:unit(pp:_color())
+	pp:unit("]")
+	pp:unit(pp:_resetcolor())
 
-		pp:_enter()
+	pp:_exit()
+end
 
-		pp:unit(pp:_color())
-		pp:unit("value.tuple_type[")
-		pp:unit(pp:_resetcolor())
+--- copypaste of typed.prim_function_type
+---@param pp PrettyPrint
+function value_override_pretty:prim_function_type(pp)
+	local param_type, result_type = self:unwrap_prim_function_type()
+	local param_is_tuple_type, param_decls = param_type:as_prim_tuple_type()
+	local ok, param_name, result_code, result_capture = result_type:as_closure()
+	if not ok then
+		--error("override_pretty: value.prim_function_type: result_type must be a closure")
+		-- allow printing cursed things that contain manually-written (broken) prim-func-types
+		pp:unit("<BROKEN prim_function_type>")
+		return
+	end
+	local result_context = ensure_context(result_capture)
+	result_context = result_context:append(param_name)
+	local result_is_destructure, result_is_rename, param_names, result_code, result_context =
+		typed_destructure_helper(result_code, result_context)
+	if result_is_rename then
+		---@cast param_names string
+		param_name = param_names
+		result_is_destructure = false
+	end
+	local result_is_tuple_type, result_decls = result_code:as_prim_tuple_type()
 
-		tuple_type_helper(pp, members)
+	pp:_enter()
 
-		pp:unit(pp:_color())
-		pp:unit("]")
-		pp:unit(pp:_resetcolor())
+	pp:unit(pp:_color())
+	pp:unit("value.prim-\u{03A0} ")
+	pp:unit(pp:_resetcolor())
 
-		pp:_exit()
-	end,
-	-- copypaste of typed.prim_function_type
-	prim_function_type = function(self, pp)
-		local param_type, result_type = self:unwrap_prim_function_type()
-		local param_is_tuple_type, param_decls = param_type:as_prim_tuple_type()
-		local ok, param_name, result_code, result_capture = result_type:as_closure()
-		if not ok then
-			--error("override_pretty: value.prim_function_type: result_type must be a closure")
-			-- allow printing cursed things that contain manually-written (broken) prim-func-types
-			pp:unit("<BROKEN prim_function_type>")
-			return
-		end
-		local result_context = ensure_context(result_capture)
-		result_context = result_context:append(param_name)
-		local result_is_destructure, result_is_rename, param_names, result_code, result_context =
-			typed_destructure_helper(result_code, result_context)
-		if result_is_rename then
-			param_name = param_names
-			result_is_destructure = false
-		end
-		local result_is_tuple_type, result_decls = result_code:as_prim_tuple_type()
+	if param_is_tuple_type and result_is_destructure then
+		---@cast param_names string[]
+		local members = value_tuple_type_flatten(param_decls)
 
-		pp:_enter()
-
-		pp:unit(pp:_color())
-		pp:unit("value.prim-\u{03A0} ")
-		pp:unit(pp:_resetcolor())
-
-		if param_is_tuple_type and result_is_destructure then
-			local members = value_tuple_type_flatten(param_decls, context)
-
-			if #members == 0 then
-				pp:unit(pp:_color())
-				pp:unit("()")
-				pp:unit(pp:_resetcolor())
-			else
-				tuple_type_helper(pp, members, param_names)
-			end
-		elseif result_is_destructure then
-			-- tuple_elim on params but params aren't a tuple type???
-			-- probably shouldn't happen, but here's a handler
+		if #members == 0 then
 			pp:unit(pp:_color())
-			pp:unit("(")
+			pp:unit("()")
 			pp:unit(pp:_resetcolor())
-
-			for i, name in ipairs(param_names) do
-				if i > 1 then
-					pp:unit(" ")
-				end
-				pp:unit(name)
-			end
-
-			pp:unit(pp:_color())
-			pp:unit(") : ")
-			pp:unit(pp:_resetcolor())
-
-			pp:any(param_type, context)
 		else
-			pp:unit(param_name)
+			tuple_type_helper(pp, members, param_names)
+		end
+	elseif result_is_destructure then
+		---@cast param_names string[]
+		-- tuple_elim on params but params aren't a tuple type???
+		-- probably shouldn't happen, but here's a handler
+		pp:unit(pp:_color())
+		pp:unit("(")
+		pp:unit(pp:_resetcolor())
 
-			pp:unit(pp:_color())
-			pp:unit(" : ")
-			pp:unit(pp:_resetcolor())
-
-			pp:any(param_type, context)
+		for i, name in ipairs(param_names) do
+			if i > 1 then
+				pp:unit(" ")
+			end
+			pp:unit(name)
 		end
 
 		pp:unit(pp:_color())
-		pp:unit(" -> ")
+		pp:unit(") : ")
 		pp:unit(pp:_resetcolor())
 
-		if result_is_tuple_type then
-			local members = typed_tuple_type_flatten(result_decls, result_context)
+		pp:any(param_type)
+	else
+		pp:unit(param_name)
 
-			if #members == 0 then
-				pp:unit(pp:_color())
-				pp:unit("()")
-				pp:unit(pp:_resetcolor())
-			else
-				tuple_type_helper(pp, members)
-			end
+		pp:unit(pp:_color())
+		pp:unit(" : ")
+		pp:unit(pp:_resetcolor())
+
+		pp:any(param_type)
+	end
+
+	pp:unit(pp:_color())
+	pp:unit(" -> ")
+	pp:unit(pp:_resetcolor())
+
+	if result_is_tuple_type then
+		local members = typed_tuple_type_flatten(result_decls, result_context)
+
+		if #members == 0 then
+			pp:unit(pp:_color())
+			pp:unit("()")
+			pp:unit(pp:_resetcolor())
 		else
-			pp:any(result_code, result_context)
+			tuple_type_helper(pp, members)
 		end
+	else
+		pp:any(result_code, result_context)
+	end
 
-		pp:_exit()
-	end,
-	prim_tuple_type = function(self, pp)
-		local decls = self:unwrap_prim_tuple_type()
-		local members = value_tuple_type_flatten(decls)
+	pp:_exit()
+end
 
-		pp:_enter()
+---@param pp PrettyPrint
+function value_override_pretty:prim_tuple_type(pp)
+	local decls = self:unwrap_prim_tuple_type()
+	local members = value_tuple_type_flatten(decls)
 
-		pp:unit(pp:_color())
-		pp:unit("value.prim_tuple_type[")
-		pp:unit(pp:_resetcolor())
+	pp:_enter()
 
-		tuple_type_helper(pp, members)
+	pp:unit(pp:_color())
+	pp:unit("value.prim_tuple_type[")
+	pp:unit(pp:_resetcolor())
 
-		pp:unit(pp:_color())
-		pp:unit("]")
-		pp:unit(pp:_resetcolor())
+	tuple_type_helper(pp, members)
 
-		pp:_exit()
-	end,
-}
+	pp:unit(pp:_color())
+	pp:unit("]")
+	pp:unit(pp:_resetcolor())
+
+	pp:_exit()
+end
 
 neutral_value:define_enum("neutral_value", {
 	-- fn(free_value) and table of functions eg free.metavariable(metavariable)
@@ -2601,12 +2627,18 @@ local prim_checkable_term_type = value.prim_user_defined_type({ name = "checkabl
 -- return ok, err
 local prim_lua_error_type = value.prim_user_defined_type({ name = "lua_error_type" }, array(value)())
 
+---@param ... any
+---@return value
 local function tup_val(...)
 	return value.tuple_value(array(value)(...))
 end
+
+---@param ... any
+---@return value
 local function cons(...)
 	return value.enum_value("cons", tup_val(...))
 end
+
 local empty = value.enum_value("empty", tup_val())
 local unit_type = value.tuple_type(empty)
 local unit_val = tup_val()
