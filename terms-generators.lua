@@ -16,8 +16,8 @@ local prettyprintable = require "./pretty-printable-trait"
 ---@class Type
 ---@field value_check ValueCheckFn
 ---@field define_enum fun(Type, string, table)
----@field derive fun(Type, table, table?)
----@alias ValueCheckFn fun(val: table): boolean
+---@field derive fun(Type, Deriver, ...)
+---@alias ValueCheckFn fun(val: any): boolean
 
 ---@class Value
 ---@field kind string
@@ -140,7 +140,7 @@ local function gen_record(self, cons, kind, params_with_types)
 end
 
 ---@class Record: Type
----@field derive fun(self: Record, deriver: Deriver)
+---@field derive fun(self: Record, deriver: Deriver, ...)
 
 ---@param self table
 ---@param kind string
@@ -173,7 +173,7 @@ local function gen_unit(self, kind)
 end
 
 ---@class Enum: Type
----@field derive fun(self: Enum, deriver: Deriver)
+---@field derive fun(self: Enum, deriver: Deriver, ...)
 
 ---@alias Variants { [1]: string, [2]: ParamsWithTypes }[]
 

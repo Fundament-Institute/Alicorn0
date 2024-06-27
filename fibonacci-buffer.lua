@@ -3,8 +3,13 @@
 -- in the case where the only methods implemented are append and get,
 -- the two names are synonymous
 
----@class FibonacciBuffer
+---@class (exact) FibonacciPartition
 ---@field n integer
+---@field [integer] any
+
+---@class (exact) FibonacciBuffer
+---@field n integer
+---@field [integer] FibonacciPartition
 local FibonacciBuffer = {}
 local FibonacciBuffer_mt = {}
 

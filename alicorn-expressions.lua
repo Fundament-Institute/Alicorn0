@@ -207,19 +207,16 @@ local function expression_pairhandler(args, a, b)
 	local sargs
 
 	local combiner
-	if ok and ifx then
-		ok, combiner = env:get("_" + op + "_")
-	else
-		ok, combiner, env = a:match(
-			{ expression(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.infer, env)) },
-			metalanguage.failure_handler,
-			nil
-		)
-		if not ok then
-			return false, combiner
-		end
-		sargs = b
+	ok, combiner, env = a:match(
+		{ expression(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.infer, env)) },
+		metalanguage.failure_handler,
+		nil
+	)
+	if not ok then
+		return false, combiner
 	end
+	---@cast combiner inferrable
+	sargs = b
 
 	-- resolve first of the pair as an expression
 	-- typecheck it
@@ -229,7 +226,6 @@ local function expression_pairhandler(args, a, b)
 	--   pass it into the operative's arguments
 
 	-- combiner was an evaluated typed value, now it isn't
-	---@cast combiner inferrable
 	local type_of_term, usage_count, term = infer(combiner, env.typechecking_context)
 	if type_of_term:is_operative_type() then
 		local handler, userdata_type = type_of_term:unwrap_operative_type()
@@ -244,17 +240,18 @@ local function expression_pairhandler(args, a, b)
 		-- 	return false, "applying operative did not result in value term with kind enum_value, typechecker or lua operative mistake when applying " .. tostring(a.anchor) .. " to the args " .. tostring(b.anchor)
 		-- end
 		-- variants: ok, error
-		if operative_result_val.variant == "error" then
-			return false, semantic_error.operative_apply_failed(operative_result_val.data, { a.anchor, b.anchor })
-		end
+		--if operative_result_val.variant == "error" then
+		--	return false, semantic_error.operative_apply_failed(operative_result_val.data, { a.anchor, b.anchor })
+		--end
 
 		-- temporary, while it isn't a Maybe
-		local data = operative_result_val.elements[1].primitive_value
-		local env = operative_result_val.elements[2].primitive_value
-		if not env then
-			print("operative_result_val.elements[2]", operative_result_val.elements[2]:pretty_print())
-			error "operative_result_val missing env"
-		end
+		local operative_result_elems = operative_result_val:unwrap_tuple_value()
+		local data = operative_result_elems[1]:unwrap_prim()
+		local env = operative_result_elems[2]:unwrap_prim()
+		--if not env then
+		--	print("operative_result_val.elements[2]", operative_result_val.elements[2]:pretty_print())
+		--	error "operative_result_val missing env"
+		--end
 
 		if goal:is_check() then
 			local checkable = data
@@ -827,33 +824,6 @@ local block = metalanguage.reducer(function(syntax, args)
 	end
 	return true, lastval, env
 end, "block")
-
----@param self any
----@param operands ConstructedSyntax
----@param environment Environment
----@return boolean
----@return { val: any, type: any }
----@return Environment?
-local function primitive_apply(self, operands, environment)
-	local ok, args, env = operands:match({
-		collect_tuple(metalanguage.accept_handler, environment),
-	}, metalanguage.failure_handler, nil)
-	if not ok then
-		return false, args
-	end
-	local ok, err = types.typeident(self.type.params[1], args.type)
-	if not ok then
-		return false, semantic_error.function_args_mismatch(err)
-	end
-	local res = self.val(args.val)
-	return true, { val = res, type = self.type.params[2] }, env
-end
-
--- operate_behavior[types.primap_kind] = primitive_apply
-
--- local function define_operate(kind, handler)
---   operate_behavior[kind] = handler
--- end
 
 -- example usage of primitive_applicative
 -- add(a, b) = a + b ->
