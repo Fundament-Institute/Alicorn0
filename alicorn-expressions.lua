@@ -177,12 +177,127 @@ local function check_infix_expression_handler(dat, a, b)
 	end
 end
 
----@param args ExpressionArgs
----@param a Syntax
----@param b Syntax
+---@param s string
+---@param a ConstructedSyntax
+---@param b ConstructedSyntax
 ---@return boolean
----@return inferrable | checkable
----@return Environment
+---@return boolean|string
+---@return string?
+---@return ConstructedSyntax?
+---@return ConstructedSyntax?
+local function shunting_yard_listtail_handler(_, symbol, a, b)
+	if not infix_data[symbol] then
+		return false,
+			"symbol was provided in an infix operator place, but the symbol isn't a valid infix operator: " .. symbol
+	end
+	return true, true, symbol, a, b
+end
+
+---@return boolean
+---@return boolean
+local function shunting_yard_nil_handler(_)
+	return true, false
+end
+
+---@param yard { n: integer, [integer]: string }
+---@param output { n: integer, [integer]: ConstructedSyntax }
+local function shunting_yard_pop(yard, output)
+	local yard_height = yard.n
+	local output_length = output.n
+	local operator = yard[yard_height]
+	local right = output[output_length]
+	local left = output[output_length - 1]
+	local tree = metalanguage.list(nil, left, metalanguage.symbol(nil, operator), right)
+	yard[yard_height] = nil
+	yard.n = yard_height - 1
+	output[output_length] = nil
+	output[output_length - 1] = tree
+	output.n = output_length - 1
+end
+
+---@param new_symbol string
+---@param yard_symbol string
+local function shunting_yard_should_pop(new_symbol, yard_symbol)
+	local new_data = infix_data[new_symbol]
+	local yard_data = infix_data[yard_symbol]
+	local new_precedence = new_data.precedence
+	local yard_precedence = yard_data.precedence
+	if new_precedence < yard_precedence then
+		return true
+	end
+	if new_precedence > yard_precedence then
+		return false
+	end
+	local new_associativity = new_data.associativity
+	--local yard_associativity = yard_data.associativity
+	--if new_associativity ~= yard_associativity then
+	--	error("clashing associativities!!!")
+	--end
+	if new_symbol ~= yard_symbol then
+		error("different infix operators with the same precedence must be disambiguated")
+	end
+	if new_associativity == "l" then
+		return true
+	else
+		return false
+	end
+end
+
+---@param a ConstructedSyntax
+---@param b ConstructedSyntax
+---@param yard { n: integer, [integer]: string }
+---@param output { n: integer, [integer]: ConstructedSyntax }
+---@return boolean
+---@return ConstructedSyntax|string
+local function shunting_yard(a, b, yard, output)
+	output.n = output.n + 1
+	output[output.n] = a
+	local ok, more, symbol, next_a, next_b = b:match({
+		metalanguage.listtail(
+			shunting_yard_listtail_handler,
+			metalanguage.issymbol(metalanguage.accept_handler),
+			metalanguage.any(metalanguage.accept_handler)
+		),
+		metalanguage.isnil(shunting_yard_nil_handler),
+	}, metalanguage.failure_handler, nil)
+	if not ok then
+		return ok, more
+	end
+	if not more then
+		while yard.n > 0 do
+			shunting_yard_pop(yard, output)
+		end
+		return true, output[1]
+	end
+	while yard.n > 0 and shunting_yard_should_pop(symbol, yard[yard.n]) do
+		shunting_yard_pop(yard, output)
+	end
+	yard.n = yard.n + 1
+	yard[yard.n] = symbol
+	return shunting_yard(next_a, next_b, yard, output)
+end
+
+---@param left ConstructedSyntax
+---@param symbol string
+---@param right ConstructedSyntax
+---@return boolean
+---@return string|ConstructedSyntax
+---@return string?
+---@return ConstructedSyntax?
+local function expression_infix_handler(_, left, symbol, right)
+	if not infix_data[symbol] then
+		return false,
+			"symbol was provided in an infix operator place, but the symbol isn't a valid infix operator: " .. symbol
+	end
+	return true, left, symbol, right
+end
+
+---@param args ExpressionArgs
+---@param a ConstructedSyntax
+---@param b ConstructedSyntax
+---@return boolean
+---@return inferrable | checkable | string
+---@return Environment?
 local function expression_pairhandler(args, a, b)
 	-- local ok, ifx, op, args = b:match(
 	--   {
@@ -194,12 +309,31 @@ local function expression_pairhandler(args, a, b)
 
 	local goal, env = args:unwrap()
 	local orig_env = env
-	local ok, ifx = true, false
+	local ifx = false
+	local left, operator, right
 	local sargs
 
+	-- if the expression is an infix expression, parse it into a tree of simple infix expressions with shunting yard
+	local ok, syntax = shunting_yard(a, b, { n = 0 }, { n = 0 })
+	if ok then
+		---@cast syntax ConstructedSyntax
+		ifx, left, operator, right = syntax:match({
+			metalanguage.listmatch(
+				expression_infix_handler,
+				metalanguage.any(metalanguage.accept_handler),
+				metalanguage.issymbol(metalanguage.accept_handler),
+				metalanguage.any(metalanguage.accept_handler)
+			),
+		}, metalanguage.failure_handler, nil)
+	end
+
 	local combiner
-	if ok and ifx then
-		ok, combiner = env:get("_" + op + "_")
+	if ifx then
+		ok, combiner = env:get("_" .. operator .. "_")
+		if not ok then
+			return false, combiner
+		end
+		sargs = metalanguage.list(nil, left, right)
 	else
 		ok, combiner, env = a:match(
 			{ expression(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.infer, env)) },

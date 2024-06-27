@@ -1158,3 +1158,6 @@ let point = lambda_implicit (U : type_(10))
 #	add (mul x x) (mul y y)
 
 #let test = sqmag(mkpoint(id(3), id(4)))
+
+let _-_ = sub
+12 - 3 - 5

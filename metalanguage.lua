@@ -453,6 +453,10 @@ local pair_accepters = {
 	end,
 }
 
+---@param anchor Anchor?
+---@param a ConstructedSyntax
+---@param b ConstructedSyntax
+---@return ConstructedSyntax
 local function pair(anchor, a, b)
 	return cons_syntax(pair_accepters, anchor, a, b)
 end
@@ -463,6 +467,9 @@ local symbol_accepters = {
 	end,
 }
 
+---@param anchor Anchor?
+---@param name string
+---@return ConstructedSyntax
 local function symbol(anchor, name)
 	return cons_syntax(symbol_accepters, anchor, name)
 end
@@ -473,6 +480,9 @@ local value_accepters = {
 	end,
 }
 
+---@param anchor Anchor?
+---@param val any
+---@return ConstructedSyntax
 local function value(anchor, val)
 	return cons_syntax(value_accepters, anchor, val)
 end
@@ -485,11 +495,15 @@ local nil_accepters = {
 
 local nilval = cons_syntax(nil_accepters)
 
-local function list(a, ...)
+---@param anchor Anchor?
+---@param a ConstructedSyntax
+---@param ... ConstructedSyntax
+---@return ConstructedSyntax
+local function list(anchor, a, ...)
 	if a == nil then
 		return nilval
 	end
-	return pair(a, list(...))
+	return pair(anchor, a, list(anchor, ...))
 end
 
 local eval
@@ -509,6 +523,10 @@ local vau_mt = {
 		end,
 	},
 }
+
+local any = reducer(function(syntax)
+	return true, syntax
+end, "any")
 
 local function list_match_pair_handler(rule, a, b)
 	--print("list pair handler", a, b, rule)
@@ -663,6 +681,7 @@ local metalanguage = {
 	issymbol = issymbol,
 	isvalue = isvalue,
 	value = value,
+	any = any,
 	listmatch = listmatch,
 	oneof = oneof,
 	listtail = listtail,
