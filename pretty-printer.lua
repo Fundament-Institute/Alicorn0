@@ -196,6 +196,7 @@ function PrettyPrint:table(fields, ...)
 	self:_exit()
 end
 
+---@param kind string
 ---@param fields table
 function PrettyPrint:record(kind, fields, ...)
 	local startLen = #self

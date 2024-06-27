@@ -325,8 +325,13 @@ local function tuple_elim_helper(pp, names, subject, context)
 	return inner_context
 end
 
+---@class (exact) TupleDeclFlat
+---@field [1] string[]
+---@field [2] inferrable | typed
+---@field [3] PrettyPrintingContext
+
 ---@param pp PrettyPrint
----@param members any[]
+---@param members TupleDeclFlat[]
 ---@param names string[]?
 local function tuple_type_helper(pp, members, names)
 	local m = #members
@@ -395,6 +400,7 @@ local prettyprinting_context_mt = {}
 ---@field bindings FibonacciBuffer
 local PrettyprintingContext = {}
 
+---@return PrettyPrintingContext
 function PrettyprintingContext.new()
 	local self = {}
 	self.bindings = fibbuf()
@@ -410,6 +416,7 @@ function PrettyprintingContext.from_typechecking_context(context)
 end
 
 ---@param context RuntimeContext
+---@return PrettyPrintingContext
 function PrettyprintingContext.from_runtime_context(context)
 	local self = {}
 	local bindings = fibbuf()
@@ -804,7 +811,7 @@ end
 -- - lambda is different
 ---@param definition inferrable
 ---@param context PrettyPrintingContext
----@return table
+---@return TupleDeclFlat[]
 ---@return integer
 local function inferrable_tuple_type_flatten(definition, context)
 	local enum_type, constructor, arg = definition:unwrap_enum_cons()
@@ -825,6 +832,7 @@ local function inferrable_tuple_type_flatten(definition, context)
 		end
 		local inner_context = context:append(param_name)
 		local is_destructure, is_rename, names, body, inner_context = inferrable_destructure_helper(body, inner_context)
+		---@cast names string[]
 		local prev, n = inferrable_tuple_type_flatten(definition, context)
 		n = n + 1
 		prev[n] = { names, body, inner_context }
@@ -1560,7 +1568,7 @@ end
 --- mostly the same as inferrable_tuple_type_flatten
 ---@param definition typed
 ---@param context PrettyPrintingContext
----@return table
+---@return TupleDeclFlat[]
 ---@return integer
 local function typed_tuple_type_flatten(definition, context)
 	local constructor, arg = definition:unwrap_enum_cons()
@@ -1576,6 +1584,7 @@ local function typed_tuple_type_flatten(definition, context)
 		end
 		local inner_context = context:append(param_name)
 		local is_destructure, is_rename, names, body, inner_context = typed_destructure_helper(body, inner_context)
+		---@cast names string[]
 		local prev, n = typed_tuple_type_flatten(definition, context)
 		n = n + 1
 		prev[n] = { names, body, inner_context }
@@ -2236,7 +2245,7 @@ value:define_enum("value", {
 -- - closure instead of lambda
 -- - context comes from closure
 ---@param definition value
----@return table
+---@return TupleDeclFlat[]
 ---@return integer
 local function value_tuple_type_flatten(definition)
 	local constructor, arg = definition:unwrap_enum_value()
@@ -2253,6 +2262,7 @@ local function value_tuple_type_flatten(definition)
 		local context = ensure_context(capture)
 		local inner_context = context:append(param_name)
 		local is_destructure, is_rename, names, code, inner_context = typed_destructure_helper(code, inner_context)
+		---@cast names string[]
 		local prev, n = value_tuple_type_flatten(definition)
 		n = n + 1
 		prev[n] = { names, code, inner_context }
