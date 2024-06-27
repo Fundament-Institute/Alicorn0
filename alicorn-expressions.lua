@@ -207,16 +207,21 @@ local function expression_pairhandler(args, a, b)
 	local sargs
 
 	local combiner
-	ok, combiner, env = a:match(
-		{ expression(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.infer, env)) },
-		metalanguage.failure_handler,
-		nil
-	)
-	if not ok then
-		return false, combiner
+	if ok and ifx then
+		error("infix operators nyi")
+		ok, combiner = env:get("_" + op + "_")
+	else
+		ok, combiner, env = a:match(
+			{ expression(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.infer, env)) },
+			metalanguage.failure_handler,
+			nil
+		)
+		if not ok then
+			return false, combiner
+		end
+		---@cast combiner inferrable
+		sargs = b
 	end
-	---@cast combiner inferrable
-	sargs = b
 
 	-- resolve first of the pair as an expression
 	-- typecheck it
