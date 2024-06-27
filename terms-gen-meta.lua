@@ -42,7 +42,7 @@ return {}]],
 	record_constructor = [[---@field $variant fun($(, )params): $typename]],
 }
 
-function build_meta_file_for_enum(info)
+local function build_meta_file_for_enum(info)
 	local kind = info.name
 	local methods = {}
 	local constructors = {}

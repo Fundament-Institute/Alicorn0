@@ -16,7 +16,7 @@ local prettyprintable = require "./pretty-printable-trait"
 ---@class Type
 ---@field value_check ValueCheckFn
 ---@field define_enum fun(Type, string, table)
----@field derive fun(Type, table)
+---@field derive fun(Type, Deriver, ...)
 ---@alias ValueCheckFn fun(val: any): boolean
 
 ---@class Value
@@ -140,7 +140,7 @@ local function gen_record(self, cons, kind, params_with_types)
 end
 
 ---@class Record: Type
----@field derive fun(self: Record, deriver: Deriver)
+---@field derive fun(self: Record, deriver: Deriver, ...)
 
 ---@param self table
 ---@param kind string
@@ -173,7 +173,7 @@ local function gen_unit(self, kind)
 end
 
 ---@class Enum: Type
----@field derive fun(self: Enum, deriver: Deriver)
+---@field derive fun(self: Enum, deriver: Deriver, ...)
 
 ---@alias Variants { [1]: string, [2]: ParamsWithTypes }[]
 
@@ -227,7 +227,7 @@ end
 
 ---@param self table
 ---@param value_check ValueCheckFn
----@param lsp_type string
+---@param lsp_type string?
 ---@return Foreign self
 local function define_foreign(self, value_check, lsp_type)
 	setmetatable(self, {
@@ -257,6 +257,7 @@ local map_type_mt = {
 	end,
 }
 
+---@class Map: Type
 local map_methods = {
 	pairs = function(self)
 		return pairs(self.__map)
@@ -267,6 +268,7 @@ local map_methods = {
 		local i = 1
 		for k, v in pairs(self.__map) do
 			local function pp(x, p)
+				---@diagnostic disable-next-line
 				return ((type(x) == "table" and x.pretty_print) or tostring)(x, p)
 			end
 			parts[i] = string.format("%s = %s", pp(k, prefix), pp(v, np))
@@ -309,8 +311,6 @@ local function gen_map_fns(key_type, value_type)
 	end
 	return index, newindex
 end
-
----@class Map: Type
 
 -- TODO: memoize? otherwise LOTS of tables will be constructed,
 -- through repeated calls to declare_map
@@ -356,6 +356,7 @@ local array_type_mt = {
 	end,
 }
 
+---@class Array: Type
 local array_methods = {
 	ipairs = function(self)
 		return ipairs(self.array)
@@ -393,6 +394,7 @@ local array_methods = {
 	pretty_print = function(self, prefix)
 		local parts = {}
 		for i, v in ipairs(self.array) do
+			---@diagnostic disable-next-line
 			parts[i] = ((type(v) == "table" and v.pretty_print) or tostring)(v, prefix)
 		end
 		return string.format("[%s]", table.concat(parts, ", "))
@@ -504,8 +506,6 @@ end
 local function array_prettyprintable(self, printer, ...)
 	return printer:array(self.array, ...)
 end
-
----@class Array: Type
 
 -- TODO: see define_map
 ---@param self table

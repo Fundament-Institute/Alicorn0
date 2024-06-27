@@ -7,6 +7,12 @@ local P, C, Cg, Cc, Cmt, Ct, Cb, Cp, Cf, Cs, S, V, R =
 -- documentation for the SLN: https://scopes.readthedocs.io/en/latest/dataformat/
 -- a python SLN parser: https://github.com/salotz/python-sln/blob/master/src/sln/parser.py
 
+---@class Anchor
+---@field line integer
+---@field char integer
+---@field sourceid string
+local Anchor = {}
+
 local anchor_mt = {
 	__lt = function(fst, snd)
 		return snd.line > fst.line or (snd.line == fst.line and snd.char > fst.char)
@@ -20,6 +26,7 @@ local anchor_mt = {
 	__tostring = function(self)
 		return "in file " .. self.sourceid .. ", line " .. self.line .. " character " .. self.char
 	end,
+	__index = Anchor,
 }
 
 local function element(kind, pattern)
@@ -38,6 +45,15 @@ end
 local function list(pattern)
 	return element("list", Cg(Ct(space_tokens(pattern)), "elements") * Cg(V "textpos", "endpos"))
 end
+
+---@class Literal
+---@field anchor Anchor
+---@field kind LiteralKind
+---@field literaltype LiteralType?
+---@field val number | table | nil
+
+---@alias LiteralKind "list" | "symbol" | "string" | "literal"
+---@alias LiteralType "u8" | "u16" | "u32" | "u64" | "i8" | "i16" | "i32" | "i64"  | "f32" | "f64" | "bytes" | "unit"
 
 local function update_ffp(name, patt)
 	-- stage the error
@@ -98,6 +114,10 @@ local function erase(pattern)
 	return pattern / {}
 end
 
+---@param line integer
+---@param char integer
+---@param sourceid string
+---@return Anchor
 local function create_anchor(line, char, sourceid)
 	local newanchor = {
 		line = line,
@@ -375,6 +395,15 @@ local function span_error(position, subject, msg)
 	return span
 end
 
+---@class FormatList
+---@field anchor Anchor
+---@field endpos Anchor
+---@field kind LiteralKind
+---@field elements table[]
+
+---@param input string
+---@param filename string
+---@return FormatList?
 local function parse(input, filename)
 	assert(filename)
 

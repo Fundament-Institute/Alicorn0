@@ -33,9 +33,15 @@ local param_info_explicit = value.param_info(value.visibility(visibility.explici
 local param_info_implicit = value.param_info(value.visibility(visibility.implicit))
 local result_info_pure = value.result_info(result_info(purity.pure))
 local result_info_effectful = value.result_info(result_info(purity.effectful))
+
+---@param ... any
+---@return value
 local function tup_val(...)
 	return value.tuple_value(value_array(...))
 end
+
+---@param ... any
+---@return value
 local function prim_tup_val(...)
 	return value.prim_tuple_value(primitive_array(...))
 end
@@ -47,6 +53,8 @@ local OMEGA = 10
 local typechecker_state
 local evaluate, infer, check, apply_value
 
+---@param onto Array
+---@param with Array
 local function add_arrays(onto, with)
 	local olen = #onto
 	for i, n in ipairs(with) do
@@ -67,6 +75,8 @@ local function const_combinator(v)
 	return value.closure("#CONST_PARAM", typed_term.bound_variable(1), runtime_context():append(v))
 end
 
+---@param t value
+---@return integer
 local function get_level(t)
 	-- TODO: this
 	-- TODO: typecheck
@@ -94,10 +104,10 @@ local function substitute_inner(val, mappings, context_len)
 		return typed_term.literal(val)
 	elseif val:is_pi() then
 		local param_type, param_info, result_type, result_info = val:unwrap_pi()
-		param_type = substitute_inner(param_type, mappings, context_len)
-		param_info = substitute_inner(param_info, mappings, context_len)
-		result_type = substitute_inner(result_type, mappings, context_len)
-		result_info = substitute_inner(result_info, mappings, context_len)
+		local param_type = substitute_inner(param_type, mappings, context_len)
+		local param_info = substitute_inner(param_info, mappings, context_len)
+		local result_type = substitute_inner(result_type, mappings, context_len)
+		local result_info = substitute_inner(result_info, mappings, context_len)
 		return typed_term.pi(param_type, param_info, result_type, result_info)
 	elseif val:is_closure() then
 		local param_name, code, capture = val:unwrap_closure()
@@ -110,19 +120,19 @@ local function substitute_inner(val, mappings, context_len)
 		-- Here we need to add the new arg placeholder to a map of things to substitute
 		-- otherwise it would be left as a free.unique in the result
 		mappings[unique] = typed_term.bound_variable(context_len + 1)
-		val = substitute_inner(val, mappings, context_len + 1)
+		local val_typed = substitute_inner(val, mappings, context_len + 1)
 
 		-- FIXME: this results in more captures every time we substitute a closure ->
 		--   can cause non-obvious memory leaks
 		--   since we don't yet remove unused captures from closure value
-		return typed_term.lambda(param_name, val)
+		return typed_term.lambda(param_name, val_typed)
 	elseif val:is_name_type() then
 		return typed_term.literal(val)
 	elseif val:is_name() then
 		return typed_term.literal(val)
 	elseif val:is_operative_value() then
 		local userdata = val:unwrap_operative_value()
-		userdata = substitute_inner(userdata, mappings, context_len)
+		local userdata = substitute_inner(userdata, mappings, context_len)
 		return typed_term.operative_cons(userdata)
 	elseif val:is_operative_type() then
 		local handler, userdata_type = val:unwrap_operative_type()
@@ -138,13 +148,13 @@ local function substitute_inner(val, mappings, context_len)
 		return typed_term.tuple_cons(res)
 	elseif val:is_tuple_type() then
 		local decls = val:unwrap_tuple_type()
-		decls = substitute_inner(decls, mappings, context_len)
+		local decls = substitute_inner(decls, mappings, context_len)
 		return typed_term.tuple_type(decls)
 	elseif val:is_tuple_defn_type() then
 		return typed_term.literal(val)
 	elseif val:is_enum_value() then
 		local constructor, arg = val:unwrap_enum_value()
-		arg = substitute_inner(arg, mappings, context_len)
+		local arg = substitute_inner(arg, mappings, context_len)
 		return typed_term.enum_cons(constructor, arg)
 	elseif val:is_enum_type() then
 		local decls = val:unwrap_enum_type()
@@ -250,9 +260,9 @@ local function substitute_inner(val, mappings, context_len)
 
 		if nval:is_prim_if_stuck() then
 			local subject, consequent, alternate = nval:unwrap_prim_if_stuck()
-			subject = substitute_inner(value.neutral(subject), mappings, context_len)
-			consequent = substitute_inner(consequent, mappings, context_len)
-			alternate = substitute_inner(alternate, mappings, context_len)
+			local subject = substitute_inner(value.neutral(subject), mappings, context_len)
+			local consequent = substitute_inner(consequent, mappings, context_len)
+			local alternate = substitute_inner(alternate, mappings, context_len)
 			return typed_term.prim_if(subject, consequent, alternate)
 		end
 
@@ -271,12 +281,12 @@ local function substitute_inner(val, mappings, context_len)
 		return typed_term.literal(val)
 	elseif val:is_prim_function_type() then
 		local param_type, result_type = val:unwrap_prim_function_type()
-		param_type = substitute_inner(param_type, mappings, context_len)
-		result_type = substitute_inner(result_type, mappings, context_len)
+		local param_type = substitute_inner(param_type, mappings, context_len)
+		local result_type = substitute_inner(result_type, mappings, context_len)
 		return typed_term.prim_function_type(param_type, result_type)
 	elseif val:is_prim_wrapped_type() then
 		local type = val:unwrap_prim_wrapped_type()
-		type = substitute_inner(type, mappings, context_len)
+		local type = substitute_inner(type, mappings, context_len)
 		return typed_term.prim_wrapped_type(type)
 	elseif val:is_prim_user_defined_type() then
 		local id, family_args = val:unwrap_prim_user_defined_type()
@@ -291,7 +301,7 @@ local function substitute_inner(val, mappings, context_len)
 		return typed_term.literal(val)
 	elseif val:is_prim_tuple_type() then
 		local decls = val:unwrap_prim_tuple_type()
-		decls = substitute_inner(decls, mappings, context_len)
+		local decls = substitute_inner(decls, mappings, context_len)
 		return typed_term.prim_tuple_type(decls)
 	else
 		error("Unhandled value kind in substitute_inner: " .. val.kind)
@@ -317,8 +327,6 @@ end
 
 local make_inner_context
 local infer_tuple_type, infer_tuple_type_unwrapped
-local terms = require "./terms"
-local value = terms.value
 
 local check_concrete
 -- indexed by kind x kind
@@ -490,22 +498,23 @@ function check_concrete(val, use, typechecker)
 end
 
 local function extract_tuple_elem_type_closures(enum_val, closures)
-	local constructor, arg = enum_val.constructor, enum_val.arg
+	local constructor, arg = enum_val:unwrap_enum_value()
+	local elements = arg:unwrap_tuple_value()
 	if constructor == "empty" then
-		if #arg.elements ~= 0 then
+		if #elements ~= 0 then
 			error "enum_value with constructor empty should have no args"
 		end
 		return closures
 	end
 	if constructor == "cons" then
-		if #arg.elements ~= 2 then
+		if #elements ~= 2 then
 			error "enum_value with constructor cons should have two args"
 		end
-		extract_tuple_elem_type_closures(arg.elements[1], closures)
-		if not arg.elements[2]:is_closure() then
+		extract_tuple_elem_type_closures(elements[1], closures)
+		if not elements[2]:is_closure() then
 			error "second elem in tuple_type enum_value should be closure"
 		end
-		closures:append(arg.elements[2])
+		closures:append(elements[2])
 		return closures
 	end
 	error "unknown enum constructor for value.tuple_type's enum_value, should not be reachable"
@@ -516,8 +525,8 @@ value:derive(derivers.eq)
 ---@param checkable_term checkable
 ---@param typechecking_context TypecheckingContext
 ---@param goal_type value
----@return unknown, typed
-local function check(
+---@return Array, typed
+function check(
 	checkable_term, -- constructed from checkable_term
 	typechecking_context, -- todo
 	goal_type
@@ -698,45 +707,6 @@ local function index_tuple_value(subject, index)
 	end
 end
 
-local function eq_prim_tuple_value_decls(left, right, typechecking_context)
-	local lcons, larg = left:unwrap_enum_value()
-	local rcons, rarg = right:unwrap_enum_value()
-	if lcons == "empty" and rcons == "empty" then
-		return typechecking_context
-	elseif lcons == "empty" or rcons == "empty" then
-		error(
-			"eq_prim_tuple_value_decls: mismatch in number of expected and given args in primitive function application"
-		)
-	elseif lcons == "cons" and rcons == "cons" then
-		local left_details = larg.elements
-		local right_details = rarg.elements
-		local context = eq_prim_tuple_value_decls(left_details[1], right_details[1], typechecking_context)
-		local left_f = left_details[2]
-		local right_f = right_details[2]
-		local elements = value_array()
-		local runtime_context = context:get_runtime_context()
-		for i = #typechecking_context + 1, #context do
-			elements:append(runtime_context:get(i))
-		end
-		local arg = value.tuple_value(elements)
-		local left_type = apply_value(left_f, arg)
-		local right_type = apply_value(right_f, arg)
-		if left_type == right_type then
-			local new_context = context:append("eq_prim_tuple_value_decls_param", left_type)
-			return new_context
-		else
-			print("mismatch")
-			print(left_type:pretty_print())
-			print(right_type:pretty_print())
-			error("eq_prim_tuple_value_decls: type mismatch in primitive function application")
-		end
-	else
-		error("eq_prim_tuple_value_decls: unknown tuple type data constructor")
-	end
-
-	error("unreachable!?")
-end
-
 local function make_tuple_prefix(subject_type, subject_value)
 	local decls, make_prefix
 	if subject_type:is_tuple_type() then
@@ -834,7 +804,7 @@ end
 
 ---@param inferrable_term inferrable
 ---@param typechecking_context TypecheckingContext
----@return value, unknown, typed
+---@return value, Array, typed
 function infer(
 	inferrable_term, -- constructed from inferrable
 	typechecking_context -- todo
@@ -1166,7 +1136,7 @@ function infer(
 			new_methods[k] = method_term
 		end
 		-- TODO: usages
-		return value.object_type(type_data), usages_array(), typed_term.object_cons(new_methods)
+		return value.object_type(type_data), usage_array(), typed_term.object_cons(new_methods)
 	elseif inferrable_term:is_object_elim() then
 		local subject, mechanism = inferrable_term:unwrap_object_elim()
 		error("nyi")
@@ -1224,7 +1194,7 @@ function infer(
 		local operative_type_usages = usage_array()
 		add_arrays(operative_type_usages, handler_usages)
 		add_arrays(operative_type_usages, userdata_type_usages)
-		local handler_level = get_level(handler_type)
+		local handler_level = get_level(goal_type)
 		local userdata_type_level = get_level(userdata_type_type)
 		local operative_type_level = math.max(handler_level, userdata_type_level)
 		return value.star(operative_type_level),
@@ -1235,7 +1205,7 @@ function infer(
 		local new_family_args = typed_array()
 		local result_usages = usage_array()
 		for _, v in ipairs(family_args) do
-			local e_type, e_usages, e_term = infer(v, runtime_context)
+			local e_type, e_usages, e_term = infer(v, typechecking_context)
 			-- FIXME: use e_type?
 			add_arrays(result_usages, e_usages)
 			new_family_args:append(e_term)
@@ -1251,11 +1221,11 @@ function infer(
 	elseif inferrable_term:is_prim_wrap() then
 		local content = inferrable_term:unwrap_prim_wrap()
 		local content_type, content_usages, content_term = infer(content, typechecking_context)
-		return value.prim_wrapped_type(backing_type), content_usages, typed_term.prim_wrap(content_term)
+		return value.prim_wrapped_type(content_type), content_usages, typed_term.prim_wrap(content_term)
 	elseif inferrable_term:is_prim_unstrict_wrap() then
 		local content = inferrable_term:unwrap_prim_wrap()
 		local content_type, content_usages, content_term = infer(content, typechecking_context)
-		return value.prim_unstrict_wrapped_type(backing_type),
+		return value.prim_unstrict_wrapped_type(content_type),
 			content_usages,
 			typed_term.prim_unstrict_wrap(content_term)
 	elseif inferrable_term:is_prim_unwrap() then
@@ -1274,7 +1244,7 @@ function infer(
 		-- same for alternate but literal false
 
 		-- TODO: Replace this with a metavariable that both branches are put into
-		local stype, susages, sterm = check(terms.value.prim_bool_type, typechecking_context, subject)
+		local susages, sterm = check(subject, typechecking_context, terms.value.prim_bool_type)
 		local ctype, cusages, cterm = infer(consequent, typechecking_context)
 		local atype, ausages, aterm = infer(alternate, typechecking_context)
 		local restype = typechecker_state:metavariable():as_value()
@@ -1314,11 +1284,13 @@ function infer(
 		local type_val = evaluate(type_term, typechecking_context.runtime_context)
 		return type_val, source_usages, typed_term.prim_intrinsic(source_term, anchor)
 	elseif inferrable_term:is_level_max() then
-		local arg_type_a, arg_usages_a, arg_term_a = infer(inferrable_term.level_a, typechecking_context)
-		local arg_type_b, arg_usages_b, arg_term_b = infer(inferrable_term.level_b, typechecking_context)
+		local level_a, level_b = inferrable_term:unwrap_level_max()
+		local arg_type_a, arg_usages_a, arg_term_a = infer(level_a, typechecking_context)
+		local arg_type_b, arg_usages_b, arg_term_b = infer(level_b, typechecking_context)
 		return value.level_type, usage_array(), typed_term.level_max(arg_term_a, arg_term_b)
 	elseif inferrable_term:is_level_suc() then
-		local arg_type, arg_usages, arg_term = infer(inferrable_term.previous_level, typechecking_context)
+		local previous_level = inferrable_term:unwrap_level_suc()
+		local arg_type, arg_usages, arg_term = infer(previous_level, typechecking_context)
 		return value.level_type, usage_array(), typed_term.level_suc(arg_term)
 	elseif inferrable_term:is_level0() then
 		return value.level_type, usage_array(), typed_term.level0
@@ -1342,30 +1314,6 @@ function infer(
 	end
 
 	error("unreachable!?")
-
-	--[[
-  if inferrable_term.kind == "inferrable_level0" then
-    return value.level_type, typed_term.level0
-  elseif inferrable_term.kind == "inferrable_level_suc" then
-    local arg_type, arg_term = infer(inferrable_term.previous_level, typechecking_context)
-    arg_type:unify(value.level_type)
-    return value.level_type, typed_term.level_suc(arg_term)
-  elseif inferrable_term.kind == "inferrable_level_max" then
-    local arg_type_a, arg_term_a = infer(inferrable_term.level_a, typechecking_context)
-    local arg_type_b, arg_term_b = infer(inferrable_term.level_b, typechecking_context)
-    arg_type_a:unify(value.level_type)
-    arg_type_b:unify(value.level_type)
-    return value.level_type, typed_term.level_max(arg_term_a, arg_term_b)
-  elseif inferrable_term.kind == "inferrable_level_type" then
-    return value.star(0), typed_term.level_type
-  elseif inferrable_term.kind == "inferrable_star" then
-    return value.star(1), typed_term.star(0)
-  elseif inferrable_term.kind == "inferrable_prop" then
-    return value.star(1), typed_term.prop(0)
-  elseif inferrable_term.kind == "inferrable_prim" then
-    return value.star(1), typed_term.prim
-  end
-  ]]
 end
 
 ---Replace stuck sections in a value with a more concrete form, possibly causing cascading evaluation
@@ -1735,28 +1683,35 @@ function evaluate(typed_term, runtime_context)
 	elseif typed_term:is_level0() then
 		return value.level(0)
 	elseif typed_term:is_level_suc() then
-		local previous_level = evaluate(typed_term.previous_level, runtime_context)
-		if not previous_level:is_level() then
-			p(previous_level)
+		local previous_level = typed_term:unwrap_level_suc()
+		local previous_level_value = evaluate(previous_level, runtime_context)
+		local ok, level = previous_level_value:as_level()
+		if not ok then
+			p(previous_level_value)
 			error "wrong type for previous_level"
 		end
-		if previous_level.level > OMEGA then
-			error("NYI: level too high for typed_level_suc" .. tostring(previous_level.level))
+		if level > OMEGA then
+			error("NYI: level too high for typed_level_suc" .. tostring(level))
 		end
-		return value.level(previous_level.level + 1)
+		return value.level(level + 1)
 	elseif typed_term:is_level_max() then
-		local level_a = evaluate(typed_term.level_a, runtime_context)
-		local level_b = evaluate(typed_term.level_b, runtime_context)
-		if not level_a:is_level() or not level_b:is_level() then
+		local level_a, level_b = typed_term:unwrap_level_max()
+		local level_a_value = evaluate(level_a, runtime_context)
+		local level_b_value = evaluate(level_b, runtime_context)
+		local oka, level_a_level = level_a_value:as_level()
+		local okb, level_b_level = level_b_value:as_level()
+		if not oka or not okb then
 			error "wrong type for level_a or level_b"
 		end
-		return value.level(math.max(level_a.level, level_b.level))
+		return value.level(math.max(level_a_level, level_b_level))
 	elseif typed_term:is_level_type() then
 		return value.level_type
 	elseif typed_term:is_star() then
-		return value.star(typed_term.level)
+		local level = typed_term:unwrap_star()
+		return value.star(level)
 	elseif typed_term:is_prop() then
-		return value.prop(typed_term.level)
+		local level = typed_term:unwrap_prop()
+		return value.prop(level)
 	elseif typed_term:is_prim_tuple_type() then
 		local decl = typed_term:unwrap_prim_tuple_type()
 		local decl_val = evaluate(decl, runtime_context)
@@ -1766,37 +1721,6 @@ function evaluate(typed_term, runtime_context)
 	end
 
 	error("unreachable!?")
-
-	--[[
-  if typed_term.kind == "typed_level0" then
-    return value.level(0)
-  elseif typed_term.kind == "typed_level_suc" then
-    local previous_level = evaluate(typed_term.previous_level, runtime_context)
-    if previous_level.kind ~= "value_level" then
-      p(previous_level)
-      error("wrong type for previous_level")
-    end
-    if previous_level.level > OMEGA then
-      error("NYI: level too high for typed_level_suc" .. tostring(previous_level.level))
-    end
-    return value.level(previous_level.level + 1)
-  elseif typed_term.kind == "typed_level_max" then
-    local level_a = evaluate(typed_term.level_a, runtime_context)
-    local level_b = evaluate(typed_term.level_b, runtime_context)
-    if level_a.kind ~= "value_level" or level_b.kind ~= "value_level" then
-      error("wrong type for level_a or level_b")
-    end
-    return value.level(math.max(level_a.level, level_b.level))
-  elseif typed_term.kind == "typed_level_type" then
-    return value.level_type
-  elseif typed_term.kind == "typed_star" then
-    return value.star(typed_term.level)
-  elseif typed_term.kind == "typed_prop" then
-    return value.prop(typed_term.level)
-  elseif typed_term.kind == "typed_prim" then
-    return value.prim
-  end
-  ]]
 end
 
 ---@class OrderedSet
