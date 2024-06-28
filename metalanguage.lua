@@ -6,18 +6,35 @@ Reducer(sig : tuple-def, res : tuple-def) : type
 Error : type
 --]]
 
-local matcher_kinds = {
-	Symbol = true,
-	Pair = true,
-	Nil = true,
-	Value = true,
-	Reducible = true,
+---@enum MatcherKind
+local MatcherKind = {
+	Symbol = "Symbol",
+	Pair = "Pair",
+	Nil = "Nil",
+	Value = "Value",
+	Reducible = "Reducible",
 }
 
----@alias HandlerFn fun(a : any, b : any?, c : any?) : any
+---@generic T
+---@alias SymbolFunc fun(u : T, s: string) : ...
 
----@param handler HandlerFn
----@return table
+---@generic T
+---@alias PairFunc fun(u : T, a: ConstructedSyntax, b : ConstructedSyntax) : ...
+
+---@generic T
+---@alias NilFunc fun(u : T) : ...
+
+---@generic T
+---@alias ValueFunc fun(u : T, v : Literal) : ...
+
+---@generic T
+---@alias ReducibleFunc fun(u : T, ...) : ...
+
+---@class Matcher
+---@field kind MatcherKind
+---@field handler SymbolFunc | PairFunc | NilFunc | ValueFunc | ReducibleFunc
+---@field reducible any?
+
 --[[
 issymbol : forall
 	implicit userdata : type
@@ -26,15 +43,16 @@ issymbol : forall
 	->
 	Matcher(userdata, results)
 --]]
+---@generic T
+---@param handler SymbolFunc<T>
+---@return Matcher
 local function issymbol(handler)
 	return {
-		kind = "Symbol",
+		kind = MatcherKind.Symbol,
 		handler = handler,
 	}
 end
 
----@param handler HandlerFn
----@return table
 --[[
 ispair : forall
 	implicit userdata : type
@@ -43,15 +61,16 @@ ispair : forall
 	->
 	Matcher(userdata, results)
 --]]
+---@generic T
+---@param handler PairFunc<T>
+---@return Matcher
 local function ispair(handler)
 	return {
-		kind = "Pair",
+		kind = MatcherKind.Pair,
 		handler = handler,
 	}
 end
 
----@param handler HandlerFn
----@return table
 --[[
 isnil : forall
 	implicit userdata : type
@@ -60,15 +79,19 @@ isnil : forall
 	->
 	Matcher(userdata, results)
 --]]
+---@generic T
+---@param handler NilFunc<T>
+---@return Matcher
 local function isnil(handler)
 	return {
-		kind = "Nil",
+		kind = MatcherKind.Nil,
 		handler = handler,
 	}
 end
 
----@param handler HandlerFn
----@return table
+---@generic T
+---@param handler ValueFunc<T>
+---@return Matcher
 --[[
 isvalue : forall
 	implicit userdata : type
@@ -79,7 +102,7 @@ isvalue : forall
 --]]
 local function isvalue(handler)
 	return {
-		kind = "Value",
+		kind = MatcherKind.Value,
 		handler = handler,
 	}
 end
@@ -89,7 +112,7 @@ local function get_reducer(reducible)
 end
 
 local function dispatch_reducer(handler_mapping, default, matcher)
-	if matcher.kind == "Reducible" then
+	if matcher.kind == MatcherKind.Reducible then
 		if handler_mapping[get_reducer(matcher)] then
 			return handler_mapping[get_reducer(matcher)](matcher)
 		else
@@ -100,14 +123,6 @@ local function dispatch_reducer(handler_mapping, default, matcher)
 	end
 end
 
----@class Reducible
----@field kind string
----@field handler HandlerFn
----@field reducible any
-
----@param handler HandlerFn
----@param ... any
----@return Reducible
 --[[
 create_reducible : forall
 	implicit userdata : type
@@ -120,6 +135,10 @@ create_reducible : forall
 	->
 	Matcher(userdata, results)
 ]]
+---@generic T
+---@param handler ReducibleFunc<T>
+---@param ... any
+---@return Matcher
 local function create_reducible(self, handler, ...)
 	local funcnew = {
 		...,
@@ -128,7 +147,7 @@ local function create_reducible(self, handler, ...)
 	setmetatable(funcnew, self.mt)
 
 	local reducible = {
-		kind = "Reducible",
+		kind = MatcherKind.Reducible,
 		handler = handler,
 		reducible = funcnew,
 	}
@@ -140,7 +159,7 @@ local reducer_mt = { __call = create_reducible }
 
 ---@class ExternalError
 ---@field cause any
----@field anchor any
+---@field anchor Anchor
 ---@field reducer_name string
 local ExternalError = {}
 
@@ -158,8 +177,8 @@ local external_error_mt = {
 }
 
 ---@param cause any
----@param anchor any
----@param reducer_name any
+---@param anchor Anchor
+---@param reducer_name string
 ---@return ExternalError
 function ExternalError.new(cause, anchor, reducer_name)
 	return setmetatable({
@@ -226,11 +245,9 @@ local function custom_traceback(err)
 end
 
 ---@class Reducer
----@field wrapper fun(syntax: any, matcher: Reducible)
+---@field wrapper fun(syntax: ConstructedSyntax, matcher: Matcher) : ...
+---@field create_reducible fun(handler: ReducibleFunc, ...) : Matcher
 
----@param func fun(syntax: any, ...)
----@param name any
----@return table
 --[[
 reducer : forall
 	implicit storage : tuple-def
@@ -240,7 +257,13 @@ reducer : forall
 	->
 	res : Reducer(storage, results)
 ]]
+---@param func fun(syntax: ConstructedSyntax, ...) : boolean, ...
+---@param name string
+---@return Reducer
 local function reducer(func, name)
+	---@param syntax ConstructedSyntax
+	---@param matcher Matcher
+	---@return ...
 	local function funcwrapper(syntax, matcher)
 		return augment_error(syntax, name, xpcall(func, custom_traceback, syntax, table.unpack(matcher.reducible)))
 	end
@@ -265,70 +288,6 @@ local function reducer(func, name)
 	return reducer
 end
 
----@class Env
----@field dict { [any]: any }
-local Env = {}
-local env_mt
-
----comment
----@param name any
----@return any
-function Env:get(name)
-	return self.dict[name]
-end
-
-function Env:without(name)
-	local res = {}
-	for k, v in pairs(self.dict) do
-		if k ~= name then
-			res[k] = v
-		end
-	end
-	return setmetatable({ dict = res }, env_mt)
-end
-
-env_mt = {
-	__add = function(self, other)
-		local res = {}
-		for k, v in pairs(self.dict) do
-			res[k] = v
-		end
-		for k, v in pairs(other.dict) do
-			if res[k] ~= nil then
-				error("names in environments being merged must be disjoint, but both environments have " .. k)
-			end
-			res[k] = v
-		end
-		return setmetatable({ dict = res }, env_mt)
-	end,
-	__index = Env,
-	__tostring = function(self)
-		local message = "env{"
-		local fields = {}
-		for k, v in pairs(self.dict) do
-			fields[#fields + 1] = tostring(k) .. " = " .. tostring(v)
-		end
-		message = message .. table.concat(fields, ", ") .. "}"
-		return message
-	end,
-}
-
----@param dict any
----@return Env
-local function newenv(dict)
-	return setmetatable({ dict = dict }, env_mt)
-end
-
-local function symbolenvhandler(env, name)
-	--print("symbolenvhandler(", name, env, ")")
-	local res = env:get(name)
-	if res ~= nil then
-		return true, res
-	else
-		return false, "environment does not contain a binding for " .. name
-	end
-end
-
 local function symbolexacthandler(expected, name)
 	if name == expected then
 		return true
@@ -344,45 +303,48 @@ local function failure_handler(data, exception)
 	return false, exception
 end
 
-local function SymbolInEnvironment(syntax, environment)
-	--print("in symbol in environment reducer", matcher.kind, matcher[1], matcher)
-	return syntax:match({
-		issymbol(symbolenvhandler),
-	}, failure_handler, environment)
-end
-
 local function SymbolExact(syntax, symbol)
 	return syntax:match({
 		issymbol(symbolexacthandler),
 	}, failure_handler, symbol)
 end
 
-local symbol_in_environment = reducer(SymbolInEnvironment, "symbol in env")
-
 local symbol_exact = reducer(SymbolExact, "symbol exact")
 
+---@class SyntaxError
+---@field matchers Matcher[]
+---@field anchor Anchor
+---@field cause any
+local SyntaxError = {}
+
+function SyntaxError:__tostring()
+	local message = "Syntax error at anchor "
+		.. (self.anchor and tostring(self.anchor) or "<unknown position>")
+		.. " must be acceptable for one of:\n"
+	local options = {}
+	for k, v in ipairs(self.matchers) do
+		if v.kind == MatcherKind.Reducible then
+			options[k] = v.kind .. ": " .. getmetatable(v.reducible).name
+		else
+			options[k] = v.kind
+		end
+	end
+	message = message .. "[ " .. table.concat(options, ", ") .. " ]"
+	message = message .. "\nbut was rejected"
+	if self.cause then
+		message = message .. " because:\n" .. tostring(self.cause)
+	end
+	return message
+end
+
 local syntax_error_mt = {
-	__tostring = function(self)
-		local message = "Syntax error at anchor "
-			.. (self.anchor and tostring(self.anchor) or "<unknown position>")
-			.. " must be acceptable for one of:\n"
-		local options = {}
-		for k, v in ipairs(self.matchers) do
-			if v.kind == "Reducible" then
-				options[k] = v.kind .. ": " .. getmetatable(v.reducible).name
-			else
-				options[k] = v.kind
-			end
-		end
-		message = message .. "[ " .. table.concat(options, ", ") .. " ]"
-		message = message .. "\nbut was rejected"
-		if self.cause then
-			message = message .. " because:\n" .. tostring(self.cause)
-		end
-		return message
-	end,
+	__tostring = SyntaxError.__tostring,
 }
 
+---@param matchers Matcher[]
+---@param anchor Anchor
+---@param cause any
+---@return SyntaxError
 local function syntax_error(matchers, anchor, cause)
 	return setmetatable({
 		matchers = matchers,
@@ -391,9 +353,15 @@ local function syntax_error(matchers, anchor, cause)
 	}, syntax_error_mt)
 end
 
+---@generic T
+---@alias AccepterFunc fun(self: ConstructedSyntax, matcher: Matcher, extra : T) : ...
+
+---@generic T
+---@alias AccepterSet { Symbol: AccepterFunc<T>?, Pair:AccepterFunc<T>?, Nil:AccepterFunc<T>?, Value:AccepterFunc<T>? }
+
 ---@class ConstructedSyntax
----@field accepters table
----@field anchor table
+---@field accepters AccepterSet
+---@field anchor Anchor
 local ConstructedSyntax = {}
 
 --[[
@@ -407,16 +375,20 @@ match : forall
 	->
 	res : tuple-type(results)
 ]]
+---@generic T
+---@param matchers Matcher[]
+---@param unmatched fun(u : T, ...) : ...
+---@param extra T
+---@return ...
 function ConstructedSyntax:match(matchers, unmatched, extra)
-	if matchers.kind then
-		print(debug.traceback())
-	end
+	assert(matchers["kind"] == nil, "Unexpected matchers parameter")
+
 	local lasterr = nil
 	for _, matcher in ipairs(matchers) do
 		if self.accepters[matcher.kind] then
 			--   print("accepting primitive handler on kind", matcher.kind)
 			return self.accepters[matcher.kind](self, matcher, extra)
-		elseif matcher.kind == "Reducible" then
+		elseif matcher.kind == MatcherKind.Reducible then
 			--   print("trying syntax reduction on kind", matcher.kind)
 			local res = { matcher.reducible.reduce(self, matcher) }
 			if res[1] then
@@ -439,8 +411,8 @@ local constructed_syntax_mt = {
 	__index = ConstructedSyntax,
 }
 
----@param accepters table
----@param anchor table
+---@param accepters AccepterSet
+---@param anchor Anchor?
 ---@param ... any
 ---@return ConstructedSyntax
 local function cons_syntax(accepters, anchor, ...)
@@ -506,34 +478,27 @@ local function list(anchor, a, ...)
 	return pair(anchor, a, list(anchor, ...))
 end
 
-local eval
-
-local vau_mt = {
-	__index = {
-		apply = function(self, ops, env)
-			local bodyenv = self.params:argmatch(ops) + self.envparam:argmatch(env)
-			local bodycode = self.body
-			local expr
-			local res
-			while bodycode ~= unit do
-				expr, bodycode = bodycode[1], bodycode[2]
-				res, bodyenv = eval(expr, bodyenv)
-			end
-			return { kind = "value", res }
-		end,
-	},
-}
-
 local any = reducer(function(syntax)
 	return true, syntax
 end, "any")
 
+---@generic T
+---@param rule any
+---@param a ConstructedSyntax
+---@param b T
+---@return boolean
+---@return any
+---@return T
 local function list_match_pair_handler(rule, a, b)
 	--print("list pair handler", a, b, rule)
 	local ok, val = a:match({ rule }, failure_handler, nil)
 	return ok, val, b
 end
 
+---@param syntax ConstructedSyntax
+---@param ... any
+---@return boolean
+---@return ...
 local function ListMatch(syntax, ...)
 	local args = {}
 	local ok, err, val, tail = true, nil, true, nil
@@ -559,6 +524,10 @@ end
 
 local listmatch = reducer(ListMatch, "list_match")
 
+---@param syntax ConstructedSyntax
+---@param ... any
+---@return boolean
+---@return ...
 local function ListTail(syntax, ...)
 	local args = {}
 	local ok, err, val, tail = true, nil, true, nil
@@ -581,6 +550,15 @@ local listtail = reducer(ListTail, "list+tail")
 
 local list_many
 
+---@generic T
+---@param rule any
+---@param a ConstructedSyntax
+---@param b T
+---@return boolean
+---@return boolean
+---@return any
+---@return any
+---@return T?
 local function list_many_threaded_pair_handler(rule, a, b)
 	local ok, val, thread
 
@@ -596,6 +574,8 @@ local function list_many_threaded_pair_handler(rule, a, b)
 	return ok, true, val, thread, b
 end
 
+---@return boolean
+---@return boolean
 local function list_many_nil_handler()
 	return true, false
 end
@@ -670,11 +650,10 @@ local gen = require "./terms-generators"
 local constructed_syntax_type = gen.declare_foreign(gen.metatable_equality(constructed_syntax_mt))
 local reducer_type = gen.declare_foreign(gen.metatable_equality(reducer_mt))
 local matcher_type = gen.declare_foreign(function(val)
-	return matcher_kinds[val.kind]
+	return MatcherKind[val.kind] ~= nil
 end)
 
 local metalanguage = {
-	newenv = newenv,
 	accept_handler = accept_handler,
 	failure_handler = failure_handler,
 	ispair = ispair,
@@ -696,7 +675,6 @@ local metalanguage = {
 	pair = pair,
 	list = list,
 	symbol = symbol,
-	symbol_in_environment = symbol_in_environment,
 	constructed_syntax_type = constructed_syntax_type,
 	reducer_type = reducer_type,
 	matcher_type = matcher_type,

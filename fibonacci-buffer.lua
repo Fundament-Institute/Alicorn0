@@ -3,15 +3,23 @@
 -- in the case where the only methods implemented are append and get,
 -- the two names are synonymous
 
+---@class (exact) FibonacciPartition
+---@field n integer
+---@field [integer] any
+
+---@class (exact) FibonacciBuffer
+---@field n integer
+---@field [integer] FibonacciPartition
 local FibonacciBuffer = {}
 local FibonacciBuffer_mt = {}
 
+---@return FibonacciBuffer
 local function new()
-	local fib_buf = { n = 0 }
-	setmetatable(fib_buf, FibonacciBuffer_mt)
-	return fib_buf
+	return setmetatable({ n = 0 }, FibonacciBuffer_mt)
 end
 
+---@param value any
+---@return FibonacciBuffer
 function FibonacciBuffer:append(value)
 	local n = self.n
 	local n_partitions = #self
@@ -57,6 +65,8 @@ function FibonacciBuffer:append(value)
 end
 
 -- one-based!!!
+---@param index integer
+---@return any
 function FibonacciBuffer:get(index)
 	for _, p in ipairs(self) do
 		local length = p.n
@@ -69,6 +79,9 @@ function FibonacciBuffer:get(index)
 	return nil
 end
 
+---@param index integer
+---@param value any
+---@return FibonacciBuffer
 function FibonacciBuffer:set(index, value)
 	if index < 1 then
 		error("fibonacci buffer set() index out of bounds")
@@ -96,10 +109,13 @@ function FibonacciBuffer:set(index, value)
 	error("fibonacci buffer set() index out of bounds")
 end
 
+---@return integer
 function FibonacciBuffer:len()
 	return self.n
 end
 
+---@param other FibonacciBuffer
+---@return boolean
 function FibonacciBuffer:eq(other)
 	local other_mt = getmetatable(other)
 	if other_mt ~= FibonacciBuffer_mt then
@@ -129,6 +145,7 @@ function FibonacciBuffer:eq(other)
 	return true
 end
 
+---@return string
 function FibonacciBuffer:debug_repr()
 	local partition_strings = {}
 	for i, p in ipairs(self) do

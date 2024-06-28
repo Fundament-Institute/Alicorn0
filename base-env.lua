@@ -13,33 +13,7 @@ local p = require "pretty-print".prettyPrint
 --- lua_operative is dependently typed and should produce inferrable vs checkable depending on the goal, and an error as the second return if it failed
 --- | unknown in the second return insufficiently constrains the non-error cases to be inferrable or checkable terms
 --- this can be fixed in the future if we swap to returning a Result type that can express the success/error constraint separately
----@alias lua_operative fun(syntax : any, env : Environment, goal : expression_goal) : boolean, inferrable | checkable | unknown, Environment?
-
-local function do_block_pair_handler(env, a, b)
-	local ok, val, newenv = a:match({
-		evaluator.evaluates(metalang.accept_handler, env),
-	}, metalang.failure_handler, nil)
-	if not ok then
-		return false, val
-	end
-	--print("do block pair handler", ok, val, newenv, b)
-	return true, true, val, newenv, b
-end
-
-local function do_block_nil_handler(env)
-	return true, false, nil, env
-end
-
-local function do_block(syntax, env)
-	local newenv = env:child_scope()
-	local ok, val, newenv = syntax:match({
-		evaluator.block(metalang.accept_handler, newenv),
-	}, metalang.failure_handler, nil)
-	if not ok then
-		return ok, val
-	end
-	return ok, val, env:exit_child_scope(newenv)
-end
+---@alias lua_operative fun(syntax : ConstructedSyntax, env : Environment, goal : expression_goal) : boolean, inferrable | checkable | unknown, Environment?
 
 ---handle a let binding
 ---@type lua_operative
@@ -69,8 +43,8 @@ local function let_bind(syntax, env)
 	if not ok then
 		return false, bind
 	end
+	local expr, env = utils.unpack_val_env(bind)
 
-	env = bind.env
 	if not env or not env.get then
 		p(env)
 		error("env in let_bind isn't an env")
@@ -80,9 +54,9 @@ local function let_bind(syntax, env)
 		--print("binding destructuring with let")
 		--p(name)
 		local tupletype = gen.declare_array(gen.builtin_string)
-		env = env:bind_local(terms.binding.tuple_elim(tupletype(unpack(name)), bind.val))
+		env = env:bind_local(terms.binding.tuple_elim(tupletype(table.unpack(name)), expr))
 	else
-		env = env:bind_local(terms.binding.let(name, bind.val))
+		env = env:bind_local(terms.binding.let(name, expr))
 	end
 
 	return true,
@@ -94,10 +68,19 @@ local function let_bind(syntax, env)
 		env
 end
 
+---@param _ any
+---@param name string
+---@param exprenv { val:inferrable, env:Environment }
+---@return boolean
+---@return { name:string, expr:inferrable }
+---@return Environment
 local function record_threaded_element_acceptor(_, name, exprenv)
-	return true, { name = name, expr = exprenv.val }, exprenv.env
+	local expr, env = utils.unpack_val_env(exprenv)
+	return true, { name = name, expr = expr }, env
 end
 
+---@param env Environment
+---@return Matcher
 local function record_threaded_element(env)
 	return metalang.listmatch(
 		record_threaded_element_acceptor,
@@ -107,6 +90,7 @@ local function record_threaded_element(env)
 	)
 end
 
+---@type lua_operative
 local function record_build(syntax, env)
 	local ok, defs, env = syntax:match({
 		metalang.list_many_threaded(metalang.accept_handler, record_threaded_element, env),
@@ -133,18 +117,18 @@ local function intrinsic(syntax, env)
 	if not ok then
 		return ok, str_env
 	end
-	env = str_env.env
+	local str, env = utils.unpack_val_env(str_env)
 	if not env then
 		error "env nil in base-env.intrinsic"
 	end
-	local str = terms.checkable_term.inferrable(str_env.val) -- workaround for not having exprs.checked_expression yet
+	local str = terms.checkable_term.inferrable(str) -- workaround for not having exprs.checked_expression yet
 	local ok, type_env = syntax:match({
 		metalang.listmatch(metalang.accept_handler, exprs.inferred_expression(utils.accept_with_env, env)),
 	}, metalang.failure_handler, nil)
 	if not ok then
 		return ok, type_env
 	end
-	local type, env = type_env.val, type_env.env
+	local type, env = utils.unpack_val_env(type_env)
 	if not env then
 		error "env nil in base-env.intrinsic"
 	end
@@ -153,135 +137,75 @@ local function intrinsic(syntax, env)
 		env
 end
 
---evaluator.define_operate(
---  basic_fn_kind,
---  function(self, operands, env)
---    local ok, args, env = operands:match(
---      {
---        evaluator.collect_tuple(metalang.accept_handler, env)
---      },
---      metalang.failure_handler,
---      nil
---    )
---    if not ok then return ok, args end
---    if #args.type.params ~= #self.val.argnames then return false, "argument count mismatch" end
---    local bindings = {}
---    for i = 1, #args.type.params do
---      bindings[self.val.argnames[i]] = environment.new_store{type = args.type.params[i], val = args.val[i]}
---    end
---    local callenv = environment.new_env {
---      locals = treemap.build(bindings),
---      nonlocals = self.val.enclosing_bindings,
---      carrier = env.carrier,
---      perms = self.val.enclosing_perms
---    }
---    local ok, res, resenv = self.val.body:match(
---      {
---        evaluator.block(metalang.accept_handler, callenv)
---      },
---      metalang.failure_handler,
---      nil
---    )
---    if not ok then return ok, res end
---    return ok, res, environment.new_env {locals = env.locals, nonlocals = env.nonlocals, carrier = resenv.carrier, perms = env.perms}
---
---end)
-
-local function basic_fn(syntax, env)
-	local ok, args, body = syntax:match({
-		metalang.ispair(metalang.accept_handler),
-	}, metalang.failure_handler, nil)
-	if not ok then
-		return false, args
-	end
-	-- print "defining function"
-	-- p(args)
-	-- p(body)
-	local ok, names = args:match({
-		metalang.list_many(metalang.accept_handler, metalang.issymbol(metalang.accept_handler)),
-	}, metalang.failure_handler, nil)
-	if not ok then
-		return ok, names
-	end
-	local defn = {
-		enclosing_bindings = env.bindings,
-		enclosing_perms = env.perms,
-		body = body,
-		argnames = names,
-	}
-	return true, { type = basic_fn_type, val = defn }, env
-end
-
-local function tuple_type_impl(syntax, env)
-	local ok, typeargs, env = syntax:match({
-		evaluator.collect_tuple(metalang.accept_handler, env),
-	}, metalang.failure_handler, nil)
-	if not ok then
-		return ok, typeargs
-	end
-	for i, t in ipairs(typeargs.type.params) do
-		if t ~= types.type then
-			return false, "tuple-type was provided something that wasn't a type"
+local pure_ascribed_name_with_tail = metalang.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@return boolean
+	---@return string
+	---@return inferrable?
+	---@return Environment?
+	---@return ConstructedSyntax?
+	function(syntax, env)
+		local ok, name, type_env, tail = syntax:match({
+			metalang.listtail(
+				metalang.accept_handler,
+				metalang.issymbol(metalang.accept_handler),
+				metalang.symbol_exact(metalang.accept_handler, ":"),
+				exprs.inferred_expression(utils.accept_with_env, env)
+			),
+		}, metalang.failure_handler, nil)
+		if not ok then
+			return ok, name
 		end
-	end
-	return true, { type = types.type, val = types.tuple(typeargs.val) }, env
-end
-local function tuple_of_impl(syntax, env)
-	local ok, components, env = syntax:match({
-		evaluator.collect_tuple(metalang.accept_handler, env),
-	}, metalang.failure_handler, nil)
-	if not ok then
-		return ok, components
-	end
-	return true, components, env
-end
+		local type, env = utils.unpack_val_env(type_env)
+		return true, name, type, env, tail
+	end,
+	"pure_ascribed_name_with_tail"
+)
 
-local pure_ascribed_name_with_tail = metalang.reducer(function(syntax, env)
-	local ok, name, type_env, tail = syntax:match({
-		metalang.listtail(
-			metalang.accept_handler,
-			metalang.issymbol(metalang.accept_handler),
-			metalang.symbol_exact(metalang.accept_handler, ":"),
-			exprs.inferred_expression(utils.accept_with_env, env)
-		),
-	}, metalang.failure_handler, nil)
-	if not ok then
-		return ok, name
-	end
-	return true, name, type_env.val, type_env.env, tail
-end, "pure_ascribed_name_with_tail")
-
-local ascribed_name_with_tail = metalang.reducer(function(syntax, env, prev, names)
-	-- print("ascribed_name trying")
-	-- p(syntax)
-	-- print(prev:pretty_print())
-	-- print("is env an environment? (start of ascribed name)")
-	-- print(env.get)
-	-- print(env.enter_block)
-	---@cast env Environment
-	local shadowed, env = env:enter_block()
-	local anchor = syntax.anchor
-	if not anchor then
-		anchor = "bug in ascribed_name_with_tail"
-	end
-	env = env:bind_local(terms.binding.annotated_lambda("#prev", prev, anchor, terms.visibility.explicit))
-	local ok, prev_binding = env:get("#prev")
-	if not ok then
-		error "#prev should always be bound, was just added"
-	end
-	env = env:bind_local(terms.binding.tuple_elim(names, prev_binding))
-	local ok, name, val, env, tail =
-		syntax:match({ pure_ascribed_name_with_tail(metalang.accept_handler, env) }, metalang.failure_handler, nil)
-	if not ok then
-		return ok, name
-	end
-	---@type Environment
-	local env, val = env:exit_block(val, shadowed)
-	-- print("is env an environment? (end of ascribed name)")
-	-- print(env.get)
-	-- print(env.enter_block)
-	return true, name, val, env, tail
-end, "ascribed_name_with_tail")
+local ascribed_name_with_tail = metalang.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@param prev inferrable
+	---@param names string[]
+	---@return boolean
+	---@return string
+	---@return inferrable?
+	---@return Environment?
+	---@return ConstructedSyntax?
+	function(syntax, env, prev, names)
+		-- print("ascribed_name trying")
+		-- p(syntax)
+		-- print(prev:pretty_print())
+		-- print("is env an environment? (start of ascribed name)")
+		-- print(env.get)
+		-- print(env.enter_block)
+		local shadowed, env = env:enter_block()
+		local anchor = syntax.anchor
+		if not anchor then
+			anchor = "bug in ascribed_name_with_tail"
+		end
+		env = env:bind_local(terms.binding.annotated_lambda("#prev", prev, anchor, terms.visibility.explicit))
+		local ok, prev_binding = env:get("#prev")
+		if not ok then
+			error "#prev should always be bound, was just added"
+		end
+		---@cast prev_binding -string
+		env = env:bind_local(terms.binding.tuple_elim(names, prev_binding))
+		local ok, name, val, env, tail =
+			syntax:match({ pure_ascribed_name_with_tail(metalang.accept_handler, env) }, metalang.failure_handler, nil)
+		if not ok then
+			return ok, name
+		end
+		---@cast env Environment
+		local env, val = env:exit_block(val, shadowed)
+		-- print("is env an environment? (end of ascribed name)")
+		-- print(env.get)
+		-- print(env.enter_block)
+		return true, name, val, env, tail
+	end,
+	"ascribed_name_with_tail"
+)
 
 local ascribed_name = metalang.reducer(function(syntax, env, prev, names)
 	local ok, name, val, env = syntax:match({
@@ -458,20 +382,9 @@ local prim_ascribed_segment = metalang.reducer(function(syntax, env, termination
 	return true, { single = single, names = names, args = args, env = env }, tail
 end, "prim_ascribed_segment")
 
-local function prim_func_type_pair_handler(env, a, b)
-	local ok, val, env =
-		a:match({ exprs.inferred_expression(metalang.accept_handler, env) }, metalang.failure_handler, nil)
-	if not ok then
-		return false, val
-	end
-	return true, true, val, b, env
-end
-
-local function prim_func_type_empty_handler(env)
-	return true, false, nil, nil, env
-end
-
-local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
+-- TODO: abstract so can reuse for func type and prim func type
+---@type lua_operative
+local function prim_func_type_impl(syntax, env)
 	local pft_anchor = syntax.anchor
 
 	if not env or not env.enter_block then
@@ -537,28 +450,11 @@ local prim_func_type_impl_reducer = metalang.reducer(function(syntax, env)
 		error "env isn't an environment at end in prim_func_type_impl_reducer"
 	end
 	return true, fn_type_term, env
-end, "prim_func_type_impl")
+end
 
 -- TODO: abstract so can reuse for func type and prim func type
 ---@type lua_operative
-local function prim_func_type_impl(syntax, env)
-	--print("in prim_func_type_impl")
-	local ok, fn_type_term, env =
-		syntax:match({ prim_func_type_impl_reducer(metalang.accept_handler, env) }, metalang.failure_handler, env)
-	if not ok then
-		return ok, fn_type_term
-	end
-	--print("finished matching prim_func_type_impl and got:")
-	--print("ok:", ok)
-	--print("fn_type_term: (inferrable term follows)")
-	--print(fn_type_term:pretty_print(env.typechecking_context))
-	if not env or not env.enter_block then
-		error "env isn't an environment at end in prim_func_type_impl"
-	end
-	return ok, fn_type_term, env
-end
-
-local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
+local function forall_type_impl(syntax, env)
 	local pft_anchor = syntax.anchor
 
 	if not env or not env.enter_block then
@@ -646,28 +542,6 @@ local forall_type_impl_reducer = metalang.reducer(function(syntax, env)
 		error "env isn't an environment at end in forall_type_impl_reducer"
 	end
 	return true, fn_type_term, env
-end, "forall_type_impl")
-
--- TODO: abstract so can reuse for func type and prim func type
----@type lua_operative
-local function forall_type_impl(syntax, env)
-	--print("in forall_type_impl")
-	local ok, fn_type_term, env =
-		syntax:match({ forall_type_impl_reducer(metalang.accept_handler, env) }, metalang.failure_handler, env)
-	if not ok then
-		return ok, fn_type_term
-	end
-	--print("finished matching forall_type_impl and got")
-	--print(fn_type_term:pretty_print(env.typechecking_context))
-	if not env.enter_block then
-		error "env isn't an environment at end in forall_type_impl"
-	end
-	return ok, fn_type_term, env
-	-- parse sequence of ascribed names, arrow, then sequence of ascribed names
-	-- for each ascribed name:
-	-- enter a block, perform lambda binding, perform tuple destrucutring binding, parse out the type of the ascription
-
-	--local ok,
 end
 
 ---Constrains a type by using a checked expression goal and producing an annotated inferrable term
@@ -748,19 +622,18 @@ local function apply_operative_impl(syntax, env)
 		),
 	}, metalang.failure_handler, nil)
 	if not ok then
-		return ok, fn_inferrable_term
+		return ok, args_inferrable_term
 	end
 
-	local inf_term = args_inferrable_term.val
+	local inf_term, env = utils.unpack_val_env(args_inferrable_term)
 	if terms.inferrable_term.value_check(inf_term) == true then
 		inf_term = terms.checkable_term.inferrable(inf_term)
 	end
 	return true,
 		terms.inferrable_term.application(terms.inferrable_term.typed(type_of_fn, usages, fn_typed_term), inf_term),
-		args_inferrable_term.env
+		env
 end
 
----@param syntax any
 ---@type lua_operative
 local function lambda_impl(syntax, env)
 	local ok, thread, tail = syntax:match({
