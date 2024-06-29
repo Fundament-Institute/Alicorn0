@@ -27,7 +27,10 @@ $definition
 function $typename:is_$variant() end]],
 	unwrap_method = [[---@return $(, )parts
 function $typename:unwrap_$variant() end]],
+	as_method = [[---@return boolean, $(, )parts
+function $typename:as_$variant() end]],
 	enum_definition = [[---@class (exact) $typename
+---@field kind string
 $typename = {}
 $(
 )methods
@@ -39,7 +42,7 @@ return {}]],
 	record_constructor = [[---@field $variant fun($(, )params): $typename]],
 }
 
-function build_meta_file_for_enum(info)
+local function build_meta_file_for_enum(info)
 	local kind = info.name
 	local methods = {}
 	local constructors = {}
@@ -78,6 +81,12 @@ function build_meta_file_for_enum(info)
 			}
 			methods[#methods + 1] = {
 				kind = "unwrap_method",
+				typename = kind,
+				variant = variant,
+				parts = paramtypes,
+			}
+			methods[#methods + 1] = {
+				kind = "as_method",
 				typename = kind,
 				variant = variant,
 				parts = paramtypes,

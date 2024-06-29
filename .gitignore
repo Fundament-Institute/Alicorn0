@@ -4,3 +4,5 @@
 /.direnv/
 /.pre-commit-config.yaml
 /deps/
+/luaunit.lua
+/.vscode/

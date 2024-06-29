@@ -109,7 +109,7 @@
                 (ps: with ps; [ luasocket lpeg inspect luaunit tl lqc ]))
             ];
             shellHook = self.checks.${system}.pre-commit-check.shellHook + ''
-              export LUA_PATH='${luajit}/share/lua/5.1/?.lua'
+              export LUA_PATH='${luajit}/share/lua/5.1/?.lua;./?.lua'
             '';
           };
           default = alicorn;

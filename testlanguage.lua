@@ -1,4 +1,4 @@
-local metalang = require "metalanguage"
+local metalang = require "./metalanguage"
 
 local eval
 
@@ -28,9 +28,28 @@ local function eval_pairhandler(env, a, b)
 	return ok, val, newenv
 end
 
+local function symbolenvhandler(env, name)
+	--print("symbolenvhandler(", name, env, ")")
+	local res = env:get(name)
+	if res ~= nil then
+		return true, res
+	else
+		return false, "environment does not contain a binding for " .. name
+	end
+end
+
+local function SymbolInEnvironment(syntax, environment)
+	--print("in symbol in environment reducer", matcher.kind, matcher[1], matcher)
+	return syntax:match({
+		metalang.issymbol(symbolenvhandler),
+	}, metalang.failure_handler, environment)
+end
+
+local symbol_in_environment = metalang.reducer(SymbolInEnvironment, "symbol in env")
+
 function eval(syntax, environment)
 	return syntax:match({
-		metalang.symbol_in_environment(eval_passhandler, environment),
+		symbol_in_environment(eval_passhandler, environment),
 		metalang.isvalue(eval_passhandler),
 		metalang.ispair(eval_pairhandler),
 	}, metalang.failure_handler, environment)
