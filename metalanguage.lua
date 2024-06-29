@@ -442,7 +442,7 @@ local pair_accepters = {
 	end,
 }
 
----@param anchor Anchor?
+---@param anchor Anchor
 ---@param a ConstructedSyntax
 ---@param b ConstructedSyntax
 ---@return ConstructedSyntax
@@ -456,7 +456,7 @@ local symbol_accepters = {
 	end,
 }
 
----@param anchor Anchor?
+---@param anchor Anchor
 ---@param name string
 ---@return ConstructedSyntax
 local function symbol(anchor, name)
@@ -469,7 +469,7 @@ local value_accepters = {
 	end,
 }
 
----@param anchor Anchor?
+---@param anchor Anchor
 ---@param val any
 ---@return ConstructedSyntax
 local function value(anchor, val)
@@ -484,7 +484,7 @@ local nil_accepters = {
 
 local nilval = cons_syntax(nil_accepters)
 
----@param anchor Anchor?
+---@param anchor Anchor
 ---@param a ConstructedSyntax
 ---@param ... ConstructedSyntax
 ---@return ConstructedSyntax

@@ -244,7 +244,8 @@ end
 
 ---@param yard { n: integer, [integer]: TaggedOperator }
 ---@param output { n: integer, [integer]: ConstructedSyntax }
-local function shunting_yard_pop(yard, output)
+---@param anchor Anchor
+local function shunting_yard_pop(yard, output, anchor)
 	local yard_height = yard.n
 	local output_length = output.n
 	local operator = yard[yard_height]
@@ -252,14 +253,14 @@ local function shunting_yard_pop(yard, output)
 	local operator_symbol = operator.symbol
 	if operator_type == OperatorType.Prefix then
 		local arg = output[output_length]
-		local tree = metalanguage.list(nil, metalanguage.symbol(nil, operator_symbol), arg)
+		local tree = metalanguage.list(anchor, metalanguage.symbol(anchor, operator_symbol), arg)
 		yard[yard_height] = nil
 		yard.n = yard_height - 1
 		output[output_length] = tree
 	elseif operator_type == OperatorType.Infix then
 		local right = output[output_length]
 		local left = output[output_length - 1]
-		local tree = metalanguage.list(nil, left, metalanguage.symbol(nil, operator_symbol), right)
+		local tree = metalanguage.list(anchor, left, metalanguage.symbol(anchor, operator_symbol), right)
 		yard[yard_height] = nil
 		yard.n = yard_height - 1
 		output[output_length] = nil
@@ -314,9 +315,10 @@ end
 ---@param b ConstructedSyntax
 ---@param yard { n: integer, [integer]: TaggedOperator }
 ---@param output { n: integer, [integer]: ConstructedSyntax }
+---@param anchor Anchor
 ---@return boolean
 ---@return ConstructedSyntax|string
-local function shunting_yard(a, b, yard, output)
+local function shunting_yard(a, b, yard, output, anchor)
 	-- first, collect all prefix operators
 	local is_prefix, prefix_symbol =
 		a:match({ metalanguage.issymbol(shunting_yard_prefix_handler) }, metalanguage.failure_handler, nil)
@@ -334,7 +336,7 @@ local function shunting_yard(a, b, yard, output)
 			type = OperatorType.Prefix,
 			symbol = prefix_symbol,
 		}
-		return shunting_yard(next_a, next_b, yard, output)
+		return shunting_yard(next_a, next_b, yard, output, anchor)
 	end
 	-- no more prefix operators, now handle infix
 	output.n = output.n + 1
@@ -364,7 +366,7 @@ local function shunting_yard(a, b, yard, output)
 		type = OperatorType.Infix,
 		symbol = infix_symbol,
 	}
-	return shunting_yard(next_a, next_b, yard, output)
+	return shunting_yard(next_a, next_b, yard, output, anchor)
 end
 
 ---@param symbol string
@@ -413,7 +415,7 @@ local function expression_pairhandler(args, a, b)
 
 	-- if the expression is a list containing prefix and infix expressions,
 	-- parse it into a tree of simple prefix/infix expressions with shunting yard
-	local ok, syntax = shunting_yard(a, b, { n = 0 }, { n = 0 })
+	local ok, syntax = shunting_yard(a, b, { n = 0 }, { n = 0 }, a.anchor)
 	if ok then
 		---@cast syntax ConstructedSyntax
 		is_operator, operator_type, operator, left, right = syntax:match({
