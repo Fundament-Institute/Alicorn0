@@ -602,7 +602,7 @@ local list_many_threaded_until = reducer(function(syntax, submatcher_fn, init_th
 	if not ok then
 		return ok, cont
 	end
-	return true, vals, thread, tail
+	return ok, vals, thread, tail
 end, "list_many_threaded_until")
 
 local list_many_threaded = reducer(function(syntax, submatcher_fn, init_thread)
@@ -612,7 +612,7 @@ local list_many_threaded = reducer(function(syntax, submatcher_fn, init_thread)
 		nil
 	)
 	if not ok then
-		return ok, false
+		return ok, vals
 	end
 	return ok, vals, thread
 end, "list_many_threaded")

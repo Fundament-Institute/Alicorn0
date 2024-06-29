@@ -205,8 +205,7 @@ local infix_data = {
 ---@return boolean
 ---@return string
 local function shunting_yard_prefix_handler(_, symbol)
-	local s = string.sub(symbol, 1, 1)
-	if not prefix_data[s] then
+	if not prefix_data[symbol:sub(1, 1)] then
 		return false,
 			"symbol was provided in a prefix operator place, but the symbol isn't a valid prefix operator: " .. symbol
 	end
@@ -222,12 +221,7 @@ end
 ---@return ConstructedSyntax?
 ---@return ConstructedSyntax?
 local function shunting_yard_infix_handler(_, symbol, a, b)
-	-- HACK: workaround for parsing forall -> T : prim-type
-	if symbol == "->" then
-		return false, "you've been hit by, you've been struck by, a smooth design error"
-	end
-	local s = string.sub(symbol, 1, 1)
-	if not infix_data[s] then
+	if not infix_data[symbol:sub(1, 1)] then
 		return false,
 			"symbol was provided in an infix operator place, but the symbol isn't a valid infix operator: " .. symbol
 	end
@@ -285,10 +279,8 @@ local function shunting_yard_should_pop(new_symbol, yard_operator)
 		error("unknown operator type")
 	end
 	local yard_symbol = yard_operator.symbol
-	local n = string.sub(new_symbol, 1, 1)
-	local y = string.sub(yard_symbol, 1, 1)
-	local new_data = infix_data[n]
-	local yard_data = infix_data[y]
+	local new_data = infix_data[new_symbol:sub(1, 1)]
+	local yard_data = infix_data[yard_symbol:sub(1, 1)]
 	local new_precedence = new_data.precedence
 	local yard_precedence = yard_data.precedence
 	if new_precedence < yard_precedence then
@@ -378,8 +370,7 @@ end
 ---@return string?
 ---@return ConstructedSyntax?
 local function expression_prefix_handler(_, symbol, arg)
-	local s = string.sub(symbol, 1, 1)
-	if not prefix_data[s] then
+	if not prefix_data[symbol:sub(1, 1)] then
 		return false,
 			"symbol was provided in a prefix operator place, but the symbol isn't a valid prefix operator: " .. symbol
 	end
@@ -395,8 +386,7 @@ end
 ---@return ConstructedSyntax?
 ---@return ConstructedSyntax?
 local function expression_infix_handler(_, left, symbol, right)
-	local s = string.sub(symbol, 1, 1)
-	if not infix_data[s] then
+	if not infix_data[symbol:sub(1, 1)] then
 		return false,
 			"symbol was provided in an infix operator place, but the symbol isn't a valid infix operator: " .. symbol
 	end
