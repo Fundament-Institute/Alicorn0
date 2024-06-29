@@ -339,9 +339,11 @@ local check_concrete
 -- indexed by kind x kind
 local concrete_comparers = {}
 
+---@alias value_comparer fun(a: value, b: value, typechecker: TypeCheckerState): boolean, string?
+
 ---@param ka string
 ---@param kb string
----@param comparer fun(a: value, b: value, typechecker: TypeCheckerState): boolean, string?
+---@param comparer value_comparer
 local function add_comparer(ka, kb, comparer)
 	concrete_comparers[ka] = concrete_comparers[ka] or {}
 	concrete_comparers[ka][kb] = comparer
@@ -372,10 +374,7 @@ local function concrete_fail(message, cause)
 	}, concrete_fail_mt)
 end
 
----@param a value
----@param b value
----@param typechecker TypeCheckerState
----@return boolean
+---@type value_comparer
 local function always_fits_comparer(a, b, typechecker)
 	return true
 end
@@ -392,11 +391,7 @@ end
 
 -- types of types
 add_comparer(value.prim_type_type.kind, value.prim_type_type.kind, always_fits_comparer)
----@param a value
----@param b value
----@param typechecker TypeCheckerState
----@return boolean
----@return string?
+---@type value_comparer
 local function tuple_compare(a, b, typechecker)
 	-- fixme lol
 	local placeholder = value.neutral(neutral_value.free(free.unique({})))
@@ -425,61 +420,43 @@ local function tuple_compare(a, b, typechecker)
 end
 add_comparer("value.tuple_type", "value.tuple_type", tuple_compare)
 add_comparer("value.prim_tuple_type", "value.prim_tuple_type", tuple_compare)
-add_comparer(
-	"value.pi",
-	"value.pi",
-	---@param a value
-	---@param b value
-	---@param typechecker TypeCheckerState
-	---@return boolean
-	---@return string?
-	function(a, b, typechecker)
-		if a == b then
-			return true
-		end
-
-		local avis = a.param_info.visibility.visibility
-		local bvis = b.param_info.visibility.visibility
-		if avis ~= bvis and avis ~= terms.visibility.implicit then
-			return false, concrete_fail("pi param_info")
-		end
-
-		local apurity = a.result_info.purity
-		local bpurity = b.result_info.purity
-		if apurity ~= bpurity then
-			return false, concrete_fail("pi result_info")
-		end
-
-		local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
-		local a_res = apply_value(a.result_type, unique_placeholder)
-		local b_res = apply_value(b.result_type, unique_placeholder)
-		typechecker:queue_work(a_res, b_res, "pi function results")
-		typechecker:queue_work(b.param_type, a.param_type, "pi function parameters")
-
+add_comparer("value.pi", "value.pi", function(a, b, typechecker)
+	if a == b then
 		return true
 	end
-)
-add_comparer(
-	"value.prim_function_type",
-	"value.prim_function_type",
-	---@param a value
-	---@param b value
-	---@param typechecker TypeCheckerState
-	---@return boolean
-	---@return string?
-	function(a, b, typechecker)
-		if a == b then
-			return true
-		end
 
-		local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
-		local a_res = apply_value(a.result_type, unique_placeholder)
-		local b_res = apply_value(b.result_type, unique_placeholder)
-		typechecker:queue_work(a_res, b_res, "prim function results")
-		typechecker:queue_work(b.param_type, a.param_type, "prim function parameters")
+	local avis = a.param_info.visibility.visibility
+	local bvis = b.param_info.visibility.visibility
+	if avis ~= bvis and avis ~= terms.visibility.implicit then
+		return false, concrete_fail("pi param_info")
+	end
+
+	local apurity = a.result_info.purity
+	local bpurity = b.result_info.purity
+	if apurity ~= bpurity then
+		return false, concrete_fail("pi result_info")
+	end
+
+	local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
+	local a_res = apply_value(a.result_type, unique_placeholder)
+	local b_res = apply_value(b.result_type, unique_placeholder)
+	typechecker:queue_work(a_res, b_res, "pi function results")
+	typechecker:queue_work(b.param_type, a.param_type, "pi function parameters")
+
+	return true
+end)
+add_comparer("value.prim_function_type", "value.prim_function_type", function(a, b, typechecker)
+	if a == b then
 		return true
 	end
-)
+
+	local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
+	local a_res = apply_value(a.result_type, unique_placeholder)
+	local b_res = apply_value(b.result_type, unique_placeholder)
+	typechecker:queue_work(a_res, b_res, "prim function results")
+	typechecker:queue_work(b.param_type, a.param_type, "prim function parameters")
+	return true
+end)
 
 for _, type_of_type in ipairs({
 	value.prim_type_type,
@@ -487,39 +464,21 @@ for _, type_of_type in ipairs({
 	add_comparer(type_of_type.kind, value.star(0).kind, always_fits_comparer)
 end
 
-add_comparer(
-	value.star(0).kind,
-	value.star(0).kind,
-	---@param a value
-	---@param b value
-	---@param typechecker TypeCheckerState
-	---@return boolean
-	---@return string?
-	function(a, b, typechecker)
-		if a.level > b.level then
-			print("star-comparer error:")
-			print("a:", a.level)
-			print("b:", b.level)
-			return false, "a.level > b.level"
-		end
-		return true
+add_comparer(value.star(0).kind, value.star(0).kind, function(a, b, typechecker)
+	if a.level > b.level then
+		print("star-comparer error:")
+		print("a:", a.level)
+		print("b:", b.level)
+		return false, "a.level > b.level"
 	end
-)
+	return true
+end)
 
-add_comparer(
-	"value.prim_wrapped_type",
-	"value.prim_wrapped_type",
-	---@param a value
-	---@param b value
-	---@param typechecker TypeCheckerState
-	---@return boolean
-	---@return string?
-	function(a, b, typechecker)
-		local ua, ub = a:unwrap_prim_wrapped_type(), b:unwrap_prim_wrapped_type()
-		check_concrete(ua, ub, typechecker)
-		return true
-	end
-)
+add_comparer("value.prim_wrapped_type", "value.prim_wrapped_type", function(a, b, typechecker)
+	local ua, ub = a:unwrap_prim_wrapped_type(), b:unwrap_prim_wrapped_type()
+	check_concrete(ua, ub, typechecker)
+	return true
+end)
 
 -- Compares any non-metavariables, or defers any metavariable comparisons to the work queue
 ---@param val value
