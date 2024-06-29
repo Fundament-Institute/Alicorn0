@@ -572,7 +572,7 @@ let prim-tuple-of = lambda (U : universe, defn : tuple-def-type(U))
 let tuple-def-singleton = lambda (U : universe, T : U)
 	tuple-def-elem U
 		tuple-def-empty U
-		lambda (())
+		lambda ()
 			T
 let tuple-def-concat = lambda (U : universe, head : tuple-def-type(U), tail : tuple-def-type(U))
 	# woah huge intrinsic
@@ -914,7 +914,7 @@ let new-operative = lambda (userdata : prim-type, ud : userdata, handler : opera
 		tuple-def-elem type_(1)
 			tuple-def-elem type_(1)
 				tuple-def-empty type_(1)
-				lambda (())
+				lambda ()
 					prim-type
 			lambda ((op-type : prim-type))
 				op-type
@@ -933,7 +933,7 @@ let block-match-result-defn = lambda ((goal : prim-goal))
 		tuple-def-elem prim-type
 			tuple-def-elem prim-type
 				tuple-def-empty prim-type
-				lambda (())
+				lambda ()
 					prim-bool
 			lambda ((ok : prim-bool))
 				prim-if(ok, prim-term-of(goal), prim-lua-error)
@@ -1072,7 +1072,7 @@ let tupleof-ascribed-names-match-result-defn =
 		tuple-def-elem prim-type
 			tuple-def-elem prim-type
 				tuple-def-empty prim-type
-				lambda (())
+				lambda ()
 					prim-bool
 			lambda ((ok : prim-bool))
 				prim-if(ok, tupleof-ascribed-names-reducer-thread-type, prim-lua-error)
