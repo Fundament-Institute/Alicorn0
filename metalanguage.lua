@@ -289,6 +289,10 @@ local function reducer(func, name)
 	return reducer
 end
 
+---@param expected string
+---@param name string
+---@return boolean
+---@return string?
 local function symbolexacthandler(expected, name)
 	if name == expected then
 		return true
@@ -297,13 +301,25 @@ local function symbolexacthandler(expected, name)
 	end
 end
 
+---@param data any
+---@param ... any
+---@return boolean
+---@return any
 local function accept_handler(data, ...)
 	return true, ...
 end
+---@param data any
+---@param exception string
+---@return boolean
+---@return string
 local function failure_handler(data, exception)
 	return false, exception
 end
 
+---@param syntax ConstructedSyntax
+---@param symbol string
+---@return boolean
+---@return string?
 local function SymbolExact(syntax, symbol)
 	return syntax:match({
 		issymbol(symbolexacthandler),
@@ -555,16 +571,14 @@ end
 
 local listtail = reducer(ListTail, "list+tail")
 
-local list_many
-
 ---@generic T
 ---@param rule any
 ---@param a ConstructedSyntax
 ---@param b T
 ---@return boolean
----@return boolean
----@return any
----@return any
+---@return boolean|string
+---@return any?
+---@return any?
 ---@return T?
 local function list_many_threaded_pair_handler(rule, a, b)
 	local ok, val, thread
@@ -587,71 +601,108 @@ local function list_many_nil_handler()
 	return true, false
 end
 
-local list_many_threaded_until = reducer(function(syntax, submatcher_fn, init_thread, termination)
-	local vals = {}
-	local ok, cont, val, thread, tail = true, true, nil, init_thread, syntax
-	local nextthread = init_thread
-	while ok and cont do
-		thread = nextthread
-		ok, cont, val, nextthread, tail = tail:match({
-			ispair(list_many_threaded_pair_handler),
-			isnil(list_many_nil_handler),
-		}, failure_handler, { submatcher_fn(thread), termination })
-		vals[#vals + 1] = val
-	end
-	if not ok then
-		return ok, cont
-	end
-	return ok, vals, thread, tail
-end, "list_many_threaded_until")
+local list_many_threaded_until = reducer(
+	---@param syntax ConstructedSyntax
+	---@param submatcher_fn fun(any): Matcher
+	---@param init_thread any
+	---@param termination Matcher
+	---@return boolean
+	---@return any[]|string
+	---@return any?
+	---@return ConstructedSyntax?
+	function(syntax, submatcher_fn, init_thread, termination)
+		local vals = {}
+		local ok, cont, val, thread, tail = true, true, nil, init_thread, syntax
+		local nextthread = init_thread
+		while ok and cont do
+			thread = nextthread
+			ok, cont, val, nextthread, tail = tail:match({
+				ispair(list_many_threaded_pair_handler),
+				isnil(list_many_nil_handler),
+			}, failure_handler, { submatcher_fn(thread), termination })
+			vals[#vals + 1] = val
+		end
+		if not ok then
+			return ok, cont
+		end
+		return ok, vals, thread, tail
+	end,
+	"list_many_threaded_until"
+)
 
-local list_many_threaded = reducer(function(syntax, submatcher_fn, init_thread)
-	local ok, vals, thread, tail = syntax:match(
-		{ list_many_threaded_until(accept_handler, submatcher_fn, init_thread, nil) },
-		failure_handler,
-		nil
-	)
-	if not ok then
-		return ok, vals
-	end
-	return ok, vals, thread
-end, "list_many_threaded")
+local list_many_threaded = reducer(
+	---@param syntax ConstructedSyntax
+	---@param submatcher_fn fun(any): Matcher
+	---@param init_thread any
+	---@return boolean
+	---@return any[]|string
+	---@return any?
+	function(syntax, submatcher_fn, init_thread)
+		local ok, vals, thread, tail = syntax:match(
+			{ list_many_threaded_until(accept_handler, submatcher_fn, init_thread, nil) },
+			failure_handler,
+			nil
+		)
+		if not ok then
+			return ok, vals
+		end
+		return ok, vals, thread
+	end,
+	"list_many_threaded"
+)
 
-list_many = reducer(function(syntax, submatcher)
-	local ok, vals, thread, tail = syntax:match(
-		{ list_many_threaded(accept_handler, function(...)
-			return submatcher
-		end, {}) },
-		failure_handler,
-		nil
-	)
-	if not ok then
-		return ok, false
-	end
-	return true, vals
-end, "list_many")
+local list_many = reducer(
+	---@param syntax ConstructedSyntax
+	---@param submatcher Matcher
+	---@return boolean
+	---@return any[]|string
+	function(syntax, submatcher)
+		local ok, vals, thread, tail = syntax:match(
+			{ list_many_threaded(accept_handler, function()
+				return submatcher
+			end, {}) },
+			failure_handler,
+			nil
+		)
+		if not ok then
+			return ok, false
+		end
+		return true, vals
+	end,
+	"list_many"
+)
 
-local oneof = reducer(function(syntax, ...)
-	return syntax:match({ ... }, failure_handler, nil)
-end, "oneof")
+local oneof = reducer(
+	---@param syntax ConstructedSyntax
+	---@param ... Matcher
+	function(syntax, ...)
+		return syntax:match({ ... }, failure_handler, nil)
+	end,
+	"oneof"
+)
 
-local list_tail_ends = reducer(function(syntax, rule)
-	local res = { syntax:match({ rule }, failure_handler, nil) }
-	local ok, err, tail = res[1], res[2], res[#res]
+local list_tail_ends = reducer(
+	---@param syntax ConstructedSyntax
+	---@param rule Matcher
+	function(syntax, rule)
+		local res = { syntax:match({ rule }, failure_handler, nil) }
+		local ok, err, tail = res[1], res[2], res[#res]
 
-	if not ok then
-		return false, err
-	end
+		if not ok then
+			return false, err
+		end
 
-	ok, err = tail:match({ isnil(accept_handler) }, failure_handler, nil)
-	if not ok then
-		return false, err, "list tail does not end with nil"
-	end
+		ok, err = tail:match({ isnil(accept_handler) }, failure_handler, nil)
+		if not ok then
+			return false, err, "list tail does not end with nil"
+		end
 
-	res[#res] = nil
+		res[#res] = nil
 
-	return table.unpack(res)
-end, "list_tail_ends")
+		return table.unpack(res)
+	end,
+	"list_tail_ends"
+)
 
 local gen = require "./terms-generators"
 local constructed_syntax_type = gen.declare_foreign(gen.metatable_equality(constructed_syntax_mt))

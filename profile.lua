@@ -62,6 +62,9 @@ end
 
 local function dump(profile_file)
 	local profile_out = io.open(profile_file, "w")
+	if not profile_out then
+		error("opening profile file failed!")
+	end
 	for n, sample in ipairs(profile_samples) do
 		profile_out:write("sample: ", n, "\n")
 		local t = false
@@ -89,7 +92,10 @@ end
 
 local function dump_flame(profile_file)
 	local profile_out = io.open(profile_file, "w")
-	for n, sample in ipairs(profile_samples) do
+	if not profile_out then
+		error("opening profile file failed!")
+	end
+	for _, sample in ipairs(profile_samples) do
 		local s = sample.stack
 		for i = sample.stack_n, 1, -1 do
 			local d = s[i]

@@ -32,9 +32,13 @@ local param_info_explicit = value.param_info(value.visibility(visibility.explici
 local param_info_implicit = value.param_info(value.visibility(visibility.implicit))
 local result_info_pure = value.result_info(result_info(purity.pure))
 local result_info_effectful = value.result_info(result_info(purity.effectful))
+---@param ... value
+---@return value
 local function tup_val(...)
 	return value.tuple_value(value_array(...))
 end
+---@param ... value
+---@return value
 local function cons(...)
 	return value.enum_value("cons", tup_val(...))
 end
@@ -584,7 +588,7 @@ end
 ---@param name string
 ---@return boolean
 ---@return inferrable | checkable | string
----@return Environment
+---@return Environment?
 local function expression_symbolhandler(args, name)
 	local goal, env = args:unwrap()
 	--print("looking up symbol", name)
@@ -629,7 +633,7 @@ end
 ---@param val inferrable | checkable
 ---@return boolean
 ---@return inferrable | checkable
----@return Environment
+---@return Environment?
 local function expression_valuehandler(args, val)
 	local goal, env = args:unwrap()
 
@@ -662,14 +666,22 @@ local function expression_valuehandler(args, val)
 	error("unknown value type " .. val.type)
 end
 
-expression = metalanguage.reducer(function(syntax, args)
-	-- print('trying to expression', syntax)
-	return syntax:match({
-		metalanguage.ispair(expression_pairhandler),
-		metalanguage.issymbol(expression_symbolhandler),
-		metalanguage.isvalue(expression_valuehandler),
-	}, metalanguage.failure_handler, args)
-end, "expressions")
+expression = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param args ExpressionArgs
+	---@return boolean
+	---@return inferrable|checkable|string
+	---@return Environment?
+	function(syntax, args)
+		-- print('trying to expression', syntax)
+		return syntax:match({
+			metalanguage.ispair(expression_pairhandler),
+			metalanguage.issymbol(expression_symbolhandler),
+			metalanguage.isvalue(expression_valuehandler),
+		}, metalanguage.failure_handler, args)
+	end,
+	"expressions"
+)
 
 -- local constexpr =
 --   metalanguage.reducer(
@@ -850,10 +862,10 @@ end
 
 collect_tuple = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
-	---@param args any
+	---@param args ExpressionArgs
 	---@return boolean
-	---@return boolean|string|inferrable|checkable
-	---@return Environment
+	---@return string|inferrable|checkable
+	---@return Environment?
 	function(syntax, args)
 		local goal, env = args:unwrap()
 		local goal_type, closures, collected_terms
@@ -942,10 +954,10 @@ collect_tuple = metalanguage.reducer(
 
 collect_prim_tuple = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
-	---@param args any
+	---@param args ExpressionArgs
 	---@return boolean
-	---@return boolean|string|inferrable|checkable
-	---@return unknown
+	---@return string|inferrable|checkable
+	---@return Environment?
 	function(syntax, args)
 		local goal, env = args:unwrap()
 		local goal_type, closures, collected_terms
@@ -1025,10 +1037,10 @@ collect_prim_tuple = metalanguage.reducer(
 
 local expressions_args = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
-	---@param args any
+	---@param args ExpressionArgs
 	---@return boolean
-	---@return boolean|table|string
-	---@return Environment
+	---@return inferrable[]|checkable[]|string
+	---@return Environment?
 	function(syntax, args)
 		local goal, env = args:unwrap()
 		local vals = {}
@@ -1047,25 +1059,33 @@ local expressions_args = metalanguage.reducer(
 	"expressions_args"
 )
 
-local block = metalanguage.reducer(function(syntax, args)
-	local goal, env = args:unwrap()
-	assert(goal:is_infer(), "NYI non-infer cases for block")
-	local lastval, newval
-	local ok, continue = true, true
-	while ok and continue do
-		ok, continue, newval, syntax, env = syntax:match({
-			metalanguage.ispair(collect_tuple_pair_handler),
-			metalanguage.isnil(collect_tuple_nil_handler),
-		}, metalanguage.failure_handler, ExpressionArgs.new(goal, env))
-		if ok and continue then
-			lastval = newval
+local block = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param args ExpressionArgs
+	---@return boolean
+	---@return inferrable|checkable|string
+	---@return Environment?
+	function(syntax, args)
+		local goal, env = args:unwrap()
+		assert(goal:is_infer(), "NYI non-infer cases for block")
+		local lastval, newval
+		local ok, continue = true, true
+		while ok and continue do
+			ok, continue, newval, syntax, env = syntax:match({
+				metalanguage.ispair(collect_tuple_pair_handler),
+				metalanguage.isnil(collect_tuple_nil_handler),
+			}, metalanguage.failure_handler, ExpressionArgs.new(goal, env))
+			if ok and continue then
+				lastval = newval
+			end
 		end
-	end
-	if not ok then
-		return false, continue
-	end
-	return true, lastval, env
-end, "block")
+		if not ok then
+			return false, continue
+		end
+		return true, lastval, env
+	end,
+	"block"
+)
 
 -- example usage of primitive_applicative
 -- add(a, b) = a + b ->
