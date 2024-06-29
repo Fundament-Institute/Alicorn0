@@ -6,14 +6,15 @@ Reducer(sig : tuple-def, res : tuple-def) : type
 Error : type
 --]]
 
----@enum MatcherKind
-local MatcherKind = {
-	Symbol = "Symbol",
-	Pair = "Pair",
-	Nil = "Nil",
-	Value = "Value",
-	Reducible = "Reducible",
-}
+---@class MatcherKindContainer
+local MatcherKind = --[[@enum MatcherKind]]
+	{
+		Symbol = "Symbol",
+		Pair = "Pair",
+		Nil = "Nil",
+		Value = "Value",
+		Reducible = "Reducible",
+	}
 
 ---@generic T
 ---@alias SymbolFunc fun(u : T, s: string) : ...
@@ -478,9 +479,15 @@ local function list(anchor, a, ...)
 	return pair(anchor, a, list(anchor, ...))
 end
 
-local any = reducer(function(syntax)
-	return true, syntax
-end, "any")
+local any = reducer(
+	---@param syntax ConstructedSyntax
+	---@return boolean
+	---@return ConstructedSyntax
+	function(syntax)
+		return true, syntax
+	end,
+	"any"
+)
 
 ---@generic T
 ---@param rule any

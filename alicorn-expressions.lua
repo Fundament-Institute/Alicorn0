@@ -156,6 +156,34 @@ function ExpressionArgs.new(goal, env)
 	}, { __index = ExpressionArgs })
 end
 
+-- work around lua lsp not warning about invalid enum accesses
+---@class OperatorTypeContainer
+local OperatorType = --[[@enum OperatorType]]
+	{
+		Prefix = "Prefix",
+		Infix = "Infix",
+	}
+
+---@class (exact) PrefixData
+
+---@type {[string]: PrefixData}
+local prefix_data = {
+	["-"] = {},
+	["@"] = {},
+}
+
+---@class AssociativityContainer
+local Associativity = --[[@enum Associativity]]
+	{
+		r = "r",
+		l = "l",
+	}
+
+---@class (exact) InfixData
+---@field precedence integer
+---@field associativity Associativity
+
+---@type {[string]: InfixData}
 local infix_data = {
 	["="] = { precedence = 2, associativity = "r" },
 	["|"] = { precedence = 3, associativity = "l" },
@@ -173,17 +201,16 @@ local infix_data = {
 	-- # is the comment character and is forbidden here
 }
 
--- Always take a third arg which is an enum: Inferrable(no info), Checkable(goal type), Mechanism(mechanism info)
-
-local function check_infix_expression_handler(dat, a, b)
-	local env, prec = dat.env, dat.prec
-	local ok, name = a:match({
-		metalanguage.is_symbol(metalanguage.accept_handler),
-	}, metalanguage.failure_handler, nil)
-	local data = infix_data[name:sub(1, 1)]
-	if data then
-		local ok, ifx, op, rhs
+---@param symbol string
+---@return boolean
+---@return string
+local function shunting_yard_prefix_handler(_, symbol)
+	local s = string.sub(symbol, 1, 1)
+	if not prefix_data[s] then
+		return false,
+			"symbol was provided in a prefix operator place, but the symbol isn't a valid prefix operator: " .. symbol
 	end
+	return true, symbol
 end
 
 ---@param symbol string
@@ -194,8 +221,13 @@ end
 ---@return string?
 ---@return ConstructedSyntax?
 ---@return ConstructedSyntax?
-local function shunting_yard_listtail_handler(_, symbol, a, b)
-	if not infix_data[symbol] then
+local function shunting_yard_infix_handler(_, symbol, a, b)
+	-- HACK: workaround for parsing forall -> T : prim-type
+	if symbol == "->" then
+		return false, "you've been hit by, you've been struck by, a smooth design error"
+	end
+	local s = string.sub(symbol, 1, 1)
+	if not infix_data[s] then
 		return false,
 			"symbol was provided in an infix operator place, but the symbol isn't a valid infix operator: " .. symbol
 	end
@@ -208,27 +240,55 @@ local function shunting_yard_nil_handler(_)
 	return true, false
 end
 
----@param yard { n: integer, [integer]: string }
+---@class (exact) TaggedOperator
+---@field type OperatorType
+---@field symbol string
+
+---@param yard { n: integer, [integer]: TaggedOperator }
 ---@param output { n: integer, [integer]: ConstructedSyntax }
 local function shunting_yard_pop(yard, output)
 	local yard_height = yard.n
 	local output_length = output.n
 	local operator = yard[yard_height]
-	local right = output[output_length]
-	local left = output[output_length - 1]
-	local tree = metalanguage.list(nil, left, metalanguage.symbol(nil, operator), right)
-	yard[yard_height] = nil
-	yard.n = yard_height - 1
-	output[output_length] = nil
-	output[output_length - 1] = tree
-	output.n = output_length - 1
+	local operator_type = operator.type
+	local operator_symbol = operator.symbol
+	if operator_type == OperatorType.Prefix then
+		local arg = output[output_length]
+		local tree = metalanguage.list(nil, metalanguage.symbol(nil, operator_symbol), arg)
+		yard[yard_height] = nil
+		yard.n = yard_height - 1
+		output[output_length] = tree
+	elseif operator_type == OperatorType.Infix then
+		local right = output[output_length]
+		local left = output[output_length - 1]
+		local tree = metalanguage.list(nil, left, metalanguage.symbol(nil, operator_symbol), right)
+		yard[yard_height] = nil
+		yard.n = yard_height - 1
+		output[output_length] = nil
+		output[output_length - 1] = tree
+		output.n = output_length - 1
+	else
+		error("unknown operator type")
+	end
 end
 
 ---@param new_symbol string
----@param yard_symbol string
-local function shunting_yard_should_pop(new_symbol, yard_symbol)
-	local new_data = infix_data[new_symbol]
-	local yard_data = infix_data[yard_symbol]
+---@param yard_operator TaggedOperator
+local function shunting_yard_should_pop(new_symbol, yard_operator)
+	-- new_symbol is always infix, as we never pop while adding a prefix operator
+	-- prefix operators always have higher precedence than infix operators
+	local yard_type = yard_operator.type
+	if yard_type == OperatorType.Prefix then
+		return true
+	end
+	if yard_type ~= OperatorType.Infix then
+		error("unknown operator type")
+	end
+	local yard_symbol = yard_operator.symbol
+	local n = string.sub(new_symbol, 1, 1)
+	local y = string.sub(yard_symbol, 1, 1)
+	local new_data = infix_data[n]
+	local yard_data = infix_data[y]
 	local new_precedence = new_data.precedence
 	local yard_precedence = yard_data.precedence
 	if new_precedence < yard_precedence then
@@ -238,32 +298,54 @@ local function shunting_yard_should_pop(new_symbol, yard_symbol)
 		return false
 	end
 	local new_associativity = new_data.associativity
-	--local yard_associativity = yard_data.associativity
-	--if new_associativity ~= yard_associativity then
-	--	error("clashing associativities!!!")
-	--end
-	if new_symbol ~= yard_symbol then
-		error("different infix operators with the same precedence must be disambiguated")
+	local yard_associativity = yard_data.associativity
+	if new_associativity ~= yard_associativity then
+		-- if you actually hit this error, it's because the infix_data is badly specified
+		-- one of the precedence levels has both left- and right-associative operators
+		-- please separate these operators into different precedence levels to disambiguate
+		error("clashing associativities!!!")
 	end
-	if new_associativity == "l" then
+	if new_associativity == Associativity.l then
 		return true
-	else
+	end
+	if new_associativity == Associativity.r then
 		return false
 	end
+	error("unknown associativity")
 end
 
 ---@param a ConstructedSyntax
 ---@param b ConstructedSyntax
----@param yard { n: integer, [integer]: string }
+---@param yard { n: integer, [integer]: TaggedOperator }
 ---@param output { n: integer, [integer]: ConstructedSyntax }
 ---@return boolean
 ---@return ConstructedSyntax|string
 local function shunting_yard(a, b, yard, output)
+	-- first, collect all prefix operators
+	local is_prefix, prefix_symbol =
+		a:match({ metalanguage.issymbol(shunting_yard_prefix_handler) }, metalanguage.failure_handler, nil)
+	if is_prefix then
+		local ok, next_a, next_b =
+			b:match({ metalanguage.ispair(metalanguage.accept_handler) }, metalanguage.failure_handler, nil)
+		if not ok then
+			return ok, next_a
+		end
+		-- prefix operators always have higher precedence than infix operators,
+		-- all have the same precedence as each other (conceptually), and are always right-associative
+		-- this means we never need to pop the yard before adding a prefix operator to it
+		yard.n = yard.n + 1
+		yard[yard.n] = {
+			type = OperatorType.Prefix,
+			symbol = prefix_symbol,
+		}
+		return shunting_yard(next_a, next_b, yard, output)
+	end
+	-- no more prefix operators, now handle infix
 	output.n = output.n + 1
 	output[output.n] = a
-	local ok, more, symbol, next_a, next_b = b:match({
+	local ok, more, infix_symbol, next_a, next_b = b:match({
 		metalanguage.listtail(
-			shunting_yard_listtail_handler,
+			shunting_yard_infix_handler,
 			metalanguage.issymbol(metalanguage.accept_handler),
 			metalanguage.any(metalanguage.accept_handler)
 		),
@@ -278,27 +360,47 @@ local function shunting_yard(a, b, yard, output)
 		end
 		return true, output[1]
 	end
-	while yard.n > 0 and shunting_yard_should_pop(symbol, yard[yard.n]) do
+	while yard.n > 0 and shunting_yard_should_pop(infix_symbol, yard[yard.n]) do
 		shunting_yard_pop(yard, output)
 	end
 	yard.n = yard.n + 1
-	yard[yard.n] = symbol
+	yard[yard.n] = {
+		type = OperatorType.Infix,
+		symbol = infix_symbol,
+	}
 	return shunting_yard(next_a, next_b, yard, output)
+end
+
+---@param symbol string
+---@param arg ConstructedSyntax
+---@return boolean
+---@return OperatorType|string
+---@return string?
+---@return ConstructedSyntax?
+local function expression_prefix_handler(_, symbol, arg)
+	local s = string.sub(symbol, 1, 1)
+	if not prefix_data[s] then
+		return false,
+			"symbol was provided in a prefix operator place, but the symbol isn't a valid prefix operator: " .. symbol
+	end
+	return true, OperatorType.Prefix, symbol, arg
 end
 
 ---@param left ConstructedSyntax
 ---@param symbol string
 ---@param right ConstructedSyntax
 ---@return boolean
----@return string|ConstructedSyntax
+---@return OperatorType|string
 ---@return string?
 ---@return ConstructedSyntax?
+---@return ConstructedSyntax?
 local function expression_infix_handler(_, left, symbol, right)
-	if not infix_data[symbol] then
+	local s = string.sub(symbol, 1, 1)
+	if not infix_data[s] then
 		return false,
 			"symbol was provided in an infix operator place, but the symbol isn't a valid infix operator: " .. symbol
 	end
-	return true, left, symbol, right
+	return true, OperatorType.Infix, symbol, left, right
 end
 
 ---@param args ExpressionArgs
@@ -308,25 +410,24 @@ end
 ---@return inferrable | checkable | string
 ---@return Environment?
 local function expression_pairhandler(args, a, b)
-	-- local ok, ifx, op, args = b:match(
-	--   {
-	--     metalanguage.is_pair(check_infix_expression_handler)
-	--   },
-	--   metalanguage.failure_handler,
-	--   {env = env, prec = 0, lhs = a}
-	-- )
-
 	local goal, env = args:unwrap()
 	local orig_env = env
-	local ifx = false
+	local is_operator = false
+	local operator_type
 	local left, operator, right
 	local sargs
 
-	-- if the expression is an infix expression, parse it into a tree of simple infix expressions with shunting yard
+	-- if the expression is a list containing prefix and infix expressions,
+	-- parse it into a tree of simple prefix/infix expressions with shunting yard
 	local ok, syntax = shunting_yard(a, b, { n = 0 }, { n = 0 })
 	if ok then
 		---@cast syntax ConstructedSyntax
-		ifx, left, operator, right = syntax:match({
+		is_operator, operator_type, operator, left, right = syntax:match({
+			metalanguage.listmatch(
+				expression_prefix_handler,
+				metalanguage.issymbol(metalanguage.accept_handler),
+				metalanguage.any(metalanguage.accept_handler)
+			),
 			metalanguage.listmatch(
 				expression_infix_handler,
 				metalanguage.any(metalanguage.accept_handler),
@@ -337,7 +438,13 @@ local function expression_pairhandler(args, a, b)
 	end
 
 	local combiner
-	if ifx then
+	if is_operator and operator_type == OperatorType.Prefix then
+		ok, combiner = env:get(operator .. "_")
+		if not ok then
+			return false, combiner
+		end
+		sargs = metalanguage.list(nil, left)
+	elseif is_operator and operator_type == OperatorType.Infix then
 		ok, combiner = env:get("_" .. operator .. "_")
 		if not ok then
 			return false, combiner
