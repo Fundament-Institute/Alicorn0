@@ -548,14 +548,10 @@ function check(
 		local inferred_type, inferred_usages, typed_term = infer(inferrable_term, typechecking_context)
 		-- TODO: unify!!!!
 		if inferred_type ~= goal_type then
-			local ok, err
-			if inferred_type:is_neutral() then
-				ok, err = false, "inferred type is a neutral value"
-				-- TODO: add debugging dump to typechecking context that looks for placeholders inside inferred_type
-				-- then shows matching types and values in env if relevant?
-			else
-				ok, err = typechecker_state:flow(inferred_type, goal_type)
-			end
+			-- FIXME: needs context to avoid bugs where inferred and goal are the same neutral structurally
+			-- but come from different context thus are different
+			-- but erroneously compare equal
+			local ok, err = typechecker_state:flow(inferred_type, goal_type)
 			if not ok then
 				print "attempting to check if terms fit for checkable_term.inferrable"
 				--for i = 2, 49 do
@@ -1785,7 +1781,7 @@ end
 ---@param context any
 function Reachability:add_edge(left, right, queue, context)
 	assert(type(left) == "number", "left isn't an integer!")
-	assert(type(right) == "number", "left isn't an integer!")
+	assert(type(right) == "number", "right isn't an integer!")
 	local work = { { left, right } }
 
 	while #work > 0 do

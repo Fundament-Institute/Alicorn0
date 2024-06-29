@@ -462,6 +462,13 @@ local function expression_pairhandler(args, a, b)
 
 	-- combiner was an evaluated typed value, now it isn't
 	local type_of_term, usage_count, term = infer(combiner, env.typechecking_context)
+	if
+		type_of_term:is_neutral()
+		and type_of_term:unwrap_neutral():is_free()
+		and type_of_term:unwrap_neutral():unwrap_free():is_metavariable()
+	then
+		error("halp!")
+	end
 	if type_of_term:is_operative_type() then
 		local handler, userdata_type = type_of_term:unwrap_operative_type()
 		-- operative input: env, syntax tree, goal type (if checked)

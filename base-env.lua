@@ -167,11 +167,12 @@ local ascribed_name = metalang.reducer(
 	---@param env Environment
 	---@param prev inferrable
 	---@param names string[]
+	---@param backup_anchor Anchor
 	---@return boolean
 	---@return string
 	---@return inferrable?
 	---@return Environment?
-	function(syntax, env, prev, names)
+	function(syntax, env, prev, names, backup_anchor)
 		-- print("ascribed_name trying")
 		-- p(syntax)
 		-- print(prev:pretty_print())
@@ -180,11 +181,9 @@ local ascribed_name = metalang.reducer(
 		-- print(env.enter_block)
 		local shadowed
 		shadowed, env = env:enter_block()
-		local anchor = syntax.anchor
-		if not anchor then
-			anchor = "bug in ascribed_name"
-		end
-		env = env:bind_local(terms.binding.annotated_lambda("#prev", prev, anchor, terms.visibility.explicit))
+		env = env:bind_local(
+			terms.binding.annotated_lambda("#prev", prev, syntax.anchor or backup_anchor, terms.visibility.explicit)
+		)
 		local ok, prev_binding = env:get("#prev")
 		if not ok then
 			error "#prev should always be bound, was just added"
@@ -220,6 +219,8 @@ local tupleof_ascribed_names_inner = metalang.reducer(function(syntax, env)
 	local empty = terms.inferrable_term.enum_cons(terms.value.tuple_defn_type(terms.value.star(0)), "empty", tup_cons())
 	local names = gen.declare_array(gen.builtin_string)()
 
+	local close_enough = syntax.anchor
+
 	local ok, names, args, env = syntax:match({
 		metalang.list_many_threaded(function(_, vals, thread)
 			return true, thread.names, thread.args, thread.env
@@ -233,7 +234,7 @@ local tupleof_ascribed_names_inner = metalang.reducer(function(syntax, env)
 					env = type_env,
 				}
 				return true, { name = name, type = type_val }, newthread
-			end, thread.env, build_type_term(thread.args), thread.names)
+			end, thread.env, build_type_term(thread.args), thread.names, close_enough)
 		end, {
 			names = names,
 			args = empty,
