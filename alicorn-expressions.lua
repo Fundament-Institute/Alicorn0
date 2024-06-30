@@ -354,12 +354,12 @@ local function shunting_yard(a, b, yard, output, anchor)
 	end
 	if not more then
 		while yard.n > 0 do
-			shunting_yard_pop(yard, output)
+			shunting_yard_pop(yard, output, anchor)
 		end
 		return true, output[1]
 	end
 	while yard.n > 0 and shunting_yard_should_pop(infix_symbol, yard[yard.n]) do
-		shunting_yard_pop(yard, output)
+		shunting_yard_pop(yard, output, anchor)
 	end
 	yard.n = yard.n + 1
 	yard[yard.n] = {
@@ -439,13 +439,13 @@ local function expression_pairhandler(args, a, b)
 		if not ok then
 			return false, combiner
 		end
-		sargs = metalanguage.list(nil, left)
+		sargs = metalanguage.list(a.anchor, left)
 	elseif is_operator and operator_type == OperatorType.Infix then
 		ok, combiner = env:get("_" .. operator .. "_")
 		if not ok then
 			return false, combiner
 		end
-		sargs = metalanguage.list(nil, left, right)
+		sargs = metalanguage.list(a.anchor, left, right)
 	else
 		ok, combiner, env = a:match(
 			{ expression(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.infer, env)) },
@@ -540,9 +540,11 @@ local function expression_pairhandler(args, a, b)
 			return false, tuple, env
 		end
 
+		---@type inferrable | checkable
 		local res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
 
 		if goal:is_check() then
+			---@cast res inferrable
 			res = checkable_term.inferrable(res)
 		end
 
@@ -567,9 +569,11 @@ local function expression_pairhandler(args, a, b)
 				env
 		end
 
+		---@type inferrable | checkable
 		local res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
 
 		if goal:is_check() then
+			---@cast res inferrable
 			res = checkable_term.inferrable(res)
 		end
 
