@@ -798,6 +798,20 @@ let prim-term-of-inner = intrinsic
 let prim-term-of = lambda ((goal : prim-goal))
 	let (t) = prim-term-of-inner(goal)
 	t
+let goalify-inferrable = intrinsic
+	""""
+		local function goalify_inferrable(goal, inferrable)
+			if goal:is_infer() then
+				return inferrable
+			elseif goal:is_check() then
+				return terms.checkable_term.inferrable(inferrable)
+			else
+				error("goalify-inferrable: unknown goal")
+			end
+		end
+		return goalify_inferrable
+	:
+	prim-func-type (goal : prim-goal, inferrable : prim-inferrable-term) -> ((term : prim-term-of(goal)))
 
 let operative-handler-type = lambda ((userdata : prim-type))
 	forall (syn : prim-syntax, env : prim-environment, ud : userdata, goal : prim-goal) -> (term : prim-term-of(goal), env : prim-environment)
@@ -1028,6 +1042,8 @@ let tuple-def-impl = lambda (syn : prim-syntax, env : prim-environment, ud : pri
 
 	let (args) = tupleof-ascribed-names-reducer-thread-type-get-args(thread)
 	let (env) = tupleof-ascribed-names-reducer-thread-type-get-env(thread)
+
+	let (args) = goalify-inferrable(goal, args)
 
 	tuple-of(prim-type, operative-result-defn(goal))(args, env)
 

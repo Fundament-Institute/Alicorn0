@@ -503,19 +503,12 @@ local function expression_pairhandler(args, a, b)
 
 		if goal:is_check() then
 			local checkable = data
-			if inferrable_term.value_check(checkable) == true then
-				checkable = checkable_term.inferrable(checkable)
-			end
-
 			local goal_type = goal:unwrap_check()
 			local usage_counts, term = evaluator.check(checkable, env.typechecking_context, goal_type)
 			return true, checkable_term.inferrable(inferrable_term.typed(goal_type, usage_counts, term)), env
 		elseif goal:is_infer() then
-			if inferrable_term.value_check(data) == true then
-				local resulting_type, usage_counts, term = infer(data, env.typechecking_context)
-
-				return true, inferrable_term.typed(resulting_type, usage_counts, term), env
-			end
+			local resulting_type, usage_counts, term = infer(data, env.typechecking_context)
+			return true, inferrable_term.typed(resulting_type, usage_counts, term), env
 		else
 			error("NYI goal " .. goal.kind .. " for operative in expression_pairhandler")
 		end
@@ -547,7 +540,13 @@ local function expression_pairhandler(args, a, b)
 			return false, tuple, env
 		end
 
-		return true, inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple), env
+		local res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
+
+		if goal:is_check() then
+			res = checkable_term.inferrable(res)
+		end
+
+		return true, res, env
 	end
 
 	if type_of_term:is_prim_function_type() then
@@ -568,7 +567,13 @@ local function expression_pairhandler(args, a, b)
 				env
 		end
 
-		return true, inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple), env
+		local res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
+
+		if goal:is_check() then
+			res = checkable_term.inferrable(res)
+		end
+
+		return true, res, env
 	end
 
 	print("!!! about to fail of invalid type")
@@ -752,6 +757,18 @@ local function primitive_operative(fn, name)
 		if not ok then
 			error(OperativeError.new(res, syn.anchor, debugstring))
 		end
+		if
+			(goal:is_infer() and inferrable_term.value_check(res))
+			or (goal:is_check() and checkable_term.value_check(res))
+		then
+			-- nothing to do, all is well
+		elseif goal:is_check() and inferrable_term.value_check(res) then
+			-- workaround primitive operatives that ignore goal and assume inferrable
+			---@cast res inferrable
+			res = checkable_term.inferrable(res)
+		else
+			error("mismatch in goal and returned term")
+		end
 		if not env or not env.exit_block then
 			print(
 				"env returned from fn passed to alicorn-expressions.primitive_operative isn't an env or is nil",
@@ -820,9 +837,6 @@ local function collect_tuple_pair_handler(args, a, b)
 		metalanguage.failure_handler,
 		nil
 	)
-	if ok and val and goal:is_check() and getmetatable(val) ~= checkable_term then
-		val = checkable_term.inferrable(val)
-	end
 	if not ok then
 		return false, val
 	end

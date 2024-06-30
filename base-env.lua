@@ -38,7 +38,7 @@ local val_desc_empty = value.enum_value("empty", val_tup_cons())
 --- lua_operative is dependently typed and should produce inferrable vs checkable depending on the goal, and an error as the second return if it failed
 --- | unknown in the second return insufficiently constrains the non-error cases to be inferrable or checkable terms
 --- this can be fixed in the future if we swap to returning a Result type that can express the success/error constraint separately
----@alias lua_operative fun(syntax : ConstructedSyntax, env : Environment, goal : expression_goal) : boolean, inferrable | checkable | unknown, Environment?
+---@alias lua_operative fun(syntax : ConstructedSyntax, env : Environment, goal : expression_goal) : boolean, inferrable | checkable, Environment?
 
 ---handle a let binding
 ---@type lua_operative
@@ -620,9 +620,6 @@ local function apply_operative_impl(syntax, env)
 	end
 
 	local inf_term, env = utils.unpack_val_env(args_inferrable_term)
-	if terms.inferrable_term.value_check(inf_term) == true then
-		inf_term = terms.checkable_term.inferrable(inf_term)
-	end
 	return true,
 		terms.inferrable_term.application(terms.inferrable_term.typed(type_of_fn, usages, fn_typed_term), inf_term),
 		env
