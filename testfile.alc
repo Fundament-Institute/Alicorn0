@@ -969,17 +969,9 @@ let tupleof-ascribed-names-reducer-thread-type-get-env = intrinsic
 	:
 	prim-func-type ((thread : tupleof-ascribed-names-reducer-thread-type)) -> ((env : prim-environment))
 
-let tupleof-ascribed-names-reducer-storage-defn =
-	# read as: (env : prim-environment, termination : prim-matcher(...))
-	tuple-def-concat prim-type
-		tuple-def-singleton(prim-type, prim-environment)
-		tuple-def-singleton(prim-type, prim-matcher(prim-unit, tuple-def-empty(prim-type)))
+let tupleof-ascribed-names-reducer-storage-defn = tuple-def-singleton(prim-type, prim-environment)
 
-let tupleof-ascribed-names-reducer-result2-defn =
-	# read as: (thread : tupleof-ascribed-names-reducer-thread-type, tail : prim-syntax)
-	tuple-def-concat prim-type
-		tuple-def-singleton(prim-type, tupleof-ascribed-names-reducer-thread-type)
-		tuple-def-singleton(prim-type, prim-syntax)
+let tupleof-ascribed-names-reducer-result2-defn = tuple-def-singleton(prim-type, tupleof-ascribed-names-reducer-thread-type)
 
 let tupleof-ascribed-names-match-result-defn =
 	# read as: (ok : prim-bool, _ : prim-if(ok, tupleof-ascribed-names-reducer-thread-type, prim-lua-error))
@@ -1004,13 +996,10 @@ let tupleof-ascribed-names-match-accept-handler = intrinsic "return metalanguage
 let tupleof-ascribed-names-match-failure-handler = intrinsic "return metalanguage.failure_handler" :
 	failure-handler-type(prim-unit, tupleof-ascribed-names-match-result-defn)
 
-let nil-match-accept-handler = intrinsic "return metalanguage.accept_handler" :
-	nil-handler-type(prim-unit, tuple-def-empty(prim-type))
-
 let tuple-def-impl-type = operative-handler-type(prim-unit)
 
 let tuple-def-impl = lambda (syn : prim-syntax, env : prim-environment, ud : prim-unit, goal : prim-goal)
-	let s = prim-tuple-of(prim-type, tupleof-ascribed-names-reducer-storage-defn)(env, prim-matcher-is-nil(prim-unit, tuple-def-empty(prim-type), nil-match-accept-handler))
+	let s = prim-tuple-of(prim-type, tupleof-ascribed-names-reducer-storage-defn)(env)
 
 	let matcher-t = prim-matcher(prim-unit, tupleof-ascribed-names-match-result-defn)
 	let matcher =
