@@ -796,11 +796,8 @@ let prim-term-of-inner = intrinsic
 	:
 	prim-func-type ((goal : prim-goal)) -> ((t : prim-type))
 let prim-term-of = lambda ((goal : prim-goal))
-	#let (t) = prim-term-of-inner(goal)
-	#t
-	# FIXME: above errors with: inferred type is a neutral value
-	# stub below works for now
-	prim-inferrable-term
+	let (t) = prim-term-of-inner(goal)
+	t
 
 let operative-handler-type = lambda ((userdata : prim-type))
 	forall (syn : prim-syntax, env : prim-environment, ud : userdata, goal : prim-goal) -> (term : prim-term-of(goal), env : prim-environment)
