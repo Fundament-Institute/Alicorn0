@@ -84,7 +84,7 @@ local function get_level(t)
 end
 
 ---@param val value an alicorn value
----@param mappings table the placeholder we are trying to get rid of by substituting
+---@param mappings {[integer]: typed} the placeholder we are trying to get rid of by substituting
 ---@param context_len integer number of bindings in the runtime context already used - needed for closures
 ---@return typed a typed term
 local function substitute_inner(val, mappings, context_len)
@@ -309,6 +309,11 @@ local function substitute_inner(val, mappings, context_len)
 end
 
 --for substituting a single var at index
+---@param val value
+---@param index integer
+---@param param_name string
+---@param typechecking_context TypecheckingContext
+---@return value
 local function substitute_type_variables(val, index, param_name, typechecking_context)
 	param_name = param_name and "#sub-" .. param_name or "#sub-param"
 	--print("value before substituting (val): (value term follows)")
@@ -321,6 +326,8 @@ local function substitute_type_variables(val, index, param_name, typechecking_co
 	return value.closure(param_name, substituted, runtime_context())
 end
 
+---@param val value
+---@return boolean
 local function is_type_of_types(val)
 	return val:is_star() or val:is_prop() or val:is_prim_type_type()
 end
@@ -332,6 +339,11 @@ local check_concrete
 -- indexed by kind x kind
 local concrete_comparers = {}
 
+---@alias value_comparer fun(a: value, b: value, typechecker: TypeCheckerState): boolean, string?
+
+---@param ka string
+---@param kb string
+---@param comparer value_comparer
 local function add_comparer(ka, kb, comparer)
 	concrete_comparers[ka] = concrete_comparers[ka] or {}
 	concrete_comparers[ka][kb] = comparer
@@ -362,6 +374,7 @@ local function concrete_fail(message, cause)
 	}, concrete_fail_mt)
 end
 
+---@type value_comparer
 local function always_fits_comparer(a, b, typechecker)
 	return true
 end
@@ -378,6 +391,7 @@ end
 
 -- types of types
 add_comparer(value.prim_type_type.kind, value.prim_type_type.kind, always_fits_comparer)
+---@type value_comparer
 local function tuple_compare(a, b, typechecker)
 	-- fixme lol
 	local placeholder = value.neutral(neutral_value.free(free.unique({})))
@@ -497,6 +511,9 @@ function check_concrete(val, use, typechecker)
 	return comparer(val, use)
 end
 
+---@param enum_val value
+---@param closures Array
+---@return Array
 local function extract_tuple_elem_type_closures(enum_val, closures)
 	local constructor, arg = enum_val:unwrap_enum_value()
 	local elements = arg:unwrap_tuple_value()
@@ -519,8 +536,6 @@ local function extract_tuple_elem_type_closures(enum_val, closures)
 	end
 	error "unknown enum constructor for value.tuple_type's enum_value, should not be reachable"
 end
-
-value:derive(derivers.eq)
 
 ---@param checkable_term checkable
 ---@param typechecking_context TypecheckingContext
@@ -548,14 +563,10 @@ function check(
 		local inferred_type, inferred_usages, typed_term = infer(inferrable_term, typechecking_context)
 		-- TODO: unify!!!!
 		if inferred_type ~= goal_type then
-			local ok, err
-			if inferred_type:is_neutral() then
-				ok, err = false, "inferred type is a neutral value"
-				-- TODO: add debugging dump to typechecking context that looks for placeholders inside inferred_type
-				-- then shows matching types and values in env if relevant?
-			else
-				ok, err = typechecker_state:flow(inferred_type, goal_type)
-			end
+			-- FIXME: needs context to avoid bugs where inferred and goal are the same neutral structurally
+			-- but come from different context thus are different
+			-- but erroneously compare equal
+			local ok, err = typechecker_state:flow(inferred_type, goal_type)
 			if not ok then
 				print "attempting to check if terms fit for checkable_term.inferrable"
 				--for i = 2, 49 do
@@ -678,6 +689,9 @@ function apply_value(f, arg)
 	error("unreachable!?")
 end
 
+---@param subject value
+---@param index integer
+---@return value
 local function index_tuple_value(subject, index)
 	if terms.value.value_check(subject) ~= true then
 		error("index_tuple_value, subject: expected an alicorn value")
@@ -707,6 +721,9 @@ local function index_tuple_value(subject, index)
 	end
 end
 
+---@param subject_type value
+---@param subject_value value
+---@return value
 local function make_tuple_prefix(subject_type, subject_value)
 	local decls, make_prefix
 	if subject_type:is_tuple_type() then
@@ -763,6 +780,11 @@ local function make_tuple_prefix(subject_type, subject_value)
 end
 
 -- TODO: create a typechecking context append variant that merges two
+---@param decls value
+---@param tupletypes value[]
+---@param make_prefix fun(i: integer): value
+---@return value[]
+---@return integer
 function make_inner_context(decls, tupletypes, make_prefix)
 	-- evaluate the type of the tuple
 	local constructor, arg = decls:unwrap_enum_value()
@@ -781,16 +803,26 @@ function make_inner_context(decls, tupletypes, make_prefix)
 	end
 end
 
+---@param subject_type value
+---@param subject_value value
+---@return value[]
+---@return integer
 function infer_tuple_type_unwrapped(subject_type, subject_value)
 	local decls, make_prefix = make_tuple_prefix(subject_type, subject_value)
 	return make_inner_context(decls, {}, make_prefix)
 end
 
+---@param subject_type value
+---@param subject_value value
+---@return value[]
+---@return integer
 function infer_tuple_type(subject_type, subject_value)
 	-- define how the type of each tuple element should be evaluated
 	return infer_tuple_type_unwrapped(subject_type, subject_value)
 end
 
+---@param typ value
+---@return integer
 local function nearest_star_level(typ)
 	if typ:is_prim_type_type() then
 		return 0
@@ -1785,7 +1817,7 @@ end
 ---@param context any
 function Reachability:add_edge(left, right, queue, context)
 	assert(type(left) == "number", "left isn't an integer!")
-	assert(type(right) == "number", "left isn't an integer!")
+	assert(type(right) == "number", "right isn't an integer!")
 	local work = { { left, right } }
 
 	while #work > 0 do

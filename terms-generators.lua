@@ -125,11 +125,6 @@ local function gen_record(self, cons, kind, params_with_types)
 			setmetatable(val, self)
 			return val
 		end,
-		setmetatable(self, {
-			__tostring = function()
-				return "terms-gen record " .. kind
-			end,
-		}),
 	})
 	local derive_info = {
 		kind = kind,
@@ -148,6 +143,9 @@ end
 ---@return Record self
 local function define_record(self, kind, params_with_types)
 	local self, derive_info = gen_record(self, self, kind, params_with_types)
+	getmetatable(self).__tostring = function()
+		return "terms-gen record " .. kind
+	end
 	function self:derive(deriver, ...)
 		return deriver.record(self, derive_info, ...)
 	end
