@@ -43,6 +43,7 @@ local empty = value.enum_value("empty", tup_val())
 local evaluator = require "./evaluator"
 local const_combinator = evaluator.const_combinator
 local infer = evaluator.infer
+local typechecker_state = evaluator.typechecker_state
 
 local p = require "pretty-print".prettyPrint
 local U = require "./utils"
@@ -289,7 +290,7 @@ local function expression_pairhandler(args, a, b)
 		local param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
 
 		while param_info:unwrap_param_info() == value.visibility(visibility.implicit) do
-			local metavar = evaluator.typechecker_state:metavariable()
+			local metavar = typechecker_state:metavariable()
 			local metavalue = metavar:as_value()
 			local metaresult = evaluator.apply_value(result_type, metavalue)
 			if not metaresult:is_pi() then
@@ -587,17 +588,6 @@ end
 
 ---@param args any
 ---@return boolean
----@return string
----@return nil
----@return nil
----@return Environment
-local function collect_tuple_pair_too_many_handler(args)
-	local goal, env = args:unwrap()
-	return false, "tuple has too many elements for checked collect_tuple", nil, nil, env
-end
-
----@param args any
----@return boolean
 ---@return boolean
 ---@return nil
 ---@return nil
@@ -605,17 +595,6 @@ end
 local function collect_tuple_nil_handler(args)
 	local goal, env = args:unwrap()
 	return true, false, nil, nil, env
-end
-
----@param args any
----@return boolean
----@return string
----@return nil
----@return nil
----@return Environment
-local function collect_tuple_nil_too_few_handler(args)
-	local goal, env = args:unwrap()
-	return false, "tuple has too few elements for checked collect_tuple", nil, nil, env
 end
 
 collect_tuple = metalanguage.reducer(
@@ -626,12 +605,13 @@ collect_tuple = metalanguage.reducer(
 	---@return Environment
 	function(syntax, args)
 		local goal, env = args:unwrap()
-		local goal_type, closures, collected_terms
+		local goal_type, decls_metavar, collected_terms
 
 		if goal:is_check() then
 			collected_terms = array(checkable_term)()
 			goal_type = goal:unwrap_check()
-			closures = evaluator.extract_tuple_elem_type_closures(goal_type:unwrap_tuple_type(), value_array())
+			decls_metavar = typechecker_state:metavariable()
+			typechecker_state:flow(value.tuple_type(decls_metavar:as_value()), goal_type)
 		else
 			collected_terms = inferrable_array()
 		end
@@ -642,39 +622,30 @@ collect_tuple = metalanguage.reducer(
 		local i = 0
 		while ok and continue do
 			i = i + 1
-			-- checked version knows how many elems should be in the tuple
 			if goal_type then
-				if i > #closures then
-					ok, continue, next_term, syntax, env = syntax:match({
-						metalanguage.ispair(collect_tuple_pair_too_many_handler),
-						metalanguage.isnil(collect_tuple_nil_handler),
-					}, metalanguage.failure_handler, ExpressionArgs.new(goal, env))
-				else
-					local next_elem_type = evaluator.apply_value(closures[i], value.tuple_value(tuple_symbolic_elems))
-					-- if next_elem_type:is_neutral() then
-					-- 	print("collect_tuple: neutral goal type")
-					-- 	print("from application of: (value term follows)")
-					-- 	print(closures[i]:pretty_print())
-					-- 	print("applied to: (value term follows)")
-					-- 	print(value.tuple_value(tuple_symbolic_elems))
-					-- 	error "neutral goal type"
-					-- end
-
-					ok, continue, next_term, syntax, env = syntax:match({
+				local next_elem_type = typechecker_state:metavariable()
+				ok, continue, next_term, syntax, env = syntax:match(
+					{
 						metalanguage.ispair(collect_tuple_pair_handler),
-						metalanguage.isnil(collect_tuple_nil_too_few_handler),
-					}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
-					if ok and continue then
-						collected_terms:append(next_term)
-						--print("goal type for next element in tuple: (value term follows)")
-						--print(next_elem_type)
-						--print("term we are checking: (checkable term follows)")
-						--print(next_term:pretty_print(env.typechecking_context))
-						local usages, typed_elem_term =
-							evaluator.check(next_term, env.typechecking_context, next_elem_type)
-						local elem_value = evaluator.evaluate(typed_elem_term, env.typechecking_context.runtime_context)
-						tuple_symbolic_elems:append(elem_value)
-					end
+						metalanguage.isnil(collect_tuple_nil_handler),
+					},
+					metalanguage.failure_handler,
+					ExpressionArgs.new(expression_goal.check(next_elem_type:as_value()), env)
+				)
+				if ok and continue then
+					local next_decls_metavar = typechecker_state:metavariable()
+					typechecker_state:flow(
+						decls_metavar:as_value(),
+						value.enum_value(
+							"cons",
+							value.tuple_value(next_decls_metavar:as_value(), value.closure(aaaaaaaa))
+						)
+					)
+					collected_terms:append(next_term)
+					local usages, typed_elem_term =
+						evaluator.check(next_term, env.typechecking_context, next_elem_type:as_value())
+					local elem_value = evaluator.evaluate(typed_elem_term, env.typechecking_context.runtime_context)
+					tuple_symbolic_elems:append(elem_value)
 				end
 				if not ok and type(continue) == "string" then
 					continue = continue
@@ -684,7 +655,6 @@ collect_tuple = metalanguage.reducer(
 						.. tostring(#collected_terms)
 						.. " so far)"
 				end
-			-- else we don't know how many elems so nil or pair are both valid
 			else
 				ok, continue, next_term, syntax, env = syntax:match({
 					metalanguage.ispair(collect_tuple_pair_handler),
