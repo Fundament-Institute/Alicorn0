@@ -67,9 +67,26 @@ function M.append(list, value)
 	list[#list + 1] = value
 end
 
+---Removes an element from a list, respecting whether it was a shadowed array or not
+---@generic T
+---@param list T[] | { [integer]: T, __length : integer }
+---@return T
+function M.pop(list)
+	local value = list[#list]
+	rawset(list, #list, nil)
+	if list.__length then
+		list.__length = list.__length - 1
+	end
+	return value
+end
+
 -- This is a metatable that shadows an array, but only if you use shadowinsert
 local shadowarray_mt = {
 	__index = function(t, k)
+		-- If our length is negative, we've "removed" items from the array we're shadowing
+		if t.__length < 0 and k > #t then
+			return nil
+		end
 		return t.__shadow[k]
 	end,
 	__newindex = function(t, k, v)
@@ -139,11 +156,29 @@ end
 function M.commit(t)
 	setmetatable(t, nil)
 	local original = t.__shadow
+	local length = t.__length
 	t.__shadow = nil
 	t.__length = nil
+
 	for k, v in pairs(t) do
 		rawset(original, k, v)
 	end
+
+	-- If this is an array, truncate the shadowed array in case we removed elements
+	if length then
+		local i = length
+		local start = #original
+
+		if original.__length then
+			original.__length = original.__length + length
+		end
+
+		while i < 0 do
+			rawset(original, start + i + 1, nil)
+			i = i + 1
+		end
+	end
+
 	return original
 end
 

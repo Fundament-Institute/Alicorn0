@@ -56,31 +56,6 @@ end
 local metavariable_mt = { __index = Metavariable }
 local metavariable_type = gen.declare_foreign(gen.metatable_equality(metavariable_mt))
 
--- freeze and then commit or revert
--- like a transaction
---[[
-local function speculate(f, ...)
-	mvs = {
-		prev_mvs = mvs,
-	}
-	local commit, result = f(...)
-	if commit then
-		-- commit
-		for k, v in pairs(mvs) do
-			if k ~= "prev_mvs" then
-				prev_mvs[k] = mvs[k]
-			end
-		end
-		mvs = mvs.prev_mvs
-		return result
-	else
-		-- revert
-		mvs = mvs.prev_mvs
-		-- intentionally don't return result if set if not committing to prevent smuggling out of execution
-		return nil
-	end
-end]]
-
 ---@class RuntimeContext
 ---@field bindings FibonacciBuffer
 local RuntimeContext = {}

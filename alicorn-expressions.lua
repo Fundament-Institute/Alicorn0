@@ -473,7 +473,34 @@ local function expression_pairhandler(args, a, b)
 		and type_of_term:unwrap_neutral():is_free()
 		and type_of_term:unwrap_neutral():unwrap_free():is_metavariable()
 	then
-		error("halp!")
+		-- Speculate that this is a pi type
+		local ok, pi = evaluator.typechecker_state:speculate(function()
+			local pi = value.pi(
+				evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
+				value.param_info(value.visibility(terms.visibility.explicit)),
+				evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
+				value.result_info(terms.result_info(terms.purity.pure))
+			)
+
+			local ok, err = evaluator.typechecker_state:flow(
+				type_of_term,
+				env.typechecking_context,
+				pi,
+				env.typechecking_context,
+				"Speculating on pi type"
+			)
+
+			if ok then
+				return pi
+			end
+			return err
+		end)
+		if not ok then
+			error("speculate DID NOT work for pi!: " .. tostring(pi))
+		end
+		--print("OUTPUT: " .. tostring(ok))
+		--print(pi)
+		type_of_term = pi
 	end
 	if type_of_term:is_operative_type() then
 		local handler, userdata_type = type_of_term:unwrap_operative_type()

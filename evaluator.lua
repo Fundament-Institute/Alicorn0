@@ -1918,7 +1918,7 @@ function Reachability:add_edge(left, right, queue, rel, cause)
 	local work = { { left, right } }
 
 	while #work > 0 do
-		local l, r = table.unpack(table.remove(work))
+		local l, r = table.unpack(U.pop(work))
 
 		assert(self.downsets[l], "Can't find " .. tostring(l))
 		if self.setinsert(self.downsets, l, r) then
@@ -2035,12 +2035,12 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 	local queue = {}
 
 	while #self.pending > 0 do
-		local left, right, cause = table.unpack(table.remove(self.pending))
+		local left, right, cause = table.unpack(U.pop(self.pending))
 		self.graph:add_edge(left, right, queue, rel, cause)
 
 		-- Check if adding that edge resulted in any new type pairs needing to be checked
 		while #queue > 0 do
-			local l, r, subrel = table.unpack(table.remove(queue))
+			local l, r, subrel = table.unpack(U.pop(queue))
 
 			local lvalue, ltag, lctx = table.unpack(self.values[l])
 			local rvalue, rtag, rctx = table.unpack(self.values[r])
@@ -2056,22 +2056,6 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 	assert(#queue == 0, "queue was not empty after constrain!")
 	assert(#self.pending == 0, "pending was not drained!")
 	return true
-end
-
----@param fn fun() : ...
----@return boolean
----@return ...
-function TypeCheckerState:speculate(fn)
-	local function capture(ok, ...)
-		if ok then
-			-- flattens all our changes back on to self
-			typechecker_state:commit()
-		end
-		typechecker_state = self
-		return ok, ...
-	end
-	typechecker_state = self:shadow()
-	return capture(pcall(fn))
 end
 
 local typechecker_state_mt = { __index = TypeCheckerState }
@@ -2121,4 +2105,23 @@ local evaluator = {
 	OMEGA = OMEGA,
 }
 internals_interface.evaluator = evaluator
+
+---@param fn fun() : ...
+---@return boolean
+---@return ...
+function TypeCheckerState:speculate(fn)
+	local function capture(ok, ...)
+		if ok then
+			-- flattens all our changes back on to self
+			typechecker_state:commit()
+		end
+		typechecker_state = self
+		evaluator.typechecker_state = self
+		return ok, ...
+	end
+	typechecker_state = self:shadow()
+	evaluator.typechecker_state = typechecker_state
+	return capture(pcall(fn))
+end
+
 return evaluator
