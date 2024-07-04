@@ -498,8 +498,8 @@ local function expression_pairhandler(args, a, b)
 		if not ok then
 			error("speculate DID NOT work for pi!: " .. tostring(pi))
 		end
-		--print("OUTPUT: " .. tostring(ok))
-		--print(pi)
+		print("OUTPUT: " .. tostring(ok))
+		print(pi)
 		type_of_term = pi
 	end
 	if type_of_term:is_operative_type() then
