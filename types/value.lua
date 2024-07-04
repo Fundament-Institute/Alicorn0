@@ -2,6 +2,7 @@
 ---@meta "value.lua"
 ---@class (exact) value
 ---@field kind string
+---@field pretty_print fun(...)
 value = {}
 ---@return boolean
 function value:is_visibility_type() end

@@ -2,6 +2,7 @@
 ---@meta "checkable.lua"
 ---@class (exact) checkable
 ---@field kind string
+---@field pretty_print fun(...)
 checkable = {}
 ---@return boolean
 function checkable:is_inferrable() end

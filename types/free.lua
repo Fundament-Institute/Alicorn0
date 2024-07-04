@@ -2,6 +2,7 @@
 ---@meta "free.lua"
 ---@class (exact) free
 ---@field kind string
+---@field pretty_print fun(...)
 free = {}
 ---@return boolean
 function free:is_metavariable() end

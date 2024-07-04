@@ -2,6 +2,7 @@
 ---@meta "expression_goal.lua"
 ---@class (exact) expression_goal
 ---@field kind string
+---@field pretty_print fun(...)
 expression_goal = {}
 ---@return boolean
 function expression_goal:is_infer() end

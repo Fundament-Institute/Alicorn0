@@ -2,6 +2,7 @@
 ---@meta "typed.lua"
 ---@class (exact) typed
 ---@field kind string
+---@field pretty_print fun(...)
 typed = {}
 ---@return boolean
 function typed:is_bound_variable() end
