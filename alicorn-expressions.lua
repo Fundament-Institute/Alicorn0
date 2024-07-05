@@ -902,7 +902,10 @@ collect_tuple = metalanguage.reducer(
 			decls_metavar = typechecker_state:metavariable()
 			typechecker_state:flow(
 				decls_metavar:as_value(),
-				value.enum_value("empty", value.tuple_value(value_array()))
+				env.typechecking_context,
+				value.enum_value("empty", value.tuple_value(value_array())),
+				env.typechecking_context,
+				"base case of collect_tuple"
 			)
 		else
 			collected_terms = inferrable_array()
@@ -926,6 +929,7 @@ collect_tuple = metalanguage.reducer(
 					local next_decls_metavar = typechecker_state:metavariable()
 					typechecker_state:flow(
 						next_decls_metavar:as_value(),
+						env.typechecking_context,
 						value.enum_value(
 							"cons",
 							value.tuple_value(
@@ -938,7 +942,9 @@ collect_tuple = metalanguage.reducer(
 									)
 								)
 							)
-						)
+						),
+						env.typechecking_context,
+						"recursive case of collect_tuple"
 					)
 					decls_metavar = next_decls_metavar
 					collected_terms:append(next_term)
@@ -966,7 +972,13 @@ collect_tuple = metalanguage.reducer(
 		if goal:is_infer() then
 			return true, inferrable_term.tuple_cons(collected_terms), env
 		elseif goal:is_check() then
-			typechecker_state:flow(value.tuple_type(decls_metavar:as_value()), goal_type)
+			typechecker_state:flow(
+				value.tuple_type(decls_metavar:as_value()),
+				env.typechecking_context,
+				goal_type,
+				env.typechecking_context,
+				"tuple type in collect_tuple"
+			)
 			return true, checkable_term.tuple_cons(collected_terms), env
 		else
 			error("NYI: collect_tuple goal case " .. goal.kind)
