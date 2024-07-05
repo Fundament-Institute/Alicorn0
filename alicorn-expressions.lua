@@ -611,13 +611,14 @@ collect_tuple = metalanguage.reducer(
 			collected_terms = array(checkable_term)()
 			goal_type = goal:unwrap_check()
 			decls_metavar = typechecker_state:metavariable()
-			typechecker_state:flow(value.tuple_type(decls_metavar:as_value()), goal_type)
+			typechecker_state:flow(
+				decls_metavar:as_value(),
+				value.enum_value("empty", value.tuple_value(value_array()))
+			)
 		else
 			collected_terms = inferrable_array()
 		end
 
-		local tuple_type_elems = value_array()
-		local tuple_symbolic_elems = value_array()
 		local ok, continue, next_term = true, true, nil
 		local i = 0
 		while ok and continue do
@@ -635,25 +636,29 @@ collect_tuple = metalanguage.reducer(
 				if ok and continue then
 					local next_decls_metavar = typechecker_state:metavariable()
 					typechecker_state:flow(
-						decls_metavar:as_value(),
+						next_decls_metavar:as_value(),
 						value.enum_value(
 							"cons",
-							value.tuple_value(next_decls_metavar:as_value(), value.closure(aaaaaaaa))
+							value.tuple_value(
+								value_array(
+									decls_metavar:as_value(),
+									value.closure(
+										"#collect-tuple-param",
+										typed_term.literal(next_elem_type:as_value()),
+										env.typechecking_context.runtime_context
+									)
+								)
+							)
 						)
 					)
+					decls_metavar = next_decls_metavar
 					collected_terms:append(next_term)
 					local usages, typed_elem_term =
 						evaluator.check(next_term, env.typechecking_context, next_elem_type:as_value())
 					local elem_value = evaluator.evaluate(typed_elem_term, env.typechecking_context.runtime_context)
-					tuple_symbolic_elems:append(elem_value)
 				end
 				if not ok and type(continue) == "string" then
-					continue = continue
-						.. " (should have "
-						.. tostring(#closures)
-						.. ", found "
-						.. tostring(#collected_terms)
-						.. " so far)"
+					continue = continue .. " (should have " .. ", found " .. tostring(#collected_terms) .. " so far)"
 				end
 			else
 				ok, continue, next_term, syntax, env = syntax:match({
@@ -672,6 +677,7 @@ collect_tuple = metalanguage.reducer(
 		if goal:is_infer() then
 			return true, inferrable_term.tuple_cons(collected_terms), env
 		elseif goal:is_check() then
+			typechecker_state:flow(value.tuple_type(decls_metavar:as_value()), goal_type)
 			return true, checkable_term.tuple_cons(collected_terms), env
 		else
 			error("NYI: collect_tuple goal case " .. goal.kind)
