@@ -191,7 +191,7 @@ local grammar = P {
 	end, "indent_level"),
 
 	baselevel = update_ffp(
-		"filestart or newline",
+		"no indentation",
 		Cmt(Cb("indent_level") * V "count_tabs", function(_, _, prev_indent, tabscount)
 			return (prev_indent == 0) and (tabscount == 0)
 		end)
@@ -358,39 +358,34 @@ local grammar = P {
 }
 
 local function span_error(position, subject, msg)
-	local function split_lines(subject)
-		local lines = {}
-		for line in subject:gmatch("([^\n\r]*)\r*\n") do
-			table.insert(lines, line)
-		end
-
-		return lines
+	local lines = {}
+	for line in subject:gmatch("([^\n\r]*)\r*\n") do
+		table.insert(lines, line)
 	end
+	local line = lines[position.line] or ""
 
-	local lines = split_lines(subject)
+	local _, tabnum = line:gsub("\t", "")
+	local caret_wsp = ("\t"):rep(tabnum) .. (" "):rep(position.char - (1 + tabnum))
+	local linenum_wsp = (" "):rep(string.len(position.line))
 
-	local span = "error: "
-		.. msg
-		.. "\n--> "
-		.. position.sourceid
-		.. ":"
-		.. tostring(position.line)
-		.. ":"
-		.. tostring(position.char)
-		.. "\n"
-
-	local spacing = string.rep(" ", string.len(position.line)) .. " |"
-
-	span = span
-		.. spacing
-		.. "\n"
-		.. position.line
-		.. " |"
-		.. lines[math.min(position.line, #lines)]
-		.. "\n"
-		.. spacing
-		.. string.rep(" ", position.char - 1)
-		.. "^"
+	local span = string.format(
+		[[
+error: %s
+--> %s:%i:%i
+%s |
+%i |%s
+%s |%s^
+	]],
+		msg,
+		position.sourceid,
+		position.line,
+		position.char,
+		linenum_wsp,
+		position.line,
+		line,
+		linenum_wsp,
+		caret_wsp
+	)
 
 	return span
 end

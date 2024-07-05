@@ -2,6 +2,7 @@
 ---@meta "binding.lua"
 ---@class (exact) binding
 ---@field kind string
+---@field pretty_print fun(...)
 binding = {}
 ---@return boolean
 function binding:is_let() end

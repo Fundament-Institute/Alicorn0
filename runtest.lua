@@ -110,5 +110,5 @@ end
 
 print("Evaluating")
 local result = evaluator.evaluate(term, terms.runtime_context())
---print("result: (value term follows)")
---print(result)
+print("result: (value term follows)")
+print(result)

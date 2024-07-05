@@ -56,31 +56,6 @@ end
 local metavariable_mt = { __index = Metavariable }
 local metavariable_type = gen.declare_foreign(gen.metatable_equality(metavariable_mt))
 
--- freeze and then commit or revert
--- like a transaction
---[[
-local function speculate(f, ...)
-	mvs = {
-		prev_mvs = mvs,
-	}
-	local commit, result = f(...)
-	if commit then
-		-- commit
-		for k, v in pairs(mvs) do
-			if k ~= "prev_mvs" then
-				prev_mvs[k] = mvs[k]
-			end
-		end
-		mvs = mvs.prev_mvs
-		return result
-	else
-		-- revert
-		mvs = mvs.prev_mvs
-		-- intentionally don't return result if set if not committing to prevent smuggling out of execution
-		return nil
-	end
-end]]
-
 ---@class RuntimeContext
 ---@field bindings FibonacciBuffer
 local RuntimeContext = {}
@@ -2280,20 +2255,25 @@ local value_override_pretty = {}
 function value_override_pretty:pi(pp)
 	local param_type, param_info, result_type, result_info = self:unwrap_pi()
 	local param_is_tuple_type, param_decls = as_any_tuple_type(param_type)
+	local result_is_broken = false
 	local ok, param_name, result_code, result_capture = result_type:as_closure()
 	if not ok then
-		error("override_pretty: value.pi: result_type must be a closure")
+		result_is_broken = true
 	end
-	local result_context = ensure_context(result_capture)
-	result_context = result_context:append(param_name)
-	local result_is_destructure, result_is_rename, param_names, result_code, result_context =
-		typed_destructure_helper(result_code, result_context)
-	if result_is_rename then
-		---@cast param_names string
-		param_name = param_names
-		result_is_destructure = false
+	local result_is_destructure = false
+	local result_context, result_is_destructure, result_is_rename, param_names, result_code, result_context, result_is_tuple_type, result_decls
+	if not result_is_broken then
+		result_context = ensure_context(result_capture)
+		result_context = result_context:append(param_name)
+		result_is_destructure, result_is_rename, param_names, result_code, result_context =
+			typed_destructure_helper(result_code, result_context)
+		if result_is_rename then
+			---@cast param_names string
+			param_name = param_names
+			result_is_destructure = false
+		end
+		result_is_tuple_type, result_decls = as_any_tuple_type(result_code)
 	end
-	local result_is_tuple_type, result_decls = as_any_tuple_type(result_code)
 
 	pp:_enter()
 
@@ -2301,7 +2281,9 @@ function value_override_pretty:pi(pp)
 	pp:unit("value.\u{03A0} ")
 	pp:unit(pp:_resetcolor())
 
-	if param_is_tuple_type and result_is_destructure then
+	if result_is_broken then
+		pp:any(param_type)
+	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
 		local members = value_tuple_type_flatten(param_decls)
 
@@ -2346,7 +2328,9 @@ function value_override_pretty:pi(pp)
 	pp:unit(" -> ")
 	pp:unit(pp:_resetcolor())
 
-	if result_is_tuple_type then
+	if result_is_broken then
+		pp:any(result_type)
+	elseif result_is_tuple_type then
 		local members = typed_tuple_type_flatten(result_decls, result_context)
 
 		if #members == 0 then

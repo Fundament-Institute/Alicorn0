@@ -31,6 +31,7 @@ function $typename:unwrap_$variant() end]],
 function $typename:as_$variant() end]],
 	enum_definition = [[---@class (exact) $typename
 ---@field kind string
+---@field pretty_print fun(...)
 $typename = {}
 $(
 )methods

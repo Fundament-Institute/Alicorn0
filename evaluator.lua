@@ -1,6 +1,6 @@
 local terms = require "./terms"
 local runtime_context = terms.runtime_context
-local typechecking_context = terms.typechecking_context
+local new_typechecking_context = terms.typechecking_context
 local checkable_term = terms.checkable_term
 local inferrable_term = terms.inferrable_term
 local typed_term = terms.typed_term
@@ -84,7 +84,7 @@ local function get_level(t)
 end
 
 ---@param val value an alicorn value
----@param mappings table the placeholder we are trying to get rid of by substituting
+---@param mappings {[integer]: typed} the placeholder we are trying to get rid of by substituting
 ---@param context_len integer number of bindings in the runtime context already used - needed for closures
 ---@return typed a typed term
 local function substitute_inner(val, mappings, context_len)
@@ -309,6 +309,11 @@ local function substitute_inner(val, mappings, context_len)
 end
 
 --for substituting a single var at index
+---@param val value
+---@param index integer
+---@param param_name string?
+---@param typechecking_context TypecheckingContext
+---@return value
 local function substitute_type_variables(val, index, param_name, typechecking_context)
 	param_name = param_name and "#sub-" .. param_name or "#sub-param"
 	--print("value before substituting (val): (value term follows)")
@@ -321,6 +326,8 @@ local function substitute_type_variables(val, index, param_name, typechecking_co
 	return value.closure(param_name, substituted, runtime_context())
 end
 
+---@param val value
+---@return boolean
 local function is_type_of_types(val)
 	return val:is_star() or val:is_prop() or val:is_prim_type_type()
 end
@@ -332,6 +339,11 @@ local check_concrete
 -- indexed by kind x kind
 local concrete_comparers = {}
 
+---@alias value_comparer fun(a: value, b: value, typechecker: TypeCheckerState): boolean, string?
+
+---@param ka string
+---@param kb string
+---@param comparer value_comparer
 local function add_comparer(ka, kb, comparer)
 	concrete_comparers[ka] = concrete_comparers[ka] or {}
 	concrete_comparers[ka][kb] = comparer
@@ -362,6 +374,7 @@ local function concrete_fail(message, cause)
 	}, concrete_fail_mt)
 end
 
+---@type value_comparer
 local function always_fits_comparer(a, b, typechecker)
 	return true
 end
@@ -378,6 +391,7 @@ end
 
 -- types of types
 add_comparer(value.prim_type_type.kind, value.prim_type_type.kind, always_fits_comparer)
+---@type value_comparer
 local function tuple_compare(a, b, typechecker)
 	-- fixme lol
 	local placeholder = value.neutral(neutral_value.free(free.unique({})))
@@ -497,6 +511,9 @@ function check_concrete(val, use, typechecker)
 	return comparer(val, use)
 end
 
+---@param enum_val value
+---@param closures Array
+---@return Array
 local function extract_tuple_elem_type_closures(enum_val, closures)
 	local constructor, arg = enum_val:unwrap_enum_value()
 	local elements = arg:unwrap_tuple_value()
@@ -519,8 +536,6 @@ local function extract_tuple_elem_type_closures(enum_val, closures)
 	end
 	error "unknown enum constructor for value.tuple_type's enum_value, should not be reachable"
 end
-
-value:derive(derivers.eq)
 
 ---@param checkable_term checkable
 ---@param typechecking_context TypecheckingContext
@@ -551,7 +566,7 @@ function check(
 			-- FIXME: needs context to avoid bugs where inferred and goal are the same neutral structurally
 			-- but come from different context thus are different
 			-- but erroneously compare equal
-			local ok, err = typechecker_state:flow(inferred_type, goal_type)
+			local ok, err = typechecker_state:flow(inferred_type, typechecking_context, goal_type, typechecking_context)
 			if not ok then
 				print "attempting to check if terms fit for checkable_term.inferrable"
 				--for i = 2, 49 do
@@ -674,6 +689,9 @@ function apply_value(f, arg)
 	error("unreachable!?")
 end
 
+---@param subject value
+---@param index integer
+---@return value
 local function index_tuple_value(subject, index)
 	if terms.value.value_check(subject) ~= true then
 		error("index_tuple_value, subject: expected an alicorn value")
@@ -701,8 +719,13 @@ local function index_tuple_value(subject, index)
 		end
 		return value.neutral(neutral_value.tuple_element_access_stuck(inner, index))
 	end
+	error("Should be unreachable???")
 end
 
+---@param subject_type value
+---@param subject_value value
+---@return value
+---@return fun(i: any) : value
 local function make_tuple_prefix(subject_type, subject_value)
 	local decls, make_prefix
 	if subject_type:is_tuple_type() then
@@ -759,6 +782,11 @@ local function make_tuple_prefix(subject_type, subject_value)
 end
 
 -- TODO: create a typechecking context append variant that merges two
+---@param decls value
+---@param tupletypes value[]
+---@param make_prefix fun(i: integer): value
+---@return value[]
+---@return integer
 function make_inner_context(decls, tupletypes, make_prefix)
 	-- evaluate the type of the tuple
 	local constructor, arg = decls:unwrap_enum_value()
@@ -777,16 +805,26 @@ function make_inner_context(decls, tupletypes, make_prefix)
 	end
 end
 
+---@param subject_type value
+---@param subject_value value
+---@return value[]
+---@return integer
 function infer_tuple_type_unwrapped(subject_type, subject_value)
 	local decls, make_prefix = make_tuple_prefix(subject_type, subject_value)
 	return make_inner_context(decls, {}, make_prefix)
 end
 
+---@param subject_type value
+---@param subject_value value
+---@return value[]
+---@return integer
 function infer_tuple_type(subject_type, subject_value)
 	-- define how the type of each tuple element should be evaluated
 	return infer_tuple_type_unwrapped(subject_type, subject_value)
 end
 
+---@param typ value
+---@return integer
 local function nearest_star_level(typ)
 	if typ:is_prim_type_type() then
 		return 0
@@ -864,7 +902,9 @@ function infer(
 
 		local ok, err = typechecker_state:flow(
 			evaluate(param_type_term, typechecking_context.runtime_context),
+			typechecking_context,
 			result_type_param_type,
+			typechecking_context,
 			"inferrable pi term"
 		)
 		if not ok then
@@ -1146,7 +1186,10 @@ function infer(
 		if not ok then
 			error("infer, is_operative_cons, operative_type_value: expected a term with an operative type")
 		end
-		if userdata_type ~= op_userdata_type and not typechecker_state:flow(userdata_type, op_userdata_type) then
+		if
+			userdata_type ~= op_userdata_type
+			and not typechecker_state:flow(userdata_type, typechecking_context, op_userdata_type, typechecking_context)
+		then
 			p(userdata_type, op_userdata_type)
 			print(userdata_type:pretty_print())
 			print(op_userdata_type:pretty_print())
@@ -1243,9 +1286,15 @@ function infer(
 		local susages, sterm = check(subject, typechecking_context, terms.value.prim_bool_type)
 		local ctype, cusages, cterm = infer(consequent, typechecking_context)
 		local atype, ausages, aterm = infer(alternate, typechecking_context)
-		local restype = typechecker_state:metavariable():as_value()
-		typechecker_state:flow(ctype, restype, "inferred prim if consequent")
-		typechecker_state:flow(atype, restype, "inferred prim if alternate")
+		local restype = typechecker_state:metavariable(typechecking_context):as_value()
+		typechecker_state:flow(
+			ctype,
+			typechecking_context,
+			restype,
+			typechecking_context,
+			"inferred prim if consequent"
+		)
+		typechecker_state:flow(atype, typechecking_context, restype, typechecking_context, "inferred prim if alternate")
 
 		local result_usages = usage_array()
 		add_arrays(result_usages, susages)
@@ -1719,10 +1768,52 @@ function evaluate(typed_term, runtime_context)
 	error("unreachable!?")
 end
 
+local typed = terms.typed_term
+local name_array = gen.declare_array(gen.builtin_string)
+
+---@param luafunc function
+---@param parameters Array -- example usage: name_array("#wrap-TODO1", "#wrap-TODO2")
+---@return value
+local function luatovalue(luafunc, parameters)
+	local len = parameters:len()
+	local new_body = typed_array()
+
+	for i = 1, len do
+		new_body:append(typed.bound_variable(i + 1))
+	end
+
+	return value.closure(
+		"#args",
+		typed.application(
+			typed.literal(value.prim(luafunc)),
+			typed.tuple_elim(parameters, typed.bound_variable(1), len, typed.prim_tuple_cons(new_body))
+		),
+		runtime_context()
+	)
+end
+
+---@class SubtypeRelation
+---@field Rel value -- : (a:T,b:T) -> Prop__
+---@field refl value -- : (a:T) -> Rel(a,a)
+---@field antisym value -- : (a:T, B:T, Rel(a,b), Rel(b,a)) -> a == b
+---@field constrain value -- : (Node(T), Node(T)) -> [TCState] ()
+local SubtypeRelation = {}
+
+---@type SubtypeRelation
+local UniverseOmegaRelation = {
+	Rel = luatovalue(function(a, b) end, name_array("a", "b")),
+	refl = luatovalue(function(a) end, name_array("a")),
+	antisym = luatovalue(function(a, b, r1, r2) end, name_array("a", "b", "r1", "r2")),
+	constrain = luatovalue(function(val, use)
+		check_concrete(val, nil, use, nil, typechecker_state)
+	end, name_array("val", "use")),
+}
+
 ---@class OrderedSet
 ---@field set { [any]: integer }
 ---@field array any[]
 local OrderedSet = {}
+local ordered_set_mt
 
 ---@param t any
 ---@return boolean
@@ -1731,7 +1822,7 @@ function OrderedSet:insert(t)
 		return false
 	end
 	self.set[t] = #self.array + 1
-	table.insert(self.array, t)
+	U.append(self.array, t)
 	return true
 end
 
@@ -1742,68 +1833,110 @@ function OrderedSet:insert_aux(t, ...)
 		return false
 	end
 	self.set[t] = #self.array + 1
-	table.insert(self.array, { t, ... })
+	U.append(self.array, { t, ... })
 	return true
 end
 
-local ordered_set_mt = { __index = OrderedSet }
+---@return OrderedSet
+function OrderedSet:shadow()
+	return setmetatable({ set = U.shadowtable(self.set), array = U.shadowarray(self.array) }, ordered_set_mt)
+end
+
+ordered_set_mt = { __index = OrderedSet }
 
 ---@return OrderedSet
 local function ordered_set()
-	return setmetatable({ set = {}, count = 0 }, ordered_set_mt)
+	return setmetatable({ set = {}, array = {} }, ordered_set_mt)
 end
 
 ---@class TypeCheckerState
----@field pending table
+---@field pending [integer, integer, any][]
 ---@field graph Reachability
----@field values table
----@field valcheck table
----@field usecheck table
+---@field values [value, TypeCheckerTag, TypecheckingContext][]
+---@field valcheck { [value]: integer }
+---@field usecheck { [value]: integer }
 local TypeCheckerState = {}
 
 ---@class Reachability
 ---@field upsets OrderedSet[]
 ---@field downsets OrderedSet[]
 local Reachability = {}
+local reachability_mt
 
 ---@return integer
 function Reachability:add_node()
 	local i = #self.upsets + 1 -- Account for lua tables starting at 1
-	table.insert(self.upsets, ordered_set())
-	table.insert(self.downsets, ordered_set())
+	U.append(self.upsets, ordered_set())
+	U.append(self.downsets, ordered_set())
 	assert(#self.upsets == #self.downsets, "upsets must equal downsets!")
 	return i
 end
 
+---This shadowing works a bit differently because it overrides setinsert to be shadow-aware
+---@return Reachability
+function Reachability:shadow()
+	return setmetatable({
+		---@param set OrderedSet[]
+		---@param k integer
+		---@param v integer
+		---@return boolean
+		setinsert = function(set, k, v)
+			if rawget(set, k) == nil then
+				set[k] = set[k]:shadow()
+			end
+			assert(rawget(set, k) ~= nil, "failed to shadow set???")
+			return set[k]:insert(v)
+		end,
+		downsets = U.shadowarray(self.downsets),
+		upsets = U.shadowarray(self.upsets),
+	}, reachability_mt)
+end
+
+function Reachability:commit()
+	U.commit(self.downsets)
+	U.commit(self.upsets)
+end
+
+---@param set OrderedSet[]
+---@param k integer
+---@param v integer
+---@return boolean
+function Reachability.setinsert(set, k, v)
+	return set[k]:insert(v)
+end
+
+---@alias ReachabilityQueue [integer, integer, SubtypeRelation, any][]
+
 ---@param left integer
 ---@param right integer
----@param queue table
----@param context any
-function Reachability:add_edge(left, right, queue, context)
+---@param queue ReachabilityQueue
+---@param rel SubtypeRelation
+---@param cause any
+function Reachability:add_edge(left, right, queue, rel, cause)
 	assert(type(left) == "number", "left isn't an integer!")
 	assert(type(right) == "number", "right isn't an integer!")
 	local work = { { left, right } }
 
 	while #work > 0 do
-		local l, r = table.unpack(table.remove(work))
+		local l, r = table.unpack(U.pop(work))
 
 		assert(self.downsets[l], "Can't find " .. tostring(l))
-		if self.downsets[l]:insert(r) then
+		if self.setinsert(self.downsets, l, r) then
 			assert(self.downsets[r], "Can't find " .. tostring(r))
 			self.upsets[r]:insert(l)
-			table.insert(queue, { l, r })
+			U.append(queue, { l, r, rel, cause })
 
 			for i, l2 in ipairs(self.upsets[l].array) do
-				table.insert(work, { l2, r })
+				U.append(work, { l2, r })
 			end
 			for i, r2 in ipairs(self.downsets[r].array) do
-				table.insert(work, { l, r2 })
+				U.append(work, { l, r2 })
 			end
 		end
 	end
 end
 
-local reachability_mt = { __index = Reachability }
+reachability_mt = { __index = Reachability }
 
 ---@return Reachability
 local function reachability()
@@ -1818,19 +1951,22 @@ local TypeCheckerTag = {
 }
 ---@param val value
 ---@param use value
----@param context any
-function TypeCheckerState:queue_work(val, use, context)
-	local l = self:check_value(val, TypeCheckerTag.VALUE)
-	local r = self:check_value(use, TypeCheckerTag.USAGE)
+---@param cause any
+function TypeCheckerState:queue_work(val, use, cause)
+	local l = self:check_value(val, TypeCheckerTag.VALUE, nil)
+	local r = self:check_value(use, TypeCheckerTag.USAGE, nil)
 	assert(type(l) == "number", "l isn't number, instead found " .. tostring(l))
 	assert(type(r) == "number", "r isn't number, instead found " .. tostring(r))
-	table.insert(self.pending, { l, r, context })
+	U.append(self.pending, { l, r, cause })
 end
 
 ---@param v value
 ---@param tag TypeCheckerTag
+---@param context TypecheckingContext
 ---@return integer
-function TypeCheckerState:check_value(v, tag)
+function TypeCheckerState:check_value(v, tag, context)
+	assert(v, "nil passed into check_value!")
+
 	if v:is_neutral() and v:unwrap_neutral():is_free() and v:unwrap_neutral():unwrap_free():is_metavariable() then
 		local mv = v:unwrap_neutral():unwrap_free():unwrap_metavariable()
 		if tag == TypeCheckerTag.VALUE then
@@ -1855,7 +1991,7 @@ function TypeCheckerState:check_value(v, tag)
 		return checker[v]
 	end
 
-	table.insert(self.values, { v, tag })
+	U.append(self.values, { v, tag, context })
 	local i = self.graph:add_node()
 	assert(i == #self.values, "Value array and node array got out of sync!")
 	checker[v] = i
@@ -1863,44 +1999,85 @@ function TypeCheckerState:check_value(v, tag)
 end
 
 ---@return Metavariable
-function TypeCheckerState:metavariable()
+---@param context TypecheckingContext
+function TypeCheckerState:metavariable(context)
 	local i = self.graph:add_node()
 	local mv = setmetatable({ value = i, usage = i }, terms.metavariable_mt)
-	table.insert(self.values, { mv:as_value(), TypeCheckerTag.VAR })
+	U.append(self.values, { mv:as_value(), TypeCheckerTag.VAR })
 	assert(i == #self.values, "Value array and node array got out of sync!")
 	return mv
 end
 
 ---@param val value
 ---@param use value
----@param context any
-function TypeCheckerState:flow(val, use, context)
-	assert(#self.pending == 0, "pending not empty at start of flow!")
-	self:queue_work(val, use, context)
+---@param cause any
+---@return boolean
+---@return ...
+function TypeCheckerState:flow(val, val_context, use, use_context, cause)
+	return self:constrain(val, val_context, use, use_context, UniverseOmegaRelation, cause)
+end
+
+---@param val value
+---@param val_context TypecheckingContext
+---@param use value
+---@param use_context TypecheckingContext
+---@param rel SubtypeRelation
+---@param cause any
+---@return boolean
+---@return ...
+function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cause)
+	assert(val and use, "empty val or use passed into constrain!")
+	assert(#self.pending == 0, "pending not empty at start of constrain!")
+	--TODO: add contexts to queue_work if appropriate
+	--self:queue_work(val, val_context, use, use_context, cause)
+	self:queue_work(val, use, cause)
+	---@type ReachabilityQueue
 	local queue = {}
 
 	while #self.pending > 0 do
-		local left, right, context = table.unpack(table.remove(self.pending))
-		self.graph:add_edge(left, right, queue, context)
+		local left, right, cause = table.unpack(U.pop(self.pending))
+		self.graph:add_edge(left, right, queue, rel, cause)
 
 		-- Check if adding that edge resulted in any new type pairs needing to be checked
 		while #queue > 0 do
-			local l, r = table.unpack(table.remove(queue))
+			local l, r, subrel = table.unpack(U.pop(queue))
 
-			local lvalue, ltag = table.unpack(self.values[l])
-			local rvalue, rtag = table.unpack(self.values[r])
+			local lvalue, ltag, lctx = table.unpack(self.values[l])
+			local rvalue, rtag, rctx = table.unpack(self.values[r])
 			if ltag == TypeCheckerTag.VALUE and rtag == TypeCheckerTag.USAGE then
-				check_concrete(lvalue, rvalue, self)
+				-- Unpacking tuples hasn't been fixed in VSCode yet (despite the issue being closed???) so we have to override the types: https://github.com/LuaLS/lua-language-server/issues/1816
+				local tuple_params = value_array(lvalue --[[@as value]], rvalue --[[@as value]])
+				-- TODO: how do we pass in the type contexts???
+				apply_value(subrel, value.tuple_value(tuple_params))
 			end
 		end
 	end
 
-	assert(#queue == 0, "queue was not empty after flow!")
+	assert(#queue == 0, "queue was not empty after constrain!")
 	assert(#self.pending == 0, "pending was not drained!")
 	return true
 end
 
 local typechecker_state_mt = { __index = TypeCheckerState }
+
+---@return TypeCheckerState
+function TypeCheckerState:shadow()
+	return setmetatable({
+		pending = U.shadowarray(self.pending),
+		graph = self.graph:shadow(),
+		values = U.shadowarray(self.values),
+		valcheck = U.shadowtable(self.valcheck),
+		usecheck = U.shadowtable(self.usecheck),
+	}, typechecker_state_mt)
+end
+
+function TypeCheckerState:commit()
+	U.commit(self.pending)
+	self.graph:commit()
+	U.commit(self.values)
+	U.commit(self.valcheck)
+	U.commit(self.usecheck)
+end
 
 ---@return TypeCheckerState
 local function new_typechecker_state()
@@ -1928,4 +2105,23 @@ local evaluator = {
 	OMEGA = OMEGA,
 }
 internals_interface.evaluator = evaluator
+
+---@param fn fun() : ...
+---@return boolean
+---@return ...
+function TypeCheckerState:speculate(fn)
+	local function capture(ok, ...)
+		if ok then
+			-- flattens all our changes back on to self
+			typechecker_state:commit()
+		end
+		typechecker_state = self
+		evaluator.typechecker_state = self
+		return ok, ...
+	end
+	typechecker_state = self:shadow()
+	evaluator.typechecker_state = typechecker_state
+	return capture(pcall(fn))
+end
+
 return evaluator

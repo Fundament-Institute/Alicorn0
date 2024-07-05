@@ -2,6 +2,7 @@
 ---@meta "inferrable.lua"
 ---@class (exact) inferrable
 ---@field kind string
+---@field pretty_print fun(...)
 inferrable = {}
 ---@return boolean
 function inferrable:is_bound_variable() end
