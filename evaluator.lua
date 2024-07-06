@@ -597,22 +597,32 @@ function check(
 		local elements = checkable_term:unwrap_tuple_cons()
 		local usages = usage_array()
 		local new_elements = typed_array()
+		local decls = value.enum_value("empty", value.tuple_value(value_array()))
 
-		local tuple_elems = value_array()
 		for i, v in ipairs(elements) do
-			local el_usages, el_term =
-				check(v, typechecking_context, typechecker_state:metavariable(typechecking_context):as_value())
+			local el_type_metavar = typechecker_state:metavariable(typechecking_context)
+			local el_usages, el_term = check(v, typechecking_context, el_type_metavar:as_value())
 
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
 
-			local new_elem = evaluate(el_term, typechecking_context.runtime_context)
-			tuple_elems:append(new_elem)
+			decls = value.enum_value(
+				"cons",
+				value.tuple_value(
+					value_array(
+						decls,
+						value.closure(
+							"#check-tuple-cons-param",
+							typed_term.literal(el_type_metavar:as_value()),
+							typechecking_context.runtime_context
+						)
+					)
+				)
+			)
 		end
 
-		local tuple = value.tuple_value(tuple_elems)
 		local ok = typechecker_state:flow(
-			tuple,
+			value.tuple_type(decls),
 			typechecking_context,
 			goal_type,
 			typechecking_context,
