@@ -499,8 +499,6 @@ local function expression_pairhandler(args, a, b)
 		if not ok then
 			error("speculate DID NOT work for pi!: " .. tostring(pi))
 		end
-		print("OUTPUT: " .. tostring(ok))
-		print(pi)
 		type_of_term = pi
 	end
 	if type_of_term:is_operative_type() then
@@ -546,7 +544,7 @@ local function expression_pairhandler(args, a, b)
 		local param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
 
 		while param_info:unwrap_param_info() == value.visibility(visibility.implicit) do
-			local metavar = typechecker_state:metavariable()
+			local metavar = typechecker_state:metavariable(env.typechecking_context)
 			local metavalue = metavar:as_value()
 			local metaresult = evaluator.apply_value(result_type, metavalue)
 			if not metaresult:is_pi() then
@@ -899,7 +897,7 @@ collect_tuple = metalanguage.reducer(
 		if goal:is_check() then
 			collected_terms = array(checkable_term)()
 			goal_type = goal:unwrap_check()
-			decls_metavar = typechecker_state:metavariable()
+			decls_metavar = typechecker_state:metavariable(env.typechecking_context)
 			typechecker_state:flow(
 				decls_metavar:as_value(),
 				env.typechecking_context,
@@ -916,7 +914,7 @@ collect_tuple = metalanguage.reducer(
 		while ok and continue do
 			i = i + 1
 			if goal_type then
-				local next_elem_type = typechecker_state:metavariable()
+				local next_elem_type = typechecker_state:metavariable(env.typechecking_context)
 				ok, continue, next_term, syntax, env = syntax:match(
 					{
 						metalanguage.ispair(collect_tuple_pair_handler),
@@ -926,7 +924,7 @@ collect_tuple = metalanguage.reducer(
 					ExpressionArgs.new(expression_goal.check(next_elem_type:as_value()), env)
 				)
 				if ok and continue then
-					local next_decls_metavar = typechecker_state:metavariable()
+					local next_decls_metavar = typechecker_state:metavariable(env.typechecking_context)
 					typechecker_state:flow(
 						next_decls_metavar:as_value(),
 						env.typechecking_context,

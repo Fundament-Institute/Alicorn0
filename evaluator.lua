@@ -266,9 +266,16 @@ local function substitute_inner(val, mappings, context_len)
 			return typed_term.prim_if(subject, consequent, alternate)
 		end
 
+		if nval:is_application_stuck() then
+			local fn, arg = nval:unwrap_application_stuck()
+			return typed_term.application(
+				substitute_inner(value.neutral(fn), mappings, context_len),
+				substitute_inner(arg, mappings, context_len)
+			)
+		end
+
 		-- TODO: deconstruct nuetral value or something
-		print("nval", nval)
-		error("substitute_inner not implemented yet val:is_neutral")
+		error("substitute_inner not implemented yet val:is_neutral - " .. tostring(nval))
 	elseif val:is_prim() then
 		return typed_term.literal(val)
 	elseif val:is_prim_type_type() then
@@ -588,22 +595,13 @@ function check(
 		return inferred_usages, typed_term
 	elseif checkable_term:is_tuple_cons() then
 		local elements = checkable_term:unwrap_tuple_cons()
-
-		local goal_tuple_type_elements = goal_type:unwrap_tuple_type()
-		local elem_type_closures = extract_tuple_elem_type_closures(goal_tuple_type_elements, value_array())
-		if #elem_type_closures ~= #elements then
-			print("goal_type", goal_type)
-			print("elements", elements)
-			error("check: mismatch in checkable_term.tuple_cons goal type element count and elements in tuple cons")
-		end
-
 		local usages = usage_array()
 		local new_elements = typed_array()
+
 		local tuple_elems = value_array()
 		for i, v in ipairs(elements) do
-			local tuple_elem_type = apply_value(elem_type_closures[i], value.tuple_value(tuple_elems))
-
-			local el_usages, el_term = check(v, typechecking_context, tuple_elem_type)
+			local el_usages, el_term =
+				check(v, typechecking_context, typechecker_state:metavariable(typechecking_context):as_value())
 
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
@@ -611,6 +609,20 @@ function check(
 			local new_elem = evaluate(el_term, typechecking_context.runtime_context)
 			tuple_elems:append(new_elem)
 		end
+
+		local tuple = value.tuple_value(tuple_elems)
+		local ok = typechecker_state:flow(
+			tuple,
+			typechecking_context,
+			goal_type,
+			typechecking_context,
+			"checkable_term:is_tuple_cons"
+		)
+
+		if not ok then
+			error("failed checkable_term flow")
+		end
+
 		return usages, typed_term.tuple_cons(new_elements)
 	elseif checkable_term:is_prim_tuple_cons() then
 		local elements = checkable_term:unwrap_prim_tuple_cons()
@@ -1849,12 +1861,31 @@ local function ordered_set()
 	return setmetatable({ set = {}, array = {} }, ordered_set_mt)
 end
 
+---@class TraitRegistry
+---@field traits { [string]: Trait }
+local TraitRegistry = {}
+local trait_registry_mt
+
+function TraitRegistry:shadow()
+	return setmetatable({ traits = U.shadowtable(self.traits) }, trait_registry_mt)
+end
+
+function TraitRegistry:commit()
+	U.commit(self.traits)
+end
+
+trait_registry_mt = { __index = TraitRegistry }
+
+local function trait_registry()
+	return setmetatable({ traits = {} }, trait_registry_mt)
+end
 ---@class TypeCheckerState
 ---@field pending [integer, integer, any][]
 ---@field graph Reachability
 ---@field values [value, TypeCheckerTag, TypecheckingContext][]
 ---@field valcheck { [value]: integer }
 ---@field usecheck { [value]: integer }
+---@field trait_registry TraitRegistry
 local TypeCheckerState = {}
 
 ---@class Reachability
@@ -2000,9 +2031,10 @@ end
 
 ---@return Metavariable
 ---@param context TypecheckingContext
-function TypeCheckerState:metavariable(context)
+---@param trait boolean?
+function TypeCheckerState:metavariable(context, trait)
 	local i = self.graph:add_node()
-	local mv = setmetatable({ value = i, usage = i }, terms.metavariable_mt)
+	local mv = setmetatable({ value = i, usage = i, trait = trait or false }, terms.metavariable_mt)
 	U.append(self.values, { mv:as_value(), TypeCheckerTag.VAR })
 	assert(i == #self.values, "Value array and node array got out of sync!")
 	return mv
@@ -2068,6 +2100,7 @@ function TypeCheckerState:shadow()
 		values = U.shadowarray(self.values),
 		valcheck = U.shadowtable(self.valcheck),
 		usecheck = U.shadowtable(self.usecheck),
+		trait_registry = self.trait_registry:shadow(),
 	}, typechecker_state_mt)
 end
 
@@ -2077,6 +2110,7 @@ function TypeCheckerState:commit()
 	U.commit(self.values)
 	U.commit(self.valcheck)
 	U.commit(self.usecheck)
+	self.trait_registry:commit()
 end
 
 ---@return TypeCheckerState
@@ -2087,6 +2121,7 @@ local function new_typechecker_state()
 		values = {},
 		valcheck = {},
 		usecheck = {},
+		trait_registry = trait_registry(),
 	}, typechecker_state_mt)
 end
 
