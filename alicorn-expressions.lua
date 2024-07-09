@@ -210,7 +210,7 @@ local infix_data = {
 ---@return boolean
 ---@return string
 local function shunting_yard_prefix_handler(_, symbol)
-	if not prefix_data[symbol:sub(1, 1)] then
+	if not prefix_data[symbol:sub(1, 1)] or symbol:find("_") then
 		return false,
 			"symbol was provided in a prefix operator place, but the symbol isn't a valid prefix operator: " .. symbol
 	end
@@ -226,7 +226,7 @@ end
 ---@return ConstructedSyntax?
 ---@return ConstructedSyntax?
 local function shunting_yard_infix_handler(_, symbol, a, b)
-	if not infix_data[symbol:sub(1, 1)] then
+	if not infix_data[symbol:sub(1, 1)] or symbol:find("_") then
 		return false,
 			"symbol was provided in an infix operator place, but the symbol isn't a valid infix operator: " .. symbol
 	end
@@ -377,7 +377,7 @@ end
 ---@return string?
 ---@return ConstructedSyntax?
 local function expression_prefix_handler(_, symbol, arg)
-	if not prefix_data[symbol:sub(1, 1)] then
+	if not prefix_data[symbol:sub(1, 1)] or symbol:find("_") then
 		return false,
 			"symbol was provided in a prefix operator place, but the symbol isn't a valid prefix operator: " .. symbol
 	end
@@ -393,7 +393,7 @@ end
 ---@return ConstructedSyntax?
 ---@return ConstructedSyntax?
 local function expression_infix_handler(_, left, symbol, right)
-	if not infix_data[symbol:sub(1, 1)] then
+	if not infix_data[symbol:sub(1, 1)] or symbol:find("_") then
 		return false,
 			"symbol was provided in an infix operator place, but the symbol isn't a valid infix operator: " .. symbol
 	end
