@@ -786,34 +786,39 @@ end
 -- - lambda is different
 ---@param definition inferrable
 ---@param context PrettyPrintingContext
----@return TupleDeclFlat[]
----@return integer
+---@return boolean
+---@return TupleDeclFlat[]?
+---@return integer?
 local function inferrable_tuple_type_flatten(definition, context)
 	local enum_type, constructor, arg = definition:unwrap_enum_cons()
 	local ok, universe = enum_type:as_tuple_defn_type()
 	-- TODO: what is universe?
 	if not ok then
-		error("override_pretty: inferrable.tuple_type: enum_type must be tuple_defn_type")
+		-- non-fatal, but weird
+		print("override_pretty: inferrable.tuple_type: enum_type must be tuple_defn_type")
 	end
 	if constructor == "empty" then
-		return {}, 0
+		return true, {}, 0
 	elseif constructor == "cons" then
 		local elements = arg:unwrap_tuple_cons()
 		local definition = elements[1]
 		local f = elements[2]
 		local ok, param_name, param_annotation, body, anchor = f:as_annotated_lambda()
 		if not ok then
-			error("override_pretty: inferrable.tuple_type: tuple decl must be a lambda")
+			return false
 		end
 		local inner_context = context:append(param_name)
 		local is_destructure, is_rename, names, body, inner_context = inferrable_destructure_helper(body, inner_context)
 		---@cast names string[]
-		local prev, n = inferrable_tuple_type_flatten(definition, context)
+		local ok, prev, n = inferrable_tuple_type_flatten(definition, context)
+		if not ok then
+			return false
+		end
 		n = n + 1
 		prev[n] = { names, body, inner_context }
-		return prev, n
+		return true, prev, n
 	else
-		error("override_pretty: inferrable.tuple_type: unknown tuple type data constructor")
+		return false
 	end
 end
 
@@ -900,6 +905,11 @@ function inferrable_term_override_pretty:annotated_lambda(pp, context)
 		is_destructure = false
 	end
 
+	local members
+	if is_tuple_type then
+		is_tuple_type, members = inferrable_tuple_type_flatten(decls, context)
+	end
+
 	pp:_enter()
 
 	pp:unit(pp:_color())
@@ -908,8 +918,6 @@ function inferrable_term_override_pretty:annotated_lambda(pp, context)
 
 	if is_tuple_type and is_destructure then
 		---@cast names string[]
-		local members = inferrable_tuple_type_flatten(decls, context)
-
 		if #members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
@@ -977,19 +985,30 @@ function inferrable_term_override_pretty:pi(pp, context)
 	context = ensure_context(context)
 	local result_context = context
 	local param_is_tuple_type, param_decls = as_any_tuple_type(param_type)
-	local ok, param_name, param_annotation, result_body, result_anchor = result_type:as_annotated_lambda()
-	if not ok then
-		error("override_pretty: inferrable.pi: result_type must be a lambda")
+	local result_is_readable, param_name, param_annotation, result_body, result_anchor =
+		result_type:as_annotated_lambda()
+	local result_is_destructure, result_is_rename, param_names, result_body, result_is_tuple_type, result_decls
+	if result_is_readable then
+		result_context = result_context:append(param_name)
+		result_is_destructure, result_is_rename, param_names, result_body, result_context =
+			inferrable_destructure_helper(result_body, result_context)
+		if result_is_rename then
+			---@cast param_names string
+			param_name = param_names
+			result_is_destructure = false
+		end
+		result_is_tuple_type, result_decls = as_any_tuple_type(result_body)
 	end
-	result_context = result_context:append(param_name)
-	local result_is_destructure, result_is_rename, param_names, result_body, result_context =
-		inferrable_destructure_helper(result_body, result_context)
-	if result_is_rename then
-		---@cast param_names string
-		param_name = param_names
-		result_is_destructure = false
+
+	local param_members
+	if param_is_tuple_type then
+		param_is_tuple_type, param_members = inferrable_tuple_type_flatten(param_decls, context)
 	end
-	local result_is_tuple_type, result_decls = as_any_tuple_type(result_body)
+
+	local result_members
+	if result_is_readable and result_is_tuple_type then
+		result_is_tuple_type, result_members = inferrable_tuple_type_flatten(result_decls, result_context)
+	end
 
 	pp:_enter()
 
@@ -997,16 +1016,16 @@ function inferrable_term_override_pretty:pi(pp, context)
 	pp:unit("inferrable.\u{03A0} ")
 	pp:unit(pp:_resetcolor())
 
-	if param_is_tuple_type and result_is_destructure then
+	if not result_is_readable then
+		pp:any(param_type, context)
+	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
-		local members = inferrable_tuple_type_flatten(param_decls, context)
-
-		if #members == 0 then
+		if #param_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
 		else
-			tuple_type_helper(pp, members, param_names)
+			tuple_type_helper(pp, param_members, param_names)
 		end
 	elseif result_is_destructure then
 		---@cast param_names string[]
@@ -1042,15 +1061,15 @@ function inferrable_term_override_pretty:pi(pp, context)
 	pp:unit(" -> ")
 	pp:unit(pp:_resetcolor())
 
-	if result_is_tuple_type then
-		local members = inferrable_tuple_type_flatten(result_decls, result_context)
-
-		if #members == 0 then
+	if not result_is_readable then
+		pp:any(result_type, context)
+	elseif result_is_tuple_type then
+		if #result_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
 		else
-			tuple_type_helper(pp, members)
+			tuple_type_helper(pp, result_members)
 		end
 	else
 		pp:any(result_body, result_context)
@@ -1156,7 +1175,7 @@ end
 function inferrable_term_override_pretty:tuple_type(pp, context)
 	local definition = self:unwrap_tuple_type()
 	context = ensure_context(context)
-	local members = inferrable_tuple_type_flatten(definition, context)
+	local ok, members = inferrable_tuple_type_flatten(definition, context)
 
 	pp:_enter()
 
@@ -1164,7 +1183,11 @@ function inferrable_term_override_pretty:tuple_type(pp, context)
 	pp:unit("inferrable.tuple_type[")
 	pp:unit(pp:_resetcolor())
 
-	tuple_type_helper(pp, members)
+	if ok then
+		tuple_type_helper(pp, members)
+	else
+		pp:unit("<UNHANDLED EDGE CASE>")
+	end
 
 	pp:unit(pp:_color())
 	pp:unit("]")
@@ -1185,7 +1208,7 @@ end
 function inferrable_term_override_pretty:prim_tuple_type(pp, context)
 	local decls = self:unwrap_prim_tuple_type()
 	context = ensure_context(context)
-	local members = inferrable_tuple_type_flatten(decls, context)
+	local ok, members = inferrable_tuple_type_flatten(decls, context)
 
 	pp:_enter()
 
@@ -1193,7 +1216,11 @@ function inferrable_term_override_pretty:prim_tuple_type(pp, context)
 	pp:unit("inferrable.prim_tuple_type[")
 	pp:unit(pp:_resetcolor())
 
-	tuple_type_helper(pp, members)
+	if ok then
+		tuple_type_helper(pp, members)
+	else
+		pp:unit("<UNHANDLED EDGE CASE>")
+	end
 
 	pp:unit(pp:_color())
 	pp:unit("]")
@@ -1211,19 +1238,30 @@ function inferrable_term_override_pretty:prim_function_type(pp, context)
 	context = ensure_context(context)
 	local result_context = context
 	local param_is_tuple_type, param_decls = param_type:as_prim_tuple_type()
-	local ok, param_name, param_annotation, result_body, result_anchor = result_type:as_annotated_lambda()
-	if not ok then
-		error("override_pretty: inferrable.prim_function_type: result_type must be a lambda")
+	local result_is_readable, param_name, param_annotation, result_body, result_anchor =
+		result_type:as_annotated_lambda()
+	local result_is_destructure, result_is_rename, param_names, result_body, result_is_tuple_type, result_decls
+	if result_is_readable then
+		result_context = result_context:append(param_name)
+		result_is_destructure, result_is_rename, param_names, result_body, result_context =
+			inferrable_destructure_helper(result_body, result_context)
+		if result_is_rename then
+			---@cast param_names string
+			param_name = param_names
+			result_is_destructure = false
+		end
+		result_is_tuple_type, result_decls = result_body:as_prim_tuple_type()
 	end
-	result_context = result_context:append(param_name)
-	local result_is_destructure, result_is_rename, param_names, result_body, result_context =
-		inferrable_destructure_helper(result_body, result_context)
-	if result_is_rename then
-		---@cast param_names string
-		param_name = param_names
-		result_is_destructure = false
+
+	local param_members
+	if param_is_tuple_type then
+		param_is_tuple_type, param_members = inferrable_tuple_type_flatten(param_decls, context)
 	end
-	local result_is_tuple_type, result_decls = result_body:as_prim_tuple_type()
+
+	local result_members
+	if result_is_readable and result_is_tuple_type then
+		result_is_tuple_type, result_members = inferrable_tuple_type_flatten(result_decls, result_context)
+	end
 
 	pp:_enter()
 
@@ -1231,16 +1269,16 @@ function inferrable_term_override_pretty:prim_function_type(pp, context)
 	pp:unit("inferrable.prim-\u{03A0} ")
 	pp:unit(pp:_resetcolor())
 
-	if param_is_tuple_type and result_is_destructure then
+	if not result_is_readable then
+		pp:any(param_type, context)
+	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
-		local members = inferrable_tuple_type_flatten(param_decls, context)
-
-		if #members == 0 then
+		if #param_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
 		else
-			tuple_type_helper(pp, members, param_names)
+			tuple_type_helper(pp, param_members, param_names)
 		end
 	elseif result_is_destructure then
 		---@cast param_names string[]
@@ -1276,15 +1314,15 @@ function inferrable_term_override_pretty:prim_function_type(pp, context)
 	pp:unit(" -> ")
 	pp:unit(pp:_resetcolor())
 
-	if result_is_tuple_type then
-		local members = inferrable_tuple_type_flatten(result_decls, result_context)
-
-		if #members == 0 then
+	if not result_is_readable then
+		pp:any(result_type, context)
+	elseif result_is_tuple_type then
+		if #result_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
 		else
-			tuple_type_helper(pp, members)
+			tuple_type_helper(pp, result_members)
 		end
 	else
 		pp:any(result_body, result_context)
@@ -1543,29 +1581,33 @@ end
 --- mostly the same as inferrable_tuple_type_flatten
 ---@param definition typed
 ---@param context PrettyPrintingContext
----@return TupleDeclFlat[]
----@return integer
+---@return boolean
+---@return TupleDeclFlat[]?
+---@return integer?
 local function typed_tuple_type_flatten(definition, context)
 	local constructor, arg = definition:unwrap_enum_cons()
 	if constructor == "empty" then
-		return {}, 0
+		return true, {}, 0
 	elseif constructor == "cons" then
 		local elements = arg:unwrap_tuple_cons()
 		local definition = elements[1]
 		local f = elements[2]
 		local ok, param_name, body = f:as_lambda()
 		if not ok then
-			error("override_pretty: typed.tuple_type: tuple decl must be a lambda")
+			return false
 		end
 		local inner_context = context:append(param_name)
 		local is_destructure, is_rename, names, body, inner_context = typed_destructure_helper(body, inner_context)
 		---@cast names string[]
-		local prev, n = typed_tuple_type_flatten(definition, context)
+		local ok, prev, n = typed_tuple_type_flatten(definition, context)
+		if not ok then
+			return false
+		end
 		n = n + 1
 		prev[n] = { names, body, inner_context }
-		return prev, n
+		return true, prev, n
 	else
-		error("override_pretty: typed.tuple_type: unknown tuple type data constructor")
+		return false
 	end
 end
 
@@ -1669,19 +1711,29 @@ function typed_term_override_pretty:pi(pp, context)
 	context = ensure_context(context)
 	local result_context = context
 	local param_is_tuple_type, param_decls = as_any_tuple_type(param_type)
-	local ok, param_name, result_body = result_type:as_lambda()
-	if not ok then
-		error("override_pretty: typed.pi: result_type must be a lambda")
+	local result_is_readable, param_name, result_body = result_type:as_lambda()
+	local result_is_destructure, result_is_rename, param_names, result_body, result_is_tuple_type, result_decls
+	if result_is_readable then
+		result_context = result_context:append(param_name)
+		result_is_destructure, result_is_rename, param_names, result_body, result_context =
+			typed_destructure_helper(result_body, result_context)
+		if result_is_rename then
+			---@cast param_names string
+			param_name = param_names
+			result_is_destructure = false
+		end
+		result_is_tuple_type, result_decls = as_any_tuple_type(result_body)
 	end
-	result_context = result_context:append(param_name)
-	local result_is_destructure, result_is_rename, param_names, result_body, result_context =
-		typed_destructure_helper(result_body, result_context)
-	if result_is_rename then
-		---@cast param_names string
-		param_name = param_names
-		result_is_destructure = false
+
+	local param_members
+	if param_is_tuple_type then
+		param_is_tuple_type, param_members = typed_tuple_type_flatten(param_decls, context)
 	end
-	local result_is_tuple_type, result_decls = as_any_tuple_type(result_body)
+
+	local result_members
+	if result_is_readable and result_is_tuple_type then
+		result_is_tuple_type, result_members = typed_tuple_type_flatten(result_decls, result_context)
+	end
 
 	pp:_enter()
 
@@ -1689,16 +1741,16 @@ function typed_term_override_pretty:pi(pp, context)
 	pp:unit("typed.\u{03A0} ")
 	pp:unit(pp:_resetcolor())
 
-	if param_is_tuple_type and result_is_destructure then
+	if not result_is_readable then
+		pp:any(param_type, context)
+	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
-		local members = typed_tuple_type_flatten(param_decls, context)
-
-		if #members == 0 then
+		if #param_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
 		else
-			tuple_type_helper(pp, members, param_names)
+			tuple_type_helper(pp, param_members, param_names)
 		end
 	elseif result_is_destructure then
 		---@cast param_names string[]
@@ -1734,15 +1786,15 @@ function typed_term_override_pretty:pi(pp, context)
 	pp:unit(" -> ")
 	pp:unit(pp:_resetcolor())
 
-	if result_is_tuple_type then
-		local members = typed_tuple_type_flatten(result_decls, result_context)
-
-		if #members == 0 then
+	if not result_is_readable then
+		pp:any(result_type, context)
+	elseif result_is_tuple_type then
+		if #result_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
 		else
-			tuple_type_helper(pp, members)
+			tuple_type_helper(pp, result_members)
 		end
 	else
 		pp:any(result_body, result_context)
@@ -1872,7 +1924,7 @@ end
 function typed_term_override_pretty:tuple_type(pp, context)
 	local definition = self:unwrap_tuple_type()
 	context = ensure_context(context)
-	local members = typed_tuple_type_flatten(definition, context)
+	local ok, members = typed_tuple_type_flatten(definition, context)
 
 	pp:_enter()
 
@@ -1880,7 +1932,11 @@ function typed_term_override_pretty:tuple_type(pp, context)
 	pp:unit("typed.tuple_type[")
 	pp:unit(pp:_resetcolor())
 
-	tuple_type_helper(pp, members)
+	if ok then
+		tuple_type_helper(pp, members)
+	else
+		pp:unit("<UNHANDLED EDGE CASE>")
+	end
 
 	pp:unit(pp:_color())
 	pp:unit("]")
@@ -1893,7 +1949,7 @@ end
 function typed_term_override_pretty:prim_tuple_type(pp, context)
 	local decls = self:unwrap_prim_tuple_type()
 	context = ensure_context(context)
-	local members = typed_tuple_type_flatten(decls, context)
+	local ok, members = typed_tuple_type_flatten(decls, context)
 
 	pp:_enter()
 
@@ -1901,7 +1957,11 @@ function typed_term_override_pretty:prim_tuple_type(pp, context)
 	pp:unit("typed.prim_tuple_type[")
 	pp:unit(pp:_resetcolor())
 
-	tuple_type_helper(pp, members)
+	if ok then
+		tuple_type_helper(pp, members)
+	else
+		pp:unit("<UNHANDLED EDGE CASE>")
+	end
 
 	pp:unit(pp:_color())
 	pp:unit("]")
@@ -1917,19 +1977,29 @@ function typed_term_override_pretty:prim_function_type(pp, context)
 	context = ensure_context(context)
 	local result_context = context
 	local param_is_tuple_type, param_decls = param_type:as_prim_tuple_type()
-	local ok, param_name, result_body = result_type:as_lambda()
-	if not ok then
-		error("override_pretty: typed.prim_function_type: result_type must be a lambda")
+	local result_is_readable, param_name, result_body = result_type:as_lambda()
+	local result_is_destructure, result_is_rename, param_names, result_body, result_is_tuple_type, result_decls
+	if result_is_readable then
+		result_context = result_context:append(param_name)
+		result_is_destructure, result_is_rename, param_names, result_body, result_context =
+			typed_destructure_helper(result_body, result_context)
+		if result_is_rename then
+			---@cast param_names string
+			param_name = param_names
+			result_is_destructure = false
+		end
+		result_is_tuple_type, result_decls = result_body:as_prim_tuple_type()
 	end
-	result_context = result_context:append(param_name)
-	local result_is_destructure, result_is_rename, param_names, result_body, result_context =
-		typed_destructure_helper(result_body, result_context)
-	if result_is_rename then
-		---@cast param_names string
-		param_name = param_names
-		result_is_destructure = false
+
+	local param_members
+	if param_is_tuple_type then
+		param_is_tuple_type, param_members = typed_tuple_type_flatten(param_decls, context)
 	end
-	local result_is_tuple_type, result_decls = result_body:as_prim_tuple_type()
+
+	local result_members
+	if result_is_readable and result_is_tuple_type then
+		result_is_tuple_type, result_members = typed_tuple_type_flatten(result_decls, result_context)
+	end
 
 	pp:_enter()
 
@@ -1937,16 +2007,16 @@ function typed_term_override_pretty:prim_function_type(pp, context)
 	pp:unit("typed.prim-\u{03A0} ")
 	pp:unit(pp:_resetcolor())
 
-	if param_is_tuple_type and result_is_destructure then
+	if not result_is_readable then
+		pp:any(param_type, context)
+	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
-		local members = typed_tuple_type_flatten(param_decls, context)
-
-		if #members == 0 then
+		if #param_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
 		else
-			tuple_type_helper(pp, members, param_names)
+			tuple_type_helper(pp, param_members, param_names)
 		end
 	elseif result_is_destructure then
 		---@cast param_names string[]
@@ -1982,15 +2052,15 @@ function typed_term_override_pretty:prim_function_type(pp, context)
 	pp:unit(" -> ")
 	pp:unit(pp:_resetcolor())
 
-	if result_is_tuple_type then
-		local members = typed_tuple_type_flatten(result_decls, result_context)
-
-		if #members == 0 then
+	if not result_is_readable then
+		pp:any(result_type, context)
+	elseif result_is_tuple_type then
+		if #result_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
 		else
-			tuple_type_helper(pp, members)
+			tuple_type_helper(pp, result_members)
 		end
 	else
 		pp:any(result_body, result_context)
@@ -2009,13 +2079,12 @@ function typed_term_override_pretty:prim_intrinsic(pp, context)
 	pp:unit("typed.prim_intrinsic ")
 	pp:unit(pp:_resetcolor())
 
+	local source_text
 	local ok, source_val = source:as_literal()
 	if ok then
-		local ok, source_text = source_val:as_prim()
-		if not ok or type(source_text) ~= "string" then
-			error("override_pretty: typed.prim_intrinsic: source must be a prim string")
-		end
-
+		ok, source_text = source_val:as_prim()
+	end
+	if ok and type(source_text) == "string" then
 		-- trim initial newlines
 		-- get first line
 		-- ellipsize further lines
@@ -2220,30 +2289,34 @@ value:define_enum("value", {
 -- - closure instead of lambda
 -- - context comes from closure
 ---@param definition value
----@return TupleDeclFlat[]
----@return integer
+---@return boolean
+---@return TupleDeclFlat[]?
+---@return integer?
 local function value_tuple_type_flatten(definition)
 	local constructor, arg = definition:unwrap_enum_value()
 	if constructor == "empty" then
-		return {}, 0
+		return true, {}, 0
 	elseif constructor == "cons" then
 		local elements = arg:unwrap_tuple_value()
 		local definition = elements[1]
 		local f = elements[2]
 		local ok, param_name, code, capture = f:as_closure()
 		if not ok then
-			error("override_pretty: value.tuple_type: tuple decl must be a closure")
+			return false
 		end
 		local context = ensure_context(capture)
 		local inner_context = context:append(param_name)
 		local is_destructure, is_rename, names, code, inner_context = typed_destructure_helper(code, inner_context)
 		---@cast names string[]
-		local prev, n = value_tuple_type_flatten(definition)
+		local ok, prev, n = value_tuple_type_flatten(definition)
+		if not ok then
+			return false
+		end
 		n = n + 1
 		prev[n] = { names, code, inner_context }
-		return prev, n
+		return true, prev, n
 	else
-		error("override_pretty: value.tuple_type: unknown tuple type data constructor")
+		return false
 	end
 end
 
@@ -2255,14 +2328,9 @@ local value_override_pretty = {}
 function value_override_pretty:pi(pp)
 	local param_type, param_info, result_type, result_info = self:unwrap_pi()
 	local param_is_tuple_type, param_decls = as_any_tuple_type(param_type)
-	local result_is_broken = false
-	local ok, param_name, result_code, result_capture = result_type:as_closure()
-	if not ok then
-		result_is_broken = true
-	end
-	local result_is_destructure = false
-	local result_context, result_is_destructure, result_is_rename, param_names, result_code, result_context, result_is_tuple_type, result_decls
-	if not result_is_broken then
+	local result_is_readable, param_name, result_code, result_capture = result_type:as_closure()
+	local result_context, result_is_destructure, result_is_rename, param_names, result_code, result_is_tuple_type, result_decls
+	if result_is_readable then
 		result_context = ensure_context(result_capture)
 		result_context = result_context:append(param_name)
 		result_is_destructure, result_is_rename, param_names, result_code, result_context =
@@ -2275,24 +2343,32 @@ function value_override_pretty:pi(pp)
 		result_is_tuple_type, result_decls = as_any_tuple_type(result_code)
 	end
 
+	local param_members
+	if param_is_tuple_type then
+		param_is_tuple_type, param_members = value_tuple_type_flatten(param_decls)
+	end
+
+	local result_members
+	if result_is_readable and result_is_tuple_type then
+		result_is_tuple_type, result_members = typed_tuple_type_flatten(result_decls, result_context)
+	end
+
 	pp:_enter()
 
 	pp:unit(pp:_color())
 	pp:unit("value.\u{03A0} ")
 	pp:unit(pp:_resetcolor())
 
-	if result_is_broken then
+	if not result_is_readable then
 		pp:any(param_type)
 	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
-		local members = value_tuple_type_flatten(param_decls)
-
-		if #members == 0 then
+		if #param_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
 		else
-			tuple_type_helper(pp, members, param_names)
+			tuple_type_helper(pp, param_members, param_names)
 		end
 	elseif result_is_destructure then
 		---@cast param_names string[]
@@ -2328,17 +2404,15 @@ function value_override_pretty:pi(pp)
 	pp:unit(" -> ")
 	pp:unit(pp:_resetcolor())
 
-	if result_is_broken then
+	if not result_is_readable then
 		pp:any(result_type)
 	elseif result_is_tuple_type then
-		local members = typed_tuple_type_flatten(result_decls, result_context)
-
-		if #members == 0 then
+		if #result_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
 		else
-			tuple_type_helper(pp, members)
+			tuple_type_helper(pp, result_members)
 		end
 	else
 		pp:any(result_code, result_context)
@@ -2405,7 +2479,7 @@ end
 ---@param pp PrettyPrint
 function value_override_pretty:tuple_type(pp)
 	local decls = self:unwrap_tuple_type()
-	local members = value_tuple_type_flatten(decls)
+	local ok, members = value_tuple_type_flatten(decls)
 
 	pp:_enter()
 
@@ -2413,7 +2487,11 @@ function value_override_pretty:tuple_type(pp)
 	pp:unit("value.tuple_type[")
 	pp:unit(pp:_resetcolor())
 
-	tuple_type_helper(pp, members)
+	if ok then
+		tuple_type_helper(pp, members)
+	else
+		pp:unit("<UNHANDLED EDGE CASE>")
+	end
 
 	pp:unit(pp:_color())
 	pp:unit("]")
@@ -2427,23 +2505,30 @@ end
 function value_override_pretty:prim_function_type(pp)
 	local param_type, result_type = self:unwrap_prim_function_type()
 	local param_is_tuple_type, param_decls = param_type:as_prim_tuple_type()
-	local ok, param_name, result_code, result_capture = result_type:as_closure()
-	if not ok then
-		--error("override_pretty: value.prim_function_type: result_type must be a closure")
-		-- allow printing cursed things that contain manually-written (broken) prim-func-types
-		pp:unit("<BROKEN prim_function_type>")
-		return
+	local result_is_readable, param_name, result_code, result_capture = result_type:as_closure()
+	local result_context, result_is_destructure, result_is_rename, param_names, result_code, result_is_tuple_type, result_decls
+	if result_is_readable then
+		result_context = ensure_context(result_capture)
+		result_context = result_context:append(param_name)
+		result_is_destructure, result_is_rename, param_names, result_code, result_context =
+			typed_destructure_helper(result_code, result_context)
+		if result_is_rename then
+			---@cast param_names string
+			param_name = param_names
+			result_is_destructure = false
+		end
+		result_is_tuple_type, result_decls = result_code:as_prim_tuple_type()
 	end
-	local result_context = ensure_context(result_capture)
-	result_context = result_context:append(param_name)
-	local result_is_destructure, result_is_rename, param_names, result_code, result_context =
-		typed_destructure_helper(result_code, result_context)
-	if result_is_rename then
-		---@cast param_names string
-		param_name = param_names
-		result_is_destructure = false
+
+	local param_members
+	if param_is_tuple_type then
+		param_is_tuple_type, param_members = value_tuple_type_flatten(param_decls)
 	end
-	local result_is_tuple_type, result_decls = result_code:as_prim_tuple_type()
+
+	local result_members
+	if result_is_readable and result_is_tuple_type then
+		result_is_tuple_type, result_members = typed_tuple_type_flatten(result_decls, result_context)
+	end
 
 	pp:_enter()
 
@@ -2451,16 +2536,16 @@ function value_override_pretty:prim_function_type(pp)
 	pp:unit("value.prim-\u{03A0} ")
 	pp:unit(pp:_resetcolor())
 
-	if param_is_tuple_type and result_is_destructure then
+	if not result_is_readable then
+		pp:any(param_type)
+	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
-		local members = value_tuple_type_flatten(param_decls)
-
-		if #members == 0 then
+		if #param_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
 		else
-			tuple_type_helper(pp, members, param_names)
+			tuple_type_helper(pp, param_members, param_names)
 		end
 	elseif result_is_destructure then
 		---@cast param_names string[]
@@ -2496,15 +2581,15 @@ function value_override_pretty:prim_function_type(pp)
 	pp:unit(" -> ")
 	pp:unit(pp:_resetcolor())
 
-	if result_is_tuple_type then
-		local members = typed_tuple_type_flatten(result_decls, result_context)
-
-		if #members == 0 then
+	if not result_is_readable then
+		pp:any(result_type)
+	elseif result_is_tuple_type then
+		if #result_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
 		else
-			tuple_type_helper(pp, members)
+			tuple_type_helper(pp, result_members)
 		end
 	else
 		pp:any(result_code, result_context)
@@ -2516,7 +2601,7 @@ end
 ---@param pp PrettyPrint
 function value_override_pretty:prim_tuple_type(pp)
 	local decls = self:unwrap_prim_tuple_type()
-	local members = value_tuple_type_flatten(decls)
+	local ok, members = value_tuple_type_flatten(decls)
 
 	pp:_enter()
 
@@ -2524,7 +2609,11 @@ function value_override_pretty:prim_tuple_type(pp)
 	pp:unit("value.prim_tuple_type[")
 	pp:unit(pp:_resetcolor())
 
-	tuple_type_helper(pp, members)
+	if ok then
+		tuple_type_helper(pp, members)
+	else
+		pp:unit("<UNHANDLED EDGE CASE>")
+	end
 
 	pp:unit(pp:_color())
 	pp:unit("]")
