@@ -63,6 +63,10 @@ end]]
 ---@param list T[]
 ---@param value T
 function M.append(list, value)
+	if rawget(list, "__lock") then
+		error("Modifying a shadowed object! This should never happen!")
+	end
+
 	-- If this is a shadowed array it'll trigger the __newindex overload that increments length
 	list[#list + 1] = value
 
@@ -79,10 +83,14 @@ end
 ---@param list T[] | { [integer]: T, __length : integer }
 ---@return T
 function M.pop(list)
+	if rawget(list, "__lock") then
+		error("Modifying a shadowed object! This should never happen!")
+	end
+
 	local value = list[#list]
 	rawset(list, #list, nil)
-	if list.__length then
-		list.__length = list.__length - 1
+	if rawget(list, "__length") then
+		rawset(list, "__length", rawget(list, "__length") - 1)
 	end
 	return value
 end
@@ -94,7 +102,7 @@ local shadowarray_mt = {
 		if k > #t then
 			return nil
 		end
-		return t.__shadow[k]
+		return rawget(t, "__shadow")[k]
 	end,
 	__newindex = function(t, k, v)
 		if k == #t + 1 then
@@ -117,28 +125,10 @@ local shadowarray_mt = {
 }
 
 -- This is a metatable that shadows a dictionary, pretending to have all of it's elements without actually affecting it
+-- We do not attempt to make pairs iterate over all the shadowed elements because this is extremely nontrivial.
 local shadowtable_mt = {
 	__index = function(t, k)
-		return t.__shadow[k]
-	end,
-	__pairs = function(t)
-		local function shadow_iter(t, k)
-			local result, v = nil, nil
-			if k == nil or t.__shadow[k] ~= nil then
-				result, v = next(t.__shadow, k)
-			end
-			if result == nil then
-				-- If k existed in __shadow but next returns nil, that was the end of the table, so restart with nil
-				if t.__shadow[k] ~= nil then
-					k = nil
-				end
-				result, v = next(t, k)
-			end
-			return result, v
-		end
-
-		-- Return an iterator function, the table, starting point
-		return shadow_iter, t, nil
+		return rawget(t, "__shadow")[k]
 	end,
 }
 
@@ -146,6 +136,7 @@ local shadowtable_mt = {
 ---@param t T
 ---@return T
 function M.shadowtable(t)
+	rawset(t, "__lock", true)
 	return setmetatable({ __shadow = t }, shadowtable_mt)
 end
 
@@ -153,6 +144,7 @@ end
 ---@param t T[] | { [integer]: T, __length: integer }
 ---@return { [integer]: T, __length: integer }
 function M.shadowarray(t)
+	rawset(t, "__lock", true)
 	return setmetatable({ __shadow = t, __length = #t }, shadowarray_mt)
 end
 
@@ -166,6 +158,10 @@ function M.commit(t)
 	local length = t.__length
 	t.__shadow = nil
 	t.__length = nil
+
+	if original then
+		rawset(original, "__lock", nil)
+	end
 
 	for k, v in pairs(t) do
 		rawset(original, k, v)
