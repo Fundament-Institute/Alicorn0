@@ -1906,10 +1906,23 @@ local reachability_mt
 
 ---@return integer
 function Reachability:add_node()
+	local prevupsets = U.dumptable(self.upsets)
+
 	local i = #self.upsets + 1 -- Account for lua tables starting at 1
 	U.append(self.upsets, ordered_set())
 	U.append(self.downsets, ordered_set())
 	assert(#self.upsets == #self.downsets, "upsets must equal downsets!")
+	assert(
+		#self.upsets == i,
+		"i does not equal upsets?! "
+			.. tostring(i)
+			.. " != "
+			.. tostring(#self.upsets)
+			.. " ... \n"
+			.. tostring(prevupsets)
+			.. " ... \n"
+			.. tostring(U.dumptable(self.upsets))
+	)
 	return i
 end
 
@@ -2046,7 +2059,10 @@ function TypeCheckerState:metavariable(context, trait)
 	local i = self.graph:add_node()
 	local mv = setmetatable({ value = i, usage = i, trait = trait or false }, terms.metavariable_mt)
 	U.append(self.values, { mv:as_value(), TypeCheckerTag.VAR })
-	assert(i == #self.values, "Value array and node array got out of sync!")
+	assert(
+		i == #self.values,
+		"Value array and node array got out of sync! " .. tostring(i) .. " != " .. tostring(#self.values)
+	)
 	return mv
 end
 

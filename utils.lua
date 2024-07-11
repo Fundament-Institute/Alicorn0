@@ -193,4 +193,14 @@ function M.shallow_copy(src)
 	return t
 end
 
+---@param t table
+---@return string
+function M.dumptable(t)
+	local s = tostring(t) .. ": "
+	for k, v in pairs(t) do
+		s = s .. "\n  " .. tostring(k) .. ": " .. tostring(v)
+	end
+	return s
+end
+
 return M
