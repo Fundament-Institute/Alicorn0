@@ -65,6 +65,13 @@ end]]
 function M.append(list, value)
 	-- If this is a shadowed array it'll trigger the __newindex overload that increments length
 	list[#list + 1] = value
+
+	--[[for i = 1, #list do
+		if list[i] == nil then
+			print("found hole:" .. M.dumptable(list))
+			os.exit(-1)
+		end
+	end]]
 end
 
 ---Removes an element from a list, respecting whether it was a shadowed array or not
@@ -83,8 +90,8 @@ end
 -- This is a metatable that shadows an array, but only if you use shadowinsert
 local shadowarray_mt = {
 	__index = function(t, k)
-		-- If our length is negative, we've "removed" items from the array we're shadowing
-		if t.__length < 0 and k > #t then
+		-- Our length can go below the length of the array we're shadowing, so handle that case
+		if k > #t then
 			return nil
 		end
 		return t.__shadow[k]
@@ -96,7 +103,7 @@ local shadowarray_mt = {
 		rawset(t, k, v)
 	end,
 	__len = function(t)
-		return #t.__shadow + t.__length
+		return t.__length
 	end,
 	__ipairs = function(tbl)
 		return function(t, i)
@@ -146,7 +153,7 @@ end
 ---@param t T[] | { [integer]: T, __length: integer }
 ---@return { [integer]: T, __length: integer }
 function M.shadowarray(t)
-	return setmetatable({ __shadow = t, __length = 0 }, shadowarray_mt)
+	return setmetatable({ __shadow = t, __length = #t }, shadowarray_mt)
 end
 
 ---Given a shadowed table, flattens its values on to the shadowed table below and returns it
@@ -166,16 +173,12 @@ function M.commit(t)
 
 	-- If this is an array, truncate the shadowed array in case we removed elements
 	if length then
-		local i = length
-		local start = #original
-
-		if original.__length then
-			original.__length = original.__length + length
+		for i = length + 1, #original do
+			rawset(original, i, nil)
 		end
 
-		while i < 0 do
-			rawset(original, start + i + 1, nil)
-			i = i + 1
+		if original.__length then
+			original.__length = length
 		end
 	end
 
@@ -195,11 +198,19 @@ end
 
 ---@param t table
 ---@return string
-function M.dumptable(t)
+function M.dumptable(t, spaces)
+	spaces = spaces or 0
 	local s = tostring(t) .. ": "
 	for k, v in pairs(t) do
-		s = s .. "\n  " .. tostring(k) .. ": " .. tostring(v)
+		s = s .. "\n" .. string.rep(" ", spaces)
+
+		if k == "__shadow" then
+			s = s .. "  " .. tostring(k) .. ": " .. tostring(M.dumptable(v, spaces + 2))
+		else
+			s = s .. "  " .. tostring(k) .. ": " .. tostring(v)
+		end
 	end
+
 	return s
 end
 
