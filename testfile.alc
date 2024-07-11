@@ -97,6 +97,9 @@ let new-prim-type-family = lambda (unique-id : prim-unique-id, signature : type_
 		:
 		prim-func-type (unique-id : prim-unique-id, signature_ : wrapped(type_(1))) -> ((family    : wrapped(signature)))
 	let (family) = inner(unique-id, implicit-wrap(signature))
+	# FIXME: implicit-unwrap here causes new-prim-type to fail due to trying
+	# to call something whose type is a metavariable
+	#unwrap(signature, family)
 	implicit-unwrap(family)
 let new-prim-type = lambda ((unique-id : prim-unique-id))
 	let Tfam = new-prim-type-family unique-id
@@ -376,8 +379,8 @@ let sub_type = forall (x : prim-number, y : prim-number) -> (res : prim-number)
 let (orig-results) = get-prim-func-res-inner(implicit-wrap(foo), prim-nil)
 # FIXME: implicit-unwrap here causes new-results to fail due to trying
 # to call something whose type is a metavariable
-#let orig-results = unwrap(func-conv-res-type(oldargs), orig-results)
-let orig-results = implicit-unwrap(orig-results)
+let orig-results = unwrap(func-conv-res-type(oldargs), orig-results)
+#let orig-results = implicit-unwrap(orig-results)
 let new-results =
 	lambda ((args : implicit-unwrap(newargs)))
 		let ptuple = tuple-to-prim-tuple(oldargs, oldargs-valid, args)

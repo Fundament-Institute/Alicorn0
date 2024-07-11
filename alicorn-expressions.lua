@@ -914,19 +914,12 @@ collect_tuple = metalanguage.reducer(
 	---@return Environment?
 	function(syntax, args)
 		local goal, env = args:unwrap()
-		local goal_type, decls_metavar, collected_terms
+		local goal_type, collected_terms
+		local decls = value.enum_value("empty", value.tuple_value(value_array()))
 
 		if goal:is_check() then
 			collected_terms = array(checkable_term)()
 			goal_type = goal:unwrap_check()
-			decls_metavar = typechecker_state:metavariable(env.typechecking_context)
-			typechecker_state:flow(
-				decls_metavar:as_value(),
-				env.typechecking_context,
-				value.enum_value("empty", value.tuple_value(value_array())),
-				env.typechecking_context,
-				"base case of collect_tuple"
-			)
 		else
 			collected_terms = inferrable_array()
 		end
@@ -946,31 +939,20 @@ collect_tuple = metalanguage.reducer(
 					ExpressionArgs.new(expression_goal.check(next_elem_type:as_value()), env)
 				)
 				if ok and continue then
-					local next_decls_metavar = typechecker_state:metavariable(env.typechecking_context)
-					typechecker_state:flow(
-						next_decls_metavar:as_value(),
-						env.typechecking_context,
-						value.enum_value(
-							"cons",
-							value.tuple_value(
-								value_array(
-									decls_metavar:as_value(),
-									value.closure(
-										"#collect-tuple-param",
-										typed_term.literal(next_elem_type:as_value()),
-										env.typechecking_context.runtime_context
-									)
+					decls = value.enum_value(
+						"cons",
+						value.tuple_value(
+							value_array(
+								decls,
+								value.closure(
+									"#collect-tuple-param",
+									typed_term.literal(next_elem_type:as_value()),
+									env.typechecking_context.runtime_context
 								)
 							)
-						),
-						env.typechecking_context,
-						"recursive case of collect_tuple"
+						)
 					)
-					decls_metavar = next_decls_metavar
 					collected_terms:append(next_term)
-					local usages, typed_elem_term =
-						evaluator.check(next_term, env.typechecking_context, next_elem_type:as_value())
-					local elem_value = evaluator.evaluate(typed_elem_term, env.typechecking_context.runtime_context)
 				end
 				if not ok and type(continue) == "string" then
 					continue = continue .. " (should have " .. ", found " .. tostring(#collected_terms) .. " so far)"
@@ -993,7 +975,7 @@ collect_tuple = metalanguage.reducer(
 			return true, inferrable_term.tuple_cons(collected_terms), env
 		elseif goal:is_check() then
 			typechecker_state:flow(
-				value.tuple_type(decls_metavar:as_value()),
+				value.tuple_type(decls),
 				env.typechecking_context,
 				goal_type,
 				env.typechecking_context,
