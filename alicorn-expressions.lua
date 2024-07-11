@@ -47,7 +47,8 @@ local empty = value.enum_value("empty", tup_val())
 local evaluator = require "./evaluator"
 local const_combinator = evaluator.const_combinator
 local infer = evaluator.infer
-local typechecker_state = evaluator.typechecker_state
+-- BUG: do not uncomment this, as speculation relies on changing evaluator.typechecking_state, which is masked by the local
+--local typechecker_state = evaluator.typechecker_state
 
 local p = require "pretty-print".prettyPrint
 local U = require "./utils"
@@ -547,7 +548,7 @@ local function expression_pairhandler(args, a, b)
 		local param_type, param_info, result_type, result_info = pi:unwrap_pi()
 
 		while param_info:unwrap_param_info() == value.visibility(visibility.implicit) do
-			local metavar = typechecker_state:metavariable(env.typechecking_context)
+			local metavar = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			local metavalue = metavar:as_value()
 			local metaresult = evaluator.apply_value(result_type, metavalue)
 			if not metaresult:is_pi() then
@@ -929,7 +930,7 @@ collect_tuple = metalanguage.reducer(
 		while ok and continue do
 			i = i + 1
 			if goal_type then
-				local next_elem_type = typechecker_state:metavariable(env.typechecking_context)
+				local next_elem_type = evaluator.typechecker_state:metavariable(env.typechecking_context)
 				ok, continue, next_term, syntax, env = syntax:match(
 					{
 						metalanguage.ispair(collect_tuple_pair_handler),
@@ -974,7 +975,7 @@ collect_tuple = metalanguage.reducer(
 		if goal:is_infer() then
 			return true, inferrable_term.tuple_cons(collected_terms), env
 		elseif goal:is_check() then
-			typechecker_state:flow(
+			evaluator.typechecker_state:flow(
 				value.tuple_type(decls),
 				env.typechecking_context,
 				goal_type,
