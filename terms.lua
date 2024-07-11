@@ -987,7 +987,7 @@ function inferrable_term_override_pretty:pi(pp, context)
 	local param_is_tuple_type, param_decls = as_any_tuple_type(param_type)
 	local result_is_readable, param_name, param_annotation, result_body, result_anchor =
 		result_type:as_annotated_lambda()
-	local result_is_destructure, result_is_rename, param_names, result_body, result_is_tuple_type, result_decls
+	local result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_decls
 	if result_is_readable then
 		result_context = result_context:append(param_name)
 		result_is_destructure, result_is_rename, param_names, result_body, result_context =
@@ -1240,7 +1240,7 @@ function inferrable_term_override_pretty:prim_function_type(pp, context)
 	local param_is_tuple_type, param_decls = param_type:as_prim_tuple_type()
 	local result_is_readable, param_name, param_annotation, result_body, result_anchor =
 		result_type:as_annotated_lambda()
-	local result_is_destructure, result_is_rename, param_names, result_body, result_is_tuple_type, result_decls
+	local result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_decls
 	if result_is_readable then
 		result_context = result_context:append(param_name)
 		result_is_destructure, result_is_rename, param_names, result_body, result_context =
@@ -1712,7 +1712,7 @@ function typed_term_override_pretty:pi(pp, context)
 	local result_context = context
 	local param_is_tuple_type, param_decls = as_any_tuple_type(param_type)
 	local result_is_readable, param_name, result_body = result_type:as_lambda()
-	local result_is_destructure, result_is_rename, param_names, result_body, result_is_tuple_type, result_decls
+	local result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_decls
 	if result_is_readable then
 		result_context = result_context:append(param_name)
 		result_is_destructure, result_is_rename, param_names, result_body, result_context =
@@ -1978,7 +1978,7 @@ function typed_term_override_pretty:prim_function_type(pp, context)
 	local result_context = context
 	local param_is_tuple_type, param_decls = param_type:as_prim_tuple_type()
 	local result_is_readable, param_name, result_body = result_type:as_lambda()
-	local result_is_destructure, result_is_rename, param_names, result_body, result_is_tuple_type, result_decls
+	local result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_decls
 	if result_is_readable then
 		result_context = result_context:append(param_name)
 		result_is_destructure, result_is_rename, param_names, result_body, result_context =
@@ -2329,7 +2329,7 @@ function value_override_pretty:pi(pp)
 	local param_type, param_info, result_type, result_info = self:unwrap_pi()
 	local param_is_tuple_type, param_decls = as_any_tuple_type(param_type)
 	local result_is_readable, param_name, result_code, result_capture = result_type:as_closure()
-	local result_context, result_is_destructure, result_is_rename, param_names, result_code, result_is_tuple_type, result_decls
+	local result_context, result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_decls
 	if result_is_readable then
 		result_context = ensure_context(result_capture)
 		result_context = result_context:append(param_name)
@@ -2506,7 +2506,7 @@ function value_override_pretty:prim_function_type(pp)
 	local param_type, result_type = self:unwrap_prim_function_type()
 	local param_is_tuple_type, param_decls = param_type:as_prim_tuple_type()
 	local result_is_readable, param_name, result_code, result_capture = result_type:as_closure()
-	local result_context, result_is_destructure, result_is_rename, param_names, result_code, result_is_tuple_type, result_decls
+	local result_context, result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_decls
 	if result_is_readable then
 		result_context = ensure_context(result_capture)
 		result_context = result_context:append(param_name)

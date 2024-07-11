@@ -469,39 +469,22 @@ local function expression_pairhandler(args, a, b)
 
 	-- combiner was an evaluated typed value, now it isn't
 	local type_of_term, usage_count, term = infer(combiner, env.typechecking_context)
-	if
-		type_of_term:is_neutral()
-		and type_of_term:unwrap_neutral():is_free()
-		and type_of_term:unwrap_neutral():unwrap_free():is_metavariable()
-	then
-		-- Speculate that this is a pi type
-		local ok, pi = evaluator.typechecker_state:speculate(function()
-			local pi = value.pi(
-				evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
-				value.param_info(value.visibility(terms.visibility.explicit)),
-				evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
-				value.result_info(terms.result_info(terms.purity.pure))
-			)
 
-			local ok, err = evaluator.typechecker_state:flow(
-				type_of_term,
-				env.typechecking_context,
-				pi,
-				env.typechecking_context,
-				"Speculating on pi type"
-			)
+	local ok, res_, env_ = evaluator.typechecker_state:speculate(function()
+		--local op = value.operative_type(
+		--	evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
+		--	evaluator.typechecker_state:metavariable(env.typechecking_context):as_value()
+		--)
 
-			if ok then
-				return pi
-			end
-			return err
-		end)
-		if not ok then
-			error("speculate DID NOT work for pi!: " .. tostring(pi))
-		end
-		type_of_term = pi
-	end
-	if type_of_term:is_operative_type() then
+		--local ok, err = evaluator.typechecker_state:flow(
+		--	type_of_term,
+		--	env.typechecking_context,
+		--	op,
+		--	env.typechecking_context,
+		--	"Speculating on operative type"
+		--)
+
+		--local handler, userdata_type = op:unwrap_operative_type()
 		local handler, userdata_type = type_of_term:unwrap_operative_type()
 		-- operative input: env, syntax tree, goal type (if checked)
 		local tuple_args = value_array(value.prim(sargs), value.prim(env), value.prim(term), value.prim(goal))
@@ -531,17 +514,37 @@ local function expression_pairhandler(args, a, b)
 			local checkable = data
 			local goal_type = goal:unwrap_check()
 			local usage_counts, term = evaluator.check(checkable, env.typechecking_context, goal_type)
-			return true, checkable_term.inferrable(inferrable_term.typed(goal_type, usage_counts, term)), env
+			return checkable_term.inferrable(inferrable_term.typed(goal_type, usage_counts, term)), env
 		elseif goal:is_infer() then
 			local resulting_type, usage_counts, term = infer(data, env.typechecking_context)
-			return true, inferrable_term.typed(resulting_type, usage_counts, term), env
+			return inferrable_term.typed(resulting_type, usage_counts, term), env
 		else
 			error("NYI goal " .. goal.kind .. " for operative in expression_pairhandler")
 		end
+	end)
+	if ok then
+		return true, res_, env_
 	end
+	print("not op type")
+	print(res_)
+	print("end not op type")
+	local ok, res_, env_ = evaluator.typechecker_state:speculate(function()
+		local pi = value.pi(
+			evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
+			value.param_info(value.visibility(terms.visibility.explicit)),
+			evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
+			value.result_info(terms.result_info(terms.purity.pure))
+		)
 
-	if type_of_term:is_pi() then
-		local param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
+		local ok, err = evaluator.typechecker_state:flow(
+			type_of_term,
+			env.typechecking_context,
+			pi,
+			env.typechecking_context,
+			"Speculating on pi type"
+		)
+
+		local param_type, param_info, result_type, result_info = pi:unwrap_pi()
 
 		while param_info:unwrap_param_info() == value.visibility(visibility.implicit) do
 			local metavar = typechecker_state:metavariable(env.typechecking_context)
@@ -563,7 +566,7 @@ local function expression_pairhandler(args, a, b)
 		}, metalanguage.failure_handler, nil)
 
 		if not ok then
-			return false, tuple, env
+			error(tuple)
 		end
 
 		---@type inferrable | checkable
@@ -574,11 +577,29 @@ local function expression_pairhandler(args, a, b)
 			res = checkable_term.inferrable(res)
 		end
 
-		return true, res, env
+		return res, env
+	end)
+	if ok then
+		return true, res_, env_
 	end
+	print("not pi type")
+	print(res_)
+	print("end not pi type")
+	local ok, res_, env_ = evaluator.typechecker_state:speculate(function()
+		local prim_func = value.prim_function_type(
+			evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
+			evaluator.typechecker_state:metavariable(env.typechecking_context):as_value()
+		)
 
-	if type_of_term:is_prim_function_type() then
-		local param_type, result_type = type_of_term:unwrap_prim_function_type()
+		local ok, err = evaluator.typechecker_state:flow(
+			type_of_term,
+			env.typechecking_context,
+			prim_func,
+			env.typechecking_context,
+			"Speculating on prim func type"
+		)
+
+		local param_type, result_type = prim_func:unwrap_prim_function_type()
 		--print("checking prim_function_type call args with goal: (value term follows)")
 		--print(param_type)
 		-- multiple quantity of usages in tuple with usage in function arguments
@@ -587,12 +608,10 @@ local function expression_pairhandler(args, a, b)
 		}, metalanguage.failure_handler, nil)
 
 		if not ok then
-			return false,
-				semantic_error.prim_function_argument_collect_failed(tuple, { a.anchor, b.anchor }, {
-					prim_function_type = type_of_term,
-					prim_function_value = term,
-				}, orig_env),
-				env
+			error(semantic_error.prim_function_argument_collect_failed(tuple, { a.anchor, b.anchor }, {
+				prim_function_type = type_of_term,
+				prim_function_value = term,
+			}, orig_env))
 		end
 
 		---@type inferrable | checkable
@@ -603,7 +622,10 @@ local function expression_pairhandler(args, a, b)
 			res = checkable_term.inferrable(res)
 		end
 
-		return true, res, env
+		return res, env
+	end)
+	if ok then
+		return true, res_, env_
 	end
 
 	print("!!! about to fail of invalid type")
