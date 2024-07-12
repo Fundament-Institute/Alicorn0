@@ -1835,7 +1835,10 @@ local UniverseOmegaRelation = {
 	refl = luatovalue(function(a) end, name_array("a")),
 	antisym = luatovalue(function(a, b, r1, r2) end, name_array("a", "b", "r1", "r2")),
 	constrain = luatovalue(function(val, use)
-		check_concrete(val, nil, use, nil, typechecker_state)
+		local ok, err = check_concrete(val, use, typechecker_state)
+		if not ok then
+			error(err)
+		end
 	end, name_array("val", "use")),
 }
 
@@ -1848,7 +1851,7 @@ local ordered_set_mt
 ---@param t any
 ---@return boolean
 function OrderedSet:insert(t)
-	if self.set[t] == nil then
+	if self.set[t] ~= nil then
 		return false
 	end
 	self.set[t] = #self.array + 1
@@ -1859,7 +1862,7 @@ end
 ---@param t any
 ---@return boolean
 function OrderedSet:insert_aux(t, ...)
-	if self.set[t] == nil then
+	if self.set[t] ~= nil then
 		return false
 	end
 	self.set[t] = #self.array + 1
@@ -2106,6 +2109,7 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 
 		-- Check if adding that edge resulted in any new type pairs needing to be checked
 		while #queue > 0 do
+			---@type integer, integer, SubtypeRelation
 			local l, r, subrel = table.unpack(U.pop(queue))
 
 			local lvalue, ltag, lctx = table.unpack(self.values[l])
@@ -2114,7 +2118,11 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 				-- Unpacking tuples hasn't been fixed in VSCode yet (despite the issue being closed???) so we have to override the types: https://github.com/LuaLS/lua-language-server/issues/1816
 				local tuple_params = value_array(lvalue --[[@as value]], rvalue --[[@as value]])
 				-- TODO: how do we pass in the type contexts???
-				apply_value(subrel, value.tuple_value(tuple_params))
+				--apply_value(subrel.Rel, value.tuple_value(tuple_params))
+				local ok, err = check_concrete(lvalue --[[@as value]], rvalue --[[@as value]], self)
+				if not ok then
+					error(err)
+				end
 			end
 		end
 	end
