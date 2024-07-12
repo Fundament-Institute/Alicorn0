@@ -687,7 +687,7 @@ function apply_value(f, arg)
 
 	if f:is_closure() then
 		local param_name, code, capture = f:unwrap_closure()
-		return evaluate(code, capture:append(arg))
+		return U.notail(U.tag("evaluate", code, evaluate, code, capture:append(arg)))
 	elseif f:is_neutral() then
 		return value.neutral(neutral_value.application_stuck(f:unwrap_neutral(), arg))
 	elseif f:is_prim() then
@@ -955,8 +955,16 @@ function infer(
 
 		if f_type:is_pi() then
 			local f_param_type, f_param_info, f_result_type, f_result_info = f_type:unwrap_pi()
-			if not f_param_info:unwrap_param_info():unwrap_visibility():is_explicit() then
-				error("infer: nyi implicit parameters")
+			while f_param_info:unwrap_param_info():unwrap_visibility():is_implicit() do
+				local metavar = typechecker_state:metavariable(typechecking_context)
+				local metaresult = apply_value(f_result_type, metavar:as_value())
+				if not metaresult:is_pi() then
+					error(
+						"calling function with implicit args, result type applied on implicit args must be a function type"
+					)
+				end
+				f_term = typed_term.application(f_term, typed_term.literal(metavar:as_value()))
+				f_param_type, f_param_info, f_result_type, f_result_info = metaresult:unwrap_pi()
 			end
 
 			local arg_usages, arg_term = check(arg, typechecking_context, f_param_type)
@@ -1435,7 +1443,7 @@ function evaluate(typed_term, runtime_context)
 		local f, arg = typed_term:unwrap_application()
 		local f_value = U.tag("evaluate", f, evaluate, f, runtime_context)
 		local arg_value = U.tag("evaluate", arg, evaluate, arg, runtime_context)
-		return apply_value(f_value, arg_value)
+		return U.notail(apply_value(f_value, arg_value))
 	elseif typed_term:is_tuple_cons() then
 		local elements = typed_term:unwrap_tuple_cons()
 		local new_elements = value_array()

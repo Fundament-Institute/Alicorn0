@@ -1,5 +1,6 @@
 local trie = require "./lazy-prefix-tree"
 local fibbuf = require "./fibonacci-buffer"
+local U = require "./utils"
 
 local terms = require "./terms"
 local inferrable_term = terms.inferrable_term
@@ -118,7 +119,13 @@ function environment:bind_local(binding)
 		end
 
 		-- evaluating the subject is necessary for inferring the type of the body
-		local subject_value = eval.evaluate(subject_term, self.typechecking_context:get_runtime_context())
+		local subject_value = U.tag(
+			"evaluate",
+			subject_term,
+			eval.evaluate,
+			subject_term,
+			self.typechecking_context:get_runtime_context()
+		)
 		-- extract subject type and evaled for each elem in tuple
 		local tupletypes, n_elements = eval.infer_tuple_type(subject_type, subject_value)
 
