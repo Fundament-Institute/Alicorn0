@@ -472,6 +472,8 @@ local function expression_pairhandler(args, a, b)
 	local type_of_term, usage_count, term = infer(combiner, env.typechecking_context)
 	local random = {}
 
+	print("kind is " .. type_of_term.kind .. " " .. tostring(random))
+
 	if type_of_term:is_prim_function_type() then
 		print("A")
 	end
@@ -552,6 +554,12 @@ local function expression_pairhandler(args, a, b)
 			print("BB")
 		end
 
+		print("TRYING FLOW:")
+		print("VALUE:")
+		print(type_of_term)
+		print("USAGE:")
+		print(pi)
+
 		local ok, err = evaluator.typechecker_state:flow(
 			type_of_term,
 			env.typechecking_context,
@@ -563,6 +571,7 @@ local function expression_pairhandler(args, a, b)
 			print("BC")
 			print(ok)
 		end
+		print("flow succeeded")
 
 		local param_type, param_info, result_type, result_info = pi:unwrap_pi()
 		if type_of_term:is_prim_function_type() then

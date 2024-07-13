@@ -736,6 +736,7 @@ local metalanguage = {
 	constructed_syntax_type = constructed_syntax_type,
 	reducer_type = reducer_type,
 	matcher_type = matcher_type,
+	custom_traceback = custom_traceback,
 }
 local internals_interface = require "./internals-interface"
 internals_interface.metalanguage = metalanguage

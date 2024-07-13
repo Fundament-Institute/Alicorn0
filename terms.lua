@@ -2736,6 +2736,8 @@ for _, deriver in ipairs { derivers.as, derivers.eq, derivers.diff } do
 	purity:derive(deriver)
 	result_info:derive(deriver)
 end
+placeholder_debug:derive(derivers.unwrap)
+result_info:derive(derivers.unwrap)
 
 checkable_term:derive(derivers.pretty_print, checkable_term_override_pretty)
 inferrable_term:derive(derivers.pretty_print, inferrable_term_override_pretty)

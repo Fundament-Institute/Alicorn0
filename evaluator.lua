@@ -346,7 +346,7 @@ local check_concrete
 -- indexed by kind x kind
 local concrete_comparers = {}
 
----@alias value_comparer fun(a: value, b: value, typechecker: TypeCheckerState): boolean, string?
+---@alias value_comparer fun(a: value, b: value): boolean, string?
 
 ---@param ka string
 ---@param kb string
@@ -382,7 +382,7 @@ local function concrete_fail(message, cause)
 end
 
 ---@type value_comparer
-local function always_fits_comparer(a, b, typechecker)
+local function always_fits_comparer(a, b)
 	return true
 end
 
@@ -399,7 +399,7 @@ end
 -- types of types
 add_comparer(value.prim_type_type.kind, value.prim_type_type.kind, always_fits_comparer)
 ---@type value_comparer
-local function tuple_compare(a, b, typechecker)
+local function tuple_compare(a, b)
 	-- fixme lol
 	local placeholder = value.neutral(neutral_value.free(free.unique({})))
 	local tuple_types_a, na = infer_tuple_type_unwrapped(a, placeholder)
@@ -412,10 +412,10 @@ local function tuple_compare(a, b, typechecker)
 
 		if ta ~= tb then
 			local ok, err
-			if tb.kind == "value.neutral" then
-				typechecker:queue_work(ta, tb, "Nuetral value in tuple_compare")
+			if tb:is_neutral() then
+				typechecker_state:queue_work(ta, tb, "Nuetral value in tuple_compare")
 			else
-				typechecker:queue_work(ta, tb, "tuple_compare")
+				typechecker_state:queue_work(ta, tb, "tuple_compare")
 			end
 
 			if not ok then
@@ -427,41 +427,47 @@ local function tuple_compare(a, b, typechecker)
 end
 add_comparer("value.tuple_type", "value.tuple_type", tuple_compare)
 add_comparer("value.prim_tuple_type", "value.prim_tuple_type", tuple_compare)
-add_comparer("value.pi", "value.pi", function(a, b, typechecker)
+add_comparer("value.pi", "value.pi", function(a, b)
 	if a == b then
 		return true
 	end
 
-	local avis = a.param_info.visibility.visibility
-	local bvis = b.param_info.visibility.visibility
-	if avis ~= bvis and avis ~= terms.visibility.implicit then
+	local a_param_type, a_param_info, a_result_type, a_result_info = a:unwrap_pi()
+	local b_param_type, b_param_info, b_result_type, b_result_info = b:unwrap_pi()
+
+	local avis = a_param_info:unwrap_param_info():unwrap_visibility()
+	local bvis = b_param_info:unwrap_param_info():unwrap_visibility()
+	if avis ~= bvis and not avis:is_implicit() then
 		return false, concrete_fail("pi param_info")
 	end
 
-	local apurity = a.result_info.purity
-	local bpurity = b.result_info.purity
+	local apurity = a_result_info:unwrap_result_info():unwrap_result_info()
+	local bpurity = a_result_info:unwrap_result_info():unwrap_result_info()
 	if apurity ~= bpurity then
 		return false, concrete_fail("pi result_info")
 	end
 
 	local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
-	local a_res = apply_value(a.result_type, unique_placeholder)
-	local b_res = apply_value(b.result_type, unique_placeholder)
-	typechecker:queue_work(a_res, b_res, "pi function results")
-	typechecker:queue_work(b.param_type, a.param_type, "pi function parameters")
+	local a_res = apply_value(a_result_type, unique_placeholder)
+	local b_res = apply_value(b_result_type, unique_placeholder)
+	typechecker_state:queue_work(a_res, b_res, "pi function results")
+	typechecker_state:queue_work(b_param_type, a_param_type, "pi function parameters")
 
 	return true
 end)
-add_comparer("value.prim_function_type", "value.prim_function_type", function(a, b, typechecker)
+add_comparer("value.prim_function_type", "value.prim_function_type", function(a, b)
 	if a == b then
 		return true
 	end
 
+	local a_param_type, a_result_type = a:unwrap_pi()
+	local b_param_type, b_result_type = b:unwrap_pi()
+
 	local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
-	local a_res = apply_value(a.result_type, unique_placeholder)
-	local b_res = apply_value(b.result_type, unique_placeholder)
-	typechecker:queue_work(a_res, b_res, "prim function results")
-	typechecker:queue_work(b.param_type, a.param_type, "prim function parameters")
+	local a_res = apply_value(a_result_type, unique_placeholder)
+	local b_res = apply_value(b_result_type, unique_placeholder)
+	typechecker_state:queue_work(a_res, b_res, "prim function results")
+	typechecker_state:queue_work(b_param_type, a_param_type, "prim function parameters")
 	return true
 end)
 
@@ -471,29 +477,30 @@ for _, type_of_type in ipairs({
 	add_comparer(type_of_type.kind, value.star(0).kind, always_fits_comparer)
 end
 
-add_comparer(value.star(0).kind, value.star(0).kind, function(a, b, typechecker)
-	if a.level > b.level then
+add_comparer(value.star(0).kind, value.star(0).kind, function(a, b)
+	local alevel = a:unwrap_star()
+	local blevel = b:unwrap_star()
+	if alevel > blevel then
 		print("star-comparer error:")
-		print("a:", a.level)
-		print("b:", b.level)
+		print("a:", alevel)
+		print("b:", blevel)
 		return false, "a.level > b.level"
 	end
 	return true
 end)
 
-add_comparer("value.prim_wrapped_type", "value.prim_wrapped_type", function(a, b, typechecker)
+add_comparer("value.prim_wrapped_type", "value.prim_wrapped_type", function(a, b)
 	local ua, ub = a:unwrap_prim_wrapped_type(), b:unwrap_prim_wrapped_type()
-	check_concrete(ua, ub, typechecker)
+	check_concrete(ua, ub)
 	return true
 end)
 
 -- Compares any non-metavariables, or defers any metavariable comparisons to the work queue
 ---@param val value
 ---@param use value
----@param typechecker TypeCheckerState
 ---@return boolean
 ---@return string?
-function check_concrete(val, use, typechecker)
+function check_concrete(val, use)
 	assert(val and use, "nil value or usage passed into check_concrete!")
 
 	if val:is_neutral() and use:is_neutral() then
@@ -507,6 +514,11 @@ function check_concrete(val, use, typechecker)
 	if not concrete_comparers[val.kind] then
 		error("No valid concrete type comparer found for value " .. val.kind)
 	elseif not concrete_comparers[use.kind] then
+		print("ERROR check_concrete")
+		print("VALUE:")
+		print(val)
+		print("USAGE:")
+		print(use)
 		error("No valid concrete type comparer found for usage " .. use.kind)
 	end
 
@@ -1835,7 +1847,7 @@ local UniverseOmegaRelation = {
 	refl = luatovalue(function(a) end, name_array("a")),
 	antisym = luatovalue(function(a, b, r1, r2) end, name_array("a", "b", "r1", "r2")),
 	constrain = luatovalue(function(val, use)
-		local ok, err = check_concrete(val, use, typechecker_state)
+		local ok, err = check_concrete(val, use)
 		if not ok then
 			error(err)
 		end
@@ -2119,7 +2131,7 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 				local tuple_params = value_array(lvalue --[[@as value]], rvalue --[[@as value]])
 				-- TODO: how do we pass in the type contexts???
 				--apply_value(subrel.Rel, value.tuple_value(tuple_params))
-				local ok, err = check_concrete(lvalue --[[@as value]], rvalue --[[@as value]], self)
+				local ok, err = check_concrete(lvalue --[[@as value]], rvalue --[[@as value]])
 				if not ok then
 					error(err)
 				end
