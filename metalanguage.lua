@@ -213,7 +213,7 @@ local function custom_traceback(err)
 	if type(err) == "table" then
 		return err
 	end
-	local s = err
+	local s = err or "nil passed to error handler! DON'T DO THAT!"
 	local i = 3
 	local info = debug.getinfo(i, "Sfln")
 	while info ~= nil do
