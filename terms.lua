@@ -918,6 +918,7 @@ function inferrable_term_override_pretty:annotated_lambda(pp, context)
 
 	if is_tuple_type and is_destructure then
 		---@cast names string[]
+		---@cast members TupleDeclFlat[]
 		if #members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
@@ -1020,6 +1021,7 @@ function inferrable_term_override_pretty:pi(pp, context)
 		pp:any(param_type, context)
 	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
+		---@cast param_members TupleDeclFlat[]
 		if #param_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
@@ -1064,6 +1066,7 @@ function inferrable_term_override_pretty:pi(pp, context)
 	if not result_is_readable then
 		pp:any(result_type, context)
 	elseif result_is_tuple_type then
+		---@cast result_members TupleDeclFlat[]
 		if #result_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
@@ -1184,6 +1187,7 @@ function inferrable_term_override_pretty:tuple_type(pp, context)
 	pp:unit(pp:_resetcolor())
 
 	if ok then
+		---@cast members TupleDeclFlat[]
 		tuple_type_helper(pp, members)
 	else
 		pp:unit("<UNHANDLED EDGE CASE>")
@@ -1217,6 +1221,7 @@ function inferrable_term_override_pretty:prim_tuple_type(pp, context)
 	pp:unit(pp:_resetcolor())
 
 	if ok then
+		---@cast members TupleDeclFlat[]
 		tuple_type_helper(pp, members)
 	else
 		pp:unit("<UNHANDLED EDGE CASE>")
@@ -1273,6 +1278,7 @@ function inferrable_term_override_pretty:prim_function_type(pp, context)
 		pp:any(param_type, context)
 	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
+		---@cast param_members TupleDeclFlat[]
 		if #param_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
@@ -1317,6 +1323,7 @@ function inferrable_term_override_pretty:prim_function_type(pp, context)
 	if not result_is_readable then
 		pp:any(result_type, context)
 	elseif result_is_tuple_type then
+		---@cast result_members TupleDeclFlat[]
 		if #result_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
@@ -1745,6 +1752,7 @@ function typed_term_override_pretty:pi(pp, context)
 		pp:any(param_type, context)
 	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
+		---@cast param_members TupleDeclFlat[]
 		if #param_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
@@ -1789,6 +1797,7 @@ function typed_term_override_pretty:pi(pp, context)
 	if not result_is_readable then
 		pp:any(result_type, context)
 	elseif result_is_tuple_type then
+		---@cast result_members TupleDeclFlat[]
 		if #result_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
@@ -1933,6 +1942,7 @@ function typed_term_override_pretty:tuple_type(pp, context)
 	pp:unit(pp:_resetcolor())
 
 	if ok then
+		---@cast members TupleDeclFlat[]
 		tuple_type_helper(pp, members)
 	else
 		pp:unit("<UNHANDLED EDGE CASE>")
@@ -1958,6 +1968,7 @@ function typed_term_override_pretty:prim_tuple_type(pp, context)
 	pp:unit(pp:_resetcolor())
 
 	if ok then
+		---@cast members TupleDeclFlat[]
 		tuple_type_helper(pp, members)
 	else
 		pp:unit("<UNHANDLED EDGE CASE>")
@@ -2011,6 +2022,7 @@ function typed_term_override_pretty:prim_function_type(pp, context)
 		pp:any(param_type, context)
 	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
+		---@cast param_members TupleDeclFlat[]
 		if #param_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
@@ -2055,6 +2067,7 @@ function typed_term_override_pretty:prim_function_type(pp, context)
 	if not result_is_readable then
 		pp:any(result_type, context)
 	elseif result_is_tuple_type then
+		---@cast result_members TupleDeclFlat[]
 		if #result_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
@@ -2363,6 +2376,7 @@ function value_override_pretty:pi(pp)
 		pp:any(param_type)
 	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
+		---@cast param_members TupleDeclFlat[]
 		if #param_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
@@ -2407,6 +2421,7 @@ function value_override_pretty:pi(pp)
 	if not result_is_readable then
 		pp:any(result_type)
 	elseif result_is_tuple_type then
+		---@cast result_members TupleDeclFlat[]
 		if #result_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
@@ -2488,6 +2503,7 @@ function value_override_pretty:tuple_type(pp)
 	pp:unit(pp:_resetcolor())
 
 	if ok then
+		---@cast members TupleDeclFlat[]
 		tuple_type_helper(pp, members)
 	else
 		pp:unit("<UNHANDLED EDGE CASE>")
@@ -2540,6 +2556,7 @@ function value_override_pretty:prim_function_type(pp)
 		pp:any(param_type)
 	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
+		---@cast param_members TupleDeclFlat[]
 		if #param_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
@@ -2584,6 +2601,7 @@ function value_override_pretty:prim_function_type(pp)
 	if not result_is_readable then
 		pp:any(result_type)
 	elseif result_is_tuple_type then
+		---@cast result_members TupleDeclFlat[]
 		if #result_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
@@ -2610,6 +2628,7 @@ function value_override_pretty:prim_tuple_type(pp)
 	pp:unit(pp:_resetcolor())
 
 	if ok then
+		---@cast members TupleDeclFlat[]
 		tuple_type_helper(pp, members)
 	else
 		pp:unit("<UNHANDLED EDGE CASE>")

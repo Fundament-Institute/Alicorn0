@@ -13,6 +13,9 @@ local p = require "pretty-print".prettyPrint
 local value = terms.value
 local typed = terms.typed_term
 
+local param_info_explicit = value.param_info(value.visibility(terms.visibility.explicit))
+local result_info_pure = value.result_info(terms.result_info(terms.purity.pure))
+
 local usage_array = gen.declare_array(gen.builtin_number)
 local val_array = gen.declare_array(value)
 
@@ -518,7 +521,7 @@ local function forall_type_impl(syntax, env)
 			terms.inferrable_term.typed(
 				terms.value.param_info_type,
 				usage_array(),
-				terms.typed_term.literal(terms.value.param_info(terms.value.visibility(terms.visibility.explicit)))
+				terms.typed_term.literal(param_info_explicit)
 			)
 		),
 		fn_res_term,
@@ -526,7 +529,7 @@ local function forall_type_impl(syntax, env)
 			terms.inferrable_term.typed(
 				terms.value.result_info_type,
 				usage_array(),
-				terms.typed_term.literal(terms.value.result_info(terms.result_info(terms.purity.pure)))
+				terms.typed_term.literal(result_info_pure)
 			)
 		)
 	)
@@ -757,13 +760,13 @@ local function build_wrap(body_fn, type_fn)
 					)
 				)
 			),
-			value.param_info(value.visibility(terms.visibility.explicit)),
+			param_info_explicit,
 			value.closure(
 				pname_type,
 				typed.tuple_elim(names2, typed.bound_variable(1), 2, type_fn(typed.bound_variable(2))),
 				terms.runtime_context()
 			),
-			value.result_info(terms.result_info(terms.purity.pure))
+			result_info_pure
 		)
 	)
 end
@@ -812,13 +815,13 @@ local function build_unwrap(body_fn, type_fn)
 					)
 				)
 			),
-			value.param_info(value.visibility(terms.visibility.explicit)),
+			param_info_explicit,
 			value.closure(
 				pname_type,
 				typed.tuple_elim(names2, typed.bound_variable(1), 2, typed.bound_variable(2)),
 				terms.runtime_context()
 			),
-			value.result_info(terms.result_info(terms.purity.pure))
+			result_info_pure
 		)
 	)
 end
@@ -851,13 +854,13 @@ local function build_wrapped(body_fn)
 					)
 				)
 			),
-			value.param_info(value.visibility(terms.visibility.explicit)),
+			param_info_explicit,
 			value.closure(
 				pname_type,
 				typed.tuple_elim(names1, typed.bound_variable(1), 1, typed.literal(value.prim_type_type)),
 				terms.runtime_context()
 			),
-			value.result_info(terms.result_info(terms.purity.pure))
+			result_info_pure
 		)
 	)
 end

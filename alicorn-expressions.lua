@@ -29,9 +29,7 @@ local usage_array = array(gen.builtin_number)
 local name_array = array(gen.builtin_string)
 
 local param_info_explicit = value.param_info(value.visibility(visibility.explicit))
-local param_info_implicit = value.param_info(value.visibility(visibility.implicit))
 local result_info_pure = value.result_info(result_info(purity.pure))
-local result_info_effectful = value.result_info(result_info(purity.effectful))
 ---@param ... value
 ---@return value
 local function tup_val(...)
@@ -546,9 +544,9 @@ local function expression_pairhandler(args, a, b)
 		end
 		local pi = value.pi(
 			evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
-			value.param_info(value.visibility(terms.visibility.explicit)),
+			param_info_explicit,
 			evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
-			value.result_info(terms.result_info(terms.purity.pure))
+			result_info_pure
 		)
 		if type_of_term:is_prim_function_type() then
 			print("BB")
@@ -578,7 +576,7 @@ local function expression_pairhandler(args, a, b)
 			print("BD")
 		end
 
-		while param_info:unwrap_param_info() == value.visibility(visibility.implicit) do
+		while param_info:unwrap_param_info():unwrap_visibility():is_implicit() do
 			local metavar = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			local metavalue = metavar:as_value()
 			local metaresult = evaluator.apply_value(result_type, metavalue)
@@ -749,7 +747,7 @@ local function expression_symbolhandler(args, name)
 end
 
 ---@param args ExpressionArgs
----@param val inferrable | checkable
+---@param val SyntaxValue
 ---@return boolean
 ---@return inferrable | checkable
 ---@return Environment?

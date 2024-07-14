@@ -30,9 +30,7 @@ local string_array = array(gen.builtin_string)
 local internals_interface = require "./internals-interface"
 
 local param_info_explicit = value.param_info(value.visibility(visibility.explicit))
-local param_info_implicit = value.param_info(value.visibility(visibility.implicit))
 local result_info_pure = value.result_info(result_info(purity.pure))
-local result_info_effectful = value.result_info(result_info(purity.effectful))
 
 ---@param ... any
 ---@return value
@@ -346,7 +344,7 @@ local check_concrete
 -- indexed by kind x kind
 local concrete_comparers = {}
 
----@alias value_comparer fun(a: value, b: value): boolean, string?
+---@alias value_comparer fun(a: value, b: value): boolean, (string|ConcreteFail)?
 
 ---@param ka string
 ---@param kb string
@@ -355,6 +353,8 @@ local function add_comparer(ka, kb, comparer)
 	concrete_comparers[ka] = concrete_comparers[ka] or {}
 	concrete_comparers[ka][kb] = comparer
 end
+
+---@class ConcreteFail
 
 local concrete_fail_mt = {
 	__tostring = function(self)

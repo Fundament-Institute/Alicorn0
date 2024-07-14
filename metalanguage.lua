@@ -469,8 +469,12 @@ local value_accepters = {
 	end,
 }
 
+---@class SyntaxValue
+---@field type string
+---@field val any
+
 ---@param anchor Anchor
----@param val any
+---@param val SyntaxValue
 ---@return ConstructedSyntax
 local function value(anchor, val)
 	return cons_syntax(value_accepters, anchor, val)
