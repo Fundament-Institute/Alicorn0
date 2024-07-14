@@ -545,7 +545,11 @@ local function expression_pairhandler(args, a, b)
 		local pi = value.pi(
 			evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
 			param_info_explicit,
-			evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
+			value.closure(
+				"#spec-pi",
+				typed_term.literal(evaluator.typechecker_state:metavariable(env.typechecking_context):as_value()),
+				env.typechecking_context.runtime_context
+			),
 			result_info_pure
 		)
 		if type_of_term:is_prim_function_type() then
