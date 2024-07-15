@@ -411,15 +411,10 @@ local function tuple_compare(a, b)
 		local ta, tb = tuple_types_a[i], tuple_types_b[i]
 
 		if ta ~= tb then
-			local ok, err
 			if tb:is_neutral() then
 				typechecker_state:queue_work(ta, tb, "Nuetral value in tuple_compare")
 			else
 				typechecker_state:queue_work(ta, tb, "tuple_compare")
-			end
-
-			if not ok then
-				return false, err
 			end
 		end
 	end
@@ -507,18 +502,12 @@ function check_concrete(val, use)
 		if val == use then
 			return true
 		end
-		val:diff(use)
 		return false, "both values are neutral, but they aren't equal: " .. tostring(val) .. " ~= " .. tostring(use)
 	end
 
 	if not concrete_comparers[val.kind] then
 		error("No valid concrete type comparer found for value " .. val.kind)
 	elseif not concrete_comparers[use.kind] then
-		print("ERROR check_concrete")
-		print("VALUE:")
-		print(val)
-		print("USAGE:")
-		print(use)
 		error("No valid concrete type comparer found for usage " .. use.kind)
 	end
 
@@ -1078,7 +1067,7 @@ function infer(
 		local inner_context = typechecking_context
 
 		for i, v in ipairs(tupletypes) do
-			inner_context = inner_context:append("tuple_element_" .. i, v, index_tuple_value(subject_value, i))
+			inner_context = inner_context:append("#tuple_element_" .. i, v, index_tuple_value(subject_value, i))
 		end
 
 		-- infer the type of the body, now knowing the type of the tuple

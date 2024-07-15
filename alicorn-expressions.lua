@@ -529,6 +529,7 @@ local function expression_pairhandler(args, a, b)
 		end
 	end)
 	if ok then
+		print("speculation succeeded for op type! " .. tostring(random))
 		return true, res_, env_
 	end
 	print("not op type " .. tostring(random))
@@ -556,12 +557,6 @@ local function expression_pairhandler(args, a, b)
 			print("BB")
 		end
 
-		print("TRYING FLOW:")
-		print("VALUE:")
-		print(type_of_term)
-		print("USAGE:")
-		print(pi)
-
 		local ok, err = evaluator.typechecker_state:flow(
 			type_of_term,
 			env.typechecking_context,
@@ -573,7 +568,6 @@ local function expression_pairhandler(args, a, b)
 			print("BC")
 			print(ok)
 		end
-		print("flow succeeded")
 
 		local param_type, param_info, result_type, result_info = pi:unwrap_pi()
 		if type_of_term:is_prim_function_type() then
@@ -631,6 +625,7 @@ local function expression_pairhandler(args, a, b)
 		return res, env
 	end)
 	if ok then
+		print("speculation succeeded for pi type! " .. tostring(random))
 		return true, res_, env_
 	end
 	print("not pi type " .. tostring(random))
@@ -680,6 +675,7 @@ local function expression_pairhandler(args, a, b)
 		return res, env
 	end)
 	if ok then
+		print("speculation succeeded for prim func type! " .. tostring(random))
 		return true, res_, env_
 	end
 	print("not prim func type " .. tostring(random))
