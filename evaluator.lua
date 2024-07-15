@@ -919,7 +919,7 @@ function infer(
 		local result_type_param_type, result_type_param_info, result_type_result_type, result_type_result_info =
 			result_type_type:unwrap_pi()
 
-		if not result_type_result_info:unwrap_result_info().purity:is_pure() then
+		if not result_type_result_info:unwrap_result_info():unwrap_result_info():is_pure() then
 			error "result type computation must be pure for now"
 		end
 
