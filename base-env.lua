@@ -1,6 +1,6 @@
 local environment = require "./environment"
 local treemap = require "./lazy-prefix-tree"
-local types = require "./typesystem"
+--local types = require "./typesystem"
 local metalang = require "./metalanguage"
 local utils = require "./reducer-utils"
 local exprs = require "./alicorn-expressions"
@@ -17,7 +17,6 @@ local param_info_explicit = value.param_info(value.visibility(terms.visibility.e
 local result_info_pure = value.result_info(terms.result_info(terms.purity.pure))
 
 local usage_array = gen.declare_array(gen.builtin_number)
-local val_array = gen.declare_array(value)
 
 ---@param val value
 ---@param typ value
@@ -25,18 +24,6 @@ local val_array = gen.declare_array(value)
 local function lit_term(val, typ)
 	return terms.inferrable_term.typed(typ, usage_array(), terms.typed_term.literal(val))
 end
-
----@param ... value
----@return value
-local function val_tup_cons(...)
-	return value.tuple_value(val_array(...))
-end
----@param x value
----@return value
-local function val_desc_elem(x)
-	return value.enum_value("cons", x)
-end
-local val_desc_empty = value.enum_value("empty", val_tup_cons())
 
 --- lua_operative is dependently typed and should produce inferrable vs checkable depending on the goal, and an error as the second return if it failed
 --- | unknown in the second return insufficiently constrains the non-error cases to be inferrable or checkable terms
@@ -127,7 +114,7 @@ local function record_build(syntax, env)
 		return ok, defs
 	end
 	local map = gen.declare_map(gen.builtin_string, terms.inferrable_term)()
-	for i, v in ipairs(defs) do
+	for _, v in ipairs(defs) do
 		map[v.name] = v.expr
 	end
 	return true, terms.inferrable_term.record_cons(map), env
@@ -249,12 +236,15 @@ local tupleof_ascribed_names_inner = metalang.reducer(
 		local function cons(...)
 			return terms.inferrable_term.enum_cons(
 				terms.value.tuple_defn_type(terms.value.star(0)),
-				"cons",
+				terms.DeclCons.cons,
 				tup_cons(...)
 			)
 		end
-		local empty =
-			terms.inferrable_term.enum_cons(terms.value.tuple_defn_type(terms.value.star(0)), "empty", tup_cons())
+		local empty = terms.inferrable_term.enum_cons(
+			terms.value.tuple_defn_type(terms.value.star(0)),
+			terms.DeclCons.empty,
+			tup_cons()
+		)
 		local names = gen.declare_array(gen.builtin_string)()
 
 		local close_enough = syntax.anchor
@@ -439,9 +429,7 @@ local function prim_func_type_impl(syntax, env)
 		return ok, results_thread
 	end
 
-	local results_single = results_thread.single
 	local results_args = results_thread.args
-	local results_names = results_thread.names
 	env = results_thread.env
 
 	local env, fn_res_term = env:exit_block(results_args, shadowed)
@@ -508,9 +496,7 @@ local function forall_type_impl(syntax, env)
 		return ok, results_thread
 	end
 
-	local results_single = results_thread.single
 	local results_args = results_thread.args
-	local results_names = results_thread.names
 	env = results_thread.env
 
 	local env, fn_res_term = env:exit_block(results_args, shadowed)
@@ -735,28 +721,24 @@ local function build_wrap(body_fn, type_fn)
 		),
 		value.pi(
 			value.tuple_type(
-				val_desc_elem(
-					val_tup_cons(
-						val_desc_elem(
-							val_tup_cons(
-								val_desc_empty,
-								value.closure(
-									pname_type,
-									typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),
-									terms.runtime_context()
-								)
-							)
-						),
+				terms.cons(
+					terms.cons(
+						terms.empty,
 						value.closure(
 							pname_type,
-							terms.typed_term.tuple_elim(
-								names1,
-								terms.typed_term.bound_variable(1),
-								1,
-								typed.bound_variable(2)
-							),
+							typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),
 							terms.runtime_context()
 						)
+					),
+					value.closure(
+						pname_type,
+						terms.typed_term.tuple_elim(
+							names1,
+							terms.typed_term.bound_variable(1),
+							1,
+							typed.bound_variable(2)
+						),
+						terms.runtime_context()
 					)
 				)
 			),
@@ -790,28 +772,24 @@ local function build_unwrap(body_fn, type_fn)
 		),
 		value.pi(
 			value.tuple_type(
-				val_desc_elem(
-					val_tup_cons(
-						val_desc_elem(
-							val_tup_cons(
-								val_desc_empty,
-								value.closure(
-									pname_type,
-									typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),
-									terms.runtime_context()
-								)
-							)
-						),
+				terms.cons(
+					terms.cons(
+						terms.empty,
 						value.closure(
 							pname_type,
-							terms.typed_term.tuple_elim(
-								names1,
-								terms.typed_term.bound_variable(1),
-								1,
-								type_fn(typed.bound_variable(2))
-							),
+							typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),
 							terms.runtime_context()
 						)
+					),
+					value.closure(
+						pname_type,
+						terms.typed_term.tuple_elim(
+							names1,
+							terms.typed_term.bound_variable(1),
+							1,
+							type_fn(typed.bound_variable(2))
+						),
+						terms.runtime_context()
 					)
 				)
 			),
@@ -843,14 +821,12 @@ local function build_wrapped(body_fn)
 		),
 		value.pi(
 			value.tuple_type(
-				val_desc_elem(
-					val_tup_cons(
-						val_desc_empty,
-						value.closure(
-							pname_type,
-							typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),
-							terms.runtime_context()
-						)
+				terms.cons(
+					terms.empty,
+					value.closure(
+						pname_type,
+						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),
+						terms.runtime_context()
 					)
 				)
 			),

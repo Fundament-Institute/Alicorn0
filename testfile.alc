@@ -62,9 +62,9 @@ let new-prim-type-family = lambda (unique-id : prim-unique-id, signature : type_
 			local function length(defn, len)
 				len = len or 0
 				local constructor, arg = defn:unwrap_enum_value()
-				if constructor == "empty" then
+				if constructor == terms.DeclCons.empty then
 					return len
-				elseif constructor == "cons" then
+				elseif constructor == terms.DeclCons.cons then
 					local elements = arg:unwrap_tuple_value()
 					local next_defn = elements[1]
 					return length(next_defn, len + 1)
@@ -166,8 +166,7 @@ let void =
 	implicit-unwrap
 		intrinsic
 			""""
-				local val_array = terms_gen.declare_array(terms.value)
-				local decl = terms.value.enum_value("empty", terms.value.tuple_value(val_array()))
+				local decl = terms.empty
 				local basetype = terms.value.enum_type(decl)
 				return basetype
 			:
@@ -497,12 +496,7 @@ let prim-tuple-type-implicit = lambda_implicit (U : universe)
 		implicit-unwrap(T)
 let tuple-def-empty = lambda ((U : universe))
 	let T = tuple-def-type(U)
-	let empty = intrinsic
-		""""
-			local value_array = terms_gen.declare_array(terms.value)
-			return terms.value.enum_value("empty", terms.value.tuple_value(value_array()))
-		:
-		wrapped(T)
+	let empty = intrinsic "return terms.empty" : wrapped(T)
 	implicit-unwrap(empty)
 let jank-it-up = lambda (U : universe, defn : tuple-def-type(U))
 	forall (rest : tuple-type(U, defn)) -> (next : U)
@@ -511,14 +505,7 @@ let tuple-def-elem = lambda (
 		U    : universe,
 		defn : tuple-def-type(U),
 		elem : jank-it-up(U, defn))
-	let inner = intrinsic
-		""""
-			local value_array = terms_gen.declare_array(terms.value)
-			local function tuple_def_elem(defn, elem)
-				return terms.value.enum_value("cons", terms.value.tuple_value(value_array(defn, elem)))
-			end
-			return tuple_def_elem
-		:
+	let inner = intrinsic "return terms.cons" :
 		prim-func-type (
 			defn_ : wrapped(tuple-def-type(U)), # aaaa shadowing
 			elem  : (wrapped (forall (rest : tuple-type(U, defn)) -> (next : U))))
@@ -547,15 +534,14 @@ let tuple-def-concat = lambda (U : universe, head : tuple-def-type(U), tail : tu
 		""""
 			local typed = terms.typed_term
 			local typed_array = terms_gen.declare_array(typed)
-			local value_array = terms_gen.declare_array(terms.value)
 			local string_array = terms_gen.declare_array(terms_gen.builtin_string)
 			local function traverse(defn, len, elems)
 				len = len or 0
 				elems = elems or {}
 				local constructor, arg = defn:unwrap_enum_value()
-				if constructor == "empty" then
+				if constructor == terms.DeclCons.empty then
 					return len, elems
-				elseif constructor == "cons" then
+				elseif constructor == terms.DeclCons.cons then
 					local elements = arg:unwrap_tuple_value()
 					local next_defn = elements[1]
 					len = len + 1
@@ -593,7 +579,7 @@ let tuple-def-concat = lambda (U : universe, head : tuple-def-type(U), tail : tu
 					typed.application(typed.literal(elem), typed.tuple_cons(tail_args))
 				)
 				local elem_wrap = terms.value.closure("#tuple-def-concat", body, terms.runtime_context())
-				return terms.value.enum_value("cons", terms.value.tuple_value(value_array(defn, elem_wrap)))
+				return terms.cons(defn, elem_wrap)
 			end
 			local function tuple_def_concat(head, tail)
 				local head_n, head_elems = traverse(head)

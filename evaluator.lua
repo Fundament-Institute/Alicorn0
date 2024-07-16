@@ -1,8 +1,8 @@
 local terms = require "./terms"
 local runtime_context = terms.runtime_context
-local new_typechecking_context = terms.typechecking_context
-local checkable_term = terms.checkable_term
-local inferrable_term = terms.inferrable_term
+--local new_typechecking_context = terms.typechecking_context
+--local checkable_term = terms.checkable_term
+--local inferrable_term = terms.inferrable_term
 local typed_term = terms.typed_term
 local free = terms.free
 local visibility = terms.visibility
@@ -32,20 +32,8 @@ local internals_interface = require "./internals-interface"
 local param_info_explicit = value.param_info(value.visibility(visibility.explicit))
 local result_info_pure = value.result_info(result_info(purity.pure))
 
----@param ... any
----@return value
-local function tup_val(...)
-	return value.tuple_value(value_array(...))
-end
-
----@param ... any
----@return value
-local function prim_tup_val(...)
-	return value.prim_tuple_value(primitive_array(...))
-end
-
-local derivers = require "./derivers"
-local traits = require "./traits"
+--local derivers = require "./derivers"
+--local traits = require "./traits"
 local U = require "./utils"
 local OMEGA = 10
 local typechecker_state
@@ -140,7 +128,7 @@ local function substitute_inner(val, mappings, context_len)
 	elseif val:is_tuple_value() then
 		local elems = val:unwrap_tuple_value()
 		local res = typed_array()
-		for i, v in ipairs(elems) do
+		for _, v in ipairs(elems) do
 			res:append(substitute_inner(v, mappings, context_len))
 		end
 		return typed_term.tuple_cons(res)
@@ -296,7 +284,7 @@ local function substitute_inner(val, mappings, context_len)
 	elseif val:is_prim_user_defined_type() then
 		local id, family_args = val:unwrap_prim_user_defined_type()
 		local res = typed_array()
-		for i, v in ipairs(family_args) do
+		for _, v in ipairs(family_args) do
 			res:append(substitute_inner(v, mappings, context_len))
 		end
 		return typed_term.prim_user_defined_type_cons(id, res)
@@ -437,7 +425,7 @@ add_comparer("value.pi", "value.pi", function(a, b)
 	end
 
 	local apurity = a_result_info:unwrap_result_info():unwrap_result_info()
-	local bpurity = a_result_info:unwrap_result_info():unwrap_result_info()
+	local bpurity = b_result_info:unwrap_result_info():unwrap_result_info()
 	if apurity ~= bpurity then
 		return false, concrete_fail("pi result_info")
 	end
@@ -525,13 +513,13 @@ end
 local function extract_tuple_elem_type_closures(enum_val, closures)
 	local constructor, arg = enum_val:unwrap_enum_value()
 	local elements = arg:unwrap_tuple_value()
-	if constructor == "empty" then
+	if constructor == terms.DeclCons.empty then
 		if #elements ~= 0 then
 			error "enum_value with constructor empty should have no args"
 		end
 		return closures
 	end
-	if constructor == "cons" then
+	if constructor == terms.DeclCons.cons then
 		if #elements ~= 2 then
 			error "enum_value with constructor cons should have two args"
 		end
@@ -574,65 +562,39 @@ function check(
 			-- FIXME: needs context to avoid bugs where inferred and goal are the same neutral structurally
 			-- but come from different context thus are different
 			-- but erroneously compare equal
-			local ok, err = typechecker_state:flow(inferred_type, typechecking_context, goal_type, typechecking_context)
-			if not ok then
-				print "attempting to check if terms fit for checkable_term.inferrable"
-				--for i = 2, 49 do
-				--	local d = debug.getinfo(i, "Sln")
-				--	print(string.format("%s %s %s: %s:%d", d.what, d.namewhat, d.name, d.source, d.currentline))
-				--end
-				print("checkable_term", checkable_term:pretty_print(typechecking_context))
-				print("inferred_type", inferred_type)
-				print("goal_type", goal_type)
-				print("typechecking_context", typechecking_context:format_names())
-				error(
-					"check: mismatch in inferred and goal type for "
-						.. inferrable_term.kind
-						.. " due to "
-						.. tostring(err)
-				)
-			end
+			typechecker_state:flow(inferred_type, typechecking_context, goal_type, typechecking_context)
 		end
 		return inferred_usages, typed_term
 	elseif checkable_term:is_tuple_cons() then
 		local elements = checkable_term:unwrap_tuple_cons()
 		local usages = usage_array()
 		local new_elements = typed_array()
-		local decls = value.enum_value("empty", value.tuple_value(value_array()))
+		local decls = terms.empty
 
-		for i, v in ipairs(elements) do
+		for _, v in ipairs(elements) do
 			local el_type_metavar = typechecker_state:metavariable(typechecking_context)
 			local el_usages, el_term = check(v, typechecking_context, el_type_metavar:as_value())
 
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
 
-			decls = value.enum_value(
-				"cons",
-				value.tuple_value(
-					value_array(
-						decls,
-						value.closure(
-							"#check-tuple-cons-param",
-							typed_term.literal(el_type_metavar:as_value()),
-							typechecking_context.runtime_context
-						)
-					)
+			decls = terms.cons(
+				decls,
+				value.closure(
+					"#check-tuple-cons-param",
+					typed_term.literal(el_type_metavar:as_value()),
+					typechecking_context.runtime_context
 				)
 			)
 		end
 
-		local ok = typechecker_state:flow(
+		typechecker_state:flow(
 			value.tuple_type(decls),
 			typechecking_context,
 			goal_type,
 			typechecking_context,
 			"checkable_term:is_tuple_cons"
 		)
-
-		if not ok then
-			error("failed checkable_term flow")
-		end
 
 		return usages, typed_term.tuple_cons(new_elements)
 	elseif checkable_term:is_prim_tuple_cons() then
@@ -698,7 +660,7 @@ function apply_value(f, arg)
 		end
 		if arg:is_prim_tuple_value() then
 			local arg_elements = arg:unwrap_prim_tuple_value()
-			return prim_tup_val(prim_func_impl(arg_elements:unpack()))
+			return value.prim_tuple_value(primitive_array(prim_func_impl(arg_elements:unpack())))
 		elseif arg:is_neutral() then
 			return value.neutral(neutral_value.prim_application_stuck(prim_func_impl, arg:unwrap_neutral()))
 		else
@@ -813,9 +775,9 @@ end
 function make_inner_context(decls, tupletypes, make_prefix)
 	-- evaluate the type of the tuple
 	local constructor, arg = decls:unwrap_enum_value()
-	if constructor == "empty" then
+	if constructor == terms.DeclCons.empty then
 		return tupletypes, 0
-	elseif constructor == "cons" then
+	elseif constructor == terms.DeclCons.cons then
 		local details = arg:unwrap_tuple_value()
 		local tupletypes, n_elements = make_inner_context(details[1], tupletypes, make_prefix)
 		local f = details[2]
@@ -879,7 +841,7 @@ function infer(
 		local typeof_bound = typechecking_context:get_type(index)
 		local usage_counts = usage_array()
 		local context_size = #typechecking_context
-		for i = 1, context_size do
+		for _ = 1, context_size do
 			usage_counts:append(0)
 		end
 		usage_counts[index] = 1
@@ -923,18 +885,13 @@ function infer(
 			error "result type computation must be pure for now"
 		end
 
-		local ok, err = typechecker_state:flow(
+		typechecker_state:flow(
 			evaluate(param_type_term, typechecking_context.runtime_context),
 			typechecking_context,
 			result_type_param_type,
 			typechecking_context,
 			"inferrable pi term"
 		)
-		if not ok then
-			error(
-				"inferrable pi type's param type doesn't fit into the result type function's parameters because " .. err
-			)
-		end
 		local result_type_result_type_result =
 			apply_value(result_type_result_type, evaluate(param_type_term, typechecking_context.runtime_context))
 		local sort = value.star(
@@ -1010,17 +967,14 @@ function infer(
 		-- type_data is either "empty", an empty tuple,
 		-- or "cons", a tuple with the previous type_data and a function that
 		-- takes all previous values and produces the type of the next element
-		local type_data = value.enum_value("empty", tup_val())
+		local type_data = terms.empty
 		local usages = usage_array()
 		local new_elements = typed_array()
 		for _, v in ipairs(elements) do
 			local el_type, el_usages, el_term = infer(v, typechecking_context)
-			type_data = value.enum_value(
-				"cons",
-				tup_val(
-					type_data,
-					substitute_type_variables(el_type, #typechecking_context + 1, nil, typechecking_context)
-				)
+			type_data = terms.cons(
+				type_data,
+				substitute_type_variables(el_type, #typechecking_context + 1, nil, typechecking_context)
 			)
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
@@ -1038,19 +992,16 @@ function infer(
 		-- or "cons", a tuple with the previous type_data and a function that
 		-- takes all previous values and produces the type of the next element
 		-- TODO: it is a type error to put something that isn't a prim into a prim tuple
-		local type_data = value.enum_value("empty", tup_val())
+		local type_data = terms.empty
 		local usages = usage_array()
 		local new_elements = typed_array()
 		for _, v in ipairs(elements) do
 			local el_type, el_usages, el_term = infer(v, typechecking_context)
 			--print "inferring element of tuple construction"
 			--print(el_type:pretty_print())
-			type_data = value.enum_value(
-				"cons",
-				tup_val(
-					type_data,
-					substitute_type_variables(el_type, #typechecking_context + 1, nil, typechecking_context)
-				)
+			type_data = terms.cons(
+				type_data,
+				substitute_type_variables(el_type, #typechecking_context + 1, nil, typechecking_context)
 			)
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
@@ -1089,18 +1040,15 @@ function infer(
 		-- type_data is either "empty", an empty tuple,
 		-- or "cons", a tuple with the previous type_data and a function that
 		-- takes all previous values and produces the type of the next element
-		local type_data = value.enum_value("empty", tup_val())
+		local type_data = terms.empty
 		local usages = usage_array()
 		local new_fields = string_typed_map()
 		for k, v in pairs(fields) do
 			local field_type, field_usages, field_term = infer(v, typechecking_context)
-			type_data = value.enum_value(
-				"cons",
-				tup_val(
-					type_data,
-					value.name(k),
-					substitute_type_variables(field_type, #typechecking_context + 1, nil, typechecking_context)
-				)
+			type_data = terms.cons(
+				type_data,
+				value.name(k),
+				substitute_type_variables(field_type, #typechecking_context + 1, nil, typechecking_context)
 			)
 			add_arrays(usages, field_usages)
 			new_fields[k] = field_term
@@ -1143,9 +1091,9 @@ function infer(
 		-- evaluate the type of the record
 		local function make_type(decls)
 			local constructor, arg = decls:unwrap_enum_value()
-			if constructor == "empty" then
+			if constructor == terms.DeclCons.empty then
 				return string_array(), string_value_map()
-			elseif constructor == "cons" then
+			elseif constructor == terms.DeclCons.cons then
 				local details = arg:unwrap_tuple_value()
 				local field_names, field_types = make_type(details[1])
 				local name = details[2]:unwrap_name()
@@ -1195,11 +1143,11 @@ function infer(
 		error("nyi")
 	elseif inferrable_term:is_object_cons() then
 		local methods = inferrable_term:unwrap_object_cons()
-		local type_data = value.enum_value("empty", tup_val())
+		local type_data = terms.empty
 		local new_methods = string_typed_map()
 		for k, v in pairs(methods) do
 			local method_type, method_usages, method_term = infer(v, typechecking_context)
-			type_data = value.enum_value("cons", tup_val(type_data, value.name(k), method_type))
+			type_data = terms.cons(type_data, value.name(k), method_type)
 			new_methods[k] = method_term
 		end
 		-- TODO: usages
@@ -1217,30 +1165,23 @@ function infer(
 		if not ok then
 			error("infer, is_operative_cons, operative_type_value: expected a term with an operative type")
 		end
-		if
-			userdata_type ~= op_userdata_type
-			and not typechecker_state:flow(userdata_type, typechecking_context, op_userdata_type, typechecking_context)
-		then
-			p(userdata_type, op_userdata_type)
-			print(userdata_type:pretty_print())
-			print(op_userdata_type:pretty_print())
-			error("infer: mismatch in userdata types of operative construction")
+		if userdata_type ~= op_userdata_type then
+			typechecker_state:flow(userdata_type, typechecking_context, op_userdata_type, typechecking_context)
 		end
 		local operative_usages = usage_array()
 		add_arrays(operative_usages, operative_type_usages)
 		add_arrays(operative_usages, userdata_usages)
 		return operative_type_value, operative_usages, typed_term.operative_cons(userdata_term)
 	elseif inferrable_term:is_operative_type_cons() then
-		local function cons(...)
-			return value.enum_value("cons", tup_val(...))
-		end
-		local empty = value.enum_value("empty", tup_val())
 		local handler, userdata_type = inferrable_term:unwrap_operative_type_cons()
 		local goal_type = value.pi(
 			value.tuple_type(
-				cons(
-					cons(
-						cons(cons(empty, const_combinator(prim_syntax_type)), const_combinator(prim_environment_type)),
+				terms.cons(
+					terms.cons(
+						terms.cons(
+							terms.cons(terms.empty, const_combinator(prim_syntax_type)),
+							const_combinator(prim_environment_type)
+						),
 						const_combinator(prim_typed_term_type)
 					),
 					const_combinator(prim_goal_type)
@@ -1250,8 +1191,8 @@ function infer(
 			param_info_explicit,
 			const_combinator(
 				value.tuple_type(
-					cons(
-						cons(empty, const_combinator(prim_inferrable_term_type)),
+					terms.cons(
+						terms.cons(terms.empty, const_combinator(prim_inferrable_term_type)),
 						const_combinator(prim_environment_type)
 					)
 				)
@@ -1520,7 +1461,7 @@ function evaluate(typed_term, runtime_context)
 			for i = 1, real_length do
 				inner_context = inner_context:append(value.prim(subject_elements[i]))
 			end
-			for i = real_length + 1, length do
+			for _ = real_length + 1, length do
 				inner_context = inner_context:append(value.prim(nil))
 			end
 		elseif subject_value:is_neutral() then

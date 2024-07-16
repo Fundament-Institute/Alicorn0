@@ -7,7 +7,7 @@ local types = require "./typesystem"
 local terms = require "./terms"
 local expression_goal = terms.expression_goal
 local runtime_context = terms.runtime_context
-local typechecking_context = terms.typechecking_context
+--local typechecking_context = terms.typechecking_context
 local checkable_term = terms.checkable_term
 local inferrable_term = terms.inferrable_term
 local typed_term = terms.typed_term
@@ -15,13 +15,13 @@ local visibility = terms.visibility
 local purity = terms.purity
 local result_info = terms.result_info
 local value = terms.value
-local prim_syntax_type = terms.prim_syntax_type
-local prim_environment_type = terms.prim_environment_type
-local prim_inferrable_term_type = terms.prim_inferrable_term_type
+--local prim_syntax_type = terms.prim_syntax_type
+--local prim_environment_type = terms.prim_environment_type
+--local prim_inferrable_term_type = terms.prim_inferrable_term_type
 
 local gen = require "./terms-generators"
 local array = gen.declare_array
-local checkable_array = array(checkable_term)
+--local checkable_array = array(checkable_term)
 local inferrable_array = array(inferrable_term)
 local typed_array = array(typed_term)
 local value_array = array(value)
@@ -30,17 +30,6 @@ local name_array = array(gen.builtin_string)
 
 local param_info_explicit = value.param_info(value.visibility(visibility.explicit))
 local result_info_pure = value.result_info(result_info(purity.pure))
----@param ... value
----@return value
-local function tup_val(...)
-	return value.tuple_value(value_array(...))
-end
----@param ... value
----@return value
-local function cons(...)
-	return value.enum_value("cons", tup_val(...))
-end
-local empty = value.enum_value("empty", tup_val())
 
 local evaluator = require "./evaluator"
 local const_combinator = evaluator.const_combinator
@@ -482,7 +471,7 @@ local function expression_pairhandler(args, a, b)
 		--	evaluator.typechecker_state:metavariable(env.typechecking_context):as_value()
 		--)
 
-		--local ok, err = evaluator.typechecker_state:flow(
+		--evaluator.typechecker_state:flow(
 		--	type_of_term,
 		--	env.typechecking_context,
 		--	op,
@@ -557,7 +546,7 @@ local function expression_pairhandler(args, a, b)
 			print("BB")
 		end
 
-		local ok, err = evaluator.typechecker_state:flow(
+		evaluator.typechecker_state:flow(
 			type_of_term,
 			env.typechecking_context,
 			pi,
@@ -641,7 +630,7 @@ local function expression_pairhandler(args, a, b)
 			evaluator.typechecker_state:metavariable(env.typechecking_context):as_value()
 		)
 
-		local ok, err = evaluator.typechecker_state:flow(
+		evaluator.typechecker_state:flow(
 			type_of_term,
 			env.typechecking_context,
 			prim_func,
@@ -922,7 +911,7 @@ local function primitive_operative(fn, name)
 	-- this ensures variable 1 is the argument tuple
 	local value_fn = value.closure("#OPERATIVE_PARAM", tuple_to_tuple_fn, runtime_context())
 
-	local userdata_type = value.tuple_type(empty)
+	local userdata_type = value.tuple_type(terms.empty)
 	return inferrable_term.typed(
 		value.operative_type(value_fn, userdata_type),
 		array(gen.builtin_number)(),
@@ -973,7 +962,7 @@ collect_tuple = metalanguage.reducer(
 	function(syntax, args)
 		local goal, env = args:unwrap()
 		local goal_type, collected_terms
-		local decls = value.enum_value("empty", value.tuple_value(value_array()))
+		local decls = terms.empty
 
 		if goal:is_check() then
 			collected_terms = array(checkable_term)()
@@ -997,17 +986,12 @@ collect_tuple = metalanguage.reducer(
 					ExpressionArgs.new(expression_goal.check(next_elem_type:as_value()), env)
 				)
 				if ok and continue then
-					decls = value.enum_value(
-						"cons",
-						value.tuple_value(
-							value_array(
-								decls,
-								value.closure(
-									"#collect-tuple-param",
-									typed_term.literal(next_elem_type:as_value()),
-									env.typechecking_context.runtime_context
-								)
-							)
+					decls = terms.cons(
+						decls,
+						value.closure(
+							"#collect-tuple-param",
+							typed_term.literal(next_elem_type:as_value()),
+							env.typechecking_context.runtime_context
 						)
 					)
 					collected_terms:append(next_term)
@@ -1056,7 +1040,7 @@ collect_prim_tuple = metalanguage.reducer(
 	function(syntax, args)
 		local goal, env = args:unwrap()
 		local goal_type, collected_terms
-		local decls = value.enum_value("empty", value.tuple_value(value_array()))
+		local decls = terms.empty
 
 		if goal:is_check() then
 			collected_terms = array(checkable_term)()
@@ -1080,17 +1064,12 @@ collect_prim_tuple = metalanguage.reducer(
 					ExpressionArgs.new(expression_goal.check(next_elem_type:as_value()), env)
 				)
 				if ok and continue then
-					decls = value.enum_value(
-						"cons",
-						value.tuple_value(
-							value_array(
-								decls,
-								value.closure(
-									"#collect-tuple-param",
-									typed_term.literal(next_elem_type:as_value()),
-									env.typechecking_context.runtime_context
-								)
-							)
+					decls = terms.cons(
+						decls,
+						value.closure(
+							"#collect-tuple-param",
+							typed_term.literal(next_elem_type:as_value()),
+							env.typechecking_context.runtime_context
 						)
 					)
 					collected_terms:append(next_term)
@@ -1190,10 +1169,10 @@ local block = metalanguage.reducer(
 ---@param elems value[]
 ---@return value
 local function build_prim_type_tuple(elems)
-	local result = empty
+	local result = terms.empty
 
-	for i, v in ipairs(elems) do
-		result = cons(result, const_combinator(v))
+	for _, v in ipairs(elems) do
+		result = terms.cons(result, const_combinator(v))
 	end
 
 	return terms.value.prim_tuple_type(result)
