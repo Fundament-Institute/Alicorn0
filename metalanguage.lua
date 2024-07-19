@@ -204,7 +204,8 @@ local function augment_error(syntax, reducer_name, ok, err_msg, ...)
 	return err_msg, ...
 end
 
-local pdump = require "pretty-print".dump
+--local pdump = require "pretty-print".dump
+local pdump = require("./pretty-printer").s
 local tag = (require "./utils").tag
 
 ---@param err table | string

@@ -613,6 +613,19 @@ value:define_enum("value", {
 
 	-- type of key and value of key -> type of the value
 	-- {"prim_table_type"},
+
+	-- a type family, that takes a type and a value, and produces a new type
+	-- inhabited only by that single value and is a subtype of the type.
+	-- example: singleton(integer, 5) is the type that is inhabited only by the
+	-- number 5. values of this type can be, for example, passed to a function
+	-- that takes any integer.
+	-- alternative names include:
+	-- - Most Specific Type (from discussion with open),
+	-- - Val (from julia)
+	{ "singleton", {
+		"supertype", value,
+		"value",     value,
+	} },
 })
 
 -- stylua: ignore
@@ -718,30 +731,6 @@ end
 placeholder_debug:derive(derivers.unwrap)
 result_info:derive(derivers.unwrap)
 
-local override_prettys = require("./terms-pretty.lua") {
-	typechecking_context_type = typechecking_context_type,
-	runtime_context_type = runtime_context_type,
-	DeclCons = DeclCons,
-}
-local checkable_term_override_pretty = override_prettys.checkable_term_override_pretty
-local inferrable_term_override_pretty = override_prettys.inferrable_term_override_pretty
-local typed_term_override_pretty = override_prettys.typed_term_override_pretty
-local value_override_pretty = override_prettys.value_override_pretty
-local binding_override_pretty = override_prettys.binding_override_pretty
-
-checkable_term:derive(derivers.pretty_print, checkable_term_override_pretty)
-inferrable_term:derive(derivers.pretty_print, inferrable_term_override_pretty)
-typed_term:derive(derivers.pretty_print, typed_term_override_pretty)
-visibility:derive(derivers.pretty_print)
-free:derive(derivers.pretty_print)
-value:derive(derivers.pretty_print, value_override_pretty)
-neutral_value:derive(derivers.pretty_print)
-binding:derive(derivers.pretty_print, binding_override_pretty)
-expression_goal:derive(derivers.pretty_print)
-placeholder_debug:derive(derivers.pretty_print)
-purity:derive(derivers.pretty_print)
-result_info:derive(derivers.pretty_print)
-
 --[[
 local tuple_defn = value.enum_value("variant",
 	tup_val(
@@ -791,6 +780,27 @@ local terms = {
 	unit_type = unit_type,
 	unit_val = unit_val,
 }
+
+local override_prettys = require("./terms-pretty.lua")(terms)
+local checkable_term_override_pretty = override_prettys.checkable_term_override_pretty
+local inferrable_term_override_pretty = override_prettys.inferrable_term_override_pretty
+local typed_term_override_pretty = override_prettys.typed_term_override_pretty
+local value_override_pretty = override_prettys.value_override_pretty
+local binding_override_pretty = override_prettys.binding_override_pretty
+
+checkable_term:derive(derivers.pretty_print, checkable_term_override_pretty)
+inferrable_term:derive(derivers.pretty_print, inferrable_term_override_pretty)
+typed_term:derive(derivers.pretty_print, typed_term_override_pretty)
+visibility:derive(derivers.pretty_print)
+free:derive(derivers.pretty_print)
+value:derive(derivers.pretty_print, value_override_pretty)
+neutral_value:derive(derivers.pretty_print)
+binding:derive(derivers.pretty_print, binding_override_pretty)
+expression_goal:derive(derivers.pretty_print)
+placeholder_debug:derive(derivers.pretty_print)
+purity:derive(derivers.pretty_print)
+result_info:derive(derivers.pretty_print)
+
 local internals_interface = require "./internals-interface"
 internals_interface.terms = terms
 return terms

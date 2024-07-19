@@ -218,6 +218,12 @@ function value:is_prim_tuple_type() end
 function value:unwrap_prim_tuple_type() end
 ---@return boolean, value
 function value:as_prim_tuple_type() end
+---@return boolean
+function value:is_singleton() end
+---@return value, value
+function value:unwrap_singleton() end
+---@return boolean, value, value
+function value:as_singleton() end
 ---@class (exact) valueType:Type
 ---@field visibility_type value
 ---@field visibility fun(visibility:visibility): value
@@ -262,4 +268,5 @@ function value:as_prim_tuple_type() end
 ---@field prim_nil_type value
 ---@field prim_tuple_value fun(elements:any): value
 ---@field prim_tuple_type fun(decls:value): value
+---@field singleton fun(supertype:value, value:value): value
 return {}

@@ -1,4 +1,5 @@
 local terms = require "./terms"
+local metalanguage = require "./metalanguage"
 local runtime_context = terms.runtime_context
 --local new_typechecking_context = terms.typechecking_context
 --local checkable_term = terms.checkable_term
@@ -474,8 +475,20 @@ end)
 
 add_comparer("value.prim_wrapped_type", "value.prim_wrapped_type", function(a, b)
 	local ua, ub = a:unwrap_prim_wrapped_type(), b:unwrap_prim_wrapped_type()
-	check_concrete(ua, ub)
+	U.tag("check_concrete", { ua, ub }, check_concrete, ua, ub)
 	return true
+end)
+
+add_comparer("value.singleton", "value.singleton", function(a, b)
+	local a_supertype, a_value = a:unwrap_singleton()
+	local b_supertype, b_value = b:unwrap_singleton()
+	typechecker_state:flow(a_supertype, nil, b_supertype, nil)
+
+	if a_value == b_value then
+		return true
+	else
+		return false, "unequal singletons"
+	end
 end)
 
 -- Compares any non-metavariables, or defers any metavariable comparisons to the work queue
@@ -573,16 +586,19 @@ function check(
 
 		for _, v in ipairs(elements) do
 			local el_type_metavar = typechecker_state:metavariable(typechecking_context)
-			local el_usages, el_term = check(v, typechecking_context, el_type_metavar:as_value())
+			local el_type = el_type_metavar:as_value()
+			local el_usages, el_term = check(v, typechecking_context, el_type)
 
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
+
+			local el_val = evaluate(el_term, typechecking_context.runtime_context)
 
 			decls = terms.cons(
 				decls,
 				value.closure(
 					"#check-tuple-cons-param",
-					typed_term.literal(el_type_metavar:as_value()),
+					typed_term.literal(value.singleton(el_type, el_val)),
 					typechecking_context.runtime_context
 				)
 			)
@@ -599,30 +615,38 @@ function check(
 		return usages, typed_term.tuple_cons(new_elements)
 	elseif checkable_term:is_prim_tuple_cons() then
 		local elements = checkable_term:unwrap_prim_tuple_cons()
-
-		local goal_tuple_type_elements = goal_type:unwrap_prim_tuple_type()
-		local elem_type_closures = extract_tuple_elem_type_closures(goal_tuple_type_elements, value_array())
-		if #elem_type_closures ~= #elements then
-			print("goal_type", goal_type)
-			print("elements", elements)
-			error(
-				"check: mismatch in checkable_term.prim_tuple_cons goal type element count and elements in tuple cons"
-			)
-		end
-
 		local usages = usage_array()
 		local new_elements = typed_array()
-		local tuple_elems = value_array()
-		for i, v in ipairs(elements) do
-			local tuple_elem_type = apply_value(elem_type_closures[i], value.tuple_value(tuple_elems))
+		local decls = terms.empty
 
-			local el_usages, el_term = check(v, typechecking_context, tuple_elem_type)
+		for _, v in ipairs(elements) do
+			local el_type_metavar = typechecker_state:metavariable(typechecking_context)
+			local el_type = el_type_metavar:as_value()
+			local el_usages, el_term = check(v, typechecking_context, el_type)
 
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
-			local new_elem = evaluate(el_term, typechecking_context.runtime_context)
-			tuple_elems:append(new_elem)
+
+			local el_val = evaluate(el_term, typechecking_context.runtime_context)
+
+			decls = terms.cons(
+				decls,
+				value.closure(
+					"#check-tuple-cons-param",
+					typed_term.literal(value.singleton(el_type, el_val)),
+					typechecking_context.runtime_context
+				)
+			)
 		end
+
+		typechecker_state:flow(
+			value.prim_tuple_type(decls),
+			typechecking_context,
+			goal_type,
+			typechecking_context,
+			"checkable_term:is_prim_tuple_cons"
+		)
+
 		return usages, typed_term.prim_tuple_cons(new_elements)
 	elseif checkable_term:is_lambda() then
 		local param_name, body = checkable_term:unwrap_lambda()
@@ -768,23 +792,33 @@ end
 
 -- TODO: create a typechecking context append variant that merges two
 ---@param decls value
----@param tupletypes value[]
 ---@param make_prefix fun(i: integer): value
 ---@return value[]
 ---@return integer
-function make_inner_context(decls, tupletypes, make_prefix)
+---@return value[]
+function make_inner_context(decls, make_prefix)
 	-- evaluate the type of the tuple
 	local constructor, arg = decls:unwrap_enum_value()
 	if constructor == terms.DeclCons.empty then
-		return tupletypes, 0
+		return value_array(), 0, value_array()
 	elseif constructor == terms.DeclCons.cons then
 		local details = arg:unwrap_tuple_value()
-		local tupletypes, n_elements = make_inner_context(details[1], tupletypes, make_prefix)
+		local tupletypes, n_elements, tuplevals = make_inner_context(details[1], make_prefix)
 		local f = details[2]
-		local prefix = make_prefix(n_elements)
-		local element_type = apply_value(f, prefix)
-		tupletypes[#tupletypes + 1] = element_type
-		return tupletypes, n_elements + 1
+		local element_type
+		if #tupletypes == #tuplevals then
+			local prefix = value.tuple_value(tuplevals)
+			element_type = apply_value(f, prefix)
+			if element_type:is_singleton() then
+				local _, val = element_type:unwrap_singleton()
+				tuplevals:append(val)
+			end
+		else
+			local prefix = make_prefix(n_elements)
+			element_type = apply_value(f, prefix)
+		end
+		tupletypes:append(element_type)
+		return tupletypes, n_elements + 1, tuplevals
 	else
 		error("infer: unknown tuple type data constructor")
 	end
@@ -794,15 +828,17 @@ end
 ---@param subject_value value
 ---@return value[]
 ---@return integer
+---@return value[]
 function infer_tuple_type_unwrapped(subject_type, subject_value)
 	local decls, make_prefix = make_tuple_prefix(subject_type, subject_value)
-	return make_inner_context(decls, {}, make_prefix)
+	return make_inner_context(decls, make_prefix)
 end
 
 ---@param subject_type value
 ---@param subject_value value
 ---@return value[]
 ---@return integer
+---@return value[]
 function infer_tuple_type(subject_type, subject_value)
 	-- define how the type of each tuple element should be evaluated
 	return infer_tuple_type_unwrapped(subject_type, subject_value)
@@ -972,9 +1008,13 @@ function infer(
 		local new_elements = typed_array()
 		for _, v in ipairs(elements) do
 			local el_type, el_usages, el_term = infer(v, typechecking_context)
+			local el_val = evaluate(el_term, typechecking_context.runtime_context)
 			type_data = terms.cons(
 				type_data,
-				substitute_type_variables(el_type, #typechecking_context + 1, nil, typechecking_context)
+				value.singleton(
+					substitute_type_variables(el_type, #typechecking_context + 1, nil, typechecking_context),
+					el_val
+				)
 			)
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
@@ -999,9 +1039,13 @@ function infer(
 			local el_type, el_usages, el_term = infer(v, typechecking_context)
 			--print "inferring element of tuple construction"
 			--print(el_type:pretty_print())
+			local el_val = evaluate(el_term, typechecking_context.runtime_context)
 			type_data = terms.cons(
 				type_data,
-				substitute_type_variables(el_type, #typechecking_context + 1, nil, typechecking_context)
+				value.singleton(
+					substitute_type_variables(el_type, #typechecking_context + 1, nil, typechecking_context),
+					el_val
+				)
 			)
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
@@ -1777,7 +1821,7 @@ local UniverseOmegaRelation = {
 	refl = luatovalue(function(a) end, name_array("a")),
 	antisym = luatovalue(function(a, b, r1, r2) end, name_array("a", "b", "r1", "r2")),
 	constrain = luatovalue(function(val, use)
-		local ok, err = check_concrete(val, use)
+		local ok, err = U.tag("check_concrete", { val, use }, check_concrete, val, use)
 		if not ok then
 			error(err)
 		end
@@ -2061,7 +2105,13 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 				local tuple_params = value_array(lvalue --[[@as value]], rvalue --[[@as value]])
 				-- TODO: how do we pass in the type contexts???
 				--apply_value(subrel.Rel, value.tuple_value(tuple_params))
-				local ok, err = check_concrete(lvalue --[[@as value]], rvalue --[[@as value]])
+				local ok, err = U.tag(
+					"check_concrete",
+					{ lvalue, rvalue },
+					check_concrete,
+					lvalue --[[@as value]],
+					rvalue --[[@as value]]
+				)
 				if not ok then
 					error(err)
 				end
@@ -2140,6 +2190,7 @@ function TypeCheckerState:speculate(fn)
 	end
 	typechecker_state = self:shadow()
 	evaluator.typechecker_state = typechecker_state
+	--return capture(xpcall(fn, metalanguage.custom_traceback))
 	return capture(pcall(fn))
 end
 

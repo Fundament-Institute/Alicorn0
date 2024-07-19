@@ -260,17 +260,25 @@ function PrettyPrint_mt:__tostring()
 	return table.concat(self, "")
 end
 
-_G["p"] = function(...)
+local function s(...)
 	local res = {}
 	for i, v in ipairs { ... } do
 		local pp = PrettyPrint:new()
 		pp:any(v)
 		res[i] = tostring(pp)
 	end
-	print(table.concat(res, "    "))
+	return table.concat(res, "    ")
 end
+
+local function p(...)
+	print(s(...))
+end
+
+_G["p"] = p
 
 return {
 	PrettyPrint = PrettyPrint,
 	prettyprintable = prettyprintable,
+	s = s,
+	p = p,
 }

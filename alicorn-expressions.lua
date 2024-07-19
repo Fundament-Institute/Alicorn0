@@ -976,25 +976,24 @@ collect_tuple = metalanguage.reducer(
 		while ok and continue do
 			i = i + 1
 			if goal_type then
-				local next_elem_type = evaluator.typechecker_state:metavariable(env.typechecking_context)
-				ok, continue, next_term, syntax, env = syntax:match(
-					{
-						metalanguage.ispair(collect_tuple_pair_handler),
-						metalanguage.isnil(collect_tuple_nil_handler),
-					},
-					metalanguage.failure_handler,
-					ExpressionArgs.new(expression_goal.check(next_elem_type:as_value()), env)
-				)
+				local next_elem_type_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+				local next_elem_type = next_elem_type_mv:as_value()
+				ok, continue, next_term, syntax, env = syntax:match({
+					metalanguage.ispair(collect_tuple_pair_handler),
+					metalanguage.isnil(collect_tuple_nil_handler),
+				}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
 				if ok and continue then
+					collected_terms:append(next_term)
+					local _, next_typed = evaluator.check(next_term, env.typechecking_context, next_elem_type)
+					local next_val = evaluator.evaluate(next_typed, env.typechecking_context.runtime_context)
 					decls = terms.cons(
 						decls,
 						value.closure(
 							"#collect-tuple-param",
-							typed_term.literal(next_elem_type:as_value()),
+							typed_term.literal(value.singleton(next_elem_type, next_val)),
 							env.typechecking_context.runtime_context
 						)
 					)
-					collected_terms:append(next_term)
 				end
 				if not ok and type(continue) == "string" then
 					continue = continue .. " (should have " .. ", found " .. tostring(#collected_terms) .. " so far)"
@@ -1054,25 +1053,24 @@ collect_prim_tuple = metalanguage.reducer(
 		while ok and continue do
 			i = i + 1
 			if goal_type then
-				local next_elem_type = evaluator.typechecker_state:metavariable(env.typechecking_context)
-				ok, continue, next_term, syntax, env = syntax:match(
-					{
-						metalanguage.ispair(collect_tuple_pair_handler),
-						metalanguage.isnil(collect_tuple_nil_handler),
-					},
-					metalanguage.failure_handler,
-					ExpressionArgs.new(expression_goal.check(next_elem_type:as_value()), env)
-				)
+				local next_elem_type_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+				local next_elem_type = next_elem_type_mv:as_value()
+				ok, continue, next_term, syntax, env = syntax:match({
+					metalanguage.ispair(collect_tuple_pair_handler),
+					metalanguage.isnil(collect_tuple_nil_handler),
+				}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
 				if ok and continue then
+					collected_terms:append(next_term)
+					local _, next_typed = evaluator.check(next_term, env.typechecking_context, next_elem_type)
+					local next_val = evaluator.evaluate(next_typed, env.typechecking_context.runtime_context)
 					decls = terms.cons(
 						decls,
 						value.closure(
 							"#collect-tuple-param",
-							typed_term.literal(next_elem_type:as_value()),
+							typed_term.literal(value.singleton(next_elem_type, next_val)),
 							env.typechecking_context.runtime_context
 						)
 					)
-					collected_terms:append(next_term)
 				end
 				if not ok and type(continue) == "string" then
 					continue = continue .. " (should have " .. ", found " .. tostring(#collected_terms) .. " so far)"
