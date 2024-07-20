@@ -555,7 +555,6 @@ local function expression_pairhandler(args, a, b)
 		)
 		if type_of_term:is_prim_function_type() then
 			print("BC")
-			print(ok)
 		end
 
 		local param_type, param_info, result_type, result_info = pi:unwrap_pi()

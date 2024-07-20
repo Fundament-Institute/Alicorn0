@@ -2102,19 +2102,19 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 			local rvalue, rtag, rctx = table.unpack(self.values[r])
 			if ltag == TypeCheckerTag.VALUE and rtag == TypeCheckerTag.USAGE then
 				-- Unpacking tuples hasn't been fixed in VSCode yet (despite the issue being closed???) so we have to override the types: https://github.com/LuaLS/lua-language-server/issues/1816
-				local tuple_params = value_array(lvalue --[[@as value]], rvalue --[[@as value]])
+				local tuple_params = value_array(value.prim(lvalue) --[[@as value]], value.prim(rvalue) --[[@as value]])
 				-- TODO: how do we pass in the type contexts???
-				--apply_value(subrel.Rel, value.tuple_value(tuple_params))
-				local ok, err = U.tag(
-					"check_concrete",
-					{ lvalue, rvalue },
-					check_concrete,
-					lvalue --[[@as value]],
-					rvalue --[[@as value]]
-				)
-				if not ok then
-					error(err)
-				end
+				U.tag("apply_value", { lvalue, rvalue }, apply_value, subrel.constrain, value.tuple_value(tuple_params))
+				-- local ok, err = U.tag(
+				-- 	"check_concrete",
+				-- 	{ lvalue, rvalue },
+				-- 	check_concrete,
+				-- 	lvalue --[[@as value]],
+				-- 	rvalue --[[@as value]]
+				-- )
+				-- if not ok then
+				-- 	error(err)
+				-- end
 			end
 		end
 	end
@@ -2190,8 +2190,8 @@ function TypeCheckerState:speculate(fn)
 	end
 	typechecker_state = self:shadow()
 	evaluator.typechecker_state = typechecker_state
-	--return capture(xpcall(fn, metalanguage.custom_traceback))
-	return capture(pcall(fn))
+	return capture(xpcall(fn, metalanguage.custom_traceback))
+	--return capture(pcall(fn))
 end
 
 return evaluator
