@@ -49,9 +49,16 @@ local function let_bind(syntax, env)
 		return false, name
 	end
 
+	local expr
+	ok, expr = tail:match({
+		metalang.listmatch(metalang.accept_handler, metalang.any(metalang.accept_handler)),
+	}, metalang.failure_handler)
+	if not ok then
+		expr = tail
+	end
+
 	local bind
-	ok, bind = tail:match({
-		metalang.listmatch(metalang.accept_handler, exprs.inferred_expression(utils.accept_with_env, env)),
+	ok, bind = expr:match({
 		exprs.inferred_expression(utils.accept_with_env, env),
 	}, metalang.failure_handler, nil)
 
@@ -125,7 +132,10 @@ local function intrinsic(syntax, env)
 	local ok, str_env, syntax = syntax:match({
 		metalang.listtail(
 			metalang.accept_handler,
-			exprs.inferred_expression(utils.accept_with_env, env),
+			exprs.expression(
+				utils.accept_with_env,
+				exprs.ExpressionArgs.new(terms.expression_goal.check(value.prim_string_type), env)
+			),
 			metalang.symbol_exact(metalang.accept_handler, ":")
 		),
 	}, metalang.failure_handler, nil)
@@ -136,7 +146,6 @@ local function intrinsic(syntax, env)
 	if not env then
 		error "env nil in base-env.intrinsic"
 	end
-	local str = terms.checkable_term.inferrable(str) -- workaround for not having exprs.checked_expression yet
 	local ok, type_env = syntax:match({
 		metalang.listmatch(metalang.accept_handler, exprs.inferred_expression(utils.accept_with_env, env)),
 	}, metalang.failure_handler, nil)
@@ -321,26 +330,33 @@ local ascribed_segment = metalang.reducer(
 	---@return boolean
 	---@return {single: boolean, names: string|string[], args: inferrable, env: Environment}|string
 	function(syntax, env)
-		local single, name, type_val, type_env = syntax:match({
-			pure_ascribed_name(metalang.accept_handler, env),
+		-- check whether syntax starts with a paren list, or is empty
+		local multi, _, _ = syntax:match({
+			metalang.isnil(metalang.accept_handler),
+			metalang.listtail(metalang.accept_handler, metalang.ispair(metalang.accept_handler)),
 		}, metalang.failure_handler, nil)
 
-		if single then
+		if multi then
+			local ok, thread = syntax:match({
+				tupleof_ascribed_names(metalang.accept_handler, env),
+			}, metalang.failure_handler, nil)
+
+			if not ok then
+				return ok, thread
+			end
+
+			return true, { single = false, names = thread.names, args = thread.args, env = thread.env }
+		else
+			local ok, name, type_val, type_env = syntax:match({
+				pure_ascribed_name(metalang.accept_handler, env),
+			}, metalang.failure_handler, nil)
+
+			if not ok then
+				return ok, name
+			end
+
 			return true, { single = true, names = name, args = type_val, env = type_env }
 		end
-
-		local ok, thread = syntax:match({
-			tupleof_ascribed_names(metalang.accept_handler, env),
-		}, metalang.failure_handler, nil)
-
-		if not ok then
-			return ok, thread
-			-- if you want to see an error from the 'single' branch of syntax matching
-			-- comment above and uncomment below
-			--return single, name
-		end
-
-		return true, { single = false, names = thread.names, args = thread.args, env = thread.env }
 	end,
 	"ascribed_segment"
 )
@@ -351,26 +367,33 @@ local prim_ascribed_segment = metalang.reducer(
 	---@return boolean
 	---@return {single: boolean, names: string|string[], args: inferrable, env: Environment}|string
 	function(syntax, env)
-		local single, name, type_val, type_env = syntax:match({
-			pure_ascribed_name(metalang.accept_handler, env),
+		-- check whether syntax starts with a paren list
+		local multi, _, _ = syntax:match({
+			metalang.isnil(metalang.accept_handler),
+			metalang.listtail(metalang.accept_handler, metalang.ispair(metalang.accept_handler)),
 		}, metalang.failure_handler, nil)
 
-		if single then
+		if multi then
+			local ok, thread = syntax:match({
+				prim_tupleof_ascribed_names(metalang.accept_handler, env),
+			}, metalang.failure_handler, nil)
+
+			if not ok then
+				return ok, thread
+			end
+
+			return true, { single = false, names = thread.names, args = thread.args, env = thread.env }
+		else
+			local ok, name, type_val, type_env = syntax:match({
+				pure_ascribed_name(metalang.accept_handler, env),
+			}, metalang.failure_handler, nil)
+
+			if not ok then
+				return ok, name
+			end
+
 			return true, { single = true, names = name, args = type_val, env = type_env }
 		end
-
-		local ok, thread = syntax:match({
-			prim_tupleof_ascribed_names(metalang.accept_handler, env),
-		}, metalang.failure_handler, nil)
-
-		if not ok then
-			return ok, thread
-			-- if you want to see an error from the 'single' branch of syntax matching
-			-- comment above and uncomment below
-			--return single, name
-		end
-
-		return true, { single = false, names = thread.names, args = thread.args, env = thread.env }
 	end,
 	"prim_ascribed_segment"
 )

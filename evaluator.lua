@@ -482,7 +482,7 @@ end)
 add_comparer("value.singleton", "value.singleton", function(a, b)
 	local a_supertype, a_value = a:unwrap_singleton()
 	local b_supertype, b_value = b:unwrap_singleton()
-	typechecker_state:flow(a_supertype, nil, b_supertype, nil)
+	typechecker_state:queue_work(a_supertype, b_supertype, "singleton")
 
 	if a_value == b_value then
 		return true
@@ -508,8 +508,6 @@ function check_concrete(val, use)
 
 	if not concrete_comparers[val.kind] then
 		error("No valid concrete type comparer found for value " .. val.kind)
-	elseif not concrete_comparers[use.kind] then
-		error("No valid concrete type comparer found for usage " .. use.kind)
 	end
 
 	local comparer = (concrete_comparers[val.kind] or {})[use.kind]
