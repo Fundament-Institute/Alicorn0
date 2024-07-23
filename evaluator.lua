@@ -328,6 +328,8 @@ end
 
 local make_inner_context
 local infer_tuple_type, infer_tuple_type_unwrapped
+local make_inner_context2
+local infer_tuple_type2, infer_tuple_type_unwrapped2
 
 local check_concrete
 -- indexed by kind x kind
@@ -391,12 +393,8 @@ add_comparer(value.prim_type_type.kind, value.prim_type_type.kind, always_fits_c
 local function tuple_compare(a, b)
 	-- fixme lol
 	local placeholder = value.neutral(neutral_value.free(free.unique({})))
-	local tuple_types_a, na = infer_tuple_type_unwrapped(a, placeholder)
-	local tuple_types_b, nb = infer_tuple_type_unwrapped(b, placeholder)
-	if na ~= nb then
-		return false, "tuple types have different length"
-	end
-	for i = 1, na do
+	local tuple_types_a, tuple_types_b, tuple_vals, n = infer_tuple_type_unwrapped2(a, b, placeholder)
+	for i = 1, n do
 		local ta, tb = tuple_types_a[i], tuple_types_b[i]
 
 		if ta ~= tb then
@@ -506,13 +504,22 @@ function check_concrete(val, use)
 		return false, "both values are neutral, but they aren't equal: " .. tostring(val) .. " ~= " .. tostring(use)
 	end
 
+	if val:is_singleton() and not use:is_singleton() then
+		local val_supertype, _ = val:unwrap_singleton()
+		typechecker_state:queue_work(val_supertype, use, "singleton subtype")
+		return true
+	end
+
 	if not concrete_comparers[val.kind] then
-		error("No valid concrete type comparer found for value " .. val.kind)
+		error("No valid concrete type comparer found for value " .. val.kind .. ": " .. tostring(val))
 	end
 
 	local comparer = (concrete_comparers[val.kind] or {})[use.kind]
 	if not comparer then
-		return false, "no valid concerete comparer between value " .. val.kind .. " and usage " .. use.kind
+		return false,
+			"no valid concerete comparer between value " .. val.kind .. " and usage " .. use.kind .. ": " .. tostring(
+				val
+			) .. " compared against " .. tostring(use)
 	end
 
 	return comparer(val, use)
@@ -840,6 +847,68 @@ end
 function infer_tuple_type(subject_type, subject_value)
 	-- define how the type of each tuple element should be evaluated
 	return infer_tuple_type_unwrapped(subject_type, subject_value)
+end
+
+---@param decls_a value
+---@param make_prefix_a fun(i: integer): value
+---@param decls_b value
+---@param make_prefix_b fun(i: integer): value
+---@return value[]
+---@return value[]
+---@return value[]
+---@return integer
+function make_inner_context2(decls_a, make_prefix_a, decls_b, make_prefix_b)
+	local constructor_a, arg_a = decls_a:unwrap_enum_value()
+	local constructor_b, arg_b = decls_b:unwrap_enum_value()
+	if constructor_a == terms.DeclCons.empty and constructor_b == terms.DeclCons.empty then
+		return value_array(), value_array(), value_array(), 0
+	elseif constructor_a == terms.DeclCons.empty or constructor_b == terms.DeclCons.empty then
+		error("tuple decls lengths must be equal")
+	elseif constructor_a == terms.DeclCons.cons and constructor_b == terms.DeclCons.cons then
+		local details_a = arg_a:unwrap_tuple_value()
+		local details_b = arg_b:unwrap_tuple_value()
+		local tupletypes_a, tupletypes_b, tuplevals, n_elements =
+			make_inner_context2(details_a[1], make_prefix_a, details_b[1], make_prefix_b)
+		local f_a = details_a[2]
+		local f_b = details_b[2]
+		local element_type_a
+		local element_type_b
+		if #tupletypes_a == #tuplevals then
+			local prefix = value.tuple_value(tuplevals)
+			element_type_a = apply_value(f_a, prefix)
+			element_type_b = apply_value(f_b, prefix)
+			if element_type_a:is_singleton() then
+				local _, val = element_type_a:unwrap_singleton()
+				tuplevals:append(val)
+			elseif element_type_b:is_singleton() then
+				local _, val = element_type_b:unwrap_singleton()
+				tuplevals:append(val)
+			end
+		else
+			local prefix_a = make_prefix_a(n_elements)
+			local prefix_b = make_prefix_b(n_elements)
+			element_type_a = apply_value(f_a, prefix_a)
+			element_type_b = apply_value(f_b, prefix_b)
+		end
+		tupletypes_a:append(element_type_a)
+		tupletypes_b:append(element_type_b)
+		return tupletypes_a, tupletypes_b, tuplevals, n_elements + 1
+	else
+		error("infer: unknown tuple type data constructor")
+	end
+end
+
+---@param subject_type_a value
+---@param subject_type_b value
+---@param subject_value value
+---@return value[]
+---@return value[]
+---@return value[]
+---@return integer
+function infer_tuple_type_unwrapped2(subject_type_a, subject_type_b, subject_value)
+	local decls_a, make_prefix_a = make_tuple_prefix(subject_type_a, subject_value)
+	local decls_b, make_prefix_b = make_tuple_prefix(subject_type_b, subject_value)
+	return make_inner_context2(decls_a, make_prefix_a, decls_b, make_prefix_b)
 end
 
 ---@param typ value
