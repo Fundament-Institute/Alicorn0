@@ -485,7 +485,7 @@ add_comparer("value.pi", "value.pi", function(a, b)
 	local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
 	local a_res = apply_value(a_result_type, unique_placeholder)
 	local b_res = apply_value(b_result_type, unique_placeholder)
-	typechecker_state:queue_subtype(a_res, b_res, "pi function results")
+	typechecker_state:queue_constrain(a_res, FunctionRelation(UniverseOmegaRelation), b_res, "pi function results")
 	typechecker_state:queue_subtype(b_param_type, a_param_type, "pi function parameters")
 
 	return true
