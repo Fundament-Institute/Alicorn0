@@ -39,6 +39,59 @@ local U = require "./utils"
 local OMEGA = 10
 local typechecker_state
 local evaluate, infer, check, apply_value
+local name_array = gen.declare_array(gen.builtin_string)
+local typed = terms.typed_term
+
+---@param luafunc function
+---@param parameters Array -- example usage: name_array("#wrap-TODO1", "#wrap-TODO2")
+---@return value
+local function luatovalue(luafunc, parameters)
+	local len = parameters:len()
+	local new_body = typed_array()
+
+	for i = 1, len do
+		new_body:append(typed.bound_variable(i + 1))
+	end
+
+	return value.closure(
+		"#args",
+		typed.application(
+			typed.literal(value.prim(luafunc)),
+			typed.tuple_elim(parameters, typed.bound_variable(1), len, typed.prim_tuple_cons(new_body))
+		),
+		runtime_context()
+	)
+end
+
+---@param srel SubtypeRelation
+---@return SubtypeRelation
+local function FunctionRelation(srel)
+	return {
+		srel = srel,
+		Rel = luatovalue(function(a, b) end, name_array("a", "b")),
+		refl = luatovalue(function(a) end, name_array("a")),
+		antisym = luatovalue(function(a, b, r1, r2) end, name_array("a", "b", "r1", "r2")),
+		constrain = luatovalue(function(val, use)
+			local u = value.neutral(neutral_value.free(free.unique({})))
+
+			local applied_val = apply_value(val, u)
+			local applied_use = apply_value(use, u)
+
+			--  Call the constrain of our contained srel variable, which will throw an error if it fails
+			local tuple_params = value_array(value.prim(applied_val), value.prim(applied_use))
+			U.tag(
+				"apply_value",
+				{ applied_val, applied_use },
+				apply_value,
+				srel.constrain,
+				value.tuple_value(tuple_params)
+			)
+		end, name_array("val", "use")),
+	}
+end
+
+---@type SubtypeRelation
+local UniverseOmegaRelation
 
 ---@param onto Array
 ---@param with Array
@@ -1851,30 +1904,6 @@ function evaluate(typed_term, runtime_context)
 	error("unreachable!?")
 end
 
-local typed = terms.typed_term
-local name_array = gen.declare_array(gen.builtin_string)
-
----@param luafunc function
----@param parameters Array -- example usage: name_array("#wrap-TODO1", "#wrap-TODO2")
----@return value
-local function luatovalue(luafunc, parameters)
-	local len = parameters:len()
-	local new_body = typed_array()
-
-	for i = 1, len do
-		new_body:append(typed.bound_variable(i + 1))
-	end
-
-	return value.closure(
-		"#args",
-		typed.application(
-			typed.literal(value.prim(luafunc)),
-			typed.tuple_elim(parameters, typed.bound_variable(1), len, typed.prim_tuple_cons(new_body))
-		),
-		runtime_context()
-	)
-end
-
 ---@class SubtypeRelation
 ---@field Rel value -- : (a:T,b:T) -> Prop__
 ---@field refl value -- : (a:T) -> Rel(a,a)
@@ -1954,7 +1983,7 @@ local function trait_registry()
 	return setmetatable({ traits = {} }, trait_registry_mt)
 end
 ---@class TypeCheckerState
----@field pending [integer, integer, any][]
+---@field pending ReachabilityQueue
 ---@field graph Reachability
 ---@field values [value, TypeCheckerTag, TypecheckingContext][]
 ---@field valcheck { [value]: integer }
@@ -1965,6 +1994,10 @@ local TypeCheckerState = {}
 ---@class Reachability
 ---@field upsets OrderedSet[]
 ---@field downsets OrderedSet[]
+---@field leftcallupsets OrderedSet[]
+---@field leftcalldownsets OrderedSet[]
+---@field rightcallupsets OrderedSet[]
+---@field rightcalldownsets OrderedSet[]
 local Reachability = {}
 local reachability_mt
 
@@ -1975,6 +2008,8 @@ function Reachability:add_node()
 	local i = #self.upsets + 1 -- Account for lua tables starting at 1
 	U.append(self.upsets, ordered_set())
 	U.append(self.downsets, ordered_set())
+	U.append(self.callupsets, ordered_set())
+	U.append(self.calldownsets, ordered_set())
 	assert(#self.upsets == #self.downsets, "upsets must equal downsets!")
 	assert(
 		#self.upsets == i,
@@ -2005,14 +2040,30 @@ function Reachability:shadow()
 			assert(rawget(set, k) ~= nil, "failed to shadow set???")
 			return set[k]:insert(v)
 		end,
+		---@param set OrderedSet[]
+		---@param k integer
+		---@param v integer
+		---@param ... any
+		---@return boolean
+		setinsert_aux = function(set, k, v, ...)
+			if rawget(set, k) == nil then
+				set[k] = set[k]:shadow()
+			end
+			assert(rawget(set, k) ~= nil, "failed to shadow set???")
+			return set[k]:insert_aux(v, ...)
+		end,
 		downsets = U.shadowarray(self.downsets),
 		upsets = U.shadowarray(self.upsets),
+		calldownsets = U.shadowarray(self.calldownsets),
+		callupsets = U.shadowarray(self.callupsets),
 	}, reachability_mt)
 end
 
 function Reachability:commit()
 	U.commit(self.downsets)
 	U.commit(self.upsets)
+	U.commit(self.calldownsets)
+	U.commit(self.callupsets)
 end
 
 ---@param set OrderedSet[]
@@ -2023,42 +2074,160 @@ function Reachability.setinsert(set, k, v)
 	return set[k]:insert(v)
 end
 
----@alias ReachabilityQueue [integer, integer, SubtypeRelation, any][]
+---@param set OrderedSet[]
+---@param k integer
+---@param v integer
+---@param ... any
+---@return boolean
+function Reachability.setinsert_aux(set, k, v, ...)
+	return set[k]:insert_aux(v, ...)
+end
+
+---@class (exact) EdgeNotifConstrain
+---@field kind string
+---@field left integer
+---@field right integer
+---@field rel SubtypeRelation
+---@field cause any
+local EdgeNotif_Constrain = {}
+local EdgeNotif_Constrain_mt = { __index = EdgeNotif_Constrain }
+
+---@class (exact) EdgeNotifCallLeft
+---@field kind string
+---@field arg value
+---@field left integer
+---@field right integer
+---@field rel SubtypeRelation
+---@field cause any
+local EdgeNotif_CallLeft = {}
+local EdgeNotif_CallLeft_mt = { __index = EdgeNotif_CallLeft }
+
+---@class (exact) EdgeNotifCallRight
+---@field kind string
+---@field left integer
+---@field right integer
+---@field rel SubtypeRelation
+---@field arg value
+---@field cause any
+local EdgeNotif_CallRight = {}
+local EdgeNotif_CallRight_mt = { __index = EdgeNotif_CallRight }
+
+local EdgeNotif = {
+	---@param left integer
+	---@param rel SubtypeRelation
+	---@param right integer
+	---@param cause any
+	---@return EdgeNotifConstrain
+	Constrain = function(left, rel, right, cause)
+		return { kind = "constrain", left = left, rel = rel, right = right, cause = cause }
+	end,
+	---@param left integer
+	---@param argument value
+	---@param rel SubtypeRelation
+	---@param right integer
+	---@param cause any
+	---@return EdgeNotifCallLeft
+	CallLeft = function(left, argument, rel, right, cause)
+		return { kind = "call_left", left = left, arg = argument, rel = rel, right = right, cause = cause }
+	end,
+	---@param left integer
+	---@param rel SubtypeRelation
+	---@param right integer
+	---@param argument value
+	---@param cause any
+	---@return EdgeNotifCallRight
+	CallRight = function(left, rel, right, argument, cause)
+		return { kind = "call_right", left = left, rel = rel, right = right, arg = argument, cause = cause }
+	end,
+}
+
+---@alias EdgeNotif EdgeNotifConstrain | EdgeNotifCallRight | EdgeNotifCallLeft
+---@alias ReachabilityQueue [EdgeNotif]
+
+function Reachability:constrain_transitivity(left, right, queue, rel, cause)
+	for _, l2 in ipairs(self.upsets[left].array) do
+		if l2[1] ~= rel then
+			error("Relations do not match! " .. tostring(l2[1]) .. " is not " .. tostring(rel))
+		end
+		U.append(queue, EdgeNotif.Constrain(l2[0], rel, right, cause))
+	end
+	for _, r2 in ipairs(self.downsets[right].array) do
+		if r2[1] ~= rel then
+			error("Relations do not match! " .. tostring(r2[1]) .. " is not " .. tostring(rel))
+		end
+		U.append(queue, EdgeNotif.Constrain(left, rel, r2[0], cause))
+	end
+end
 
 ---@param left integer
 ---@param right integer
----@param queue ReachabilityQueue
 ---@param rel SubtypeRelation
----@param cause any
-function Reachability:add_edge(left, right, queue, rel, cause)
+---@return boolean
+function Reachability:add_constrain_edge(left, right, rel)
 	assert(type(left) == "number", "left isn't an integer!")
 	assert(type(right) == "number", "right isn't an integer!")
-	local work = { { left, right } }
 
-	while #work > 0 do
-		local l, r = table.unpack(U.pop(work))
+	assert(self.downsets[left], "Can't find " .. tostring(l))
+	if self.setinsert_aux(self.downsets, left, right, rel) then
+		assert(self.downsets[right], "Can't find " .. tostring(r))
+		self.setinsert_aux(self.upsets, right, left, rel)
 
-		assert(self.downsets[l], "Can't find " .. tostring(l))
-		if self.setinsert(self.downsets, l, r) then
-			assert(self.downsets[r], "Can't find " .. tostring(r))
-			self.upsets[r]:insert(l)
-			U.append(queue, { l, r, rel, cause })
-
-			for i, l2 in ipairs(self.upsets[l].array) do
-				U.append(work, { l2, r })
-			end
-			for i, r2 in ipairs(self.downsets[r].array) do
-				U.append(work, { l, r2 })
-			end
-		end
+		return true
 	end
+
+	return false
+end
+
+---@param left integer
+---@param arg value
+---@param rel SubtypeRelation
+---@param right integer
+---@return boolean
+function Reachability:add_call_left_edge(left, arg, rel, right)
+	assert(type(left) == "number", "left isn't an integer!")
+	assert(type(right) == "number", "right isn't an integer!")
+
+	assert(self.leftcalldownsets[left], "Can't find " .. tostring(l))
+	if self.setinsert_aux(self.leftcalldownsets, left, right, rel) then
+		assert(self.leftcalldownsets[right], "Can't find " .. tostring(r))
+		self.setinsert_aux(self.leftcallupsets, right, left, rel)
+
+		return true
+	end
+
+	return false
+end
+
+---@param left integer
+---@param rel SubtypeRelation
+---@param right integer
+---@param arg value
+---@return boolean
+function Reachability:add_call_right_edge(left, rel, right, arg)
+	assert(type(left) == "number", "left isn't an integer!")
+	assert(type(right) == "number", "right isn't an integer!")
+
+	assert(self.rightcalldownsets[left], "Can't find " .. tostring(l))
+	if self.setinsert_aux(self.rightcalldownsets, left, right, rel) then
+		assert(self.rightcalldownsets[right], "Can't find " .. tostring(r))
+		self.setinsert_aux(self.rightcallupsets, right, left, rel)
+
+		return true
+	end
+
+	return false
+end
+
+function Reachability:add_call_edge(left, right, queue, rel, cause)
+	assert(type(left) == "number", "left isn't an integer!")
+	assert(type(right) == "number", "right isn't an integer!")
 end
 
 reachability_mt = { __index = Reachability }
 
 ---@return Reachability
 local function reachability()
-	return setmetatable({ downsets = {}, upsets = {} }, reachability_mt)
+	return setmetatable({ downsets = {}, upsets = {}, calldownsets = {}, callupsets = {} }, reachability_mt)
 end
 
 ---@class TypeCheckerTag
@@ -2075,7 +2244,7 @@ function TypeCheckerState:queue_work(val, use, cause)
 	local r = self:check_value(use, TypeCheckerTag.USAGE, nil)
 	assert(type(l) == "number", "l isn't number, instead found " .. tostring(l))
 	assert(type(r) == "number", "r isn't number, instead found " .. tostring(r))
-	U.append(self.pending, { l, r, cause })
+	U.append(self.pending, EdgeNotif.Constrain(l, UniverseOmegaRelation, r, cause))
 end
 
 ---@param v value
@@ -2139,6 +2308,53 @@ function TypeCheckerState:flow(val, val_context, use, use_context, cause)
 	return self:constrain(val, val_context, use, use_context, UniverseOmegaRelation, cause)
 end
 
+---@param left integer
+---@param right integer
+---@param rel SubtypeRelation
+function TypeCheckerState:check_heads(left, right, rel)
+	local lvalue, ltag, lctx = table.unpack(self.values[left])
+	local rvalue, rtag, rctx = table.unpack(self.values[right])
+
+	if ltag == TypeCheckerTag.VALUE and rtag == TypeCheckerTag.USAGE then
+		-- Unpacking tuples hasn't been fixed in VSCode yet (despite the issue being closed???) so we have to override the types: https://github.com/LuaLS/lua-language-server/issues/1816
+		local tuple_params = value_array(value.prim(lvalue), value.prim(rvalue))
+		-- TODO: how do we pass in the type contexts???
+		U.tag("apply_value", { lvalue, rvalue }, apply_value, rel.constrain, value.tuple_value(tuple_params))
+		-- local ok, err = U.tag(
+		-- 	"check_concrete",
+		-- 	{ lvalue, rvalue },
+		-- 	check_concrete,
+		-- 	lvalue --[[@as value]],
+		-- 	rvalue --[[@as value]]
+		-- )
+		-- if not ok then
+		-- 	error(err)
+		-- end
+	end
+end
+
+---@param left integer
+---@param right integer
+---@param rel SubtypeRelation
+function TypeCheckerState:constrain_induce_call(left, right, rel)
+	---@type value, TypeCheckerTag, TypecheckingContext
+	local lvalue, ltag, lctx = table.unpack(self.values[left])
+	---@type value, TypeCheckerTag, TypecheckingContext
+	local rvalue, rtag, rctx = table.unpack(self.values[right])
+
+	if ltag == TypeCheckerTag.VAR and lvalue:is_neutral() and lvalue:unwrap_neutral():is_application_stuck() then
+		local f, arg = lvalue:unwrap_neutral():unwrap_application_stuck()
+		local l = self:check_value(value.neutral(f), TypeCheckerTag.VALUE, nil)
+		U.append(self.pending, EdgeNotif.CallLeft(l, arg, rel, right, "Inside constrain_induce_call ltag"))
+	end
+
+	if rtag == TypeCheckerTag.VAR and rvalue:is_neutral() and rvalue:unwrap_neutral():is_application_stuck() then
+		local f, arg = rvalue:unwrap_neutral():unwrap_application_stuck()
+		local r = self:check_value(value.neutral(f), TypeCheckerTag.USAGE, nil)
+		U.append(self.pending, EdgeNotif.CallRight(left, rel, r, arg, "Inside constrain_induce_call rtag"))
+	end
+end
+
 ---@param val value
 ---@param val_context TypecheckingContext
 ---@param use value
@@ -2154,39 +2370,32 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 	--self:queue_work(val, val_context, use, use_context, cause)
 	self:queue_work(val, use, cause)
 	---@type ReachabilityQueue
-	local queue = {}
 
 	while #self.pending > 0 do
-		local left, right, cause = table.unpack(U.pop(self.pending))
-		self.graph:add_edge(left, right, queue, rel, cause)
+		local item = U.pop(self.pending)
 
-		-- Check if adding that edge resulted in any new type pairs needing to be checked
-		while #queue > 0 do
-			---@type integer, integer, SubtypeRelation
-			local l, r, subrel = table.unpack(U.pop(queue))
-
-			local lvalue, ltag, lctx = table.unpack(self.values[l])
-			local rvalue, rtag, rctx = table.unpack(self.values[r])
-			if ltag == TypeCheckerTag.VALUE and rtag == TypeCheckerTag.USAGE then
-				-- Unpacking tuples hasn't been fixed in VSCode yet (despite the issue being closed???) so we have to override the types: https://github.com/LuaLS/lua-language-server/issues/1816
-				local tuple_params = value_array(value.prim(lvalue) --[[@as value]], value.prim(rvalue) --[[@as value]])
-				-- TODO: how do we pass in the type contexts???
-				U.tag("apply_value", { lvalue, rvalue }, apply_value, subrel.constrain, value.tuple_value(tuple_params))
-				-- local ok, err = U.tag(
-				-- 	"check_concrete",
-				-- 	{ lvalue, rvalue },
-				-- 	check_concrete,
-				-- 	lvalue --[[@as value]],
-				-- 	rvalue --[[@as value]]
-				-- )
-				-- if not ok then
-				-- 	error(err)
-				-- end
+		if item.kind == "constrain" then
+			local left, right, rel, cause = item.left, item.right, item.rel, item.cause
+			if self.graph:add_constrain_edge(left, right, rel) then
+				self.graph:constrain_transitivity(left, right, self.pending, rel, cause)
+				self:check_heads(left, right, rel)
+				self:constrain_induce_call(left, right, rel)
 			end
+		elseif item.kind == "call_left" then
+			local left, right, rel, arg, cause = item.left, item.right, item.rel, item.arg, item.cause
+
+			if self.graph:add_call_left_edge(left, arg, rel, right) then
+			end
+		elseif item.kind == "call_right" then
+			local left, right, rel, arg, cause = item.left, item.right, item.rel, item.arg, item.cause
+
+			if self.graph:add_call_right_edge(left, rel, right, arg) then
+			end
+		else
+			error("Unknown edge kind!")
 		end
 	end
 
-	assert(#queue == 0, "queue was not empty after constrain!")
 	assert(#self.pending == 0, "pending was not drained!")
 	return true
 end
