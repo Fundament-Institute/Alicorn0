@@ -173,7 +173,7 @@ end
 ---@class Enum: Type
 ---@field derive fun(self: Enum, deriver: Deriver, ...)
 
----@alias Variants { [1]: string, [2]: ParamsWithTypes }[]
+---@alias Variants [ string, ParamsWithTypes ][]
 
 ---@param self table
 ---@param name string

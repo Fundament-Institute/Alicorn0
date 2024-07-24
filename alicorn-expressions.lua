@@ -460,6 +460,7 @@ local function expression_pairhandler(args, a, b)
 	--local random = {}
 
 	--print("kind is " .. type_of_term.kind .. " " .. tostring(random))
+	--print("expression handler: " .. tostring(type_of_term))
 
 	-- if type_of_term:is_prim_function_type() then
 	-- 	print("A")
@@ -475,11 +476,15 @@ local function expression_pairhandler(args, a, b)
 			local pi = value.pi(
 				evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
 				value.param_info(value.visibility(terms.visibility.explicit)),
-				evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
+				value.closure(
+					"#spec-pi",
+					typed_term.literal(evaluator.typechecker_state:metavariable(env.typechecking_context):as_value()),
+					env.typechecking_context.runtime_context
+				),
 				value.result_info(terms.result_info(terms.purity.pure))
 			)
 
-			local ok, err = evaluator.typechecker_state:flow(
+			evaluator.typechecker_state:flow(
 				type_of_term,
 				env.typechecking_context,
 				pi,
@@ -487,10 +492,7 @@ local function expression_pairhandler(args, a, b)
 				"Speculating on pi type"
 			)
 
-			if ok then
-				return pi
-			end
-			error(err)
+			return pi
 		end)
 		if not ok then
 			error("speculate DID NOT work for pi!: " .. tostring(pi))
@@ -1059,7 +1061,11 @@ collect_tuple = metalanguage.reducer(
 		if goal:is_infer() then
 			return true, inferrable_term.tuple_cons(collected_terms), env
 		elseif goal:is_check() then
-			evaluator.typechecker_state:flow(
+			U.tag(
+				"flow",
+				{ value.tuple_type(decls), goal_type },
+				evaluator.typechecker_state.flow,
+				evaluator.typechecker_state,
 				value.tuple_type(decls),
 				env.typechecking_context,
 				goal_type,

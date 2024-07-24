@@ -181,7 +181,9 @@ function PrettyPrint:table(fields, ...)
 			if not hidden_fields[k] then
 				self:_prefix()
 				self[#self + 1] = k
+				self[#self + 1] = self:_color()
 				self[#self + 1] = " = "
+				self[#self + 1] = self:_resetcolor()
 				self:any(v, ...)
 				self[#self + 1] = ",\n"
 			end
@@ -230,7 +232,9 @@ function PrettyPrint:record(kind, fields, ...)
 			end
 			self:_prefix()
 			self[#self + 1] = k
+			self[#self + 1] = self:_color()
 			self[#self + 1] = " = "
+			self[#self + 1] = self:_resetcolor()
 			self:any(v, ...)
 			self[#self + 1] = ",\n"
 		end
