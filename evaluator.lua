@@ -1,5 +1,6 @@
 local terms = require "./terms"
 local metalanguage = require "./metalanguage"
+local U = require "./alicorn-utils"
 local runtime_context = terms.runtime_context
 --local new_typechecking_context = terms.typechecking_context
 --local checkable_term = terms.checkable_term
@@ -35,7 +36,6 @@ local result_info_pure = value.result_info(result_info(purity.pure))
 
 --local derivers = require "./derivers"
 --local traits = require "./traits"
-local U = require "./utils"
 local OMEGA = 10
 local typechecker_state
 local evaluate, infer, check, apply_value
@@ -2451,7 +2451,7 @@ end
 ---@param arg value
 ---@param rel SubtypeRelation
 ---@param right integer
-function TypeCheckerState:rightcall_constrain_compose_1(left, arg, rel, right)
+function TypeCheckerState:rightcall_constrain_compose_1(left, rel, right, arg)
 	local mvalue, mtag, mctx = table.unpack(self.values[right])
 	if mtag == TypeCheckerTag.VAR then
 		for _, r2 in ipairs(self.graph.downsets[right].array) do

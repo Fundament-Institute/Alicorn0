@@ -38,7 +38,7 @@ local infer = evaluator.infer
 --local typechecker_state = evaluator.typechecker_state
 
 local p = require "pretty-print".prettyPrint
-local U = require "./utils"
+local U = require "./alicorn-utils"
 
 local semantic_error_mt = {
 	__tostring = function(self)

@@ -1,6 +1,6 @@
 local trie = require "./lazy-prefix-tree"
 local fibbuf = require "./fibonacci-buffer"
-local U = require "./utils"
+local U = require "./alicorn-utils"
 
 local terms = require "./terms"
 local inferrable_term = terms.inferrable_term
