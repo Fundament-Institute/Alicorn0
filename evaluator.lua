@@ -89,6 +89,7 @@ local function FunctionRelation(srel)
 		end, name_array("val", "use")),
 	}
 end
+FunctionRelation = U.memoize(FunctionRelation)
 
 ---@type SubtypeRelation
 local UniverseOmegaRelation
@@ -2198,9 +2199,9 @@ function Reachability:add_call_left_edge(left, arg, rel, right)
 	assert(type(right) == "number", "right isn't an integer!")
 
 	assert(self.leftcalldownsets[left], "Can't find " .. tostring(left))
-	if self.setinsert_aux(self.leftcalldownsets, left, right, rel) then
+	if self.setinsert_aux(self.leftcalldownsets, left, right, arg, rel) then
 		assert(self.leftcalldownsets[right], "Can't find " .. tostring(right))
-		self.setinsert_aux(self.leftcallupsets, right, left, rel)
+		self.setinsert_aux(self.leftcallupsets, right, left, arg, rel)
 
 		return true
 	end
@@ -2218,9 +2219,9 @@ function Reachability:add_call_right_edge(left, rel, right, arg)
 	assert(type(right) == "number", "right isn't an integer!")
 
 	assert(self.rightcalldownsets[left], "Can't find " .. tostring(left))
-	if self.setinsert_aux(self.rightcalldownsets, left, right, rel) then
+	if self.setinsert_aux(self.rightcalldownsets, left, right, arg, rel) then
 		assert(self.rightcalldownsets[right], "Can't find " .. tostring(right))
-		self.setinsert_aux(self.rightcallupsets, right, left, rel)
+		self.setinsert_aux(self.rightcallupsets, right, left, arg, rel)
 
 		return true
 	end
@@ -2387,6 +2388,84 @@ function TypeCheckerState:constrain_induce_call(left, right, rel)
 	end
 end
 
+---check for compositions of a constrain edge and a left call edge in response to a new constrain edge
+---@param left integer
+---@param rel SubtypeRelation
+---@param right integer
+function TypeCheckerState:constrain_leftcall_compose_1(left, rel, right)
+	local mvalue, mtag, mctx = table.unpack(self.values[right])
+	if mtag == TypeCheckerTag.VAR then
+		for _, r2 in ipairs(self.graph.leftcalldownsets[right].array) do
+			if FunctionRelation(r2[3]) ~= rel then
+				error("Relations do not match! " .. tostring(FunctionRelation(r2[3])) .. " is not " .. tostring(rel))
+			end
+			U.append(
+				self.pending,
+				EdgeNotif.CallLeft(left, r2[2], r2[3], r2[1], "constrain leftcall composition induced by constrain")
+			)
+		end
+	end
+end
+
+---check for compositions of a constrain edge and a left call edge in response to a new left call edge
+---@param left integer
+---@param arg value
+---@param rel SubtypeRelation
+---@param right integer
+function TypeCheckerState:constrain_leftcall_compose_2(left, arg, rel, right)
+	local mvalue, mtag, mctx = table.unpack(self.values[left])
+	if mtag == TypeCheckerTag.VAR then
+		for _, l2 in ipairs(self.graph.upsets[left].array) do
+			if l2[2] ~= FunctionRelation(rel) then
+				error("Relations do not match! " .. tostring(l2[2]) .. " is not " .. tostring(FunctionRelation(rel)))
+			end
+			U.append(
+				self.pending,
+				EdgeNotif.CallLeft(left, arg, rel, l2[1], "constrain leftcall composition induced by leftcall")
+			)
+		end
+	end
+end
+
+---check for compositions of a right call edge and a constrain edge in response to a new constrain edge
+---@param left integer
+---@param rel SubtypeRelation
+---@param right integer
+function TypeCheckerState:rightcall_constrain_compose_2(left, rel, right)
+	local mvalue, mtag, mctx = table.unpack(self.values[left])
+	if mtag == TypeCheckerTag.VAR then
+		for _, l2 in ipairs(self.graph.rightcallupsets[left].array) do
+			if FunctionRelation(l2[3]) ~= rel then
+				error("Relations do not match! " .. tostring(FunctionRelation(l2[3])) .. " is not " .. tostring(rel))
+			end
+			U.append(
+				self.pending,
+				EdgeNotif.CallRight(left, l2[3], l2[1], l2[2], "rightcall constrain composition induced by constrain")
+			)
+		end
+	end
+end
+
+---check for compositions of a right call edge and a constrain edge in response to a new right call edge
+---@param left integer
+---@param arg value
+---@param rel SubtypeRelation
+---@param right integer
+function TypeCheckerState:rightcall_constrain_compose_1(left, arg, rel, right)
+	local mvalue, mtag, mctx = table.unpack(self.values[right])
+	if mtag == TypeCheckerTag.VAR then
+		for _, r2 in ipairs(self.graph.downsets[right].array) do
+			if r2[2] ~= FunctionRelation(rel) then
+				error("Relations do not match! " .. tostring(r2[2]) .. " is not " .. tostring(FunctionRelation(rel)))
+			end
+			U.append(
+				self.pending,
+				EdgeNotif.CallRight(left, rel, r2[1], arg, "constrain leftcall composition induced by leftcall")
+			)
+		end
+	end
+end
+
 ---@param val value
 ---@param val_context TypecheckingContext
 ---@param use value
@@ -2400,8 +2479,7 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 	assert(#self.pending == 0, "pending not empty at start of constrain!")
 	--TODO: add contexts to queue_work if appropriate
 	--self:queue_work(val, val_context, use, use_context, cause)
-	self:queue_subtype(val, use, cause)
-	---@type ReachabilityQueue
+	self:queue_constrain(val, rel, use, cause)
 
 	while #self.pending > 0 do
 		local item = U.pop(self.pending)
@@ -2412,16 +2490,20 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 				self.graph:constrain_transitivity(left, right, self.pending, rel, cause)
 				U.tag("check_heads", { left, right }, self.check_heads, self, left, right, rel)
 				self:constrain_induce_call(left, right, rel)
+				self:constrain_leftcall_compose_1(left, rel, right)
+				self:rightcall_constrain_compose_2(left, rel, right)
 			end
 		elseif item.kind == "call_left" then
 			local left, right, rel, arg, cause = item.left, item.right, item.rel, item.arg, item.cause
 
 			if self.graph:add_call_left_edge(left, arg, rel, right) then
+				self:constrain_leftcall_compose_2(left, arg, rel, right)
 			end
 		elseif item.kind == "call_right" then
 			local left, right, rel, arg, cause = item.left, item.right, item.rel, item.arg, item.cause
 
 			if self.graph:add_call_right_edge(left, rel, right, arg) then
+				self:rightcall_constrain_compose_1(left, rel, right, arg)
 			end
 		else
 			error("Unknown edge kind!")
