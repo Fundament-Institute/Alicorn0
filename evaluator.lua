@@ -452,9 +452,9 @@ local function tuple_compare(a, b)
 
 		if ta ~= tb then
 			if tb:is_neutral() then
-				typechecker_state:queue_work(ta, tb, "Nuetral value in tuple_compare")
+				typechecker_state:queue_subtype(ta, tb, "Nuetral value in tuple_compare")
 			else
-				typechecker_state:queue_work(ta, tb, "tuple_compare")
+				typechecker_state:queue_subtype(ta, tb, "tuple_compare")
 			end
 		end
 	end
@@ -485,8 +485,8 @@ add_comparer("value.pi", "value.pi", function(a, b)
 	local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
 	local a_res = apply_value(a_result_type, unique_placeholder)
 	local b_res = apply_value(b_result_type, unique_placeholder)
-	typechecker_state:queue_work(a_res, b_res, "pi function results")
-	typechecker_state:queue_work(b_param_type, a_param_type, "pi function parameters")
+	typechecker_state:queue_subtype(a_res, b_res, "pi function results")
+	typechecker_state:queue_subtype(b_param_type, a_param_type, "pi function parameters")
 
 	return true
 end)
@@ -501,8 +501,13 @@ add_comparer("value.prim_function_type", "value.prim_function_type", function(a,
 	local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
 	local a_res = apply_value(a_result_type, unique_placeholder)
 	local b_res = apply_value(b_result_type, unique_placeholder)
-	typechecker_state:queue_work(a_res, b_res, "prim function results")
-	typechecker_state:queue_work(b_param_type, a_param_type, "prim function parameters")
+	typechecker_state:queue_subtype(a_res, b_res, "prim function results")
+	typechecker_state:queue_constrain(
+		b_param_type,
+		FunctionRelation(UniverseOmegaRelation),
+		a_param_type,
+		"prim function parameters"
+	)
 	return true
 end)
 
@@ -526,14 +531,15 @@ end)
 
 add_comparer("value.prim_wrapped_type", "value.prim_wrapped_type", function(a, b)
 	local ua, ub = a:unwrap_prim_wrapped_type(), b:unwrap_prim_wrapped_type()
-	U.tag("check_concrete", { ua, ub }, check_concrete, ua, ub)
+	typechecker_state:queue_subtype(ua, ub)
+	--U.tag("check_concrete", { ua, ub }, check_concrete, ua, ub)
 	return true
 end)
 
 add_comparer("value.singleton", "value.singleton", function(a, b)
 	local a_supertype, a_value = a:unwrap_singleton()
 	local b_supertype, b_value = b:unwrap_singleton()
-	typechecker_state:queue_work(a_supertype, b_supertype, "singleton")
+	typechecker_state:queue_subtype(a_supertype, b_supertype, "singleton")
 
 	if a_value == b_value then
 		return true
@@ -559,7 +565,7 @@ function check_concrete(val, use)
 
 	if val:is_singleton() and not use:is_singleton() then
 		local val_supertype, _ = val:unwrap_singleton()
-		typechecker_state:queue_work(val_supertype, use, "singleton subtype")
+		typechecker_state:queue_subtype(val_supertype, use, "singleton subtype")
 		return true
 	end
 
@@ -2008,8 +2014,10 @@ function Reachability:add_node()
 	local i = #self.upsets + 1 -- Account for lua tables starting at 1
 	U.append(self.upsets, ordered_set())
 	U.append(self.downsets, ordered_set())
-	U.append(self.callupsets, ordered_set())
-	U.append(self.calldownsets, ordered_set())
+	U.append(self.leftcallupsets, ordered_set())
+	U.append(self.leftcalldownsets, ordered_set())
+	U.append(self.rightcallupsets, ordered_set())
+	U.append(self.rightcalldownsets, ordered_set())
 	assert(#self.upsets == #self.downsets, "upsets must equal downsets!")
 	assert(
 		#self.upsets == i,
@@ -2054,16 +2062,20 @@ function Reachability:shadow()
 		end,
 		downsets = U.shadowarray(self.downsets),
 		upsets = U.shadowarray(self.upsets),
-		calldownsets = U.shadowarray(self.calldownsets),
-		callupsets = U.shadowarray(self.callupsets),
+		leftcalldownsets = U.shadowarray(self.leftcalldownsets),
+		leftcallupsets = U.shadowarray(self.leftcallupsets),
+		rightcalldownsets = U.shadowarray(self.rightcalldownsets),
+		rightcallupsets = U.shadowarray(self.rightcallupsets),
 	}, reachability_mt)
 end
 
 function Reachability:commit()
 	U.commit(self.downsets)
 	U.commit(self.upsets)
-	U.commit(self.calldownsets)
-	U.commit(self.callupsets)
+	U.commit(self.leftcalldownsets)
+	U.commit(self.leftcallupsets)
+	U.commit(self.rightcalldownsets)
+	U.commit(self.rightcallupsets)
 end
 
 ---@param set OrderedSet[]
@@ -2146,16 +2158,16 @@ local EdgeNotif = {
 
 function Reachability:constrain_transitivity(left, right, queue, rel, cause)
 	for _, l2 in ipairs(self.upsets[left].array) do
-		if l2[1] ~= rel then
-			error("Relations do not match! " .. tostring(l2[1]) .. " is not " .. tostring(rel))
+		if l2[2] ~= rel then
+			error("Relations do not match! " .. tostring(l2[2]) .. " is not " .. tostring(rel))
 		end
-		U.append(queue, EdgeNotif.Constrain(l2[0], rel, right, cause))
+		U.append(queue, EdgeNotif.Constrain(l2[1], rel, right, cause))
 	end
 	for _, r2 in ipairs(self.downsets[right].array) do
-		if r2[1] ~= rel then
-			error("Relations do not match! " .. tostring(r2[1]) .. " is not " .. tostring(rel))
+		if r2[2] ~= rel then
+			error("Relations do not match! " .. tostring(r2[2]) .. " is not " .. tostring(rel))
 		end
-		U.append(queue, EdgeNotif.Constrain(left, rel, r2[0], cause))
+		U.append(queue, EdgeNotif.Constrain(left, rel, r2[1], cause))
 	end
 end
 
@@ -2227,7 +2239,14 @@ reachability_mt = { __index = Reachability }
 
 ---@return Reachability
 local function reachability()
-	return setmetatable({ downsets = {}, upsets = {}, calldownsets = {}, callupsets = {} }, reachability_mt)
+	return setmetatable({
+		downsets = {},
+		upsets = {},
+		leftcalldownsets = {},
+		leftcallupsets = {},
+		rightcalldownsets = {},
+		rightcallupsets = {},
+	}, reachability_mt)
 end
 
 ---@class TypeCheckerTag
@@ -2239,12 +2258,24 @@ local TypeCheckerTag = {
 ---@param val value
 ---@param use value
 ---@param cause any
-function TypeCheckerState:queue_work(val, use, cause)
+function TypeCheckerState:queue_subtype(val, use, cause)
 	local l = self:check_value(val, TypeCheckerTag.VALUE, nil)
 	local r = self:check_value(use, TypeCheckerTag.USAGE, nil)
 	assert(type(l) == "number", "l isn't number, instead found " .. tostring(l))
 	assert(type(r) == "number", "r isn't number, instead found " .. tostring(r))
 	U.append(self.pending, EdgeNotif.Constrain(l, UniverseOmegaRelation, r, cause))
+end
+
+---@param val value
+---@param rel SubtypeRelation
+---@param use value
+---@param cause any
+function TypeCheckerState:queue_constrain(val, rel, use, cause)
+	local l = self:check_value(val, TypeCheckerTag.VALUE, nil)
+	local r = self:check_value(use, TypeCheckerTag.USAGE, nil)
+	assert(type(l) == "number", "l isn't number, instead found " .. tostring(l))
+	assert(type(r) == "number", "r isn't number, instead found " .. tostring(r))
+	U.append(self.pending, EdgeNotif.Constrain(l, rel, r, cause))
 end
 
 ---@param v value
@@ -2368,7 +2399,7 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 	assert(#self.pending == 0, "pending not empty at start of constrain!")
 	--TODO: add contexts to queue_work if appropriate
 	--self:queue_work(val, val_context, use, use_context, cause)
-	self:queue_work(val, use, cause)
+	self:queue_subtype(val, use, cause)
 	---@type ReachabilityQueue
 
 	while #self.pending > 0 do
