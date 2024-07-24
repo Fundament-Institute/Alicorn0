@@ -206,7 +206,7 @@ end
 
 --local pdump = require "pretty-print".dump
 local pdump = require("./pretty-printer").s
-local tag = (require "./utils").tag
+local tag = (require "./alicorn-utils").tag
 
 ---@param err table | string
 ---@return table | string

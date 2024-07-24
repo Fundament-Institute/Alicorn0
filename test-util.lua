@@ -1,4 +1,4 @@
-local U = require "./utils"
+local U = require "./alicorn-utils"
 
 local blah = {}
 U.append(blah, "not 1")
