@@ -1019,6 +1019,9 @@ function infer(
 		local body_type, body_usages, body_term = infer(body, inner_context)
 
 		local result_type = substitute_type_variables(body_type, #inner_context, param_name, typechecking_context)
+		--print("INFER ANNOTATED LAMBDA")
+		--print("result_type")
+		--print(result_type:pretty_print(typechecking_context))
 		local body_usages_param = body_usages[#body_usages]
 		local lambda_usages = body_usages:copy(1, #body_usages - 1)
 		local lambda_type =
@@ -1986,7 +1989,7 @@ end
 ---@class TypeCheckerState
 ---@field pending ReachabilityQueue
 ---@field graph Reachability
----@field values [value, TypeCheckerTag, TypecheckingContext][]
+---@field values [value, TypeCheckerTag, TypecheckingContext|nil][]
 ---@field valcheck { [value]: integer }
 ---@field usecheck { [value]: integer }
 ---@field trait_registry TraitRegistry
@@ -2174,9 +2177,9 @@ function Reachability:add_constrain_edge(left, right, rel)
 	assert(type(left) == "number", "left isn't an integer!")
 	assert(type(right) == "number", "right isn't an integer!")
 
-	assert(self.downsets[left], "Can't find " .. tostring(l))
+	assert(self.downsets[left], "Can't find " .. tostring(left))
 	if self.setinsert_aux(self.downsets, left, right, rel) then
-		assert(self.downsets[right], "Can't find " .. tostring(r))
+		assert(self.downsets[right], "Can't find " .. tostring(right))
 		self.setinsert_aux(self.upsets, right, left, rel)
 
 		return true
@@ -2194,9 +2197,9 @@ function Reachability:add_call_left_edge(left, arg, rel, right)
 	assert(type(left) == "number", "left isn't an integer!")
 	assert(type(right) == "number", "right isn't an integer!")
 
-	assert(self.leftcalldownsets[left], "Can't find " .. tostring(l))
+	assert(self.leftcalldownsets[left], "Can't find " .. tostring(left))
 	if self.setinsert_aux(self.leftcalldownsets, left, right, rel) then
-		assert(self.leftcalldownsets[right], "Can't find " .. tostring(r))
+		assert(self.leftcalldownsets[right], "Can't find " .. tostring(right))
 		self.setinsert_aux(self.leftcallupsets, right, left, rel)
 
 		return true
@@ -2214,9 +2217,9 @@ function Reachability:add_call_right_edge(left, rel, right, arg)
 	assert(type(left) == "number", "left isn't an integer!")
 	assert(type(right) == "number", "right isn't an integer!")
 
-	assert(self.rightcalldownsets[left], "Can't find " .. tostring(l))
+	assert(self.rightcalldownsets[left], "Can't find " .. tostring(left))
 	if self.setinsert_aux(self.rightcalldownsets, left, right, rel) then
-		assert(self.rightcalldownsets[right], "Can't find " .. tostring(r))
+		assert(self.rightcalldownsets[right], "Can't find " .. tostring(right))
 		self.setinsert_aux(self.rightcallupsets, right, left, rel)
 
 		return true
@@ -2254,8 +2257,8 @@ local TypeCheckerTag = {
 ---@param use value
 ---@param cause any
 function TypeCheckerState:queue_subtype(val, use, cause)
-	local l = self:check_value(val, TypeCheckerTag.VALUE, nil)
-	local r = self:check_value(use, TypeCheckerTag.USAGE, nil)
+	local l = U.tag("check_value", { val, use }, self.check_value, self, val, TypeCheckerTag.VALUE, nil)
+	local r = U.tag("check_value", { val, use }, self.check_value, self, use, TypeCheckerTag.USAGE, nil)
 	assert(type(l) == "number", "l isn't number, instead found " .. tostring(l))
 	assert(type(r) == "number", "r isn't number, instead found " .. tostring(r))
 	U.append(self.pending, EdgeNotif.Constrain(l, UniverseOmegaRelation, r, cause))
@@ -2266,8 +2269,8 @@ end
 ---@param use value
 ---@param cause any
 function TypeCheckerState:queue_constrain(val, rel, use, cause)
-	local l = self:check_value(val, TypeCheckerTag.VALUE, nil)
-	local r = self:check_value(use, TypeCheckerTag.USAGE, nil)
+	local l = U.tag("check_value", { val, use }, self.check_value, self, val, TypeCheckerTag.VALUE, nil)
+	local r = U.tag("check_value", { val, use }, self.check_value, self, use, TypeCheckerTag.USAGE, nil)
 	assert(type(l) == "number", "l isn't number, instead found " .. tostring(l))
 	assert(type(r) == "number", "r isn't number, instead found " .. tostring(r))
 	U.append(self.pending, EdgeNotif.Constrain(l, rel, r, cause))
@@ -2275,13 +2278,16 @@ end
 
 ---@param v value
 ---@param tag TypeCheckerTag
----@param context TypecheckingContext
+---@param context TypecheckingContext|nil
 ---@return integer
 function TypeCheckerState:check_value(v, tag, context)
 	assert(v, "nil passed into check_value!")
 
 	if v:is_neutral() and v:unwrap_neutral():is_free() and v:unwrap_neutral():unwrap_free():is_metavariable() then
 		local mv = v:unwrap_neutral():unwrap_free():unwrap_metavariable()
+		if mv.value == 339 or mv.usage == 339 then
+			--error("339!!!!!")
+		end
 		if tag == TypeCheckerTag.VALUE then
 			assert(mv.value ~= nil)
 			return mv.value
@@ -2404,7 +2410,7 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 			local left, right, rel, cause = item.left, item.right, item.rel, item.cause
 			if self.graph:add_constrain_edge(left, right, rel) then
 				self.graph:constrain_transitivity(left, right, self.pending, rel, cause)
-				self:check_heads(left, right, rel)
+				U.tag("check_heads", { left, right }, self.check_heads, self, left, right, rel)
 				self:constrain_induce_call(left, right, rel)
 			end
 		elseif item.kind == "call_left" then
