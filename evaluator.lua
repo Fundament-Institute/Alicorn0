@@ -501,13 +501,8 @@ add_comparer("value.prim_function_type", "value.prim_function_type", function(a,
 	local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
 	local a_res = apply_value(a_result_type, unique_placeholder)
 	local b_res = apply_value(b_result_type, unique_placeholder)
-	typechecker_state:queue_subtype(a_res, b_res, "prim function results")
-	typechecker_state:queue_constrain(
-		b_param_type,
-		FunctionRelation(UniverseOmegaRelation),
-		a_param_type,
-		"prim function parameters"
-	)
+	typechecker_state:queue_subtype(a_param_type, b_param_type, "prim function results")
+	typechecker_state:queue_constrain(b_res, FunctionRelation(UniverseOmegaRelation), a_res, "prim function parameters")
 	return true
 end)
 
