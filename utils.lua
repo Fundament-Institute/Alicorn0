@@ -210,4 +210,32 @@ function M.dumptable(t, spaces)
 	return s
 end
 
+local memo_mt = { __mode = "k" }
+local memo_end_tag = {}
+
+---cache a function's outputs to ensure purity with respect to identity
+---@param fn function
+---@return function
+function M.memoize(fn)
+	local memotab = setmetatable({}, memo_mt)
+	local function wrapfn(...)
+		local args = { ... }
+		local nargs = select("#", ...)
+		local thismemo = memotab
+		for i = 1, nargs do
+			local nextmemo = thismemo[args[i]]
+			if not nextmemo then
+				nextmemo = setmetatable({}, memo_mt)
+				thismemo[args[i]] = nextmemo
+			end
+			thismemo = nextmemo
+		end
+		if not thismemo[memo_end_tag] then
+			thismemo[memo_end_tag] = fn(...)
+		end
+		return thismemo[memo_end_tag]
+	end
+	return wrapfn
+end
+
 return M
