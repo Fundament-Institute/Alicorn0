@@ -1017,7 +1017,7 @@ collect_tuple = metalanguage.reducer(
 		elseif goal:is_check() then
 			U.tag(
 				"flow",
-				{ value.tuple_type(decls), goal_type },
+				{ val = value.tuple_type(decls), use = goal_type },
 				evaluator.typechecker_state.flow,
 				evaluator.typechecker_state,
 				value.tuple_type(decls),

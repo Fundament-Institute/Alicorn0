@@ -80,7 +80,7 @@ local function ensure_context(context)
 	else
 		print("!!!!!!!!!! MISSING PRETTYPRINTER CONTEXT !!!!!!!!!!!!!!")
 		print("making something up")
-		return PrettyprintingContext.new()
+		return PrettyprintingContext.new():append("#made-up")
 	end
 end
 

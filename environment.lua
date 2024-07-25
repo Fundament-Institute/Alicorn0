@@ -121,7 +121,7 @@ function environment:bind_local(binding)
 		-- evaluating the subject is necessary for inferring the type of the body
 		local subject_value = U.tag(
 			"evaluate",
-			subject_term,
+			{ subject_term = subject_term },
 			eval.evaluate,
 			subject_term,
 			self.typechecking_context:get_runtime_context()
