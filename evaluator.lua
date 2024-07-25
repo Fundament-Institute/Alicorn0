@@ -1917,7 +1917,7 @@ end
 local SubtypeRelation = {}
 
 ---@type SubtypeRelation
-local UniverseOmegaRelation = {
+UniverseOmegaRelation = {
 	Rel = luatovalue(function(a, b) end, name_array("a", "b")),
 	refl = luatovalue(function(a) end, name_array("a")),
 	antisym = luatovalue(function(a, b, r1, r2) end, name_array("a", "b", "r1", "r2")),
@@ -1969,6 +1969,48 @@ local function ordered_set()
 	return setmetatable({ set = {}, array = {} }, ordered_set_mt)
 end
 
+local function IndexedCollection(indices)
+	local collection = {}
+	local index_store = {}
+	local res = {}
+	function res:all()
+		return collection
+	end
+	for k, v in pairs(indices) do
+		index_store[k] = {}
+		res[k] = function(self, ...)
+			local args = { ... }
+			local store = index_store[k]
+			for i = 1, #indices[k] do
+				if store[args[i]] then
+					store = store[args[i]]
+				else
+					store[args[i]] = {}
+					store = store[args[i]]
+				end
+			end
+			return store
+		end
+	end
+	function res:add(obj)
+		U.append(collection, obj)
+		for name, extractors in pairs(indices) do
+			local store = index_store[name]
+			for i, kx in ipairs(extractors) do
+				local key = kx(obj)
+				if store[key] then
+					store = store[key]
+				else
+					store[key] = {}
+					store = store[key]
+				end
+			end
+		end
+	end
+
+	return res
+end
+
 ---@class TraitRegistry
 ---@field traits { [string]: Trait }
 local TraitRegistry = {}
@@ -1996,20 +2038,65 @@ end
 ---@field trait_registry TraitRegistry
 local TypeCheckerState = {}
 
+---@class ConstrainEdge
+---@field left integer
+---@field rel SubtypeRelation
+---@field shallowest_block integer
+---@field right integer
+
+---@class LeftCallEdge
+---@field left integer
+---@field arg value
+---@field rel SubtypeRelation
+---@field shallowest_block integer
+---@field right integer
+
+---@class RightCallEdge
+---@field left integer
+---@field rel SubtypeRelation
+---@field shallowest_block integer
+---@field right integer
+---@field arg value
+
+-- I wish I had generics in LuaCATS
+
+---@class ConstrainCollection
+---@field add fun(self: ConstrainCollection,edge: ConstrainEdge)
+---@field all fun(self: ConstrainCollection): ConstrainEdge[]
+---@field from fun(self: ConstrainCollection,left: integer): ConstrainEdge[]
+---@field to fun(self: ConstrainCollection,right: integer): ConstrainEdge[]
+---@field between fun(self: ConstrainCollection,left: integer, right: integer): ConstrainEdge[]
+
+---@class LeftCallCollection
+---@field add fun(self: LeftCallCollection,edge: LeftCallEdge)
+---@field all fun(self: LeftCallCollection): LeftCallEdge[]
+---@field from fun(self: LeftCallCollection,left: integer): LeftCallEdge[]
+---@field to fun(self: LeftCallCollection,right: integer): LeftCallEdge[]
+---@field between fun(self: LeftCallCollection,left: integer, right: integer): LeftCallEdge[]
+
+---@class RightCallCollection
+---@field add fun(self: RightCallCollection,edge: RightCallEdge)
+---@field all fun(self: RightCallCollection): RightCallEdge[]
+---@field from fun(self: RightCallCollection,left: integer): RightCallEdge[]
+---@field to fun(self: RightCallCollection,right: integer): RightCallEdge[]
+---@field between fun(self: RightCallCollection,left: integer, right: integer): RightCallEdge[]
+
 ---@class Reachability
----@field upsets OrderedSet[]
----@field downsets OrderedSet[]
----@field leftcallupsets OrderedSet[]
----@field leftcalldownsets OrderedSet[]
----@field rightcallupsets OrderedSet[]
----@field rightcalldownsets OrderedSet[]
+-- -@field upsets OrderedSet[]
+-- -@field downsets OrderedSet[]
+-- -@field leftcallupsets OrderedSet[]
+-- -@field leftcalldownsets OrderedSet[]
+-- -@field rightcallupsets OrderedSet[]
+-- -@field rightcalldownsets OrderedSet[]
+---@field constrain_edges ConstrainCollection
+---@field leftcall_edges LeftCallCollection
+---@field rightcall_edges RightCallCollection
+---@field nodecount integer
 local Reachability = {}
 local reachability_mt
 
 ---@return integer
 function Reachability:add_node()
-	local prevupsets = U.dumptable(self.upsets)
-
 	local i = #self.upsets + 1 -- Account for lua tables starting at 1
 	U.append(self.upsets, ordered_set())
 	U.append(self.downsets, ordered_set())
@@ -2035,6 +2122,7 @@ end
 ---This shadowing works a bit differently because it overrides setinsert to be shadow-aware
 ---@return Reachability
 function Reachability:shadow()
+	error "reached an NYI shadow"
 	return setmetatable({
 		---@param set OrderedSet[]
 		---@param k integer
@@ -2077,13 +2165,15 @@ function Reachability:commit()
 	U.commit(self.rightcallupsets)
 end
 
+--[[
 ---@param set OrderedSet[]
 ---@param k integer
----@param v integer
+---@param v any
 ---@return boolean
 function Reachability.setinsert(set, k, v)
 	return set[k]:insert(v)
 end
+
 
 ---@param set OrderedSet[]
 ---@param k integer
@@ -2094,6 +2184,52 @@ function Reachability.setinsert_aux(set, k, v, ...)
 	return set[k]:insert_aux(v, ...)
 end
 
+---find all constrain edges leading into a node
+---@param node integer
+---@return ConstrainEdge[]
+function Reachability:find_constrain_to(node)
+	local res = {}
+	for _, value in ipairs(t) do
+		
+	end
+	return self.upsets[node].array
+end
+
+---find all constrain edges leading out of a node
+---@param node integer
+---@return ConstrainEdge[]
+function Reachability:find_constrain_from(node)
+	return self.downsets[node].array
+end
+
+---find all left call edges leading into a node
+---@param node integer
+---@return LeftCallEdge
+function Reachability:find_leftcall_to(node)
+	return self.leftcallupsets[node].array
+end
+
+---find all left edges leading out of a node
+---@param node integer
+---@return LeftCallEdge[]
+function Reachability:find_leftcall_from(node)
+	return self.leftcalldownsets[node].array
+end
+
+---find all right call edges leading into a node
+---@param node integer
+---@return RightCallEdge
+function Reachability:find_rightcall_to(node)
+	return self.rightcallupsets[node].array
+end
+
+---find all left edges leading out of a node
+---@param node integer
+---@return RightCallEdge[]
+function Reachability:find_rightcall_from(node)
+	return self.rightcalldownsets[node].array
+end
+--]]
 ---@class (exact) EdgeNotifConstrain
 ---@field kind string
 ---@field left integer
@@ -2127,111 +2263,179 @@ local EdgeNotif = {
 	---@param left integer
 	---@param rel SubtypeRelation
 	---@param right integer
+	---@param shallowest_block integer
 	---@param cause any
 	---@return EdgeNotifConstrain
-	Constrain = function(left, rel, right, cause)
-		return { kind = "constrain", left = left, rel = rel, right = right, cause = cause }
+	Constrain = function(left, rel, right, shallowest_block, cause)
+		return {
+			kind = "constrain",
+			left = left,
+			rel = rel,
+			right = right,
+			shallowest_block = shallowest_block,
+			cause = cause,
+		}
 	end,
 	---@param left integer
 	---@param argument value
 	---@param rel SubtypeRelation
 	---@param right integer
+	---@param shallowest_block integer
 	---@param cause any
 	---@return EdgeNotifCallLeft
-	CallLeft = function(left, argument, rel, right, cause)
-		return { kind = "call_left", left = left, arg = argument, rel = rel, right = right, cause = cause }
+	CallLeft = function(left, argument, rel, right, shallowest_block, cause)
+		return {
+			kind = "call_left",
+			left = left,
+			arg = argument,
+			rel = rel,
+			right = right,
+			shallowest_block = shallowest_block,
+			cause = cause,
+		}
 	end,
 	---@param left integer
 	---@param rel SubtypeRelation
 	---@param right integer
 	---@param argument value
+	---@param shallowest_block integer
 	---@param cause any
 	---@return EdgeNotifCallRight
-	CallRight = function(left, rel, right, argument, cause)
-		return { kind = "call_right", left = left, rel = rel, right = right, arg = argument, cause = cause }
+	CallRight = function(left, rel, right, argument, shallowest_block, cause)
+		return {
+			kind = "call_right",
+			left = left,
+			rel = rel,
+			right = right,
+			arg = argument,
+			shallowest_block = shallowest_block,
+			cause = cause,
+		}
 	end,
 }
 
 ---@alias EdgeNotif EdgeNotifConstrain | EdgeNotifCallRight | EdgeNotifCallLeft
----@alias ReachabilityQueue [EdgeNotif]
+---@alias ReachabilityQueue EdgeNotif[]
 
-function Reachability:constrain_transitivity(left, right, queue, rel, cause)
-	for _, l2 in ipairs(self.upsets[left].array) do
-		if l2[2] ~= rel then
-			error("Relations do not match! " .. tostring(l2[2]) .. " is not " .. tostring(rel))
+---check for combinations of constrain edges that induce new constraints in response to a constrain edges
+---@param edge ConstrainEdge
+---@param queue ReachabilityQueue
+---@param cause any
+function Reachability:constrain_transitivity(edge, queue, cause)
+	for _, l2 in ipairs(self.constrain_edges:to(edge.left)) do
+		---@cast l2 ConstrainEdge
+		if l2.rel ~= edge.rel then
+			error("Relations do not match! " .. tostring(l2.rel) .. " is not " .. tostring(edge.rel))
 		end
-		U.append(queue, EdgeNotif.Constrain(l2[1], rel, right, cause))
+		U.append(
+			queue,
+			EdgeNotif.Constrain(
+				l2.left,
+				edge.rel,
+				edge.right,
+				math.min(edge.shallowest_block, l2.shallowest_block),
+				cause
+			)
+		)
 	end
-	for _, r2 in ipairs(self.downsets[right].array) do
-		if r2[2] ~= rel then
-			error("Relations do not match! " .. tostring(r2[2]) .. " is not " .. tostring(rel))
+	for _, r2 in ipairs(self.constrain_edges:from(edge.right)) do
+		---@cast r2 ConstrainEdge
+		if r2.rel ~= edge.rel then
+			error("Relations do not match! " .. tostring(r2.rel) .. " is not " .. tostring(edge.rel))
 		end
-		U.append(queue, EdgeNotif.Constrain(left, rel, r2[1], cause))
+		U.append(
+			queue,
+			EdgeNotif.Constrain(
+				edge.left,
+				edge.rel,
+				r2.right,
+				math.min(edge.shallowest_block, r2.shallowest_block),
+				cause
+			)
+		)
 	end
 end
 
 ---@param left integer
 ---@param right integer
 ---@param rel SubtypeRelation
+---@param shallowest_block integer
 ---@return boolean
-function Reachability:add_constrain_edge(left, right, rel)
+function Reachability:add_constrain_edge(left, right, rel, shallowest_block)
 	assert(type(left) == "number", "left isn't an integer!")
 	assert(type(right) == "number", "right isn't an integer!")
 
-	assert(self.downsets[left], "Can't find " .. tostring(left))
-	if self.setinsert_aux(self.downsets, left, right, rel) then
-		assert(self.downsets[right], "Can't find " .. tostring(right))
-		self.setinsert_aux(self.upsets, right, left, rel)
-
-		return true
+	for _, edge in ipairs(self.constrain_edges:between(left, right)) do
+		if edge.rel ~= rel then
+			error "edges are not unique and have mismatched constraints"
+			--TODO: maybe allow between concrete heads
+		end
+		return false
 	end
 
-	return false
+	---@type ConstrainEdge
+	local edge = { left = left, right = right, rel = rel, shallowest_block = shallowest_block }
+
+	self.constrain_edges:add(edge)
+
+	return true
 end
 
 ---@param left integer
 ---@param arg value
 ---@param rel SubtypeRelation
 ---@param right integer
+---@param shallowest_block integer
 ---@return boolean
-function Reachability:add_call_left_edge(left, arg, rel, right)
+function Reachability:add_call_left_edge(left, arg, rel, right, shallowest_block)
 	assert(type(left) == "number", "left isn't an integer!")
 	assert(type(right) == "number", "right isn't an integer!")
 
-	assert(self.leftcalldownsets[left], "Can't find " .. tostring(left))
-	if self.setinsert_aux(self.leftcalldownsets, left, right, arg, rel) then
-		assert(self.leftcalldownsets[right], "Can't find " .. tostring(right))
-		self.setinsert_aux(self.leftcallupsets, right, left, arg, rel)
-
-		return true
+	for _, edge in ipairs(self.leftcall_edges:between(left, right)) do
+		if rel == edge.rel and arg == edge.arg then
+			return false
+		end
 	end
+	---@type LeftCallEdge
+	local edge = {
+		left = left,
+		arg = arg,
+		rel = rel,
+		right = right,
+		shallowest_block = shallowest_block,
+	}
 
-	return false
+	self.leftcall_edges:add(edge)
+
+	return true
 end
 
 ---@param left integer
 ---@param rel SubtypeRelation
 ---@param right integer
 ---@param arg value
+---@param shallowest_block integer
 ---@return boolean
-function Reachability:add_call_right_edge(left, rel, right, arg)
+function Reachability:add_call_right_edge(left, rel, right, arg, shallowest_block)
 	assert(type(left) == "number", "left isn't an integer!")
 	assert(type(right) == "number", "right isn't an integer!")
 
-	assert(self.rightcalldownsets[left], "Can't find " .. tostring(left))
-	if self.setinsert_aux(self.rightcalldownsets, left, right, arg, rel) then
-		assert(self.rightcalldownsets[right], "Can't find " .. tostring(right))
-		self.setinsert_aux(self.rightcallupsets, right, left, arg, rel)
-
-		return true
+	for _, edge in ipairs(self.rightcall_edges:between(left, right)) do
+		if rel == edge.rel and arg == edge.arg then
+			return false
+		end
 	end
+	---@type RightCallEdge
+	local edge = {
+		left = left,
+		arg = arg,
+		rel = rel,
+		right = right,
+		shallowest_block = shallowest_block,
+	}
 
-	return false
-end
-
-function Reachability:add_call_edge(left, right, queue, rel, cause)
-	assert(type(left) == "number", "left isn't an integer!")
-	assert(type(right) == "number", "right isn't an integer!")
+	self.rightcall_edges:add(edge)
+	return true
 end
 
 reachability_mt = { __index = Reachability }
@@ -2245,6 +2449,67 @@ local function reachability()
 		leftcallupsets = {},
 		rightcalldownsets = {},
 		rightcallupsets = {},
+
+		constrain_edges = IndexedCollection {
+			from = {
+				function(obj)
+					return obj.left
+				end,
+			},
+			to = {
+				function(obj)
+					return obj.right
+				end,
+			},
+			between = {
+				function(obj)
+					return obj.left
+				end,
+				function(obj)
+					return obj.right
+				end,
+			},
+		},
+		leftcall_edges = IndexedCollection {
+			from = {
+				function(obj)
+					return obj.left
+				end,
+			},
+			to = {
+				function(obj)
+					return obj.right
+				end,
+			},
+			between = {
+				function(obj)
+					return obj.left
+				end,
+				function(obj)
+					return obj.right
+				end,
+			},
+		},
+		rightcall_edges = IndexedCollection {
+			from = {
+				function(obj)
+					return obj.left
+				end,
+			},
+			to = {
+				function(obj)
+					return obj.right
+				end,
+			},
+			between = {
+				function(obj)
+					return obj.left
+				end,
+				function(obj)
+					return obj.right
+				end,
+			},
+		},
 	}, reachability_mt)
 end
 
@@ -2312,23 +2577,27 @@ function TypeCheckerState:check_value(v, tag, context)
 	end
 
 	U.append(self.values, { v, tag, context })
-	local i = self.graph:add_node()
-	assert(i == #self.values, "Value array and node array got out of sync!")
-	checker[v] = i
-	return i
+	--local i = self.graph:add_node()
+	--assert(i == #self.values, "Value array and node array got out of sync!")
+	checker[v] = #self.values
+	return #self.values
 end
 
 ---@return Metavariable
 ---@param context TypecheckingContext
 ---@param trait boolean?
 function TypeCheckerState:metavariable(context, trait)
-	local i = self.graph:add_node()
-	local mv = setmetatable({ value = i, usage = i, trait = trait or false }, terms.metavariable_mt)
-	U.append(self.values, { mv:as_value(), TypeCheckerTag.VAR })
-	assert(
-		i == #self.values,
-		"Value array and node array got out of sync! " .. tostring(i) .. " != " .. tostring(#self.values)
+	--local i = self.graph:add_node()
+	local i = #self.values + 1
+	local mv = setmetatable(
+		{ value = i, usage = i, trait = trait or false, block_level = self.block_level },
+		terms.metavariable_mt
 	)
+	U.append(self.values, { mv:as_value(), TypeCheckerTag.VAR })
+	-- assert(
+	-- 	i == #self.values,
+	-- 	"Value array and node array got out of sync! " .. tostring(i) .. " != " .. tostring(#self.values)
+	-- )
 	return mv
 end
 
@@ -2378,89 +2647,120 @@ function TypeCheckerState:constrain_induce_call(left, right, rel)
 	if ltag == TypeCheckerTag.VAR and lvalue:is_neutral() and lvalue:unwrap_neutral():is_application_stuck() then
 		local f, arg = lvalue:unwrap_neutral():unwrap_application_stuck()
 		local l = self:check_value(value.neutral(f), TypeCheckerTag.VALUE, nil)
-		U.append(self.pending, EdgeNotif.CallLeft(l, arg, rel, right, "Inside constrain_induce_call ltag"))
+		U.append(
+			self.pending,
+			EdgeNotif.CallLeft(l, arg, rel, right, self.block_level, "Inside constrain_induce_call ltag")
+		)
 	end
 
 	if rtag == TypeCheckerTag.VAR and rvalue:is_neutral() and rvalue:unwrap_neutral():is_application_stuck() then
 		local f, arg = rvalue:unwrap_neutral():unwrap_application_stuck()
 		local r = self:check_value(value.neutral(f), TypeCheckerTag.USAGE, nil)
-		U.append(self.pending, EdgeNotif.CallRight(left, rel, r, arg, "Inside constrain_induce_call rtag"))
+		U.append(
+			self.pending,
+			EdgeNotif.CallRight(left, rel, r, arg, self.block_level, "Inside constrain_induce_call rtag")
+		)
 	end
 end
 
 ---check for compositions of a constrain edge and a left call edge in response to a new constrain edge
----@param left integer
----@param rel SubtypeRelation
----@param right integer
-function TypeCheckerState:constrain_leftcall_compose_1(left, rel, right)
-	local mvalue, mtag, mctx = table.unpack(self.values[right])
+---@param edge ConstrainEdge
+function TypeCheckerState:constrain_leftcall_compose_1(edge)
+	local mvalue, mtag, mctx = table.unpack(self.values[edge.right])
 	if mtag == TypeCheckerTag.VAR then
-		for _, r2 in ipairs(self.graph.leftcalldownsets[right].array) do
-			if FunctionRelation(r2[3]) ~= rel then
-				error("Relations do not match! " .. tostring(FunctionRelation(r2[3])) .. " is not " .. tostring(rel))
+		for _, r2 in ipairs(self.graph.leftcall_edges:from(edge.right)) do
+			if FunctionRelation(r2.rel) ~= edge.rel then
+				error(
+					"Relations do not match! " .. tostring(FunctionRelation(r2.rel)) .. " is not " .. tostring(edge.rel)
+				)
 			end
 			U.append(
 				self.pending,
-				EdgeNotif.CallLeft(left, r2[2], r2[3], r2[1], "constrain leftcall composition induced by constrain")
+				EdgeNotif.CallLeft(
+					edge.left,
+					r2.arg,
+					r2.rel,
+					r2.right,
+					math.min(edge.shallowest_block, r2.shallowest_block) "constrain leftcall composition induced by constrain"
+				)
 			)
 		end
 	end
 end
 
 ---check for compositions of a constrain edge and a left call edge in response to a new left call edge
----@param left integer
----@param arg value
----@param rel SubtypeRelation
----@param right integer
-function TypeCheckerState:constrain_leftcall_compose_2(left, arg, rel, right)
-	local mvalue, mtag, mctx = table.unpack(self.values[left])
+---@param edge LeftCallEdge
+function TypeCheckerState:constrain_leftcall_compose_2(edge)
+	local mvalue, mtag, mctx = table.unpack(self.values[edge.left])
 	if mtag == TypeCheckerTag.VAR then
-		for _, l2 in ipairs(self.graph.upsets[left].array) do
-			if l2[2] ~= FunctionRelation(rel) then
-				error("Relations do not match! " .. tostring(l2[2]) .. " is not " .. tostring(FunctionRelation(rel)))
+		for _, l2 in ipairs(self.graph.constrain_edges:to(edge.left)) do
+			if l2.rel ~= FunctionRelation(edge.rel) then
+				error(
+					"Relations do not match! " .. tostring(l2.rel) .. " is not " .. tostring(FunctionRelation(edge.rel))
+				)
 			end
 			U.append(
 				self.pending,
-				EdgeNotif.CallLeft(left, arg, rel, l2[1], "constrain leftcall composition induced by leftcall")
+				EdgeNotif.CallLeft(
+					edge.left,
+					edge.arg,
+					edge.rel,
+					l2.right,
+					math.min(edge.shallowest_block, l2.shallowest_block),
+					"constrain leftcall composition induced by leftcall"
+				)
 			)
 		end
 	end
 end
 
 ---check for compositions of a right call edge and a constrain edge in response to a new constrain edge
----@param left integer
----@param rel SubtypeRelation
----@param right integer
-function TypeCheckerState:rightcall_constrain_compose_2(left, rel, right)
-	local mvalue, mtag, mctx = table.unpack(self.values[left])
+---@param edge ConstrainEdge
+function TypeCheckerState:rightcall_constrain_compose_2(edge)
+	local mvalue, mtag, mctx = table.unpack(self.values[edge.left])
 	if mtag == TypeCheckerTag.VAR then
-		for _, l2 in ipairs(self.graph.rightcallupsets[left].array) do
-			if FunctionRelation(l2[3]) ~= rel then
-				error("Relations do not match! " .. tostring(FunctionRelation(l2[3])) .. " is not " .. tostring(rel))
+		for _, l2 in ipairs(self.graph.rightcall_edges:to(edge.left)) do
+			if FunctionRelation(l2.rel) ~= edge.rel then
+				error(
+					"Relations do not match! " .. tostring(FunctionRelation(l2.rel)) .. " is not " .. tostring(edge.rel)
+				)
 			end
 			U.append(
 				self.pending,
-				EdgeNotif.CallRight(left, l2[3], l2[1], l2[2], "rightcall constrain composition induced by constrain")
+				EdgeNotif.CallRight(
+					edge.left,
+					l2.rel,
+					l2.right,
+					l2.arg,
+					math.min(edge.shallowest_block, l2.shallowest_block),
+					"rightcall constrain composition induced by constrain"
+				)
 			)
 		end
 	end
 end
 
 ---check for compositions of a right call edge and a constrain edge in response to a new right call edge
----@param left integer
----@param arg value
----@param rel SubtypeRelation
----@param right integer
-function TypeCheckerState:rightcall_constrain_compose_1(left, rel, right, arg)
-	local mvalue, mtag, mctx = table.unpack(self.values[right])
+---@param edge RightCallEdge
+function TypeCheckerState:rightcall_constrain_compose_1(edge)
+	local mvalue, mtag, mctx = table.unpack(self.values[edge.right])
 	if mtag == TypeCheckerTag.VAR then
-		for _, r2 in ipairs(self.graph.downsets[right].array) do
-			if r2[2] ~= FunctionRelation(rel) then
-				error("Relations do not match! " .. tostring(r2[2]) .. " is not " .. tostring(FunctionRelation(rel)))
+		for _, r2 in ipairs(self.graph.constrain_edges:from(edge.right)) do
+			if r2.rel ~= FunctionRelation(edge.rel) then
+				error(
+					"Relations do not match! " .. tostring(r2.rel) .. " is not " .. tostring(FunctionRelation(edge.rel))
+				)
 			end
 			U.append(
 				self.pending,
-				EdgeNotif.CallRight(left, rel, r2[1], arg, "constrain leftcall composition induced by leftcall")
+				EdgeNotif.CallRight(
+					edge.left,
+					edge.rel,
+					r2.right,
+					edge.arg,
+					math.min(edge.shallowest_block, r2.shallowest_block),
+					"constrain leftcall composition induced by leftcall"
+				)
 			)
 		end
 	end
@@ -2486,24 +2786,30 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 
 		if item.kind == "constrain" then
 			local left, right, rel, cause = item.left, item.right, item.rel, item.cause
-			if self.graph:add_constrain_edge(left, right, rel) then
-				self.graph:constrain_transitivity(left, right, self.pending, rel, cause)
+			if self.graph:add_constrain_edge(left, right, rel, self.block_level) then
+				---@type ConstrainEdge
+				local edge = { left = left, rel = rel, right = right, shallowest_block = self.block_level }
+				self.graph:constrain_transitivity(edge, self.pending, cause)
 				U.tag("check_heads", { left, right }, self.check_heads, self, left, right, rel)
 				self:constrain_induce_call(left, right, rel)
-				self:constrain_leftcall_compose_1(left, rel, right)
-				self:rightcall_constrain_compose_2(left, rel, right)
+				self:constrain_leftcall_compose_1(edge)
+				self:rightcall_constrain_compose_2(edge)
 			end
 		elseif item.kind == "call_left" then
 			local left, right, rel, arg, cause = item.left, item.right, item.rel, item.arg, item.cause
 
-			if self.graph:add_call_left_edge(left, arg, rel, right) then
-				self:constrain_leftcall_compose_2(left, arg, rel, right)
+			if self.graph:add_call_left_edge(left, arg, rel, right, self.block_level) then
+				---@type LeftCallEdge
+				local edge = { left = left, arg = arg, rel = rel, right = right, shallowest_block = self.block_level }
+				self:constrain_leftcall_compose_2(edge)
 			end
 		elseif item.kind == "call_right" then
 			local left, right, rel, arg, cause = item.left, item.right, item.rel, item.arg, item.cause
 
-			if self.graph:add_call_right_edge(left, rel, right, arg) then
-				self:rightcall_constrain_compose_1(left, rel, right, arg)
+			if self.graph:add_call_right_edge(left, rel, right, arg, self.block_level) then
+				---@type RightCallEdge
+				local edge = { left = left, rel = rel, right = right, arg = arg, shallowest_block = self.block_level }
+				self:rightcall_constrain_compose_1(edge)
 			end
 		else
 			error("Unknown edge kind!")
@@ -2537,12 +2843,20 @@ function TypeCheckerState:commit()
 	self.trait_registry:commit()
 end
 
+function TypeCheckerState:enter_block()
+	self.block_level = self.block_level + 1
+end
+function TypeCheckerState:exit_block()
+	self.block_level = self.block_level - 1
+end
+
 ---@return TypeCheckerState
 local function new_typechecker_state()
 	return setmetatable({
 		pending = {},
 		graph = reachability(),
 		values = {},
+		block_level = 0,
 		valcheck = {},
 		usecheck = {},
 		trait_registry = trait_registry(),
