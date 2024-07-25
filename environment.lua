@@ -237,6 +237,7 @@ end
 function environment:enter_block()
 	--print "entering block"
 	--self.typechecking_context:dump_names()
+	eval.typechecker_state:enter_block()
 	return { shadowed = self },
 		new_env {
 			-- locals = nil,
@@ -285,6 +286,7 @@ function environment:exit_block(term, shadowed)
 			wrapped = terms.inferrable_term.annotated_lambda(name, annotation, wrapped, anchor, visible)
 		end
 	end
+	eval.typechecker_state:exit_block()
 
 	return env, wrapped
 end
