@@ -74,14 +74,14 @@ local function FunctionRelation(srel)
 		constrain = luatovalue(function(val, use)
 			local u = value.neutral(neutral_value.free(free.unique({})))
 
-			local applied_val = apply_value(val, u)
-			local applied_use = apply_value(use, u)
+			local applied_val = U.tag("apply_value", { val = val, use = use }, apply_value, val, u)
+			local applied_use = U.tag("apply_value", { val = val, use = use }, apply_value, use, u)
 
 			--  Call the constrain of our contained srel variable, which will throw an error if it fails
 			local tuple_params = value_array(value.prim(applied_val), value.prim(applied_use))
 			U.tag(
 				"apply_value",
-				{ applied_val, applied_use },
+				{ applied_val = applied_val, applied_use = applied_use },
 				apply_value,
 				srel.constrain,
 				value.tuple_value(tuple_params)
@@ -483,11 +483,17 @@ add_comparer("value.pi", "value.pi", function(a, b)
 		return false, concrete_fail("pi result_info")
 	end
 
-	local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
-	local a_res = apply_value(a_result_type, unique_placeholder)
-	local b_res = apply_value(b_result_type, unique_placeholder)
-	typechecker_state:queue_constrain(a_res, FunctionRelation(UniverseOmegaRelation), b_res, "pi function results")
 	typechecker_state:queue_subtype(b_param_type, a_param_type, "pi function parameters")
+	--local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
+	--local a_res = apply_value(a_result_type, unique_placeholder)
+	--local b_res = apply_value(b_result_type, unique_placeholder)
+	--typechecker_state:queue_constrain(a_res, FunctionRelation(UniverseOmegaRelation), b_res, "pi function results")
+	typechecker_state:queue_constrain(
+		a_result_type,
+		FunctionRelation(UniverseOmegaRelation),
+		b_result_type,
+		"pi function results"
+	)
 
 	return true
 end)
@@ -499,11 +505,17 @@ add_comparer("value.prim_function_type", "value.prim_function_type", function(a,
 	local a_param_type, a_result_type = a:unwrap_pi()
 	local b_param_type, b_result_type = b:unwrap_pi()
 
-	local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
-	local a_res = apply_value(a_result_type, unique_placeholder)
-	local b_res = apply_value(b_result_type, unique_placeholder)
-	typechecker_state:queue_subtype(a_param_type, b_param_type, "prim function results")
-	typechecker_state:queue_constrain(b_res, FunctionRelation(UniverseOmegaRelation), a_res, "prim function parameters")
+	typechecker_state:queue_subtype(b_param_type, a_param_type, "prim function parameters")
+	--local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
+	--local a_res = apply_value(a_result_type, unique_placeholder)
+	--local b_res = apply_value(b_result_type, unique_placeholder)
+	--typechecker_state:queue_constrain(b_res, FunctionRelation(UniverseOmegaRelation), a_res, "prim function parameters")
+	typechecker_state:queue_constrain(
+		a_result_type,
+		FunctionRelation(UniverseOmegaRelation),
+		b_result_type,
+		"prim function results"
+	)
 	return true
 end)
 
@@ -734,7 +746,7 @@ function apply_value(f, arg)
 
 	if f:is_closure() then
 		local param_name, code, capture = f:unwrap_closure()
-		return U.notail(U.tag("evaluate", code, evaluate, code, capture:append(arg)))
+		return U.notail(U.tag("evaluate", { code = code }, evaluate, code, capture:append(arg)))
 	elseif f:is_neutral() then
 		return value.neutral(neutral_value.application_stuck(f:unwrap_neutral(), arg))
 	elseif f:is_prim() then
@@ -1545,21 +1557,25 @@ function evaluate(typed_term, runtime_context)
 		return value.closure(param_name, body, runtime_context)
 	elseif typed_term:is_pi() then
 		local param_type, param_info, result_type, result_info = typed_term:unwrap_pi()
-		local param_type_value = U.tag("evaluate", param_type, evaluate, param_type, runtime_context)
-		local param_info_value = U.tag("evaluate", param_info, evaluate, param_info, runtime_context)
-		local result_type_value = U.tag("evaluate", result_type, evaluate, result_type, runtime_context)
-		local result_info_value = U.tag("evaluate", result_info, evaluate, result_info, runtime_context)
+		local param_type_value = U.tag("evaluate", { param_type = param_type }, evaluate, param_type, runtime_context)
+		local param_info_value = U.tag("evaluate", { param_info = param_info }, evaluate, param_info, runtime_context)
+		local result_type_value =
+			U.tag("evaluate", { result_type = result_type }, evaluate, result_type, runtime_context)
+		local result_info_value =
+			U.tag("evaluate", { result_info = result_info }, evaluate, result_info, runtime_context)
 		return value.pi(param_type_value, param_info_value, result_type_value, result_info_value)
 	elseif typed_term:is_application() then
 		local f, arg = typed_term:unwrap_application()
-		local f_value = U.tag("evaluate", f, evaluate, f, runtime_context)
-		local arg_value = U.tag("evaluate", arg, evaluate, arg, runtime_context)
-		return U.notail(apply_value(f_value, arg_value))
+		local f_value = U.tag("evaluate", { f = f }, evaluate, f, runtime_context)
+		local arg_value = U.tag("evaluate", { arg = arg }, evaluate, arg, runtime_context)
+		return U.notail(
+			U.tag("apply_value", { f_value = f_value, arg_value = arg_value }, apply_value, f_value, arg_value)
+		)
 	elseif typed_term:is_tuple_cons() then
 		local elements = typed_term:unwrap_tuple_cons()
 		local new_elements = value_array()
-		for _, v in ipairs(elements) do
-			new_elements:append(U.tag("evaluate", v, evaluate, v, runtime_context))
+		for i, v in ipairs(elements) do
+			new_elements:append(U.tag("evaluate", { ["element_" .. tostring(i)] = v }, evaluate, v, runtime_context))
 		end
 		return value.tuple_value(new_elements)
 	elseif typed_term:is_prim_tuple_cons() then
@@ -1569,7 +1585,7 @@ function evaluate(typed_term, runtime_context)
 		local stuck_element
 		local trailing_values
 		for i, v in ipairs(elements) do
-			local element_value = U.tag("evaluate", v, evaluate, v, runtime_context)
+			local element_value = U.tag("evaluate", { ["element_" .. tostring(i)] = v }, evaluate, v, runtime_context)
 			if element_value == nil then
 				p("wtf", v.kind)
 			end
@@ -1595,7 +1611,7 @@ function evaluate(typed_term, runtime_context)
 		end
 	elseif typed_term:is_tuple_elim() then
 		local names, subject, length, body = typed_term:unwrap_tuple_elim()
-		local subject_value = U.tag("evaluate", subject, evaluate, subject, runtime_context)
+		local subject_value = U.tag("evaluate", { subject = subject }, evaluate, subject, runtime_context)
 		local inner_context = runtime_context
 		if subject_value:is_tuple_value() then
 			local subject_elements = subject_value:unwrap_tuple_value()
@@ -1641,29 +1657,30 @@ function evaluate(typed_term, runtime_context)
 			p(subject_value)
 			error("evaluate, is_tuple_elim, subject_value: expected a tuple")
 		end
-		return U.tag("evaluate", body, evaluate, body, inner_context)
+		return U.tag("evaluate", { body = body }, evaluate, body, inner_context)
 	elseif typed_term:is_tuple_element_access() then
 		local tuple_term, index = typed_term:unwrap_tuple_element_access()
 		--print("tuple_element_access tuple_term: (typed term follows)")
 		--print(tuple_term:pretty_print(runtime_context))
-		local tuple = U.tag("evaluate", tuple_term, evaluate, tuple_term, runtime_context)
+		local tuple = U.tag("evaluate", { tuple_term = tuple_term }, evaluate, tuple_term, runtime_context)
 		--print("tuple_element_access tuple: (value term follows)")
 		--print(tuple)
 		return index_tuple_value(tuple, index)
 	elseif typed_term:is_tuple_type() then
 		local definition_term = typed_term:unwrap_tuple_type()
-		local definition = U.tag("evaluate", definition_term, evaluate, definition_term, runtime_context)
+		local definition =
+			U.tag("evaluate", { definition_term = definition_term }, evaluate, definition_term, runtime_context)
 		return terms.value.tuple_type(definition)
 	elseif typed_term:is_record_cons() then
 		local fields = typed_term:unwrap_record_cons()
 		local new_fields = string_value_map()
 		for k, v in pairs(fields) do
-			new_fields[k] = U.tag("evaluate", v, evaluate, v, runtime_context)
+			new_fields[k] = U.tag("evaluate", { ["record_field_" .. tostring(k)] = v }, evaluate, v, runtime_context)
 		end
 		return value.record_value(new_fields)
 	elseif typed_term:is_record_elim() then
 		local subject, field_names, body = typed_term:unwrap_record_elim()
-		local subject_value = U.tag("evaluate", subject, evaluate, subject, runtime_context)
+		local subject_value = U.tag("evaluate", { subject = subject }, evaluate, subject, runtime_context)
 		local inner_context = runtime_context
 		if subject_value:is_record_value() then
 			local subject_fields = subject_value:unwrap_record_value()
@@ -1679,15 +1696,15 @@ function evaluate(typed_term, runtime_context)
 		else
 			error("evaluate, is_record_elim, subject_value: expected a record")
 		end
-		return U.tag("evaluate", body, evaluate, body, inner_context)
+		return U.tag("evaluate", { body = body }, evaluate, body, inner_context)
 	elseif typed_term:is_enum_cons() then
 		local constructor, arg = typed_term:unwrap_enum_cons()
-		local arg_value = U.tag("evaluate", arg, evaluate, arg, runtime_context)
+		local arg_value = U.tag("evaluate", { arg = arg }, evaluate, arg, runtime_context)
 		return value.enum_value(constructor, arg_value)
 	elseif typed_term:is_enum_elim() then
 		local subject, mechanism = typed_term:unwrap_enum_elim()
-		local subject_value = U.tag("evaluate", subject, evaluate, subject, runtime_context)
-		local mechanism_value = U.tag("evaluate", mechanism, evaluate, mechanism, runtime_context)
+		local subject_value = U.tag("evaluate", { subject = subject }, evaluate, subject, runtime_context)
+		local mechanism_value = U.tag("evaluate", { mechanism = mechanism }, evaluate, mechanism, runtime_context)
 		if subject_value:is_enum_value() then
 			if mechanism_value:is_object_value() then
 				local constructor, arg = subject_value:unwrap_enum_value()
@@ -1922,7 +1939,7 @@ UniverseOmegaRelation = {
 	refl = luatovalue(function(a) end, name_array("a")),
 	antisym = luatovalue(function(a, b, r1, r2) end, name_array("a", "b", "r1", "r2")),
 	constrain = luatovalue(function(val, use)
-		local ok, err = U.tag("check_concrete", { val, use }, check_concrete, val, use)
+		local ok, err = U.tag("check_concrete", { val = val, use = use }, check_concrete, val, use)
 		if not ok then
 			error(err)
 		end
@@ -2523,8 +2540,8 @@ local TypeCheckerTag = {
 ---@param use value
 ---@param cause any
 function TypeCheckerState:queue_subtype(val, use, cause)
-	local l = U.tag("check_value", { val, use }, self.check_value, self, val, TypeCheckerTag.VALUE, nil)
-	local r = U.tag("check_value", { val, use }, self.check_value, self, use, TypeCheckerTag.USAGE, nil)
+	local l = U.tag("check_value", { val = val, use = use }, self.check_value, self, val, TypeCheckerTag.VALUE, nil)
+	local r = U.tag("check_value", { val = val, use = use }, self.check_value, self, use, TypeCheckerTag.USAGE, nil)
 	assert(type(l) == "number", "l isn't number, instead found " .. tostring(l))
 	assert(type(r) == "number", "r isn't number, instead found " .. tostring(r))
 	U.append(self.pending, EdgeNotif.Constrain(l, UniverseOmegaRelation, r, cause))
@@ -2535,8 +2552,8 @@ end
 ---@param use value
 ---@param cause any
 function TypeCheckerState:queue_constrain(val, rel, use, cause)
-	local l = U.tag("check_value", { val, use }, self.check_value, self, val, TypeCheckerTag.VALUE, nil)
-	local r = U.tag("check_value", { val, use }, self.check_value, self, use, TypeCheckerTag.USAGE, nil)
+	local l = U.tag("check_value", { val = val, use = use }, self.check_value, self, val, TypeCheckerTag.VALUE, nil)
+	local r = U.tag("check_value", { val = val, use = use }, self.check_value, self, use, TypeCheckerTag.USAGE, nil)
 	assert(type(l) == "number", "l isn't number, instead found " .. tostring(l))
 	assert(type(r) == "number", "r isn't number, instead found " .. tostring(r))
 	U.append(self.pending, EdgeNotif.Constrain(l, rel, r, cause))
@@ -2621,7 +2638,13 @@ function TypeCheckerState:check_heads(left, right, rel)
 		-- Unpacking tuples hasn't been fixed in VSCode yet (despite the issue being closed???) so we have to override the types: https://github.com/LuaLS/lua-language-server/issues/1816
 		local tuple_params = value_array(value.prim(lvalue), value.prim(rvalue))
 		-- TODO: how do we pass in the type contexts???
-		U.tag("apply_value", { lvalue, rvalue }, apply_value, rel.constrain, value.tuple_value(tuple_params))
+		U.tag(
+			"apply_value",
+			{ lvalue = lvalue, rvalue = rvalue },
+			apply_value,
+			rel.constrain,
+			value.tuple_value(tuple_params)
+		)
 		-- local ok, err = U.tag(
 		-- 	"check_concrete",
 		-- 	{ lvalue, rvalue },
@@ -2790,7 +2813,15 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 				---@type ConstrainEdge
 				local edge = { left = left, rel = rel, right = right, shallowest_block = self.block_level }
 				self.graph:constrain_transitivity(edge, self.pending, cause)
-				U.tag("check_heads", { left, right }, self.check_heads, self, left, right, rel)
+				U.tag(
+					"check_heads",
+					{ left = left, right = right, rel = rel },
+					self.check_heads,
+					self,
+					left,
+					right,
+					rel
+				)
 				self:constrain_induce_call(left, right, rel)
 				self:constrain_leftcall_compose_1(edge)
 				self:rightcall_constrain_compose_2(edge)

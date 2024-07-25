@@ -484,7 +484,11 @@ local function expression_pairhandler(args, a, b)
 				value.result_info(terms.result_info(terms.purity.pure))
 			)
 
-			evaluator.typechecker_state:flow(
+			U.tag(
+				"flow",
+				{ val = type_of_term, usa = pi },
+				evaluator.typechecker_state.flow,
+				evaluator.typechecker_state,
 				type_of_term,
 				env.typechecking_context,
 				pi,
@@ -1063,7 +1067,7 @@ collect_tuple = metalanguage.reducer(
 		elseif goal:is_check() then
 			U.tag(
 				"flow",
-				{ value.tuple_type(decls), goal_type },
+				{ val = value.tuple_type(decls), use = goal_type },
 				evaluator.typechecker_state.flow,
 				evaluator.typechecker_state,
 				value.tuple_type(decls),

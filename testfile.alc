@@ -97,10 +97,8 @@ let new-prim-type-family = lambda (unique-id : prim-unique-id, signature : type_
 		:
 		prim-func-type (unique-id : prim-unique-id, signature_ : wrapped(type_(1))) -> ((family    : wrapped(signature)))
 	let (family) = inner(unique-id, implicit-wrap(signature))
-	# FIXME: implicit-unwrap here causes new-prim-type to fail due to trying
-	# to call something whose type is a metavariable
-	#unwrap(signature, family)
-	implicit-unwrap(family)
+	# FIXME: results with metavariable type are poorly handled at this time
+	the signature implicit-unwrap(family)
 let new-prim-type = lambda ((unique-id : prim-unique-id))
 	let Tfam = new-prim-type-family unique-id
 		forall () -> (T : prim-type)
