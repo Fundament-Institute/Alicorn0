@@ -763,7 +763,6 @@ function apply_value(f, arg)
 			error("apply_value, is_prim, arg: expected a prim tuple argument")
 		end
 	else
-		p(f)
 		error("apply_value, f: expected a function/closure")
 	end
 
@@ -1987,32 +1986,37 @@ local function ordered_set()
 end
 
 local function IndexedCollection(indices)
-	local collection = {}
-	local index_store = {}
-	local res = {}
+	local res = { _collection = {}, _index_store = {} }
 	function res:all()
-		return collection
+		return self._collection
 	end
 	for k, v in pairs(indices) do
-		index_store[k] = {}
+		res._index_store[k] = {}
 		res[k] = function(self, ...)
+			if rawget(self, "__lock") then
+				error("Modifying a shadowed object! This should never happen!")
+			end
 			local args = { ... }
-			local store = index_store[k]
+			assert(#args == #v, "Must have one argument per key extractor")
+
+			local store = res._index_store[k]
 			for i = 1, #indices[k] do
-				if store[args[i]] then
-					store = store[args[i]]
-				else
+				if store[args[i]] == nil then
 					store[args[i]] = {}
-					store = store[args[i]]
 				end
+
+				store = store[args[i]]
 			end
 			return store
 		end
 	end
 	function res:add(obj)
-		U.append(collection, obj)
+		if rawget(self, "__lock") then
+			error("Modifying a shadowed object! This should never happen!")
+		end
+		U.append(self._collection, obj)
 		for name, extractors in pairs(indices) do
-			local store = index_store[name]
+			local store = res._index_store[name]
 			for i, kx in ipairs(extractors) do
 				local key = kx(obj)
 				if store[key] then
@@ -2023,6 +2027,23 @@ local function IndexedCollection(indices)
 				end
 			end
 		end
+	end
+
+	function res:shadow()
+		local n = U.shallow_copy(self) -- Copy all the functions into a new table
+		n._collection = U.shadowarray(self._collection) -- Shadow collection
+		n._index_store = U.deep_copy(self._index_store) -- NYI: We need to properly shadow this at some point but right now we just copy the entire table
+		rawset(self, "__lock", true) --  This has to be down here or we'll accidentally copy it
+		rawset(n, "__shadow", self)
+		return n
+	end
+
+	function res:commit()
+		U.commit(self._collection)
+		local orig = rawget(self, "__shadow")
+		orig._index_store = self._index_store
+		rawset(orig, "__lock", nil)
+		rawset(self, "__shadow", nil)
 	end
 
 	return res
@@ -2083,6 +2104,8 @@ local TypeCheckerState = {}
 ---@field from fun(self: ConstrainCollection,left: integer): ConstrainEdge[]
 ---@field to fun(self: ConstrainCollection,right: integer): ConstrainEdge[]
 ---@field between fun(self: ConstrainCollection,left: integer, right: integer): ConstrainEdge[]
+---@field shadow fun(self: ConstrainCollection) : ConstrainCollection
+---@field commit fun(self: ConstrainCollection)
 
 ---@class LeftCallCollection
 ---@field add fun(self: LeftCallCollection,edge: LeftCallEdge)
@@ -2090,6 +2113,8 @@ local TypeCheckerState = {}
 ---@field from fun(self: LeftCallCollection,left: integer): LeftCallEdge[]
 ---@field to fun(self: LeftCallCollection,right: integer): LeftCallEdge[]
 ---@field between fun(self: LeftCallCollection,left: integer, right: integer): LeftCallEdge[]
+---@field shadow fun(self: ConstrainCollection) : ConstrainCollection
+---@field commit fun(self: ConstrainCollection)
 
 ---@class RightCallCollection
 ---@field add fun(self: RightCallCollection,edge: RightCallEdge)
@@ -2097,14 +2122,10 @@ local TypeCheckerState = {}
 ---@field from fun(self: RightCallCollection,left: integer): RightCallEdge[]
 ---@field to fun(self: RightCallCollection,right: integer): RightCallEdge[]
 ---@field between fun(self: RightCallCollection,left: integer, right: integer): RightCallEdge[]
+---@field shadow fun(self: ConstrainCollection) : ConstrainCollection
+---@field commit fun(self: ConstrainCollection)
 
 ---@class Reachability
--- -@field upsets OrderedSet[]
--- -@field downsets OrderedSet[]
--- -@field leftcallupsets OrderedSet[]
--- -@field leftcalldownsets OrderedSet[]
--- -@field rightcallupsets OrderedSet[]
--- -@field rightcalldownsets OrderedSet[]
 ---@field constrain_edges ConstrainCollection
 ---@field leftcall_edges LeftCallCollection
 ---@field rightcall_edges RightCallCollection
@@ -2112,141 +2133,22 @@ local TypeCheckerState = {}
 local Reachability = {}
 local reachability_mt
 
----@return integer
-function Reachability:add_node()
-	local i = #self.upsets + 1 -- Account for lua tables starting at 1
-	U.append(self.upsets, ordered_set())
-	U.append(self.downsets, ordered_set())
-	U.append(self.leftcallupsets, ordered_set())
-	U.append(self.leftcalldownsets, ordered_set())
-	U.append(self.rightcallupsets, ordered_set())
-	U.append(self.rightcalldownsets, ordered_set())
-	assert(#self.upsets == #self.downsets, "upsets must equal downsets!")
-	assert(
-		#self.upsets == i,
-		"i does not equal upsets?! "
-			.. tostring(i)
-			.. " != "
-			.. tostring(#self.upsets)
-			.. " ... \n"
-			.. tostring(prevupsets)
-			.. " ... \n"
-			.. tostring(U.dumptable(self.upsets))
-	)
-	return i
-end
-
 ---This shadowing works a bit differently because it overrides setinsert to be shadow-aware
 ---@return Reachability
 function Reachability:shadow()
-	error "reached an NYI shadow"
 	return setmetatable({
-		---@param set OrderedSet[]
-		---@param k integer
-		---@param v integer
-		---@return boolean
-		setinsert = function(set, k, v)
-			if rawget(set, k) == nil then
-				set[k] = set[k]:shadow()
-			end
-			assert(rawget(set, k) ~= nil, "failed to shadow set???")
-			return set[k]:insert(v)
-		end,
-		---@param set OrderedSet[]
-		---@param k integer
-		---@param v integer
-		---@param ... any
-		---@return boolean
-		setinsert_aux = function(set, k, v, ...)
-			if rawget(set, k) == nil then
-				set[k] = set[k]:shadow()
-			end
-			assert(rawget(set, k) ~= nil, "failed to shadow set???")
-			return set[k]:insert_aux(v, ...)
-		end,
-		downsets = U.shadowarray(self.downsets),
-		upsets = U.shadowarray(self.upsets),
-		leftcalldownsets = U.shadowarray(self.leftcalldownsets),
-		leftcallupsets = U.shadowarray(self.leftcallupsets),
-		rightcalldownsets = U.shadowarray(self.rightcalldownsets),
-		rightcallupsets = U.shadowarray(self.rightcallupsets),
+		constrain_edges = self.constrain_edges:shadow(),
+		leftcall_edges = self.leftcall_edges:shadow(),
+		rightcall_edges = self.rightcall_edges:shadow(),
 	}, reachability_mt)
 end
 
 function Reachability:commit()
-	U.commit(self.downsets)
-	U.commit(self.upsets)
-	U.commit(self.leftcalldownsets)
-	U.commit(self.leftcallupsets)
-	U.commit(self.rightcalldownsets)
-	U.commit(self.rightcallupsets)
+	self.constrain_edges:commit()
+	self.leftcall_edges:commit()
+	self.rightcall_edges:commit()
 end
 
---[[
----@param set OrderedSet[]
----@param k integer
----@param v any
----@return boolean
-function Reachability.setinsert(set, k, v)
-	return set[k]:insert(v)
-end
-
-
----@param set OrderedSet[]
----@param k integer
----@param v integer
----@param ... any
----@return boolean
-function Reachability.setinsert_aux(set, k, v, ...)
-	return set[k]:insert_aux(v, ...)
-end
-
----find all constrain edges leading into a node
----@param node integer
----@return ConstrainEdge[]
-function Reachability:find_constrain_to(node)
-	local res = {}
-	for _, value in ipairs(t) do
-		
-	end
-	return self.upsets[node].array
-end
-
----find all constrain edges leading out of a node
----@param node integer
----@return ConstrainEdge[]
-function Reachability:find_constrain_from(node)
-	return self.downsets[node].array
-end
-
----find all left call edges leading into a node
----@param node integer
----@return LeftCallEdge
-function Reachability:find_leftcall_to(node)
-	return self.leftcallupsets[node].array
-end
-
----find all left edges leading out of a node
----@param node integer
----@return LeftCallEdge[]
-function Reachability:find_leftcall_from(node)
-	return self.leftcalldownsets[node].array
-end
-
----find all right call edges leading into a node
----@param node integer
----@return RightCallEdge
-function Reachability:find_rightcall_to(node)
-	return self.rightcallupsets[node].array
-end
-
----find all left edges leading out of a node
----@param node integer
----@return RightCallEdge[]
-function Reachability:find_rightcall_from(node)
-	return self.rightcalldownsets[node].array
-end
---]]
 ---@class (exact) EdgeNotifConstrain
 ---@field kind string
 ---@field left integer
@@ -2460,13 +2362,6 @@ reachability_mt = { __index = Reachability }
 ---@return Reachability
 local function reachability()
 	return setmetatable({
-		downsets = {},
-		upsets = {},
-		leftcalldownsets = {},
-		leftcallupsets = {},
-		rightcalldownsets = {},
-		rightcallupsets = {},
-
 		constrain_edges = IndexedCollection {
 			from = {
 				function(obj)
@@ -2594,8 +2489,6 @@ function TypeCheckerState:check_value(v, tag, context)
 	end
 
 	U.append(self.values, { v, tag, context })
-	--local i = self.graph:add_node()
-	--assert(i == #self.values, "Value array and node array got out of sync!")
 	checker[v] = #self.values
 	return #self.values
 end
@@ -2604,17 +2497,12 @@ end
 ---@param context TypecheckingContext
 ---@param trait boolean?
 function TypeCheckerState:metavariable(context, trait)
-	--local i = self.graph:add_node()
 	local i = #self.values + 1
 	local mv = setmetatable(
 		{ value = i, usage = i, trait = trait or false, block_level = self.block_level },
 		terms.metavariable_mt
 	)
 	U.append(self.values, { mv:as_value(), TypeCheckerTag.VAR })
-	-- assert(
-	-- 	i == #self.values,
-	-- 	"Value array and node array got out of sync! " .. tostring(i) .. " != " .. tostring(#self.values)
-	-- )
 	return mv
 end
 
