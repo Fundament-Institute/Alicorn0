@@ -81,7 +81,7 @@ local function FunctionRelation(srel)
 			local tuple_params = value_array(value.prim(applied_val), value.prim(applied_use))
 			U.tag(
 				"apply_value",
-				{ applied_val = applied_val, applied_use = applied_use },
+				{ val = val, use = use, applied_val = applied_val, applied_use = applied_use },
 				apply_value,
 				srel.constrain,
 				value.tuple_value(tuple_params)
@@ -1567,9 +1567,7 @@ function evaluate(typed_term, runtime_context)
 		local f, arg = typed_term:unwrap_application()
 		local f_value = U.tag("evaluate", { f = f }, evaluate, f, runtime_context)
 		local arg_value = U.tag("evaluate", { arg = arg }, evaluate, arg, runtime_context)
-		return U.notail(
-			U.tag("apply_value", { f_value = f_value, arg_value = arg_value }, apply_value, f_value, arg_value)
-		)
+		return U.notail(apply_value(f_value, arg_value))
 	elseif typed_term:is_tuple_cons() then
 		local elements = typed_term:unwrap_tuple_cons()
 		local new_elements = value_array()
@@ -1994,7 +1992,17 @@ local function IndexedCollection(indices)
 		res._index_store[k] = {}
 		res[k] = function(self, ...)
 			if rawget(self, "__lock") then
-				error("Modifying a shadowed object! This should never happen!")
+				error(
+					"Modifying a shadowed object! This should never happen!\n"
+						.. "@@@@@@@@@@@@@@@\n"
+						.. "@@@ STACK 1 @@@\n"
+						.. "@@@@@@@@@@@@@@@\n"
+						.. rawget(self, "__locktrace")
+						.. "\n@@@@@@@@@@@@@@@\n"
+						.. "@@@ STACK 2 @@@\n"
+						.. "@@@@@@@@@@@@@@@\n"
+						.. "modify attempted here"
+				)
 			end
 			local args = { ... }
 			assert(#args == #v, "Must have one argument per key extractor")
@@ -2034,6 +2042,7 @@ local function IndexedCollection(indices)
 		n._collection = U.shadowarray(self._collection) -- Shadow collection
 		n._index_store = U.deep_copy(self._index_store) -- NYI: We need to properly shadow this at some point but right now we just copy the entire table
 		rawset(self, "__lock", true) --  This has to be down here or we'll accidentally copy it
+		rawset(self, "__locktrace", metalanguage.stack_trace("shadow occurred here"))
 		rawset(n, "__shadow", self)
 		return n
 	end
@@ -2043,6 +2052,7 @@ local function IndexedCollection(indices)
 		local orig = rawget(self, "__shadow")
 		orig._index_store = self._index_store
 		rawset(orig, "__lock", nil)
+		rawset(orig, "__locktrace", nil)
 		rawset(self, "__shadow", nil)
 	end
 
@@ -2071,6 +2081,7 @@ end
 ---@field pending ReachabilityQueue
 ---@field graph Reachability
 ---@field values [value, TypeCheckerTag, TypecheckingContext|nil][]
+---@field block_level integer
 ---@field valcheck { [value]: integer }
 ---@field usecheck { [value]: integer }
 ---@field trait_registry TraitRegistry
@@ -2113,8 +2124,8 @@ local TypeCheckerState = {}
 ---@field from fun(self: LeftCallCollection,left: integer): LeftCallEdge[]
 ---@field to fun(self: LeftCallCollection,right: integer): LeftCallEdge[]
 ---@field between fun(self: LeftCallCollection,left: integer, right: integer): LeftCallEdge[]
----@field shadow fun(self: ConstrainCollection) : ConstrainCollection
----@field commit fun(self: ConstrainCollection)
+---@field shadow fun(self: LeftCallCollection) : LeftCallCollection
+---@field commit fun(self: LeftCallCollection)
 
 ---@class RightCallCollection
 ---@field add fun(self: RightCallCollection,edge: RightCallEdge)
@@ -2122,8 +2133,8 @@ local TypeCheckerState = {}
 ---@field from fun(self: RightCallCollection,left: integer): RightCallEdge[]
 ---@field to fun(self: RightCallCollection,right: integer): RightCallEdge[]
 ---@field between fun(self: RightCallCollection,left: integer, right: integer): RightCallEdge[]
----@field shadow fun(self: ConstrainCollection) : ConstrainCollection
----@field commit fun(self: ConstrainCollection)
+---@field shadow fun(self: RightCallCollection) : RightCallCollection
+---@field commit fun(self: RightCallCollection)
 
 ---@class Reachability
 ---@field constrain_edges ConstrainCollection
@@ -2746,20 +2757,24 @@ function TypeCheckerState:shadow()
 	return setmetatable({
 		pending = U.shadowarray(self.pending),
 		graph = self.graph:shadow(),
+		block_level = self.block_level,
 		values = U.shadowarray(self.values),
 		valcheck = U.shadowtable(self.valcheck),
 		usecheck = U.shadowtable(self.usecheck),
 		trait_registry = self.trait_registry:shadow(),
+		__shadow = self,
 	}, typechecker_state_mt)
 end
 
 function TypeCheckerState:commit()
 	U.commit(self.pending)
 	self.graph:commit()
+	self.__shadow.block_level = self.block_level
 	U.commit(self.values)
 	U.commit(self.valcheck)
 	U.commit(self.usecheck)
 	self.trait_registry:commit()
+	rawset(self, "__shadow", nil)
 end
 
 function TypeCheckerState:enter_block()
