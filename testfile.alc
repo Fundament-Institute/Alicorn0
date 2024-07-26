@@ -271,7 +271,7 @@ let tuple-to-prim-tuple-inner =
 let tuple-to-prim-tuple =
 	lambda (t : wrapped(type), valid : only-accept-prim-tuples(t), val : implicit-unwrap(prim-tuple-type-to-tuple-type(t, valid)))
 		let (res) = tuple-to-prim-tuple-inner(t, valid, implicit-wrap(val))
-		implicit-unwrap(res)
+		the implicit-unwrap(t) implicit-unwrap(res)
 
 let only-accept-prim-funcs-inner-prim =
 	intrinsic
