@@ -2034,6 +2034,7 @@ local function IndexedCollection(indices)
 					store = store[key]
 				end
 			end
+			U.append(store, obj)
 		end
 	end
 
