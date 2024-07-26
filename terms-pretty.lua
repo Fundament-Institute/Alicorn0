@@ -78,8 +78,8 @@ local function ensure_context(context)
 		---@cast context RuntimeContext
 		return PrettyprintingContext.from_runtime_context(context)
 	else
-		print("!!!!!!!!!! MISSING PRETTYPRINTER CONTEXT !!!!!!!!!!!!!!")
-		print("making something up")
+		--print("!!!!!!!!!! MISSING PRETTYPRINTER CONTEXT !!!!!!!!!!!!!!")
+		--print("making something up")
 		return PrettyprintingContext.new():append("#made-up")
 	end
 end

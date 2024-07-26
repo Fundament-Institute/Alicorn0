@@ -206,8 +206,9 @@ end
 
 --local pdump = require "pretty-print".dump
 local pdump = require("./pretty-printer").s
-local tag = (require "./alicorn-utils").tag
+local U = require("./alicorn-utils")
 
+-- this function should be called as an xpcall error handler
 ---@param err table | string
 ---@return table | string
 local function custom_traceback(err)
@@ -218,7 +219,7 @@ local function custom_traceback(err)
 	local i = 3
 	local info = debug.getinfo(i, "Sfln")
 	while info ~= nil do
-		if info.func == tag then
+		if info.func == U.tag then
 			local _, name = debug.getlocal(i, 1)
 			local _, tag = debug.getlocal(i, 2)
 			local _, fn = debug.getlocal(i, 3)
@@ -244,6 +245,13 @@ local function custom_traceback(err)
 	end
 
 	return s
+end
+
+-- this function should be used when calling for a trace directly
+---@param err table | string
+---@return table | string
+local function stack_trace(err)
+	return U.notail(custom_traceback(err))
 end
 
 ---@class Reducer
@@ -742,6 +750,7 @@ local metalanguage = {
 	reducer_type = reducer_type,
 	matcher_type = matcher_type,
 	custom_traceback = custom_traceback,
+	stack_trace = stack_trace,
 }
 local internals_interface = require "./internals-interface"
 internals_interface.metalanguage = metalanguage

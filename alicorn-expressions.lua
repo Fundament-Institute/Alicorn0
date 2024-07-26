@@ -460,215 +460,242 @@ local function expression_pairhandler(args, a, b)
 	local random = {}
 
 	print("kind is " .. type_of_term.kind .. " " .. tostring(random))
-	print("expression handler: " .. tostring(type_of_term))
+	--print("expression handler: " .. tostring(type_of_term))
 
 	if type_of_term:is_prim_function_type() then
 		print("A")
 	end
 
-	local ok, res_, env_ = evaluator.typechecker_state:speculate(function()
-		--local op = value.operative_type(
-		--	evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
-		--	evaluator.typechecker_state:metavariable(env.typechecking_context):as_value()
-		--)
+	local ok, res_, env_ = U.tag(
+		"speculate",
+		random,
+		evaluator.typechecker_state.speculate,
+		evaluator.typechecker_state,
+		function()
+			--local op = value.operative_type(
+			--	evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
+			--	evaluator.typechecker_state:metavariable(env.typechecking_context):as_value()
+			--)
 
-		--evaluator.typechecker_state:flow(
-		--	type_of_term,
-		--	env.typechecking_context,
-		--	op,
-		--	env.typechecking_context,
-		--	"Speculating on operative type"
-		--)
+			--evaluator.typechecker_state:flow(
+			--	type_of_term,
+			--	env.typechecking_context,
+			--	op,
+			--	env.typechecking_context,
+			--	"Speculating on operative type"
+			--)
 
-		--local handler, userdata_type = op:unwrap_operative_type()
-		local handler, userdata_type = type_of_term:unwrap_operative_type()
-		-- operative input: env, syntax tree, goal type (if checked)
-		local tuple_args = value_array(value.prim(sargs), value.prim(env), value.prim(term), value.prim(goal))
-		local operative_result_val = evaluator.apply_value(handler, terms.value.tuple_value(tuple_args))
-		-- result should be able to be an inferred term, can fail
-		-- NYI: operative_cons in evaluator must use Maybe type once it exists
-		-- if not operative_result_val:is_enum_value() then
-		-- 	p(operative_result_val.kind)
-		-- 	print(operative_result_val:pretty_print())
-		-- 	return false, "applying operative did not result in value term with kind enum_value, typechecker or lua operative mistake when applying " .. tostring(a.anchor) .. " to the args " .. tostring(b.anchor)
-		-- end
-		-- variants: ok, error
-		--if operative_result_val.variant == "error" then
-		--	return false, semantic_error.operative_apply_failed(operative_result_val.data, { a.anchor, b.anchor })
-		--end
+			--local handler, userdata_type = op:unwrap_operative_type()
+			local handler, userdata_type = type_of_term:unwrap_operative_type()
+			-- operative input: env, syntax tree, goal type (if checked)
+			local tuple_args = value_array(value.prim(sargs), value.prim(env), value.prim(term), value.prim(goal))
+			local operative_result_val = evaluator.apply_value(handler, terms.value.tuple_value(tuple_args))
+			-- result should be able to be an inferred term, can fail
+			-- NYI: operative_cons in evaluator must use Maybe type once it exists
+			-- if not operative_result_val:is_enum_value() then
+			-- 	p(operative_result_val.kind)
+			-- 	print(operative_result_val:pretty_print())
+			-- 	return false, "applying operative did not result in value term with kind enum_value, typechecker or lua operative mistake when applying " .. tostring(a.anchor) .. " to the args " .. tostring(b.anchor)
+			-- end
+			-- variants: ok, error
+			--if operative_result_val.variant == "error" then
+			--	return false, semantic_error.operative_apply_failed(operative_result_val.data, { a.anchor, b.anchor })
+			--end
 
-		-- temporary, while it isn't a Maybe
-		local operative_result_elems = operative_result_val:unwrap_tuple_value()
-		local data = operative_result_elems[1]:unwrap_prim()
-		local env = operative_result_elems[2]:unwrap_prim()
-		--if not env then
-		--	print("operative_result_val.elements[2]", operative_result_val.elements[2]:pretty_print())
-		--	error "operative_result_val missing env"
-		--end
+			-- temporary, while it isn't a Maybe
+			local operative_result_elems = operative_result_val:unwrap_tuple_value()
+			local data = operative_result_elems[1]:unwrap_prim()
+			local env = operative_result_elems[2]:unwrap_prim()
+			--if not env then
+			--	print("operative_result_val.elements[2]", operative_result_val.elements[2]:pretty_print())
+			--	error "operative_result_val missing env"
+			--end
 
-		if goal:is_check() then
-			local checkable = data
-			local goal_type = goal:unwrap_check()
-			local usage_counts, term = evaluator.check(checkable, env.typechecking_context, goal_type)
-			return checkable_term.inferrable(inferrable_term.typed(goal_type, usage_counts, term)), env
-		elseif goal:is_infer() then
-			local resulting_type, usage_counts, term = infer(data, env.typechecking_context)
-			return inferrable_term.typed(resulting_type, usage_counts, term), env
-		else
-			error("NYI goal " .. goal.kind .. " for operative in expression_pairhandler")
+			if goal:is_check() then
+				local checkable = data
+				local goal_type = goal:unwrap_check()
+				local usage_counts, term = evaluator.check(checkable, env.typechecking_context, goal_type)
+				return checkable_term.inferrable(inferrable_term.typed(goal_type, usage_counts, term)), env
+			elseif goal:is_infer() then
+				local resulting_type, usage_counts, term = infer(data, env.typechecking_context)
+				return inferrable_term.typed(resulting_type, usage_counts, term), env
+			else
+				error("NYI goal " .. goal.kind .. " for operative in expression_pairhandler")
+			end
 		end
-	end)
+	)
 	if ok then
 		print("speculation succeeded for op type! " .. tostring(random))
 		return true, res_, env_
 	end
 	print("not op type " .. tostring(random))
-	print(res_)
+	if not type_of_term:is_pi() and not type_of_term:is_prim_function_type() then
+		print(res_)
+	end
 	print("end not op type")
 
 	if type_of_term:is_prim_function_type() then
 		print("B")
 	end
-	local ok, res_, env_ = evaluator.typechecker_state:speculate(function()
-		if type_of_term:is_prim_function_type() then
-			print("BA")
-		end
-		local pi = value.pi(
-			evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
-			param_info_explicit,
-			value.closure(
-				"#spec-pi",
-				typed_term.literal(evaluator.typechecker_state:metavariable(env.typechecking_context):as_value()),
-				env.typechecking_context.runtime_context
-			),
-			result_info_pure
-		)
-		if type_of_term:is_prim_function_type() then
-			print("BB")
-		end
-
-		evaluator.typechecker_state:flow(
-			type_of_term,
-			env.typechecking_context,
-			pi,
-			env.typechecking_context,
-			"Speculating on pi type"
-		)
-		if type_of_term:is_prim_function_type() then
-			print("BC")
-		end
-
-		local param_type, param_info, result_type, result_info = pi:unwrap_pi()
-		if type_of_term:is_prim_function_type() then
-			print("BD")
-		end
-
-		while param_info:unwrap_param_info():unwrap_visibility():is_implicit() do
-			local metavar = evaluator.typechecker_state:metavariable(env.typechecking_context)
-			local metavalue = metavar:as_value()
-			local metaresult = evaluator.apply_value(result_type, metavalue)
-			if not metaresult:is_pi() then
-				error(
-					"calling function with implicit args, result type applied on implicit args must be a function type"
-				)
+	local ok, res_, env_ = U.tag(
+		"speculate",
+		random,
+		evaluator.typechecker_state.speculate,
+		evaluator.typechecker_state,
+		function()
+			if type_of_term:is_prim_function_type() then
+				print("BA")
+			end
+			local pi = value.pi(
+				evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
+				param_info_explicit,
+				value.closure(
+					"#spec-pi",
+					typed_term.literal(evaluator.typechecker_state:metavariable(env.typechecking_context):as_value()),
+					env.typechecking_context.runtime_context
+				),
+				result_info_pure
+			)
+			if type_of_term:is_prim_function_type() then
+				print("BB")
 			end
 
-			-- local new_term = inferrable_term.application(inferrable_term.typed(type_of_term, usage_array(), term), checkable_term.inferrable(inferrable_term.typed(param_type, usage_array(), terms.typed_term.literal(metavar:as_value()))))
-			term = typed_term.application(term, terms.typed_term.literal(metavar:as_value()))
-			type_of_term = metaresult
-			param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
-		end
-		if type_of_term:is_prim_function_type() then
-			print("BE")
-		end
+			evaluator.typechecker_state:flow(
+				type_of_term,
+				env.typechecking_context,
+				pi,
+				env.typechecking_context,
+				"Speculating on pi type"
+			)
+			if type_of_term:is_prim_function_type() then
+				print("BC")
+			end
 
-		-- multiple quantity of usages in tuple with usage in function arguments
-		local ok, tuple, env = sargs:match({
-			collect_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
-		}, metalanguage.failure_handler, nil)
-		if type_of_term:is_prim_function_type() then
-			print("BF")
-		end
+			local param_type, param_info, result_type, result_info = pi:unwrap_pi()
+			if type_of_term:is_prim_function_type() then
+				print("BD")
+			end
 
-		if not ok then
-			error(tuple)
-		end
-		if type_of_term:is_prim_function_type() then
-			print("BG")
-		end
+			while param_info:unwrap_param_info():unwrap_visibility():is_implicit() do
+				local metavar = evaluator.typechecker_state:metavariable(env.typechecking_context)
+				local metavalue = metavar:as_value()
+				local metaresult = evaluator.apply_value(result_type, metavalue)
+				if not metaresult:is_pi() then
+					error(
+						"calling function with implicit args, result type applied on implicit args must be a function type"
+					)
+				end
 
-		---@type inferrable | checkable
-		local res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
-		if type_of_term:is_prim_function_type() then
-			print("BH")
-		end
+				-- local new_term = inferrable_term.application(inferrable_term.typed(type_of_term, usage_array(), term), checkable_term.inferrable(inferrable_term.typed(param_type, usage_array(), terms.typed_term.literal(metavar:as_value()))))
+				term = typed_term.application(term, terms.typed_term.literal(metavar:as_value()))
+				type_of_term = metaresult
+				param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
+			end
+			if type_of_term:is_prim_function_type() then
+				print("BE")
+			end
 
-		if goal:is_check() then
-			---@cast res inferrable
-			res = checkable_term.inferrable(res)
-		end
-		if type_of_term:is_prim_function_type() then
-			print("BI")
-		end
+			-- multiple quantity of usages in tuple with usage in function arguments
+			local ok, tuple, env = sargs:match({
+				collect_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
+			}, metalanguage.failure_handler, nil)
+			if type_of_term:is_prim_function_type() then
+				print("BF")
+			end
 
-		return res, env
-	end)
+			if not ok then
+				error(tuple)
+			end
+			if type_of_term:is_prim_function_type() then
+				print("BG")
+			end
+
+			---@type inferrable | checkable
+			local res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
+			if type_of_term:is_prim_function_type() then
+				print("BH")
+			end
+
+			if goal:is_check() then
+				---@cast res inferrable
+				res = checkable_term.inferrable(res)
+			end
+			if type_of_term:is_prim_function_type() then
+				print("BI")
+			end
+
+			return res, env
+		end
+	)
 	if ok then
 		print("speculation succeeded for pi type! " .. tostring(random))
 		return true, res_, env_
 	end
 	print("not pi type " .. tostring(random))
-	print(res_)
+	if not type_of_term:is_operative_type() and not type_of_term:is_prim_function_type() then
+		print(res_)
+	end
 	print("end not pi type")
 
 	if type_of_term:is_prim_function_type() then
 		print("C")
 	end
-	local ok, res_, env_ = evaluator.typechecker_state:speculate(function()
-		local prim_func = value.prim_function_type(
-			evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
-			evaluator.typechecker_state:metavariable(env.typechecking_context):as_value()
-		)
+	local ok, res_, env_ = U.tag(
+		"speculate",
+		random,
+		evaluator.typechecker_state.speculate,
+		evaluator.typechecker_state,
+		function()
+			local prim_func = value.prim_function_type(
+				evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
+				evaluator.typechecker_state:metavariable(env.typechecking_context):as_value()
+			)
 
-		evaluator.typechecker_state:flow(
-			type_of_term,
-			env.typechecking_context,
-			prim_func,
-			env.typechecking_context,
-			"Speculating on prim func type"
-		)
+			evaluator.typechecker_state:flow(
+				type_of_term,
+				env.typechecking_context,
+				prim_func,
+				env.typechecking_context,
+				"Speculating on prim func type"
+			)
 
-		local param_type, result_type = prim_func:unwrap_prim_function_type()
-		--print("checking prim_function_type call args with goal: (value term follows)")
-		--print(param_type)
-		-- multiple quantity of usages in tuple with usage in function arguments
-		local ok, tuple, env = sargs:match({
-			collect_prim_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
-		}, metalanguage.failure_handler, nil)
+			local param_type, result_type = prim_func:unwrap_prim_function_type()
+			--print("checking prim_function_type call args with goal: (value term follows)")
+			--print(param_type)
+			-- multiple quantity of usages in tuple with usage in function arguments
+			local ok, tuple, env = sargs:match({
+				collect_prim_tuple(
+					metalanguage.accept_handler,
+					ExpressionArgs.new(expression_goal.check(param_type), env)
+				),
+			}, metalanguage.failure_handler, nil)
 
-		if not ok then
-			error(semantic_error.prim_function_argument_collect_failed(tuple, { a.anchor, b.anchor }, {
-				prim_function_type = type_of_term,
-				prim_function_value = term,
-			}, orig_env))
+			if not ok then
+				error(semantic_error.prim_function_argument_collect_failed(tuple, { a.anchor, b.anchor }, {
+					prim_function_type = type_of_term,
+					prim_function_value = term,
+				}, orig_env))
+			end
+
+			---@type inferrable | checkable
+			local res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
+
+			if goal:is_check() then
+				---@cast res inferrable
+				res = checkable_term.inferrable(res)
+			end
+
+			return res, env
 		end
-
-		---@type inferrable | checkable
-		local res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
-
-		if goal:is_check() then
-			---@cast res inferrable
-			res = checkable_term.inferrable(res)
-		end
-
-		return res, env
-	end)
+	)
 	if ok then
 		print("speculation succeeded for prim func type! " .. tostring(random))
 		return true, res_, env_
 	end
 	print("not prim func type " .. tostring(random))
-	print(res_)
+	if not type_of_term:is_operative_type() and not type_of_term:is_pi() then
+		print(res_)
+	end
 	print("end not prim func type")
 
 	if type_of_term:is_prim_function_type() then
