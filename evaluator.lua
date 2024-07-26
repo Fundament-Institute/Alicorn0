@@ -547,13 +547,20 @@ end)
 add_comparer("value.singleton", "value.singleton", function(a, b)
 	local a_supertype, a_value = a:unwrap_singleton()
 	local b_supertype, b_value = b:unwrap_singleton()
-	typechecker_state:queue_subtype(a_supertype, b_supertype, "singleton")
+	typechecker_state:queue_subtype(a_supertype, b_supertype, "singleton supertypes")
 
 	if a_value == b_value then
 		return true
 	else
 		return false, "unequal singletons"
 	end
+end)
+
+add_comparer("value.tuple_defn_type", "value.tuple_defn_type", function(a, b)
+	local a_universe = a:unwrap_tuple_defn_type()
+	local b_universe = b:unwrap_tuple_defn_type()
+	typechecker_state:queue_subtype(a_universe, b_universe, "tuple_defn_type universes")
+	return true
 end)
 
 -- Compares any non-metavariables, or defers any metavariable comparisons to the work queue

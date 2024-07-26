@@ -495,7 +495,7 @@ let prim-tuple-type-implicit = lambda_implicit (U : universe)
 let tuple-def-empty = lambda ((U : universe))
 	let T = tuple-def-type(U)
 	let empty = intrinsic "return terms.empty" : wrapped(T)
-	implicit-unwrap(empty)
+	the T implicit-unwrap(empty)
 let jank-it-up = lambda (U : universe, defn : tuple-def-type(U))
 	forall (rest : tuple-type(U, defn)) -> (next : U)
 	#forall (rest : tuple-type-implicit(defn)) -> (next : U)
@@ -513,7 +513,7 @@ let tuple-def-elem = lambda (
 		inner
 			implicit-wrap(defn)
 			implicit-wrap(elem)
-	implicit-unwrap(T)
+	the tuple-def-type(U) implicit-unwrap(T)
 let tuple-of = lambda (U : universe, defn : tuple-def-type(U))
 	# ATTN: single parens here means bare lambda syntax
 	lambda (t : tuple-type(U, defn))
@@ -599,7 +599,7 @@ let tuple-def-concat = lambda (U : universe, head : tuple-def-type(U), tail : tu
 		:
 		prim-func-type (head : wrapped(tuple-def-type(U)), tail : wrapped(tuple-def-type(U))) -> ((cat : wrapped(tuple-def-type(U))))
 	let (cat) = inner(implicit-wrap(head), implicit-wrap(tail))
-	implicit-unwrap(cat)
+	the tuple-def-type(U) implicit-unwrap(cat)
 let tuple-concat = lambda (
 		U    : universe,
 		head : tuple-def-type(U),
@@ -651,7 +651,7 @@ let prim-tuple-concat = lambda (
 		:
 		prim-func-type (hd : wrapped(prim-tuple-type(U, head)), tl : wrapped(prim-tuple-type(U, tail))) -> ((cat : wrapped(prim-tuple-type(U, tuple-def-concat(U, head, tail)))))
 	let (cat) = inner(implicit-wrap(hd), implicit-wrap(tl))
-	implicit-unwrap(cat)
+	the prim-tuple-type(U, tuple-def-concat(U, head, tail)) implicit-unwrap(cat)
 
 let prim-literal = new-prim-type(new-prim-unique-id("literal"))
 
