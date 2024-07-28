@@ -459,7 +459,7 @@ local function expression_pairhandler(args, a, b)
 	local type_of_term, usage_count, term = infer(combiner, env.typechecking_context)
 	local random = {}
 
-	print("kind is " .. type_of_term.kind .. " " .. tostring(random))
+	--print("kind is " .. type_of_term.kind .. " " .. tostring(random))
 
 	if
 		(
@@ -533,11 +533,11 @@ local function expression_pairhandler(args, a, b)
 			local checkable = data
 			local goal_type = goal:unwrap_check()
 			local usage_counts, term = evaluator.check(checkable, env.typechecking_context, goal_type)
-			print("success: " .. tostring(random))
+			--print("success: " .. tostring(random))
 			return checkable_term.inferrable(inferrable_term.typed(goal_type, usage_counts, term)), env
 		elseif goal:is_infer() then
 			local resulting_type, usage_counts, term = infer(data, env.typechecking_context)
-			print("success: " .. tostring(random))
+			--print("success: " .. tostring(random))
 			return inferrable_term.typed(resulting_type, usage_counts, term), env
 		else
 			error("NYI goal " .. goal.kind .. " for operative in expression_pairhandler")
@@ -583,7 +583,7 @@ local function expression_pairhandler(args, a, b)
 			res = checkable_term.inferrable(res)
 		end
 
-		print("success: " .. tostring(random))
+		--print("success: " .. tostring(random))
 		return res, env
 	end
 	if type_of_term:is_pi() then
@@ -614,7 +614,7 @@ local function expression_pairhandler(args, a, b)
 			res = checkable_term.inferrable(res)
 		end
 
-		print("success: " .. tostring(random))
+		--print("success: " .. tostring(random))
 		return res, env
 	end
 	if type_of_term:is_prim_function_type() then

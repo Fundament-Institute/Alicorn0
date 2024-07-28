@@ -534,8 +534,8 @@ add_comparer("value.prim_function_type", "value.prim_function_type", function(a,
 		return true
 	end
 
-	local a_param_type, a_result_type = a:unwrap_pi()
-	local b_param_type, b_result_type = b:unwrap_pi()
+	local a_param_type, a_result_type = a:unwrap_prim_function_type()
+	local b_param_type, b_result_type = b:unwrap_prim_function_type()
 
 	typechecker_state:queue_subtype(b_param_type, a_param_type, "prim function parameters")
 	--local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))

@@ -148,7 +148,7 @@ let prim-array-get = lambda_implicit (T : prim-type)
 			:
 			prim-func-type (arr   : prim-array-type(T), index : prim-number) -> ((elem  : T))
 		let (elem) = inner(arr, index)
-		(the T elem)
+		elem
 
 let prim-file-read =
 	intrinsic
@@ -271,7 +271,7 @@ let tuple-to-prim-tuple-inner =
 let tuple-to-prim-tuple =
 	lambda (t : wrapped(type), valid : only-accept-prim-tuples(t), val : implicit-unwrap(prim-tuple-type-to-tuple-type(t, valid)))
 		let (res) = tuple-to-prim-tuple-inner(t, valid, implicit-wrap(val))
-		the implicit-unwrap(t) implicit-unwrap(res)
+		implicit-unwrap(res)
 
 let only-accept-prim-funcs-inner-prim =
 	intrinsic
@@ -495,7 +495,7 @@ let prim-tuple-type-implicit = lambda_implicit (U : universe)
 let tuple-def-empty = lambda ((U : universe))
 	let T = tuple-def-type(U)
 	let empty = intrinsic "return terms.empty" : wrapped(T)
-	the T implicit-unwrap(empty)
+	implicit-unwrap(empty)
 let jank-it-up = lambda (U : universe, defn : tuple-def-type(U))
 	forall (rest : tuple-type(U, defn)) -> (next : U)
 	#forall (rest : tuple-type-implicit(defn)) -> (next : U)
@@ -513,7 +513,7 @@ let tuple-def-elem = lambda (
 		inner
 			implicit-wrap(defn)
 			implicit-wrap(elem)
-	the tuple-def-type(U) implicit-unwrap(T)
+	implicit-unwrap(T)
 let tuple-of = lambda (U : universe, defn : tuple-def-type(U))
 	# ATTN: single parens here means bare lambda syntax
 	lambda (t : tuple-type(U, defn))
@@ -599,7 +599,7 @@ let tuple-def-concat = lambda (U : universe, head : tuple-def-type(U), tail : tu
 		:
 		prim-func-type (head : wrapped(tuple-def-type(U)), tail : wrapped(tuple-def-type(U))) -> ((cat : wrapped(tuple-def-type(U))))
 	let (cat) = inner(implicit-wrap(head), implicit-wrap(tail))
-	the tuple-def-type(U) implicit-unwrap(cat)
+	implicit-unwrap(cat)
 let tuple-concat = lambda (
 		U    : universe,
 		head : tuple-def-type(U),
@@ -651,7 +651,7 @@ let prim-tuple-concat = lambda (
 		:
 		prim-func-type (hd : wrapped(prim-tuple-type(U, head)), tl : wrapped(prim-tuple-type(U, tail))) -> ((cat : wrapped(prim-tuple-type(U, tuple-def-concat(U, head, tail)))))
 	let (cat) = inner(implicit-wrap(hd), implicit-wrap(tl))
-	the prim-tuple-type(U, tuple-def-concat(U, head, tail)) implicit-unwrap(cat)
+	implicit-unwrap(cat)
 
 let prim-literal = new-prim-type(new-prim-unique-id("literal"))
 
