@@ -37,7 +37,7 @@ local infer = evaluator.infer
 -- BUG: do not uncomment this, as speculation relies on changing evaluator.typechecking_state, which is masked by the local
 --local typechecker_state = evaluator.typechecker_state
 
-local p = require "pretty-print".prettyPrint
+--local p = require "pretty-print".prettyPrint
 local U = require "./alicorn-utils"
 
 local semantic_error_mt = {
@@ -459,19 +459,25 @@ local function expression_pairhandler(args, a, b)
 	local type_of_term, usage_count, term = infer(combiner, env.typechecking_context)
 	local random = {}
 
+	print("kind is " .. type_of_term.kind .. " " .. tostring(random))
+
 	if
-		type_of_term:is_neutral()
-		and type_of_term:unwrap_neutral():is_free()
-		and type_of_term:unwrap_neutral():unwrap_free():is_metavariable()
+		(
+			type_of_term:is_neutral()
+			and type_of_term:unwrap_neutral():is_free()
+			and type_of_term:unwrap_neutral():unwrap_free():is_metavariable()
+		) or type_of_term:is_range()
 	then
 		-- Speculate that this is a pi type
 		local ok, pi = evaluator.typechecker_state:speculate(function()
+			local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+			local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			local pi = value.pi(
-				evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
+				param_mv:as_value(),
 				param_info_explicit,
 				value.closure(
 					"#spec-pi",
-					typed_term.literal(evaluator.typechecker_state:metavariable(env.typechecking_context):as_value()),
+					typed_term.literal(result_mv:as_value()),
 					env.typechecking_context.runtime_context
 				),
 				result_info_pure
@@ -488,6 +494,14 @@ local function expression_pairhandler(args, a, b)
 				env.typechecking_context,
 				"Speculating on pi type"
 			)
+			if result_mv.value == 383 then
+				print("383!!! " .. tostring(random))
+				print("BEGIN VALUES")
+				p(evaluator.typechecker_state.values)
+				print("BEGIN GRAPH")
+				p(evaluator.typechecker_state.graph)
+				print("END")
+			end
 
 			return pi
 		end)
@@ -527,9 +541,11 @@ local function expression_pairhandler(args, a, b)
 			local checkable = data
 			local goal_type = goal:unwrap_check()
 			local usage_counts, term = evaluator.check(checkable, env.typechecking_context, goal_type)
+			print("success: " .. tostring(random))
 			return checkable_term.inferrable(inferrable_term.typed(goal_type, usage_counts, term)), env
 		elseif goal:is_infer() then
 			local resulting_type, usage_counts, term = infer(data, env.typechecking_context)
+			print("success: " .. tostring(random))
 			return inferrable_term.typed(resulting_type, usage_counts, term), env
 		else
 			error("NYI goal " .. goal.kind .. " for operative in expression_pairhandler")
@@ -575,6 +591,7 @@ local function expression_pairhandler(args, a, b)
 			res = checkable_term.inferrable(res)
 		end
 
+		print("success: " .. tostring(random))
 		return res, env
 	end
 	if type_of_term:is_pi() then
@@ -605,6 +622,7 @@ local function expression_pairhandler(args, a, b)
 			res = checkable_term.inferrable(res)
 		end
 
+		print("success: " .. tostring(random))
 		return res, env
 	end
 	if type_of_term:is_prim_function_type() then

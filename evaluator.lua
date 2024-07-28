@@ -2,6 +2,7 @@ local terms = require "./terms"
 local metalanguage = require "./metalanguage"
 local U = require "./alicorn-utils"
 local runtime_context = terms.runtime_context
+local s = require("./pretty-printer").s
 --local new_typechecking_context = terms.typechecking_context
 --local checkable_term = terms.checkable_term
 --local inferrable_term = terms.inferrable_term
@@ -67,6 +68,7 @@ end
 ---@return SubtypeRelation
 local function FunctionRelation(srel)
 	return {
+		debug_name = "FunctionRelation(" .. srel.debug_name .. ")",
 		srel = srel,
 		Rel = luatovalue(function(a, b) end, name_array("a", "b")),
 		refl = luatovalue(function(a) end, name_array("a")),
@@ -77,15 +79,7 @@ local function FunctionRelation(srel)
 			local applied_val = U.tag("apply_value", { val = val, use = use }, apply_value, val, u)
 			local applied_use = U.tag("apply_value", { val = val, use = use }, apply_value, use, u)
 
-			--  Call the constrain of our contained srel variable, which will throw an error if it fails
-			local tuple_params = value_array(value.prim(applied_val), value.prim(applied_use))
-			U.tag(
-				"apply_value",
-				{ val = val, use = use, applied_val = applied_val, applied_use = applied_use },
-				apply_value,
-				srel.constrain,
-				value.tuple_value(tuple_params)
-			)
+			typechecker_state:queue_constrain(applied_val, srel, applied_use, "FunctionRelation inner")
 		end, name_array("val", "use")),
 	}
 end
@@ -1075,7 +1069,15 @@ function infer(
 		local inner_context = typechecking_context:append(param_name, param_type, nil, anchor)
 		local body_type, body_usages, body_term = infer(body, inner_context)
 
-		local result_type = substitute_type_variables(body_type, #inner_context, param_name, typechecking_context)
+		local result_type = U.tag(
+			"substitute_type_variables",
+			{ body_type = body_type, index = #inner_context, block_level = typechecker_state.block_level },
+			substitute_type_variables,
+			body_type,
+			#inner_context,
+			param_name,
+			typechecking_context
+		)
 		--print("INFER ANNOTATED LAMBDA")
 		--print("result_type")
 		--print(result_type:pretty_print(typechecking_context))
@@ -1653,7 +1655,7 @@ function evaluate(typed_term, runtime_context)
 		end
 	elseif typed_term:is_tuple_elim() then
 		local names, subject, length, body = typed_term:unwrap_tuple_elim()
-		local subject_value = U.tag("evaluate", { subject = subject }, evaluate, subject, runtime_context)
+		local subject_value = U.tag("evaluate", { subject = subject, a = "a" }, evaluate, subject, runtime_context)
 		local inner_context = runtime_context
 		if subject_value:is_tuple_value() then
 			local subject_elements = subject_value:unwrap_tuple_value()
@@ -1984,6 +1986,7 @@ function evaluate(typed_term, runtime_context)
 end
 
 ---@class SubtypeRelation
+---@field debug_name string
 ---@field Rel value -- : (a:T,b:T) -> Prop__
 ---@field refl value -- : (a:T) -> Rel(a,a)
 ---@field antisym value -- : (a:T, B:T, Rel(a,b), Rel(b,a)) -> a == b
@@ -1992,11 +1995,18 @@ local SubtypeRelation = {}
 
 ---@type SubtypeRelation
 UniverseOmegaRelation = {
+	debug_name = "UniverseOmegaRelation",
 	Rel = luatovalue(function(a, b) end, name_array("a", "b")),
 	refl = luatovalue(function(a) end, name_array("a")),
 	antisym = luatovalue(function(a, b, r1, r2) end, name_array("a", "b", "r1", "r2")),
 	constrain = luatovalue(function(val, use)
-		local ok, err = U.tag("check_concrete", { val = val, use = use }, check_concrete, val, use)
+		local ok, err = U.tag(
+			"check_concrete",
+			{ val = val, use = use, block_level = typechecker_state.block_level },
+			check_concrete,
+			val,
+			use
+		)
 		if not ok then
 			error(err)
 		end
@@ -2098,10 +2108,34 @@ local function IndexedCollection(indices)
 		end
 	end
 
+	local function store_copy_inner(n, store)
+		local copy = {}
+		if n == 0 then
+			for i, v in ipairs(store) do
+				copy[i] = v
+			end
+			return copy
+		else
+			for k, v in pairs(store) do
+				copy[k] = store_copy_inner(n - 1, v)
+			end
+			return copy
+		end
+	end
+
+	local function store_copy(store)
+		local copy = {}
+		for name, extractors in pairs(indices) do
+			local depth = #extractors
+			copy[name] = store_copy_inner(depth, store[name])
+		end
+		return copy
+	end
+
 	function res:shadow()
 		local n = U.shallow_copy(self) -- Copy all the functions into a new table
 		n._collection = U.shadowarray(self._collection) -- Shadow collection
-		n._index_store = U.deep_copy(self._index_store) -- NYI: We need to properly shadow this at some point but right now we just copy the entire table
+		n._index_store = store_copy(self._index_store)
 		rawset(self, "__lock", true) --  This has to be down here or we'll accidentally copy it
 		rawset(self, "__locktrace", metalanguage.stack_trace("shadow occurred here"))
 		rawset(n, "__shadow", self)
@@ -2319,7 +2353,7 @@ function Reachability:constrain_transitivity(edge, queue, cause)
 	for _, l2 in ipairs(self.constrain_edges:to(edge.left)) do
 		---@cast l2 ConstrainEdge
 		if l2.rel ~= edge.rel then
-			error("Relations do not match! " .. tostring(l2.rel) .. " is not " .. tostring(edge.rel))
+			error("Relations do not match! " .. l2.rel.debug_name .. " is not " .. edge.rel.debug_name)
 		end
 		U.append(
 			queue,
@@ -2930,7 +2964,7 @@ function TypeCheckerState:slice_constraints_for(mv)
 		end
 	end
 
-	assert(reln)
+	assert(reln, "reln is still nil! " .. tostring(mv.value) .. " " .. tostring(mv.usage))
 
 	return above, below, reln
 end
