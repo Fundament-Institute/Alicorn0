@@ -171,7 +171,17 @@ local external_error_mt = {
 			.. " "
 			.. (self.anchor and tostring(self.anchor) or "at unknown position")
 			.. ":\n"
-			.. tostring(self.cause)
+		local cause = tostring(self.cause)
+		if cause:find("table", 1, true) == 1 then
+			for k, v in pairs(self.cause) do
+				message = message .. tostring(k)
+				message = message .. " = "
+				message = message .. tostring(v)
+				message = message .. "\n"
+			end
+		else
+			message = message .. cause
+		end
 		return message
 	end,
 	__index = ExternalError,
@@ -206,6 +216,9 @@ end
 
 --local pdump = require "pretty-print".dump
 local pdump = require("./pretty-printer").s
+-- local function pdump(_)
+-- 	return ""
+-- end
 local U = require("./alicorn-utils")
 
 -- this function should be called as an xpcall error handler
@@ -215,7 +228,7 @@ local function custom_traceback(err)
 	if type(err) == "table" then
 		return err
 	end
-	local s = err or "nil passed to error handler! DON'T DO THAT!"
+	local s = type(err) == "string" and err or "must pass string or table to error handler"
 	local i = 3
 	local info = debug.getinfo(i, "Sfln")
 	while info ~= nil do

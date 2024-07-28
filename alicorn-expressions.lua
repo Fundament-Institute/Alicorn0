@@ -37,7 +37,7 @@ local infer = evaluator.infer
 -- BUG: do not uncomment this, as speculation relies on changing evaluator.typechecking_state, which is masked by the local
 --local typechecker_state = evaluator.typechecker_state
 
-local p = require "pretty-print".prettyPrint
+--local p = require "pretty-print".prettyPrint
 local U = require "./alicorn-utils"
 
 local semantic_error_mt = {
@@ -546,12 +546,14 @@ local function expression_pairhandler(args, a, b)
 			if type_of_term:is_prim_function_type() then
 				print("BA")
 			end
+			local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+			local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			local pi = value.pi(
-				evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
+				param_mv:as_value(),
 				param_info_explicit,
 				value.closure(
 					"#spec-pi",
-					typed_term.literal(evaluator.typechecker_state:metavariable(env.typechecking_context):as_value()),
+					typed_term.literal(result_mv:as_value()),
 					env.typechecking_context.runtime_context
 				),
 				result_info_pure

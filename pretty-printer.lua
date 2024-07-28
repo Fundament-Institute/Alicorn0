@@ -135,6 +135,7 @@ function PrettyPrint:table(fields, ...)
 
 	local count = 0
 	local num = 0
+	local nums = {}
 	for k, v in pairs(fields) do
 		if k == "kind" then
 			self[#self + 1] = " "
@@ -143,11 +144,16 @@ function PrettyPrint:table(fields, ...)
 			-- nothing
 		elseif type(k) == "number" then
 			num = num + 1
+			nums[k] = true
 		else
 			count = count + 1
 		end
 	end
-	if count == 0 then
+	local seq = false
+	if count == 0 and #nums == num then
+		seq = true
+	end
+	if seq then
 		self[#self + 1] = self:_color()
 		self[#self + 1] = "["
 		self[#self + 1] = self:_resetcolor()
@@ -160,18 +166,18 @@ function PrettyPrint:table(fields, ...)
 		self[#self + 1] = self:_color()
 		self[#self + 1] = "]"
 		self[#self + 1] = self:_resetcolor()
-	elseif num == 0 and count == 1 then
-		self[#self + 1] = self:_color()
-		self[#self + 1] = "{"
-		self[#self + 1] = self:_resetcolor()
-		for k, v in pairs(fields) do
-			if not hidden_fields[k] then
-				self:any(v, ...)
-			end
-		end
-		self[#self + 1] = self:_color()
-		self[#self + 1] = "}"
-		self[#self + 1] = self:_resetcolor()
+	-- elseif num == 0 and count == 1 then
+	-- 	self[#self + 1] = self:_color()
+	-- 	self[#self + 1] = "{"
+	-- 	self[#self + 1] = self:_resetcolor()
+	-- 	for k, v in pairs(fields) do
+	-- 		if not hidden_fields[k] then
+	-- 			self:any(v, ...)
+	-- 		end
+	-- 	end
+	-- 	self[#self + 1] = self:_color()
+	-- 	self[#self + 1] = "}"
+	-- 	self[#self + 1] = self:_resetcolor()
 	else
 		self[#self + 1] = self:_color()
 		self[#self + 1] = " {\n"
