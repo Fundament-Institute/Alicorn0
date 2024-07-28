@@ -36,7 +36,7 @@
             cd ${./.}
             mkdir $out
             >&2 echo "Checking ${file}"
-            ${pkgs.lib.getExe luvitpkgs.packages.${system}.luvit} ${file}
+            ${pkgs.lib.getExe' luvitpkgs.packages.${system}.luvit "luvit"} ${file}
           '';
 
         lqc = luajit.pkgs.buildLuarocksPackage rec {
