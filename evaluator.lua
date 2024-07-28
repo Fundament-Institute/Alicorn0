@@ -1977,7 +1977,7 @@ function evaluate(typed_term, runtime_context)
 
 		local reln = evaluate(relation, runtime_context)
 
-		return terms.value.range(lower_acc, upper_acc, reln)
+		return value.range(lower_acc, upper_acc, reln)
 	else
 		error("evaluate: unknown kind: " .. typed_term.kind)
 	end
@@ -2371,7 +2371,7 @@ function Reachability:constrain_transitivity(edge, queue, cause)
 	for _, r2 in ipairs(self.constrain_edges:from(edge.right)) do
 		---@cast r2 ConstrainEdge
 		if r2.rel ~= edge.rel then
-			error("Relations do not match! " .. tostring(r2.rel) .. " is not " .. tostring(edge.rel))
+			error("Relations do not match! " .. r2.rel.debug_name .. " is not " .. edge.rel.debug_name)
 		end
 		U.append(
 			queue,
@@ -2563,10 +2563,10 @@ end
 
 ---@enum TypeCheckerTag
 local TypeCheckerTag = {
-	VALUE = {},
-	USAGE = {},
-	METAVAR = {},
-	RANGE = {},
+	VALUE = { VALUE = "VALUE" },
+	USAGE = { USAGE = "USAGE" },
+	METAVAR = { METAVAR = "METAVAR" },
+	RANGE = { RANGE = "RANGE" },
 }
 ---@param val value
 ---@param use value
@@ -2620,17 +2620,18 @@ function TypeCheckerState:check_value(v, tag, context)
 
 	if v:is_range() then
 		U.append(self.values, { v, TypeCheckerTag.RANGE, context })
-		checker[v] = #self.values
+		self.valcheck[v] = #self.values
+		self.usecheck[v] = #self.values
 		local v_id = #self.values
 
 		local lower_bounds, upper_bounds, relation = v:unwrap_range()
 
 		for _, bound in ipairs(lower_bounds) do
-			self:queue_constrain(v, relation, bound, "range unpacking")
+			self:queue_constrain(bound, relation:unwrap_prim(), v, "range unpacking")
 		end
 
 		for _, bound in ipairs(upper_bounds) do
-			self:queue_constrain(v, relation, bound, "range_unpacking")
+			self:queue_constrain(v, relation:unwrap_prim(), bound, "range_unpacking")
 		end
 
 		return v_id
@@ -2924,7 +2925,7 @@ function TypeCheckerState:slice_constraints_for(mv)
 				error("incorrectly labelled as a metavariable")
 			end
 		else
-			if not self.values[edge.left][2] == TypeCheckerTag.RANGE then
+			if not (self.values[edge.left][2] == TypeCheckerTag.RANGE) then
 				table.insert(below, self.values[edge.left][1])
 			end
 		end
@@ -2953,7 +2954,7 @@ function TypeCheckerState:slice_constraints_for(mv)
 				error("incorrectly labelled as a metavariable")
 			end
 		else
-			if not self.values[edge.left][2] == TypeCheckerTag.RANGE then
+			if not (self.values[edge.left][2] == TypeCheckerTag.RANGE) then
 				table.insert(above, self.values[edge.left][1])
 			end
 		end
