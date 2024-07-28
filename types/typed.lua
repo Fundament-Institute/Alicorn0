@@ -236,6 +236,12 @@ function typed:is_prim_intrinsic() end
 function typed:unwrap_prim_intrinsic() end
 ---@return boolean, typed, any
 function typed:as_prim_intrinsic() end
+---@return boolean
+function typed:is_range() end
+---@return any, any, typed
+function typed:unwrap_range() end
+---@return boolean, any, any, typed
+function typed:as_range() end
 ---@class (exact) typedType:Type
 ---@field bound_variable fun(index:number): typed
 ---@field literal fun(literal_value:value): typed
@@ -277,4 +283,5 @@ function typed:as_prim_intrinsic() end
 ---@field prim_user_defined_type fun(id:any, family_args:any): typed
 ---@field prim_if fun(subject:typed, consequent:typed, alternate:typed): typed
 ---@field prim_intrinsic fun(source:typed, anchor:any): typed
+---@field range fun(lower_bounds:any, upper_bounds:any, relation:typed): typed
 return {}

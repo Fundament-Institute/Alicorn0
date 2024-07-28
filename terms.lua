@@ -41,8 +41,10 @@ local expression_goal = gen.declare_type()
 local runtime_context_mt
 
 ---@class Metavariable
----@field value integer
----@field usage integer
+---@field value integer a unique key that denotes this metavariable in the graph
+---@field usage integer a unique key that denotes this metavariable in the graph
+---@field trait boolean indicates if this metavariable should be solved with trait search or biunification
+---@field block_level integer this probably shouldn't be inside the metavariable
 local Metavariable = {}
 
 ---@return value
@@ -461,6 +463,15 @@ typed_term:define_enum("typed", {
 		"source", typed_term,
 		"anchor", gen.anchor_type,
 	} },
+
+	-- a list of upper and lower bounds, and a relation being bound with respect to
+	{ "range", {
+		  "lower_bounds", array(typed_term),
+		  "upper_bounds", array(typed_term),
+		  "relation", typed_term -- a subtyping relation. not currently represented.
+	} },
+
+
 })
 
 local unique_id = gen.declare_foreign(function(val)
@@ -532,6 +543,13 @@ value:define_enum("value", {
 		"param_name", gen.builtin_string,
 		"code",       typed_term,
 		"capture",    runtime_context_type,
+	} },
+
+	-- a list of upper and lower bounds, and a relation being bound with respect to
+	{ "range", {
+		  "lower_bounds", array(value),
+		  "upper_bounds", array(value),
+		  "relation", value -- a subtyping relation. not currently represented.
 	} },
 
 	-- metaprogramming stuff

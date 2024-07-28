@@ -39,7 +39,7 @@ local result_info_pure = value.result_info(result_info(purity.pure))
 local OMEGA = 10
 local typechecker_state
 local evaluate, infer, check, apply_value
-local name_array = gen.declare_array(gen.builtin_string)
+local name_array = string_array
 local typed = terms.typed_term
 
 ---@param luafunc function
@@ -240,7 +240,31 @@ local function substitute_inner(val, mappings, context_len)
 			elseif free:is_unique() then
 				lookup = free:unwrap_unique()
 			elseif free:is_metavariable() then
-				lookup = free:unwrap_metavariable()
+				local mv = free:unwrap_metavariable()
+
+				if not (mv.block_level < typechecker_state.block_level) then
+					local above, below, reln = typechecker_state:slice_constraints_for(mv)
+
+					local above_acc, below_acc = typed_array(), typed_array()
+
+					for _, v in ipairs(above) do
+						local subject_term = substitute_inner(v, mappings, context_len)
+						above_acc:append(subject_term)
+					end
+
+					for _, v in ipairs(below) do
+						local subject_term = substitute_inner(v, mappings, context_len)
+						below_acc:append(subject_term)
+					end
+
+					return terms.typed_term.range(
+						below_acc,
+						above_acc,
+						terms.typed_term.literal(terms.value.prim(reln))
+					)
+				else
+					lookup = free:unwrap_metavariable()
+				end
 			else
 				error("substitute_inner NYI free with kind " .. free.kind)
 			end
@@ -351,6 +375,20 @@ local function substitute_inner(val, mappings, context_len)
 		local decls = val:unwrap_prim_tuple_type()
 		local decls = substitute_inner(decls, mappings, context_len)
 		return typed_term.prim_tuple_type(decls)
+	elseif val:is_range() then
+		local lower_bounds, upper_bounds, relation = val:unwrap_range()
+		local sub_lower_bounds = typed_array()
+		local sub_upper_bounds = typed_array()
+		for _, v in ipairs(lower_bounds) do
+			local sub = substitute_inner(v, mappings, context_len)
+			sub_lower_bounds:append(sub)
+		end
+		for _, v in ipairs(upper_bounds) do
+			local sub = substitute_inner(v, mappings, context_len)
+			sub_upper_bounds:append(sub)
+		end
+		local sub_relation = substitute_inner(relation, mappings, context_len)
+		return typed_term.range(sub_lower_bounds, sub_upper_bounds, sub_relation)
 	else
 		error("Unhandled value kind in substitute_inner: " .. val.kind)
 	end
@@ -1923,6 +1961,21 @@ function evaluate(typed_term, runtime_context)
 		local decl = typed_term:unwrap_prim_tuple_type()
 		local decl_val = evaluate(decl, runtime_context)
 		return value.prim_tuple_type(decl_val)
+	elseif typed_term:is_range() then
+		local lower_bounds, upper_bounds, relation = typed_term:unwrap_range()
+		local lower_acc, upper_acc = value_array(), value_array()
+
+		for _, v in lower_bounds:ipairs() do
+			lower_acc:append(evaluate(v, runtime_context))
+		end
+
+		for _, v in upper_bounds:ipairs() do
+			upper_acc:append(evaluate(v, runtime_context))
+		end
+
+		local reln = evaluate(relation, runtime_context)
+
+		return terms.value.range(lower_acc, upper_acc, reln)
 	else
 		error("evaluate: unknown kind: " .. typed_term.kind)
 	end
@@ -2094,25 +2147,28 @@ end
 ---@field usecheck { [value]: integer }
 ---@field trait_registry TraitRegistry
 local TypeCheckerState = {}
+--@field values { val: value, tag: TypeCheckerTag, context: TypecheckingContext|nil }
+
+---@alias NodeID integer the ID of a node in the graph
 
 ---@class ConstrainEdge
----@field left integer
+---@field left NodeID
 ---@field rel SubtypeRelation
 ---@field shallowest_block integer
----@field right integer
+---@field right NodeID
 
 ---@class LeftCallEdge
----@field left integer
+---@field left NodeID
 ---@field arg value
 ---@field rel SubtypeRelation
 ---@field shallowest_block integer
----@field right integer
+---@field right NodeID
 
 ---@class RightCallEdge
----@field left integer
+---@field left NodeID
 ---@field rel SubtypeRelation
 ---@field shallowest_block integer
----@field right integer
+---@field right NodeID
 ---@field arg value
 
 -- I wish I had generics in LuaCATS
@@ -2120,27 +2176,27 @@ local TypeCheckerState = {}
 ---@class ConstrainCollection
 ---@field add fun(self: ConstrainCollection,edge: ConstrainEdge)
 ---@field all fun(self: ConstrainCollection): ConstrainEdge[]
----@field from fun(self: ConstrainCollection,left: integer): ConstrainEdge[]
----@field to fun(self: ConstrainCollection,right: integer): ConstrainEdge[]
----@field between fun(self: ConstrainCollection,left: integer, right: integer): ConstrainEdge[]
+---@field from fun(self: ConstrainCollection,left: NodeID): ConstrainEdge[]
+---@field to fun(self: ConstrainCollection,right: NodeID): ConstrainEdge[]
+---@field between fun(self: ConstrainCollection,left: NodeID, right: NodeID): ConstrainEdge[]
 ---@field shadow fun(self: ConstrainCollection) : ConstrainCollection
 ---@field commit fun(self: ConstrainCollection)
 
 ---@class LeftCallCollection
 ---@field add fun(self: LeftCallCollection,edge: LeftCallEdge)
 ---@field all fun(self: LeftCallCollection): LeftCallEdge[]
----@field from fun(self: LeftCallCollection,left: integer): LeftCallEdge[]
----@field to fun(self: LeftCallCollection,right: integer): LeftCallEdge[]
----@field between fun(self: LeftCallCollection,left: integer, right: integer): LeftCallEdge[]
+---@field from fun(self: LeftCallCollection,left: NodeID): LeftCallEdge[]
+---@field to fun(self: LeftCallCollection,right: NodeID): LeftCallEdge[]
+---@field between fun(self: LeftCallCollection,left: NodeID, right: NodeID): LeftCallEdge[]
 ---@field shadow fun(self: LeftCallCollection) : LeftCallCollection
 ---@field commit fun(self: LeftCallCollection)
 
 ---@class RightCallCollection
 ---@field add fun(self: RightCallCollection,edge: RightCallEdge)
 ---@field all fun(self: RightCallCollection): RightCallEdge[]
----@field from fun(self: RightCallCollection,left: integer): RightCallEdge[]
----@field to fun(self: RightCallCollection,right: integer): RightCallEdge[]
----@field between fun(self: RightCallCollection,left: integer, right: integer): RightCallEdge[]
+---@field from fun(self: RightCallCollection,left: NodeID): RightCallEdge[]
+---@field to fun(self: RightCallCollection,right: NodeID): RightCallEdge[]
+---@field between fun(self: RightCallCollection,left: NodeID, right: NodeID): RightCallEdge[]
 ---@field shadow fun(self: RightCallCollection) : RightCallCollection
 ---@field commit fun(self: RightCallCollection)
 
@@ -2383,19 +2439,28 @@ local function reachability()
 	return setmetatable({
 		constrain_edges = IndexedCollection {
 			from = {
+
+				---@return integer
+				---@param obj ConstrainEdge
 				function(obj)
 					return obj.left
 				end,
 			},
 			to = {
+				---@return integer
+				---@param obj ConstrainEdge
 				function(obj)
 					return obj.right
 				end,
 			},
 			between = {
+				---@return integer
+				---@param obj ConstrainEdge
 				function(obj)
 					return obj.left
 				end,
+				---@return integer
+				---@param obj ConstrainEdge
 				function(obj)
 					return obj.right
 				end,
@@ -2403,19 +2468,27 @@ local function reachability()
 		},
 		leftcall_edges = IndexedCollection {
 			from = {
+				---@return integer
+				---@param obj LeftCallEdge
 				function(obj)
 					return obj.left
 				end,
 			},
 			to = {
+				---@return integer
+				---@param obj LeftCallEdge
 				function(obj)
 					return obj.right
 				end,
 			},
 			between = {
+				---@return integer
+				---@param obj LeftCallEdge
 				function(obj)
 					return obj.left
 				end,
+				---@return integer
+				---@param obj LeftCallEdge
 				function(obj)
 					return obj.right
 				end,
@@ -2423,19 +2496,27 @@ local function reachability()
 		},
 		rightcall_edges = IndexedCollection {
 			from = {
+				---@return integer
+				---@param obj RightCallEdge
 				function(obj)
 					return obj.left
 				end,
 			},
 			to = {
+				---@return integer
+				---@param obj RightCallEdge
 				function(obj)
 					return obj.right
 				end,
 			},
 			between = {
+				---@return integer
+				---@param obj RightCallEdge
 				function(obj)
 					return obj.left
 				end,
+				---@return integer
+				---@param obj RightCallEdge
 				function(obj)
 					return obj.right
 				end,
@@ -2444,11 +2525,12 @@ local function reachability()
 	}, reachability_mt)
 end
 
----@class TypeCheckerTag
+---@enum TypeCheckerTag
 local TypeCheckerTag = {
 	VALUE = {},
 	USAGE = {},
-	VAR = {},
+	METAVAR = {},
+	RANGE = {},
 }
 ---@param val value
 ---@param use value
@@ -2476,15 +2558,12 @@ end
 ---@param v value
 ---@param tag TypeCheckerTag
 ---@param context TypecheckingContext|nil
----@return integer
+---@return NodeID
 function TypeCheckerState:check_value(v, tag, context)
 	assert(v, "nil passed into check_value!")
 
 	if v:is_neutral() and v:unwrap_neutral():is_free() and v:unwrap_neutral():unwrap_free():is_metavariable() then
 		local mv = v:unwrap_neutral():unwrap_free():unwrap_metavariable()
-		if mv.value == 339 or mv.usage == 339 then
-			--error("339!!!!!")
-		end
 		if tag == TypeCheckerTag.VALUE then
 			assert(mv.value ~= nil)
 			return mv.value
@@ -2493,10 +2572,6 @@ function TypeCheckerState:check_value(v, tag, context)
 			return mv.usage
 		end
 	end
-
-	--if v:is_neutral() then
-	--error("Don't know how to process nuetral value! " .. tostring(v))
-	--end
 
 	local checker = self.valcheck
 	if tag == TypeCheckerTag.USAGE then
@@ -2507,9 +2582,27 @@ function TypeCheckerState:check_value(v, tag, context)
 		return checker[v]
 	end
 
-	U.append(self.values, { v, tag, context })
-	checker[v] = #self.values
-	return #self.values
+	if v:is_range() then
+		U.append(self.values, { v, TypeCheckerTag.RANGE, context })
+		checker[v] = #self.values
+		local v_id = #self.values
+
+		local lower_bounds, upper_bounds, relation = v:unwrap_range()
+
+		for _, bound in ipairs(lower_bounds) do
+			self:queue_constrain(v, relation, bound, "range unpacking")
+		end
+
+		for _, bound in ipairs(upper_bounds) do
+			self:queue_constrain(v, relation, bound, "range_unpacking")
+		end
+
+		return v_id
+	else
+		U.append(self.values, { v, tag, context })
+		checker[v] = #self.values
+		return #self.values
+	end
 end
 
 ---@return Metavariable
@@ -2518,10 +2611,11 @@ end
 function TypeCheckerState:metavariable(context, trait)
 	local i = #self.values + 1
 	local mv = setmetatable(
+		-- block level here should probably be inside the context and not inside the metavariable
 		{ value = i, usage = i, trait = trait or false, block_level = self.block_level },
 		terms.metavariable_mt
 	)
-	U.append(self.values, { mv:as_value(), TypeCheckerTag.VAR })
+	U.append(self.values, { mv:as_value(), TypeCheckerTag.METAVAR })
 	return mv
 end
 
@@ -2574,7 +2668,7 @@ function TypeCheckerState:constrain_induce_call(left, right, rel)
 	---@type value, TypeCheckerTag, TypecheckingContext
 	local rvalue, rtag, rctx = table.unpack(self.values[right])
 
-	if ltag == TypeCheckerTag.VAR and lvalue:is_neutral() and lvalue:unwrap_neutral():is_application_stuck() then
+	if ltag == TypeCheckerTag.METAVAR and lvalue:is_neutral() and lvalue:unwrap_neutral():is_application_stuck() then
 		local f, arg = lvalue:unwrap_neutral():unwrap_application_stuck()
 		local l = self:check_value(value.neutral(f), TypeCheckerTag.VALUE, nil)
 		U.append(
@@ -2583,7 +2677,7 @@ function TypeCheckerState:constrain_induce_call(left, right, rel)
 		)
 	end
 
-	if rtag == TypeCheckerTag.VAR and rvalue:is_neutral() and rvalue:unwrap_neutral():is_application_stuck() then
+	if rtag == TypeCheckerTag.METAVAR and rvalue:is_neutral() and rvalue:unwrap_neutral():is_application_stuck() then
 		local f, arg = rvalue:unwrap_neutral():unwrap_application_stuck()
 		local r = self:check_value(value.neutral(f), TypeCheckerTag.USAGE, nil)
 		U.append(
@@ -2597,7 +2691,7 @@ end
 ---@param edge ConstrainEdge
 function TypeCheckerState:constrain_leftcall_compose_1(edge)
 	local mvalue, mtag, mctx = table.unpack(self.values[edge.right])
-	if mtag == TypeCheckerTag.VAR then
+	if mtag == TypeCheckerTag.METAVAR then
 		for _, r2 in ipairs(self.graph.leftcall_edges:from(edge.right)) do
 			if FunctionRelation(r2.rel) ~= edge.rel then
 				error(
@@ -2622,7 +2716,7 @@ end
 ---@param edge LeftCallEdge
 function TypeCheckerState:constrain_leftcall_compose_2(edge)
 	local mvalue, mtag, mctx = table.unpack(self.values[edge.left])
-	if mtag == TypeCheckerTag.VAR then
+	if mtag == TypeCheckerTag.METAVAR then
 		for _, l2 in ipairs(self.graph.constrain_edges:to(edge.left)) do
 			if l2.rel ~= FunctionRelation(edge.rel) then
 				error(
@@ -2648,7 +2742,7 @@ end
 ---@param edge ConstrainEdge
 function TypeCheckerState:rightcall_constrain_compose_2(edge)
 	local mvalue, mtag, mctx = table.unpack(self.values[edge.left])
-	if mtag == TypeCheckerTag.VAR then
+	if mtag == TypeCheckerTag.METAVAR then
 		for _, l2 in ipairs(self.graph.rightcall_edges:to(edge.left)) do
 			if FunctionRelation(l2.rel) ~= edge.rel then
 				error(
@@ -2674,7 +2768,7 @@ end
 ---@param edge RightCallEdge
 function TypeCheckerState:rightcall_constrain_compose_1(edge)
 	local mvalue, mtag, mctx = table.unpack(self.values[edge.right])
-	if mtag == TypeCheckerTag.VAR then
+	if mtag == TypeCheckerTag.METAVAR then
 		for _, r2 in ipairs(self.graph.constrain_edges:from(edge.right)) do
 			if r2.rel ~= FunctionRelation(edge.rel) then
 				error(
@@ -2756,6 +2850,89 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 
 	assert(#self.pending == 0, "pending was not drained!")
 	return true
+end
+
+---extract a region of a graph based on the block depth around a metavariable, for use in substitution
+---@param mv Metavariable
+---@return value[], value[], SubtypeRelation
+function TypeCheckerState:slice_constraints_for(mv)
+	-- take only the constraints that are against this metavariable in such a way that it remains valid as we exit the block
+	-- if the metavariable came from a "lower" block it is still in scope and may gain additional constraints in the future
+	-- because this metavariable is from an outer scope, it doesn't have any constraints against something that is in the deeper scope and needs to be substituted,
+	-- so we want to NOT include anything on the deeper side of a constraint towards this metavariable
+
+	-- left is tail, right is head
+	-- things flow ltr
+	-- values flow to usages
+
+	local above = {}
+	local below = {}
+	local reln = nil
+
+	--cut off metavariables that are the same level as this metavar or deeper
+	--retain all concrete constraints
+	for _, edge in ipairs(self.graph.constrain_edges:to(mv.usage)) do
+		if self.values[edge.left][2] == TypeCheckerTag.METAVAR then
+			local mvo = self.values[edge.left][1]
+
+			if
+				mvo:is_neutral()
+				and mvo:unwrap_neutral():is_free()
+				and mvo:unwrap_neutral():unwrap_free():is_metavariable()
+			then
+				mvo = mvo:unwrap_neutral():unwrap_free():unwrap_metavariable()
+				if mvo.block_level < self.block_level then
+					table.insert(below, self.values[edge.left][1])
+				end
+			else
+				error("incorrectly labelled as a metavariable")
+			end
+		else
+			if not self.values[edge.left][2] == TypeCheckerTag.RANGE then
+				table.insert(below, self.values[edge.left][1])
+			end
+		end
+
+		if reln and reln ~= edge.rel then
+			error "relations don't match"
+		end
+		if not reln then
+			reln = edge.rel
+		end
+	end
+	for _, edge in ipairs(self.graph.constrain_edges:from(mv.value)) do
+		if self.values[edge.left][2] == TypeCheckerTag.METAVAR then
+			local mvo = self.values[edge.left][1]
+
+			if
+				mvo:is_neutral()
+				and mvo:unwrap_neutral():is_free()
+				and mvo:unwrap_neutral():unwrap_free():is_metavariable()
+			then
+				mvo = mvo:unwrap_neutral():unwrap_free():unwrap_metavariable()
+				if mvo.block_level < self.block_level then
+					table.insert(above, self.values[edge.left][1])
+				end
+			else
+				error("incorrectly labelled as a metavariable")
+			end
+		else
+			if not self.values[edge.left][2] == TypeCheckerTag.RANGE then
+				table.insert(above, self.values[edge.left][1])
+			end
+		end
+
+		if reln and reln ~= edge.rel then
+			error "relations don't match"
+		end
+		if not reln then
+			reln = edge.rel
+		end
+	end
+
+	assert(reln)
+
+	return above, below, reln
 end
 
 local typechecker_state_mt = { __index = TypeCheckerState }
