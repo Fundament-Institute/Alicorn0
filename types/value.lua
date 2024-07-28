@@ -41,6 +41,12 @@ function value:unwrap_closure() end
 ---@return boolean, string, typed, any
 function value:as_closure() end
 ---@return boolean
+function value:is_range() end
+---@return any, any, any
+function value:unwrap_range() end
+---@return boolean, any, any, any
+function value:as_range() end
+---@return boolean
 function value:is_name_type() end
 ---@return boolean
 function value:is_name() end
@@ -233,6 +239,7 @@ function value:as_singleton() end
 ---@field result_info fun(result_info:any): value
 ---@field pi fun(param_type:value, param_info:value, result_type:value, result_info:value): value
 ---@field closure fun(param_name:string, code:typed, capture:any): value
+---@field range fun(lower_bounds:any, upper_bounds:any, relation:any): value
 ---@field name_type value
 ---@field name fun(name:string): value
 ---@field operative_value fun(userdata:value): value

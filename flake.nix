@@ -51,11 +51,8 @@
 
           knownRockspec = "${src}/rockspecs/lua-quickcheck-${version}.rockspec";
 
-          propagatedBuildInputs = [
-            luajit
-            luajit.pkgs.luafilesystem
-            luajit.pkgs.argparse
-          ];
+          propagatedBuildInputs =
+            [ luajit luajit.pkgs.luafilesystem luajit.pkgs.argparse ];
         };
 
       in
@@ -104,6 +101,18 @@
               luvitpkgs.packages.${system}.lit
               luvitpkgs.packages.${system}.luvit
               pkgs.stylua
+
+              (pkgs.lua-language-server.overrideAttrs {
+                version = "unstable";
+                src = pkgs.fetchFromGitHub {
+                  owner = "luals";
+                  repo = "lua-language-server";
+                  rev = "7d06e5573c8188e61516e987b0d796a40f718b05";
+                  hash = "sha256-mNG/IqRkXHVwUU06e1oD/3WBa5k09ddYUsiQN4MFaOU";
+                  fetchSubmodules = true;
+                };
+
+              })
 
               (luajit.withPackages
                 (ps: with ps; [ luasocket lpeg inspect luaunit tl lqc ]))
