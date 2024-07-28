@@ -458,7 +458,6 @@ local function expression_pairhandler(args, a, b)
 	-- combiner was an evaluated typed value, now it isn't
 	local type_of_term, usage_count, term = infer(combiner, env.typechecking_context)
 	local random = {}
-	local thing = false
 
 	print("kind is " .. type_of_term.kind .. " " .. tostring(random))
 
@@ -495,17 +494,6 @@ local function expression_pairhandler(args, a, b)
 				env.typechecking_context,
 				"Speculating on pi type"
 			)
-			if result_mv.value == 383 then
-				print("383!!! 1 " .. tostring(random))
-				print(#(evaluator.typechecker_state.graph.constrain_edges:to(383)))
-				print(evaluator.typechecker_state.graph.constrain_edges.__shadow)
-				-- print("BEGIN VALUES")
-				-- p(evaluator.typechecker_state.values)
-				-- print("BEGIN GRAPH")
-				-- p(evaluator.typechecker_state.graph)
-				-- print("END")
-				thing = true
-			end
 
 			return pi
 		end)
@@ -513,17 +501,6 @@ local function expression_pairhandler(args, a, b)
 			error("speculate DID NOT work for pi!: " .. tostring(pi))
 		end
 		type_of_term = pi
-	end
-
-	if thing then
-		print("383!!! 2 " .. tostring(random))
-		print(#(evaluator.typechecker_state.graph.constrain_edges:to(383)))
-		print(evaluator.typechecker_state.graph.constrain_edges)
-		-- print("BEGIN VALUES")
-		-- p(evaluator.typechecker_state.values)
-		-- print("BEGIN GRAPH")
-		-- p(evaluator.typechecker_state.graph)
-		-- print("END")
 	end
 
 	local function call_operative()
