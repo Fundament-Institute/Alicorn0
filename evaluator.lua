@@ -2078,7 +2078,7 @@ local function IndexedCollection(indices)
 			local args = { ... }
 			assert(#args == #v, "Must have one argument per key extractor")
 
-			local store = res._index_store[k]
+			local store = self._index_store[k]
 			for i = 1, #indices[k] do
 				if store[args[i]] == nil then
 					store[args[i]] = {}
@@ -2096,7 +2096,7 @@ local function IndexedCollection(indices)
 		-- end
 		U.append(self._collection, obj)
 		for name, extractors in pairs(indices) do
-			local store = res._index_store[name]
+			local store = self._index_store[name]
 			for i, kx in ipairs(extractors) do
 				local key = kx(obj)
 				if store[key] then
