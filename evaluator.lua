@@ -2078,9 +2078,14 @@ local function IndexedCollection(indices)
 			assert(#args == #v, "Must have one argument per key extractor")
 
 			local store = self._index_store[k]
-			for i = 1, #indices[k] do
+			for i = 1, #v do
 				if store[args[i]] == nil then
-					store[args[i]] = {}
+					-- We early return here to make things easier, but if you require that all nodes have a persistent identity,
+					-- you'll have to re-implement the behavior below where it inserts empty tables until the search query succeeds.
+					return {}
+
+					-- If you want to implement this behavior, then this function must also shadow the tree properly
+					--store[args[i]] = {}
 				end
 
 				store = store[args[i]]
@@ -2088,23 +2093,70 @@ local function IndexedCollection(indices)
 			return store
 		end
 	end
+
+	---This function is made easier because we know we're ALWAYS inserting a new item, so we ALWAYS shadow any tables we
+	---encounter that aren't shadowed yet (and also aren't new insertions on this layer).
+	---@generic T
+	---@param obj any
+	---@param store T
+	---@param i integer
+	---@param extractors any[]
+	---@param level integer
+	---@return T
+	local function insert_tree(obj, store, i, extractors, level)
+		if store == nil then
+			store = {}
+			level = -1
+		end
+		local curlevel = U.getshadowdepth(store)
+		if i > #extractors then
+			if level > 0 then
+				for j = curlevel + 1, level do
+					store = U.shadowarray(store)
+				end
+				assert(U.getshadowdepth(store) == level, "Improper shadowing happened!")
+			end
+			U.append(store, obj)
+			return store
+		end
+		local kx = extractors[i]
+		local key = kx(obj)
+		if level > 0 then
+			-- shadow the node enough times so that the levels match
+			for j = curlevel + 1, level do
+				store = U.shadowtable(store)
+			end
+			assert(U.getshadowdepth(store) == level, "Improper shadowing happened!")
+		end
+		-- Note: it might be *slightly* more efficient to only reassign if the returned table is different, but the commit
+		-- only copies completely new keys anyway so it doesn't really matter.
+		local oldlevel = 0
+		if store[key] then
+			oldlevel = U.getshadowdepth(store[key])
+		end
+		store[key] = insert_tree(obj, store[key], i + 1, extractors, level)
+
+		-- Any time we shadow something more than once, we have some "skipped" levels in-between that must be assigned
+		local parent = store
+		local child = store[key]
+		local newlevel = U.getshadowdepth(child)
+		for j = oldlevel + 1, newlevel - 1 do
+			parent = rawget(parent, "__shadow")
+			child = rawget(child, "__shadow")
+			rawset(parent, key, child)
+		end
+
+		return store
+	end
+
 	function res:add(obj)
 		if rawget(self, "__lock") then
 			error("Modifying a shadowed object! This should never happen!")
 		end
 		U.append(self._collection, obj)
 		for name, extractors in pairs(indices) do
-			local store = self._index_store[name]
-			for i, kx in ipairs(extractors) do
-				local key = kx(obj)
-				if store[key] then
-					store = store[key]
-				else
-					store[key] = {}
-					store = store[key]
-				end
-			end
-			U.append(store, obj)
+			self._index_store[name] =
+				insert_tree(obj, self._index_store[name], 1, extractors, U.getshadowdepth(self._index_store))
 		end
 	end
 
@@ -2135,17 +2187,44 @@ local function IndexedCollection(indices)
 	function res:shadow()
 		local n = U.shallow_copy(self) -- Copy all the functions into a new table
 		n._collection = U.shadowarray(self._collection) -- Shadow collection
-		n._index_store = store_copy(self._index_store)
+		n._index_store = U.shadowtable(self._index_store)
 		rawset(self, "__lock", true) --  This has to be down here or we'll accidentally copy it
 		rawset(self, "__locktrace", metalanguage.stack_trace("shadow occurred here"))
 		rawset(n, "__shadow", self)
 		return n
 	end
 
+	---To commit all the tree nodes, we only copy keys that do not exist at all in the shadowed table
+	---@param n table
+	local function commit_tree_node(n)
+		setmetatable(n, nil)
+		assert(type(n) == "table")
+		local base = rawget(n, "__shadow")
+		if base then
+			for k, v in pairs(n) do
+				-- skip internal keys
+				if type(k) == "string" and string.sub(k, 1, 2) == "__" then
+					goto continue
+				end
+				if base[k] == nil then
+					rawset(base, k, v)
+				end
+				-- The base of the tree is actually an array, so we don't recurse into it
+				if type(k) ~= "integer" then
+					commit_tree_node(v)
+				end
+				::continue::
+			end
+			rawset(n, "__shadow", nil)
+			rawset(base, "__lock", nil)
+		end
+	end
+
 	function res:commit()
 		U.commit(self._collection)
+
+		commit_tree_node(self._index_store)
 		local orig = rawget(self, "__shadow")
-		orig._index_store = self._index_store
 		rawset(orig, "__lock", nil)
 		rawset(orig, "__locktrace", nil)
 		rawset(self, "__shadow", nil)

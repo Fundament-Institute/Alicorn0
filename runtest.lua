@@ -1,6 +1,7 @@
 local endTime = os.time() + 3
 --while os.time() < endTime do end
 
+local startTime = os.clock()
 local metalanguage = require "./metalanguage"
 local evaluator = require "./evaluator"
 local format = require "./format-adapter"
@@ -73,7 +74,7 @@ local ok, expr, env = code:match(
 	nil
 )
 if not ok then
-	print("evaluating failed")
+	print("evaluating failed in " .. tostring(os.clock() - startTime) .. " seconds")
 	print(expr)
 	return
 end

@@ -137,7 +137,7 @@ local shadowtable_mt = {
 ---@return T
 function M.shadowtable(t)
 	rawset(t, "__lock", true)
-	return setmetatable({ __shadow = t }, shadowtable_mt)
+	return setmetatable({ __shadow = t, __depth = rawget(t, "__depth") or 1 }, shadowtable_mt)
 end
 
 ---@generic T
@@ -145,7 +145,11 @@ end
 ---@return { [integer]: T, __length: integer }
 function M.shadowarray(t)
 	rawset(t, "__lock", true)
-	return setmetatable({ __shadow = t, __length = #t }, shadowarray_mt)
+	return setmetatable({ __shadow = t, __length = #t, __depth = rawget(t, "__depth") or 1 }, shadowarray_mt)
+end
+
+function M.getshadowdepth(t)
+	return rawget(t, "__depth") or 0
 end
 
 ---Given a shadowed table, flattens its values on to the shadowed table below and returns it
@@ -190,24 +194,6 @@ function M.shallow_copy(src)
 		t[k] = v
 	end
 	return t
-end
-
----@generic T
----@param orig T
----@return T
-function M.deep_copy(orig)
-	local orig_type = type(orig)
-	local copy
-	if orig_type == "table" then
-		copy = {}
-		for orig_key, orig_value in next, orig, nil do
-			copy[M.deep_copy(orig_key)] = M.deep_copy(orig_value)
-		end
-		setmetatable(copy, M.deep_copy(getmetatable(orig)))
-	else -- number, string, boolean, etc
-		copy = orig
-	end
-	return copy
 end
 
 ---@param t table
