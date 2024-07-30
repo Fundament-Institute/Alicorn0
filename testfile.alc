@@ -374,7 +374,7 @@ let sub_type = forall (x : prim-number, y : prim-number) -> (res : prim-number)
 
 let (orig-results) = get-prim-func-res-inner(implicit-wrap(foo), prim-nil)
 # FIXME: implicit-unwrap here causes new-results to fail due to trying
-# to call something whose type is a metavariable
+# to apply() something whose type is a metavariable
 let orig-results = unwrap(func-conv-res-type(oldargs), orig-results)
 #let orig-results = implicit-unwrap(orig-results)
 let new-results =
@@ -390,8 +390,9 @@ let prim-func-type-to-func-type =
 		let (newargs) = prim-tuple-type-to-tuple-type-inner(oldargs, oldargs-valid)
 		let (orig-results-wrapped) = get-prim-func-res-inner(implicit-wrap(T), valid)
 		# FIXME: implicit-unwrap here causes new-results to fail due to trying
-		# to call something whose type is a metavariable
+		# to apply() something whose type is a metavariable
 		let orig-results = unwrap(func-conv-res-type(oldargs), orig-results-wrapped)
+		#let orig-results = implicit-unwrap(orig-results-wrapped)
 		
 		let new-results =
 			lambda ((args : implicit-unwrap(newargs)))
@@ -401,6 +402,7 @@ let prim-func-type-to-func-type =
 				newres
 
 		# FIXME: implicit-unwrap here causes nearest_star_level to fail
+		#forall (x : implicit-unwrap(newargs)) -> (y : implicit-unwrap(new-results(x)))
 		forall (x : unwrap(type, newargs)) -> (y : unwrap(type, new-results(x)))
 
 prim-func-type-to-func-type foo prim-nil
@@ -456,10 +458,7 @@ let prim-if-wrap = intrinsic
 		)
 	:
 	wrapped(prim-if-type)
-# FIXME: implicit-unwrap here causes its usages to fail due to trying
-# to call something whose type is a metavariable
-let prim-if = unwrap(prim-if-type, prim-if-wrap)
-#let prim-if = implicit-unwrap(prim-if-wrap)
+let prim-if = implicit-unwrap(prim-if-wrap)
 
 let tuple-def-type-inner = intrinsic "return terms.value.tuple_defn_type" :
 	prim-func-type ((U : wrapped(universe))) -> ((T : wrapped(prim-type)))
@@ -471,6 +470,7 @@ let tuple-type = lambda (U : universe, decls : tuple-def-type(U))
 		prim-func-type ((decls : wrapped(tuple-def-type(U)))) -> ((T : wrapped(prim-type)))
 	let (T) = inner(implicit-wrap(decls))
 	# FIXME: implicit-unwrap here causes nearest_star_level to fail in tuple-def-elem
+	#implicit-unwrap(T)
 	unwrap(prim-type, T)
 let prim-tuple-type = lambda (U : universe, decls : tuple-def-type(U))
 	let inner = intrinsic "return terms.value.prim_tuple_type" :
@@ -484,6 +484,7 @@ let tuple-type-implicit = lambda_implicit (U : universe)
 			prim-func-type ((decls : wrapped(tuple-def-type(U)))) -> ((T : wrapped(prim-type)))
 		let (T) = inner(implicit-wrap(decls))
 		# FIXME: implicit-unwrap here causes nearest_star_level to fail in tuple-def-elem
+		#implicit-unwrap(T)
 		unwrap(prim-type, T)
 let prim-tuple-type-implicit = lambda_implicit (U : universe)
 	lambda (decls : tuple-def-type(U))
@@ -496,6 +497,7 @@ let tuple-def-empty = lambda ((U : universe))
 	let empty = intrinsic "return terms.empty" : wrapped(T)
 	implicit-unwrap(empty)
 let jank-it-up = lambda (U : universe, defn : tuple-def-type(U))
+	# FIXME: when tuple-type-implicit works, unjank this
 	forall (rest : tuple-type(U, defn)) -> (next : U)
 	#forall (rest : tuple-type-implicit(defn)) -> (next : U)
 let tuple-def-elem = lambda (
@@ -986,6 +988,7 @@ let tupleof-ascribed-names-match-result-defn =
 		lambda ((ok : prim-bool))
 			prim-if(ok, tupleof-ascribed-names-reducer-thread-type, prim-lua-error)
 
+# FIXME: tupleof_ascribed_names_inner can only produce tuple defs in star-0
 let tupleof-ascribed-names-reducer = intrinsic "return base_env.tupleof_ascribed_names_inner" :
 	reducer-type(prim-unit, tupleof-ascribed-names-reducer-storage-defn, tupleof-ascribed-names-reducer-result2-defn, tupleof-ascribed-names-match-result-defn)
 
@@ -1092,6 +1095,7 @@ let tuple-of = lambda_implicit(T : type_(10))
 	lambda (xs : T)
 		xs
 
+# TODO: test this when tuple-def-op can do more than just star-0
 #let point = lambda_implicit (U : type_(10))
 #	lambda ((T : U))
 #		tuple-type(U, tuple-def-op(x : T, y : T))
