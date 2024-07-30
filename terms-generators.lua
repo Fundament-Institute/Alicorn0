@@ -245,7 +245,7 @@ end
 local map_type_mt = {
 	__call = function(self)
 		local val = {
-			__map = {},
+			_map = {},
 		}
 		setmetatable(val, self)
 		return val
@@ -258,13 +258,13 @@ local map_type_mt = {
 ---@class Map: Type
 local map_methods = {
 	pairs = function(self)
-		return pairs(self.__map)
+		return pairs(self._map)
 	end,
 	pretty_print = function(self, prefix)
 		local np = prefix .. " "
 		local parts = {}
 		local i = 1
-		for k, v in pairs(self.__map) do
+		for k, v in pairs(self._map) do
 			local function pp(x, p)
 				---@diagnostic disable-next-line
 				return ((type(x) == "table" and x.pretty_print) or tostring)(x, p)
@@ -274,27 +274,21 @@ local map_methods = {
 		end
 		return string.format("[\n" .. np .. "%s\n" .. prefix .. "]", table.concat(parts, ",\n" .. np))
 	end,
-}
-
-local function gen_map_fns(key_type, value_type)
-	local function index(self, key)
-		local method = map_methods[key]
-		if method then
-			return method
-		end
+	get = function(self, key)
+		local mt = getmetatable(self)
+		local key_type = mt.key_type
+		local value_type = mt.value_type
 		if key_type.value_check(key) ~= true then
 			p("map-index", key_type, value_type)
 			p(key)
 			error("wrong key type passed to indexing")
 		end
-		return self.__map[key]
-	end
-	local function newindex(self, key, value)
-		local method = map_methods[key]
-		if method then
-			p(method)
-			error("attempted index-assignment that shadows a method")
-		end
+		return self._map[key]
+	end,
+	set = function(self, key, value)
+		local mt = getmetatable(self)
+		local key_type = mt.key_type
+		local value_type = mt.value_type
 		if key_type.value_check(key) ~= true then
 			p("map-index-assign", key_type, value_type)
 			p(key)
@@ -305,7 +299,20 @@ local function gen_map_fns(key_type, value_type)
 			p(value)
 			error("wrong value type passed to index-assignment")
 		end
-		self.__map[key] = value
+		self._map[key] = value
+	end,
+}
+
+local function gen_map_fns(key_type, value_type)
+	local function index(self, key)
+		local method = map_methods[key]
+		if method then
+			return method
+		end
+		error("indexing of maps is disallowed. use :get()")
+	end
+	local function newindex(self, key, value)
+		error("index-assignment of maps is disallowed. use :set()")
 	end
 	return index, newindex
 end
