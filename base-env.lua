@@ -685,9 +685,14 @@ local function lambda_impl_implicit(syntax, env)
 	local shadow, inner_env = env:enter_block()
 	-- TODO: use correct name in lambda parameter instead of adding an extra let
 	inner_env = inner_env:bind_local(
-		terms.binding.annotated_lambda("#lambda-arguments", thread.args, syntax.anchor, terms.visibility.implicit)
+		terms.binding.annotated_lambda(
+			"#lambda-implicit-arguments",
+			thread.args,
+			syntax.anchor,
+			terms.visibility.implicit
+		)
 	)
-	local _, arg = inner_env:get("#lambda-arguments")
+	local _, arg = inner_env:get("#lambda-implicit-arguments")
 	if single then
 		inner_env = inner_env:bind_local(terms.binding.let(names, arg))
 	else

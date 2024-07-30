@@ -97,7 +97,6 @@ let new-prim-type-family = lambda (unique-id : prim-unique-id, signature : type_
 		:
 		prim-func-type (unique-id : prim-unique-id, signature_ : wrapped(type_(1))) -> ((family    : wrapped(signature)))
 	let (family) = inner(unique-id, implicit-wrap(signature))
-	# FIXME: results with metavariable type are poorly handled at this time
 	implicit-unwrap(family)
 let new-prim-type = lambda ((unique-id : prim-unique-id))
 	let Tfam = new-prim-type-family unique-id
@@ -778,10 +777,10 @@ let prim-term-of-inner = intrinsic
 		end
 		return prim_term_of
 	:
-	prim-func-type ((goal : prim-goal)) -> ((t : prim-type))
+	prim-func-type ((goal : prim-goal)) -> ((t : wrapped(prim-type)))
 let prim-term-of = lambda ((goal : prim-goal))
 	let (t) = prim-term-of-inner(goal)
-	t
+	implicit-unwrap(t)
 let goalify-inferrable = intrinsic
 	""""
 		local function goalify_inferrable(goal, inferrable)
@@ -887,24 +886,26 @@ let error-filter =
 		let (val) = inner(ok, val-or-err)
 		val
 
+let goal-infer = intrinsic "return terms.expression_goal.infer" : prim-goal
+
 let do-impl-type = operative-handler-type(prim-unit)
 
 let do-impl = lambda (syn : prim-syntax, env : prim-environment, ud : prim-unit, goal : prim-goal)
 	let (shadowed, inner_env) = enter-block(env)
 
-	let (args) = expression-args-new(goal, inner_env)
+	let (args) = expression-args-new(goal-infer, inner_env)
 	let s = prim-tuple-of(prim-type, block-reducer-storage-defn)(args)
 
-	let matcher-t = prim-matcher(prim-unit, block-match-result-defn(goal))
+	let matcher-t = prim-matcher(prim-unit, block-match-result-defn(goal-infer))
 	let matcher =
 		prim-matcher-reducible
 			prim-unit
 			block-reducer-storage-defn
-			block-reducer-result2-defn(goal)
-			block-match-result-defn(goal)
-			block-reducer(goal)
+			block-reducer-result2-defn(goal-infer)
+			block-match-result-defn(goal-infer)
+			block-reducer(goal-infer)
 			s
-			block-match-accept-handler(goal)
+			block-match-accept-handler(goal-infer)
 
 	let matchers =
 		prim-array-set
@@ -915,16 +916,18 @@ let do-impl = lambda (syn : prim-syntax, env : prim-environment, ud : prim-unit,
 	let (ok, term, inner_env) =
 		match-syntax
 			prim-unit
-			block-match-result-defn(goal)
+			block-match-result-defn(goal-infer)
 			matchers
-			block-match-failure-handler(goal)
+			block-match-failure-handler(goal-infer)
 			syn
 			prim-nil
 
-	let term = error-filter(prim-term-of(goal), prim-lua-error, ok, term)
+	let term = error-filter(prim-term-of(goal-infer), prim-lua-error, ok, term)
 	let inner_env = error-filter(prim-environment, prim-unit, ok, inner_env)
 
 	let (env, wrapped) = exit-block(inner_env, term, shadowed)
+
+	let (wrapped) = goalify-inferrable(goal, wrapped)
 
 	tuple-of(prim-type, operative-result-defn(goal))(wrapped, env)
 
@@ -1089,10 +1092,10 @@ let tuple-of = lambda_implicit(T : type_(10))
 	lambda (xs : T)
 		xs
 
-let point = lambda_implicit (U : type_(10))
-	lambda ((T : U))
-		tuple-type(U, tuple-def-op(x : T, y : T))
-
+#let point = lambda_implicit (U : type_(10))
+#	lambda ((T : U))
+#		tuple-type(U, tuple-def-op(x : T, y : T))
+#
 #let mkpoint = lambda_implicit (U : type_(10), T : U)
 #	lambda (x : T, y : T)
 #		the point(T) tuple-of(x, y)
