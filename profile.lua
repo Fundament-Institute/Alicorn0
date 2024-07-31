@@ -24,7 +24,7 @@ local function start()
 			end
 			if check then
 				_, goal = debug.getlocal(thread, i, 3)
-				_, inferred_type = debug.getlocal(thread, i, 5)
+				--_, inferred_type = debug.getlocal(thread, i, 5)
 			end
 			stack_n = stack_n + 1
 			stack[stack_n] = {
@@ -80,8 +80,8 @@ local function dump(profile_file)
 				if d.check then
 					profile_out:write(d.goal:pretty_print(d.context), "\n")
 					profile_out:write(d.goal:default_print(), "\n")
-					profile_out:write(d.inferred_type:pretty_print(d.context), "\n")
-					profile_out:write(d.inferred_type:default_print(), "\n")
+					--profile_out:write(d.inferred_type:pretty_print(d.context), "\n")
+					--profile_out:write(d.inferred_type:default_print(), "\n")
 				end
 				t = true
 			end
