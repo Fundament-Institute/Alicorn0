@@ -346,10 +346,11 @@ local function substitute_inner(val, mappings, context_len)
 	elseif val:is_prim_string_type() then
 		return typed_term.literal(val)
 	elseif val:is_prim_function_type() then
-		local param_type, result_type = val:unwrap_prim_function_type()
+		local param_type, result_type, resinfo = val:unwrap_prim_function_type()
 		local param_type = substitute_inner(param_type, mappings, context_len)
 		local result_type = substitute_inner(result_type, mappings, context_len)
-		return typed_term.prim_function_type(param_type, result_type)
+		local resinfo = substitute_inner(resinfo, mappings, context_len)
+		return typed_term.prim_function_type(param_type, result_type, resinfo)
 	elseif val:is_prim_wrapped_type() then
 		local type = val:unwrap_prim_wrapped_type()
 		local type = substitute_inner(type, mappings, context_len)
@@ -1539,13 +1540,15 @@ function infer(
 	elseif inferrable_term:is_level0() then
 		return value.level_type, usage_array(), typed_term.level0
 	elseif inferrable_term:is_prim_function_type() then
-		local args, returns = inferrable_term:unwrap_prim_function_type()
+		local args, returns, resinfo = inferrable_term:unwrap_prim_function_type()
 		local arg_type, arg_usages, arg_term = infer(args, typechecking_context)
 		local return_type, return_usages, return_term = infer(returns, typechecking_context)
+		local resinfo_usages, resinfo_term = check(resinfo, typechecking_context, value.result_info_type)
 		local res_usages = usage_array()
 		add_arrays(res_usages, arg_usages)
 		add_arrays(res_usages, return_usages)
-		return value.prim_type_type, res_usages, typed_term.prim_function_type(arg_term, return_term)
+		add_arrays(res_usages, resinfo_usages)
+		return value.prim_type_type, res_usages, typed_term.prim_function_type(arg_term, return_term, resinfo_term)
 	elseif inferrable_term:is_prim_tuple_type() then
 		local decls = inferrable_term:unwrap_prim_tuple_type()
 		local decl_type, decl_usages, decl_term = infer(decls, typechecking_context)
@@ -1923,10 +1926,11 @@ function evaluate(typed_term, runtime_context)
 			error "Tried to load an intrinsic with something that isn't a string"
 		end
 	elseif typed_term:is_prim_function_type() then
-		local args, returns = typed_term:unwrap_prim_function_type()
+		local args, returns, resinfo = typed_term:unwrap_prim_function_type()
 		local args_val = evaluate(args, runtime_context)
 		local returns_val = evaluate(returns, runtime_context)
-		return value.prim_function_type(args_val, returns_val)
+		local resinfo_val = evaluate(resinfo, runtime_context)
+		return value.prim_function_type(args_val, returns_val, resinfo_val)
 	elseif typed_term:is_level0() then
 		return value.level(0)
 	elseif typed_term:is_level_suc() then

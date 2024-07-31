@@ -101,7 +101,7 @@
               luvitpkgs.packages.${system}.lit
               luvitpkgs.packages.${system}.luvit
               pkgs.stylua
-
+              pkgs.inferno
               (pkgs.lua-language-server.overrideAttrs {
                 version = "unstable";
                 src = pkgs.fetchFromGitHub {

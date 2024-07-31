@@ -18,6 +18,7 @@ local derivers = require "./derivers"
 
 local map = gen.declare_map
 local array = gen.declare_array
+local set = gen.declare_set
 
 ---@module "./types/checkable"
 local checkable_term = gen.declare_type()
@@ -332,7 +333,7 @@ inferrable_term:define_enum("inferrable", {
 		"param_type",  inferrable_term, -- must be a prim_tuple_type
 		-- primitive functions can only have explicit arguments
 		"result_type", inferrable_term, -- must be a prim_tuple_type
-		-- primitive functions can only be pure for now
+		"result_info", checkable_term,
 	} },
 	{ "prim_wrapped_type", { "type", inferrable_term } },
 	{ "prim_unstrict_wrapped_type", { "type", inferrable_term } },
@@ -350,6 +351,14 @@ inferrable_term:define_enum("inferrable", {
 		"type",   inferrable_term, --checkable_term,
 		"anchor", gen.anchor_type,
 	} },
+	{ "program_sequence", {
+		"first", inferrable_term,
+		"continue", inferrable_term
+	} },
+	{ "program_type", {
+		"effect_type", inferrable_term,
+		"result_type", inferrable_term
+	} }
 })
 
 -- typed terms have been typechecked but do not store their type internally
@@ -442,7 +451,7 @@ typed_term:define_enum("typed", {
 		"param_type",  typed_term, -- must be a prim_tuple_type
 		-- primitive functions can only have explicit arguments
 		"result_type", typed_term, -- must be a prim_tuple_type
-		-- primitive functions can only be pure for now
+		"result_info", typed_term,
 	} },
 	{ "prim_wrapped_type", { "type", typed_term } },
 	{ "prim_unstrict_wrapped_type", { "type", typed_term } },
@@ -471,7 +480,25 @@ typed_term:define_enum("typed", {
 		  "relation", typed_term -- a subtyping relation. not currently represented.
 	} },
 
-
+	{ "program_end", {
+		"result", typed_term
+	} },
+	{ "program_invoke", {
+		"effect_tag", typed_term,
+		"effect_arg", typed_term
+	} },
+	{ "program_continue", {
+		"first", typed_term,
+		"continue", typed_term
+	} },
+	{ "effect_type", {
+		"components", array(typed_term),
+		"base", typed_term
+	} },
+	{ "program_type", {
+		"effect_type", typed_term,
+		"result_type", typed_term
+	}}
 })
 
 local unique_id = gen.declare_foreign(function(val)
@@ -507,6 +534,67 @@ local purity = gen.declare_enum("purity", {
 
 ---@module "./types/result_info"
 local result_info = gen.declare_record("result_info", { "purity", purity })
+
+---@class Registry
+---@field idx integer
+---@field name string
+local Registry = {}
+
+---add an entry to the registry, retrieving a unique identifier for it.
+---@param name string
+---@param debuginfo any
+---@return table
+function Registry:register(name, debuginfo)
+	return {
+		name = name,
+		debuginfo = debuginfo,
+		registry = self,
+	}
+end
+
+local registry_mt = { __index = Registry }
+---construct a registry for a specific kind of things
+---@param name string
+---@return Registry
+local function new_registry(name)
+	return setmetatable({ name = name }, registry_mt)
+end
+
+---@module './types/effect_id'
+local effect_id = gen.declare_type()
+effect_id:define_record("effect_id", {
+	"primary",
+	unique_id,
+	"extension",
+	set(unique_id), --TODO: switch to a set
+})
+
+local semantic_id = gen.declare_type()
+semantic_id:define_record("semantic_id", {
+	"primary",
+	unique_id,
+	"extension",
+	set(unique_id), --TODO: switch to a set
+})
+
+--TODO: consider switching to a nicer coterm representation
+---@module './types/continuation'
+local continuation = gen.declare_type()
+continuation:define_enum("continuation", {
+	{ "empty" },
+	{ "frame", {
+		"context",
+		runtime_context_type,
+		"code",
+		typed_term,
+	} },
+	{ "sequence", {
+		"first",
+		continuation,
+		"second",
+		continuation,
+	} },
+})
 
 -- values must always be constructed in their simplest form, that cannot be reduced further.
 -- their format must enforce this invariant.
@@ -616,7 +704,7 @@ value:define_enum("value", {
 		"param_type",  value, -- must be a prim_tuple_type
 		-- primitive functions can only have explicit arguments
 		"result_type", value, -- must be a prim_tuple_type
-		-- primitive functions can only be pure for now
+		"result_info", value,
 	} },
 	{ "prim_wrapped_type", { "type", value } },
 	{ "prim_unstrict_wrapped_type", { "type", value } },
@@ -644,6 +732,25 @@ value:define_enum("value", {
 		"supertype", value,
 		"value",     value,
 	} },
+	{ "program_end", {
+		"result", value
+	} },
+	{ "program_cont", {
+		"action", unique_id,
+		"argument", value,
+		"continuation", continuation
+	} },
+	{ "effect_empty" },
+	{ "effect_type", { "tag", effect_id}},
+	{ "effect_row", {
+		"components", set(unique_id),
+		"rest", value
+	} },
+	{ "effect_row_type" },
+	{ "program_type", {
+		"effect_sig", value,
+		"base_type", value
+	} }
 })
 
 -- stylua: ignore
@@ -764,6 +871,11 @@ local tuple_defn = value.enum_value("variant",
 	)
 )]]
 
+local effect_registry = new_registry("effect")
+local TCState =
+	effect_id(effect_registry:register("TCState", "effects that manipulate the typechecker state"), set(unique_id)())
+local lua_prog = effect_id(effect_registry:register("lua_prog", "running effectful lua code"), set(unique_id)())
+
 local terms = {
 	metavariable_mt = metavariable_mt,
 	checkable_term = checkable_term, -- {}
@@ -797,6 +909,12 @@ local terms = {
 	empty = empty,
 	unit_type = unit_type,
 	unit_val = unit_val,
+	effect_id = effect_id,
+	continuation = continuation,
+
+	effect_registry = effect_registry,
+	TCState = TCState,
+	lua_prog = lua_prog,
 }
 
 local override_prettys = require("./terms-pretty.lua")(terms)

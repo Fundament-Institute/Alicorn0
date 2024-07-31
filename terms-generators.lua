@@ -363,13 +363,13 @@ local function set_prettyprintable(self, printer, ...)
 end
 
 local set_methods = {
-	set = function(self, key)
+	put = function(self, key)
 		local mt = getmetatable(self)
 		local key_type = mt.key_type
 		if key_type.value_check(key) ~= true then
-			p("set-set", key_type)
+			p("set-put", key_type)
 			p(key)
-			error("wrong key type passed to set:set")
+			error("wrong key type passed to set:put")
 		end
 		self._set[key] = true
 	end,

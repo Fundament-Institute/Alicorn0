@@ -5,7 +5,7 @@ local function start()
 	profile = require("jit.profile")
 	profile_n = 0
 	profile_samples = {}
-	profile.start("li100", function(thread, samples, vmstate)
+	profile.start("li10", function(thread, samples, vmstate)
 		local stack_n = 0
 		local stack = {}
 		-- luajit's profiler loops from 0 to 100

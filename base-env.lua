@@ -15,6 +15,7 @@ local typed = terms.typed_term
 
 local param_info_explicit = value.param_info(value.visibility(terms.visibility.explicit))
 local result_info_pure = value.result_info(terms.result_info(terms.purity.pure))
+local result_info_effectful = value.result_info(terms.result_info(terms.purity.effectful))
 
 local usage_array = gen.declare_array(gen.builtin_number)
 
@@ -399,70 +400,95 @@ local prim_ascribed_segment = metalang.reducer(
 )
 
 -- TODO: abstract so can reuse for func type and prim func type
----@type lua_operative
-local function prim_func_type_impl(syntax, env)
-	if not env or not env.enter_block then
-		error "env isn't an environment in prim_func_type_impl"
-	end
+local function make_prim_func_syntax(effectful)
+	---@type lua_operative
+	local function prim_func_type_impl(syntax, env)
+		if not env or not env.enter_block then
+			error "env isn't an environment in prim_func_type_impl"
+		end
 
-	local ok, params_thread, tail = syntax:match({
-		metalang.listtail(
-			metalang.accept_handler,
-			prim_ascribed_segment(metalang.accept_handler, env),
-			metalang.symbol_exact(metalang.accept_handler, "->")
-		),
-	}, metalang.failure_handler, nil)
-	if not ok then
-		return ok, params_thread
-	end
-	local params_single = params_thread.single
-	local params_args = params_thread.args
-	local params_names = params_thread.names
-	env = params_thread.env
+		local ok, params_thread, tail = syntax:match({
+			metalang.listtail(
+				metalang.accept_handler,
+				prim_ascribed_segment(metalang.accept_handler, env),
+				metalang.symbol_exact(metalang.accept_handler, "->")
+			),
+		}, metalang.failure_handler, nil)
+		if not ok then
+			return ok, params_thread
+		end
+		local params_single = params_thread.single
+		local params_args = params_thread.args
+		local params_names = params_thread.names
+		env = params_thread.env
 
-	--print("moving on to return type")
+		--print("moving on to return type")
 
-	local shadowed
-	shadowed, env = env:enter_block()
-	-- tail.anchor can be nil so we fall back to the anchor for the start of this prim func type if needed
-	-- TODO: use correct name in lambda parameter instead of adding an extra let
-	env = env:bind_local(
-		terms.binding.annotated_lambda(
-			"#prim-func-arguments",
-			params_args,
-			tail.anchor or syntax.anchor,
-			terms.visibility.explicit
+		local shadowed
+		shadowed, env = env:enter_block()
+		-- tail.anchor can be nil so we fall back to the anchor for the start of this prim func type if needed
+		-- TODO: use correct name in lambda parameter instead of adding an extra let
+		env = env:bind_local(
+			terms.binding.annotated_lambda(
+				"#prim-func-arguments",
+				params_args,
+				tail.anchor or syntax.anchor,
+				terms.visibility.explicit
+			)
 		)
-	)
-	local ok, arg = env:get("#prim-func-arguments")
-	if not ok then
-		error("wtf")
-	end
-	---@cast arg -string
-	if params_single then
-		env = env:bind_local(terms.binding.let(params_names, arg))
-	else
-		env = env:bind_local(terms.binding.tuple_elim(params_names, arg))
+		local ok, arg = env:get("#prim-func-arguments")
+		if not ok then
+			error("wtf")
+		end
+		---@cast arg -string
+		if params_single then
+			env = env:bind_local(terms.binding.let(params_names, arg))
+		else
+			env = env:bind_local(terms.binding.tuple_elim(params_names, arg))
+		end
+
+		local ok, results_thread = tail:match({
+			metalang.listmatch(metalang.accept_handler, prim_ascribed_segment(metalang.accept_handler, env)),
+		}, metalang.failure_handler, nil)
+		if not ok then
+			return ok, results_thread
+		end
+
+		local results_args = results_thread.args
+		env = results_thread.env
+
+		if effectful then
+			local effect_description =
+				terms.value.effect_row(gen.declare_set(terms.unique_id)(terms.lua_prog), terms.value.effect_empty)
+			local effect_term = terms.inferrable_term.typed(
+				terms.value.effect_row_type,
+				usage_array(),
+				terms.typed_term.literal(effect_description)
+			)
+			results_args = terms.inferrable_term.program_type(effect_term, results_args)
+		end
+
+		local env, fn_res_term = env:exit_block(results_args, shadowed)
+		local fn_type_term = terms.inferrable_term.prim_function_type(
+			params_args,
+			fn_res_term,
+			terms.checkable_term.inferrable(
+				terms.inferrable_term.typed(
+					terms.value.result_info_type,
+					usage_array(),
+					terms.typed_term.literal(effectful and result_info_pure or result_info_effectful)
+				)
+			)
+		)
+
+		--print("reached end of function type construction")
+		if not env.enter_block then
+			error "env isn't an environment at end in prim_func_type_impl"
+		end
+		return true, fn_type_term, env
 	end
 
-	local ok, results_thread = tail:match({
-		metalang.listmatch(metalang.accept_handler, prim_ascribed_segment(metalang.accept_handler, env)),
-	}, metalang.failure_handler, nil)
-	if not ok then
-		return ok, results_thread
-	end
-
-	local results_args = results_thread.args
-	env = results_thread.env
-
-	local env, fn_res_term = env:exit_block(results_args, shadowed)
-	local fn_type_term = terms.inferrable_term.prim_function_type(params_args, fn_res_term)
-
-	--print("reached end of function type construction")
-	if not env.enter_block then
-		error "env isn't an environment at end in prim_func_type_impl"
-	end
-	return true, fn_type_term, env
+	return prim_func_type_impl
 end
 
 -- TODO: abstract so can reuse for func type and prim func type
@@ -902,7 +928,8 @@ local core_operations = {
 	intrinsic = exprs.primitive_operative(intrinsic, "intrinsic"),
 	["prim-number"] = lit_term(value.prim_number_type, value.prim_type_type),
 	["prim-type"] = lit_term(value.prim_type_type, value.star(1)),
-	["prim-func-type"] = exprs.primitive_operative(prim_func_type_impl, "prim_func_type_impl"),
+	["prim-func-type"] = exprs.primitive_operative(make_prim_func_syntax(false), "prim_func_type_impl"),
+	["prim-prog-type"] = exprs.primitive_operative(make_prim_func_syntax(true), "prim_prog_type_impl"),
 	type = lit_term(value.star(0), value.star(1)),
 	type_ = exprs.primitive_operative(startype_impl, "startype_impl"),
 	["forall"] = exprs.primitive_operative(forall_type_impl, "forall_type_impl"),

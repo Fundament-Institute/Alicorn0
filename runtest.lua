@@ -68,6 +68,9 @@ local env = base_env.create()
 local shadowed, env = env:enter_block()
 
 print("Expression -> terms")
+if profile_run then
+	profile.start()
+end
 local ok, expr, env = code:match(
 	{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, env)) },
 	metalanguage.failure_handler,
@@ -88,9 +91,7 @@ if print_inferrable then
 end
 
 print("Inferring")
-if profile_run then
-	profile.start()
-end
+
 local type, usages, term = evaluator.infer(bound_expr, terms.typechecking_context())
 if profile_run then
 	profile.stop()

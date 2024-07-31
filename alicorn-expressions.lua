@@ -1132,8 +1132,11 @@ end
 ---@return inferrable
 local function primitive_applicative(fn, params, results)
 	local literal_prim_fn = terms.typed_term.literal(terms.value.prim(fn))
-	local prim_fn_type = terms.value.prim_function_type(build_prim_type_tuple(params), build_prim_type_tuple(results))
-
+	local prim_fn_type = terms.value.prim_function_type(
+		build_prim_type_tuple(params),
+		build_prim_type_tuple(results),
+		terms.value.result_info(terms.result_info(terms.purity.pure))
+	)
 	return terms.inferrable_term.typed(prim_fn_type, usage_array(), literal_prim_fn)
 end
 
