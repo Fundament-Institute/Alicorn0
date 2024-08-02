@@ -135,6 +135,7 @@ function PrettyPrint:table(fields, ...)
 
 	local count = 0
 	local num = 0
+	local nums = {}
 	for k, v in pairs(fields) do
 		if k == "kind" then
 			self[#self + 1] = " "
@@ -143,11 +144,16 @@ function PrettyPrint:table(fields, ...)
 			-- nothing
 		elseif type(k) == "number" then
 			num = num + 1
+			nums[k] = true
 		else
 			count = count + 1
 		end
 	end
-	if count == 0 then
+	local seq = false
+	if count == 0 and #nums == num then
+		seq = true
+	end
+	if seq then
 		self[#self + 1] = self:_color()
 		self[#self + 1] = "["
 		self[#self + 1] = self:_resetcolor()
@@ -160,18 +166,18 @@ function PrettyPrint:table(fields, ...)
 		self[#self + 1] = self:_color()
 		self[#self + 1] = "]"
 		self[#self + 1] = self:_resetcolor()
-	elseif num == 0 and count == 1 then
-		self[#self + 1] = self:_color()
-		self[#self + 1] = "{"
-		self[#self + 1] = self:_resetcolor()
-		for k, v in pairs(fields) do
-			if not hidden_fields[k] then
-				self:any(v, ...)
-			end
-		end
-		self[#self + 1] = self:_color()
-		self[#self + 1] = "}"
-		self[#self + 1] = self:_resetcolor()
+	-- elseif num == 0 and count == 1 then
+	-- 	self[#self + 1] = self:_color()
+	-- 	self[#self + 1] = "{"
+	-- 	self[#self + 1] = self:_resetcolor()
+	-- 	for k, v in pairs(fields) do
+	-- 		if not hidden_fields[k] then
+	-- 			self:any(v, ...)
+	-- 		end
+	-- 	end
+	-- 	self[#self + 1] = self:_color()
+	-- 	self[#self + 1] = "}"
+	-- 	self[#self + 1] = self:_resetcolor()
 	else
 		self[#self + 1] = self:_color()
 		self[#self + 1] = " {\n"
@@ -181,7 +187,9 @@ function PrettyPrint:table(fields, ...)
 			if not hidden_fields[k] then
 				self:_prefix()
 				self[#self + 1] = k
+				self[#self + 1] = self:_color()
 				self[#self + 1] = " = "
+				self[#self + 1] = self:_resetcolor()
 				self:any(v, ...)
 				self[#self + 1] = ",\n"
 			end
@@ -230,7 +238,9 @@ function PrettyPrint:record(kind, fields, ...)
 			end
 			self:_prefix()
 			self[#self + 1] = k
+			self[#self + 1] = self:_color()
 			self[#self + 1] = " = "
+			self[#self + 1] = self:_resetcolor()
 			self:any(v, ...)
 			self[#self + 1] = ",\n"
 		end
@@ -260,17 +270,25 @@ function PrettyPrint_mt:__tostring()
 	return table.concat(self, "")
 end
 
-_G["p"] = function(...)
+local function s(...)
 	local res = {}
 	for i, v in ipairs { ... } do
 		local pp = PrettyPrint:new()
 		pp:any(v)
 		res[i] = tostring(pp)
 	end
-	print(table.concat(res, "    "))
+	return table.concat(res, "    ")
 end
+
+local function p(...)
+	print(s(...))
+end
+
+_G["p"] = p
 
 return {
 	PrettyPrint = PrettyPrint,
 	prettyprintable = prettyprintable,
+	s = s,
+	p = p,
 }

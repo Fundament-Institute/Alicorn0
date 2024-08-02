@@ -2,6 +2,7 @@
 ---@meta "typed.lua"
 ---@class (exact) typed
 ---@field kind string
+---@field pretty_print fun(...)
 typed = {}
 ---@return boolean
 function typed:is_bound_variable() end
@@ -177,9 +178,9 @@ function typed:unwrap_prim_tuple_type() end
 function typed:as_prim_tuple_type() end
 ---@return boolean
 function typed:is_prim_function_type() end
----@return typed, typed
+---@return typed, typed, typed
 function typed:unwrap_prim_function_type() end
----@return boolean, typed, typed
+---@return boolean, typed, typed, typed
 function typed:as_prim_function_type() end
 ---@return boolean
 function typed:is_prim_wrapped_type() end
@@ -235,6 +236,42 @@ function typed:is_prim_intrinsic() end
 function typed:unwrap_prim_intrinsic() end
 ---@return boolean, typed, any
 function typed:as_prim_intrinsic() end
+---@return boolean
+function typed:is_range() end
+---@return any, any, typed
+function typed:unwrap_range() end
+---@return boolean, any, any, typed
+function typed:as_range() end
+---@return boolean
+function typed:is_program_end() end
+---@return typed
+function typed:unwrap_program_end() end
+---@return boolean, typed
+function typed:as_program_end() end
+---@return boolean
+function typed:is_program_invoke() end
+---@return typed, typed
+function typed:unwrap_program_invoke() end
+---@return boolean, typed, typed
+function typed:as_program_invoke() end
+---@return boolean
+function typed:is_program_continue() end
+---@return typed, typed
+function typed:unwrap_program_continue() end
+---@return boolean, typed, typed
+function typed:as_program_continue() end
+---@return boolean
+function typed:is_effect_type() end
+---@return any, typed
+function typed:unwrap_effect_type() end
+---@return boolean, any, typed
+function typed:as_effect_type() end
+---@return boolean
+function typed:is_program_type() end
+---@return typed, typed
+function typed:unwrap_program_type() end
+---@return boolean, typed, typed
+function typed:as_program_type() end
 ---@class (exact) typedType:Type
 ---@field bound_variable fun(index:number): typed
 ---@field literal fun(literal_value:value): typed
@@ -266,7 +303,7 @@ function typed:as_prim_intrinsic() end
 ---@field prim_tuple_cons fun(elements:any): typed
 ---@field prim_user_defined_type_cons fun(id:any, family_args:any): typed
 ---@field prim_tuple_type fun(decls:typed): typed
----@field prim_function_type fun(param_type:typed, result_type:typed): typed
+---@field prim_function_type fun(param_type:typed, result_type:typed, result_info:typed): typed
 ---@field prim_wrapped_type fun(type:typed): typed
 ---@field prim_unstrict_wrapped_type fun(type:typed): typed
 ---@field prim_wrap fun(content:typed): typed
@@ -276,4 +313,10 @@ function typed:as_prim_intrinsic() end
 ---@field prim_user_defined_type fun(id:any, family_args:any): typed
 ---@field prim_if fun(subject:typed, consequent:typed, alternate:typed): typed
 ---@field prim_intrinsic fun(source:typed, anchor:any): typed
+---@field range fun(lower_bounds:any, upper_bounds:any, relation:typed): typed
+---@field program_end fun(result:typed): typed
+---@field program_invoke fun(effect_tag:typed, effect_arg:typed): typed
+---@field program_continue fun(first:typed, continue:typed): typed
+---@field effect_type fun(components:any, base:typed): typed
+---@field program_type fun(effect_type:typed, result_type:typed): typed
 return {}

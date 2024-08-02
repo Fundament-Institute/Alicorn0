@@ -62,9 +62,9 @@ let new-prim-type-family = lambda (unique-id : prim-unique-id, signature : type_
 			local function length(defn, len)
 				len = len or 0
 				local constructor, arg = defn:unwrap_enum_value()
-				if constructor == "empty" then
+				if constructor == terms.DeclCons.empty then
 					return len
-				elseif constructor == "cons" then
+				elseif constructor == terms.DeclCons.cons then
 					local elements = arg:unwrap_tuple_value()
 					local next_defn = elements[1]
 					return length(next_defn, len + 1)
@@ -97,10 +97,7 @@ let new-prim-type-family = lambda (unique-id : prim-unique-id, signature : type_
 		:
 		prim-func-type (unique-id : prim-unique-id, signature_ : wrapped(type_(1))) -> ((family    : wrapped(signature)))
 	let (family) = inner(unique-id, implicit-wrap(signature))
-	# FIXME: implicit-unwrap here causes new-prim-type to fail due to trying
-	# to call something whose type is a metavariable
-	unwrap(signature, family)
-	#implicit-unwrap(family)
+	implicit-unwrap(family)
 let new-prim-type = lambda ((unique-id : prim-unique-id))
 	let Tfam = new-prim-type-family unique-id
 		forall () -> (T : prim-type)
@@ -150,7 +147,7 @@ let prim-array-get = lambda_implicit (T : prim-type)
 			:
 			prim-func-type (arr   : prim-array-type(T), index : prim-number) -> ((elem  : T))
 		let (elem) = inner(arr, index)
-		(the T elem)
+		elem
 
 let prim-file-read =
 	intrinsic
@@ -166,8 +163,7 @@ let void =
 	implicit-unwrap
 		intrinsic
 			""""
-				local val_array = terms_gen.declare_array(terms.value)
-				local decl = terms.value.enum_value("empty", terms.value.tuple_value(val_array()))
+				local decl = terms.empty
 				local basetype = terms.value.enum_type(decl)
 				return basetype
 			:
@@ -378,7 +374,7 @@ let sub_type = forall (x : prim-number, y : prim-number) -> (res : prim-number)
 
 let (orig-results) = get-prim-func-res-inner(implicit-wrap(foo), prim-nil)
 # FIXME: implicit-unwrap here causes new-results to fail due to trying
-# to call something whose type is a metavariable
+# to apply() something whose type is a metavariable
 let orig-results = unwrap(func-conv-res-type(oldargs), orig-results)
 #let orig-results = implicit-unwrap(orig-results)
 let new-results =
@@ -394,8 +390,9 @@ let prim-func-type-to-func-type =
 		let (newargs) = prim-tuple-type-to-tuple-type-inner(oldargs, oldargs-valid)
 		let (orig-results-wrapped) = get-prim-func-res-inner(implicit-wrap(T), valid)
 		# FIXME: implicit-unwrap here causes new-results to fail due to trying
-		# to call something whose type is a metavariable
+		# to apply() something whose type is a metavariable
 		let orig-results = unwrap(func-conv-res-type(oldargs), orig-results-wrapped)
+		#let orig-results = implicit-unwrap(orig-results-wrapped)
 		
 		let new-results =
 			lambda ((args : implicit-unwrap(newargs)))
@@ -405,6 +402,7 @@ let prim-func-type-to-func-type =
 				newres
 
 		# FIXME: implicit-unwrap here causes nearest_star_level to fail
+		#forall (x : implicit-unwrap(newargs)) -> (y : implicit-unwrap(new-results(x)))
 		forall (x : unwrap(type, newargs)) -> (y : unwrap(type, new-results(x)))
 
 prim-func-type-to-func-type foo prim-nil
@@ -460,10 +458,7 @@ let prim-if-wrap = intrinsic
 		)
 	:
 	wrapped(prim-if-type)
-# FIXME: implicit-unwrap here causes its usages to fail due to trying
-# to call something whose type is a metavariable
-let prim-if = unwrap(prim-if-type, prim-if-wrap)
-#let prim-if = implicit-unwrap(prim-if-wrap)
+let prim-if = implicit-unwrap(prim-if-wrap)
 
 let tuple-def-type-inner = intrinsic "return terms.value.tuple_defn_type" :
 	prim-func-type ((U : wrapped(universe))) -> ((T : wrapped(prim-type)))
@@ -475,6 +470,7 @@ let tuple-type = lambda (U : universe, decls : tuple-def-type(U))
 		prim-func-type ((decls : wrapped(tuple-def-type(U)))) -> ((T : wrapped(prim-type)))
 	let (T) = inner(implicit-wrap(decls))
 	# FIXME: implicit-unwrap here causes nearest_star_level to fail in tuple-def-elem
+	#implicit-unwrap(T)
 	unwrap(prim-type, T)
 let prim-tuple-type = lambda (U : universe, decls : tuple-def-type(U))
 	let inner = intrinsic "return terms.value.prim_tuple_type" :
@@ -488,6 +484,7 @@ let tuple-type-implicit = lambda_implicit (U : universe)
 			prim-func-type ((decls : wrapped(tuple-def-type(U)))) -> ((T : wrapped(prim-type)))
 		let (T) = inner(implicit-wrap(decls))
 		# FIXME: implicit-unwrap here causes nearest_star_level to fail in tuple-def-elem
+		#implicit-unwrap(T)
 		unwrap(prim-type, T)
 let prim-tuple-type-implicit = lambda_implicit (U : universe)
 	lambda (decls : tuple-def-type(U))
@@ -497,28 +494,17 @@ let prim-tuple-type-implicit = lambda_implicit (U : universe)
 		implicit-unwrap(T)
 let tuple-def-empty = lambda ((U : universe))
 	let T = tuple-def-type(U)
-	let empty = intrinsic
-		""""
-			local value_array = terms_gen.declare_array(terms.value)
-			return terms.value.enum_value("empty", terms.value.tuple_value(value_array()))
-		:
-		wrapped(T)
+	let empty = intrinsic "return terms.empty" : wrapped(T)
 	implicit-unwrap(empty)
 let jank-it-up = lambda (U : universe, defn : tuple-def-type(U))
+	# FIXME: when tuple-type-implicit works, unjank this
 	forall (rest : tuple-type(U, defn)) -> (next : U)
 	#forall (rest : tuple-type-implicit(defn)) -> (next : U)
 let tuple-def-elem = lambda (
 		U    : universe,
 		defn : tuple-def-type(U),
 		elem : jank-it-up(U, defn))
-	let inner = intrinsic
-		""""
-			local value_array = terms_gen.declare_array(terms.value)
-			local function tuple_def_elem(defn, elem)
-				return terms.value.enum_value("cons", terms.value.tuple_value(value_array(defn, elem)))
-			end
-			return tuple_def_elem
-		:
+	let inner = intrinsic "return terms.cons" :
 		prim-func-type (
 			defn_ : wrapped(tuple-def-type(U)), # aaaa shadowing
 			elem  : (wrapped (forall (rest : tuple-type(U, defn)) -> (next : U))))
@@ -547,15 +533,14 @@ let tuple-def-concat = lambda (U : universe, head : tuple-def-type(U), tail : tu
 		""""
 			local typed = terms.typed_term
 			local typed_array = terms_gen.declare_array(typed)
-			local value_array = terms_gen.declare_array(terms.value)
 			local string_array = terms_gen.declare_array(terms_gen.builtin_string)
 			local function traverse(defn, len, elems)
 				len = len or 0
 				elems = elems or {}
 				local constructor, arg = defn:unwrap_enum_value()
-				if constructor == "empty" then
+				if constructor == terms.DeclCons.empty then
 					return len, elems
-				elseif constructor == "cons" then
+				elseif constructor == terms.DeclCons.cons then
 					local elements = arg:unwrap_tuple_value()
 					local next_defn = elements[1]
 					len = len + 1
@@ -593,7 +578,7 @@ let tuple-def-concat = lambda (U : universe, head : tuple-def-type(U), tail : tu
 					typed.application(typed.literal(elem), typed.tuple_cons(tail_args))
 				)
 				local elem_wrap = terms.value.closure("#tuple-def-concat", body, terms.runtime_context())
-				return terms.value.enum_value("cons", terms.value.tuple_value(value_array(defn, elem_wrap)))
+				return terms.cons(defn, elem_wrap)
 			end
 			local function tuple_def_concat(head, tail)
 				local head_n, head_elems = traverse(head)
@@ -794,10 +779,10 @@ let prim-term-of-inner = intrinsic
 		end
 		return prim_term_of
 	:
-	prim-func-type ((goal : prim-goal)) -> ((t : prim-type))
+	prim-func-type ((goal : prim-goal)) -> ((t : wrapped(prim-type)))
 let prim-term-of = lambda ((goal : prim-goal))
 	let (t) = prim-term-of-inner(goal)
-	t
+	implicit-unwrap(t)
 let goalify-inferrable = intrinsic
 	""""
 		local function goalify_inferrable(goal, inferrable)
@@ -903,24 +888,26 @@ let error-filter =
 		let (val) = inner(ok, val-or-err)
 		val
 
+let goal-infer = intrinsic "return terms.expression_goal.infer" : prim-goal
+
 let do-impl-type = operative-handler-type(prim-unit)
 
 let do-impl = lambda (syn : prim-syntax, env : prim-environment, ud : prim-unit, goal : prim-goal)
 	let (shadowed, inner_env) = enter-block(env)
 
-	let (args) = expression-args-new(goal, inner_env)
+	let (args) = expression-args-new(goal-infer, inner_env)
 	let s = prim-tuple-of(prim-type, block-reducer-storage-defn)(args)
 
-	let matcher-t = prim-matcher(prim-unit, block-match-result-defn(goal))
+	let matcher-t = prim-matcher(prim-unit, block-match-result-defn(goal-infer))
 	let matcher =
 		prim-matcher-reducible
 			prim-unit
 			block-reducer-storage-defn
-			block-reducer-result2-defn(goal)
-			block-match-result-defn(goal)
-			block-reducer(goal)
+			block-reducer-result2-defn(goal-infer)
+			block-match-result-defn(goal-infer)
+			block-reducer(goal-infer)
 			s
-			block-match-accept-handler(goal)
+			block-match-accept-handler(goal-infer)
 
 	let matchers =
 		prim-array-set
@@ -931,16 +918,18 @@ let do-impl = lambda (syn : prim-syntax, env : prim-environment, ud : prim-unit,
 	let (ok, term, inner_env) =
 		match-syntax
 			prim-unit
-			block-match-result-defn(goal)
+			block-match-result-defn(goal-infer)
 			matchers
-			block-match-failure-handler(goal)
+			block-match-failure-handler(goal-infer)
 			syn
 			prim-nil
 
-	let term = error-filter(prim-term-of(goal), prim-lua-error, ok, term)
+	let term = error-filter(prim-term-of(goal-infer), prim-lua-error, ok, term)
 	let inner_env = error-filter(prim-environment, prim-unit, ok, inner_env)
 
 	let (env, wrapped) = exit-block(inner_env, term, shadowed)
+
+	let (wrapped) = goalify-inferrable(goal, wrapped)
 
 	tuple-of(prim-type, operative-result-defn(goal))(wrapped, env)
 
@@ -999,6 +988,7 @@ let tupleof-ascribed-names-match-result-defn =
 		lambda ((ok : prim-bool))
 			prim-if(ok, tupleof-ascribed-names-reducer-thread-type, prim-lua-error)
 
+# FIXME: tupleof_ascribed_names_inner can only produce tuple defs in star-0
 let tupleof-ascribed-names-reducer = intrinsic "return base_env.tupleof_ascribed_names_inner" :
 	reducer-type(prim-unit, tupleof-ascribed-names-reducer-storage-defn, tupleof-ascribed-names-reducer-result2-defn, tupleof-ascribed-names-match-result-defn)
 
@@ -1105,10 +1095,11 @@ let tuple-of = lambda_implicit(T : type_(10))
 	lambda (xs : T)
 		xs
 
-let point = lambda_implicit (U : type_(10))
-	lambda ((T : U))
-		tuple-type(U, tuple-def-op(x : T, y : T))
-
+# TODO: test this when tuple-def-op can do more than just star-0
+#let point = lambda_implicit (U : type_(10))
+#	lambda ((T : U))
+#		tuple-type(U, tuple-def-op(x : T, y : T))
+#
 #let mkpoint = lambda_implicit (U : type_(10), T : U)
 #	lambda (x : T, y : T)
 #		the point(T) tuple-of(x, y)

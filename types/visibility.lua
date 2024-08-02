@@ -2,6 +2,7 @@
 ---@meta "visibility.lua"
 ---@class (exact) visibility
 ---@field kind string
+---@field pretty_print fun(...)
 visibility = {}
 ---@return boolean
 function visibility:is_explicit() end

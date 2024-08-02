@@ -2,6 +2,7 @@
 ---@meta "inferrable.lua"
 ---@class (exact) inferrable
 ---@field kind string
+---@field pretty_print fun(...)
 inferrable = {}
 ---@return boolean
 function inferrable:is_bound_variable() end
@@ -153,9 +154,9 @@ function inferrable:unwrap_prim_tuple_type() end
 function inferrable:as_prim_tuple_type() end
 ---@return boolean
 function inferrable:is_prim_function_type() end
----@return inferrable, inferrable
+---@return inferrable, inferrable, checkable
 function inferrable:unwrap_prim_function_type() end
----@return boolean, inferrable, inferrable
+---@return boolean, inferrable, inferrable, checkable
 function inferrable:as_prim_function_type() end
 ---@return boolean
 function inferrable:is_prim_wrapped_type() end
@@ -205,6 +206,18 @@ function inferrable:is_prim_intrinsic() end
 function inferrable:unwrap_prim_intrinsic() end
 ---@return boolean, checkable, inferrable, any
 function inferrable:as_prim_intrinsic() end
+---@return boolean
+function inferrable:is_program_sequence() end
+---@return inferrable, inferrable
+function inferrable:unwrap_program_sequence() end
+---@return boolean, inferrable, inferrable
+function inferrable:as_program_sequence() end
+---@return boolean
+function inferrable:is_program_type() end
+---@return inferrable, inferrable
+function inferrable:unwrap_program_type() end
+---@return boolean, inferrable, inferrable
+function inferrable:as_program_type() end
 ---@class (exact) inferrableType:Type
 ---@field bound_variable fun(index:number): inferrable
 ---@field typed fun(type:value, usage_counts:any, typed_term:typed): inferrable
@@ -232,7 +245,7 @@ function inferrable:as_prim_intrinsic() end
 ---@field prim_tuple_cons fun(elements:any): inferrable
 ---@field prim_user_defined_type_cons fun(id:any, family_args:any): inferrable
 ---@field prim_tuple_type fun(decls:inferrable): inferrable
----@field prim_function_type fun(param_type:inferrable, result_type:inferrable): inferrable
+---@field prim_function_type fun(param_type:inferrable, result_type:inferrable, result_info:checkable): inferrable
 ---@field prim_wrapped_type fun(type:inferrable): inferrable
 ---@field prim_unstrict_wrapped_type fun(type:inferrable): inferrable
 ---@field prim_wrap fun(content:inferrable): inferrable
@@ -241,4 +254,6 @@ function inferrable:as_prim_intrinsic() end
 ---@field prim_unstrict_unwrap fun(container:inferrable): inferrable
 ---@field prim_if fun(subject:checkable, consequent:inferrable, alternate:inferrable): inferrable
 ---@field prim_intrinsic fun(source:checkable, type:inferrable, anchor:any): inferrable
+---@field program_sequence fun(first:inferrable, continue:inferrable): inferrable
+---@field program_type fun(effect_type:inferrable, result_type:inferrable): inferrable
 return {}

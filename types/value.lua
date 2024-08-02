@@ -2,6 +2,7 @@
 ---@meta "value.lua"
 ---@class (exact) value
 ---@field kind string
+---@field pretty_print fun(...)
 value = {}
 ---@return boolean
 function value:is_visibility_type() end
@@ -39,6 +40,12 @@ function value:is_closure() end
 function value:unwrap_closure() end
 ---@return boolean, string, typed, any
 function value:as_closure() end
+---@return boolean
+function value:is_range() end
+---@return any, any, value
+function value:unwrap_range() end
+---@return boolean, any, any, value
+function value:as_range() end
 ---@return boolean
 function value:is_name_type() end
 ---@return boolean
@@ -181,9 +188,9 @@ function value:is_prim_bool_type() end
 function value:is_prim_string_type() end
 ---@return boolean
 function value:is_prim_function_type() end
----@return value, value
+---@return value, value, value
 function value:unwrap_prim_function_type() end
----@return boolean, value, value
+---@return boolean, value, value, value
 function value:as_prim_function_type() end
 ---@return boolean
 function value:is_prim_wrapped_type() end
@@ -217,6 +224,46 @@ function value:is_prim_tuple_type() end
 function value:unwrap_prim_tuple_type() end
 ---@return boolean, value
 function value:as_prim_tuple_type() end
+---@return boolean
+function value:is_singleton() end
+---@return value, value
+function value:unwrap_singleton() end
+---@return boolean, value, value
+function value:as_singleton() end
+---@return boolean
+function value:is_program_end() end
+---@return value
+function value:unwrap_program_end() end
+---@return boolean, value
+function value:as_program_end() end
+---@return boolean
+function value:is_program_cont() end
+---@return any, value, continuation
+function value:unwrap_program_cont() end
+---@return boolean, any, value, continuation
+function value:as_program_cont() end
+---@return boolean
+function value:is_effect_empty() end
+---@return boolean
+function value:is_effect_type() end
+---@return any
+function value:unwrap_effect_type() end
+---@return boolean, any
+function value:as_effect_type() end
+---@return boolean
+function value:is_effect_row() end
+---@return any, value
+function value:unwrap_effect_row() end
+---@return boolean, any, value
+function value:as_effect_row() end
+---@return boolean
+function value:is_effect_row_type() end
+---@return boolean
+function value:is_program_type() end
+---@return value, value
+function value:unwrap_program_type() end
+---@return boolean, value, value
+function value:as_program_type() end
 ---@class (exact) valueType:Type
 ---@field visibility_type value
 ---@field visibility fun(visibility:visibility): value
@@ -226,6 +273,7 @@ function value:as_prim_tuple_type() end
 ---@field result_info fun(result_info:any): value
 ---@field pi fun(param_type:value, param_info:value, result_type:value, result_info:value): value
 ---@field closure fun(param_name:string, code:typed, capture:any): value
+---@field range fun(lower_bounds:any, upper_bounds:any, relation:value): value
 ---@field name_type value
 ---@field name fun(name:string): value
 ---@field operative_value fun(userdata:value): value
@@ -254,11 +302,19 @@ function value:as_prim_tuple_type() end
 ---@field prim_number_type value
 ---@field prim_bool_type value
 ---@field prim_string_type value
----@field prim_function_type fun(param_type:value, result_type:value): value
+---@field prim_function_type fun(param_type:value, result_type:value, result_info:value): value
 ---@field prim_wrapped_type fun(type:value): value
 ---@field prim_unstrict_wrapped_type fun(type:value): value
 ---@field prim_user_defined_type fun(id:any, family_args:any): value
 ---@field prim_nil_type value
 ---@field prim_tuple_value fun(elements:any): value
 ---@field prim_tuple_type fun(decls:value): value
+---@field singleton fun(supertype:value, value:value): value
+---@field program_end fun(result:value): value
+---@field program_cont fun(action:any, argument:value, continuation:continuation): value
+---@field effect_empty value
+---@field effect_type fun(tag:any): value
+---@field effect_row fun(components:any, rest:value): value
+---@field effect_row_type value
+---@field program_type fun(effect_sig:value, base_type:value): value
 return {}

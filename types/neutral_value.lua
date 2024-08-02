@@ -2,6 +2,7 @@
 ---@meta "neutral_value.lua"
 ---@class (exact) neutral_value
 ---@field kind string
+---@field pretty_print fun(...)
 neutral_value = {}
 ---@return boolean
 function neutral_value:is_free() end

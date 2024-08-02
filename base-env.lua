@@ -1,6 +1,6 @@
 local environment = require "./environment"
 local treemap = require "./lazy-prefix-tree"
-local types = require "./typesystem"
+--local types = require "./typesystem"
 local metalang = require "./metalanguage"
 local utils = require "./reducer-utils"
 local exprs = require "./alicorn-expressions"
@@ -13,8 +13,11 @@ local p = require "pretty-print".prettyPrint
 local value = terms.value
 local typed = terms.typed_term
 
+local param_info_explicit = value.param_info(value.visibility(terms.visibility.explicit))
+local result_info_pure = value.result_info(terms.result_info(terms.purity.pure))
+local result_info_effectful = value.result_info(terms.result_info(terms.purity.effectful))
+
 local usage_array = gen.declare_array(gen.builtin_number)
-local val_array = gen.declare_array(value)
 
 ---@param val value
 ---@param typ value
@@ -22,18 +25,6 @@ local val_array = gen.declare_array(value)
 local function lit_term(val, typ)
 	return terms.inferrable_term.typed(typ, usage_array(), terms.typed_term.literal(val))
 end
-
----@param ... value
----@return value
-local function val_tup_cons(...)
-	return value.tuple_value(val_array(...))
-end
----@param x value
----@return value
-local function val_desc_elem(x)
-	return value.enum_value("cons", x)
-end
-local val_desc_empty = value.enum_value("empty", val_tup_cons())
 
 --- lua_operative is dependently typed and should produce inferrable vs checkable depending on the goal, and an error as the second return if it failed
 --- | unknown in the second return insufficiently constrains the non-error cases to be inferrable or checkable terms
@@ -59,9 +50,16 @@ local function let_bind(syntax, env)
 		return false, name
 	end
 
+	local expr
+	ok, expr = tail:match({
+		metalang.listmatch(metalang.accept_handler, metalang.any(metalang.accept_handler)),
+	}, metalang.failure_handler)
+	if not ok then
+		expr = tail
+	end
+
 	local bind
-	ok, bind = tail:match({
-		metalang.listmatch(metalang.accept_handler, exprs.inferred_expression(utils.accept_with_env, env)),
+	ok, bind = expr:match({
 		exprs.inferred_expression(utils.accept_with_env, env),
 	}, metalang.failure_handler, nil)
 
@@ -124,7 +122,7 @@ local function record_build(syntax, env)
 		return ok, defs
 	end
 	local map = gen.declare_map(gen.builtin_string, terms.inferrable_term)()
-	for i, v in ipairs(defs) do
+	for _, v in ipairs(defs) do
 		map[v.name] = v.expr
 	end
 	return true, terms.inferrable_term.record_cons(map), env
@@ -135,7 +133,10 @@ local function intrinsic(syntax, env)
 	local ok, str_env, syntax = syntax:match({
 		metalang.listtail(
 			metalang.accept_handler,
-			exprs.inferred_expression(utils.accept_with_env, env),
+			exprs.expression(
+				utils.accept_with_env,
+				exprs.ExpressionArgs.new(terms.expression_goal.check(value.prim_string_type), env)
+			),
 			metalang.symbol_exact(metalang.accept_handler, ":")
 		),
 	}, metalang.failure_handler, nil)
@@ -146,7 +147,6 @@ local function intrinsic(syntax, env)
 	if not env then
 		error "env nil in base-env.intrinsic"
 	end
-	local str = terms.checkable_term.inferrable(str) -- workaround for not having exprs.checked_expression yet
 	local ok, type_env = syntax:match({
 		metalang.listmatch(metalang.accept_handler, exprs.inferred_expression(utils.accept_with_env, env)),
 	}, metalang.failure_handler, nil)
@@ -246,12 +246,15 @@ local tupleof_ascribed_names_inner = metalang.reducer(
 		local function cons(...)
 			return terms.inferrable_term.enum_cons(
 				terms.value.tuple_defn_type(terms.value.star(0)),
-				"cons",
+				terms.DeclCons.cons,
 				tup_cons(...)
 			)
 		end
-		local empty =
-			terms.inferrable_term.enum_cons(terms.value.tuple_defn_type(terms.value.star(0)), "empty", tup_cons())
+		local empty = terms.inferrable_term.enum_cons(
+			terms.value.tuple_defn_type(terms.value.star(0)),
+			terms.DeclCons.empty,
+			tup_cons()
+		)
 		local names = gen.declare_array(gen.builtin_string)()
 
 		local close_enough = syntax.anchor
@@ -328,26 +331,33 @@ local ascribed_segment = metalang.reducer(
 	---@return boolean
 	---@return {single: boolean, names: string|string[], args: inferrable, env: Environment}|string
 	function(syntax, env)
-		local single, name, type_val, type_env = syntax:match({
-			pure_ascribed_name(metalang.accept_handler, env),
+		-- check whether syntax starts with a paren list, or is empty
+		local multi, _, _ = syntax:match({
+			metalang.isnil(metalang.accept_handler),
+			metalang.listtail(metalang.accept_handler, metalang.ispair(metalang.accept_handler)),
 		}, metalang.failure_handler, nil)
 
-		if single then
+		if multi then
+			local ok, thread = syntax:match({
+				tupleof_ascribed_names(metalang.accept_handler, env),
+			}, metalang.failure_handler, nil)
+
+			if not ok then
+				return ok, thread
+			end
+
+			return true, { single = false, names = thread.names, args = thread.args, env = thread.env }
+		else
+			local ok, name, type_val, type_env = syntax:match({
+				pure_ascribed_name(metalang.accept_handler, env),
+			}, metalang.failure_handler, nil)
+
+			if not ok then
+				return ok, name
+			end
+
 			return true, { single = true, names = name, args = type_val, env = type_env }
 		end
-
-		local ok, thread = syntax:match({
-			tupleof_ascribed_names(metalang.accept_handler, env),
-		}, metalang.failure_handler, nil)
-
-		if not ok then
-			return ok, thread
-			-- if you want to see an error from the 'single' branch of syntax matching
-			-- comment above and uncomment below
-			--return single, name
-		end
-
-		return true, { single = false, names = thread.names, args = thread.args, env = thread.env }
 	end,
 	"ascribed_segment"
 )
@@ -358,97 +368,127 @@ local prim_ascribed_segment = metalang.reducer(
 	---@return boolean
 	---@return {single: boolean, names: string|string[], args: inferrable, env: Environment}|string
 	function(syntax, env)
-		local single, name, type_val, type_env = syntax:match({
-			pure_ascribed_name(metalang.accept_handler, env),
+		-- check whether syntax starts with a paren list
+		local multi, _, _ = syntax:match({
+			metalang.isnil(metalang.accept_handler),
+			metalang.listtail(metalang.accept_handler, metalang.ispair(metalang.accept_handler)),
 		}, metalang.failure_handler, nil)
 
-		if single then
+		if multi then
+			local ok, thread = syntax:match({
+				prim_tupleof_ascribed_names(metalang.accept_handler, env),
+			}, metalang.failure_handler, nil)
+
+			if not ok then
+				return ok, thread
+			end
+
+			return true, { single = false, names = thread.names, args = thread.args, env = thread.env }
+		else
+			local ok, name, type_val, type_env = syntax:match({
+				pure_ascribed_name(metalang.accept_handler, env),
+			}, metalang.failure_handler, nil)
+
+			if not ok then
+				return ok, name
+			end
+
 			return true, { single = true, names = name, args = type_val, env = type_env }
 		end
-
-		local ok, thread = syntax:match({
-			prim_tupleof_ascribed_names(metalang.accept_handler, env),
-		}, metalang.failure_handler, nil)
-
-		if not ok then
-			return ok, thread
-			-- if you want to see an error from the 'single' branch of syntax matching
-			-- comment above and uncomment below
-			--return single, name
-		end
-
-		return true, { single = false, names = thread.names, args = thread.args, env = thread.env }
 	end,
 	"prim_ascribed_segment"
 )
 
 -- TODO: abstract so can reuse for func type and prim func type
----@type lua_operative
-local function prim_func_type_impl(syntax, env)
-	if not env or not env.enter_block then
-		error "env isn't an environment in prim_func_type_impl"
-	end
+local function make_prim_func_syntax(effectful)
+	---@type lua_operative
+	local function prim_func_type_impl(syntax, env)
+		if not env or not env.enter_block then
+			error "env isn't an environment in prim_func_type_impl"
+		end
 
-	local ok, params_thread, tail = syntax:match({
-		metalang.listtail(
-			metalang.accept_handler,
-			prim_ascribed_segment(metalang.accept_handler, env),
-			metalang.symbol_exact(metalang.accept_handler, "->")
-		),
-	}, metalang.failure_handler, nil)
-	if not ok then
-		return ok, params_thread
-	end
-	local params_single = params_thread.single
-	local params_args = params_thread.args
-	local params_names = params_thread.names
-	env = params_thread.env
+		local ok, params_thread, tail = syntax:match({
+			metalang.listtail(
+				metalang.accept_handler,
+				prim_ascribed_segment(metalang.accept_handler, env),
+				metalang.symbol_exact(metalang.accept_handler, "->")
+			),
+		}, metalang.failure_handler, nil)
+		if not ok then
+			return ok, params_thread
+		end
+		local params_single = params_thread.single
+		local params_args = params_thread.args
+		local params_names = params_thread.names
+		env = params_thread.env
 
-	--print("moving on to return type")
+		--print("moving on to return type")
 
-	local shadowed
-	shadowed, env = env:enter_block()
-	-- tail.anchor can be nil so we fall back to the anchor for the start of this prim func type if needed
-	-- TODO: use correct name in lambda parameter instead of adding an extra let
-	env = env:bind_local(
-		terms.binding.annotated_lambda(
-			"#prim-func-arguments",
-			params_args,
-			tail.anchor or syntax.anchor,
-			terms.visibility.explicit
+		local shadowed
+		shadowed, env = env:enter_block()
+		-- tail.anchor can be nil so we fall back to the anchor for the start of this prim func type if needed
+		-- TODO: use correct name in lambda parameter instead of adding an extra let
+		env = env:bind_local(
+			terms.binding.annotated_lambda(
+				"#prim-func-arguments",
+				params_args,
+				tail.anchor or syntax.anchor,
+				terms.visibility.explicit
+			)
 		)
-	)
-	local ok, arg = env:get("#prim-func-arguments")
-	if not ok then
-		error("wtf")
-	end
-	---@cast arg -string
-	if params_single then
-		env = env:bind_local(terms.binding.let(params_names, arg))
-	else
-		env = env:bind_local(terms.binding.tuple_elim(params_names, arg))
+		local ok, arg = env:get("#prim-func-arguments")
+		if not ok then
+			error("wtf")
+		end
+		---@cast arg -string
+		if params_single then
+			env = env:bind_local(terms.binding.let(params_names, arg))
+		else
+			env = env:bind_local(terms.binding.tuple_elim(params_names, arg))
+		end
+
+		local ok, results_thread = tail:match({
+			metalang.listmatch(metalang.accept_handler, prim_ascribed_segment(metalang.accept_handler, env)),
+		}, metalang.failure_handler, nil)
+		if not ok then
+			return ok, results_thread
+		end
+
+		local results_args = results_thread.args
+		env = results_thread.env
+
+		if effectful then
+			local effect_description =
+				terms.value.effect_row(gen.declare_set(terms.unique_id)(terms.lua_prog), terms.value.effect_empty)
+			local effect_term = terms.inferrable_term.typed(
+				terms.value.effect_row_type,
+				usage_array(),
+				terms.typed_term.literal(effect_description)
+			)
+			results_args = terms.inferrable_term.program_type(effect_term, results_args)
+		end
+
+		local env, fn_res_term = env:exit_block(results_args, shadowed)
+		local fn_type_term = terms.inferrable_term.prim_function_type(
+			params_args,
+			fn_res_term,
+			terms.checkable_term.inferrable(
+				terms.inferrable_term.typed(
+					terms.value.result_info_type,
+					usage_array(),
+					terms.typed_term.literal(effectful and result_info_pure or result_info_effectful)
+				)
+			)
+		)
+
+		--print("reached end of function type construction")
+		if not env.enter_block then
+			error "env isn't an environment at end in prim_func_type_impl"
+		end
+		return true, fn_type_term, env
 	end
 
-	local ok, results_thread = tail:match({
-		metalang.listmatch(metalang.accept_handler, prim_ascribed_segment(metalang.accept_handler, env)),
-	}, metalang.failure_handler, nil)
-	if not ok then
-		return ok, results_thread
-	end
-
-	local results_single = results_thread.single
-	local results_args = results_thread.args
-	local results_names = results_thread.names
-	env = results_thread.env
-
-	local env, fn_res_term = env:exit_block(results_args, shadowed)
-	local fn_type_term = terms.inferrable_term.prim_function_type(params_args, fn_res_term)
-
-	--print("reached end of function type construction")
-	if not env.enter_block then
-		error "env isn't an environment at end in prim_func_type_impl"
-	end
-	return true, fn_type_term, env
+	return prim_func_type_impl
 end
 
 -- TODO: abstract so can reuse for func type and prim func type
@@ -505,9 +545,7 @@ local function forall_type_impl(syntax, env)
 		return ok, results_thread
 	end
 
-	local results_single = results_thread.single
 	local results_args = results_thread.args
-	local results_names = results_thread.names
 	env = results_thread.env
 
 	local env, fn_res_term = env:exit_block(results_args, shadowed)
@@ -518,7 +556,7 @@ local function forall_type_impl(syntax, env)
 			terms.inferrable_term.typed(
 				terms.value.param_info_type,
 				usage_array(),
-				terms.typed_term.literal(terms.value.param_info(terms.value.visibility(terms.visibility.explicit)))
+				terms.typed_term.literal(param_info_explicit)
 			)
 		),
 		fn_res_term,
@@ -526,7 +564,7 @@ local function forall_type_impl(syntax, env)
 			terms.inferrable_term.typed(
 				terms.value.result_info_type,
 				usage_array(),
-				terms.typed_term.literal(terms.value.result_info(terms.result_info(terms.purity.pure)))
+				terms.typed_term.literal(result_info_pure)
 			)
 		)
 	)
@@ -673,9 +711,14 @@ local function lambda_impl_implicit(syntax, env)
 	local shadow, inner_env = env:enter_block()
 	-- TODO: use correct name in lambda parameter instead of adding an extra let
 	inner_env = inner_env:bind_local(
-		terms.binding.annotated_lambda("#lambda-arguments", thread.args, syntax.anchor, terms.visibility.implicit)
+		terms.binding.annotated_lambda(
+			"#lambda-implicit-arguments",
+			thread.args,
+			syntax.anchor,
+			terms.visibility.implicit
+		)
 	)
-	local _, arg = inner_env:get("#lambda-arguments")
+	local _, arg = inner_env:get("#lambda-implicit-arguments")
 	if single then
 		inner_env = inner_env:bind_local(terms.binding.let(names, arg))
 	else
@@ -732,38 +775,34 @@ local function build_wrap(body_fn, type_fn)
 		),
 		value.pi(
 			value.tuple_type(
-				val_desc_elem(
-					val_tup_cons(
-						val_desc_elem(
-							val_tup_cons(
-								val_desc_empty,
-								value.closure(
-									pname_type,
-									typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),
-									terms.runtime_context()
-								)
-							)
-						),
+				terms.cons(
+					terms.cons(
+						terms.empty,
 						value.closure(
 							pname_type,
-							terms.typed_term.tuple_elim(
-								names1,
-								terms.typed_term.bound_variable(1),
-								1,
-								typed.bound_variable(2)
-							),
+							typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),
 							terms.runtime_context()
 						)
+					),
+					value.closure(
+						pname_type,
+						terms.typed_term.tuple_elim(
+							names1,
+							terms.typed_term.bound_variable(1),
+							1,
+							typed.bound_variable(2)
+						),
+						terms.runtime_context()
 					)
 				)
 			),
-			value.param_info(value.visibility(terms.visibility.explicit)),
+			param_info_explicit,
 			value.closure(
 				pname_type,
 				typed.tuple_elim(names2, typed.bound_variable(1), 2, type_fn(typed.bound_variable(2))),
 				terms.runtime_context()
 			),
-			value.result_info(terms.result_info(terms.purity.pure))
+			result_info_pure
 		)
 	)
 end
@@ -787,38 +826,34 @@ local function build_unwrap(body_fn, type_fn)
 		),
 		value.pi(
 			value.tuple_type(
-				val_desc_elem(
-					val_tup_cons(
-						val_desc_elem(
-							val_tup_cons(
-								val_desc_empty,
-								value.closure(
-									pname_type,
-									typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),
-									terms.runtime_context()
-								)
-							)
-						),
+				terms.cons(
+					terms.cons(
+						terms.empty,
 						value.closure(
 							pname_type,
-							terms.typed_term.tuple_elim(
-								names1,
-								terms.typed_term.bound_variable(1),
-								1,
-								type_fn(typed.bound_variable(2))
-							),
+							typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),
 							terms.runtime_context()
 						)
+					),
+					value.closure(
+						pname_type,
+						terms.typed_term.tuple_elim(
+							names1,
+							terms.typed_term.bound_variable(1),
+							1,
+							type_fn(typed.bound_variable(2))
+						),
+						terms.runtime_context()
 					)
 				)
 			),
-			value.param_info(value.visibility(terms.visibility.explicit)),
+			param_info_explicit,
 			value.closure(
 				pname_type,
 				typed.tuple_elim(names2, typed.bound_variable(1), 2, typed.bound_variable(2)),
 				terms.runtime_context()
 			),
-			value.result_info(terms.result_info(terms.purity.pure))
+			result_info_pure
 		)
 	)
 end
@@ -840,24 +875,22 @@ local function build_wrapped(body_fn)
 		),
 		value.pi(
 			value.tuple_type(
-				val_desc_elem(
-					val_tup_cons(
-						val_desc_empty,
-						value.closure(
-							pname_type,
-							typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),
-							terms.runtime_context()
-						)
+				terms.cons(
+					terms.empty,
+					value.closure(
+						pname_type,
+						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),
+						terms.runtime_context()
 					)
 				)
 			),
-			value.param_info(value.visibility(terms.visibility.explicit)),
+			param_info_explicit,
 			value.closure(
 				pname_type,
 				typed.tuple_elim(names1, typed.bound_variable(1), 1, typed.literal(value.prim_type_type)),
 				terms.runtime_context()
 			),
-			value.result_info(terms.result_info(terms.purity.pure))
+			result_info_pure
 		)
 	)
 end
@@ -895,7 +928,8 @@ local core_operations = {
 	intrinsic = exprs.primitive_operative(intrinsic, "intrinsic"),
 	["prim-number"] = lit_term(value.prim_number_type, value.prim_type_type),
 	["prim-type"] = lit_term(value.prim_type_type, value.star(1)),
-	["prim-func-type"] = exprs.primitive_operative(prim_func_type_impl, "prim_func_type_impl"),
+	["prim-func-type"] = exprs.primitive_operative(make_prim_func_syntax(false), "prim_func_type_impl"),
+	["prim-prog-type"] = exprs.primitive_operative(make_prim_func_syntax(true), "prim_prog_type_impl"),
 	type = lit_term(value.star(0), value.star(1)),
 	type_ = exprs.primitive_operative(startype_impl, "startype_impl"),
 	["forall"] = exprs.primitive_operative(forall_type_impl, "forall_type_impl"),
