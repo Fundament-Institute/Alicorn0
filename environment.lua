@@ -1,5 +1,6 @@
 local trie = require "./lazy-prefix-tree"
 local fibbuf = require "./fibonacci-buffer"
+local U = require "./alicorn-utils"
 
 local terms = require "./terms"
 local inferrable_term = terms.inferrable_term
@@ -118,7 +119,13 @@ function environment:bind_local(binding)
 		end
 
 		-- evaluating the subject is necessary for inferring the type of the body
-		local subject_value = eval.evaluate(subject_term, self.typechecking_context:get_runtime_context())
+		local subject_value = U.tag(
+			"evaluate",
+			{ subject_term = subject_term },
+			eval.evaluate,
+			subject_term,
+			self.typechecking_context:get_runtime_context()
+		)
 		-- extract subject type and evaled for each elem in tuple
 		local tupletypes, n_elements = eval.infer_tuple_type(subject_type, subject_value)
 
@@ -230,6 +237,7 @@ end
 function environment:enter_block()
 	--print "entering block"
 	--self.typechecking_context:dump_names()
+	eval.typechecker_state:enter_block()
 	return { shadowed = self },
 		new_env {
 			-- locals = nil,
@@ -278,6 +286,7 @@ function environment:exit_block(term, shadowed)
 			wrapped = terms.inferrable_term.annotated_lambda(name, annotation, wrapped, anchor, visible)
 		end
 	end
+	eval.typechecker_state:exit_block()
 
 	return env, wrapped
 end

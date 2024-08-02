@@ -171,7 +171,17 @@ local external_error_mt = {
 			.. " "
 			.. (self.anchor and tostring(self.anchor) or "at unknown position")
 			.. ":\n"
-			.. tostring(self.cause)
+		local cause = tostring(self.cause)
+		if cause:find("table", 1, true) == 1 then
+			for k, v in pairs(self.cause) do
+				message = message .. tostring(k)
+				message = message .. " = "
+				message = message .. tostring(v)
+				message = message .. "\n"
+			end
+		else
+			message = message .. cause
+		end
 		return message
 	end,
 	__index = ExternalError,
@@ -204,20 +214,25 @@ local function augment_error(syntax, reducer_name, ok, err_msg, ...)
 	return err_msg, ...
 end
 
-local pdump = require "pretty-print".dump
-local tag = (require "./utils").tag
+--local pdump = require "pretty-print".dump
+local pdump = require("./pretty-printer").s
+-- local function pdump(_)
+-- 	return ""
+-- end
+local U = require("./alicorn-utils")
 
+-- this function should be called as an xpcall error handler
 ---@param err table | string
 ---@return table | string
 local function custom_traceback(err)
 	if type(err) == "table" then
 		return err
 	end
-	local s = err
+	local s = type(err) == "string" and err or "must pass string or table to error handler"
 	local i = 3
 	local info = debug.getinfo(i, "Sfln")
 	while info ~= nil do
-		if info.func == tag then
+		if info.func == U.tag then
 			local _, name = debug.getlocal(i, 1)
 			local _, tag = debug.getlocal(i, 2)
 			local _, fn = debug.getlocal(i, 3)
@@ -243,6 +258,13 @@ local function custom_traceback(err)
 	end
 
 	return s
+end
+
+-- this function should be used when calling for a trace directly
+---@param err table | string
+---@return table | string
+local function stack_trace(err)
+	return U.notail(custom_traceback(err))
 end
 
 ---@class Reducer
@@ -469,8 +491,12 @@ local value_accepters = {
 	end,
 }
 
+---@class SyntaxValue
+---@field type string
+---@field val any
+
 ---@param anchor Anchor
----@param val any
+---@param val SyntaxValue
 ---@return ConstructedSyntax
 local function value(anchor, val)
 	return cons_syntax(value_accepters, anchor, val)
@@ -736,6 +762,8 @@ local metalanguage = {
 	constructed_syntax_type = constructed_syntax_type,
 	reducer_type = reducer_type,
 	matcher_type = matcher_type,
+	custom_traceback = custom_traceback,
+	stack_trace = stack_trace,
 }
 local internals_interface = require "./internals-interface"
 internals_interface.metalanguage = metalanguage

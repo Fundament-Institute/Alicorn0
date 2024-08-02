@@ -5,7 +5,7 @@ local function start()
 	profile = require("jit.profile")
 	profile_n = 0
 	profile_samples = {}
-	profile.start("li100", function(thread, samples, vmstate)
+	profile.start("li10", function(thread, samples, vmstate)
 		local stack_n = 0
 		local stack = {}
 		-- luajit's profiler loops from 0 to 100
@@ -24,7 +24,7 @@ local function start()
 			end
 			if check then
 				_, goal = debug.getlocal(thread, i, 3)
-				_, inferred_type = debug.getlocal(thread, i, 5)
+				--_, inferred_type = debug.getlocal(thread, i, 5)
 			end
 			stack_n = stack_n + 1
 			stack[stack_n] = {
@@ -80,8 +80,8 @@ local function dump(profile_file)
 				if d.check then
 					profile_out:write(d.goal:pretty_print(d.context), "\n")
 					profile_out:write(d.goal:default_print(), "\n")
-					profile_out:write(d.inferred_type:pretty_print(d.context), "\n")
-					profile_out:write(d.inferred_type:default_print(), "\n")
+					--profile_out:write(d.inferred_type:pretty_print(d.context), "\n")
+					--profile_out:write(d.inferred_type:default_print(), "\n")
 				end
 				t = true
 			end

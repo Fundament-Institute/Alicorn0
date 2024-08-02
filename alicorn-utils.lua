@@ -63,8 +63,19 @@ end]]
 ---@param list T[]
 ---@param value T
 function M.append(list, value)
+	if rawget(list, "__lock") then
+		error("Modifying a shadowed object! This should never happen!")
+	end
+
 	-- If this is a shadowed array it'll trigger the __newindex overload that increments length
 	list[#list + 1] = value
+
+	--[[for i = 1, #list do
+		if list[i] == nil then
+			print("found hole:" .. M.dumptable(list))
+			os.exit(-1)
+		end
+	end]]
 end
 
 ---Removes an element from a list, respecting whether it was a shadowed array or not
@@ -72,10 +83,14 @@ end
 ---@param list T[] | { [integer]: T, __length : integer }
 ---@return T
 function M.pop(list)
+	if rawget(list, "__lock") then
+		error("Modifying a shadowed object! This should never happen!")
+	end
+
 	local value = list[#list]
 	rawset(list, #list, nil)
-	if list.__length then
-		list.__length = list.__length - 1
+	if rawget(list, "__length") then
+		rawset(list, "__length", rawget(list, "__length") - 1)
 	end
 	return value
 end
@@ -83,11 +98,11 @@ end
 -- This is a metatable that shadows an array, but only if you use shadowinsert
 local shadowarray_mt = {
 	__index = function(t, k)
-		-- If our length is negative, we've "removed" items from the array we're shadowing
-		if t.__length < 0 and k > #t then
+		-- Our length can go below the length of the array we're shadowing, so handle that case
+		if k > #t then
 			return nil
 		end
-		return t.__shadow[k]
+		return rawget(t, "__shadow")[k]
 	end,
 	__newindex = function(t, k, v)
 		if k == #t + 1 then
@@ -96,7 +111,7 @@ local shadowarray_mt = {
 		rawset(t, k, v)
 	end,
 	__len = function(t)
-		return #t.__shadow + t.__length
+		return t.__length
 	end,
 	__ipairs = function(tbl)
 		return function(t, i)
@@ -110,28 +125,10 @@ local shadowarray_mt = {
 }
 
 -- This is a metatable that shadows a dictionary, pretending to have all of it's elements without actually affecting it
+-- We do not attempt to make pairs iterate over all the shadowed elements because this is extremely nontrivial.
 local shadowtable_mt = {
 	__index = function(t, k)
-		return t.__shadow[k]
-	end,
-	__pairs = function(t)
-		local function shadow_iter(t, k)
-			local result, v = nil, nil
-			if k == nil or t.__shadow[k] ~= nil then
-				result, v = next(t.__shadow, k)
-			end
-			if result == nil then
-				-- If k existed in __shadow but next returns nil, that was the end of the table, so restart with nil
-				if t.__shadow[k] ~= nil then
-					k = nil
-				end
-				result, v = next(t, k)
-			end
-			return result, v
-		end
-
-		-- Return an iterator function, the table, starting point
-		return shadow_iter, t, nil
+		return rawget(t, "__shadow")[k]
 	end,
 }
 
@@ -139,14 +136,20 @@ local shadowtable_mt = {
 ---@param t T
 ---@return T
 function M.shadowtable(t)
-	return setmetatable({ __shadow = t }, shadowtable_mt)
+	rawset(t, "__lock", true)
+	return setmetatable({ __shadow = t, __depth = rawget(t, "__depth") or 1 }, shadowtable_mt)
 end
 
 ---@generic T
 ---@param t T[] | { [integer]: T, __length: integer }
 ---@return { [integer]: T, __length: integer }
 function M.shadowarray(t)
-	return setmetatable({ __shadow = t, __length = 0 }, shadowarray_mt)
+	rawset(t, "__lock", true)
+	return setmetatable({ __shadow = t, __length = #t, __depth = rawget(t, "__depth") or 1 }, shadowarray_mt)
+end
+
+function M.getshadowdepth(t)
+	return rawget(t, "__depth") or 0
 end
 
 ---Given a shadowed table, flattens its values on to the shadowed table below and returns it
@@ -160,22 +163,22 @@ function M.commit(t)
 	t.__shadow = nil
 	t.__length = nil
 
+	if original then
+		rawset(original, "__lock", nil)
+	end
+
 	for k, v in pairs(t) do
 		rawset(original, k, v)
 	end
 
 	-- If this is an array, truncate the shadowed array in case we removed elements
 	if length then
-		local i = length
-		local start = #original
-
-		if original.__length then
-			original.__length = original.__length + length
+		for i = length + 1, #original do
+			rawset(original, i, nil)
 		end
 
-		while i < 0 do
-			rawset(original, start + i + 1, nil)
-			i = i + 1
+		if original.__length then
+			original.__length = length
 		end
 	end
 
@@ -191,6 +194,52 @@ function M.shallow_copy(src)
 		t[k] = v
 	end
 	return t
+end
+
+---@param t table
+---@return string
+function M.dumptable(t, spaces)
+	spaces = spaces or 0
+	local s = tostring(t) .. ": "
+	for k, v in pairs(t) do
+		s = s .. "\n" .. string.rep(" ", spaces)
+
+		if k == "__shadow" then
+			s = s .. "  " .. tostring(k) .. ": " .. tostring(M.dumptable(v, spaces + 2))
+		else
+			s = s .. "  " .. tostring(k) .. ": " .. tostring(v)
+		end
+	end
+
+	return s
+end
+
+local memo_mt = { __mode = "k" }
+local memo_end_tag = {}
+
+---cache a function's outputs to ensure purity with respect to identity
+---@param fn function
+---@return function
+function M.memoize(fn)
+	local memotab = setmetatable({}, memo_mt)
+	local function wrapfn(...)
+		local args = { ... }
+		local nargs = select("#", ...)
+		local thismemo = memotab
+		for i = 1, nargs do
+			local nextmemo = thismemo[args[i]]
+			if not nextmemo then
+				nextmemo = setmetatable({}, memo_mt)
+				thismemo[args[i]] = nextmemo
+			end
+			thismemo = nextmemo
+		end
+		if not thismemo[memo_end_tag] then
+			thismemo[memo_end_tag] = fn(...)
+		end
+		return thismemo[memo_end_tag]
+	end
+	return wrapfn
 end
 
 return M

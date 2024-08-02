@@ -173,7 +173,7 @@ end
 ---@class Enum: Type
 ---@field derive fun(self: Enum, deriver: Deriver, ...)
 
----@alias Variants { [1]: string, [2]: ParamsWithTypes }[]
+---@alias Variants [ string, ParamsWithTypes ][]
 
 ---@param self table
 ---@param name string
@@ -245,7 +245,7 @@ end
 local map_type_mt = {
 	__call = function(self)
 		local val = {
-			__map = {},
+			_map = {},
 		}
 		setmetatable(val, self)
 		return val
@@ -256,23 +256,47 @@ local map_type_mt = {
 }
 
 ---@class Map: Type
+
+local function map_prettyprintable(self, printer, ...)
+	return printer:table(self._map, ...)
+end
+
 local map_methods = {
 	pairs = function(self)
-		return pairs(self.__map)
+		return pairs(self._map)
 	end,
-	pretty_print = function(self, prefix)
-		local np = prefix .. " "
-		local parts = {}
-		local i = 1
-		for k, v in pairs(self.__map) do
-			local function pp(x, p)
-				---@diagnostic disable-next-line
-				return ((type(x) == "table" and x.pretty_print) or tostring)(x, p)
-			end
-			parts[i] = string.format("%s = %s", pp(k, prefix), pp(v, np))
-			i = i + 1
+	-- TODO: default_print?
+	pretty_print = function(self, ...)
+		local pp = require("./pretty-printer").PrettyPrint.new()
+		map_prettyprintable(self, pp, ...)
+		return tostring(pp)
+	end,
+	get = function(self, key)
+		local mt = getmetatable(self)
+		local key_type = mt.key_type
+		local value_type = mt.value_type
+		if key_type.value_check(key) ~= true then
+			p("map-get", key_type, value_type)
+			p(key)
+			error("wrong key type passed to map:get")
 		end
-		return string.format("[\n" .. np .. "%s\n" .. prefix .. "]", table.concat(parts, ",\n" .. np))
+		return self._map[key]
+	end,
+	set = function(self, key, value)
+		local mt = getmetatable(self)
+		local key_type = mt.key_type
+		local value_type = mt.value_type
+		if key_type.value_check(key) ~= true then
+			p("map-set", key_type, value_type)
+			p(key)
+			error("wrong key type passed to map:set")
+		end
+		if value_type.value_check(value) ~= true then
+			p("map-set", key_type, value_type)
+			p(value)
+			error("wrong value type passed to map:set")
+		end
+		self._map[key] = value
 	end,
 }
 
@@ -282,30 +306,10 @@ local function gen_map_fns(key_type, value_type)
 		if method then
 			return method
 		end
-		if key_type.value_check(key) ~= true then
-			p("map-index", key_type, value_type)
-			p(key)
-			error("wrong key type passed to indexing")
-		end
-		return self.__map[key]
+		error("indexing of maps is disallowed. use :get()")
 	end
 	local function newindex(self, key, value)
-		local method = map_methods[key]
-		if method then
-			p(method)
-			error("attempted index-assignment that shadows a method")
-		end
-		if key_type.value_check(key) ~= true then
-			p("map-index-assign", key_type, value_type)
-			p(key)
-			error("wrong key type passed to index-assignment")
-		end
-		if value_type.value_check(value) ~= true then
-			p("map-index-assign", key_type, value_type)
-			p(value)
-			error("wrong value type passed to index-assignment")
-		end
-		self.__map[key] = value
+		error("index-assignment of maps is disallowed. use :set()")
 	end
 	return index, newindex
 end
@@ -330,9 +334,124 @@ local function define_map(self, key_type, value_type)
 	self.value_type = value_type
 	self.__index, self.__newindex = gen_map_fns(key_type, value_type)
 	self.__pairs = map_methods.pairs
+	prettyprintable:implement_on(self, {
+		print = map_prettyprintable,
+	})
 	-- NOTE: this isn't primitive equality; this type has a __eq metamethod!
 	self.value_check = metatable_equality(self)
 	---@cast self Map
+	return self
+end
+
+local set_type_mt = {
+	__call = function(self)
+		local val = {
+			_set = {},
+		}
+		setmetatable(val, self)
+		return val
+	end,
+	__eq = function(left, right)
+		return left.key_type == right.key_type
+	end,
+}
+
+---@class Set: Type
+
+local function set_prettyprintable(self, printer, ...)
+	return printer:table(self._set, ...)
+end
+
+local set_methods = {
+	put = function(self, key)
+		local mt = getmetatable(self)
+		local key_type = mt.key_type
+		if key_type.value_check(key) ~= true then
+			p("set-put", key_type)
+			p(key)
+			error("wrong key type passed to set:put")
+		end
+		self._set[key] = true
+	end,
+	reset = function(self, key)
+		local mt = getmetatable(self)
+		local key_type = mt.key_type
+		if key_type.value_check(key) ~= true then
+			p("set-reset", key_type)
+			p(key)
+			error("wrong key type passed to set:reset")
+		end
+		self._set[key] = nil
+	end,
+	test = function(self, key)
+		local mt = getmetatable(self)
+		local key_type = mt.key_type
+		if key_type.value_check(key) ~= true then
+			p("set-test", key_type)
+			p(key)
+			error("wrong key type passed to set:test")
+		end
+		return self._set[key]
+	end,
+	-- just ignore the second value of the iterations :)
+	pairs = function(self)
+		return pairs(self._set)
+	end,
+	-- TODO: default_print?
+	pretty_print = function(self, ...)
+		local pp = require("./pretty-printer").PrettyPrint.new()
+		set_prettyprintable(self, pp, ...)
+		return tostring(pp)
+	end,
+	copy = function(self, onto)
+		if not onto then
+			local mt = getmetatable(self)
+			onto = mt()
+		end
+		for k in self:pairs() do
+			onto:set(k)
+		end
+		return onto
+	end,
+	union = function(self, other)
+		local st = getmetatable(self)
+		local ot = getmetatable(other)
+		if st ~= ot then
+			error("set:union must be passed sets of the same type")
+		end
+		local new = self:copy()
+		other:copy(new)
+		return new
+	end,
+	subtract = function(self, other)
+		local st = getmetatable(self)
+		local ot = getmetatable(other)
+		if st ~= ot then
+			error("set:subtract must be passed sets of the same type")
+		end
+		local new = self:copy()
+		for k in other:pairs() do
+			new:reset(k)
+		end
+		return new
+	end,
+}
+
+---@param self table
+---@param key_type Type
+---@return Set self
+local function define_set(self, key_type)
+	if type(key_type) ~= "table" or type(key_type.value_check) ~= "function" then
+		error("trying to set the key or value type to something that isn't a type (possible typo?)")
+	end
+	setmetatable(self, set_type_mt)
+	self.key_type = key_type
+	self.__index = set_methods
+	prettyprintable:implement_on(self, {
+		print = set_prettyprintable,
+	})
+	-- NOTE: this isn't primitive equality; this type has a __eq metamethod!
+	self.value_check = metatable_equality(self)
 	return self
 end
 
@@ -355,6 +474,11 @@ local array_type_mt = {
 }
 
 ---@class Array: Type
+
+local function array_prettyprintable(self, printer, ...)
+	return printer:array(self.array, ...)
+end
+
 local array_methods = {
 	ipairs = function(self)
 		return ipairs(self.array)
@@ -389,13 +513,11 @@ local array_methods = {
 	unpack = function(self)
 		return table.unpack(self.array)
 	end,
-	pretty_print = function(self, prefix)
-		local parts = {}
-		for i, v in ipairs(self.array) do
-			---@diagnostic disable-next-line
-			parts[i] = ((type(v) == "table" and v.pretty_print) or tostring)(v, prefix)
-		end
-		return string.format("[%s]", table.concat(parts, ", "))
+	-- TODO: default_print?
+	pretty_print = function(self, ...)
+		local pp = require("./pretty-printer").PrettyPrint.new()
+		array_prettyprintable(self, pp, ...)
+		return tostring(pp)
 	end,
 	diff = function(self, other)
 		print("diffing array...")
@@ -458,18 +580,18 @@ local function gen_array_fns(value_type)
 		if type(key) ~= "number" then
 			p("array-index", value_type)
 			p(key)
-			error("wrong key type passed to indexing: " .. key)
+			error("wrong key type passed to array indexing")
 		end
 		-- check if integer
 		-- there are many nice ways to do this in lua >=5.3
 		-- unfortunately, this is not us
 		if math.floor(key) ~= key then
 			p(key)
-			error("key passed to indexing is not an integer")
+			error("key passed to array indexing is not an integer")
 		end
 		if key < 1 or key > self.n then
 			p(key, self.n)
-			error("key passed to indexing is out of bounds")
+			error("key passed to array indexing is out of bounds")
 		end
 		return self.array[key]
 	end
@@ -477,21 +599,21 @@ local function gen_array_fns(value_type)
 		if type(key) ~= "number" then
 			p("array-index", value_type)
 			p(key)
-			error("wrong key type passed to index-assignment")
+			error("wrong key type passed to array index-assignment")
 		end
 		if math.floor(key) ~= key then
 			p(key)
-			error("key passed to index-assignment is not an integer")
+			error("key passed to array index-assignment is not an integer")
 		end
 		-- n+1 can be used to append
 		if key < 1 or key > self.n + 1 then
 			p(key, self.n)
-			error("key passed to index-assignment is out of bounds")
+			error("key passed to array index-assignment is out of bounds")
 		end
 		if value_type.value_check(value) ~= true then
 			p("array-index-assign", value_type)
 			p(value)
-			error("wrong value type passed to index-assignment")
+			error("wrong value type passed to array index-assignment")
 		end
 		self.array[key] = value
 		if key > self.n then
@@ -499,10 +621,6 @@ local function gen_array_fns(value_type)
 		end
 	end
 	return index, newindex
-end
-
-local function array_prettyprintable(self, printer, ...)
-	return printer:array(self.array, ...)
 end
 
 -- TODO: see define_map
@@ -578,6 +696,8 @@ local terms_gen = {
 	declare_foreign = new_self(define_foreign),
 	---@type fun(key_type: Type, value_type: Type): Map
 	declare_map = new_self(define_map),
+	---@type fun(key_type: Type): Set
+	declare_set = new_self(define_set),
 	---@type fun(value_type: Type): Array
 	declare_array = new_self(define_array),
 	---@type fun(): UndefinedType

@@ -1,6 +1,7 @@
 local endTime = os.time() + 3
 --while os.time() < endTime do end
 
+local startTime = os.clock()
 local metalanguage = require "./metalanguage"
 local evaluator = require "./evaluator"
 local format = require "./format-adapter"
@@ -20,6 +21,8 @@ local print_typed = false
 local profile_run = false
 local profile_flame = false
 local profile_file = ""
+-- "match", "infer" are currently implemented
+local profile_what = ""
 if opts then
 	if string.find(opts, "S") then
 		print_src = true
@@ -37,11 +40,13 @@ if opts then
 		profile_run = true
 		profile_flame = false
 		profile_file = process.argv[3]
+		profile_what = process.argv[4] or "match"
 	end
 	if string.find(opts, "P") then
 		profile_run = true
 		profile_flame = true
 		profile_file = process.argv[3]
+		profile_what = process.argv[4] or "match"
 	end
 end
 
@@ -67,13 +72,24 @@ local env = base_env.create()
 local shadowed, env = env:enter_block()
 
 print("Expression -> terms")
+if profile_run and profile_what == "match" then
+	profile.start()
+end
 local ok, expr, env = code:match(
 	{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, env)) },
 	metalanguage.failure_handler,
 	nil
 )
+if profile_run and profile_what == "match" then
+	profile.stop()
+	if profile_flame then
+		profile.dump_flame(profile_file)
+	else
+		profile.dump(profile_file)
+	end
+end
 if not ok then
-	print("evaluating failed")
+	print("evaluating failed in " .. tostring(os.clock() - startTime) .. " seconds")
 	print(expr)
 	return
 end
@@ -87,11 +103,11 @@ if print_inferrable then
 end
 
 print("Inferring")
-if profile_run then
+if profile_run and profile_what == "infer" then
 	profile.start()
 end
 local type, usages, term = evaluator.infer(bound_expr, terms.typechecking_context())
-if profile_run then
+if profile_run and profile_what == "infer" then
 	profile.stop()
 	if profile_flame then
 		profile.dump_flame(profile_file)

@@ -7,7 +7,7 @@ local types = require "./typesystem"
 local terms = require "./terms"
 local expression_goal = terms.expression_goal
 local runtime_context = terms.runtime_context
-local typechecking_context = terms.typechecking_context
+--local typechecking_context = terms.typechecking_context
 local checkable_term = terms.checkable_term
 local inferrable_term = terms.inferrable_term
 local typed_term = terms.typed_term
@@ -15,13 +15,13 @@ local visibility = terms.visibility
 local purity = terms.purity
 local result_info = terms.result_info
 local value = terms.value
-local prim_syntax_type = terms.prim_syntax_type
-local prim_environment_type = terms.prim_environment_type
-local prim_inferrable_term_type = terms.prim_inferrable_term_type
+--local prim_syntax_type = terms.prim_syntax_type
+--local prim_environment_type = terms.prim_environment_type
+--local prim_inferrable_term_type = terms.prim_inferrable_term_type
 
 local gen = require "./terms-generators"
 local array = gen.declare_array
-local checkable_array = array(checkable_term)
+--local checkable_array = array(checkable_term)
 local inferrable_array = array(inferrable_term)
 local typed_array = array(typed_term)
 local value_array = array(value)
@@ -29,28 +29,16 @@ local usage_array = array(gen.builtin_number)
 local name_array = array(gen.builtin_string)
 
 local param_info_explicit = value.param_info(value.visibility(visibility.explicit))
-local param_info_implicit = value.param_info(value.visibility(visibility.implicit))
 local result_info_pure = value.result_info(result_info(purity.pure))
-local result_info_effectful = value.result_info(result_info(purity.effectful))
----@param ... value
----@return value
-local function tup_val(...)
-	return value.tuple_value(value_array(...))
-end
----@param ... value
----@return value
-local function cons(...)
-	return value.enum_value("cons", tup_val(...))
-end
-local empty = value.enum_value("empty", tup_val())
 
 local evaluator = require "./evaluator"
 local const_combinator = evaluator.const_combinator
 local infer = evaluator.infer
-local typechecker_state = evaluator.typechecker_state
+-- BUG: do not uncomment this, as speculation relies on changing evaluator.typechecking_state, which is masked by the local
+--local typechecker_state = evaluator.typechecker_state
 
-local p = require "pretty-print".prettyPrint
-local U = require "./utils"
+--local p = require "pretty-print".prettyPrint
+local U = require "./alicorn-utils"
 
 local semantic_error_mt = {
 	__tostring = function(self)
@@ -469,21 +457,37 @@ local function expression_pairhandler(args, a, b)
 
 	-- combiner was an evaluated typed value, now it isn't
 	local type_of_term, usage_count, term = infer(combiner, env.typechecking_context)
+	local random = {}
+
+	--print("kind is " .. type_of_term.kind .. " " .. tostring(random))
+
 	if
-		type_of_term:is_neutral()
-		and type_of_term:unwrap_neutral():is_free()
-		and type_of_term:unwrap_neutral():unwrap_free():is_metavariable()
+		(
+			type_of_term:is_neutral()
+			and type_of_term:unwrap_neutral():is_free()
+			and type_of_term:unwrap_neutral():unwrap_free():is_metavariable()
+		) or type_of_term:is_range()
 	then
 		-- Speculate that this is a pi type
 		local ok, pi = evaluator.typechecker_state:speculate(function()
+			local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+			local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			local pi = value.pi(
-				evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
-				value.param_info(value.visibility(terms.visibility.explicit)),
-				evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
-				value.result_info(terms.result_info(terms.purity.pure))
+				param_mv:as_value(),
+				param_info_explicit,
+				value.closure(
+					"#spec-pi",
+					typed_term.literal(result_mv:as_value()),
+					env.typechecking_context.runtime_context
+				),
+				result_info_pure
 			)
 
-			local ok, err = evaluator.typechecker_state:flow(
+			U.tag(
+				"flow",
+				{ val = type_of_term, usa = pi },
+				evaluator.typechecker_state.flow,
+				evaluator.typechecker_state,
 				type_of_term,
 				env.typechecking_context,
 				pi,
@@ -491,17 +495,15 @@ local function expression_pairhandler(args, a, b)
 				"Speculating on pi type"
 			)
 
-			if ok then
-				return pi
-			end
-			return err
+			return pi
 		end)
 		if not ok then
 			error("speculate DID NOT work for pi!: " .. tostring(pi))
 		end
 		type_of_term = pi
 	end
-	if type_of_term:is_operative_type() then
+
+	local function call_operative()
 		local handler, userdata_type = type_of_term:unwrap_operative_type()
 		-- operative input: env, syntax tree, goal type (if checked)
 		local tuple_args = value_array(value.prim(sargs), value.prim(env), value.prim(term), value.prim(goal))
@@ -531,24 +533,31 @@ local function expression_pairhandler(args, a, b)
 			local checkable = data
 			local goal_type = goal:unwrap_check()
 			local usage_counts, term = evaluator.check(checkable, env.typechecking_context, goal_type)
-			return true, checkable_term.inferrable(inferrable_term.typed(goal_type, usage_counts, term)), env
+			--print("success: " .. tostring(random))
+			return checkable_term.inferrable(inferrable_term.typed(goal_type, usage_counts, term)), env
 		elseif goal:is_infer() then
 			local resulting_type, usage_counts, term = infer(data, env.typechecking_context)
-			return true, inferrable_term.typed(resulting_type, usage_counts, term), env
+			--print("success: " .. tostring(random))
+			return inferrable_term.typed(resulting_type, usage_counts, term), env
 		else
 			error("NYI goal " .. goal.kind .. " for operative in expression_pairhandler")
 		end
 	end
+	if type_of_term:is_operative_type() then
+		return true, U.tag("call_operative", random, call_operative)
+	end
 
-	if type_of_term:is_pi() then
+	local function call_pi()
 		local param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
 
-		while param_info:unwrap_param_info() == value.visibility(visibility.implicit) do
-			local metavar = typechecker_state:metavariable(env.typechecking_context)
+		while param_info:unwrap_param_info():unwrap_visibility():is_implicit() do
+			local metavar = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			local metavalue = metavar:as_value()
 			local metaresult = evaluator.apply_value(result_type, metavalue)
 			if not metaresult:is_pi() then
-				error("Result of applying function to a metavariable wasn't a pi type! This is bad for some reason!")
+				error(
+					"calling function with implicit args, result type applied on implicit args must be a function type"
+				)
 			end
 
 			-- local new_term = inferrable_term.application(inferrable_term.typed(type_of_term, usage_array(), term), checkable_term.inferrable(inferrable_term.typed(param_type, usage_array(), terms.typed_term.literal(metavar:as_value()))))
@@ -563,7 +572,7 @@ local function expression_pairhandler(args, a, b)
 		}, metalanguage.failure_handler, nil)
 
 		if not ok then
-			return false, tuple, env
+			error(tuple)
 		end
 
 		---@type inferrable | checkable
@@ -574,10 +583,14 @@ local function expression_pairhandler(args, a, b)
 			res = checkable_term.inferrable(res)
 		end
 
-		return true, res, env
+		--print("success: " .. tostring(random))
+		return res, env
+	end
+	if type_of_term:is_pi() then
+		return true, U.tag("call_pi", random, call_pi)
 	end
 
-	if type_of_term:is_prim_function_type() then
+	local function call_prim_func_type()
 		local param_type, result_type = type_of_term:unwrap_prim_function_type()
 		--print("checking prim_function_type call args with goal: (value term follows)")
 		--print(param_type)
@@ -587,12 +600,10 @@ local function expression_pairhandler(args, a, b)
 		}, metalanguage.failure_handler, nil)
 
 		if not ok then
-			return false,
-				semantic_error.prim_function_argument_collect_failed(tuple, { a.anchor, b.anchor }, {
-					prim_function_type = type_of_term,
-					prim_function_value = term,
-				}, orig_env),
-				env
+			error(semantic_error.prim_function_argument_collect_failed(tuple, { a.anchor, b.anchor }, {
+				prim_function_type = type_of_term,
+				prim_function_value = term,
+			}, orig_env))
 		end
 
 		---@type inferrable | checkable
@@ -603,7 +614,11 @@ local function expression_pairhandler(args, a, b)
 			res = checkable_term.inferrable(res)
 		end
 
-		return true, res, env
+		--print("success: " .. tostring(random))
+		return res, env
+	end
+	if type_of_term:is_prim_function_type() then
+		return true, U.tag("call_prim_func_type", random, call_prim_func_type)
 	end
 
 	print("!!! about to fail of invalid type")
@@ -667,7 +682,7 @@ local function expression_symbolhandler(args, name)
 end
 
 ---@param args ExpressionArgs
----@param val inferrable | checkable
+---@param val SyntaxValue
 ---@return boolean
 ---@return inferrable | checkable
 ---@return Environment?
@@ -842,7 +857,7 @@ local function primitive_operative(fn, name)
 	-- this ensures variable 1 is the argument tuple
 	local value_fn = value.closure("#OPERATIVE_PARAM", tuple_to_tuple_fn, runtime_context())
 
-	local userdata_type = value.tuple_type(empty)
+	local userdata_type = value.tuple_type(terms.empty)
 	return inferrable_term.typed(
 		value.operative_type(value_fn, userdata_type),
 		array(gen.builtin_number)(),
@@ -892,19 +907,12 @@ collect_tuple = metalanguage.reducer(
 	---@return Environment?
 	function(syntax, args)
 		local goal, env = args:unwrap()
-		local goal_type, decls_metavar, collected_terms
+		local goal_type, collected_terms
+		local decls = terms.empty
 
 		if goal:is_check() then
 			collected_terms = array(checkable_term)()
 			goal_type = goal:unwrap_check()
-			decls_metavar = typechecker_state:metavariable(env.typechecking_context)
-			typechecker_state:flow(
-				decls_metavar:as_value(),
-				env.typechecking_context,
-				value.enum_value("empty", value.tuple_value(value_array())),
-				env.typechecking_context,
-				"base case of collect_tuple"
-			)
 		else
 			collected_terms = inferrable_array()
 		end
@@ -914,41 +922,24 @@ collect_tuple = metalanguage.reducer(
 		while ok and continue do
 			i = i + 1
 			if goal_type then
-				local next_elem_type = typechecker_state:metavariable(env.typechecking_context)
-				ok, continue, next_term, syntax, env = syntax:match(
-					{
-						metalanguage.ispair(collect_tuple_pair_handler),
-						metalanguage.isnil(collect_tuple_nil_handler),
-					},
-					metalanguage.failure_handler,
-					ExpressionArgs.new(expression_goal.check(next_elem_type:as_value()), env)
-				)
+				local next_elem_type_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+				local next_elem_type = next_elem_type_mv:as_value()
+				ok, continue, next_term, syntax, env = syntax:match({
+					metalanguage.ispair(collect_tuple_pair_handler),
+					metalanguage.isnil(collect_tuple_nil_handler),
+				}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
 				if ok and continue then
-					local next_decls_metavar = typechecker_state:metavariable(env.typechecking_context)
-					typechecker_state:flow(
-						next_decls_metavar:as_value(),
-						env.typechecking_context,
-						value.enum_value(
-							"cons",
-							value.tuple_value(
-								value_array(
-									decls_metavar:as_value(),
-									value.closure(
-										"#collect-tuple-param",
-										typed_term.literal(next_elem_type:as_value()),
-										env.typechecking_context.runtime_context
-									)
-								)
-							)
-						),
-						env.typechecking_context,
-						"recursive case of collect_tuple"
-					)
-					decls_metavar = next_decls_metavar
 					collected_terms:append(next_term)
-					local usages, typed_elem_term =
-						evaluator.check(next_term, env.typechecking_context, next_elem_type:as_value())
-					local elem_value = evaluator.evaluate(typed_elem_term, env.typechecking_context.runtime_context)
+					local _, next_typed = evaluator.check(next_term, env.typechecking_context, next_elem_type)
+					local next_val = evaluator.evaluate(next_typed, env.typechecking_context.runtime_context)
+					decls = terms.cons(
+						decls,
+						value.closure(
+							"#collect-tuple-param",
+							typed_term.literal(value.singleton(next_elem_type, next_val)),
+							env.typechecking_context.runtime_context
+						)
+					)
 				end
 				if not ok and type(continue) == "string" then
 					continue = continue .. " (should have " .. ", found " .. tostring(#collected_terms) .. " so far)"
@@ -970,8 +961,12 @@ collect_tuple = metalanguage.reducer(
 		if goal:is_infer() then
 			return true, inferrable_term.tuple_cons(collected_terms), env
 		elseif goal:is_check() then
-			typechecker_state:flow(
-				value.tuple_type(decls_metavar:as_value()),
+			U.tag(
+				"flow",
+				{ val = value.tuple_type(decls), use = goal_type },
+				evaluator.typechecker_state.flow,
+				evaluator.typechecker_state,
+				value.tuple_type(decls),
 				env.typechecking_context,
 				goal_type,
 				env.typechecking_context,
@@ -993,56 +988,43 @@ collect_prim_tuple = metalanguage.reducer(
 	---@return Environment?
 	function(syntax, args)
 		local goal, env = args:unwrap()
-		local goal_type, closures, collected_terms
+		local goal_type, collected_terms
+		local decls = terms.empty
 
 		if goal:is_check() then
 			collected_terms = array(checkable_term)()
 			goal_type = goal:unwrap_check()
-			closures = evaluator.extract_tuple_elem_type_closures(goal_type:unwrap_prim_tuple_type(), value_array())
 		else
 			collected_terms = inferrable_array
 		end
 
-		local type_elems = value_array()
-		local tuple_symbolic_elems = value_array()
 		local ok, continue, next_term = true, true, nil
 		local i = 0
 		while ok and continue do
 			i = i + 1
-			-- checked version knows how many elems should be in the tuple
 			if goal_type then
-				if i > #closures then
-					ok, continue, next_term, syntax, env = syntax:match({
-						metalanguage.ispair(collect_tuple_pair_too_many_handler),
-						metalanguage.isnil(collect_tuple_nil_handler),
-					}, metalanguage.failure_handler, ExpressionArgs.new(goal, env))
-				else
-					local next_elem_type = evaluator.apply_value(closures[i], value.tuple_value(tuple_symbolic_elems))
-					type_elems:append(next_elem_type)
-
-					ok, continue, next_term, syntax, env = syntax:match({
-						metalanguage.ispair(collect_tuple_pair_handler),
-						metalanguage.isnil(collect_tuple_nil_too_few_handler),
-					}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
-					if ok and continue then
-						collected_terms:append(next_term)
-						--print("trying to check tuple element as: (value term follows)")
-						--print(next_elem_type)
-						local usages, typed_elem_term =
-							evaluator.check(next_term, env.typechecking_context, next_elem_type)
-						local elem_value = evaluator.evaluate(typed_elem_term, env.typechecking_context.runtime_context)
-						tuple_symbolic_elems:append(elem_value)
-					end
+				local next_elem_type_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+				local next_elem_type = next_elem_type_mv:as_value()
+				ok, continue, next_term, syntax, env = syntax:match({
+					metalanguage.ispair(collect_tuple_pair_handler),
+					metalanguage.isnil(collect_tuple_nil_handler),
+				}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
+				if ok and continue then
+					collected_terms:append(next_term)
+					local _, next_typed = evaluator.check(next_term, env.typechecking_context, next_elem_type)
+					local next_val = evaluator.evaluate(next_typed, env.typechecking_context.runtime_context)
+					decls = terms.cons(
+						decls,
+						value.closure(
+							"#collect-tuple-param",
+							typed_term.literal(value.singleton(next_elem_type, next_val)),
+							env.typechecking_context.runtime_context
+						)
+					)
 				end
 				if not ok and type(continue) == "string" then
-					continue = continue
-						.. " (should have "
-						.. tostring(#closures)
-						.. ", found "
-						.. tostring(#collected_terms)
-						.. " so far)"
+					continue = continue .. " (should have " .. ", found " .. tostring(#collected_terms) .. " so far)"
 				end
-			-- else we don't know how many elems so nil or pair are both valid
 			else
 				ok, continue, next_term, syntax, env = syntax:match({
 					metalanguage.ispair(collect_tuple_pair_handler),
@@ -1060,6 +1042,13 @@ collect_prim_tuple = metalanguage.reducer(
 		if goal:is_infer() then
 			return true, inferrable_term.prim_tuple_cons(collected_terms), env
 		elseif goal:is_check() then
+			evaluator.typechecker_state:flow(
+				value.prim_tuple_type(decls),
+				env.typechecking_context,
+				goal_type,
+				env.typechecking_context,
+				"prim tuple type in collect_prim_tuple"
+			)
 			return true, checkable_term.prim_tuple_cons(collected_terms), env
 		else
 			error("NYI: collect_prim_tuple goal case " .. goal.kind)
@@ -1128,10 +1117,10 @@ local block = metalanguage.reducer(
 ---@param elems value[]
 ---@return value
 local function build_prim_type_tuple(elems)
-	local result = empty
+	local result = terms.empty
 
-	for i, v in ipairs(elems) do
-		result = cons(result, const_combinator(v))
+	for _, v in ipairs(elems) do
+		result = terms.cons(result, const_combinator(v))
 	end
 
 	return terms.value.prim_tuple_type(result)
@@ -1143,8 +1132,11 @@ end
 ---@return inferrable
 local function primitive_applicative(fn, params, results)
 	local literal_prim_fn = terms.typed_term.literal(terms.value.prim(fn))
-	local prim_fn_type = terms.value.prim_function_type(build_prim_type_tuple(params), build_prim_type_tuple(results))
-
+	local prim_fn_type = terms.value.prim_function_type(
+		build_prim_type_tuple(params),
+		build_prim_type_tuple(results),
+		terms.value.result_info(terms.result_info(terms.purity.pure))
+	)
 	return terms.inferrable_term.typed(prim_fn_type, usage_array(), literal_prim_fn)
 end
 
