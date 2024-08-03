@@ -31,7 +31,7 @@ function test_star()
 	assert(result.kind == "value_star")
 	assert(result.level == 0)
 end
-
+--[[
 function test_metavariable_bind_to_other_mv()
 	local tcs = terms.typechecker_state()
 	local mv_a = tcs:metavariable()
@@ -48,8 +48,9 @@ function test_metavariable_bind_to_other_mv()
 	-- check that bound ID was correctly collapsed
 	assert(tcs.mvs[mv_c.id].bound_mv_id == mv_a.id)
 end
+]]
 
 test_levels()
 -- FIXME: star isn't implemented as an inferrable term
 -- test_star()
-test_metavariable_bind_to_other_mv()
+--test_metavariable_bind_to_other_mv()

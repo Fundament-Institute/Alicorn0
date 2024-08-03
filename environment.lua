@@ -1,5 +1,6 @@
 local trie = require "./lazy-prefix-tree"
 local fibbuf = require "./fibonacci-buffer"
+local U = require "./alicorn-utils"
 
 local terms = require "./terms"
 local inferrable_term = terms.inferrable_term
@@ -11,6 +12,10 @@ local infer = eval.infer
 
 local environment_mt
 
+---Takes a table resembling an old environment (can be missing fields, it doesn't matter) and turns it into a new environment
+---@param old_env table
+---@param opts table?
+---@return Environment
 local function update_env(old_env, opts)
 	local new_env = {}
 	if opts then
@@ -38,16 +43,19 @@ local new_env = update_env
 
 ---@class Environment
 ---@field typechecking_context TypecheckingContext
----@field locals unknown
----@field in_scope unknown
----@field nonlocals unknown
----@field bindings unknown
----@field perms unknown
+---@field locals PrefixTree
+---@field nonlocals PrefixTree
+---@field in_scope PrefixTree
+---@field bindings FibonacciBuffer
+---@field perms table
 local environment = {}
 
 ---@class ShadowEnvironment
 ---@field shadowed Environment
 
+---@param name string
+---@return boolean
+---@return inferrable|string
 function environment:get(name)
 	local present, binding = self.in_scope:get(name)
 	if not present then
@@ -62,12 +70,23 @@ function environment:get(name)
 	return true, binding
 end
 
+---@param name string
+---@param type value
+---@param value value
 local function log_binding(name, type, value)
-	print("New let binding", name, "with type", type, "value", value)
+	print("New let binding")
+	print("name:", name)
+	print("type: (value term follows)")
+	print(type)
+	print("value: (value term follows)")
+	print(value)
 end
 
+---@param binding binding
+---@return Environment
 function environment:bind_local(binding)
-	p(binding)
+	--print("bind_local: (binding term follows)")
+	--print(binding:pretty_print(self.typechecking_context))
 	if binding:is_let() then
 		local name, expr = binding:unwrap_let()
 		local expr_type, expr_usages, expr_term = infer(expr, self.typechecking_context)
@@ -81,7 +100,7 @@ function environment:bind_local(binding)
 		local evaled = eval.evaluate(expr_term, self.typechecking_context.runtime_context)
 		-- print "doing let binding"
 		-- print(expr:pretty_print())
-		log_binding(name, expr_type, evaled)
+		--log_binding(name, expr_type, evaled)
 		local typechecking_context = self.typechecking_context:append(name, expr_type, evaled)
 		local bindings = self.bindings:append(binding)
 		return update_env(self, {
@@ -96,11 +115,17 @@ function environment:bind_local(binding)
 		--DEBUG:
 		if subject_type:is_enum_value() then
 			print "bad subject infer"
-			print(subject:pretty_print())
+			print(subject:pretty_print(self.typechecking_context))
 		end
 
 		-- evaluating the subject is necessary for inferring the type of the body
-		local subject_value = eval.evaluate(subject_term, self.typechecking_context:get_runtime_context())
+		local subject_value = U.tag(
+			"evaluate",
+			{ subject_term = subject_term },
+			eval.evaluate,
+			subject_term,
+			self.typechecking_context:get_runtime_context()
+		)
 		-- extract subject type and evaled for each elem in tuple
 		local tupletypes, n_elements = eval.infer_tuple_type(subject_type, subject_value)
 
@@ -133,7 +158,7 @@ function environment:bind_local(binding)
 			locals = locals:put(v, term)
 
 			local evaled = eval.index_tuple_value(subject_value, i)
-			log_binding(v, tupletypes[i], evaled)
+			--log_binding(v, tupletypes[i], evaled)
 			typechecking_context = typechecking_context:append(v, tupletypes[i], evaled)
 		end
 		local bindings = self.bindings:append(binding)
@@ -143,14 +168,14 @@ function environment:bind_local(binding)
 			typechecking_context = typechecking_context,
 		})
 	elseif binding:is_annotated_lambda() then
-		local param_name, param_annotation, anchor = binding:unwrap_annotated_lambda()
+		local param_name, param_annotation, anchor, visible = binding:unwrap_annotated_lambda()
 		if not anchor or not anchor.sourceid then
 			print("binding", binding)
 			error "missing anchor for annotated lambda binding"
 		end
 		local annotation_type, annotation_usages, annotation_term = infer(param_annotation, self.typechecking_context)
-		print("binding lambda annotation")
-		print(annotation_term:pretty_print())
+		--print("binding lambda annotation: (typed term follows)")
+		--print(annotation_term:pretty_print(self.typechecking_context))
 		local evaled = eval.evaluate(annotation_term, self.typechecking_context.runtime_context)
 		local bindings = self.bindings:append(binding)
 		local locals = self.locals:put(param_name, inferrable_term.bound_variable(#self.typechecking_context + 1))
@@ -167,10 +192,17 @@ function environment:bind_local(binding)
 	error("unreachable!?")
 end
 
+---@class Module
+---@field bindings PrefixTree
+
+---@return Environment
+---@return Module
 function environment:gather_module()
 	return self, setmetatable({ bindings = self.locals }, module_mt)
 end
 
+---@param module Module
+---@return Environment
 function environment:open_module(module)
 	return new_env {
 		locals = self.locals:extend(module.bindings),
@@ -178,6 +210,9 @@ function environment:open_module(module)
 		perms = self.perms,
 	}
 end
+
+---@param module Module
+---@return Environment
 function environment:use_module(module)
 	return new_env {
 		locals = self.locals,
@@ -186,6 +221,8 @@ function environment:use_module(module)
 	}
 end
 
+---@param name string
+---@return Environment
 function environment:unlet_local(name)
 	return new_env {
 		locals = self.locals:remove(name),
@@ -198,8 +235,9 @@ end
 ---@return ShadowEnvironment
 ---@return Environment
 function environment:enter_block()
-	print "entering block"
-	self.typechecking_context:dump_names()
+	--print "entering block"
+	--self.typechecking_context:dump_names()
+	eval.typechecker_state:enter_block()
 	return { shadowed = self },
 		new_env {
 			-- locals = nil,
@@ -210,10 +248,10 @@ function environment:enter_block()
 end
 
 ---exit a block, resolving the bindings in that block and restoring the shadowed locals
----@param term unknown
+---@param term inferrable
 ---@param shadowed ShadowEnvironment
 ---@return Environment
----@return unknown
+---@return inferrable
 function environment:exit_block(term, shadowed)
 	-- -> env, term
 	local outer = shadowed.shadowed or error "shadowed.shadowed missing"
@@ -225,12 +263,12 @@ function environment:exit_block(term, shadowed)
 		typechecking_context = outer.typechecking_context,
 		bindings = outer.bindings,
 	}
-	print("exiting block and dropping " .. #self.bindings .. " bindings")
-	self.typechecking_context:dump_names()
-	print "outer"
-	outer.typechecking_context:dump_names()
-	print "new"
-	env.typechecking_context:dump_names()
+	--print("exiting block and dropping " .. #self.bindings .. " bindings")
+	--self.typechecking_context:dump_names()
+	--print "outer"
+	--outer.typechecking_context:dump_names()
+	--print "new"
+	--env.typechecking_context:dump_names()
 	local wrapped = term
 	for idx = self.bindings:len(), 1, -1 do
 		local binding = self.bindings:get(idx)
@@ -242,18 +280,21 @@ function environment:exit_block(term, shadowed)
 			wrapped = terms.inferrable_term.let(name, expr, wrapped)
 		elseif binding:is_tuple_elim() then
 			local names, subject = binding:unwrap_tuple_elim()
-			wrapped = terms.inferrable_term.tuple_elim(subject, wrapped)
+			wrapped = terms.inferrable_term.tuple_elim(names, subject, wrapped)
 		elseif binding:is_annotated_lambda() then
-			local name, annotation, anchor = binding:unwrap_annotated_lambda()
-			wrapped = terms.inferrable_term.annotated_lambda(name, annotation, wrapped, anchor)
+			local name, annotation, anchor, visible = binding:unwrap_annotated_lambda()
+			wrapped = terms.inferrable_term.annotated_lambda(name, annotation, wrapped, anchor, visible)
 		end
 	end
+	eval.typechecker_state:exit_block()
 
 	return env, wrapped
 end
 
 environment_mt = { __index = environment }
 
+---@param env Environment
+---@return string
 local function dump_env(env)
 	return "Environment" .. "\nlocals: " .. trie.dump_map(env.locals) .. "\nnonlocals: " .. trie.dump_map(env.nonlocals)
 end

@@ -3,18 +3,23 @@
 -- in the case where the only methods implemented are append and get,
 -- the two names are synonymous
 
+---@class (exact) FibonacciPartition
+---@field n integer
+---@field [integer] any
+
+---@class (exact) FibonacciBuffer
+---@field n integer
+---@field [integer] FibonacciPartition
 local FibonacciBuffer = {}
+local FibonacciBuffer_mt = {}
 
-local FibonacciBuffer_mt = {
-	__index = FibonacciBuffer,
-}
-
+---@return FibonacciBuffer
 local function new()
-	local fib_buf = { n = 0 }
-	setmetatable(fib_buf, FibonacciBuffer_mt)
-	return fib_buf
+	return setmetatable({ n = 0 }, FibonacciBuffer_mt)
 end
 
+---@param value any
+---@return FibonacciBuffer
 function FibonacciBuffer:append(value)
 	local n = self.n
 	local n_partitions = #self
@@ -43,7 +48,7 @@ function FibonacciBuffer:append(value)
 		merged_partition = {}
 		local merged_length = 0
 		for i = merge_from, n_partitions do
-			local partition_length = #self[i]
+			local partition_length = self[i].n
 			table.move(self[i], 1, partition_length, merged_length + 1, merged_partition)
 			merged_length = merged_length + partition_length
 		end
@@ -60,6 +65,8 @@ function FibonacciBuffer:append(value)
 end
 
 -- one-based!!!
+---@param index integer
+---@return any
 function FibonacciBuffer:get(index)
 	for _, p in ipairs(self) do
 		local length = p.n
@@ -72,10 +79,73 @@ function FibonacciBuffer:get(index)
 	return nil
 end
 
+---@param index integer
+---@param value any
+---@return FibonacciBuffer
+function FibonacciBuffer:set(index, value)
+	if index < 1 then
+		error("fibonacci buffer set() index out of bounds")
+	end
+	local n = self.n
+	for i, p in ipairs(self) do
+		local length = p.n
+		if index <= length then
+			-- build new output based on self
+			local fib_buf = new()
+			table.move(self, 1, n, 1, fib_buf)
+			fib_buf.n = n
+			-- recreate partition which is changing
+			local newp = {}
+			table.move(p, 1, length, 1, newp)
+			newp.n = length
+			-- now set
+			newp[index] = value
+			fib_buf[i] = newp
+			return fib_buf
+		else
+			index = index - length
+		end
+	end
+	error("fibonacci buffer set() index out of bounds")
+end
+
+---@return integer
 function FibonacciBuffer:len()
 	return self.n
 end
 
+---@param other FibonacciBuffer
+---@return boolean
+function FibonacciBuffer:eq(other)
+	local other_mt = getmetatable(other)
+	if other_mt ~= FibonacciBuffer_mt then
+		return false
+	end
+	local n, other_n = self.n, other.n
+	if n ~= other_n then
+		return false
+	end
+	-- same length means same number of partitions
+	local n_partitions = #self
+	local cur = 0
+	-- compare physical equality of partitions first for efficiency
+	for i = 1, n_partitions do
+		if self[i] == other[i] then
+			cur = cur + self[i].n
+		else
+			break
+		end
+	end
+	-- then, if needed, handle the rest through structural equality
+	for i = cur + 1, n do
+		if self:get(i) ~= other:get(i) then
+			return false
+		end
+	end
+	return true
+end
+
+---@return string
 function FibonacciBuffer:debug_repr()
 	local partition_strings = {}
 	for i, p in ipairs(self) do
@@ -91,5 +161,8 @@ function FibonacciBuffer:debug_repr()
 		string.format('table="%s" n_partitions=%u %s', tostring(self), #self, table.concat(partition_strings, " "))
 	return output
 end
+
+FibonacciBuffer_mt.__index = FibonacciBuffer
+FibonacciBuffer_mt.__eq = FibonacciBuffer.eq
 
 return new

@@ -7,7 +7,7 @@ local types = require "./typesystem"
 local terms = require "./terms"
 local expression_goal = terms.expression_goal
 local runtime_context = terms.runtime_context
-local typechecking_context = terms.typechecking_context
+--local typechecking_context = terms.typechecking_context
 local checkable_term = terms.checkable_term
 local inferrable_term = terms.inferrable_term
 local typed_term = terms.typed_term
@@ -15,13 +15,13 @@ local visibility = terms.visibility
 local purity = terms.purity
 local result_info = terms.result_info
 local value = terms.value
-local prim_syntax_type = terms.prim_syntax_type
-local prim_environment_type = terms.prim_environment_type
-local prim_inferrable_term_type = terms.prim_inferrable_term_type
+--local prim_syntax_type = terms.prim_syntax_type
+--local prim_environment_type = terms.prim_environment_type
+--local prim_inferrable_term_type = terms.prim_inferrable_term_type
 
 local gen = require "./terms-generators"
 local array = gen.declare_array
-local checkable_array = array(checkable_term)
+--local checkable_array = array(checkable_term)
 local inferrable_array = array(inferrable_term)
 local typed_array = array(typed_term)
 local value_array = array(value)
@@ -29,22 +29,16 @@ local usage_array = array(gen.builtin_number)
 local name_array = array(gen.builtin_string)
 
 local param_info_explicit = value.param_info(value.visibility(visibility.explicit))
-local param_info_implicit = value.param_info(value.visibility(visibility.implicit))
 local result_info_pure = value.result_info(result_info(purity.pure))
-local result_info_effectful = value.result_info(result_info(purity.effectful))
-local function tup_val(...)
-	return value.tuple_value(value_array(...))
-end
-local function cons(...)
-	return value.enum_value("cons", tup_val(...))
-end
-local empty = value.enum_value("empty", tup_val())
 
 local evaluator = require "./evaluator"
 local const_combinator = evaluator.const_combinator
 local infer = evaluator.infer
+-- BUG: do not uncomment this, as speculation relies on changing evaluator.typechecking_state, which is masked by the local
+--local typechecker_state = evaluator.typechecker_state
 
-local p = require "pretty-print".prettyPrint
+--local p = require "pretty-print".prettyPrint
+local U = require "./alicorn-utils"
 
 local semantic_error_mt = {
 	__tostring = function(self)
@@ -58,7 +52,13 @@ local semantic_error_mt = {
 		if self.terms then
 			message = message .. " with terms\n"
 			for k, term in pairs(self.terms) do
-				message = message .. k .. " = " .. tostring(term) .. "\n"
+				local s = nil
+				if term.pretty_print and self.env then
+					s = term:pretty_print(self.env.typechecking_context)
+				else
+					s = tostring(term)
+				end
+				message = message .. k .. " = " .. s .. "\n"
 			end
 		end
 		if self.env then
@@ -73,17 +73,21 @@ local semantic_error_mt = {
 }
 
 local semantic_error = {
+	---@param cause any
 	function_args_mismatch = function(cause)
 		return {
 			text = "function args mismatch",
 			cause = cause,
 		}
 	end,
+	---@param t any
 	non_operable_combiner = function(t)
 		return {
 			text = "value in combiner slot that can't operate of type " .. types.type_name(t),
 		}
 	end,
+	---@param cause any
+	---@param anchors Anchor[]
 	operative_apply_failed = function(cause, anchors)
 		return {
 			text = "operative apply failed",
@@ -91,6 +95,11 @@ local semantic_error = {
 			anchors = anchors,
 		}
 	end,
+	---@param cause any
+	---@param anchors Anchor[]
+	---@param terms any
+	---@param env any
+	---@return table
 	prim_function_argument_collect_failed = function(cause, anchors, terms, env)
 		return {
 			text = "prim_function_argument_collect_failed",
@@ -113,18 +122,18 @@ local collect_tuple
 local collect_prim_tuple
 
 ---@class ExpressionArgs
----@field goal ExpressionGoal
+---@field goal expression_goal
 ---@field env Environment
 local ExpressionArgs = {}
 
 ---Unpack ExpressionArgs into component parts
----@return ExpressionGoal
+---@return expression_goal
 ---@return Environment
 function ExpressionArgs:unwrap()
 	return self.goal, self.env
 end
 
----@param goal ExpressionGoal
+---@param goal expression_goal
 ---@param env Environment
 ---@return ExpressionArgs
 function ExpressionArgs.new(goal, env)
@@ -140,6 +149,34 @@ function ExpressionArgs.new(goal, env)
 	}, { __index = ExpressionArgs })
 end
 
+-- work around lua lsp not warning about invalid enum accesses
+---@class OperatorTypeContainer
+local OperatorType = --[[@enum OperatorType]]
+	{
+		Prefix = "Prefix",
+		Infix = "Infix",
+	}
+
+---@class (exact) PrefixData
+
+---@type {[string]: PrefixData}
+local prefix_data = {
+	["-"] = {},
+	["@"] = {},
+}
+
+---@class AssociativityContainer
+local Associativity = --[[@enum Associativity]]
+	{
+		r = "r",
+		l = "l",
+	}
+
+---@class (exact) InfixData
+---@field precedence integer
+---@field associativity Associativity
+
+---@type {[string]: InfixData}
 local infix_data = {
 	["="] = { precedence = 2, associativity = "r" },
 	["|"] = { precedence = 3, associativity = "l" },
@@ -157,41 +194,247 @@ local infix_data = {
 	-- # is the comment character and is forbidden here
 }
 
--- Always take a third arg which is an enum: Inferrable(no info), Checkable(goal type), Mechanism(mechanism info)
+---@param symbol string
+---@return boolean
+---@return string
+local function shunting_yard_prefix_handler(_, symbol)
+	if not prefix_data[symbol:sub(1, 1)] or symbol:find("_") then
+		return false,
+			"symbol was provided in a prefix operator place, but the symbol isn't a valid prefix operator: " .. symbol
+	end
+	return true, symbol
+end
 
-local function check_infix_expression_handler(dat, a, b)
-	local env, prec = dat.env, dat.prec
-	local ok, name = a:match({
-		metalanguage.is_symbol(metalanguage.accept_handler),
-	}, metalanguage.failure_handler, nil)
-	local data = infix_data[name:sub(1, 1)]
-	if data then
-		local ok, ifx, op, rhs
+---@param symbol string
+---@param a ConstructedSyntax
+---@param b ConstructedSyntax
+---@return boolean
+---@return boolean|string
+---@return string?
+---@return ConstructedSyntax?
+---@return ConstructedSyntax?
+local function shunting_yard_infix_handler(_, symbol, a, b)
+	if not infix_data[symbol:sub(1, 1)] or symbol:find("_") then
+		return false,
+			"symbol was provided in an infix operator place, but the symbol isn't a valid infix operator: " .. symbol
+	end
+	return true, true, symbol, a, b
+end
+
+---@return boolean
+---@return boolean
+local function shunting_yard_nil_handler(_)
+	return true, false
+end
+
+---@class (exact) TaggedOperator
+---@field type OperatorType
+---@field symbol string
+
+---@param yard { n: integer, [integer]: TaggedOperator }
+---@param output { n: integer, [integer]: ConstructedSyntax }
+---@param anchor Anchor
+local function shunting_yard_pop(yard, output, anchor)
+	local yard_height = yard.n
+	local output_length = output.n
+	local operator = yard[yard_height]
+	local operator_type = operator.type
+	local operator_symbol = operator.symbol
+	if operator_type == OperatorType.Prefix then
+		local arg = output[output_length]
+		local tree = metalanguage.list(anchor, metalanguage.symbol(anchor, operator_symbol), arg)
+		yard[yard_height] = nil
+		yard.n = yard_height - 1
+		output[output_length] = tree
+	elseif operator_type == OperatorType.Infix then
+		local right = output[output_length]
+		local left = output[output_length - 1]
+		local tree = metalanguage.list(anchor, left, metalanguage.symbol(anchor, operator_symbol), right)
+		yard[yard_height] = nil
+		yard.n = yard_height - 1
+		output[output_length] = nil
+		output[output_length - 1] = tree
+		output.n = output_length - 1
+	else
+		error("unknown operator type")
 	end
 end
 
----@param args ExpressionArgs
----@param a Syntax
----@param b Syntax
----@return boolean
----@return InferrableTerm | CheckableTerm
----@return Environment
-local function expression_pairhandler(args, a, b)
-	-- local ok, ifx, op, args = b:match(
-	--   {
-	--     metalanguage.is_pair(check_infix_expression_handler)
-	--   },
-	--   metalanguage.failure_handler,
-	--   {env = env, prec = 0, lhs = a}
-	-- )
+---@param new_symbol string
+---@param yard_operator TaggedOperator
+local function shunting_yard_should_pop(new_symbol, yard_operator)
+	-- new_symbol is always infix, as we never pop while adding a prefix operator
+	-- prefix operators always have higher precedence than infix operators
+	local yard_type = yard_operator.type
+	if yard_type == OperatorType.Prefix then
+		return true
+	end
+	if yard_type ~= OperatorType.Infix then
+		error("unknown operator type")
+	end
+	local yard_symbol = yard_operator.symbol
+	local new_data = infix_data[new_symbol:sub(1, 1)]
+	local yard_data = infix_data[yard_symbol:sub(1, 1)]
+	local new_precedence = new_data.precedence
+	local yard_precedence = yard_data.precedence
+	if new_precedence < yard_precedence then
+		return true
+	end
+	if new_precedence > yard_precedence then
+		return false
+	end
+	local new_associativity = new_data.associativity
+	local yard_associativity = yard_data.associativity
+	if new_associativity ~= yard_associativity then
+		-- if you actually hit this error, it's because the infix_data is badly specified
+		-- one of the precedence levels has both left- and right-associative operators
+		-- please separate these operators into different precedence levels to disambiguate
+		error("clashing associativities!!!")
+	end
+	if new_associativity == Associativity.l then
+		return true
+	end
+	if new_associativity == Associativity.r then
+		return false
+	end
+	error("unknown associativity")
+end
 
+---@param a ConstructedSyntax
+---@param b ConstructedSyntax
+---@param yard { n: integer, [integer]: TaggedOperator }
+---@param output { n: integer, [integer]: ConstructedSyntax }
+---@param anchor Anchor
+---@return boolean
+---@return ConstructedSyntax|string
+local function shunting_yard(a, b, yard, output, anchor)
+	-- first, collect all prefix operators
+	local is_prefix, prefix_symbol =
+		a:match({ metalanguage.issymbol(shunting_yard_prefix_handler) }, metalanguage.failure_handler, nil)
+	if is_prefix then
+		local ok, next_a, next_b =
+			b:match({ metalanguage.ispair(metalanguage.accept_handler) }, metalanguage.failure_handler, nil)
+		if not ok then
+			return ok, next_a
+		end
+		-- prefix operators always have higher precedence than infix operators,
+		-- all have the same precedence as each other (conceptually), and are always right-associative
+		-- this means we never need to pop the yard before adding a prefix operator to it
+		yard.n = yard.n + 1
+		yard[yard.n] = {
+			type = OperatorType.Prefix,
+			symbol = prefix_symbol,
+		}
+		return shunting_yard(next_a, next_b, yard, output, anchor)
+	end
+	-- no more prefix operators, now handle infix
+	output.n = output.n + 1
+	output[output.n] = a
+	local ok, more, infix_symbol, next_a, next_b = b:match({
+		metalanguage.listtail(
+			shunting_yard_infix_handler,
+			metalanguage.issymbol(metalanguage.accept_handler),
+			metalanguage.any(metalanguage.accept_handler)
+		),
+		metalanguage.isnil(shunting_yard_nil_handler),
+	}, metalanguage.failure_handler, nil)
+	if not ok then
+		return ok, more
+	end
+	if not more then
+		while yard.n > 0 do
+			shunting_yard_pop(yard, output, anchor)
+		end
+		return true, output[1]
+	end
+	while yard.n > 0 and shunting_yard_should_pop(infix_symbol, yard[yard.n]) do
+		shunting_yard_pop(yard, output, anchor)
+	end
+	yard.n = yard.n + 1
+	yard[yard.n] = {
+		type = OperatorType.Infix,
+		symbol = infix_symbol,
+	}
+	return shunting_yard(next_a, next_b, yard, output, anchor)
+end
+
+---@param symbol string
+---@param arg ConstructedSyntax
+---@return boolean
+---@return OperatorType|string
+---@return string?
+---@return ConstructedSyntax?
+local function expression_prefix_handler(_, symbol, arg)
+	if not prefix_data[symbol:sub(1, 1)] or symbol:find("_") then
+		return false,
+			"symbol was provided in a prefix operator place, but the symbol isn't a valid prefix operator: " .. symbol
+	end
+	return true, OperatorType.Prefix, symbol, arg
+end
+
+---@param left ConstructedSyntax
+---@param symbol string
+---@param right ConstructedSyntax
+---@return boolean
+---@return OperatorType|string
+---@return string?
+---@return ConstructedSyntax?
+---@return ConstructedSyntax?
+local function expression_infix_handler(_, left, symbol, right)
+	if not infix_data[symbol:sub(1, 1)] or symbol:find("_") then
+		return false,
+			"symbol was provided in an infix operator place, but the symbol isn't a valid infix operator: " .. symbol
+	end
+	return true, OperatorType.Infix, symbol, left, right
+end
+
+---@param args ExpressionArgs
+---@param a ConstructedSyntax
+---@param b ConstructedSyntax
+---@return boolean
+---@return inferrable | checkable | string
+---@return Environment?
+local function expression_pairhandler(args, a, b)
 	local goal, env = args:unwrap()
 	local orig_env = env
-	local ok, ifx = true, false
+	local is_operator = false
+	local operator_type
+	local left, operator, right
+	local sargs
+
+	-- if the expression is a list containing prefix and infix expressions,
+	-- parse it into a tree of simple prefix/infix expressions with shunting yard
+	local ok, syntax = shunting_yard(a, b, { n = 0 }, { n = 0 }, a.anchor)
+	if ok then
+		---@cast syntax ConstructedSyntax
+		is_operator, operator_type, operator, left, right = syntax:match({
+			metalanguage.listmatch(
+				expression_prefix_handler,
+				metalanguage.issymbol(metalanguage.accept_handler),
+				metalanguage.any(metalanguage.accept_handler)
+			),
+			metalanguage.listmatch(
+				expression_infix_handler,
+				metalanguage.any(metalanguage.accept_handler),
+				metalanguage.issymbol(metalanguage.accept_handler),
+				metalanguage.any(metalanguage.accept_handler)
+			),
+		}, metalanguage.failure_handler, nil)
+	end
 
 	local combiner
-	if ok and ifx then
-		combiner = env:get("_" + op + "_")
+	if is_operator and operator_type == OperatorType.Prefix then
+		ok, combiner = env:get(operator .. "_")
+		if not ok then
+			return false, combiner
+		end
+		sargs = metalanguage.list(a.anchor, left)
+	elseif is_operator and operator_type == OperatorType.Infix then
+		ok, combiner = env:get("_" .. operator .. "_")
+		if not ok then
+			return false, combiner
+		end
+		sargs = metalanguage.list(a.anchor, left, right)
 	else
 		ok, combiner, env = a:match(
 			{ expression(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.infer, env)) },
@@ -201,8 +444,9 @@ local function expression_pairhandler(args, a, b)
 		if not ok then
 			return false, combiner
 		end
-		args = b
+		sargs = b
 	end
+	---@cast combiner inferrable
 
 	-- resolve first of the pair as an expression
 	-- typecheck it
@@ -213,11 +457,56 @@ local function expression_pairhandler(args, a, b)
 
 	-- combiner was an evaluated typed value, now it isn't
 	local type_of_term, usage_count, term = infer(combiner, env.typechecking_context)
+	local random = {}
 
-	local ok, handler, userdata_type = type_of_term:as_operative_type()
-	if ok then
+	--print("kind is " .. type_of_term.kind .. " " .. tostring(random))
+
+	if
+		(
+			type_of_term:is_neutral()
+			and type_of_term:unwrap_neutral():is_free()
+			and type_of_term:unwrap_neutral():unwrap_free():is_metavariable()
+		) or type_of_term:is_range()
+	then
+		-- Speculate that this is a pi type
+		local ok, pi = evaluator.typechecker_state:speculate(function()
+			local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+			local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+			local pi = value.pi(
+				param_mv:as_value(),
+				param_info_explicit,
+				value.closure(
+					"#spec-pi",
+					typed_term.literal(result_mv:as_value()),
+					env.typechecking_context.runtime_context
+				),
+				result_info_pure
+			)
+
+			U.tag(
+				"flow",
+				{ val = type_of_term, usa = pi },
+				evaluator.typechecker_state.flow,
+				evaluator.typechecker_state,
+				type_of_term,
+				env.typechecking_context,
+				pi,
+				env.typechecking_context,
+				"Speculating on pi type"
+			)
+
+			return pi
+		end)
+		if not ok then
+			error("speculate DID NOT work for pi!: " .. tostring(pi))
+		end
+		type_of_term = pi
+	end
+
+	local function call_operative()
+		local handler, userdata_type = type_of_term:unwrap_operative_type()
 		-- operative input: env, syntax tree, goal type (if checked)
-		local tuple_args = value_array(value.prim(args), value.prim(env), value.prim(term), value.prim(goal))
+		local tuple_args = value_array(value.prim(sargs), value.prim(env), value.prim(term), value.prim(goal))
 		local operative_result_val = evaluator.apply_value(handler, terms.value.tuple_value(tuple_args))
 		-- result should be able to be an inferred term, can fail
 		-- NYI: operative_cons in evaluator must use Maybe type once it exists
@@ -227,74 +516,113 @@ local function expression_pairhandler(args, a, b)
 		-- 	return false, "applying operative did not result in value term with kind enum_value, typechecker or lua operative mistake when applying " .. tostring(a.anchor) .. " to the args " .. tostring(b.anchor)
 		-- end
 		-- variants: ok, error
-		if operative_result_val.variant == "error" then
-			return false, semantic_error.operative_apply_failed(operative_result_val.data, { a.anchor, b.anchor })
-		end
+		--if operative_result_val.variant == "error" then
+		--	return false, semantic_error.operative_apply_failed(operative_result_val.data, { a.anchor, b.anchor })
+		--end
 
-		-- temporary, whFAILile it isn't a Maybe
-		local data = operative_result_val.elements[1].primitive_value
-		local env = operative_result_val.elements[2].primitive_value
-		if not env then
-			print("operative_result_val.elements[2]", operative_result_val.elements[2]:pretty_print())
-			error "operative_result_val missing env"
-		end
+		-- temporary, while it isn't a Maybe
+		local operative_result_elems = operative_result_val:unwrap_tuple_value()
+		local data = operative_result_elems[1]:unwrap_prim()
+		local env = operative_result_elems[2]:unwrap_prim()
+		--if not env then
+		--	print("operative_result_val.elements[2]", operative_result_val.elements[2]:pretty_print())
+		--	error "operative_result_val missing env"
+		--end
 
 		if goal:is_check() then
 			local checkable = data
-			if inferrable_term.value_check(checkable) == true then
-				checkable = checkable_term.inferrable(checkable)
-			end
-
 			local goal_type = goal:unwrap_check()
 			local usage_counts, term = evaluator.check(checkable, env.typechecking_context, goal_type)
-			return true, checkable_term.inferrable(inferrable_term.typed(goal_type, usage_counts, term)), env
+			--print("success: " .. tostring(random))
+			return checkable_term.inferrable(inferrable_term.typed(goal_type, usage_counts, term)), env
 		elseif goal:is_infer() then
-			if inferrable_term.value_check(data) == true then
-				local resulting_type, usage_counts, term = infer(data, env.typechecking_context)
-
-				return true, inferrable_term.typed(resulting_type, usage_counts, term), env
-			end
+			local resulting_type, usage_counts, term = infer(data, env.typechecking_context)
+			--print("success: " .. tostring(random))
+			return inferrable_term.typed(resulting_type, usage_counts, term), env
 		else
 			error("NYI goal " .. goal.kind .. " for operative in expression_pairhandler")
 		end
 	end
+	if type_of_term:is_operative_type() then
+		return true, U.tag("call_operative", random, call_operative)
+	end
 
-	if type_of_term:is_pi() then
+	local function call_pi()
 		local param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
+
+		while param_info:unwrap_param_info():unwrap_visibility():is_implicit() do
+			local metavar = evaluator.typechecker_state:metavariable(env.typechecking_context)
+			local metavalue = metavar:as_value()
+			local metaresult = evaluator.apply_value(result_type, metavalue)
+			if not metaresult:is_pi() then
+				error(
+					"calling function with implicit args, result type applied on implicit args must be a function type"
+				)
+			end
+
+			-- local new_term = inferrable_term.application(inferrable_term.typed(type_of_term, usage_array(), term), checkable_term.inferrable(inferrable_term.typed(param_type, usage_array(), terms.typed_term.literal(metavar:as_value()))))
+			term = typed_term.application(term, terms.typed_term.literal(metavar:as_value()))
+			type_of_term = metaresult
+			param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
+		end
+
 		-- multiple quantity of usages in tuple with usage in function arguments
-		local ok, tuple, env = args:match({
+		local ok, tuple, env = sargs:match({
 			collect_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
 		}, metalanguage.failure_handler, nil)
 
 		if not ok then
-			return false, tuple, env
+			error(tuple)
 		end
 
-		return true, inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple), env
+		---@type inferrable | checkable
+		local res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
+
+		if goal:is_check() then
+			---@cast res inferrable
+			res = checkable_term.inferrable(res)
+		end
+
+		--print("success: " .. tostring(random))
+		return res, env
+	end
+	if type_of_term:is_pi() then
+		return true, U.tag("call_pi", random, call_pi)
 	end
 
-	if type_of_term:is_prim_function_type() then
+	local function call_prim_func_type()
 		local param_type, result_type = type_of_term:unwrap_prim_function_type()
-		print("checking prim_function_type call args with goal ", param_type)
+		--print("checking prim_function_type call args with goal: (value term follows)")
+		--print(param_type)
 		-- multiple quantity of usages in tuple with usage in function arguments
-		local ok, tuple, env = args:match({
+		local ok, tuple, env = sargs:match({
 			collect_prim_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
 		}, metalanguage.failure_handler, nil)
 
 		if not ok then
-			return false,
-				semantic_error.prim_function_argument_collect_failed(tuple, { a.anchor, b.anchor }, {
-					prim_function_type = type_of_term,
-					prim_function_value = term,
-				}, orig_env),
-				env
+			error(semantic_error.prim_function_argument_collect_failed(tuple, { a.anchor, b.anchor }, {
+				prim_function_type = type_of_term,
+				prim_function_value = term,
+			}, orig_env))
 		end
 
-		return true, inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple), env
+		---@type inferrable | checkable
+		local res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
+
+		if goal:is_check() then
+			---@cast res inferrable
+			res = checkable_term.inferrable(res)
+		end
+
+		--print("success: " .. tostring(random))
+		return res, env
+	end
+	if type_of_term:is_prim_function_type() then
+		return true, U.tag("call_prim_func_type", random, call_prim_func_type)
 	end
 
 	print("!!! about to fail of invalid type")
-	print(combiner)
+	print(combiner:pretty_print(env.typechecking_context))
 	print("infers to")
 	print(type_of_term)
 	print("in")
@@ -302,6 +630,8 @@ local function expression_pairhandler(args, a, b)
 	return false, "unknown type for pairhandler " .. type_of_term.kind, env
 end
 
+---@param str string
+---@return string
 local function split_dot_accessors(str)
 	return str:match("([^.]+)%.(.+)")
 end
@@ -309,19 +639,21 @@ end
 ---@param args ExpressionArgs
 ---@param name string
 ---@return boolean
----@return InferrableTerm | CheckableTerm
----@return Environment
+---@return inferrable | checkable | string
+---@return Environment?
 local function expression_symbolhandler(args, name)
 	local goal, env = args:unwrap()
 	--print("looking up symbol", name)
 	--p(env)
-	print(name, split_dot_accessors(name))
+	--print(name, split_dot_accessors(name))
 	local front, rest = split_dot_accessors(name)
 	if not front then
 		local ok, val = env:get(name)
 		if not ok then
+			---@cast val string
 			return ok, val, env
 		end
+		---@cast val -string
 		if goal:is_check() then
 			return true, checkable_term.inferrable(val), env
 		end
@@ -329,8 +661,10 @@ local function expression_symbolhandler(args, name)
 	else
 		local ok, part = env:get(front)
 		if not ok then
+			---@cast part string
 			return false, part, env
 		end
+		---@cast part -string
 		while front do
 			name = rest
 			front, rest = split_dot_accessors(name)
@@ -348,10 +682,10 @@ local function expression_symbolhandler(args, name)
 end
 
 ---@param args ExpressionArgs
----@param val any
+---@param val SyntaxValue
 ---@return boolean
----@return InferrableTerm | CheckableTerm
----@return Environment
+---@return inferrable | checkable
+---@return Environment?
 local function expression_valuehandler(args, val)
 	local goal, env = args:unwrap()
 
@@ -361,6 +695,7 @@ local function expression_valuehandler(args, val)
 		if not ok then
 			return false, inf_term, env
 		end
+		---@cast inf_term -checkable
 		return true, checkable_term.inferrable(inf_term), env
 	end
 
@@ -369,7 +704,7 @@ local function expression_valuehandler(args, val)
 	end
 
 	if val.type == "f64" then
-		p(val)
+		--p(val)
 		return true,
 			inferrable_term.typed(value.prim_number_type, usage_array(), typed_term.literal(value.prim(val.val))),
 			env
@@ -383,14 +718,22 @@ local function expression_valuehandler(args, val)
 	error("unknown value type " .. val.type)
 end
 
-expression = metalanguage.reducer(function(syntax, args)
-	-- print('trying to expression', syntax)
-	return syntax:match({
-		metalanguage.ispair(expression_pairhandler),
-		metalanguage.issymbol(expression_symbolhandler),
-		metalanguage.isvalue(expression_valuehandler),
-	}, metalanguage.failure_handler, args)
-end, "expressions")
+expression = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param args ExpressionArgs
+	---@return boolean
+	---@return inferrable|checkable|string
+	---@return Environment?
+	function(syntax, args)
+		-- print('trying to expression', syntax)
+		return syntax:match({
+			metalanguage.ispair(expression_pairhandler),
+			metalanguage.issymbol(expression_symbolhandler),
+			metalanguage.isvalue(expression_valuehandler),
+		}, metalanguage.failure_handler, args)
+	end,
+	"expressions"
+)
 
 -- local constexpr =
 --   metalanguage.reducer(
@@ -412,7 +755,7 @@ end, "expressions")
 
 ---@class OperativeError
 ---@field cause any
----@field anchor any
+---@field anchor Anchor
 ---@field operative_name string
 local OperativeError = {}
 local external_error_mt = {
@@ -429,7 +772,7 @@ local external_error_mt = {
 }
 
 ---@param cause any
----@param anchor any
+---@param anchor Anchor
 ---@param operative_name any
 ---@return OperativeError
 function OperativeError.new(cause, anchor, operative_name)
@@ -440,9 +783,9 @@ function OperativeError.new(cause, anchor, operative_name)
 	}, external_error_mt)
 end
 
----@param fn fun(syntax : any, env : Environment, goal : ExpressionGoal) : boolean, any, Environment
+---@param fn lua_operative
 ---@param name string
----@return inferrable_term.operative_cons
+---@return inferrable
 local function primitive_operative(fn, name)
 	local debuginfo = debug.getinfo(fn)
 	local debugstring = (name or error("name not passed to primitive_operative"))
@@ -459,6 +802,18 @@ local function primitive_operative(fn, name)
 		if not ok then
 			error(OperativeError.new(res, syn.anchor, debugstring))
 		end
+		if
+			(goal:is_infer() and inferrable_term.value_check(res))
+			or (goal:is_check() and checkable_term.value_check(res))
+		then
+			-- nothing to do, all is well
+		elseif goal:is_check() and inferrable_term.value_check(res) then
+			-- workaround primitive operatives that ignore goal and assume inferrable
+			---@cast res inferrable
+			res = checkable_term.inferrable(res)
+		else
+			error("mismatch in goal and returned term")
+		end
 		if not env or not env.exit_block then
 			print(
 				"env returned from fn passed to alicorn-expressions.primitive_operative isn't an env or is nil",
@@ -474,8 +829,6 @@ local function primitive_operative(fn, name)
 	-- what we're going for:
 	-- (s : syntax, e : environment, u : wrapped_typed_term(userdata), g : goal) -> (goal_to_term(g), environment)
 	--   goal one of inferable, mechanism, checkable
-	-- what we have:
-	-- (s : syntax, e : environment) -> (inferrable_term, environment)
 
 	-- 1: wrap fn as a typed prim
 	-- this way it can take a prim tuple and return a prim tuple
@@ -494,14 +847,17 @@ local function primitive_operative(fn, name)
 	end
 	local tuple_conv = typed_term.tuple_cons(tuple_conv_elements)
 	local prim_tuple_conv = typed_term.prim_tuple_cons(prim_tuple_conv_elements)
-	local tuple_to_prim_tuple = typed_term.tuple_elim(typed_term.bound_variable(1), nparams, prim_tuple_conv)
+	local param_names = name_array("#syntax", "#env", "#userdata", "#goal")
+	local tuple_to_prim_tuple =
+		typed_term.tuple_elim(param_names, typed_term.bound_variable(1), nparams, prim_tuple_conv)
 	local tuple_to_prim_tuple_fn = typed_term.application(typed_prim_fn, tuple_to_prim_tuple)
-	local tuple_to_tuple_fn = typed_term.tuple_elim(tuple_to_prim_tuple_fn, 2, tuple_conv)
+	local result_names = name_array("#term", "#env")
+	local tuple_to_tuple_fn = typed_term.tuple_elim(result_names, tuple_to_prim_tuple_fn, 2, tuple_conv)
 	-- 3: wrap it in a closure with an empty capture, not a typed lambda
 	-- this ensures variable 1 is the argument tuple
-	local value_fn = value.closure(tuple_to_tuple_fn, runtime_context())
+	local value_fn = value.closure("#OPERATIVE_PARAM", tuple_to_tuple_fn, runtime_context())
 
-	local userdata_type = value.tuple_type(empty)
+	local userdata_type = value.tuple_type(terms.empty)
 	return inferrable_term.typed(
 		value.operative_type(value_fn, userdata_type),
 		array(gen.builtin_number)(),
@@ -509,6 +865,15 @@ local function primitive_operative(fn, name)
 	)
 end
 
+---@generic T
+---@param args any
+---@param a ConstructedSyntax
+---@param b T
+---@return boolean
+---@return checkable|boolean
+---@return checkable?
+---@return T?
+---@return Environment?
 local function collect_tuple_pair_handler(args, a, b)
 	local goal, env = args:unwrap()
 	local ok, val
@@ -517,258 +882,267 @@ local function collect_tuple_pair_handler(args, a, b)
 		metalanguage.failure_handler,
 		nil
 	)
-	if ok and val and goal:is_check() and getmetatable(val) ~= checkable_term then
-		val = checkable_term.inferrable(val)
-	end
 	if not ok then
 		return false, val
 	end
 	return true, true, val, b, env
 end
 
-local function collect_tuple_pair_too_many_handler(args)
-	local goal, env = args:unwrap()
-	return false, "tuple has too many elements for checked collect_tuple", nil, nil, env
-end
-
+---@param args any
+---@return boolean
+---@return boolean
+---@return nil
+---@return nil
+---@return Environment
 local function collect_tuple_nil_handler(args)
 	local goal, env = args:unwrap()
 	return true, false, nil, nil, env
 end
 
-local function collect_tuple_nil_too_few_handler(args)
-	local goal, env = args:unwrap()
-	return false, "tuple has too few elements for checked collect_tuple", nil, nil, env
-end
+collect_tuple = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param args ExpressionArgs
+	---@return boolean
+	---@return string|inferrable|checkable
+	---@return Environment?
+	function(syntax, args)
+		local goal, env = args:unwrap()
+		local goal_type, collected_terms
+		local decls = terms.empty
 
-collect_tuple = metalanguage.reducer(function(syntax, args)
-	local goal, env = args:unwrap()
-	local goal_type, closures, collected_terms
+		if goal:is_check() then
+			collected_terms = array(checkable_term)()
+			goal_type = goal:unwrap_check()
+		else
+			collected_terms = inferrable_array()
+		end
 
-	if goal:is_check() then
-		collected_terms = array(checkable_term)()
-		goal_type = goal:unwrap_check()
-		closures = evaluator.extract_tuple_elem_type_closures(goal_type:unwrap_tuple_type(), value_array())
-	else
-		collected_terms = inferrable_array
-	end
-
-	local tuple_type_elems = value_array()
-	local tuple_symbolic_elems = value_array()
-	local ok, continue, next_term = true, true, nil
-	local i = 0
-	while ok and continue do
-		i = i + 1
-		-- checked version knows how many elems should be in the tuple
-		if goal_type then
-			if i > #closures then
-				ok, continue, next_term, syntax, env = syntax:match({
-					metalanguage.ispair(collect_tuple_pair_too_many_handler),
-					metalanguage.isnil(collect_tuple_nil_handler),
-				}, metalanguage.failure_handler, ExpressionArgs.new(goal, env))
-			else
-				local next_elem_type = evaluator.apply_value(closures[i], value.tuple_value(tuple_symbolic_elems))
-				if next_elem_type:is_neutral() then
-					error "neutral goal type"
-				end
-
+		local ok, continue, next_term = true, true, nil
+		local i = 0
+		while ok and continue do
+			i = i + 1
+			if goal_type then
+				local next_elem_type_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+				local next_elem_type = next_elem_type_mv:as_value()
 				ok, continue, next_term, syntax, env = syntax:match({
 					metalanguage.ispair(collect_tuple_pair_handler),
-					metalanguage.isnil(collect_tuple_nil_too_few_handler),
+					metalanguage.isnil(collect_tuple_nil_handler),
 				}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
 				if ok and continue then
 					collected_terms:append(next_term)
-					print("goal type for next element in tuple", next_elem_type)
-					print("term we are checking", next_term)
-					local usages, typed_elem_term = evaluator.check(next_term, env.typechecking_context, next_elem_type)
-					local elem_value = evaluator.evaluate(typed_elem_term, env.typechecking_context.runtime_context)
-					tuple_symbolic_elems:append(elem_value)
+					local _, next_typed = evaluator.check(next_term, env.typechecking_context, next_elem_type)
+					local next_val = evaluator.evaluate(next_typed, env.typechecking_context.runtime_context)
+					decls = terms.cons(
+						decls,
+						value.closure(
+							"#collect-tuple-param",
+							typed_term.literal(value.singleton(next_elem_type, next_val)),
+							env.typechecking_context.runtime_context
+						)
+					)
+				end
+				if not ok and type(continue) == "string" then
+					continue = continue .. " (should have " .. ", found " .. tostring(#collected_terms) .. " so far)"
+				end
+			else
+				ok, continue, next_term, syntax, env = syntax:match({
+					metalanguage.ispair(collect_tuple_pair_handler),
+					metalanguage.isnil(collect_tuple_nil_handler),
+				}, metalanguage.failure_handler, ExpressionArgs.new(goal, env))
+				if ok and continue then
+					collected_terms:append(next_term)
 				end
 			end
-			if not ok and type(continue) == "string" then
-				continue = continue
-					.. " (should have "
-					.. tostring(#closures)
-					.. ", found "
-					.. tostring(#collected_terms)
-					.. " so far)"
-			end
-		-- else we don't know how many elems so nil or pair are both valid
+		end
+		if not ok then
+			return false, continue
+		end
+
+		if goal:is_infer() then
+			return true, inferrable_term.tuple_cons(collected_terms), env
+		elseif goal:is_check() then
+			U.tag(
+				"flow",
+				{ val = value.tuple_type(decls), use = goal_type },
+				evaluator.typechecker_state.flow,
+				evaluator.typechecker_state,
+				value.tuple_type(decls),
+				env.typechecking_context,
+				goal_type,
+				env.typechecking_context,
+				"tuple type in collect_tuple"
+			)
+			return true, checkable_term.tuple_cons(collected_terms), env
 		else
-			ok, continue, next_term, syntax, env = syntax:match({
+			error("NYI: collect_tuple goal case " .. goal.kind)
+		end
+	end,
+	"collect_tuple"
+)
+
+collect_prim_tuple = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param args ExpressionArgs
+	---@return boolean
+	---@return string|inferrable|checkable
+	---@return Environment?
+	function(syntax, args)
+		local goal, env = args:unwrap()
+		local goal_type, collected_terms
+		local decls = terms.empty
+
+		if goal:is_check() then
+			collected_terms = array(checkable_term)()
+			goal_type = goal:unwrap_check()
+		else
+			collected_terms = inferrable_array
+		end
+
+		local ok, continue, next_term = true, true, nil
+		local i = 0
+		while ok and continue do
+			i = i + 1
+			if goal_type then
+				local next_elem_type_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+				local next_elem_type = next_elem_type_mv:as_value()
+				ok, continue, next_term, syntax, env = syntax:match({
+					metalanguage.ispair(collect_tuple_pair_handler),
+					metalanguage.isnil(collect_tuple_nil_handler),
+				}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
+				if ok and continue then
+					collected_terms:append(next_term)
+					local _, next_typed = evaluator.check(next_term, env.typechecking_context, next_elem_type)
+					local next_val = evaluator.evaluate(next_typed, env.typechecking_context.runtime_context)
+					decls = terms.cons(
+						decls,
+						value.closure(
+							"#collect-tuple-param",
+							typed_term.literal(value.singleton(next_elem_type, next_val)),
+							env.typechecking_context.runtime_context
+						)
+					)
+				end
+				if not ok and type(continue) == "string" then
+					continue = continue .. " (should have " .. ", found " .. tostring(#collected_terms) .. " so far)"
+				end
+			else
+				ok, continue, next_term, syntax, env = syntax:match({
+					metalanguage.ispair(collect_tuple_pair_handler),
+					metalanguage.isnil(collect_tuple_nil_handler),
+				}, metalanguage.failure_handler, ExpressionArgs.new(goal, env))
+				if ok and continue then
+					collected_terms:append(next_term)
+				end
+			end
+		end
+		if not ok then
+			return false, continue
+		end
+
+		if goal:is_infer() then
+			return true, inferrable_term.prim_tuple_cons(collected_terms), env
+		elseif goal:is_check() then
+			evaluator.typechecker_state:flow(
+				value.prim_tuple_type(decls),
+				env.typechecking_context,
+				goal_type,
+				env.typechecking_context,
+				"prim tuple type in collect_prim_tuple"
+			)
+			return true, checkable_term.prim_tuple_cons(collected_terms), env
+		else
+			error("NYI: collect_prim_tuple goal case " .. goal.kind)
+		end
+	end,
+	"collect_prim_tuple"
+)
+
+local expressions_args = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param args ExpressionArgs
+	---@return boolean
+	---@return inferrable[]|checkable[]|string
+	---@return Environment?
+	function(syntax, args)
+		local goal, env = args:unwrap()
+		local vals = {}
+		local ok, continue = true, true
+		while ok and continue do
+			ok, continue, vals[#vals + 1], syntax, env = syntax:match({
+				metalanguage.ispair(collect_tuple_pair_handler),
+				metalanguage.isnil(collect_tuple_nil_handler),
+			}, metalanguage.failure_handler, ExpressionArgs.new(goal, env))
+		end
+		if not ok then
+			return false, continue
+		end
+		return true, vals, env
+	end,
+	"expressions_args"
+)
+
+local block = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param args ExpressionArgs
+	---@return boolean
+	---@return inferrable|checkable|string
+	---@return Environment?
+	function(syntax, args)
+		local goal, env = args:unwrap()
+		assert(goal:is_infer(), "NYI non-infer cases for block")
+		local lastval, newval
+		local ok, continue = true, true
+		while ok and continue do
+			ok, continue, newval, syntax, env = syntax:match({
 				metalanguage.ispair(collect_tuple_pair_handler),
 				metalanguage.isnil(collect_tuple_nil_handler),
 			}, metalanguage.failure_handler, ExpressionArgs.new(goal, env))
 			if ok and continue then
-				collected_terms:append(next_term)
+				lastval = newval
 			end
 		end
-	end
-	if not ok then
-		return false, continue
-	end
-
-	if goal:is_infer() then
-		return true, inferrable_term.tuple_cons(collected_terms), env
-	elseif goal:is_check() then
-		return true, checkable_term.tuple_cons(collected_terms), env
-	else
-		error("NYI: collect_tuple goal case " .. goal.kind)
-	end
-end, "collect_tuple")
-
-collect_prim_tuple = metalanguage.reducer(function(syntax, args)
-	local goal, env = args:unwrap()
-	local goal_type, closures, collected_terms
-
-	if goal:is_check() then
-		collected_terms = array(checkable_term)()
-		goal_type = goal:unwrap_check()
-		closures = evaluator.extract_tuple_elem_type_closures(goal_type:unwrap_prim_tuple_type(), value_array())
-	else
-		collected_terms = inferrable_array
-	end
-
-	local type_elems = value_array()
-	local tuple_symbolic_elems = value_array()
-	local ok, continue, next_term = true, true, nil
-	local i = 0
-	while ok and continue do
-		i = i + 1
-		-- checked version knows how many elems should be in the tuple
-		if goal_type then
-			if i > #closures then
-				ok, continue, next_term, syntax, env = syntax:match({
-					metalanguage.ispair(collect_tuple_pair_too_many_handler),
-					metalanguage.isnil(collect_tuple_nil_handler),
-				}, metalanguage.failure_handler, ExpressionArgs.new(goal, env))
-			else
-				local next_elem_type = evaluator.apply_value(closures[i], value.tuple_value(tuple_symbolic_elems))
-				type_elems:append(next_elem_type)
-
-				ok, continue, next_term, syntax, env = syntax:match({
-					metalanguage.ispair(collect_tuple_pair_handler),
-					metalanguage.isnil(collect_tuple_nil_too_few_handler),
-				}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
-				if ok and continue then
-					collected_terms:append(next_term)
-					print("trying to check tuple element as ", next_elem_type)
-					local usages, typed_elem_term = evaluator.check(next_term, env.typechecking_context, next_elem_type)
-					local elem_value = evaluator.evaluate(typed_elem_term, env.typechecking_context.runtime_context)
-					tuple_symbolic_elems:append(elem_value)
-				end
-			end
-			if not ok and type(continue) == "string" then
-				continue = continue
-					.. " (should have "
-					.. tostring(#closures)
-					.. ", found "
-					.. tostring(#collected_terms)
-					.. " so far)"
-			end
-		-- else we don't know how many elems so nil or pair are both valid
-		else
-			ok, continue, next_term, syntax, env = syntax:match({
-				metalanguage.ispair(collect_tuple_pair_handler),
-				metalanguage.isnil(collect_tuple_nil_handler),
-			}, metalanguage.failure_handler, ExpressionArgs.new(goal, env))
-			if ok and continue then
-				collected_terms:append(next_term)
-			end
+		if not ok then
+			return false, continue
 		end
-	end
-	if not ok then
-		return false, continue
-	end
-
-	if goal:is_infer() then
-		return true, inferrable_term.prim_tuple_cons(collected_terms), env
-	elseif goal:is_check() then
-		return true, checkable_term.prim_tuple_cons(collected_terms), env
-	else
-		error("NYI: collect_prim_tuple goal case " .. goal.kind)
-	end
-end, "collect_prim_tuple")
-
-local expressions_args = metalanguage.reducer(function(syntax, args)
-	local goal, env = args:unwrap()
-	local vals = {}
-	local ok, continue = true, true
-	while ok and continue do
-		ok, continue, vals[#vals + 1], syntax, env = syntax:match({
-			metalanguage.ispair(collect_tuple_pair_handler),
-			metalanguage.isnil(collect_tuple_nil_handler),
-		}, metalanguage.failure_handler, ExpressionArgs.new(goal, env))
-	end
-	if not ok then
-		return false, continue
-	end
-	return true, vals, env
-end, "expressions_args")
-
-local block = metalanguage.reducer(function(syntax, args)
-	local goal, env = args:unwrap()
-	assert(goal:is_infer(), "NYI non-infer cases for block")
-	local lastval, newval
-	local ok, continue = true, true
-	while ok and continue do
-		ok, continue, newval, syntax, env = syntax:match({
-			metalanguage.ispair(collect_tuple_pair_handler),
-			metalanguage.isnil(collect_tuple_nil_handler),
-		}, metalanguage.failure_handler, ExpressionArgs.new(goal, env))
-		if ok and continue then
-			lastval = newval
-		end
-	end
-	if not ok then
-		return false, continue
-	end
-	return true, lastval, env
-end, "block")
-
-local function primitive_apply(self, operands, environment)
-	local ok, args, env = operands:match({
-		collect_tuple(metalanguage.accept_handler, environment),
-	}, metalanguage.failure_handler, nil)
-	if not ok then
-		return false, args
-	end
-	local ok, err = types.typeident(self.type.params[1], args.type)
-	if not ok then
-		return false, semantic_error.function_args_mismatch(err)
-	end
-	local res = self.val(args.val)
-	return true, { val = res, type = self.type.params[2] }, env
-end
-
--- operate_behavior[types.primap_kind] = primitive_apply
-
--- local function define_operate(kind, handler)
---   operate_behavior[kind] = handler
--- end
+		return true, lastval, env
+	end,
+	"block"
+)
 
 -- example usage of primitive_applicative
 -- add(a, b) = a + b ->
 -- local prim_num = terms.value.prim_number_type
 -- primitive_applicative(function(a, b) return a + b end, {prim_num, prim_num}, {prim_num}),
 
+---@param elems value[]
+---@return value
 local function build_prim_type_tuple(elems)
-	local result = empty
+	local result = terms.empty
 
-	for i, v in ipairs(elems) do
-		result = cons(result, const_combinator(v))
+	for _, v in ipairs(elems) do
+		result = terms.cons(result, const_combinator(v))
 	end
 
 	return terms.value.prim_tuple_type(result)
 end
 
+---@param fn function
+---@param params value[]
+---@param results value[]
+---@return inferrable
 local function primitive_applicative(fn, params, results)
 	local literal_prim_fn = terms.typed_term.literal(terms.value.prim(fn))
-	local prim_fn_type = terms.value.prim_function_type(build_prim_type_tuple(params), build_prim_type_tuple(results))
-
+	local prim_fn_type = terms.value.prim_function_type(
+		build_prim_type_tuple(params),
+		build_prim_type_tuple(results),
+		terms.value.result_info(terms.result_info(terms.purity.pure))
+	)
 	return terms.inferrable_term.typed(prim_fn_type, usage_array(), literal_prim_fn)
 end
 
+---@param syntax ConstructedSyntax
+---@param environment Environment
+---@return ...
 local function eval(syntax, environment)
 	return syntax:match(
 		{ expression(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.infer, environment)) },
@@ -777,6 +1151,9 @@ local function eval(syntax, environment)
 	)
 end
 
+---@param syntax ConstructedSyntax
+---@param environment Environment
+---@return ...
 local function eval_block(syntax, environment)
 	return syntax:match(
 		{ block(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.infer, environment)) },
@@ -785,8 +1162,9 @@ local function eval_block(syntax, environment)
 	)
 end
 
----comment Convenience wrapper inferred_expression(handler, env) -> expression(handler, expression_args(expression_goal.infer, env))
----@param handler any
+---Convenience wrapper inferred_expression(handler, env) -> expression(handler, expression_args(expression_goal.infer, env))
+---@generic T
+---@param handler fun(u: T, ...):...
 ---@param env Environment
 ---@return any
 local function inferred_expression(handler, env)
@@ -803,7 +1181,7 @@ local alicorn_expressions = {
 	ExpressionArgs = ExpressionArgs,
 	primitive_operative = primitive_operative,
 	primitive_applicative = primitive_applicative,
-	define_operate = define_operate,
+	--define_operate = define_operate,
 	collect_tuple = collect_tuple,
 	expressions_args = expressions_args,
 	eval = eval,

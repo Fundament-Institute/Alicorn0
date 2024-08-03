@@ -1,12 +1,42 @@
----@alias RecordDeriveInfo { kind: string, params: string[], params_types: Type[] }
----@alias UnitDeriveInfo { kind: string }
----@alias EnumDeriveInfo { name: string, variants: { [number]: string, [string]: { type: string, info: RecordDeriveInfo | UnitDeriveInfo } } }
+---@class (exact) RecordDeriveInfo
+---@field kind string
+---@field params string[]
+---@field params_types Type[]
+
+---@class (exact) UnitDeriveInfo
+---@field kind string
+
+---@class (exact) EnumDeriveInfoVariant
+---@field type string
+---@field info RecordDeriveInfo | UnitDeriveInfo
+
+---@class (exact) EnumDeriveInfo
+---@field name string
+---@field variants { [integer]: string, [string]: EnumDeriveInfoVariant }
 
 ---@class (exact) Deriver
----@field record fun(t: Record, info: RecordDeriveInfo)
----@field enum fun(t: Enum, info: EnumDeriveInfo)
+---@field record fun(t: Record, info: RecordDeriveInfo, override_pretty: fun(Record, PrettyPrint, ...))
+---@field enum fun(t: Enum, info: EnumDeriveInfo, override_pretty: { [string]: fun(Enum, PrettyPrint, ...) })
 
 local derive_print = function(...) end -- can make this call derive_print(...) if you want to debug
+
+local memo_meta = { __mode = "k" }
+local function make_memo_table()
+	return setmetatable({}, memo_meta)
+end
+local eq_memoizer = { memo = make_memo_table() }
+function eq_memoizer:check(a, b)
+	local memoa = self.memo[a]
+	if memoa then
+		return memoa[b]
+	end
+end
+function eq_memoizer:set(a, b)
+	if not self.memo[a] then
+		self.memo[a] = make_memo_table()
+	end
+	self.memo[a][b] = true
+end
 
 ---@type Deriver
 local eq = {
@@ -19,7 +49,14 @@ local eq = {
 			checks[i] = string.format("left[%q] == right[%q]", param, param)
 		end
 		local all_checks = table.concat(checks, " and ")
-		local chunk = "return function(left, right) return " .. all_checks .. " end"
+		local chunk = "\z
+			local eq_memoizer = ... \n\z
+			return function(left, right)\n\z
+				if eq_memoizer:check(left, right) then return true end\n\z
+				if " .. all_checks .. " then\n\z
+					eq_memoizer:set(left, right)\n\z
+					return true\n\z
+				end return false end"
 
 		derive_print("derive eq: record chunk: " .. kind)
 		derive_print("###")
@@ -28,7 +65,7 @@ local eq = {
 
 		local compiled, message = load(chunk, "derive-eq_record", "t")
 		assert(compiled, message)
-		local eq_fn = compiled()
+		local eq_fn = compiled(eq_memoizer)
 		t.__eq = eq_fn
 	end,
 	enum = function(t, info)
@@ -62,8 +99,16 @@ local eq = {
 		local kind_check_expression = "left.kind == right.kind"
 		local variant_check_expression = "all_variants_checks[left.kind](left, right)"
 		local check_expression = kind_check_expression .. " and " .. variant_check_expression
-		local check_function = "function(left, right) return " .. check_expression .. " end"
-		local chunk = define_all_variants_checks .. "\nreturn " .. check_function
+
+		local chunk = "\z
+			local eq_memoizer = ... \n\z
+			" .. define_all_variants_checks .. "\n\z
+			return function(left, right)\n\z
+				if eq_memoizer:check(left, right) then return true end\n\z
+				if " .. check_expression .. " then\n\z
+					eq_memoizer:set(left, right)\n\z
+					return true\n\z
+				end return false end"
 
 		derive_print("derive eq: enum chunk: " .. name)
 		derive_print("###")
@@ -72,7 +117,7 @@ local eq = {
 
 		local compiled, message = load(chunk, "derive-eq_enum", "t")
 		assert(compiled, message)
-		local eq_fn = compiled()
+		local eq_fn = compiled(eq_memoizer)
 		t.__eq = eq_fn
 	end,
 }
@@ -102,6 +147,8 @@ local is = {
 	record = function(t, info) end,
 }
 
+---@param info RecordDeriveInfo
+---@return fun(self: Type, pp: PrettyPrint, ...)
 local function record_prettyprintable_trait(info)
 	local kind = info.kind
 	local params = info.params
@@ -112,10 +159,10 @@ local function record_prettyprintable_trait(info)
 	end
 	local chunk = string.format(
 		[[
-return function(self, pp)
+return function(self, pp, ...)
 	pp:record(%q, {
 		%s
-	})
+	}, ...)
 end
 ]],
 		info.kind,
@@ -132,26 +179,42 @@ end
 
 ---@type Deriver
 local pretty_print = {
-	record = function(t, info)
+	record = function(t, info, override_pretty)
 		local idx = t.__index or {}
 		t.__index = idx
-		local prettyprintable = require("./pretty-printer").prettyprintable
+
 		local prettyprintable_print = record_prettyprintable_trait(info)
-		prettyprintable:implement_on(t, { print = prettyprintable_print })
-		idx["pretty_print"] = function(self)
-			local pp = require("./pretty-printer").PrettyPrint.new()
-			prettyprintable_print(self, pp)
-			return tostring(pp)
+		local function pretty(self, pp, ...)
+			if override_pretty and not pp.force_default then
+				override_pretty(self, pp, ...)
+			else
+				prettyprintable_print(self, pp, ...)
+			end
 		end
 
-		if not t["__tostring"] then
-			t["__tostring"] = idx["pretty_print"]
+		local prettyprintable = require("./pretty-printer").prettyprintable
+		prettyprintable:implement_on(t, { print = pretty })
+
+		local function pretty_print(self, ...)
+			local pp = require("./pretty-printer").PrettyPrint.new()
+			pretty(self, pp, ...)
+			return tostring(pp)
 		end
+		idx["pretty_print"] = pretty_print
+
+		local function default_print(self, ...)
+			local pp = require("./pretty-printer").PrettyPrint.new()
+			pp.force_default = true
+			pretty(self, pp, ...)
+			return tostring(pp)
+		end
+		idx["default_print"] = default_print
+
 		if not t["__tostring"] then
-			t["__tostring"] = idx["pretty_print"]
+			t["__tostring"] = pretty_print
 		end
 	end,
-	enum = function(t, info)
+	enum = function(t, info, override_pretty)
 		local idx = t.__index or {}
 		t.__index = idx
 		local name = info.name
@@ -163,24 +226,34 @@ local pretty_print = {
 			local vdata = variants[vname]
 			local vtype = vdata.type
 			local vinfo = vdata.info
+			local override_pretty_v = override_pretty and override_pretty[vname]
+			local variant_prettyprintable_print
 			if vtype == "record" then
-				variant_printers[vkind] = record_prettyprintable_trait(vinfo)
+				---@cast vinfo RecordDeriveInfo
+				variant_prettyprintable_print = record_prettyprintable_trait(vinfo)
 			elseif vtype == "unit" then
-				variant_printers[vkind] = function(self, printer)
-					return printer:unit(self.kind)
+				variant_prettyprintable_print = function(self, pp)
+					pp:unit(self.kind)
 				end
 			else
 				error("unknown variant type: " .. vtype)
+			end
+			variant_printers[vkind] = function(self, pp, ...)
+				if override_pretty_v and not pp.force_default then
+					override_pretty_v(self, pp, ...)
+				else
+					variant_prettyprintable_print(self, pp, ...)
+				end
 			end
 		end
 
 		local chunk = [[
       local variant_printers = ...
-      return function(self, prefix)
+      return function(self, prefix, ...)
 		if not variant_printers[self.kind] then
 			error("missing variant_printer for" .. self.kind)
 		end
-        return variant_printers[self.kind](self, prefix)
+        return variant_printers[self.kind](self, prefix, ...)
       end
     ]]
 
@@ -195,14 +268,24 @@ local pretty_print = {
 
 		local prettyprintable = require("./pretty-printer").prettyprintable
 		prettyprintable:implement_on(t, { print = prettyprintable_print })
-		idx["pretty_print"] = function(self)
+
+		local function pretty_print(self, ...)
 			local pp = require("./pretty-printer").PrettyPrint.new()
-			prettyprintable_print(self, pp)
+			prettyprintable_print(self, pp, ...)
 			return tostring(pp)
 		end
+		idx["pretty_print"] = pretty_print
+
+		local function default_print(self, ...)
+			local pp = require("./pretty-printer").PrettyPrint.new()
+			pp.force_default = true
+			prettyprintable_print(self, pp, ...)
+			return tostring(pp)
+		end
+		idx["default_print"] = default_print
 
 		if not t["__tostring"] then
-			t["__tostring"] = idx["pretty_print"]
+			t["__tostring"] = pretty_print
 		end
 	end,
 }
@@ -301,6 +384,137 @@ local as = {
 	record = function(t, info) end,
 }
 
+---@type Deriver
+local diff = {
+	record = function(t, info)
+		local idx = t.__index or {}
+		t.__index = idx
+		local kind = info.kind
+		local params = info.params
+
+		local function diff_fn(left, right)
+			print("diffing...")
+			print("kind: " .. left.kind)
+			local rt = getmetatable(right)
+			if t ~= rt then
+				print("unequal types!")
+				print(t)
+				print(rt)
+				print("stopping diff")
+				return
+			end
+			if left.kind ~= right.kind then
+				print("unequal kinds!")
+				print(left.kind)
+				print(right.kind)
+				print("stopping diff")
+				return
+			end
+			local n = 0
+			local diff_params = {}
+			for _, param in ipairs(params) do
+				if left[param] ~= right[param] then
+					n = n + 1
+					diff_params[n] = param
+				end
+			end
+			if n == 0 then
+				print("no difference")
+				print("stopping diff")
+				return
+			elseif n == 1 then
+				local d = diff_params[1]
+				print("difference in param: " .. d)
+				if left[d].diff then
+					-- tail call
+					return left[d]:diff(right[d])
+				else
+					print("stopping diff (missing diff method)")
+					return
+				end
+			else
+				print("difference in multiple params:")
+				for i = 1, n do
+					print(diff_params[i])
+				end
+				print("stopping diff")
+				return
+			end
+		end
+
+		idx["diff"] = diff_fn
+	end,
+	enum = function(t, info)
+		local idx = t.__index or {}
+		t.__index = idx
+		local name = info.name
+		local variants = info.variants
+
+		local variants_checks = {}
+		for _, vname in ipairs(variants) do
+			local vkind = name .. "." .. vname
+			local vdata = variants[vname]
+			local vtype = vdata.type
+			local vinfo = vdata.info
+			variants_checks[vkind] = function(left, right)
+				local n = 0
+				local diff_params = {}
+				for _, param in ipairs(vinfo.params) do
+					if left[param] ~= right[param] then
+						n = n + 1
+						diff_params[n] = param
+					end
+				end
+				if n == 0 then
+					print("no difference")
+					print("stopping diff")
+					return
+				elseif n == 1 then
+					local d = diff_params[1]
+					print("difference in param: " .. d)
+					if left[d].diff then
+						-- tail call
+						return left[d]:diff(right[d])
+					else
+						print("stopping diff (missing diff method)")
+						return
+					end
+				else
+					print("difference in multiple params:")
+					for i = 1, n do
+						print(diff_params[i])
+					end
+					print("stopping diff")
+					return
+				end
+			end
+		end
+
+		local function diff_fn(left, right)
+			print("diffing...")
+			print("kind: " .. left.kind)
+			local rt = getmetatable(right)
+			if t ~= rt then
+				print("unequal types!")
+				print(t)
+				print(rt)
+				print("stopping diff")
+				return
+			end
+			if left.kind ~= right.kind then
+				print("unequal kinds!")
+				print(left.kind)
+				print(right.kind)
+				print("stopping diff")
+				return
+			end
+			variants_checks[left.kind](left, right)
+		end
+
+		idx["diff"] = diff_fn
+	end,
+}
+
 -- build_record_function = (trait, info) -> function that implements the trait method
 -- specializations - optional specialized implementations for particular variants
 local function trait_method(trait, method, build_record_function, specializations)
@@ -361,5 +575,6 @@ return {
 	unwrap = unwrap,
 	as = as,
 	pretty_print = pretty_print,
+	diff = diff,
 	trait_method = trait_method,
 }

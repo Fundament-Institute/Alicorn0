@@ -20,16 +20,26 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+        luajit = pkgs.luajit.override {
+          self = luajit;
+          version = "2.1.0-beta3";
+          src = pkgs.fetchFromGitHub {
+            owner = "LuaJIT";
+            repo = "LuaJIT";
+            rev = "50936d784474747b4569d988767f1b5bab8bb6d0";
+            hash = "sha256-oPU3hwSgL+d/4yW7r7maugDi+LA8QmvFN7ssEgC9B70=";
+          };
+        };
         alicorn-check = file:
           pkgs.runCommandNoCC "alicorn-check-${file}" { } ''
             set -euo pipefail
             cd ${./.}
             mkdir $out
             >&2 echo "Checking ${file}"
-            ${pkgs.lib.getExe luvitpkgs.packages.${system}.luvit} ${file}
+            ${pkgs.lib.getExe' luvitpkgs.packages.${system}.luvit "luvit"} ${file}
           '';
 
-        lqc = pkgs.luajit.pkgs.buildLuarocksPackage rec {
+        lqc = luajit.pkgs.buildLuarocksPackage rec {
           pname = "lua-quickcheck";
           version = "0.2-4";
           src = pkgs.fetchFromGitHub {
@@ -41,11 +51,8 @@
 
           knownRockspec = "${src}/rockspecs/lua-quickcheck-${version}.rockspec";
 
-          propagatedBuildInputs = with pkgs; [
-            luajit
-            luajitPackages.luafilesystem
-            luajitPackages.argparse
-          ];
+          propagatedBuildInputs =
+            [ luajit luajit.pkgs.luafilesystem luajit.pkgs.argparse ];
         };
 
       in
@@ -94,11 +101,25 @@
               luvitpkgs.packages.${system}.lit
               luvitpkgs.packages.${system}.luvit
               pkgs.stylua
+              pkgs.inferno
+              (pkgs.lua-language-server.overrideAttrs {
+                version = "unstable";
+                src = pkgs.fetchFromGitHub {
+                  owner = "luals";
+                  repo = "lua-language-server";
+                  rev = "7d06e5573c8188e61516e987b0d796a40f718b05";
+                  hash = "sha256-mNG/IqRkXHVwUU06e1oD/3WBa5k09ddYUsiQN4MFaOU";
+                  fetchSubmodules = true;
+                };
 
-              (pkgs.luajit.withPackages
+              })
+
+              (luajit.withPackages
                 (ps: with ps; [ luasocket lpeg inspect luaunit tl lqc ]))
             ];
-            inherit (self.checks.${system}.pre-commit-check) shellHook;
+            shellHook = self.checks.${system}.pre-commit-check.shellHook + ''
+              export LUA_PATH='${luajit}/share/lua/5.1/?.lua;./?.lua'
+            '';
           };
           default = alicorn;
         };

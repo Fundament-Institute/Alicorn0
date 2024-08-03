@@ -15,7 +15,9 @@ local prettyprintable = require "./pretty-printable-trait"
 
 ---@class Type
 ---@field value_check ValueCheckFn
----@alias ValueCheckFn fun(val: Type): boolean
+---@field define_enum fun(Type, string, table)
+---@field derive fun(Type, Deriver, ...)
+---@alias ValueCheckFn fun(val: any): boolean
 
 ---@class Value
 ---@field kind string
@@ -109,8 +111,13 @@ local function gen_record(self, cons, kind, params_with_types)
 				local argi = args[i]
 				-- type-check constructor arguments
 				if params_types[i].value_check(argi) ~= true then
-					p("value of parameter " .. v .. ":", argi)
-					p("expected type of parameter " .. v .. " is :", params_types[i])
+					print("value of parameter " .. v .. ": (follows)")
+					p(argi)
+					print("expected type of parameter " .. v .. " is :", params_types[i])
+					--for i = 2, 25 do
+					--	local d = debug.getinfo(i, "Sln")
+					--	print(string.format("%s %s %s: %s:%d", d.what, d.namewhat, d.name, d.source, d.currentline))
+					--end
 					error("wrong argument type passed to constructor " .. kind .. ", parameter '" .. v .. "'")
 				end
 				val[v] = argi
@@ -128,7 +135,7 @@ local function gen_record(self, cons, kind, params_with_types)
 end
 
 ---@class Record: Type
----@field derive fun(self: Record, deriver: Deriver)
+---@field derive fun(self: Record, deriver: Deriver, ...)
 
 ---@param self table
 ---@param kind string
@@ -136,10 +143,14 @@ end
 ---@return Record self
 local function define_record(self, kind, params_with_types)
 	local self, derive_info = gen_record(self, self, kind, params_with_types)
-	function self:derive(deriver)
-		return deriver.record(self, derive_info)
+	getmetatable(self).__tostring = function()
+		return "terms-gen record " .. kind
+	end
+	function self:derive(deriver, ...)
+		return deriver.record(self, derive_info, ...)
 	end
 	self.value_check = metatable_equality(self)
+	self.derive_info = derive_info
 	---@cast self Record
 	return self
 end
@@ -160,9 +171,9 @@ local function gen_unit(self, kind)
 end
 
 ---@class Enum: Type
----@field derive fun(self: Enum, deriver: Deriver)
+---@field derive fun(self: Enum, deriver: Deriver, ...)
 
----@alias Variants { [1]: string, [2]: ParamsWithTypes }[]
+---@alias Variants [ string, ParamsWithTypes ][]
 
 ---@param self table
 ---@param name string
@@ -192,14 +203,20 @@ local function define_enum(self, name, variants)
 			}
 		end
 	end
+	setmetatable(self, {
+		__tostring = function()
+			return "terms-gen enum " .. name
+		end,
+	})
 	local derive_info = {
 		name = name,
 		variants = derive_variants,
 	}
-	function self:derive(deriver)
-		return deriver.enum(self, derive_info)
+	function self:derive(deriver, ...)
+		return deriver.enum(self, derive_info, ...)
 	end
 	self.value_check = metatable_equality(self)
+	self.derive_info = derive_info
 	---@cast self Enum
 	return self
 end
@@ -208,10 +225,19 @@ end
 
 ---@param self table
 ---@param value_check ValueCheckFn
+---@param lsp_type string?
 ---@return Foreign self
-local function define_foreign(self, value_check)
-	setmetatable(self, nil)
+local function define_foreign(self, value_check, lsp_type)
+	setmetatable(self, {
+		__tostring = function()
+			return "terms-gen foreign " .. (lsp_type or "unknown")
+		end,
+	})
 	self.value_check = value_check
+	self.derive_info = {
+		kind = "foreign",
+		lsp_type = lsp_type,
+	}
 	---@cast self Foreign
 	return self
 end
@@ -219,7 +245,7 @@ end
 local map_type_mt = {
 	__call = function(self)
 		local val = {
-			__map = {},
+			_map = {},
 		}
 		setmetatable(val, self)
 		return val
@@ -229,22 +255,48 @@ local map_type_mt = {
 	end,
 }
 
+---@class Map: Type
+
+local function map_prettyprintable(self, printer, ...)
+	return printer:table(self._map, ...)
+end
+
 local map_methods = {
 	pairs = function(self)
-		return pairs(self.__map)
+		return pairs(self._map)
 	end,
-	pretty_print = function(self, prefix)
-		local np = prefix .. " "
-		local parts = {}
-		local i = 1
-		for k, v in pairs(self.__map) do
-			local function pp(x, p)
-				return ((type(x) == "table" and x.pretty_print) or tostring)(x, p)
-			end
-			parts[i] = string.format("%s = %s", pp(k, prefix), pp(v, np))
-			i = i + 1
+	-- TODO: default_print?
+	pretty_print = function(self, ...)
+		local pp = require("./pretty-printer").PrettyPrint.new()
+		map_prettyprintable(self, pp, ...)
+		return tostring(pp)
+	end,
+	get = function(self, key)
+		local mt = getmetatable(self)
+		local key_type = mt.key_type
+		local value_type = mt.value_type
+		if key_type.value_check(key) ~= true then
+			p("map-get", key_type, value_type)
+			p(key)
+			error("wrong key type passed to map:get")
 		end
-		return string.format("[\n" .. np .. "%s\n" .. prefix .. "]", table.concat(parts, ",\n" .. np))
+		return self._map[key]
+	end,
+	set = function(self, key, value)
+		local mt = getmetatable(self)
+		local key_type = mt.key_type
+		local value_type = mt.value_type
+		if key_type.value_check(key) ~= true then
+			p("map-set", key_type, value_type)
+			p(key)
+			error("wrong key type passed to map:set")
+		end
+		if value_type.value_check(value) ~= true then
+			p("map-set", key_type, value_type)
+			p(value)
+			error("wrong value type passed to map:set")
+		end
+		self._map[key] = value
 	end,
 }
 
@@ -254,35 +306,13 @@ local function gen_map_fns(key_type, value_type)
 		if method then
 			return method
 		end
-		if key_type.value_check(key) ~= true then
-			p("map-index", key_type, value_type)
-			p(key)
-			error("wrong key type passed to indexing")
-		end
-		return self.__map[key]
+		error("indexing of maps is disallowed. use :get()")
 	end
 	local function newindex(self, key, value)
-		local method = map_methods[key]
-		if method then
-			p(method)
-			error("attempted index-assignment that shadows a method")
-		end
-		if key_type.value_check(key) ~= true then
-			p("map-index-assign", key_type, value_type)
-			p(key)
-			error("wrong key type passed to index-assignment")
-		end
-		if value_type.value_check(value) ~= true then
-			p("map-index-assign", key_type, value_type)
-			p(value)
-			error("wrong value type passed to index-assignment")
-		end
-		self.__map[key] = value
+		error("index-assignment of maps is disallowed. use :set()")
 	end
 	return index, newindex
 end
-
----@class Map: Type
 
 -- TODO: memoize? otherwise LOTS of tables will be constructed,
 -- through repeated calls to declare_map
@@ -304,9 +334,124 @@ local function define_map(self, key_type, value_type)
 	self.value_type = value_type
 	self.__index, self.__newindex = gen_map_fns(key_type, value_type)
 	self.__pairs = map_methods.pairs
+	prettyprintable:implement_on(self, {
+		print = map_prettyprintable,
+	})
 	-- NOTE: this isn't primitive equality; this type has a __eq metamethod!
 	self.value_check = metatable_equality(self)
 	---@cast self Map
+	return self
+end
+
+local set_type_mt = {
+	__call = function(self)
+		local val = {
+			_set = {},
+		}
+		setmetatable(val, self)
+		return val
+	end,
+	__eq = function(left, right)
+		return left.key_type == right.key_type
+	end,
+}
+
+---@class Set: Type
+
+local function set_prettyprintable(self, printer, ...)
+	return printer:table(self._set, ...)
+end
+
+local set_methods = {
+	put = function(self, key)
+		local mt = getmetatable(self)
+		local key_type = mt.key_type
+		if key_type.value_check(key) ~= true then
+			p("set-put", key_type)
+			p(key)
+			error("wrong key type passed to set:put")
+		end
+		self._set[key] = true
+	end,
+	reset = function(self, key)
+		local mt = getmetatable(self)
+		local key_type = mt.key_type
+		if key_type.value_check(key) ~= true then
+			p("set-reset", key_type)
+			p(key)
+			error("wrong key type passed to set:reset")
+		end
+		self._set[key] = nil
+	end,
+	test = function(self, key)
+		local mt = getmetatable(self)
+		local key_type = mt.key_type
+		if key_type.value_check(key) ~= true then
+			p("set-test", key_type)
+			p(key)
+			error("wrong key type passed to set:test")
+		end
+		return self._set[key]
+	end,
+	-- just ignore the second value of the iterations :)
+	pairs = function(self)
+		return pairs(self._set)
+	end,
+	-- TODO: default_print?
+	pretty_print = function(self, ...)
+		local pp = require("./pretty-printer").PrettyPrint.new()
+		set_prettyprintable(self, pp, ...)
+		return tostring(pp)
+	end,
+	copy = function(self, onto)
+		if not onto then
+			local mt = getmetatable(self)
+			onto = mt()
+		end
+		for k in self:pairs() do
+			onto:set(k)
+		end
+		return onto
+	end,
+	union = function(self, other)
+		local st = getmetatable(self)
+		local ot = getmetatable(other)
+		if st ~= ot then
+			error("set:union must be passed sets of the same type")
+		end
+		local new = self:copy()
+		other:copy(new)
+		return new
+	end,
+	subtract = function(self, other)
+		local st = getmetatable(self)
+		local ot = getmetatable(other)
+		if st ~= ot then
+			error("set:subtract must be passed sets of the same type")
+		end
+		local new = self:copy()
+		for k in other:pairs() do
+			new:reset(k)
+		end
+		return new
+	end,
+}
+
+---@param self table
+---@param key_type Type
+---@return Set self
+local function define_set(self, key_type)
+	if type(key_type) ~= "table" or type(key_type.value_check) ~= "function" then
+		error("trying to set the key or value type to something that isn't a type (possible typo?)")
+	end
+	setmetatable(self, set_type_mt)
+	self.key_type = key_type
+	self.__index = set_methods
+	prettyprintable:implement_on(self, {
+		print = set_prettyprintable,
+	})
+	-- NOTE: this isn't primitive equality; this type has a __eq metamethod!
+	self.value_check = metatable_equality(self)
 	return self
 end
 
@@ -328,6 +473,12 @@ local array_type_mt = {
 	end,
 }
 
+---@class Array: Type
+
+local function array_prettyprintable(self, printer, ...)
+	return printer:array(self.array, ...)
+end
+
 local array_methods = {
 	ipairs = function(self)
 		return ipairs(self.array)
@@ -339,10 +490,10 @@ local array_methods = {
 		self[self.n + 1] = val
 	end,
 	eq = function(self, other)
-		if #self ~= #other then
+		if self:len() ~= other:len() then
 			return false
 		end
-		for i = 1, #self do
+		for i = 1, self:len() do
 			if self[i] ~= other[i] then
 				return false
 			end
@@ -351,7 +502,7 @@ local array_methods = {
 	end,
 	copy = function(self, first, last)
 		local first = first or 1
-		local last = last or #self
+		local last = last or self:len()
 		local mt = getmetatable(self)
 		local new = mt()
 		for i = first, last do
@@ -362,12 +513,61 @@ local array_methods = {
 	unpack = function(self)
 		return table.unpack(self.array)
 	end,
-	pretty_print = function(self, prefix)
-		local parts = {}
-		for i, v in ipairs(self.array) do
-			parts[i] = ((type(v) == "table" and v.pretty_print) or tostring)(v, prefix)
+	-- TODO: default_print?
+	pretty_print = function(self, ...)
+		local pp = require("./pretty-printer").PrettyPrint.new()
+		array_prettyprintable(self, pp, ...)
+		return tostring(pp)
+	end,
+	diff = function(self, other)
+		print("diffing array...")
+		local st = getmetatable(self)
+		local ot = getmetatable(other)
+		print("value_type: " .. tostring(st.value_type))
+		if st ~= ot then
+			print("unequal types!")
+			print(st)
+			print(ot)
+			print("stopping diff")
+			return
 		end
-		return string.format("[%s]", table.concat(parts, ", "))
+		if self:len() ~= other:len() then
+			print("unequal lengths!")
+			print(self:len())
+			print(other:len())
+			print("stopping diff")
+			return
+		end
+		local n = 0
+		local diff_elems = {}
+		for i = 1, self:len() do
+			if self[i] ~= other[i] then
+				n = n + 1
+				diff_elems[n] = i
+			end
+		end
+		if n == 0 then
+			print("no difference")
+			print("stopping diff")
+			return
+		elseif n == 1 then
+			local d = diff_elems[1]
+			print("difference in element: " .. tostring(d))
+			if self[d].diff then
+				-- tail call
+				return self[d]:diff(other[d])
+			else
+				print("stopping diff (missing diff method)")
+				return
+			end
+		else
+			print("difference in multiple elements:")
+			for i = 1, n do
+				print(diff_elems[i])
+			end
+			print("stopping diff")
+			return
+		end
 	end,
 }
 
@@ -380,18 +580,18 @@ local function gen_array_fns(value_type)
 		if type(key) ~= "number" then
 			p("array-index", value_type)
 			p(key)
-			error("wrong key type passed to indexing: " .. key)
+			error("wrong key type passed to array indexing")
 		end
 		-- check if integer
 		-- there are many nice ways to do this in lua >=5.3
 		-- unfortunately, this is not us
 		if math.floor(key) ~= key then
 			p(key)
-			error("key passed to indexing is not an integer")
+			error("key passed to array indexing is not an integer")
 		end
 		if key < 1 or key > self.n then
 			p(key, self.n)
-			error("key passed to indexing is out of bounds")
+			error("key passed to array indexing is out of bounds")
 		end
 		return self.array[key]
 	end
@@ -399,21 +599,21 @@ local function gen_array_fns(value_type)
 		if type(key) ~= "number" then
 			p("array-index", value_type)
 			p(key)
-			error("wrong key type passed to index-assignment")
+			error("wrong key type passed to array index-assignment")
 		end
 		if math.floor(key) ~= key then
 			p(key)
-			error("key passed to index-assignment is not an integer")
+			error("key passed to array index-assignment is not an integer")
 		end
 		-- n+1 can be used to append
 		if key < 1 or key > self.n + 1 then
 			p(key, self.n)
-			error("key passed to index-assignment is out of bounds")
+			error("key passed to array index-assignment is out of bounds")
 		end
 		if value_type.value_check(value) ~= true then
 			p("array-index-assign", value_type)
 			p(value)
-			error("wrong value type passed to index-assignment")
+			error("wrong value type passed to array index-assignment")
 		end
 		self.array[key] = value
 		if key > self.n then
@@ -422,12 +622,6 @@ local function gen_array_fns(value_type)
 	end
 	return index, newindex
 end
-
-local function array_prettyprintable(self, printer)
-	return printer:array(self.array)
-end
-
----@class Array: Type
 
 -- TODO: see define_map
 ---@param self table
@@ -489,7 +683,7 @@ end
 local function gen_builtin(typename)
 	return define_foreign({}, function(val)
 		return type(val) == typename
-	end)
+	end, typename)
 end
 
 local terms_gen = {
@@ -502,6 +696,8 @@ local terms_gen = {
 	declare_foreign = new_self(define_foreign),
 	---@type fun(key_type: Type, value_type: Type): Map
 	declare_map = new_self(define_map),
+	---@type fun(key_type: Type): Set
+	declare_set = new_self(define_set),
 	---@type fun(value_type: Type): Array
 	declare_array = new_self(define_array),
 	---@type fun(): UndefinedType

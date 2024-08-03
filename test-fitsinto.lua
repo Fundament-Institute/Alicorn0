@@ -124,6 +124,7 @@ local passed, failed, total = (require "tap")(function(test)
 	test("tuple type decl", function(expect)
 		-- fitsinto needs to handle tuple type by applying the closures on prior element (from right side always)
 		-- not by blindly applying closure like it is right now
+		local names = gen.declare_array(gen.builtin_string)
 		local decl_a = value.tuple_type(
 			val_desc_elem(
 				val_tup_cons(
@@ -131,13 +132,20 @@ local passed, failed, total = (require "tap")(function(test)
 						val_tup_cons(
 							val_desc_empty,
 							value.closure(
-								typed.tuple_elim(typed.bound_variable(1), 0, typed.star(1)),
+								"#A",
+								typed.tuple_elim(names(), typed.bound_variable(1), 0, typed.star(1)),
 								terms.runtime_context()
 							)
 						)
 					),
 					value.closure(
-						terms.typed_term.tuple_elim(terms.typed_term.bound_variable(1), 1, typed.bound_variable(2)),
+						"#B",
+						terms.typed_term.tuple_elim(
+							names("#FOO"),
+							terms.typed_term.bound_variable(1),
+							1,
+							typed.bound_variable(2)
+						),
 						terms.runtime_context()
 					)
 				)
@@ -150,13 +158,20 @@ local passed, failed, total = (require "tap")(function(test)
 						val_tup_cons(
 							val_desc_empty,
 							value.closure(
-								typed.tuple_elim(typed.bound_variable(1), 0, typed.star(1)),
+								"#C",
+								typed.tuple_elim(names(), typed.bound_variable(1), 0, typed.star(1)),
 								terms.runtime_context()
 							)
 						)
 					),
 					value.closure(
-						terms.typed_term.tuple_elim(terms.typed_term.bound_variable(1), 1, typed.bound_variable(2)),
+						"#D",
+						terms.typed_term.tuple_elim(
+							names("#BAR"),
+							terms.typed_term.bound_variable(1),
+							1,
+							typed.bound_variable(2)
+						),
 						terms.runtime_context()
 					)
 				)
