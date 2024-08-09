@@ -245,11 +245,13 @@ function value:as_program_cont() end
 ---@return boolean
 function value:is_effect_empty() end
 ---@return boolean
-function value:is_effect_type() end
+function value:is_effect_elem() end
 ---@return any
-function value:unwrap_effect_type() end
+function value:unwrap_effect_elem() end
 ---@return boolean, any
-function value:as_effect_type() end
+function value:as_effect_elem() end
+---@return boolean
+function value:is_effect_type() end
 ---@return boolean
 function value:is_effect_row() end
 ---@return any, value
@@ -313,7 +315,8 @@ function value:as_program_type() end
 ---@field program_end fun(result:value): value
 ---@field program_cont fun(action:any, argument:value, continuation:continuation): value
 ---@field effect_empty value
----@field effect_type fun(tag:any): value
+---@field effect_elem fun(tag:any): value
+---@field effect_type value
 ---@field effect_row fun(components:any, rest:value): value
 ---@field effect_row_type value
 ---@field program_type fun(effect_sig:value, base_type:value): value

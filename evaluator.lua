@@ -634,6 +634,21 @@ add_comparer("value.tuple_defn_type", "value.tuple_defn_type", function(a, b)
 	return true
 end)
 
+add_comparer("value.program_type", "value.program_type", function(a, b)
+	local a_eff, a_base = a:unwrap_program_type()
+	local b_eff, b_base = b:unwrap_program_type()
+	typechecker_state:queue_subtype(a_base, b_base, "program result")
+	typechecker_state:queue_constrain(a_eff, effect_row_srel, b_eff, "program effects")
+	return true
+end)
+
+add_comparer("value.effect_row_type", "value.effect_row_type", function(a, b)
+	return true
+end)
+add_comparer("value.effect_type", "value.effect_type", function(a, b)
+	return true
+end)
+
 -- Compares any non-metavariables, or defers any metavariable comparisons to the work queue
 ---@param val value
 ---@param use value

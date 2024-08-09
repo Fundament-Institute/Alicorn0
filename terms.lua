@@ -749,7 +749,8 @@ value:define_enum("value", {
 		"continuation", continuation
 	} },
 	{ "effect_empty" },
-	{ "effect_type", { "tag", effect_id}},
+	{ "effect_elem", { "tag", effect_id}},
+	{ "effect_type" },
 	{ "effect_row", {
 		"components", set(unique_id),
 		"rest", value
