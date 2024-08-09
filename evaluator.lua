@@ -86,6 +86,44 @@ end
 FunctionRelation = U.memoize(FunctionRelation)
 
 ---@type SubtypeRelation
+local effect_row_srel
+effect_row_srel = {
+	debug_name = "effect_row_srel",
+	Rel = luatovalue(function(a, b) end, name_array("a", "b")),
+	refl = luatovalue(function(a) end, name_array("a")),
+	antisym = luatovalue(function(a, b, r1, r2) end, name_array("a", "b", "r1", "r2")),
+
+	constrain = luatovalue(
+		---@param val value
+		---@param use value
+		function(val, use)
+			if val:is_effect_empty() then
+				return true
+			end
+			if val:is_effect_row() then
+				local val_components, val_rest = val:unwrap_effect_row()
+				if use:is_effect_empty() then
+					error "production has effect requirements that the consumption doesn't fulfill"
+				end
+				if not use:is_effect_row() then
+					error "consumption of effect row constraint isn't an effect row?"
+				end
+				local use_components, use_rest = use:unwrap_effect_row()
+				if not use_components:superset(val_components) then
+					error "consumption of effect row doesn't satisfy all components of production"
+				end
+				--TODO allow polymorphism
+				if val_rest:is_effect_empty() and use_rest:is_effect_empty() then
+					return true
+				end
+				error "NYI effect polymorphism"
+			end
+		end,
+		name_array("val", "use")
+	),
+}
+
+---@type SubtypeRelation
 local UniverseOmegaRelation
 
 ---@param onto Array

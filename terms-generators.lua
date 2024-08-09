@@ -435,6 +435,19 @@ local set_methods = {
 		end
 		return new
 	end,
+	superset = function(self, other)
+		local st = getmetatable(self)
+		local ot = getmetatable(other)
+		if st ~= ot then
+			error("set:superset must be passed sets of the same type")
+		end
+		for k in other:pairs() do
+			if not self:test(k) then
+				return false
+			end
+		end
+		return true
+	end,
 }
 
 ---@param self table
