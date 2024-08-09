@@ -532,6 +532,14 @@ local purity = gen.declare_enum("purity", {
 	{ "pure" },
 })
 
+---@module './types/block_purity'
+local block_purity = gen.declare_enum("block_purity", {
+	{ "effectful" },
+	{ "pure" },
+	{ "dependent", { "val", value } },
+	{ "inherit" },
+})
+
 ---@module "./types/result_info"
 local result_info = gen.declare_record("result_info", { "purity", purity })
 
@@ -884,6 +892,7 @@ local terms = {
 	free = free,
 	visibility = visibility,
 	purity = purity,
+	block_purity = block_purity,
 	result_info = result_info,
 	value = value,
 	neutral_value = neutral_value,

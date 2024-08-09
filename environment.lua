@@ -34,6 +34,7 @@ local function update_env(old_env, opts)
 	new_env.nonlocals = new_env.nonlocals or trie.empty
 	new_env.in_scope = new_env.nonlocals:extend(new_env.locals)
 	new_env.bindings = new_env.bindings or fibbuf()
+	new_env.purity = new_env.purity or terms.block_purity.pure
 	new_env.perms = new_env.perms or {}
 	new_env.typechecking_context = new_env.typechecking_context or typechecking_context()
 	return setmetatable(new_env, environment_mt)
@@ -47,6 +48,7 @@ local new_env = update_env
 ---@field nonlocals PrefixTree
 ---@field in_scope PrefixTree
 ---@field bindings FibonacciBuffer
+---@field purity block_purity
 ---@field perms table
 local environment = {}
 
@@ -232,9 +234,10 @@ function environment:unlet_local(name)
 end
 
 ---enter a new block, shadowing the current context and allowing new bindings
+---@param pure block_purity
 ---@return ShadowEnvironment
 ---@return Environment
-function environment:enter_block()
+function environment:enter_block(pure)
 	--print "entering block"
 	--self.typechecking_context:dump_names()
 	eval.typechecker_state:enter_block()
@@ -252,6 +255,7 @@ end
 ---@param shadowed ShadowEnvironment
 ---@return Environment
 ---@return inferrable
+---@return purity
 function environment:exit_block(term, shadowed)
 	-- -> env, term
 	local outer = shadowed.shadowed or error "shadowed.shadowed missing"
