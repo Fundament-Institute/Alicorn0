@@ -13,11 +13,11 @@ local purity = terms.purity
 local result_info = terms.result_info
 local value = terms.value
 local neutral_value = terms.neutral_value
-local prim_syntax_type = terms.prim_syntax_type
-local prim_environment_type = terms.prim_environment_type
-local prim_typed_term_type = terms.prim_typed_term_type
-local prim_goal_type = terms.prim_goal_type
-local prim_inferrable_term_type = terms.prim_inferrable_term_type
+local host_syntax_type = terms.host_syntax_type
+local host_environment_type = terms.host_environment_type
+local host_typed_term_type = terms.host_typed_term_type
+local host_goal_type = terms.host_goal_type
+local host_inferrable_term_type = terms.host_inferrable_term_type
 
 local gen = require "./terms-generators"
 local map = gen.declare_map
@@ -26,7 +26,7 @@ local string_value_map = map(gen.builtin_string, value)
 local array = gen.declare_array
 local typed_array = array(typed_term)
 local value_array = array(value)
-local primitive_array = array(gen.any_lua_type)
+local host_array = array(gen.any_lua_type)
 local usage_array = array(gen.builtin_number)
 local string_array = array(gen.builtin_string)
 
@@ -57,8 +57,8 @@ local function luatovalue(luafunc, parameters)
 	return value.closure(
 		"#args",
 		typed.application(
-			typed.literal(value.prim(luafunc)),
-			typed.tuple_elim(parameters, typed.bound_variable(1), len, typed.prim_tuple_cons(new_body))
+			typed.literal(value.host_value(luafunc)),
+			typed.tuple_elim(parameters, typed.bound_variable(1), len, typed.host_tuple_cons(new_body))
 		),
 		runtime_context()
 	)
@@ -292,7 +292,7 @@ local function substitute_inner(val, mappings, context_len)
 					return terms.typed_term.range(
 						below_acc,
 						above_acc,
-						terms.typed_term.literal(terms.value.prim(reln))
+						terms.typed_term.literal(terms.value.host_value(reln))
 					)
 				else
 					lookup = free:unwrap_metavariable()
@@ -314,53 +314,53 @@ local function substitute_inner(val, mappings, context_len)
 			return typed_term.tuple_element_access(subject_term, index)
 		end
 
-		if nval:is_prim_unwrap_stuck() then
-			local boxed = nval:unwrap_prim_unwrap_stuck()
-			return typed_term.prim_unwrap(substitute_inner(value.neutral(boxed), mappings, context_len))
+		if nval:is_host_unwrap_stuck() then
+			local boxed = nval:unwrap_host_unwrap_stuck()
+			return typed_term.host_unwrap(substitute_inner(value.neutral(boxed), mappings, context_len))
 		end
 
-		if nval:is_prim_wrap_stuck() then
-			local to_wrap = nval:unwrap_prim_wrap_stuck()
-			return typed_term.prim_wrap(substitute_inner(value.neutral(to_wrap), mappings, context_len))
+		if nval:is_host_wrap_stuck() then
+			local to_wrap = nval:unwrap_host_wrap_stuck()
+			return typed_term.host_wrap(substitute_inner(value.neutral(to_wrap), mappings, context_len))
 		end
 
-		if nval:is_prim_unwrap_stuck() then
-			local to_unwrap = nval:unwrap_prim_unwrap_stuck()
-			return typed_term.prim_unwrap(substitute_inner(value.neutral(to_unwrap), mappings, context_len))
+		if nval:is_host_unwrap_stuck() then
+			local to_unwrap = nval:unwrap_host_unwrap_stuck()
+			return typed_term.host_unwrap(substitute_inner(value.neutral(to_unwrap), mappings, context_len))
 		end
 
-		if nval:is_prim_application_stuck() then
-			local fn, arg = nval:unwrap_prim_application_stuck()
+		if nval:is_host_application_stuck() then
+			local fn, arg = nval:unwrap_host_application_stuck()
 			return typed_term.application(
-				typed_term.literal(value.prim(fn)),
+				typed_term.literal(value.host_value(fn)),
 				substitute_inner(value.neutral(arg), mappings, context_len)
 			)
 		end
 
-		if nval:is_prim_tuple_stuck() then
-			local leading, stuck, trailing = nval:unwrap_prim_tuple_stuck()
+		if nval:is_host_tuple_stuck() then
+			local leading, stuck, trailing = nval:unwrap_host_tuple_stuck()
 			local elems = typed_array()
-			-- leading is an array of unwrapped prims and must already be unwrapped prim values
+			-- leading is an array of unwrapped host_values and must already be unwrapped host values
 			for _, elem in ipairs(leading) do
-				local elem_value = typed_term.literal(value.prim(elem))
+				local elem_value = typed_term.literal(value.host_value(elem))
 				elems:append(elem_value)
 			end
 			elems:append(substitute_inner(value.neutral(stuck), mappings, context_len))
 			for _, elem in ipairs(trailing) do
 				elems:append(substitute_inner(elem, mappings, context_len))
 			end
-			-- print("prim_tuple_stuck nval", nval)
-			local result = typed_term.prim_tuple_cons(elems)
-			-- print("prim_tuple_stuck result", result)
+			-- print("host_tuple_stuck nval", nval)
+			local result = typed_term.host_tuple_cons(elems)
+			-- print("host_tuple_stuck result", result)
 			return result
 		end
 
-		if nval:is_prim_if_stuck() then
-			local subject, consequent, alternate = nval:unwrap_prim_if_stuck()
+		if nval:is_host_if_stuck() then
+			local subject, consequent, alternate = nval:unwrap_host_if_stuck()
 			local subject = substitute_inner(value.neutral(subject), mappings, context_len)
 			local consequent = substitute_inner(consequent, mappings, context_len)
 			local alternate = substitute_inner(alternate, mappings, context_len)
-			return typed_term.prim_if(subject, consequent, alternate)
+			return typed_term.host_if(subject, consequent, alternate)
 		end
 
 		if nval:is_application_stuck() then
@@ -373,41 +373,41 @@ local function substitute_inner(val, mappings, context_len)
 
 		-- TODO: deconstruct nuetral value or something
 		error("substitute_inner not implemented yet val:is_neutral - " .. tostring(nval))
-	elseif val:is_prim() then
+	elseif val:is_host_value() then
 		return typed_term.literal(val)
-	elseif val:is_prim_type_type() then
+	elseif val:is_host_type_type() then
 		return typed_term.literal(val)
-	elseif val:is_prim_number_type() then
+	elseif val:is_host_number_type() then
 		return typed_term.literal(val)
-	elseif val:is_prim_bool_type() then
+	elseif val:is_host_bool_type() then
 		return typed_term.literal(val)
-	elseif val:is_prim_string_type() then
+	elseif val:is_host_string_type() then
 		return typed_term.literal(val)
-	elseif val:is_prim_function_type() then
-		local param_type, result_type, resinfo = val:unwrap_prim_function_type()
+	elseif val:is_host_function_type() then
+		local param_type, result_type, resinfo = val:unwrap_host_function_type()
 		local param_type = substitute_inner(param_type, mappings, context_len)
 		local result_type = substitute_inner(result_type, mappings, context_len)
 		local resinfo = substitute_inner(resinfo, mappings, context_len)
-		return typed_term.prim_function_type(param_type, result_type, resinfo)
-	elseif val:is_prim_wrapped_type() then
-		local type = val:unwrap_prim_wrapped_type()
+		return typed_term.host_function_type(param_type, result_type, resinfo)
+	elseif val:is_host_wrapped_type() then
+		local type = val:unwrap_host_wrapped_type()
 		local type = substitute_inner(type, mappings, context_len)
-		return typed_term.prim_wrapped_type(type)
-	elseif val:is_prim_user_defined_type() then
-		local id, family_args = val:unwrap_prim_user_defined_type()
+		return typed_term.host_wrapped_type(type)
+	elseif val:is_host_user_defined_type() then
+		local id, family_args = val:unwrap_host_user_defined_type()
 		local res = typed_array()
 		for _, v in ipairs(family_args) do
 			res:append(substitute_inner(v, mappings, context_len))
 		end
-		return typed_term.prim_user_defined_type_cons(id, res)
-	elseif val:is_prim_nil_type() then
+		return typed_term.host_user_defined_type_cons(id, res)
+	elseif val:is_host_nil_type() then
 		return typed_term.literal(val)
-	elseif val:is_prim_tuple_value() then
+	elseif val:is_host_tuple_value() then
 		return typed_term.literal(val)
-	elseif val:is_prim_tuple_type() then
-		local decls = val:unwrap_prim_tuple_type()
+	elseif val:is_host_tuple_type() then
+		local decls = val:unwrap_host_tuple_type()
 		local decls = substitute_inner(decls, mappings, context_len)
-		return typed_term.prim_tuple_type(decls)
+		return typed_term.host_tuple_type(decls)
 	elseif val:is_range() then
 		local lower_bounds, upper_bounds, relation = val:unwrap_range()
 		local sub_lower_bounds = typed_array()
@@ -448,7 +448,7 @@ end
 ---@param val value
 ---@return boolean
 local function is_type_of_types(val)
-	return val:is_star() or val:is_prop() or val:is_prim_type_type()
+	return val:is_star() or val:is_prop() or val:is_host_type_type()
 end
 
 local make_inner_context
@@ -502,18 +502,18 @@ local function always_fits_comparer(a, b)
 	return true
 end
 
--- prim types
-for _, prim_type in ipairs({
-	value.prim_number_type,
-	value.prim_string_type,
-	value.prim_bool_type,
-	value.prim_user_defined_type({ name = "" }, value_array()),
+-- host types
+for _, host_type in ipairs({
+	value.host_number_type,
+	value.host_string_type,
+	value.host_bool_type,
+	value.host_user_defined_type({ name = "" }, value_array()),
 }) do
-	add_comparer(prim_type.kind, prim_type.kind, always_fits_comparer)
+	add_comparer(host_type.kind, host_type.kind, always_fits_comparer)
 end
 
 -- types of types
-add_comparer(value.prim_type_type.kind, value.prim_type_type.kind, always_fits_comparer)
+add_comparer(value.host_type_type.kind, value.host_type_type.kind, always_fits_comparer)
 ---@type value_comparer
 local function tuple_compare(a, b)
 	-- fixme lol
@@ -533,7 +533,7 @@ local function tuple_compare(a, b)
 	return true
 end
 add_comparer("value.tuple_type", "value.tuple_type", tuple_compare)
-add_comparer("value.prim_tuple_type", "value.prim_tuple_type", tuple_compare)
+add_comparer("value.host_tuple_type", "value.host_tuple_type", tuple_compare)
 add_comparer("value.pi", "value.pi", function(a, b)
 	if a == b then
 		return true
@@ -568,30 +568,30 @@ add_comparer("value.pi", "value.pi", function(a, b)
 
 	return true
 end)
-add_comparer("value.prim_function_type", "value.prim_function_type", function(a, b)
+add_comparer("value.host_function_type", "value.host_function_type", function(a, b)
 	if a == b then
 		return true
 	end
 
-	local a_param_type, a_result_type = a:unwrap_prim_function_type()
-	local b_param_type, b_result_type = b:unwrap_prim_function_type()
+	local a_param_type, a_result_type = a:unwrap_host_function_type()
+	local b_param_type, b_result_type = b:unwrap_host_function_type()
 
-	typechecker_state:queue_subtype(b_param_type, a_param_type, "prim function parameters")
+	typechecker_state:queue_subtype(b_param_type, a_param_type, "host function parameters")
 	--local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
 	--local a_res = apply_value(a_result_type, unique_placeholder)
 	--local b_res = apply_value(b_result_type, unique_placeholder)
-	--typechecker_state:queue_constrain(b_res, FunctionRelation(UniverseOmegaRelation), a_res, "prim function parameters")
+	--typechecker_state:queue_constrain(b_res, FunctionRelation(UniverseOmegaRelation), a_res, "host function parameters")
 	typechecker_state:queue_constrain(
 		a_result_type,
 		FunctionRelation(UniverseOmegaRelation),
 		b_result_type,
-		"prim function results"
+		"host function results"
 	)
 	return true
 end)
 
 for _, type_of_type in ipairs({
-	value.prim_type_type,
+	value.host_type_type,
 }) do
 	add_comparer(type_of_type.kind, value.star(0).kind, always_fits_comparer)
 end
@@ -608,8 +608,8 @@ add_comparer(value.star(0).kind, value.star(0).kind, function(a, b)
 	return true
 end)
 
-add_comparer("value.prim_wrapped_type", "value.prim_wrapped_type", function(a, b)
-	local ua, ub = a:unwrap_prim_wrapped_type(), b:unwrap_prim_wrapped_type()
+add_comparer("value.host_wrapped_type", "value.host_wrapped_type", function(a, b)
+	local ua, ub = a:unwrap_host_wrapped_type(), b:unwrap_host_wrapped_type()
 	typechecker_state:queue_subtype(ua, ub)
 	--U.tag("check_concrete", { ua, ub }, check_concrete, ua, ub)
 	return true
@@ -778,8 +778,8 @@ function check(
 		)
 
 		return usages, typed_term.tuple_cons(new_elements)
-	elseif checkable_term:is_prim_tuple_cons() then
-		local elements = checkable_term:unwrap_prim_tuple_cons()
+	elseif checkable_term:is_host_tuple_cons() then
+		local elements = checkable_term:unwrap_host_tuple_cons()
 		local usages = usage_array()
 		local new_elements = typed_array()
 		local decls = terms.empty
@@ -805,14 +805,14 @@ function check(
 		end
 
 		typechecker_state:flow(
-			value.prim_tuple_type(decls),
+			value.host_tuple_type(decls),
 			typechecking_context,
 			goal_type,
 			typechecking_context,
-			"checkable_term:is_prim_tuple_cons"
+			"checkable_term:is_host_tuple_cons"
 		)
 
-		return usages, typed_term.prim_tuple_cons(new_elements)
+		return usages, typed_term.host_tuple_cons(new_elements)
 	elseif checkable_term:is_lambda() then
 		local param_name, body = checkable_term:unwrap_lambda()
 		-- assert that goal_type is a pi type
@@ -842,18 +842,18 @@ function apply_value(f, arg)
 		return U.notail(U.tag("evaluate", { code = code }, evaluate, code, capture:append(arg)))
 	elseif f:is_neutral() then
 		return value.neutral(neutral_value.application_stuck(f:unwrap_neutral(), arg))
-	elseif f:is_prim() then
-		local prim_func_impl = f:unwrap_prim()
-		if prim_func_impl == nil then
+	elseif f:is_host_value() then
+		local host_func_impl = f:unwrap_host_value()
+		if host_func_impl == nil then
 			error "expected to get a function but found nil, did you forget to return the function from an intrinsic"
 		end
-		if arg:is_prim_tuple_value() then
-			local arg_elements = arg:unwrap_prim_tuple_value()
-			return value.prim_tuple_value(primitive_array(prim_func_impl(arg_elements:unpack())))
+		if arg:is_host_tuple_value() then
+			local arg_elements = arg:unwrap_host_tuple_value()
+			return value.host_tuple_value(host_array(host_func_impl(arg_elements:unpack())))
 		elseif arg:is_neutral() then
-			return value.neutral(neutral_value.prim_application_stuck(prim_func_impl, arg:unwrap_neutral()))
+			return value.neutral(neutral_value.host_application_stuck(host_func_impl, arg:unwrap_neutral()))
 		else
-			error("apply_value, is_prim, arg: expected a prim tuple argument")
+			error("apply_value, is_host_value, arg: expected a host tuple argument")
 		end
 	else
 		error("apply_value, f: expected a function/closure")
@@ -873,15 +873,15 @@ local function index_tuple_value(subject, index)
 	if subject:is_tuple_value() then
 		local elems = subject:unwrap_tuple_value()
 		return elems[index]
-	elseif subject:is_prim_tuple_value() then
-		local elems = subject:unwrap_prim_tuple_value()
-		return value.prim(elems[index])
+	elseif subject:is_host_tuple_value() then
+		local elems = subject:unwrap_host_tuple_value()
+		return value.host_value(elems[index])
 	elseif subject:is_neutral() then
 		local inner = subject:unwrap_neutral()
-		if inner:is_prim_tuple_stuck() then
-			local leading, stuck_elem, trailing = inner:unwrap_prim_tuple_stuck()
+		if inner:is_host_tuple_stuck() then
+			local leading, stuck_elem, trailing = inner:unwrap_host_tuple_stuck()
 			if #leading >= index then
-				return terms.value.prim(leading[index])
+				return terms.value.host_value(leading[index])
 			elseif #leading + 1 == index then
 				return terms.value.neutral(stuck_elem)
 			elseif #leading + 1 + #trailing >= index then
@@ -921,14 +921,14 @@ local function make_tuple_prefix(subject_type, subject_value)
 		else
 			error("make_tuple_prefix, is_tuple_type, subject_value: expected a tuple")
 		end
-	elseif subject_type:is_prim_tuple_type() then
-		decls = subject_type:unwrap_prim_tuple_type()
+	elseif subject_type:is_host_tuple_type() then
+		decls = subject_type:unwrap_host_tuple_type()
 
-		if subject_value:is_prim_tuple_value() then
-			local subject_elements = subject_value:unwrap_prim_tuple_value()
+		if subject_value:is_host_tuple_value() then
+			local subject_elements = subject_value:unwrap_host_tuple_value()
 			local subject_value_elements = value_array()
 			for _, v in ipairs(subject_elements) do
-				subject_value_elements:append(value.prim(v))
+				subject_value_elements:append(value.host_value(v))
 			end
 			function make_prefix(i)
 				return value.tuple_value(subject_value_elements:copy(1, i))
@@ -944,7 +944,7 @@ local function make_tuple_prefix(subject_type, subject_value)
 				return value.tuple_value(prefix_elements)
 			end
 		else
-			error("make_tuple_prefix, is_prim_tuple_type, subject_value: expected a primitive tuple")
+			error("make_tuple_prefix, is_host_tuple_type, subject_value: expected a host tuple")
 		end
 	else
 		print(subject_type:pretty_print())
@@ -1073,7 +1073,7 @@ end
 ---@param typ value
 ---@return integer
 local function nearest_star_level(typ)
-	if typ:is_prim_type_type() then
+	if typ:is_host_type_type() then
 		return 0
 	elseif typ:is_star() then
 		return typ:unwrap_star()
@@ -1214,8 +1214,8 @@ function infer(
 				error("application_result_type isn't a value inferring application of pi type")
 			end
 			return application_result_type, application_usages, application
-		elseif f_type:is_prim_function_type() then
-			local f_param_type, f_result_type_closure = f_type:unwrap_prim_function_type()
+		elseif f_type:is_host_function_type() then
+			local f_param_type, f_result_type_closure = f_type:unwrap_host_function_type()
 
 			local arg_usages, arg_term = check(arg, typechecking_context, f_param_type)
 
@@ -1228,7 +1228,7 @@ function infer(
 			local f_result_type =
 				apply_value(f_result_type_closure, evaluate(arg_term, typechecking_context:get_runtime_context()))
 			if value.value_check(f_result_type) ~= true then
-				error("application_result_type isn't a value inferring application of prim_function_type")
+				error("application_result_type isn't a value inferring application of host_function_type")
 			end
 			return f_result_type, application_usages, application
 		else
@@ -1257,18 +1257,18 @@ function infer(
 			new_elements:append(el_term)
 		end
 		return value.tuple_type(type_data), usages, typed_term.tuple_cons(new_elements)
-	elseif inferrable_term:is_prim_tuple_cons() then
+	elseif inferrable_term:is_host_tuple_cons() then
 		--print "inferring tuple construction"
 		--print(inferrable_term:pretty_print())
 		--print "environment_names"
 		--for i = 1, #typechecking_context do
 		--	print(i, typechecking_context:get_name(i))
 		--end
-		local elements = inferrable_term:unwrap_prim_tuple_cons()
+		local elements = inferrable_term:unwrap_host_tuple_cons()
 		-- type_data is either "empty", an empty tuple,
 		-- or "cons", a tuple with the previous type_data and a function that
 		-- takes all previous values and produces the type of the next element
-		-- TODO: it is a type error to put something that isn't a prim into a prim tuple
+		-- TODO: it is a type error to put something that isn't a host_value into a host tuple
 		local type_data = terms.empty
 		local usages = usage_array()
 		local new_elements = typed_array()
@@ -1287,7 +1287,7 @@ function infer(
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
 		end
-		return value.prim_tuple_type(type_data), usages, typed_term.prim_tuple_cons(new_elements)
+		return value.host_tuple_type(type_data), usages, typed_term.host_tuple_cons(new_elements)
 	elseif inferrable_term:is_tuple_elim() then
 		local names, subject, body = inferrable_term:unwrap_tuple_elim()
 		local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
@@ -1460,25 +1460,25 @@ function infer(
 				terms.cons(
 					terms.cons(
 						terms.cons(
-							terms.cons(terms.empty, const_combinator(prim_syntax_type)),
-							const_combinator(prim_environment_type)
+							terms.cons(terms.empty, const_combinator(host_syntax_type)),
+							const_combinator(host_environment_type)
 						),
-						const_combinator(prim_typed_term_type)
+						const_combinator(host_typed_term_type)
 					),
-					const_combinator(prim_goal_type)
+					const_combinator(host_goal_type)
 				)
 			),
-			--unrestricted(tup_val(unrestricted(prim_syntax_type), unrestricted(prim_environment_type))),
+			--unrestricted(tup_val(unrestricted(host_syntax_type), unrestricted(host_environment_type))),
 			param_info_explicit,
 			const_combinator(
 				value.tuple_type(
 					terms.cons(
-						terms.cons(terms.empty, const_combinator(prim_inferrable_term_type)),
-						const_combinator(prim_environment_type)
+						terms.cons(terms.empty, const_combinator(host_inferrable_term_type)),
+						const_combinator(host_environment_type)
 					)
 				)
 			),
-			--unrestricted(tup_val(unrestricted(prim_inferrable_term_type), unrestricted(prim_environment_type))),
+			--unrestricted(tup_val(unrestricted(host_inferrable_term_type), unrestricted(host_environment_type))),
 			result_info_pure
 		)
 		local handler_usages, handler_term = check(handler, typechecking_context, goal_type)
@@ -1492,8 +1492,8 @@ function infer(
 		return value.star(operative_type_level),
 			operative_type_usages,
 			typed_term.operative_type_cons(handler_term, userdata_type_term)
-	elseif inferrable_term:is_prim_user_defined_type_cons() then
-		local id, family_args = inferrable_term:unwrap_prim_user_defined_type_cons()
+	elseif inferrable_term:is_host_user_defined_type_cons() then
+		local id, family_args = inferrable_term:unwrap_host_user_defined_type_cons()
 		local new_family_args = typed_array()
 		local result_usages = usage_array()
 		for _, v in ipairs(family_args) do
@@ -1502,41 +1502,41 @@ function infer(
 			add_arrays(result_usages, e_usages)
 			new_family_args:append(e_term)
 		end
-		return value.prim_type_type, result_usages, typed_term.prim_user_defined_type_cons(id, new_family_args)
-	elseif inferrable_term:is_prim_wrapped_type() then
-		local type_inf = inferrable_term:unwrap_prim_wrapped_type()
+		return value.host_type_type, result_usages, typed_term.host_user_defined_type_cons(id, new_family_args)
+	elseif inferrable_term:is_host_wrapped_type() then
+		local type_inf = inferrable_term:unwrap_host_wrapped_type()
 		local content_type_type, content_type_usages, content_type_term = infer(type_inf, typechecking_context)
 		if not is_type_of_types(content_type_type) then
 			error "infer: type being boxed must be a type"
 		end
-		return value.prim_type_type, content_type_usages, typed_term.prim_wrapped_type(content_type_term)
-	elseif inferrable_term:is_prim_wrap() then
-		local content = inferrable_term:unwrap_prim_wrap()
+		return value.host_type_type, content_type_usages, typed_term.host_wrapped_type(content_type_term)
+	elseif inferrable_term:is_host_wrap() then
+		local content = inferrable_term:unwrap_host_wrap()
 		local content_type, content_usages, content_term = infer(content, typechecking_context)
-		return value.prim_wrapped_type(content_type), content_usages, typed_term.prim_wrap(content_term)
-	elseif inferrable_term:is_prim_unstrict_wrap() then
-		local content = inferrable_term:unwrap_prim_wrap()
+		return value.host_wrapped_type(content_type), content_usages, typed_term.host_wrap(content_term)
+	elseif inferrable_term:is_host_unstrict_wrap() then
+		local content = inferrable_term:unwrap_host_wrap()
 		local content_type, content_usages, content_term = infer(content, typechecking_context)
-		return value.prim_unstrict_wrapped_type(content_type),
+		return value.host_unstrict_wrapped_type(content_type),
 			content_usages,
-			typed_term.prim_unstrict_wrap(content_term)
-	elseif inferrable_term:is_prim_unwrap() then
-		local container = inferrable_term:unwrap_prim_unwrap()
+			typed_term.host_unstrict_wrap(content_term)
+	elseif inferrable_term:is_host_unwrap() then
+		local container = inferrable_term:unwrap_host_unwrap()
 		local container_type, container_usages, container_term = infer(container, typechecking_context)
-		local content_type = container_type:unwrap_prim_wrapped_type()
-		return content_type, container_usages, typed_term.prim_unwrap(container_term)
-	elseif inferrable_term:is_prim_unstrict_unwrap() then
-		local container = inferrable_term:unwrap_prim_unwrap()
+		local content_type = container_type:unwrap_host_wrapped_type()
+		return content_type, container_usages, typed_term.host_unwrap(container_term)
+	elseif inferrable_term:is_host_unstrict_unwrap() then
+		local container = inferrable_term:unwrap_host_unwrap()
 		local container_type, container_usages, container_term = infer(container, typechecking_context)
-		local content_type = container_type:unwrap_prim_unstrict_wrapped_type()
-		return content_type, container_usages, typed_term.prim_unstrict_unwrap(container_term)
-	elseif inferrable_term:is_prim_if() then
-		local subject, consequent, alternate = inferrable_term:unwrap_prim_if()
+		local content_type = container_type:unwrap_host_unstrict_wrapped_type()
+		return content_type, container_usages, typed_term.host_unstrict_unwrap(container_term)
+	elseif inferrable_term:is_host_if() then
+		local subject, consequent, alternate = inferrable_term:unwrap_host_if()
 		-- for each thing in typechecking context check if it == the subject, replace with literal true
 		-- same for alternate but literal false
 
 		-- TODO: Replace this with a metavariable that both branches are put into
-		local susages, sterm = check(subject, typechecking_context, terms.value.prim_bool_type)
+		local susages, sterm = check(subject, typechecking_context, terms.value.host_bool_type)
 		local ctype, cusages, cterm = infer(consequent, typechecking_context)
 		local atype, ausages, aterm = infer(alternate, typechecking_context)
 		local restype = typechecker_state:metavariable(typechecking_context):as_value()
@@ -1545,16 +1545,16 @@ function infer(
 			typechecking_context,
 			restype,
 			typechecking_context,
-			"inferred prim if consequent"
+			"inferred host if consequent"
 		)
-		typechecker_state:flow(atype, typechecking_context, restype, typechecking_context, "inferred prim if alternate")
+		typechecker_state:flow(atype, typechecking_context, restype, typechecking_context, "inferred host if alternate")
 
 		local result_usages = usage_array()
 		add_arrays(result_usages, susages)
 		-- FIXME: max of cusages and ausages rather than adding?
 		add_arrays(result_usages, cusages)
 		add_arrays(result_usages, ausages)
-		return restype, result_usages, typed_term.prim_if(sterm, cterm, aterm)
+		return restype, result_usages, typed_term.host_if(sterm, cterm, aterm)
 	elseif inferrable_term:is_let() then
 		-- print(inferrable_term:pretty_print())
 		local name, expr, body = inferrable_term:unwrap_let()
@@ -1568,19 +1568,19 @@ function infer(
 		add_arrays(result_usages, exprusages)
 		add_arrays(result_usages, bodyusages)
 		return bodytype, result_usages, terms.typed_term.let(name, exprterm, bodyterm)
-	elseif inferrable_term:is_prim_intrinsic() then
-		local source, type, anchor = inferrable_term:unwrap_prim_intrinsic()
-		local source_usages, source_term = check(source, typechecking_context, value.prim_string_type)
+	elseif inferrable_term:is_host_intrinsic() then
+		local source, type, anchor = inferrable_term:unwrap_host_intrinsic()
+		local source_usages, source_term = check(source, typechecking_context, value.host_string_type)
 		local type_type, type_usages, type_term = infer(type, typechecking_context) --check(type, typechecking_context, value.qtype_type(0))
 
-		--print("prim intrinsic is inferring: (inferrable term follows)")
+		--print("host intrinsic is inferring: (inferrable term follows)")
 		--print(type:pretty_print(typechecking_context))
 		--print("lowers to: (typed term follows)")
 		--print(type_term:pretty_print(typechecking_context))
 		--error "weird type"
 		-- FIXME: type_type, source_type are ignored, need checked?
 		local type_val = evaluate(type_term, typechecking_context.runtime_context)
-		return type_val, source_usages, typed_term.prim_intrinsic(source_term, anchor)
+		return type_val, source_usages, typed_term.host_intrinsic(source_term, anchor)
 	elseif inferrable_term:is_level_max() then
 		local level_a, level_b = inferrable_term:unwrap_level_max()
 		local arg_type_a, arg_usages_a, arg_term_a = infer(level_a, typechecking_context)
@@ -1592,8 +1592,8 @@ function infer(
 		return value.level_type, usage_array(), typed_term.level_suc(arg_term)
 	elseif inferrable_term:is_level0() then
 		return value.level_type, usage_array(), typed_term.level0
-	elseif inferrable_term:is_prim_function_type() then
-		local args, returns, resinfo = inferrable_term:unwrap_prim_function_type()
+	elseif inferrable_term:is_host_function_type() then
+		local args, returns, resinfo = inferrable_term:unwrap_host_function_type()
 		local arg_type, arg_usages, arg_term = infer(args, typechecking_context)
 		local return_type, return_usages, return_term = infer(returns, typechecking_context)
 		local resinfo_usages, resinfo_term = check(resinfo, typechecking_context, value.result_info_type)
@@ -1601,14 +1601,14 @@ function infer(
 		add_arrays(res_usages, arg_usages)
 		add_arrays(res_usages, return_usages)
 		add_arrays(res_usages, resinfo_usages)
-		return value.prim_type_type, res_usages, typed_term.prim_function_type(arg_term, return_term, resinfo_term)
-	elseif inferrable_term:is_prim_tuple_type() then
-		local decls = inferrable_term:unwrap_prim_tuple_type()
+		return value.host_type_type, res_usages, typed_term.host_function_type(arg_term, return_term, resinfo_term)
+	elseif inferrable_term:is_host_tuple_type() then
+		local decls = inferrable_term:unwrap_host_tuple_type()
 		local decl_type, decl_usages, decl_term = infer(decls, typechecking_context)
 		if not decl_type:is_tuple_defn_type() then
 			error "must be a tuple defn"
 		end
-		return value.star(0), decl_usages, typed_term.prim_tuple_type(decl_term)
+		return value.star(0), decl_usages, typed_term.host_tuple_type(decl_term)
 	else
 		error("infer: unknown kind: " .. inferrable_term.kind)
 	end
@@ -1678,9 +1678,9 @@ function evaluate(typed_term, runtime_context)
 			new_elements:append(U.tag("evaluate", { ["element_" .. tostring(i)] = v }, evaluate, v, runtime_context))
 		end
 		return value.tuple_value(new_elements)
-	elseif typed_term:is_prim_tuple_cons() then
-		local elements = typed_term:unwrap_prim_tuple_cons()
-		local new_elements = primitive_array()
+	elseif typed_term:is_host_tuple_cons() then
+		local elements = typed_term:unwrap_host_tuple_cons()
+		local new_elements = host_array()
 		local stuck = false
 		local stuck_element
 		local trailing_values
@@ -1691,8 +1691,8 @@ function evaluate(typed_term, runtime_context)
 			end
 			if stuck then
 				trailing_values:append(element_value)
-			elseif element_value:is_prim() then
-				new_elements:append(element_value:unwrap_prim())
+			elseif element_value:is_host_value() then
+				new_elements:append(element_value:unwrap_host_value())
 			elseif element_value:is_neutral() then
 				stuck = true
 				stuck_element = element_value:unwrap_neutral()
@@ -1701,13 +1701,13 @@ function evaluate(typed_term, runtime_context)
 				print("term that fails", typed_term)
 				print("which element", i)
 				print("element_value", element_value)
-				error("evaluate, is_prim_tuple_cons, element_value: expected a primitive value")
+				error("evaluate, is_host_tuple_cons, element_value: expected a host value")
 			end
 		end
 		if stuck then
-			return value.neutral(neutral_value.prim_tuple_stuck(new_elements, stuck_element, trailing_values))
+			return value.neutral(neutral_value.host_tuple_stuck(new_elements, stuck_element, trailing_values))
 		else
-			return value.prim_tuple_value(new_elements)
+			return value.host_tuple_value(new_elements)
 		end
 	elseif typed_term:is_tuple_elim() then
 		local names, subject, length, body = typed_term:unwrap_tuple_elim()
@@ -1723,8 +1723,8 @@ function evaluate(typed_term, runtime_context)
 			for i = 1, length do
 				inner_context = inner_context:append(subject_elements[i])
 			end
-		elseif subject_value:is_prim_tuple_value() then
-			local subject_elements = subject_value:unwrap_prim_tuple_value()
+		elseif subject_value:is_host_tuple_value() then
+			local subject_elements = subject_value:unwrap_host_tuple_value()
 			local real_length = #subject_elements
 			if real_length ~= length then
 				print("evaluating typed tuple_elim error")
@@ -1739,15 +1739,15 @@ function evaluate(typed_term, runtime_context)
 				print("<redacted>")
 				print("body:")
 				print(body:pretty_print(runtime_context))
-				print("error commented out to allow for variable-length prim tuples via the prim-unit hack")
+				print("error commented out to allow for variable-length host tuples via the host-unit hack")
 				print("if you're having issues check this!!!")
 				--error("evaluate: mismatch in tuple length from typechecking and evaluation")
 			end
 			for i = 1, real_length do
-				inner_context = inner_context:append(value.prim(subject_elements[i]))
+				inner_context = inner_context:append(value.host_value(subject_elements[i]))
 			end
 			for _ = real_length + 1, length do
-				inner_context = inner_context:append(value.prim(nil))
+				inner_context = inner_context:append(value.host_value(nil))
 			end
 		elseif subject_value:is_neutral() then
 			for i = 1, length do
@@ -1858,76 +1858,76 @@ function evaluate(typed_term, runtime_context)
 		local handler_value = evaluate(handler, runtime_context)
 		local userdata_type_value = evaluate(userdata_type, runtime_context)
 		return value.operative_type(handler_value, userdata_type_value)
-	elseif typed_term:is_prim_user_defined_type_cons() then
-		local id, family_args = typed_term:unwrap_prim_user_defined_type_cons()
+	elseif typed_term:is_host_user_defined_type_cons() then
+		local id, family_args = typed_term:unwrap_host_user_defined_type_cons()
 		local new_family_args = value_array()
 		for _, v in ipairs(family_args) do
 			new_family_args:append(evaluate(v, runtime_context))
 		end
-		return value.prim_user_defined_type(id, new_family_args)
-	elseif typed_term:is_prim_wrapped_type() then
-		local type_term = typed_term:unwrap_prim_wrapped_type()
+		return value.host_user_defined_type(id, new_family_args)
+	elseif typed_term:is_host_wrapped_type() then
+		local type_term = typed_term:unwrap_host_wrapped_type()
 		local type_value = evaluate(type_term, runtime_context)
-		return value.prim_wrapped_type(type_value)
-	elseif typed_term:is_prim_unstrict_wrapped_type() then
-		local type_term = typed_term:unwrap_prim_unstrict_wrapped_type()
+		return value.host_wrapped_type(type_value)
+	elseif typed_term:is_host_unstrict_wrapped_type() then
+		local type_term = typed_term:unwrap_host_unstrict_wrapped_type()
 		local type_value = evaluate(type_term, runtime_context)
-		return value.prim_wrapped_type(type_value)
-	elseif typed_term:is_prim_wrap() then
-		local content = typed_term:unwrap_prim_wrap()
+		return value.host_wrapped_type(type_value)
+	elseif typed_term:is_host_wrap() then
+		local content = typed_term:unwrap_host_wrap()
 		local content_val = evaluate(content, runtime_context)
 		if content_val:is_neutral() then
 			local nval = content_val:unwrap_neutral()
-			return value.neutral(neutral_value.prim_wrap_stuck(nval))
+			return value.neutral(neutral_value.host_wrap_stuck(nval))
 		end
-		return value.prim(content_val)
-	elseif typed_term:is_prim_unstrict_wrap() then
-		local content = typed_term:unwrap_prim_unstrict_wrap()
+		return value.host_value(content_val)
+	elseif typed_term:is_host_unstrict_wrap() then
+		local content = typed_term:unwrap_host_unstrict_wrap()
 		local content_val = evaluate(content, runtime_context)
-		return value.prim(content_val)
-	elseif typed_term:is_prim_unwrap() then
-		local unwrapped = typed_term:unwrap_prim_unwrap()
+		return value.host_value(content_val)
+	elseif typed_term:is_host_unwrap() then
+		local unwrapped = typed_term:unwrap_host_unwrap()
 		local unwrap_val = evaluate(unwrapped, runtime_context)
-		if not unwrap_val.as_prim then
+		if not unwrap_val.as_host_value then
 			print("unwrapped", unwrapped, unwrap_val)
-			error "evaluate, is_prim_unwrap: missing as_prim on unwrapped prim_unwrap"
+			error "evaluate, is_host_unwrap: missing as_host_value on unwrapped host_unwrap"
 		end
-		if unwrap_val:is_prim() then
-			return unwrap_val:unwrap_prim()
+		if unwrap_val:is_host_value() then
+			return unwrap_val:unwrap_host_value()
 		elseif unwrap_val:is_neutral() then
 			local nval = unwrap_val:unwrap_neutral()
-			if nval:is_prim_wrap_stuck() then
-				return value.neutral(nval:unwrap_prim_wrap_stuck())
+			if nval:is_host_wrap_stuck() then
+				return value.neutral(nval:unwrap_host_wrap_stuck())
 			else
-				return value.neutral(neutral_value.prim_unwrap_stuck(nval))
+				return value.neutral(neutral_value.host_unwrap_stuck(nval))
 			end
 		else
 			print("unrecognized value in unbox", unwrap_val)
-			error "invalid value in unbox, must be prim or neutral"
+			error "invalid value in unbox, must be host_value or neutral"
 		end
-	elseif typed_term:is_prim_unstrict_unwrap() then
-		local unwrapped = typed_term:unwrap_prim_unstrict_unwrap()
+	elseif typed_term:is_host_unstrict_unwrap() then
+		local unwrapped = typed_term:unwrap_host_unstrict_unwrap()
 		local unwrap_val = evaluate(unwrapped, runtime_context)
-		if not unwrap_val.as_prim then
+		if not unwrap_val.as_host_value then
 			print("unwrapped", unwrapped, unwrap_val)
-			error "evaluate, is_prim_unwrap: missing as_prim on unwrapped prim_unwrap"
+			error "evaluate, is_host_unwrap: missing as_host_value on unwrapped host_unwrap"
 		end
-		if unwrap_val:is_prim() then
-			return unwrap_val:unwrap_prim()
+		if unwrap_val:is_host_value() then
+			return unwrap_val:unwrap_host_value()
 		elseif unwrap_val:is_neutral() then
 			local nval = unwrap_val:unwrap_neutral()
-			return value.neutral(neutral_value.prim_unwrap_stuck(nval))
+			return value.neutral(neutral_value.host_unwrap_stuck(nval))
 		else
 			print("unrecognized value in unbox", unwrap_val)
-			error "invalid value in unbox, must be prim or neutral"
+			error "invalid value in unbox, must be host_value or neutral"
 		end
-	elseif typed_term:is_prim_if() then
-		local subject, consequent, alternate = typed_term:unwrap_prim_if()
+	elseif typed_term:is_host_if() then
+		local subject, consequent, alternate = typed_term:unwrap_host_if()
 		local sval = evaluate(subject, runtime_context)
-		if sval:is_prim() then
-			local sbool = sval:unwrap_prim()
+		if sval:is_host_value() then
+			local sbool = sval:unwrap_host_value()
 			if type(sbool) ~= "boolean" then
-				error("subject of prim_if must be a primitive bool")
+				error("subject of host_if must be a host bool")
 			end
 			if sbool then
 				return evaluate(consequent, runtime_context)
@@ -1939,26 +1939,26 @@ function evaluate(typed_term, runtime_context)
 			local inner_context_c, inner_context_a = runtime_context, runtime_context
 			local ok, index = subject:as_bound_variable()
 			if ok then
-				inner_context_c = inner_context_c:set(index, value.prim(true))
-				inner_context_a = inner_context_a:set(index, value.prim(false))
+				inner_context_c = inner_context_c:set(index, value.host_value(true))
+				inner_context_a = inner_context_a:set(index, value.host_value(false))
 			end
 			local cval = evaluate(consequent, inner_context_c)
 			local aval = evaluate(alternate, inner_context_a)
-			return value.neutral(neutral_value.prim_if_stuck(sval_neutral, cval, aval))
+			return value.neutral(neutral_value.host_if_stuck(sval_neutral, cval, aval))
 		else
-			error("subject of prim_if must be prim or neutral")
+			error("subject of host_if must be host_value or neutral")
 		end
 	elseif typed_term:is_let() then
 		local name, expr, body = typed_term:unwrap_let()
 		local expr_value = evaluate(expr, runtime_context)
 		return evaluate(body, runtime_context:append(expr_value))
-	elseif typed_term:is_prim_intrinsic() then
-		local source, anchor = typed_term:unwrap_prim_intrinsic()
+	elseif typed_term:is_host_intrinsic() then
+		local source, anchor = typed_term:unwrap_host_intrinsic()
 		local source_val = evaluate(source, runtime_context)
-		if source_val:is_prim() then
-			local source_str = source_val:unwrap_prim()
+		if source_val:is_host_value() then
+			local source_str = source_val:unwrap_host_value()
 			if intrinsic_memo[source_str] then
-				return value.prim(intrinsic_memo[source_str])
+				return value.host_value(intrinsic_memo[source_str])
 			end
 			local load_env = {}
 			for k, v in pairs(_G) do
@@ -1969,21 +1969,21 @@ function evaluate(typed_term, runtime_context)
 			end
 			local require_generator = require "require"
 			load_env.require = require_generator(anchor.sourceid)
-			local res = assert(load(source_str, "prim_intrinsic", "t", load_env))()
+			local res = assert(load(source_str, "host_intrinsic", "t", load_env))()
 			intrinsic_memo[source_str] = res
-			return value.prim(res)
+			return value.host_value(res)
 		elseif source_val:is_neutral() then
 			local source_neutral = source_val:unwrap_neutral()
-			return value.neutral(neutral_value.prim_intrinsic_stuck(source_neutral, anchor))
+			return value.neutral(neutral_value.host_intrinsic_stuck(source_neutral, anchor))
 		else
 			error "Tried to load an intrinsic with something that isn't a string"
 		end
-	elseif typed_term:is_prim_function_type() then
-		local args, returns, resinfo = typed_term:unwrap_prim_function_type()
+	elseif typed_term:is_host_function_type() then
+		local args, returns, resinfo = typed_term:unwrap_host_function_type()
 		local args_val = evaluate(args, runtime_context)
 		local returns_val = evaluate(returns, runtime_context)
 		local resinfo_val = evaluate(resinfo, runtime_context)
-		return value.prim_function_type(args_val, returns_val, resinfo_val)
+		return value.host_function_type(args_val, returns_val, resinfo_val)
 	elseif typed_term:is_level0() then
 		return value.level(0)
 	elseif typed_term:is_level_suc() then
@@ -2016,10 +2016,10 @@ function evaluate(typed_term, runtime_context)
 	elseif typed_term:is_prop() then
 		local level = typed_term:unwrap_prop()
 		return value.prop(level)
-	elseif typed_term:is_prim_tuple_type() then
-		local decl = typed_term:unwrap_prim_tuple_type()
+	elseif typed_term:is_host_tuple_type() then
+		local decl = typed_term:unwrap_host_tuple_type()
 		local decl_val = evaluate(decl, runtime_context)
-		return value.prim_tuple_type(decl_val)
+		return value.host_tuple_type(decl_val)
 	elseif typed_term:is_range() then
 		local lower_bounds, upper_bounds, relation = typed_term:unwrap_range()
 		local lower_acc, upper_acc = value_array(), value_array()
@@ -2761,11 +2761,11 @@ function TypeCheckerState:check_value(v, tag, context)
 		local lower_bounds, upper_bounds, relation = v:unwrap_range()
 
 		for _, bound in ipairs(lower_bounds) do
-			self:queue_constrain(bound, relation:unwrap_prim(), v, "range unpacking")
+			self:queue_constrain(bound, relation:unwrap_host_value(), v, "range unpacking")
 		end
 
 		for _, bound in ipairs(upper_bounds) do
-			self:queue_constrain(v, relation:unwrap_prim(), bound, "range_unpacking")
+			self:queue_constrain(v, relation:unwrap_host_value(), bound, "range_unpacking")
 		end
 
 		return v_id
@@ -2808,7 +2808,7 @@ function TypeCheckerState:check_heads(left, right, rel)
 
 	if ltag == TypeCheckerTag.VALUE and rtag == TypeCheckerTag.USAGE then
 		-- Unpacking tuples hasn't been fixed in VSCode yet (despite the issue being closed???) so we have to override the types: https://github.com/LuaLS/lua-language-server/issues/1816
-		local tuple_params = value_array(value.prim(lvalue), value.prim(rvalue))
+		local tuple_params = value_array(value.host_value(lvalue), value.host_value(rvalue))
 		-- TODO: how do we pass in the type contexts???
 		U.tag(
 			"apply_value",

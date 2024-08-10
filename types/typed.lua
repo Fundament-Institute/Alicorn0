@@ -167,83 +167,83 @@ function typed:unwrap_operative_type_cons() end
 ---@return boolean, typed, typed
 function typed:as_operative_type_cons() end
 ---@return boolean
-function typed:is_prim_tuple_cons() end
+function typed:is_host_tuple_cons() end
 ---@return ArrayValue
-function typed:unwrap_prim_tuple_cons() end
+function typed:unwrap_host_tuple_cons() end
 ---@return boolean, ArrayValue
-function typed:as_prim_tuple_cons() end
+function typed:as_host_tuple_cons() end
 ---@return boolean
-function typed:is_prim_user_defined_type_cons() end
+function typed:is_host_user_defined_type_cons() end
 ---@return { name: string }, ArrayValue
-function typed:unwrap_prim_user_defined_type_cons() end
+function typed:unwrap_host_user_defined_type_cons() end
 ---@return boolean, { name: string }, ArrayValue
-function typed:as_prim_user_defined_type_cons() end
+function typed:as_host_user_defined_type_cons() end
 ---@return boolean
-function typed:is_prim_tuple_type() end
+function typed:is_host_tuple_type() end
 ---@return typed
-function typed:unwrap_prim_tuple_type() end
+function typed:unwrap_host_tuple_type() end
 ---@return boolean, typed
-function typed:as_prim_tuple_type() end
+function typed:as_host_tuple_type() end
 ---@return boolean
-function typed:is_prim_function_type() end
+function typed:is_host_function_type() end
 ---@return typed, typed, typed
-function typed:unwrap_prim_function_type() end
+function typed:unwrap_host_function_type() end
 ---@return boolean, typed, typed, typed
-function typed:as_prim_function_type() end
+function typed:as_host_function_type() end
 ---@return boolean
-function typed:is_prim_wrapped_type() end
+function typed:is_host_wrapped_type() end
 ---@return typed
-function typed:unwrap_prim_wrapped_type() end
+function typed:unwrap_host_wrapped_type() end
 ---@return boolean, typed
-function typed:as_prim_wrapped_type() end
+function typed:as_host_wrapped_type() end
 ---@return boolean
-function typed:is_prim_unstrict_wrapped_type() end
+function typed:is_host_unstrict_wrapped_type() end
 ---@return typed
-function typed:unwrap_prim_unstrict_wrapped_type() end
+function typed:unwrap_host_unstrict_wrapped_type() end
 ---@return boolean, typed
-function typed:as_prim_unstrict_wrapped_type() end
+function typed:as_host_unstrict_wrapped_type() end
 ---@return boolean
-function typed:is_prim_wrap() end
+function typed:is_host_wrap() end
 ---@return typed
-function typed:unwrap_prim_wrap() end
+function typed:unwrap_host_wrap() end
 ---@return boolean, typed
-function typed:as_prim_wrap() end
+function typed:as_host_wrap() end
 ---@return boolean
-function typed:is_prim_unwrap() end
+function typed:is_host_unwrap() end
 ---@return typed
-function typed:unwrap_prim_unwrap() end
+function typed:unwrap_host_unwrap() end
 ---@return boolean, typed
-function typed:as_prim_unwrap() end
+function typed:as_host_unwrap() end
 ---@return boolean
-function typed:is_prim_unstrict_wrap() end
+function typed:is_host_unstrict_wrap() end
 ---@return typed
-function typed:unwrap_prim_unstrict_wrap() end
+function typed:unwrap_host_unstrict_wrap() end
 ---@return boolean, typed
-function typed:as_prim_unstrict_wrap() end
+function typed:as_host_unstrict_wrap() end
 ---@return boolean
-function typed:is_prim_unstrict_unwrap() end
+function typed:is_host_unstrict_unwrap() end
 ---@return typed
-function typed:unwrap_prim_unstrict_unwrap() end
+function typed:unwrap_host_unstrict_unwrap() end
 ---@return boolean, typed
-function typed:as_prim_unstrict_unwrap() end
+function typed:as_host_unstrict_unwrap() end
 ---@return boolean
-function typed:is_prim_user_defined_type() end
+function typed:is_host_user_defined_type() end
 ---@return { name: string }, ArrayValue
-function typed:unwrap_prim_user_defined_type() end
+function typed:unwrap_host_user_defined_type() end
 ---@return boolean, { name: string }, ArrayValue
-function typed:as_prim_user_defined_type() end
+function typed:as_host_user_defined_type() end
 ---@return boolean
-function typed:is_prim_if() end
+function typed:is_host_if() end
 ---@return typed, typed, typed
-function typed:unwrap_prim_if() end
+function typed:unwrap_host_if() end
 ---@return boolean, typed, typed, typed
-function typed:as_prim_if() end
+function typed:as_host_if() end
 ---@return boolean
-function typed:is_prim_intrinsic() end
+function typed:is_host_intrinsic() end
 ---@return typed, Anchor
-function typed:unwrap_prim_intrinsic() end
+function typed:unwrap_host_intrinsic() end
 ---@return boolean, typed, Anchor
-function typed:as_prim_intrinsic() end
+function typed:as_host_intrinsic() end
 ---@return boolean
 function typed:is_range() end
 ---@return ArrayValue, ArrayValue, typed
@@ -309,19 +309,19 @@ function typed:as_program_type() end
 ---@field object_elim fun(subject: typed, mechanism: typed): typed
 ---@field operative_cons fun(userdata: typed): typed
 ---@field operative_type_cons fun(handler: typed, userdata_type: typed): typed
----@field prim_tuple_cons fun(elements: ArrayValue): typed
----@field prim_user_defined_type_cons fun(id: { name: string }, family_args: ArrayValue): typed
----@field prim_tuple_type fun(decls: typed): typed
----@field prim_function_type fun(param_type: typed, result_type: typed, result_info: typed): typed
----@field prim_wrapped_type fun(type: typed): typed
----@field prim_unstrict_wrapped_type fun(type: typed): typed
----@field prim_wrap fun(content: typed): typed
----@field prim_unwrap fun(container: typed): typed
----@field prim_unstrict_wrap fun(content: typed): typed
----@field prim_unstrict_unwrap fun(container: typed): typed
----@field prim_user_defined_type fun(id: { name: string }, family_args: ArrayValue): typed
----@field prim_if fun(subject: typed, consequent: typed, alternate: typed): typed
----@field prim_intrinsic fun(source: typed, anchor: Anchor): typed
+---@field host_tuple_cons fun(elements: ArrayValue): typed
+---@field host_user_defined_type_cons fun(id: { name: string }, family_args: ArrayValue): typed
+---@field host_tuple_type fun(decls: typed): typed
+---@field host_function_type fun(param_type: typed, result_type: typed, result_info: typed): typed
+---@field host_wrapped_type fun(type: typed): typed
+---@field host_unstrict_wrapped_type fun(type: typed): typed
+---@field host_wrap fun(content: typed): typed
+---@field host_unwrap fun(container: typed): typed
+---@field host_unstrict_wrap fun(content: typed): typed
+---@field host_unstrict_unwrap fun(container: typed): typed
+---@field host_user_defined_type fun(id: { name: string }, family_args: ArrayValue): typed
+---@field host_if fun(subject: typed, consequent: typed, alternate: typed): typed
+---@field host_intrinsic fun(source: typed, anchor: Anchor): typed
 ---@field range fun(lower_bounds: ArrayValue, upper_bounds: ArrayValue, relation: typed): typed
 ---@field program_end fun(result: typed): typed
 ---@field program_invoke fun(effect_tag: typed, effect_arg: typed): typed

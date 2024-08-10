@@ -202,7 +202,7 @@ local function as_any_tuple_type(term)
 		return ok, decls
 	end
 
-	local ok, decls = term:as_prim_tuple_type()
+	local ok, decls = term:as_host_tuple_type()
 	if ok then
 		return ok, decls
 	end
@@ -953,11 +953,11 @@ end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function inferrable_term_override_pretty:prim_function_type(pp, context)
-	local param_type, result_type = self:unwrap_prim_function_type()
+function inferrable_term_override_pretty:host_function_type(pp, context)
+	local param_type, result_type = self:unwrap_host_function_type()
 	context = ensure_context(context)
 	local result_context = context
-	local param_is_tuple_type, param_decls = param_type:as_prim_tuple_type()
+	local param_is_tuple_type, param_decls = param_type:as_host_tuple_type()
 	local result_is_readable, param_name, _, result_body, _ = result_type:as_annotated_lambda()
 	local result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_decls
 	if result_is_readable then
@@ -969,7 +969,7 @@ function inferrable_term_override_pretty:prim_function_type(pp, context)
 			param_name = param_names
 			result_is_destructure = false
 		end
-		result_is_tuple_type, result_decls = result_body:as_prim_tuple_type()
+		result_is_tuple_type, result_decls = result_body:as_host_tuple_type()
 	end
 
 	local param_members
@@ -985,7 +985,7 @@ function inferrable_term_override_pretty:prim_function_type(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("inferrable.prim-\u{03A0} ")
+	pp:unit("inferrable.host-\u{03A0} ")
 	pp:unit(pp:_resetcolor())
 
 	if not result_is_readable then
@@ -1158,11 +1158,11 @@ end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function typed_term_override_pretty:prim_function_type(pp, context)
-	local param_type, result_type = self:unwrap_prim_function_type()
+function typed_term_override_pretty:host_function_type(pp, context)
+	local param_type, result_type = self:unwrap_host_function_type()
 	context = ensure_context(context)
 	local result_context = context
-	local param_is_tuple_type, param_decls = param_type:as_prim_tuple_type()
+	local param_is_tuple_type, param_decls = param_type:as_host_tuple_type()
 	local result_is_readable, param_name, result_body = result_type:as_lambda()
 	local result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_decls
 	if result_is_readable then
@@ -1174,7 +1174,7 @@ function typed_term_override_pretty:prim_function_type(pp, context)
 			param_name = param_names
 			result_is_destructure = false
 		end
-		result_is_tuple_type, result_decls = result_body:as_prim_tuple_type()
+		result_is_tuple_type, result_decls = result_body:as_host_tuple_type()
 	end
 
 	local param_members
@@ -1190,7 +1190,7 @@ function typed_term_override_pretty:prim_function_type(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("typed.prim-\u{03A0} ")
+	pp:unit("typed.host-\u{03A0} ")
 	pp:unit(pp:_resetcolor())
 
 	if not result_is_readable then
@@ -1357,9 +1357,9 @@ function value_override_pretty:pi(pp)
 end
 
 ---@param pp PrettyPrint
-function value_override_pretty:prim_function_type(pp)
-	local param_type, result_type = self:unwrap_prim_function_type()
-	local param_is_tuple_type, param_decls = param_type:as_prim_tuple_type()
+function value_override_pretty:host_function_type(pp)
+	local param_type, result_type = self:unwrap_host_function_type()
+	local param_is_tuple_type, param_decls = param_type:as_host_tuple_type()
 	local result_is_readable, param_name, result_code, result_capture = result_type:as_closure()
 	local result_context, result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_decls
 	if result_is_readable then
@@ -1372,7 +1372,7 @@ function value_override_pretty:prim_function_type(pp)
 			param_name = param_names
 			result_is_destructure = false
 		end
-		result_is_tuple_type, result_decls = result_code:as_prim_tuple_type()
+		result_is_tuple_type, result_decls = result_code:as_host_tuple_type()
 	end
 
 	local param_members
@@ -1388,7 +1388,7 @@ function value_override_pretty:prim_function_type(pp)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("value.prim-\u{03A0} ")
+	pp:unit("value.host-\u{03A0} ")
 	pp:unit(pp:_resetcolor())
 
 	if not result_is_readable then
@@ -1477,7 +1477,7 @@ function inferrable_term_override_pretty:application(pp, context)
 		-- print pretty on certain conditions, or fall back to apply()
 		if
 			(f_is_application or (f_is_typed and f_is_bound_variable and #context >= f_index))
-			and (arg:is_tuple_cons() or arg:is_prim_tuple_cons())
+			and (arg:is_tuple_cons() or arg:is_host_tuple_cons())
 		then
 			if f_is_application then
 				application_inner(f_f, f_arg)
@@ -1486,7 +1486,7 @@ function inferrable_term_override_pretty:application(pp, context)
 			end
 
 			local ok, elements = arg:as_tuple_cons()
-			elements = ok and elements or arg:unwrap_prim_tuple_cons()
+			elements = ok and elements or arg:unwrap_host_tuple_cons()
 
 			pp:unit(pp:_color())
 			pp:unit("(")
@@ -1558,7 +1558,7 @@ function typed_term_override_pretty:application(pp, context)
 		-- print pretty on certain conditions, or fall back to apply()
 		if
 			(f_is_application or (f_is_bound_variable and #context >= f_index))
-			and (arg:is_tuple_cons() or arg:is_prim_tuple_cons())
+			and (arg:is_tuple_cons() or arg:is_host_tuple_cons())
 		then
 			if f_is_application then
 				application_inner(f_f, f_arg)
@@ -1567,7 +1567,7 @@ function typed_term_override_pretty:application(pp, context)
 			end
 
 			local ok, elements = arg:as_tuple_cons()
-			elements = ok and elements or arg:unwrap_prim_tuple_cons()
+			elements = ok and elements or arg:unwrap_host_tuple_cons()
 
 			pp:unit(pp:_color())
 			pp:unit("(")
@@ -1650,15 +1650,15 @@ end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function inferrable_term_override_pretty:prim_tuple_type(pp, context)
-	local decls = self:unwrap_prim_tuple_type()
+function inferrable_term_override_pretty:host_tuple_type(pp, context)
+	local decls = self:unwrap_host_tuple_type()
 	context = ensure_context(context)
 	local ok, members = inferrable_tuple_type_flatten(decls, context)
 
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("inferrable.prim_tuple_type[")
+	pp:unit("inferrable.host_tuple_type[")
 	pp:unit(pp:_resetcolor())
 
 	if ok then
@@ -1704,15 +1704,15 @@ end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function typed_term_override_pretty:prim_tuple_type(pp, context)
-	local decls = self:unwrap_prim_tuple_type()
+function typed_term_override_pretty:host_tuple_type(pp, context)
+	local decls = self:unwrap_host_tuple_type()
 	context = ensure_context(context)
 	local ok, members = typed_tuple_type_flatten(decls, context)
 
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("typed.prim_tuple_type[")
+	pp:unit("typed.host_tuple_type[")
 	pp:unit(pp:_resetcolor())
 
 	if ok then
@@ -1755,14 +1755,14 @@ function value_override_pretty:tuple_type(pp)
 end
 
 ---@param pp PrettyPrint
-function value_override_pretty:prim_tuple_type(pp)
-	local decls = self:unwrap_prim_tuple_type()
+function value_override_pretty:host_tuple_type(pp)
+	local decls = self:unwrap_host_tuple_type()
 	local ok, members = value_tuple_type_flatten(decls)
 
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("value.prim_tuple_type[")
+	pp:unit("value.host_tuple_type[")
 	pp:unit(pp:_resetcolor())
 
 	if ok then
@@ -1805,19 +1805,19 @@ end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function typed_term_override_pretty:prim_intrinsic(pp, context)
-	local source, _ = self:unwrap_prim_intrinsic()
+function typed_term_override_pretty:host_intrinsic(pp, context)
+	local source, _ = self:unwrap_host_intrinsic()
 
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("typed.prim_intrinsic ")
+	pp:unit("typed.host_intrinsic ")
 	pp:unit(pp:_resetcolor())
 
 	local source_text
 	local ok, source_val = source:as_literal()
 	if ok then
-		ok, source_text = source_val:as_prim()
+		ok, source_text = source_val:as_host_value()
 	end
 	if ok and type(source_text) == "string" then
 		-- trim initial newlines

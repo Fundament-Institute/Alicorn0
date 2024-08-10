@@ -197,77 +197,77 @@ function value:unwrap_neutral() end
 ---@return boolean, neutral_value
 function value:as_neutral() end
 ---@return boolean
-function value:is_prim() end
+function value:is_host_value() end
 ---@return any
-function value:unwrap_prim() end
+function value:unwrap_host_value() end
 ---@return boolean, any
-function value:as_prim() end
+function value:as_host_value() end
 ---@return boolean
-function value:is_prim_type_type() end
+function value:is_host_type_type() end
 ---@return nil
-function value:unwrap_prim_type_type() end
+function value:unwrap_host_type_type() end
 ---@return boolean
-function value:as_prim_type_type() end
+function value:as_host_type_type() end
 ---@return boolean
-function value:is_prim_number_type() end
+function value:is_host_number_type() end
 ---@return nil
-function value:unwrap_prim_number_type() end
+function value:unwrap_host_number_type() end
 ---@return boolean
-function value:as_prim_number_type() end
+function value:as_host_number_type() end
 ---@return boolean
-function value:is_prim_bool_type() end
+function value:is_host_bool_type() end
 ---@return nil
-function value:unwrap_prim_bool_type() end
+function value:unwrap_host_bool_type() end
 ---@return boolean
-function value:as_prim_bool_type() end
+function value:as_host_bool_type() end
 ---@return boolean
-function value:is_prim_string_type() end
+function value:is_host_string_type() end
 ---@return nil
-function value:unwrap_prim_string_type() end
+function value:unwrap_host_string_type() end
 ---@return boolean
-function value:as_prim_string_type() end
+function value:as_host_string_type() end
 ---@return boolean
-function value:is_prim_function_type() end
+function value:is_host_function_type() end
 ---@return value, value, value
-function value:unwrap_prim_function_type() end
+function value:unwrap_host_function_type() end
 ---@return boolean, value, value, value
-function value:as_prim_function_type() end
+function value:as_host_function_type() end
 ---@return boolean
-function value:is_prim_wrapped_type() end
+function value:is_host_wrapped_type() end
 ---@return value
-function value:unwrap_prim_wrapped_type() end
+function value:unwrap_host_wrapped_type() end
 ---@return boolean, value
-function value:as_prim_wrapped_type() end
+function value:as_host_wrapped_type() end
 ---@return boolean
-function value:is_prim_unstrict_wrapped_type() end
+function value:is_host_unstrict_wrapped_type() end
 ---@return value
-function value:unwrap_prim_unstrict_wrapped_type() end
+function value:unwrap_host_unstrict_wrapped_type() end
 ---@return boolean, value
-function value:as_prim_unstrict_wrapped_type() end
+function value:as_host_unstrict_wrapped_type() end
 ---@return boolean
-function value:is_prim_user_defined_type() end
+function value:is_host_user_defined_type() end
 ---@return { name: string }, ArrayValue
-function value:unwrap_prim_user_defined_type() end
+function value:unwrap_host_user_defined_type() end
 ---@return boolean, { name: string }, ArrayValue
-function value:as_prim_user_defined_type() end
+function value:as_host_user_defined_type() end
 ---@return boolean
-function value:is_prim_nil_type() end
+function value:is_host_nil_type() end
 ---@return nil
-function value:unwrap_prim_nil_type() end
+function value:unwrap_host_nil_type() end
 ---@return boolean
-function value:as_prim_nil_type() end
+function value:as_host_nil_type() end
 ---@return boolean
-function value:is_prim_tuple_value() end
+function value:is_host_tuple_value() end
 ---@return ArrayValue
-function value:unwrap_prim_tuple_value() end
+function value:unwrap_host_tuple_value() end
 ---@return boolean, ArrayValue
-function value:as_prim_tuple_value() end
+function value:as_host_tuple_value() end
 ---@return boolean
-function value:is_prim_tuple_type() end
+function value:is_host_tuple_type() end
 ---@return value
-function value:unwrap_prim_tuple_type() end
+function value:unwrap_host_tuple_type() end
 ---@return boolean, value
-function value:as_prim_tuple_type() end
+function value:as_host_tuple_type() end
 ---@return boolean
 function value:is_singleton() end
 ---@return value, value
@@ -356,18 +356,18 @@ function value:as_program_type() end
 ---@field star fun(level: number): value
 ---@field prop fun(level: number): value
 ---@field neutral fun(neutral: neutral_value): value
----@field prim fun(primitive_value: any): value
----@field prim_type_type value
----@field prim_number_type value
----@field prim_bool_type value
----@field prim_string_type value
----@field prim_function_type fun(param_type: value, result_type: value, result_info: value): value
----@field prim_wrapped_type fun(type: value): value
----@field prim_unstrict_wrapped_type fun(type: value): value
----@field prim_user_defined_type fun(id: { name: string }, family_args: ArrayValue): value
----@field prim_nil_type value
----@field prim_tuple_value fun(elements: ArrayValue): value
----@field prim_tuple_type fun(decls: value): value
+---@field host_value fun(host_value: any): value
+---@field host_type_type value
+---@field host_number_type value
+---@field host_bool_type value
+---@field host_string_type value
+---@field host_function_type fun(param_type: value, result_type: value, result_info: value): value
+---@field host_wrapped_type fun(type: value): value
+---@field host_unstrict_wrapped_type fun(type: value): value
+---@field host_user_defined_type fun(id: { name: string }, family_args: ArrayValue): value
+---@field host_nil_type value
+---@field host_tuple_value fun(elements: ArrayValue): value
+---@field host_tuple_type fun(decls: value): value
 ---@field singleton fun(supertype: value, value: value): value
 ---@field program_end fun(result: value): value
 ---@field program_cont fun(action: table, argument: value, continuation: continuation): value
