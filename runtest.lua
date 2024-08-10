@@ -13,7 +13,8 @@ local profile = require "./profile"
 local fs = require "fs"
 local path = require "path"
 
-local opts = process.argv[2]
+local argv = process.argv
+local opts = argv[2]
 local print_src = false
 local print_ast = false
 local print_inferrable = false
@@ -39,14 +40,14 @@ if opts then
 	if string.find(opts, "p") then
 		profile_run = true
 		profile_flame = false
-		profile_file = process.argv[3]
-		profile_what = process.argv[4] or "match"
+		profile_file = argv[3]
+		profile_what = argv[4] or "match"
 	end
 	if string.find(opts, "P") then
 		profile_run = true
 		profile_flame = true
-		profile_file = process.argv[3]
-		profile_what = process.argv[4] or "match"
+		profile_file = argv[3]
+		profile_what = argv[4] or "match"
 	end
 end
 
