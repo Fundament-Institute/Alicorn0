@@ -1110,6 +1110,11 @@ local block = metalanguage.reducer(
 	"block"
 )
 
+-- example usage of primitive_applicative
+-- add(a, b) = a + b ->
+-- local prim_num = terms.value.prim_number_type
+-- primitive_applicative(function(a, b) return a + b end, {prim_num, prim_num}, {prim_num}),
+
 ---@param elems value[]
 ---@return value
 local function build_host_type_tuple(elems)
