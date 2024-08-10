@@ -80,7 +80,7 @@ local semantic_error = {
 			cause = cause,
 		}
 	end,
-	---@param t any
+	-- ---@param t any
 	-- non_operable_combiner = function(t)
 	-- 	return {
 	-- 		text = "value in combiner slot that can't operate of type " .. types.type_name(t),
