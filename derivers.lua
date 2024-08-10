@@ -63,6 +63,21 @@ function eq_memoizer:set(a, b)
 	self.memo[a][b] = true
 end
 
+local function array_eq_fn(left, right)
+	if getmetatable(left) ~= getmetatable(right) then
+		return false
+	end
+	if left:len() ~= right:len() then
+		return false
+	end
+	for i = 1, left:len() do
+		if left[i] ~= right[i] then
+			return false
+		end
+	end
+	return true
+end
+
 ---@type Deriver
 local eq = {
 	record = function(t, info)
@@ -173,13 +188,13 @@ end]]
 		t.derived_eq = true
 	end,
 	foreign = function()
-		error("can't derive eq for a foreign type")
+		error("can't derive :eq() for a foreign type")
 	end,
 	map = function()
-		error("can't derive eq for a map type")
+		error("can't derive :eq() for a map type")
 	end,
 	set = function()
-		error("can't derive eq for a set type")
+		error("can't derive :eq() for a set type")
 	end,
 	array = function(t, info)
 		if t.derived_eq then
@@ -187,22 +202,7 @@ end]]
 			return
 		end
 
-		local function eq_fn(left, right)
-			if getmetatable(left) ~= getmetatable(right) then
-				return false
-			end
-			if left:len() ~= right:len() then
-				return false
-			end
-			for i = 1, left:len() do
-				if left[i] ~= right[i] then
-					return false
-				end
-			end
-			return true
-		end
-
-		t.__eq = eq_fn
+		t.__eq = array_eq_fn
 
 		t.derived_eq = true
 	end,
@@ -211,7 +211,7 @@ end]]
 ---@type Deriver
 local is = {
 	record = function()
-		error("can't derive is for a record type")
+		error("can't derive :is() for a record type")
 	end,
 	enum = function(t, info)
 		if t.derived_is then
@@ -241,16 +241,16 @@ local is = {
 		t.derived_is = true
 	end,
 	foreign = function()
-		error("can't derive is for a foreign type")
+		error("can't derive :is() for a foreign type")
 	end,
 	map = function()
-		error("can't derive is for a map type")
+		error("can't derive :is() for a map type")
 	end,
 	set = function()
-		error("can't derive is for a set type")
+		error("can't derive :is() for a set type")
 	end,
 	array = function()
-		error("can't derive is for an array type")
+		error("can't derive :is() for an array type")
 	end,
 }
 
@@ -337,23 +337,23 @@ end]]
 		t.derived_unwrap = true
 	end,
 	foreign = function()
-		error("can't derive unwrap for a foreign type")
+		error("can't derive :unwrap() for a foreign type")
 	end,
 	map = function()
-		error("can't derive unwrap for a map type")
+		error("can't derive :unwrap() for a map type")
 	end,
 	set = function()
-		error("can't derive unwrap for a set type")
+		error("can't derive :unwrap() for a set type")
 	end,
 	array = function()
-		error("can't derive unwrap for an array type")
+		error("can't derive :unwrap() for an array type")
 	end,
 }
 
 ---@type Deriver
 local as = {
 	record = function()
-		error("can't derive as for a record type")
+		error("can't derive :as() for a record type")
 	end,
 	enum = function(t, info)
 		if t.derived_as then
@@ -407,16 +407,16 @@ end]]
 		t.derived_as = true
 	end,
 	foreign = function()
-		error("can't derive as for a foreign type")
+		error("can't derive :as() for a foreign type")
 	end,
 	map = function()
-		error("can't derive as for a map type")
+		error("can't derive :as() for a map type")
 	end,
 	set = function()
-		error("can't derive as for a set type")
+		error("can't derive :as() for a set type")
 	end,
 	array = function()
-		error("can't derive as for an array type")
+		error("can't derive :as() for an array type")
 	end,
 }
 
@@ -574,7 +574,7 @@ local pretty_print = {
 		t.derived_pretty_print = true
 	end,
 	foreign = function()
-		error("can't derive pretty_print for a foreign type")
+		error("can't derive :pretty_print() for a foreign type")
 	end,
 	map = function(t, info)
 		if t.derived_pretty_print then
@@ -813,13 +813,13 @@ local diff = {
 		t.derived_diff = true
 	end,
 	foreign = function()
-		error("can't derive diff for a foreign type")
+		error("can't derive :diff() for a foreign type")
 	end,
 	map = function()
-		error("can't derive diff for a map type")
+		error("can't derive :diff() for a map type")
 	end,
 	set = function()
-		error("can't derive diff for a set type")
+		error("can't derive :diff() for a set type")
 	end,
 	array = function(t, info)
 		if t.derived_diff then
@@ -926,6 +926,7 @@ local value_name = {
 		end
 		t.value_name = function()
 			return "MapValue"
+			-- e.g. "MapValue<" .. info.key_type.value_name() .. ", " .. info.value_type.value_name() .. ">""
 		end
 		t.derived_value_name = true
 	end,
