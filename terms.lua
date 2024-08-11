@@ -192,7 +192,7 @@ local module_mt = {}
 local runtime_context_type = gen.declare_foreign(gen.metatable_equality(runtime_context_mt), "RuntimeContext")
 local typechecking_context_type =
 	gen.declare_foreign(gen.metatable_equality(typechecking_context_mt), "TypecheckingContext")
-local prim_user_defined_id = gen.declare_foreign(function(val)
+local host_user_defined_id = gen.declare_foreign(function(val)
 	return type(val) == "table" and type(val.name) == "string"
 end, "{ name: string }")
 local anchor_type = gen.declare_foreign(gen.metatable_equality(format.anchor_mt), "Anchor")
@@ -239,7 +239,7 @@ binding:define_enum("binding", {
 checkable_term:define_enum("checkable", {
 	{ "inferrable", { "inferrable_term", inferrable_term } },
 	{ "tuple_cons", { "elements", array(checkable_term) } },
-	{ "prim_tuple_cons", { "elements", array(checkable_term) } },
+	{ "host_tuple_cons", { "elements", array(checkable_term) } },
 	{ "lambda", {
 		"param_name", gen.builtin_string,
 		"body",       checkable_term,
@@ -327,30 +327,30 @@ inferrable_term:define_enum("inferrable", {
 		"annotated_term", checkable_term,
 		"annotated_type", inferrable_term,
 	} },
-	{ "prim_tuple_cons", { "elements", array(inferrable_term) } }, -- prim
-	{ "prim_user_defined_type_cons", {
-		"id",          prim_user_defined_id, -- prim_user_defined_type
-		"family_args", array(inferrable_term), -- prim
+	{ "host_tuple_cons", { "elements", array(inferrable_term) } }, -- host_value
+	{ "host_user_defined_type_cons", {
+		"id",          host_user_defined_id, -- host_user_defined_type
+		"family_args", array(inferrable_term), -- host_value
 	} },
-	{ "prim_tuple_type", { "decls", inferrable_term } }, -- just like an ordinary tuple type but can only hold prims
-	{ "prim_function_type", {
-		"param_type",  inferrable_term, -- must be a prim_tuple_type
-		-- primitive functions can only have explicit arguments
-		"result_type", inferrable_term, -- must be a prim_tuple_type
+	{ "host_tuple_type", { "decls", inferrable_term } }, -- just like an ordinary tuple type but can only hold host_values
+	{ "host_function_type", {
+		"param_type",  inferrable_term, -- must be a host_tuple_type
+		-- host functions can only have explicit arguments
+		"result_type", inferrable_term, -- must be a host_tuple_type
 		"result_info", checkable_term,
 	} },
-	{ "prim_wrapped_type", { "type", inferrable_term } },
-	{ "prim_unstrict_wrapped_type", { "type", inferrable_term } },
-	{ "prim_wrap", { "content", inferrable_term } },
-	{ "prim_unstrict_wrap", { "content", inferrable_term } },
-	{ "prim_unwrap", { "container", inferrable_term } },
-	{ "prim_unstrict_unwrap", { "container", inferrable_term } },
-	{ "prim_if", {
-		"subject",    checkable_term, -- checkable because we always know must be of prim_bool_type
+	{ "host_wrapped_type", { "type", inferrable_term } },
+	{ "host_unstrict_wrapped_type", { "type", inferrable_term } },
+	{ "host_wrap", { "content", inferrable_term } },
+	{ "host_unstrict_wrap", { "content", inferrable_term } },
+	{ "host_unwrap", { "container", inferrable_term } },
+	{ "host_unstrict_unwrap", { "container", inferrable_term } },
+	{ "host_if", {
+		"subject",    checkable_term, -- checkable because we always know must be of host_bool_type
 		"consequent", inferrable_term,
 		"alternate",  inferrable_term,
 	} },
-	{ "prim_intrinsic", {
+	{ "host_intrinsic", {
 		"source", checkable_term,
 		"type",   inferrable_term, --checkable_term,
 		"anchor", anchor_type,
@@ -445,34 +445,34 @@ typed_term:define_enum("typed", {
 		"handler",       typed_term,
 		"userdata_type", typed_term,
 	} },
-	{ "prim_tuple_cons", { "elements", array(typed_term) } }, -- prim
-	{ "prim_user_defined_type_cons", {
-		"id",          prim_user_defined_id,
-		"family_args", array(typed_term), -- prim
+	{ "host_tuple_cons", { "elements", array(typed_term) } }, -- host_value
+	{ "host_user_defined_type_cons", {
+		"id",          host_user_defined_id,
+		"family_args", array(typed_term), -- host_value
 	} },
-	{ "prim_tuple_type", { "decls", typed_term } }, -- just like an ordinary tuple type but can only hold prims
-	{ "prim_function_type", {
-		"param_type",  typed_term, -- must be a prim_tuple_type
-		-- primitive functions can only have explicit arguments
-		"result_type", typed_term, -- must be a prim_tuple_type
+	{ "host_tuple_type", { "decls", typed_term } }, -- just like an ordinary tuple type but can only hold host_values
+	{ "host_function_type", {
+		"param_type",  typed_term, -- must be a host_tuple_type
+		-- host functions can only have explicit arguments
+		"result_type", typed_term, -- must be a host_tuple_type
 		"result_info", typed_term,
 	} },
-	{ "prim_wrapped_type", { "type", typed_term } },
-	{ "prim_unstrict_wrapped_type", { "type", typed_term } },
-	{ "prim_wrap", { "content", typed_term } },
-	{ "prim_unwrap", { "container", typed_term } },
-	{ "prim_unstrict_wrap", { "content", typed_term } },
-	{ "prim_unstrict_unwrap", { "container", typed_term } },
-	{ "prim_user_defined_type", {
-		"id",          prim_user_defined_id,
+	{ "host_wrapped_type", { "type", typed_term } },
+	{ "host_unstrict_wrapped_type", { "type", typed_term } },
+	{ "host_wrap", { "content", typed_term } },
+	{ "host_unwrap", { "container", typed_term } },
+	{ "host_unstrict_wrap", { "content", typed_term } },
+	{ "host_unstrict_unwrap", { "container", typed_term } },
+	{ "host_user_defined_type", {
+		"id",          host_user_defined_id,
 		"family_args", array(typed_term),
 	} },
-	{ "prim_if", {
+	{ "host_if", {
 		"subject",    typed_term,
 		"consequent", typed_term,
 		"alternate",  typed_term,
 	} },
-	{ "prim_intrinsic", {
+	{ "host_intrinsic", {
 		"source", typed_term,
 		"anchor", anchor_type,
 	} },
@@ -652,7 +652,7 @@ value:define_enum("value", {
 
 	-- metaprogramming stuff
 	-- TODO: add types of terms, and type indices
-	-- NOTE: we're doing this through prims instead
+	-- NOTE: we're doing this through host_values instead
 	--{"syntax_value", {"syntax", metalang.constructed_syntax_type}},
 	--{"syntax_type"},
 	--{"matcher_value", {"matcher", metalang.matcher_type}},
@@ -705,30 +705,30 @@ value:define_enum("value", {
 	{ "neutral", { "neutral", neutral_value } },
 
 	-- foreign data
-	{ "prim", { "primitive_value", gen.any_lua_type } },
-	{ "prim_type_type" },
-	{ "prim_number_type" },
-	{ "prim_bool_type" },
-	{ "prim_string_type" },
-	{ "prim_function_type", {
-		"param_type",  value, -- must be a prim_tuple_type
-		-- primitive functions can only have explicit arguments
-		"result_type", value, -- must be a prim_tuple_type
+	{ "host_value", { "host_value", gen.any_lua_type } },
+	{ "host_type_type" },
+	{ "host_number_type" },
+	{ "host_bool_type" },
+	{ "host_string_type" },
+	{ "host_function_type", {
+		"param_type",  value, -- must be a host_tuple_type
+		-- host functions can only have explicit arguments
+		"result_type", value, -- must be a host_tuple_type
 		"result_info", value,
 	} },
-	{ "prim_wrapped_type", { "type", value } },
-	{ "prim_unstrict_wrapped_type", { "type", value } },
-	{ "prim_user_defined_type", {
-		"id",          prim_user_defined_id,
+	{ "host_wrapped_type", { "type", value } },
+	{ "host_unstrict_wrapped_type", { "type", value } },
+	{ "host_user_defined_type", {
+		"id",          host_user_defined_id,
 		"family_args", array(value),
 	} },
-	{ "prim_nil_type" },
-	--NOTE: prim_tuple is not considered a prim type because it's not a first class value in lua.
-	{ "prim_tuple_value", { "elements", array(gen.any_lua_type) } },
-	{ "prim_tuple_type", { "decls", value } }, -- just like an ordinary tuple type but can only hold prims
+	{ "host_nil_type" },
+	--NOTE: host_tuple is not considered a host type because it's not a first class value in lua.
+	{ "host_tuple_value", { "elements", array(gen.any_lua_type) } },
+	{ "host_tuple_type", { "decls", value } }, -- just like an ordinary tuple type but can only hold host_values
 
 	-- type of key and value of key -> type of the value
-	-- {"prim_table_type"},
+	-- {"host_table_type"},
 
 	-- a type family, that takes a type and a value, and produces a new type
 	-- inhabited only by that single value and is a subtype of the type.
@@ -793,36 +793,36 @@ neutral_value:define_enum("neutral_value", {
 		"subject",    neutral_value,
 		"field_name", gen.builtin_string,
 	} },
-	{ "prim_application_stuck", {
+	{ "host_application_stuck", {
 		"function", gen.any_lua_type,
 		"arg",      neutral_value,
 	} },
-	{ "prim_tuple_stuck", {
+	{ "host_tuple_stuck", {
 		"leading",       array(gen.any_lua_type),
 		"stuck_element", neutral_value,
-		"trailing",      array(value), -- either primitive or neutral
+		"trailing",      array(value), -- either host or neutral
 	} },
-	{ "prim_if_stuck", {
+	{ "host_if_stuck", {
 		"subject",    neutral_value,
 		"consequent", value,
 		"alternate",  value,
 	} },
-	{ "prim_intrinsic_stuck", {
+	{ "host_intrinsic_stuck", {
 		"source", neutral_value,
 		"anchor", anchor_type,
 	} },
-	{ "prim_wrap_stuck", { "content", neutral_value } },
-	{ "prim_unwrap_stuck", { "container", neutral_value } },
+	{ "host_wrap_stuck", { "content", neutral_value } },
+	{ "host_unwrap_stuck", { "container", neutral_value } },
 })
 
-local prim_syntax_type = value.prim_user_defined_type({ name = "syntax" }, array(value)())
-local prim_environment_type = value.prim_user_defined_type({ name = "environment" }, array(value)())
-local prim_typed_term_type = value.prim_user_defined_type({ name = "typed_term" }, array(value)())
-local prim_goal_type = value.prim_user_defined_type({ name = "goal" }, array(value)())
-local prim_inferrable_term_type = value.prim_user_defined_type({ name = "inferrable_term" }, array(value)())
-local prim_checkable_term_type = value.prim_user_defined_type({ name = "checkable_term" }, array(value)())
+local host_syntax_type = value.host_user_defined_type({ name = "syntax" }, array(value)())
+local host_environment_type = value.host_user_defined_type({ name = "environment" }, array(value)())
+local host_typed_term_type = value.host_user_defined_type({ name = "typed_term" }, array(value)())
+local host_goal_type = value.host_user_defined_type({ name = "goal" }, array(value)())
+local host_inferrable_term_type = value.host_user_defined_type({ name = "inferrable_term" }, array(value)())
+local host_checkable_term_type = value.host_user_defined_type({ name = "checkable_term" }, array(value)())
 -- return ok, err
-local prim_lua_error_type = value.prim_user_defined_type({ name = "lua_error_type" }, array(value)())
+local host_lua_error_type = value.host_user_defined_type({ name = "lua_error_type" }, array(value)())
 
 ---@class DeclConsContainer
 local DeclCons = --[[@enum DeclCons]]
@@ -855,7 +855,7 @@ local tuple_defn = value.enum_value("variant",
 		value.enum_value("variant",
 			tup_val(
 				value.enum_value("empty", tup_val()),
-				value.prim "element",
+				value.host_value "element",
 				value.closure()
 			)
 		),
@@ -883,13 +883,13 @@ local terms = {
 	neutral_value = neutral_value,
 	binding = binding,
 	expression_goal = expression_goal,
-	prim_syntax_type = prim_syntax_type,
-	prim_environment_type = prim_environment_type,
-	prim_typed_term_type = prim_typed_term_type,
-	prim_goal_type = prim_goal_type,
-	prim_inferrable_term_type = prim_inferrable_term_type,
-	prim_checkable_term_type = prim_checkable_term_type,
-	prim_lua_error_type = prim_lua_error_type,
+	host_syntax_type = host_syntax_type,
+	host_environment_type = host_environment_type,
+	host_typed_term_type = host_typed_term_type,
+	host_goal_type = host_goal_type,
+	host_inferrable_term_type = host_inferrable_term_type,
+	host_checkable_term_type = host_checkable_term_type,
+	host_lua_error_type = host_lua_error_type,
 
 	runtime_context = runtime_context,
 	typechecking_context = typechecking_context,

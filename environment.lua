@@ -136,8 +136,8 @@ function environment:bind_local(binding)
 
 		if inner_type:is_tuple_type() then
 			decls = subject_type:unwrap_tuple_type()
-		elseif inner_type:is_prim_tuple_type() then
-			decls = subject_type:unwrap_prim_tuple_type()
+		elseif inner_type:is_host_tuple_type() then
+			decls = subject_type:unwrap_host_tuple_type()
 		else
 			error("bind_local tuple_elim, subject_type: expected a term with a tuple type, but got " .. subject_type.kind)
 		end

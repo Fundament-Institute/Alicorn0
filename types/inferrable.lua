@@ -143,77 +143,77 @@ function inferrable:unwrap_annotated() end
 ---@return boolean, checkable, inferrable
 function inferrable:as_annotated() end
 ---@return boolean
-function inferrable:is_prim_tuple_cons() end
+function inferrable:is_host_tuple_cons() end
 ---@return ArrayValue
-function inferrable:unwrap_prim_tuple_cons() end
+function inferrable:unwrap_host_tuple_cons() end
 ---@return boolean, ArrayValue
-function inferrable:as_prim_tuple_cons() end
+function inferrable:as_host_tuple_cons() end
 ---@return boolean
-function inferrable:is_prim_user_defined_type_cons() end
+function inferrable:is_host_user_defined_type_cons() end
 ---@return { name: string }, ArrayValue
-function inferrable:unwrap_prim_user_defined_type_cons() end
+function inferrable:unwrap_host_user_defined_type_cons() end
 ---@return boolean, { name: string }, ArrayValue
-function inferrable:as_prim_user_defined_type_cons() end
+function inferrable:as_host_user_defined_type_cons() end
 ---@return boolean
-function inferrable:is_prim_tuple_type() end
+function inferrable:is_host_tuple_type() end
 ---@return inferrable
-function inferrable:unwrap_prim_tuple_type() end
+function inferrable:unwrap_host_tuple_type() end
 ---@return boolean, inferrable
-function inferrable:as_prim_tuple_type() end
+function inferrable:as_host_tuple_type() end
 ---@return boolean
-function inferrable:is_prim_function_type() end
+function inferrable:is_host_function_type() end
 ---@return inferrable, inferrable, checkable
-function inferrable:unwrap_prim_function_type() end
+function inferrable:unwrap_host_function_type() end
 ---@return boolean, inferrable, inferrable, checkable
-function inferrable:as_prim_function_type() end
+function inferrable:as_host_function_type() end
 ---@return boolean
-function inferrable:is_prim_wrapped_type() end
+function inferrable:is_host_wrapped_type() end
 ---@return inferrable
-function inferrable:unwrap_prim_wrapped_type() end
+function inferrable:unwrap_host_wrapped_type() end
 ---@return boolean, inferrable
-function inferrable:as_prim_wrapped_type() end
+function inferrable:as_host_wrapped_type() end
 ---@return boolean
-function inferrable:is_prim_unstrict_wrapped_type() end
+function inferrable:is_host_unstrict_wrapped_type() end
 ---@return inferrable
-function inferrable:unwrap_prim_unstrict_wrapped_type() end
+function inferrable:unwrap_host_unstrict_wrapped_type() end
 ---@return boolean, inferrable
-function inferrable:as_prim_unstrict_wrapped_type() end
+function inferrable:as_host_unstrict_wrapped_type() end
 ---@return boolean
-function inferrable:is_prim_wrap() end
+function inferrable:is_host_wrap() end
 ---@return inferrable
-function inferrable:unwrap_prim_wrap() end
+function inferrable:unwrap_host_wrap() end
 ---@return boolean, inferrable
-function inferrable:as_prim_wrap() end
+function inferrable:as_host_wrap() end
 ---@return boolean
-function inferrable:is_prim_unstrict_wrap() end
+function inferrable:is_host_unstrict_wrap() end
 ---@return inferrable
-function inferrable:unwrap_prim_unstrict_wrap() end
+function inferrable:unwrap_host_unstrict_wrap() end
 ---@return boolean, inferrable
-function inferrable:as_prim_unstrict_wrap() end
+function inferrable:as_host_unstrict_wrap() end
 ---@return boolean
-function inferrable:is_prim_unwrap() end
+function inferrable:is_host_unwrap() end
 ---@return inferrable
-function inferrable:unwrap_prim_unwrap() end
+function inferrable:unwrap_host_unwrap() end
 ---@return boolean, inferrable
-function inferrable:as_prim_unwrap() end
+function inferrable:as_host_unwrap() end
 ---@return boolean
-function inferrable:is_prim_unstrict_unwrap() end
+function inferrable:is_host_unstrict_unwrap() end
 ---@return inferrable
-function inferrable:unwrap_prim_unstrict_unwrap() end
+function inferrable:unwrap_host_unstrict_unwrap() end
 ---@return boolean, inferrable
-function inferrable:as_prim_unstrict_unwrap() end
+function inferrable:as_host_unstrict_unwrap() end
 ---@return boolean
-function inferrable:is_prim_if() end
+function inferrable:is_host_if() end
 ---@return checkable, inferrable, inferrable
-function inferrable:unwrap_prim_if() end
+function inferrable:unwrap_host_if() end
 ---@return boolean, checkable, inferrable, inferrable
-function inferrable:as_prim_if() end
+function inferrable:as_host_if() end
 ---@return boolean
-function inferrable:is_prim_intrinsic() end
+function inferrable:is_host_intrinsic() end
 ---@return checkable, inferrable, Anchor
-function inferrable:unwrap_prim_intrinsic() end
+function inferrable:unwrap_host_intrinsic() end
 ---@return boolean, checkable, inferrable, Anchor
-function inferrable:as_prim_intrinsic() end
+function inferrable:as_host_intrinsic() end
 ---@return boolean
 function inferrable:is_program_sequence() end
 ---@return inferrable, inferrable
@@ -252,18 +252,18 @@ function inferrable:as_program_type() end
 ---@field level_suc fun(previous_level: inferrable): inferrable
 ---@field level_max fun(level_a: inferrable, level_b: inferrable): inferrable
 ---@field annotated fun(annotated_term: checkable, annotated_type: inferrable): inferrable
----@field prim_tuple_cons fun(elements: ArrayValue): inferrable
----@field prim_user_defined_type_cons fun(id: { name: string }, family_args: ArrayValue): inferrable
----@field prim_tuple_type fun(decls: inferrable): inferrable
----@field prim_function_type fun(param_type: inferrable, result_type: inferrable, result_info: checkable): inferrable
----@field prim_wrapped_type fun(type: inferrable): inferrable
----@field prim_unstrict_wrapped_type fun(type: inferrable): inferrable
----@field prim_wrap fun(content: inferrable): inferrable
----@field prim_unstrict_wrap fun(content: inferrable): inferrable
----@field prim_unwrap fun(container: inferrable): inferrable
----@field prim_unstrict_unwrap fun(container: inferrable): inferrable
----@field prim_if fun(subject: checkable, consequent: inferrable, alternate: inferrable): inferrable
----@field prim_intrinsic fun(source: checkable, type: inferrable, anchor: Anchor): inferrable
+---@field host_tuple_cons fun(elements: ArrayValue): inferrable
+---@field host_user_defined_type_cons fun(id: { name: string }, family_args: ArrayValue): inferrable
+---@field host_tuple_type fun(decls: inferrable): inferrable
+---@field host_function_type fun(param_type: inferrable, result_type: inferrable, result_info: checkable): inferrable
+---@field host_wrapped_type fun(type: inferrable): inferrable
+---@field host_unstrict_wrapped_type fun(type: inferrable): inferrable
+---@field host_wrap fun(content: inferrable): inferrable
+---@field host_unstrict_wrap fun(content: inferrable): inferrable
+---@field host_unwrap fun(container: inferrable): inferrable
+---@field host_unstrict_unwrap fun(container: inferrable): inferrable
+---@field host_if fun(subject: checkable, consequent: inferrable, alternate: inferrable): inferrable
+---@field host_intrinsic fun(source: checkable, type: inferrable, anchor: Anchor): inferrable
 ---@field program_sequence fun(first: inferrable, continue: inferrable): inferrable
 ---@field program_type fun(effect_type: inferrable, result_type: inferrable): inferrable
 return {}

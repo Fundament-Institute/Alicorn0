@@ -1,10 +1,10 @@
-let prim-arith-binop = (prim-func-type (a : prim-number, b : prim-number) -> ((c : prim-number)))
-let prim-sub = (intrinsic "return function(a, b) return a - b end" : prim-arith-binop)
+let host-arith-binop = (host-func-type (a : host-number, b : host-number) -> ((c : host-number)))
+let host-sub = (intrinsic "return function(a, b) return a - b end" : host-arith-binop)
 
-#let prim-sub = (intrinsic "return function(a, b) return a - b end" : (prim-func-type (a : prim-number, b : prim-number) -> ((c : prim-number))))
+#let host-sub = (intrinsic "return function(a, b) return a - b end" : (host-func-type (a : host-number, b : host-number) -> ((c : host-number))))
 
 #let foo = (record (bar = 5) (baz = 6))
-#let subbed = prim-sub foo.bar y
+#let subbed = host-sub foo.bar y
 
 let implicit-wrap =
 	lambda_implicit (T : type_(10))
@@ -21,40 +21,40 @@ let implicit-unwrap =
 # so we have to settle for star-9
 let universe = type_(9)
 
-let prim-bool-wrap            = intrinsic "return terms.value.prim_bool_type"      : wrapped(prim-type)
-let prim-string-wrap          = intrinsic "return terms.value.prim_string_type"    : wrapped(prim-type)
-let prim-syntax-wrap          = intrinsic "return terms.prim_syntax_type"          : wrapped(prim-type)
-let prim-environment-wrap     = intrinsic "return terms.prim_environment_type"     : wrapped(prim-type)
-let prim-goal-wrap            = intrinsic "return terms.prim_goal_type"            : wrapped(prim-type)
-let prim-inferrable-term-wrap = intrinsic "return terms.prim_inferrable_term_type" : wrapped(prim-type)
-let prim-checkable-term-wrap  = intrinsic "return terms.prim_checkable_term_type"  : wrapped(prim-type)
-let prim-lua-error-wrap       = intrinsic "return terms.prim_lua_error_type"       : wrapped(prim-type)
+let host-bool-wrap            = intrinsic "return terms.value.host_bool_type"      : wrapped(host-type)
+let host-string-wrap          = intrinsic "return terms.value.host_string_type"    : wrapped(host-type)
+let host-syntax-wrap          = intrinsic "return terms.host_syntax_type"          : wrapped(host-type)
+let host-environment-wrap     = intrinsic "return terms.host_environment_type"     : wrapped(host-type)
+let host-goal-wrap            = intrinsic "return terms.host_goal_type"            : wrapped(host-type)
+let host-inferrable-term-wrap = intrinsic "return terms.host_inferrable_term_type" : wrapped(host-type)
+let host-checkable-term-wrap  = intrinsic "return terms.host_checkable_term_type"  : wrapped(host-type)
+let host-lua-error-wrap       = intrinsic "return terms.host_lua_error_type"       : wrapped(host-type)
 
-let prim-bool            = implicit-unwrap(prim-bool-wrap)
-let prim-string          = implicit-unwrap(prim-string-wrap)
-let prim-syntax          = implicit-unwrap(prim-syntax-wrap)
-let prim-environment     = implicit-unwrap(prim-environment-wrap)
-let prim-goal            = implicit-unwrap(prim-goal-wrap)
-let prim-inferrable-term = implicit-unwrap(prim-inferrable-term-wrap)
-let prim-checkable-term  = implicit-unwrap(prim-checkable-term-wrap)
-let prim-lua-error       = implicit-unwrap(prim-lua-error-wrap)
+let host-bool            = implicit-unwrap(host-bool-wrap)
+let host-string          = implicit-unwrap(host-string-wrap)
+let host-syntax          = implicit-unwrap(host-syntax-wrap)
+let host-environment     = implicit-unwrap(host-environment-wrap)
+let host-goal            = implicit-unwrap(host-goal-wrap)
+let host-inferrable-term = implicit-unwrap(host-inferrable-term-wrap)
+let host-checkable-term  = implicit-unwrap(host-checkable-term-wrap)
+let host-lua-error       = implicit-unwrap(host-lua-error-wrap)
 
-let prim-string-concat = intrinsic "return function(a, b) return a .. b end" :
-	prim-func-type (a : prim-string, b : prim-string) -> ((c : prim-string))
+let host-string-concat = intrinsic "return function(a, b) return a .. b end" :
+	host-func-type (a : host-string, b : host-string) -> ((c : host-string))
 
 # lmao bootstrapping problem
-let prim-unique-id-wrap = intrinsic
-	"return terms.value.prim_user_defined_type({ name = \"unique_id\" }, terms_gen.declare_array(terms.value)())"
+let host-unique-id-wrap = intrinsic
+	"return terms.value.host_user_defined_type({ name = \"unique_id\" }, terms_gen.declare_array(terms.value)())"
 	:
-	wrapped(prim-type)
-let prim-unique-id = implicit-unwrap(prim-unique-id-wrap)
-let new-prim-unique-id = lambda ((name : prim-string))
+	wrapped(host-type)
+let host-unique-id = implicit-unwrap(host-unique-id-wrap)
+let new-host-unique-id = lambda ((name : host-string))
 	let source0 = "return { name = \""
-	let (source1) = prim-string-concat(source0, name)
-	let (source2) = prim-string-concat(source1, "\" }")
-	intrinsic source2 : prim-unique-id
+	let (source1) = host-string-concat(source0, name)
+	let (source2) = host-string-concat(source1, "\" }")
+	intrinsic source2 : host-unique-id
 
-let new-prim-type-family = lambda (unique-id : prim-unique-id, signature : type_(1))
+let new-host-type-family = lambda (unique-id : host-unique-id, signature : type_(1))
 	let inner = intrinsic
 		""""
 			local typed_array = terms_gen.declare_array(terms.typed_term)
@@ -72,7 +72,7 @@ let new-prim-type-family = lambda (unique-id : prim-unique-id, signature : type_
 					error("unknown tuple defn constructor")
 				end
 			end
-			local function new_prim_type_family(unique_id, sig)
+			local function new_host_type_family(unique_id, sig)
 				local param_type, _, _, _ = sig:unwrap_pi()
 				local param_decls = param_type:unwrap_tuple_type()
 				local nparams = length(param_decls)
@@ -86,27 +86,27 @@ let new-prim-type-family = lambda (unique-id : prim-unique-id, signature : type_
 					param_names,
 					terms.typed_term.bound_variable(1),
 					nparams,
-					terms.typed_term.prim_user_defined_type_cons(
+					terms.typed_term.host_user_defined_type_cons(
 						unique_id,
 						params
 					)
 				)
 				return terms.value.closure("#type-family-B", body, terms.runtime_context())
 			end
-			return new_prim_type_family
+			return new_host_type_family
 		:
-		prim-func-type (unique-id : prim-unique-id, signature_ : wrapped(type_(1))) -> ((family    : wrapped(signature)))
+		host-func-type (unique-id : host-unique-id, signature_ : wrapped(type_(1))) -> ((family    : wrapped(signature)))
 	let (family) = inner(unique-id, implicit-wrap(signature))
 	implicit-unwrap(family)
-let new-prim-type = lambda ((unique-id : prim-unique-id))
-	let Tfam = new-prim-type-family unique-id
-		forall () -> (T : prim-type)
+let new-host-type = lambda ((unique-id : host-unique-id))
+	let Tfam = new-host-type-family unique-id
+		forall () -> (T : host-type)
 	Tfam()
 
-let prim-array-type = new-prim-type-family new-prim-unique-id("array")
-	forall ((T : prim-type)) -> (T : prim-type)
+let host-array-type = new-host-type-family new-host-unique-id("array")
+	forall ((T : host-type)) -> (T : host-type)
 
-let prim-array-new = lambda ((T : prim-type))
+let host-array-new = lambda ((T : host-type))
 	let inner = intrinsic
 		""""
 			local function array_new()
@@ -114,11 +114,11 @@ let prim-array-new = lambda ((T : prim-type))
 			end
 			return array_new
 		:
-		prim-func-type () -> ((arr : prim-array-type(T)))
+		host-func-type () -> ((arr : host-array-type(T)))
 	let (arr) = inner()
 	arr
-let prim-array-set = lambda_implicit (T : prim-type)
-	lambda (arr : prim-array-type(T), index : prim-number, elem : T)
+let host-array-set = lambda_implicit (T : host-type)
+	lambda (arr : host-array-type(T), index : host-number, elem : T)
 		let inner = intrinsic
 			""""
 				local function array_set(array, index, elem)
@@ -133,11 +133,11 @@ let prim-array-set = lambda_implicit (T : prim-type)
 				end
 				return array_set
 			:
-			prim-func-type (arr   : prim-array-type(T), index : prim-number, elem  : T) -> ((arr   : prim-array-type(T)))
+			host-func-type (arr   : host-array-type(T), index : host-number, elem  : T) -> ((arr   : host-array-type(T)))
 		let (arr) = inner(arr, index, elem)
 		arr
-let prim-array-get = lambda_implicit (T : prim-type)
-	lambda (arr : prim-array-type(T), index : prim-number)
+let host-array-get = lambda_implicit (T : host-type)
+	lambda (arr : host-array-type(T), index : host-number)
 		let inner = intrinsic
 			""""
 				local function array_get(array, index)
@@ -145,19 +145,19 @@ let prim-array-get = lambda_implicit (T : prim-type)
 				end
 				return array_get
 			:
-			prim-func-type (arr   : prim-array-type(T), index : prim-number) -> ((elem  : T))
+			host-func-type (arr   : host-array-type(T), index : host-number) -> ((elem  : T))
 		let (elem) = inner(arr, index)
 		elem
 
-let prim-file-read =
+let host-file-read =
 	intrinsic
 		""""
 			local fs = require 'fs'
 			return fs.readFileSync
 		:
-		prim-func-type ((fname : prim-string)) -> ((content : prim-string))
+		host-func-type ((fname : host-string)) -> ((content : host-string))
 
-let terms-gen-array = new-prim-type(new-prim-unique-id("terms-gen-array"))
+let terms-gen-array = new-host-type(new-host-unique-id("terms-gen-array"))
 
 let void =
 	implicit-unwrap
@@ -169,76 +169,76 @@ let void =
 			:
 			wrapped type
 
-let prim-unit = new-prim-type(new-prim-unique-id("prim-unit"))
-let prim-nil = intrinsic "return nil" : prim-unit
+let host-unit = new-host-type(new-host-unique-id("host-unit"))
+let host-nil = intrinsic "return nil" : host-unit
 
-let only-accept-prim-tuples-inner-prim =
+let only-accept-host-tuples-inner-host =
 	intrinsic
 		""""
-			local function check_prim_tuple(subject, consequent, alternate)
-				if subject:is_prim_tuple_type() then
+			local function check_host_tuple(subject, consequent, alternate)
+				if subject:is_host_tuple_type() then
 					return consequent
 				else
 					return alternate
 				end
 			end
-			return check_prim_tuple
+			return check_host_tuple
 		:
-		prim-func-type (subject : wrapped(type), consequent : wrapped(prim-type), alternate : wrapped(prim-type)) -> ((result : wrapped(prim-type)))
+		host-func-type (subject : wrapped(type), consequent : wrapped(host-type), alternate : wrapped(host-type)) -> ((result : wrapped(host-type)))
 
-let only-accept-prim-tuples-inner =
-	lambda (subject : wrapped(type), consequent : prim-type, alternate : prim-type)
+let only-accept-host-tuples-inner =
+	lambda (subject : wrapped(type), consequent : host-type, alternate : host-type)
 		let (res) =
-			only-accept-prim-tuples-inner-prim
+			only-accept-host-tuples-inner-host
 				subject
 				implicit-wrap consequent
 				implicit-wrap alternate
 		implicit-unwrap res
-let only-accept-prim-tuples =
+let only-accept-host-tuples =
 	lambda ((subject : wrapped(type)))
-		only-accept-prim-tuples-inner
+		only-accept-host-tuples-inner
 			subject
-			prim-unit
+			host-unit
 			wrapped void
 
-let prim-tuple-type-to-tuple-type-inner =
+let host-tuple-type-to-tuple-type-inner =
 	intrinsic
 		""""
-			local function prim_tuple_to_tuple(prim_tuple_type)
-				local decls = prim_tuple_type:unwrap_prim_tuple_type()
-				-- this conversion happens to work since the eliminator for prim tuples and tuples is the same term
+			local function host_tuple_to_tuple(host_tuple_type)
+				local decls = host_tuple_type:unwrap_host_tuple_type()
+				-- this conversion happens to work since the eliminator for host tuples and tuples is the same term
 				local newbasetype = terms.value.tuple_type(decls)
 				return newbasetype
 			end
-			return prim_tuple_to_tuple
+			return host_tuple_to_tuple
 		:
-		prim-func-type (t : wrapped(type), valid : only-accept-prim-tuples(t)) -> ((res : wrapped(type)))
+		host-func-type (t : wrapped(type), valid : only-accept-host-tuples(t)) -> ((res : wrapped(type)))
 
-let prim-tuple-type-to-tuple-type =
-	lambda (t : wrapped(type), valid : only-accept-prim-tuples(t))
-		let (res) = prim-tuple-type-to-tuple-type-inner(t, valid)
+let host-tuple-type-to-tuple-type =
+	lambda (t : wrapped(type), valid : only-accept-host-tuples(t))
+		let (res) = host-tuple-type-to-tuple-type-inner(t, valid)
 		res
 
-let prim-tuple-to-tuple-inner =
+let host-tuple-to-tuple-inner =
 	intrinsic
 		""""
 			return function(_type, _valid, val)
-				local elems = val:unwrap_prim_tuple_value()
+				local elems = val:unwrap_host_tuple_value()
 				local vals = terms_gen.delcare_array(terms.value)()
 				for _, v in ipairs(elems) do
-					vals:append(terms.value.prim(v))
+					vals:append(terms.value.host_value(v))
 				end
 				return terms.value.tuple_value(vals)
 			end
 		:
-		prim-func-type (t : wrapped(type), valid : only-accept-prim-tuples(t), val : wrapped(implicit-unwrap(t))) -> ((res : wrapped(implicit-unwrap(prim-tuple-type-to-tuple-type(t, valid)))))
+		host-func-type (t : wrapped(type), valid : only-accept-host-tuples(t), val : wrapped(implicit-unwrap(t))) -> ((res : wrapped(implicit-unwrap(host-tuple-type-to-tuple-type(t, valid)))))
 
-let prim-tuple-to-tuple =
-	lambda (t : wrapped(type), valid : only-accept-prim-tuples(t), val : implicit-unwrap(t))
-		let (res) = prim-tuple-to-tuple-inner(t, valid, implicit-wrap(val))
+let host-tuple-to-tuple =
+	lambda (t : wrapped(type), valid : only-accept-host-tuples(t), val : implicit-unwrap(t))
+		let (res) = host-tuple-to-tuple-inner(t, valid, implicit-wrap(val))
 		implicit-unwrap(res)
 
-let tuple-to-prim-tuple-inner =
+let tuple-to-host-tuple-inner =
 	intrinsic
 		""""
 			return function(_type, _valid, val)
@@ -250,145 +250,145 @@ let tuple-to-prim-tuple-inner =
 				for _, v in ipairs(elems) do
 					if stuck then
 						trailing:append(v)
-					elseif v:is_prim() then
-						leading:append(v:unwrap_prim())
+					elseif v:is_host_value() then
+						leading:append(v:unwrap_host_value())
 					elseif v:is_neutral() then
 						stuck, stuck_elem = true, v:unwrap_neutral()
 					else
-						error "found an element in a tuple being converted to prim-tuple that was neither prim nor neutral"
+						error "found an element in a tuple being converted to host-tuple that was neither host nor neutral"
 					end
 				end
 				if not stuck then
-					return terms.value.prim_tuple_value(leading)
+					return terms.value.host_tuple_value(leading)
 				else
-					return terms.value.neutral(terms.neutral_value.prim_tuple_stuck(leading, stuck_elem, trailing))
+					return terms.value.neutral(terms.neutral_value.host_tuple_stuck(leading, stuck_elem, trailing))
 				end
 			end
 		:
-		prim-func-type (t : wrapped(type), valid : only-accept-prim-tuples(t), val : wrapped(implicit-unwrap(prim-tuple-type-to-tuple-type(t, valid)))) -> ((res : wrapped(implicit-unwrap(t))))
+		host-func-type (t : wrapped(type), valid : only-accept-host-tuples(t), val : wrapped(implicit-unwrap(host-tuple-type-to-tuple-type(t, valid)))) -> ((res : wrapped(implicit-unwrap(t))))
 
-let tuple-to-prim-tuple =
-	lambda (t : wrapped(type), valid : only-accept-prim-tuples(t), val : implicit-unwrap(prim-tuple-type-to-tuple-type(t, valid)))
-		let (res) = tuple-to-prim-tuple-inner(t, valid, implicit-wrap(val))
+let tuple-to-host-tuple =
+	lambda (t : wrapped(type), valid : only-accept-host-tuples(t), val : implicit-unwrap(host-tuple-type-to-tuple-type(t, valid)))
+		let (res) = tuple-to-host-tuple-inner(t, valid, implicit-wrap(val))
 		implicit-unwrap(res)
 
-let only-accept-prim-funcs-inner-prim =
+let only-accept-host-funcs-inner-host =
 	intrinsic
 		""""
-			local function check_prim_func(subject, consequent, alternate)
-				if subject:is_prim_function_type() then
+			local function check_host_func(subject, consequent, alternate)
+				if subject:is_host_function_type() then
 					return consequent
 				else
 					return alternate
 				end
 			end
-			return check_prim_func
+			return check_host_func
 		:
-		prim-func-type (subject : wrapped(type), consequent : wrapped(prim-type), alternate : wrapped(prim-type)) -> ((result : wrapped(prim-type)))
+		host-func-type (subject : wrapped(type), consequent : wrapped(host-type), alternate : wrapped(host-type)) -> ((result : wrapped(host-type)))
 
-let only-accept-prim-funcs-inner =
-	lambda (subject : wrapped(type), consequent : prim-type, alternate : prim-type)
+let only-accept-host-funcs-inner =
+	lambda (subject : wrapped(type), consequent : host-type, alternate : host-type)
 		let (res) =
-			only-accept-prim-funcs-inner-prim
+			only-accept-host-funcs-inner-host
 				subject
 				implicit-wrap consequent
 				implicit-wrap alternate
 		implicit-unwrap res
-let only-accept-prim-funcs =
+let only-accept-host-funcs =
 	lambda ((subject : wrapped(type)))
-		only-accept-prim-funcs-inner
+		only-accept-host-funcs-inner
 			subject
-			prim-unit
+			host-unit
 			wrapped void
 
-let get-prim-func-arg-inner =
+let get-host-func-arg-inner =
 	intrinsic
 		""""
-			local function get_prim_func_arg(subject, valid)
-				local param_type, result_type = subject:unwrap_prim_function_type()
+			local function get_host_func_arg(subject, valid)
+				local param_type, result_type = subject:unwrap_host_function_type()
 				return param_type, nil
 			end
-			return get_prim_func_arg
+			return get_host_func_arg
 		:
-		prim-func-type (subject : wrapped(type), valid : only-accept-prim-funcs(subject)) -> (result : wrapped(type), valid : only-accept-prim-tuples(result))
+		host-func-type (subject : wrapped(type), valid : only-accept-host-funcs(subject)) -> (result : wrapped(type), valid : only-accept-host-tuples(result))
 
 let just-args =
-	lambda (subject : wrapped(type), valid : only-accept-prim-funcs(subject))
-		let (result, valid) = get-prim-func-arg-inner(subject, valid)
+	lambda (subject : wrapped(type), valid : only-accept-host-funcs(subject))
+		let (result, valid) = get-host-func-arg-inner(subject, valid)
 		result
 
 let func-conv-res-type = 
 	lambda ((argtype : wrapped(type)))
 		# FIXME: implicit-unwrap here causes nearest_star_level to fail
-		#forall (arg : implicit-unwrap(argtype)) -> (res : wrapped(type), valid : only-accept-prim-tuples(res))
-		forall (arg : unwrap(type, argtype)) -> (res : wrapped(type), valid : only-accept-prim-tuples(res))
+		#forall (arg : implicit-unwrap(argtype)) -> (res : wrapped(type), valid : only-accept-host-tuples(res))
+		forall (arg : unwrap(type, argtype)) -> (res : wrapped(type), valid : only-accept-host-tuples(res))
 
-let get-prim-func-res-inner =
+let get-host-func-res-inner =
 	intrinsic
 		""""
-			local function get_prim_func_res(subject, valid)
-				local param_type, result_type = subject:unwrap_prim_function_type()
+			local function get_host_func_res(subject, valid)
+				local param_type, result_type = subject:unwrap_host_function_type()
 				local typed_array = terms_gen.declare_array(terms.typed_term)
 				local tuple_build = terms.typed_term.tuple_cons(
 					typed_array(
-						terms.typed_term.prim_wrap(
+						terms.typed_term.host_wrap(
 							terms.typed_term.application(
 								terms.typed_term.bound_variable(1),
 								terms.typed_term.bound_variable(2)
 							)
 						),
-						terms.typed_term.literal(terms.value.prim(nil))
+						terms.typed_term.literal(terms.value.host_value(nil))
 					)
 				)
 				local ctx = terms.runtime_context():append(result_type)
 				return terms.value.closure("#TEST-1", tuple_build, ctx)
 			end
-			return get_prim_func_res
+			return get_host_func_res
 		:
-		prim-func-type (subject : wrapped(type), valid : only-accept-prim-funcs(subject)) -> ((results : wrapped(func-conv-res-type(just-args(subject, valid)))))
+		host-func-type (subject : wrapped(type), valid : only-accept-host-funcs(subject)) -> ((results : wrapped(func-conv-res-type(just-args(subject, valid)))))
 						
 
 let foo =
-	prim-func-type (x : prim-number, y : prim-number) -> ((res : prim-number))
+	host-func-type (x : host-number, y : host-number) -> ((res : host-number))
 
 foo
 
-let (oldargs oldargs-valid) = get-prim-func-arg-inner(implicit-wrap(foo), prim-nil)
-let (newargs) = prim-tuple-type-to-tuple-type-inner(oldargs, oldargs-valid)
+let (oldargs oldargs-valid) = get-host-func-arg-inner(implicit-wrap(foo), host-nil)
+let (newargs) = host-tuple-type-to-tuple-type-inner(oldargs, oldargs-valid)
 newargs
 
-let id_type = forall (name : prim-number) -> (name : prim-number)
+let id_type = forall (name : host-number) -> (name : host-number)
 
-let id_num = lambda (T : prim-number)
+let id_num = lambda (T : host-number)
 	T
 
 (the id_type id_num)
 
-let sub = lambda (x : prim-number, y : prim-number)
-	let (res) = prim-sub(x, y)
+let sub = lambda (x : host-number, y : host-number)
+	let (res) = host-sub(x, y)
 	res
 
-let sub_type = forall (x : prim-number, y : prim-number) -> (res : prim-number)
+let sub_type = forall (x : host-number, y : host-number) -> (res : host-number)
 
 (the sub_type sub)
 
-let (orig-results) = get-prim-func-res-inner(implicit-wrap(foo), prim-nil)
+let (orig-results) = get-host-func-res-inner(implicit-wrap(foo), host-nil)
 # FIXME: implicit-unwrap here causes new-results to fail due to trying
 # to apply() something whose type is a metavariable
 let orig-results = unwrap(func-conv-res-type(oldargs), orig-results)
 #let orig-results = implicit-unwrap(orig-results)
 let new-results =
 	lambda ((args : implicit-unwrap(newargs)))
-		let ptuple = tuple-to-prim-tuple(oldargs, oldargs-valid, args)
+		let ptuple = tuple-to-host-tuple(oldargs, oldargs-valid, args)
 		let orig-results-res = apply(orig-results, ptuple)
 		let (newres valid) = orig-results-res
 		newres
 
-let prim-func-type-to-func-type =
-	lambda (T : type, valid : only-accept-prim-funcs(implicit-wrap(T)))
-		let (oldargs oldargs-valid) = get-prim-func-arg-inner(implicit-wrap(T), valid)
-		let (newargs) = prim-tuple-type-to-tuple-type-inner(oldargs, oldargs-valid)
-		let (orig-results-wrapped) = get-prim-func-res-inner(implicit-wrap(T), valid)
+let host-func-type-to-func-type =
+	lambda (T : type, valid : only-accept-host-funcs(implicit-wrap(T)))
+		let (oldargs oldargs-valid) = get-host-func-arg-inner(implicit-wrap(T), valid)
+		let (newargs) = host-tuple-type-to-tuple-type-inner(oldargs, oldargs-valid)
+		let (orig-results-wrapped) = get-host-func-res-inner(implicit-wrap(T), valid)
 		# FIXME: implicit-unwrap here causes new-results to fail due to trying
 		# to apply() something whose type is a metavariable
 		let orig-results = unwrap(func-conv-res-type(oldargs), orig-results-wrapped)
@@ -396,18 +396,18 @@ let prim-func-type-to-func-type =
 		
 		let new-results =
 			lambda ((args : implicit-unwrap(newargs)))
-				let ptuple = tuple-to-prim-tuple(oldargs, oldargs-valid, args)
+				let ptuple = tuple-to-host-tuple(oldargs, oldargs-valid, args)
 				let (oldres oldres-valid) = apply(orig-results, ptuple)
-				let (newres) = prim-tuple-type-to-tuple-type-inner(oldres, oldres-valid)
+				let (newres) = host-tuple-type-to-tuple-type-inner(oldres, oldres-valid)
 				newres
 
 		# FIXME: implicit-unwrap here causes nearest_star_level to fail
 		#forall (x : implicit-unwrap(newargs)) -> (y : implicit-unwrap(new-results(x)))
 		forall (x : unwrap(type, newargs)) -> (y : unwrap(type, new-results(x)))
 
-prim-func-type-to-func-type foo prim-nil
+host-func-type-to-func-type foo host-nil
 
-let func-to-prim-func =
+let func-to-host-func =
 	intrinsic
 		""""
 			return function(_type, _valid, afn)
@@ -416,39 +416,39 @@ let func-to-prim-func =
 					local nargs = select("#", ...)
 					local conv_args = terms_gen.declare_array(terms.value)()
 					for i = 1, nargs do
-						conv_args:append(terms.value.prim(args[i]))
+						conv_args:append(terms.value.host_value(args[i]))
 					end
 					local res = evaluator.apply_value(afn, terms.value.tuple_value(conv_args))
-					if not res:is_prim() then
+					if not res:is_host_value() then
 						error "alicorn function converted to native function has failed to create a real value"
 					end
-					return res:unwrap_prim()
+					return res:unwrap_host_value()
 				end
 			end
 		:
-		prim-func-type (T : type, valid : only-accept-prim-funcs(implicit-wrap(T)), fn : prim-func-type-to-func-type(T, valid)) -> ((res-fn : T))
+		host-func-type (T : type, valid : only-accept-host-funcs(implicit-wrap(T)), fn : host-func-type-to-func-type(T, valid)) -> ((res-fn : T))
 
 
 
 
 
-let prim-if-type = forall (subject : prim-bool, consequent : prim-type, alternate : prim-type) -> (T : prim-type)
+let host-if-type = forall (subject : host-bool, consequent : host-type, alternate : host-type) -> (T : host-type)
 
-let prim-if-wrap = intrinsic
+let host-if-wrap = intrinsic
 	""""
 		local typed = terms.typed_term
 		local string_array = terms_gen.declare_array(terms_gen.builtin_string)
 		return terms.value.closure(
-			"#prim-if-param",
+			"#host-if-param",
 			typed.tuple_elim(
 				string_array(
-					"#prim-if-subject",
-					"#prim-if-consequent",
-					"#prim-if-alternate"
+					"#host-if-subject",
+					"#host-if-consequent",
+					"#host-if-alternate"
 				),
 				typed.bound_variable(1),
 				3,
-				typed.prim_if(
+				typed.host_if(
 					typed.bound_variable(2),
 					typed.bound_variable(3),
 					typed.bound_variable(4)
@@ -457,39 +457,39 @@ let prim-if-wrap = intrinsic
 			terms.runtime_context()
 		)
 	:
-	wrapped(prim-if-type)
-let prim-if = implicit-unwrap(prim-if-wrap)
+	wrapped(host-if-type)
+let host-if = implicit-unwrap(host-if-wrap)
 
 let tuple-def-type-inner = intrinsic "return terms.value.tuple_defn_type" :
-	prim-func-type ((U : wrapped(universe))) -> ((T : wrapped(prim-type)))
+	host-func-type ((U : wrapped(universe))) -> ((T : wrapped(host-type)))
 let tuple-def-type = lambda ((U : universe))
 	let (T) = tuple-def-type-inner(implicit-wrap(U))
 	implicit-unwrap(T)
 let tuple-type = lambda (U : universe, decls : tuple-def-type(U))
 	let inner = intrinsic "return terms.value.tuple_type" :
-		prim-func-type ((decls : wrapped(tuple-def-type(U)))) -> ((T : wrapped(prim-type)))
+		host-func-type ((decls : wrapped(tuple-def-type(U)))) -> ((T : wrapped(host-type)))
 	let (T) = inner(implicit-wrap(decls))
 	# FIXME: implicit-unwrap here causes nearest_star_level to fail in tuple-def-elem
 	#implicit-unwrap(T)
-	unwrap(prim-type, T)
-let prim-tuple-type = lambda (U : universe, decls : tuple-def-type(U))
-	let inner = intrinsic "return terms.value.prim_tuple_type" :
-		prim-func-type ((decls : wrapped(tuple-def-type(U)))) -> ((T : wrapped(prim-type)))
+	unwrap(host-type, T)
+let host-tuple-type = lambda (U : universe, decls : tuple-def-type(U))
+	let inner = intrinsic "return terms.value.host_tuple_type" :
+		host-func-type ((decls : wrapped(tuple-def-type(U)))) -> ((T : wrapped(host-type)))
 	let (T) = inner(implicit-wrap(decls))
 	implicit-unwrap(T)
 # FIXME: these implicit functions don't seem to work at all
 let tuple-type-implicit = lambda_implicit (U : universe)
 	lambda (decls : tuple-def-type(U))
 		let inner = intrinsic "return terms.value.tuple_type" :
-			prim-func-type ((decls : wrapped(tuple-def-type(U)))) -> ((T : wrapped(prim-type)))
+			host-func-type ((decls : wrapped(tuple-def-type(U)))) -> ((T : wrapped(host-type)))
 		let (T) = inner(implicit-wrap(decls))
 		# FIXME: implicit-unwrap here causes nearest_star_level to fail in tuple-def-elem
 		#implicit-unwrap(T)
-		unwrap(prim-type, T)
-let prim-tuple-type-implicit = lambda_implicit (U : universe)
+		unwrap(host-type, T)
+let host-tuple-type-implicit = lambda_implicit (U : universe)
 	lambda (decls : tuple-def-type(U))
-		let inner = intrinsic "return terms.value.prim_tuple_type" :
-			prim-func-type ((decls : wrapped(tuple-def-type(U)))) -> ((T : wrapped(prim-type)))
+		let inner = intrinsic "return terms.value.host_tuple_type" :
+			host-func-type ((decls : wrapped(tuple-def-type(U)))) -> ((T : wrapped(host-type)))
 		let (T) = inner(implicit-wrap(decls))
 		implicit-unwrap(T)
 let tuple-def-empty = lambda ((U : universe))
@@ -505,7 +505,7 @@ let tuple-def-elem = lambda (
 		defn : tuple-def-type(U),
 		elem : jank-it-up(U, defn))
 	let inner = intrinsic "return terms.cons" :
-		prim-func-type (
+		host-func-type (
 			defn_ : wrapped(tuple-def-type(U)), # aaaa shadowing
 			elem  : (wrapped (forall (rest : tuple-type(U, defn)) -> (next : U))))
 			->
@@ -519,9 +519,9 @@ let tuple-of = lambda (U : universe, defn : tuple-def-type(U))
 	# ATTN: single parens here means bare lambda syntax
 	lambda (t : tuple-type(U, defn))
 		t
-let prim-tuple-of = lambda (U : universe, defn : tuple-def-type(U))
+let host-tuple-of = lambda (U : universe, defn : tuple-def-type(U))
 	intrinsic "return function(...) return ... end" :
-		prim-func-type (t : prim-tuple-type(U, defn)) -> (t : prim-tuple-type(U, defn))
+		host-func-type (t : host-tuple-type(U, defn)) -> (t : host-tuple-type(U, defn))
 let tuple-def-singleton = lambda (U : universe, T : U)
 	tuple-def-elem U
 		tuple-def-empty U
@@ -598,7 +598,7 @@ let tuple-def-concat = lambda (U : universe, head : tuple-def-type(U), tail : tu
 			end
 			return tuple_def_concat
 		:
-		prim-func-type (head : wrapped(tuple-def-type(U)), tail : wrapped(tuple-def-type(U))) -> ((cat : wrapped(tuple-def-type(U))))
+		host-func-type (head : wrapped(tuple-def-type(U)), tail : wrapped(tuple-def-type(U))) -> ((cat : wrapped(tuple-def-type(U))))
 	let (cat) = inner(implicit-wrap(head), implicit-wrap(tail))
 	implicit-unwrap(cat)
 let tuple-concat = lambda (
@@ -624,21 +624,21 @@ let tuple-concat = lambda (
 			end
 			return tuple_concat
 		:
-		prim-func-type (hd : wrapped(tuple-type(U, head)), tl : wrapped(tuple-type(U, tail))) -> ((cat : wrapped(tuple-type(U, tuple-def-concat(U, head, tail)))))
+		host-func-type (hd : wrapped(tuple-type(U, head)), tl : wrapped(tuple-type(U, tail))) -> ((cat : wrapped(tuple-type(U, tuple-def-concat(U, head, tail)))))
 	let (cat) = inner(implicit-wrap(hd), implicit-wrap(tl))
 	implicit-unwrap(cat)
-let prim-tuple-concat = lambda (
+let host-tuple-concat = lambda (
 		U    : universe,
 		head : tuple-def-type(U),
 		tail : tuple-def-type(U),
-		hd   : prim-tuple-type(U, head),
-		tl   : prim-tuple-type(U, tail))
+		hd   : host-tuple-type(U, head),
+		tl   : host-tuple-type(U, tail))
 	let inner = intrinsic
 		""""
 			local value_array = terms_gen.declare_array(terms_gen.any_lua_type)
-			local function prim_tuple_concat(head, tail)
-				local head_elements = head:unwrap_prim_tuple_value()
-				local tail_elements = tail:unwrap_prim_tuple_value()
+			local function host_tuple_concat(head, tail)
+				local head_elements = head:unwrap_host_tuple_value()
+				local tail_elements = tail:unwrap_host_tuple_value()
 				local new_elements = value_array()
 				for _, e in head_elements:ipairs() do
 					new_elements:append(e)
@@ -646,21 +646,21 @@ let prim-tuple-concat = lambda (
 				for _, e in tail_elements:ipairs() do
 					new_elements:append(e)
 				end
-				return terms.value.prim_tuple_value(new_elements)
+				return terms.value.host_tuple_value(new_elements)
 			end
-			return prim_tuple_concat
+			return host_tuple_concat
 		:
-		prim-func-type (hd : wrapped(prim-tuple-type(U, head)), tl : wrapped(prim-tuple-type(U, tail))) -> ((cat : wrapped(prim-tuple-type(U, tuple-def-concat(U, head, tail)))))
+		host-func-type (hd : wrapped(host-tuple-type(U, head)), tl : wrapped(host-tuple-type(U, tail))) -> ((cat : wrapped(host-tuple-type(U, tuple-def-concat(U, head, tail)))))
 	let (cat) = inner(implicit-wrap(hd), implicit-wrap(tl))
 	implicit-unwrap(cat)
 
-let prim-literal = new-prim-type(new-prim-unique-id("literal"))
+let host-literal = new-host-type(new-host-unique-id("literal"))
 
-let prim-expression-args = new-prim-type(new-prim-unique-id("expression-args"))
+let host-expression-args = new-host-type(new-host-unique-id("expression-args"))
 let expression-args-new = intrinsic "return alicorn_expressions.ExpressionArgs.new" :
-	prim-func-type (goal : prim-goal, env : prim-environment) -> ((args : prim-expression-args))
+	host-func-type (goal : host-goal, env : host-environment) -> ((args : host-expression-args))
 
-let prim-shadow-environment = new-prim-type(new-prim-unique-id("shadow-environment"))
+let host-shadow-environment = new-host-type(new-host-unique-id("shadow-environment"))
 let enter-block = intrinsic
 	""""
 		-- wish environment.enter_block was accessible from internals
@@ -669,7 +669,7 @@ let enter-block = intrinsic
 		end
 		return enter_block
 	:
-	prim-func-type ((env : prim-environment)) -> (shadowed : prim-shadow-environment, inner : prim-environment)
+	host-func-type ((env : host-environment)) -> (shadowed : host-shadow-environment, inner : host-environment)
 let exit-block = intrinsic
 	""""
 		-- wish environment.exit_block was accessible from internals
@@ -678,83 +678,83 @@ let exit-block = intrinsic
 		end
 		return exit_block
 	:
-	prim-func-type (inner : prim-environment, term : prim-inferrable-term, shadowed : prim-shadow-environment) -> (env : prim-environment, wrapped : prim-inferrable-term)
+	host-func-type (inner : host-environment, term : host-inferrable-term, shadowed : host-shadow-environment) -> (env : host-environment, wrapped : host-inferrable-term)
 
-let prim-matcher = new-prim-type-family new-prim-unique-id("matcher")
-	forall (userdata : prim-type, result : tuple-def-type(prim-type)) -> (T : prim-type)
+let host-matcher = new-host-type-family new-host-unique-id("matcher")
+	forall (userdata : host-type, result : tuple-def-type(host-type)) -> (T : host-type)
 
-let nil-handler-type = lambda (userdata : prim-type, result : tuple-def-type(prim-type))
-	prim-func-type ((ud : userdata)) -> (r : prim-tuple-type(prim-type, result))
-let prim-matcher-is-nil = lambda (userdata : prim-type, result : tuple-def-type(prim-type), accept-handler : nil-handler-type(userdata, result))
+let nil-handler-type = lambda (userdata : host-type, result : tuple-def-type(host-type))
+	host-func-type ((ud : userdata)) -> (r : host-tuple-type(host-type, result))
+let host-matcher-is-nil = lambda (userdata : host-type, result : tuple-def-type(host-type), accept-handler : nil-handler-type(userdata, result))
 	let inner = intrinsic "return metalanguage.isnil" :
-		prim-func-type ((accept-handler : nil-handler-type(userdata, result))) -> ((m : prim-matcher(userdata, result)))
+		host-func-type ((accept-handler : nil-handler-type(userdata, result))) -> ((m : host-matcher(userdata, result)))
 	let (m) = inner(accept-handler)
 	m
 
-let pair-handler-type = lambda (userdata : prim-type, result : tuple-def-type(prim-type))
-	prim-func-type (ud : userdata, a : prim-syntax, b : prim-syntax) -> (r : prim-tuple-type(prim-type, result))
-let prim-matcher-is-pair = lambda (userdata : prim-type, result : tuple-def-type(prim-type), accept-handler : pair-handler-type(userdata, result))
+let pair-handler-type = lambda (userdata : host-type, result : tuple-def-type(host-type))
+	host-func-type (ud : userdata, a : host-syntax, b : host-syntax) -> (r : host-tuple-type(host-type, result))
+let host-matcher-is-pair = lambda (userdata : host-type, result : tuple-def-type(host-type), accept-handler : pair-handler-type(userdata, result))
 	let inner = intrinsic "return metalanguage.ispair" :
-		prim-func-type ((accept-handler : pair-handler-type(userdata, result))) -> ((m : prim-matcher(userdata, result)))
+		host-func-type ((accept-handler : pair-handler-type(userdata, result))) -> ((m : host-matcher(userdata, result)))
 	let (m) = inner(accept-handler)
 	m
 
-let symbol-handler-type = lambda (userdata : prim-type, result : tuple-def-type(prim-type))
-	prim-func-type (ud : userdata, symbol : prim-string) -> (r : prim-tuple-type(prim-type, result))
-let prim-matcher-is-symbol = lambda (userdata : prim-type, result : tuple-def-type(prim-type), accept-handler : symbol-handler-type(userdata, result))
+let symbol-handler-type = lambda (userdata : host-type, result : tuple-def-type(host-type))
+	host-func-type (ud : userdata, symbol : host-string) -> (r : host-tuple-type(host-type, result))
+let host-matcher-is-symbol = lambda (userdata : host-type, result : tuple-def-type(host-type), accept-handler : symbol-handler-type(userdata, result))
 	let inner = intrinsic "return metalanguage.issymbol" :
-		prim-func-type ((accept-handler : symbol-handler-type(userdata, result))) -> ((m : prim-matcher(userdata, result)))
+		host-func-type ((accept-handler : symbol-handler-type(userdata, result))) -> ((m : host-matcher(userdata, result)))
 	let (m) = inner(accept-handler)
 	m
 
-let value-handler-type = lambda (userdata : prim-type, result : tuple-def-type(prim-type))
-	prim-func-type (ud : userdata, val : prim-literal) -> (r : prim-tuple-type(prim-type, result))
-let prim-matcher-is-value = lambda (userdata : prim-type, result : tuple-def-type(prim-type), accept-handler : value-handler-type(userdata, result))
+let value-handler-type = lambda (userdata : host-type, result : tuple-def-type(host-type))
+	host-func-type (ud : userdata, val : host-literal) -> (r : host-tuple-type(host-type, result))
+let host-matcher-is-value = lambda (userdata : host-type, result : tuple-def-type(host-type), accept-handler : value-handler-type(userdata, result))
 	let inner = intrinsic "return metalanguage.isvalue" :
-		prim-func-type ((accept-handler : value-handler-type(userdata, result))) -> ((m : prim-matcher(userdata, result)))
+		host-func-type ((accept-handler : value-handler-type(userdata, result))) -> ((m : host-matcher(userdata, result)))
 	let (m) = inner(accept-handler)
 	m
 
-let reducible-handler-type = lambda (userdata : prim-type, result2 : tuple-def-type(prim-type), result : tuple-def-type(prim-type))
+let reducible-handler-type = lambda (userdata : host-type, result2 : tuple-def-type(host-type), result : tuple-def-type(host-type))
 	# prepend userdata to result2
-	let userdata-defn = tuple-def-singleton(prim-type, userdata)
-	let params = tuple-def-concat(prim-type, userdata-defn, result2)
-	prim-func-type (p : prim-tuple-type(prim-type, params)) -> (r : prim-tuple-type(prim-type, result))
-let reducer-type = lambda (userdata : prim-type, storage : tuple-def-type(prim-type), result2 : tuple-def-type(prim-type), result : tuple-def-type(prim-type))
+	let userdata-defn = tuple-def-singleton(host-type, userdata)
+	let params = tuple-def-concat(host-type, userdata-defn, result2)
+	host-func-type (p : host-tuple-type(host-type, params)) -> (r : host-tuple-type(host-type, result))
+let reducer-type = lambda (userdata : host-type, storage : tuple-def-type(host-type), result2 : tuple-def-type(host-type), result : tuple-def-type(host-type))
 	let accept-handler-type = reducible-handler-type(userdata, result2, result)
 	# prepend accept-handler-type to storage
-	let accept-handler-defn = tuple-def-singleton(prim-type, accept-handler-type)
-	let params = tuple-def-concat(prim-type, accept-handler-defn, storage)
-	prim-func-type (p : prim-tuple-type(prim-type, params)) -> ((m : prim-matcher(userdata, result)))
-let prim-matcher-reducible = lambda (
-		userdata       : prim-type,
-		storage        : tuple-def-type(prim-type),
-		result2        : tuple-def-type(prim-type),
-		result         : tuple-def-type(prim-type),
+	let accept-handler-defn = tuple-def-singleton(host-type, accept-handler-type)
+	let params = tuple-def-concat(host-type, accept-handler-defn, storage)
+	host-func-type (p : host-tuple-type(host-type, params)) -> ((m : host-matcher(userdata, result)))
+let host-matcher-reducible = lambda (
+		userdata       : host-type,
+		storage        : tuple-def-type(host-type),
+		result2        : tuple-def-type(host-type),
+		result         : tuple-def-type(host-type),
 		red            : reducer-type(userdata, storage, result2, result),
-		s              : prim-tuple-type(prim-type, storage),
+		s              : host-tuple-type(host-type, storage),
 		accept-handler : reducible-handler-type(userdata, result2, result))
 	let accept-handler-type = reducible-handler-type(userdata, result2, result)
-	let accept-handler-defn = tuple-def-singleton(prim-type, accept-handler-type)
-	let red-param-defn = tuple-def-concat(prim-type, accept-handler-defn, storage)
-	let red-result-defn = tuple-def-singleton(prim-type, prim-matcher(userdata, result))
+	let accept-handler-defn = tuple-def-singleton(host-type, accept-handler-type)
+	let red-param-defn = tuple-def-concat(host-type, accept-handler-defn, storage)
+	let red-result-defn = tuple-def-singleton(host-type, host-matcher(userdata, result))
 
-	let accept-handler-tuple = prim-tuple-of(prim-type, accept-handler-defn)(accept-handler)
-	let red-param = prim-tuple-concat(prim-type, accept-handler-defn, storage, accept-handler-tuple, s)
+	let accept-handler-tuple = host-tuple-of(host-type, accept-handler-defn)(accept-handler)
+	let red-param = host-tuple-concat(host-type, accept-handler-defn, storage, accept-handler-tuple, s)
 
 	# look ma, no intrinsics!
 	let (m) = apply(red, red-param)
 	m
 
-let failure-handler-type = lambda (userdata : prim-type, result : tuple-def-type(prim-type))
-	prim-func-type (ud : userdata, exception : prim-lua-error) -> (r : prim-tuple-type(prim-type, result))
+let failure-handler-type = lambda (userdata : host-type, result : tuple-def-type(host-type))
+	host-func-type (ud : userdata, exception : host-lua-error) -> (r : host-tuple-type(host-type, result))
 
 let match-syntax = lambda (
-		userdata        : prim-type,
-		result          : tuple-def-type(prim-type),
-		matchers        : prim-array-type(prim-matcher(userdata, result)),
+		userdata        : host-type,
+		result          : tuple-def-type(host-type),
+		matchers        : host-array-type(host-matcher(userdata, result)),
 		failure-handler : failure-handler-type(userdata, result),
-		syn             : prim-syntax,
+		syn             : host-syntax,
 		ud              : userdata)
 	let inner = intrinsic
 		""""
@@ -763,25 +763,25 @@ let match-syntax = lambda (
 			end
 			return match_syntax
 		:
-		prim-func-type (matchers        : prim-array-type(prim-matcher(userdata, result)), failure-handler : failure-handler-type(userdata, result), syn             : prim-syntax, ud              : wrapped(userdata)) -> (r : prim-tuple-type(prim-type, result))
+		host-func-type (matchers        : host-array-type(host-matcher(userdata, result)), failure-handler : failure-handler-type(userdata, result), syn             : host-syntax, ud              : wrapped(userdata)) -> (r : host-tuple-type(host-type, result))
 	inner(matchers, failure-handler, syn, implicit-wrap(ud))
 
-let prim-term-of-inner = intrinsic
+let host-term-of-inner = intrinsic
 	""""
-		local function prim_term_of(goal)
+		local function host_term_of(goal)
 			if goal:is_infer() then
-				return terms.prim_inferrable_term_type
+				return terms.host_inferrable_term_type
 			elseif goal:is_check() then
-				return terms.prim_checkable_term_type
+				return terms.host_checkable_term_type
 			else
-				error("prim-term-of: unknown goal")
+				error("host-term-of: unknown goal")
 			end
 		end
-		return prim_term_of
+		return host_term_of
 	:
-	prim-func-type ((goal : prim-goal)) -> ((t : wrapped(prim-type)))
-let prim-term-of = lambda ((goal : prim-goal))
-	let (t) = prim-term-of-inner(goal)
+	host-func-type ((goal : host-goal)) -> ((t : wrapped(host-type)))
+let host-term-of = lambda ((goal : host-goal))
+	let (t) = host-term-of-inner(goal)
 	implicit-unwrap(t)
 let goalify-inferrable = intrinsic
 	""""
@@ -796,18 +796,18 @@ let goalify-inferrable = intrinsic
 		end
 		return goalify_inferrable
 	:
-	prim-func-type (goal : prim-goal, inferrable : prim-inferrable-term) -> ((term : prim-term-of(goal)))
+	host-func-type (goal : host-goal, inferrable : host-inferrable-term) -> ((term : host-term-of(goal)))
 
-let operative-handler-type = lambda ((userdata : prim-type))
-	forall (syn : prim-syntax, env : prim-environment, ud : userdata, goal : prim-goal) -> (term : prim-term-of(goal), env : prim-environment)
+let operative-handler-type = lambda ((userdata : host-type))
+	forall (syn : host-syntax, env : host-environment, ud : userdata, goal : host-goal) -> (term : host-term-of(goal), env : host-environment)
 
-let operative-result-defn = lambda ((goal : prim-goal))
-	# read as: (term : prim-term-of(goal), env : prim-environment)
-	tuple-def-concat prim-type
-		tuple-def-singleton(prim-type, prim-term-of(goal))
-		tuple-def-singleton(prim-type, prim-environment)
+let operative-result-defn = lambda ((goal : host-goal))
+	# read as: (term : host-term-of(goal), env : host-environment)
+	tuple-def-concat host-type
+		tuple-def-singleton(host-type, host-term-of(goal))
+		tuple-def-singleton(host-type, host-environment)
 
-let new-operative = lambda (userdata : prim-type, ud : userdata, handler : operative-handler-type(userdata))
+let new-operative = lambda (userdata : host-type, ud : userdata, handler : operative-handler-type(userdata))
 	let inner = intrinsic
 		""""
 			local function new_operative(userdata, ud, handler)
@@ -817,7 +817,7 @@ let new-operative = lambda (userdata : prim-type, ud : userdata, handler : opera
 			end
 			return new_operative
 		:
-		prim-func-type (userdata_ : wrapped(prim-type), ud : wrapped(userdata), handler : wrapped(operative-handler-type(userdata))) -> (op-type : wrapped(prim-type), op : wrapped(implicit-unwrap(op-type)))
+		host-func-type (userdata_ : wrapped(host-type), ud : wrapped(userdata), handler : wrapped(operative-handler-type(userdata))) -> (op-type : wrapped(host-type), op : wrapped(implicit-unwrap(op-type)))
 	let (op-type, op) =
 		inner
 			implicit-wrap(userdata)
@@ -828,52 +828,52 @@ let new-operative = lambda (userdata : prim-type, ud : userdata, handler : opera
 	let op = implicit-unwrap(op)
 
 	# lol look how horrible tuple types are
-	# read as: (op-type : prim-type, op : op-type)
+	# read as: (op-type : host-type, op : op-type)
 	let result-defn =
 		tuple-def-elem type_(1)
 			tuple-def-elem type_(1)
 				tuple-def-empty type_(1)
 				lambda ()
-					prim-type
-			lambda ((op-type : prim-type))
+					host-type
+			lambda ((op-type : host-type))
 				op-type
 	tuple-of(type_(1), result-defn)(op-type, op)
 
-let block-reducer-storage-defn = tuple-def-singleton(prim-type, prim-expression-args)
+let block-reducer-storage-defn = tuple-def-singleton(host-type, host-expression-args)
 
 let block-reducer-result2-defn = operative-result-defn # incidentally the same
 
-let block-match-result-defn = lambda ((goal : prim-goal))
-	# read as: (ok : prim-bool, _ : prim-if(ok, prim-term-of(goal), prim-lua-error), _ : prim-if(ok, prim-environment, prim-unit))
-	# or, more logically: (ok : prim-bool, ...) where:
-	# - ok == true:  `...` is prim-term-of(goal), prim-environment
-	# - ok == false: `...` is prim-lua-error
-	tuple-def-elem prim-type
-		tuple-def-elem prim-type
-			tuple-def-elem prim-type
-				tuple-def-empty prim-type
+let block-match-result-defn = lambda ((goal : host-goal))
+	# read as: (ok : host-bool, _ : host-if(ok, host-term-of(goal), host-lua-error), _ : host-if(ok, host-environment, host-unit))
+	# or, more logically: (ok : host-bool, ...) where:
+	# - ok == true:  `...` is host-term-of(goal), host-environment
+	# - ok == false: `...` is host-lua-error
+	tuple-def-elem host-type
+		tuple-def-elem host-type
+			tuple-def-elem host-type
+				tuple-def-empty host-type
 				lambda ()
-					prim-bool
-			lambda ((ok : prim-bool))
-				prim-if(ok, prim-term-of(goal), prim-lua-error)
-		lambda (ok : prim-bool, _ : prim-if(ok, prim-term-of(goal), prim-lua-error))
-			# hacky way to do variable-length prim tuples
-			prim-if(ok, prim-environment, prim-unit)
+					host-bool
+			lambda ((ok : host-bool))
+				host-if(ok, host-term-of(goal), host-lua-error)
+		lambda (ok : host-bool, _ : host-if(ok, host-term-of(goal), host-lua-error))
+			# hacky way to do variable-length host tuples
+			host-if(ok, host-environment, host-unit)
 
-let block-reducer = lambda ((goal : prim-goal))
+let block-reducer = lambda ((goal : host-goal))
 	intrinsic "return alicorn_expressions.block" :
-		reducer-type(prim-unit, block-reducer-storage-defn, block-reducer-result2-defn(goal), block-match-result-defn(goal))
+		reducer-type(host-unit, block-reducer-storage-defn, block-reducer-result2-defn(goal), block-match-result-defn(goal))
 
-let block-match-accept-handler = lambda ((goal : prim-goal))
+let block-match-accept-handler = lambda ((goal : host-goal))
 	intrinsic "return metalanguage.accept_handler" :
-		reducible-handler-type(prim-unit, block-reducer-result2-defn(goal), block-match-result-defn(goal))
-let block-match-failure-handler = lambda ((goal : prim-goal))
+		reducible-handler-type(host-unit, block-reducer-result2-defn(goal), block-match-result-defn(goal))
+let block-match-failure-handler = lambda ((goal : host-goal))
 	intrinsic "return metalanguage.failure_handler" :
-		failure-handler-type(prim-unit, block-match-result-defn(goal))
+		failure-handler-type(host-unit, block-match-result-defn(goal))
 
 # alicorn doesn't have conds or branches yet so...
 let error-filter =
-	lambda (Tt : prim-type, Tf : prim-type, ok : prim-bool, val-or-err : prim-if(ok, Tt, Tf))
+	lambda (Tt : host-type, Tf : host-type, ok : host-bool, val-or-err : host-if(ok, Tt, Tf))
 		let inner = intrinsic
 			""""
 				local function error_filter(ok, val_or_err)
@@ -884,24 +884,24 @@ let error-filter =
 				end
 				return error_filter
 			:
-			prim-func-type (ok : prim-bool, val-or-err : prim-if(ok, Tt, Tf)) -> ((val : Tt))
+			host-func-type (ok : host-bool, val-or-err : host-if(ok, Tt, Tf)) -> ((val : Tt))
 		let (val) = inner(ok, val-or-err)
 		val
 
-let goal-infer = intrinsic "return terms.expression_goal.infer" : prim-goal
+let goal-infer = intrinsic "return terms.expression_goal.infer" : host-goal
 
-let do-impl-type = operative-handler-type(prim-unit)
+let do-impl-type = operative-handler-type(host-unit)
 
-let do-impl = lambda (syn : prim-syntax, env : prim-environment, ud : prim-unit, goal : prim-goal)
+let do-impl = lambda (syn : host-syntax, env : host-environment, ud : host-unit, goal : host-goal)
 	let (shadowed, inner_env) = enter-block(env)
 
 	let (args) = expression-args-new(goal-infer, inner_env)
-	let s = prim-tuple-of(prim-type, block-reducer-storage-defn)(args)
+	let s = host-tuple-of(host-type, block-reducer-storage-defn)(args)
 
-	let matcher-t = prim-matcher(prim-unit, block-match-result-defn(goal-infer))
+	let matcher-t = host-matcher(host-unit, block-match-result-defn(goal-infer))
 	let matcher =
-		prim-matcher-reducible
-			prim-unit
+		host-matcher-reducible
+			host-unit
 			block-reducer-storage-defn
 			block-reducer-result2-defn(goal-infer)
 			block-match-result-defn(goal-infer)
@@ -910,40 +910,40 @@ let do-impl = lambda (syn : prim-syntax, env : prim-environment, ud : prim-unit,
 			block-match-accept-handler(goal-infer)
 
 	let matchers =
-		prim-array-set
-			prim-array-new matcher-t
+		host-array-set
+			host-array-new matcher-t
 			1
 			matcher
 
 	let (ok, term, inner_env) =
 		match-syntax
-			prim-unit
+			host-unit
 			block-match-result-defn(goal-infer)
 			matchers
 			block-match-failure-handler(goal-infer)
 			syn
-			prim-nil
+			host-nil
 
-	let term = error-filter(prim-term-of(goal-infer), prim-lua-error, ok, term)
-	let inner_env = error-filter(prim-environment, prim-unit, ok, inner_env)
+	let term = error-filter(host-term-of(goal-infer), host-lua-error, ok, term)
+	let inner_env = error-filter(host-environment, host-unit, ok, inner_env)
 
 	let (env, wrapped) = exit-block(inner_env, term, shadowed)
 
 	let (wrapped) = goalify-inferrable(goal, wrapped)
 
-	tuple-of(prim-type, operative-result-defn(goal))(wrapped, env)
+	tuple-of(host-type, operative-result-defn(goal))(wrapped, env)
 
-let (do-type, do) = new-operative(prim-unit, prim-nil, do-impl)
+let (do-type, do) = new-operative(host-unit, host-nil, do-impl)
 
 let foo = "baz"
 let x = do
 	let foo = "foo"
-	let (foobar) = prim-string-concat(foo, "bar")
+	let (foobar) = host-string-concat(foo, "bar")
 	foobar
-let (foobarbaz) = prim-string-concat(x, foo)
+let (foobarbaz) = host-string-concat(x, foo)
 foobarbaz
 
-let tupleof-ascribed-names-reducer-thread-type = new-prim-type(new-prim-unique-id("tupleof-ascribed-names-reducer-thread"))
+let tupleof-ascribed-names-reducer-thread-type = new-host-type(new-host-unique-id("tupleof-ascribed-names-reducer-thread"))
 let tupleof-ascribed-names-reducer-thread-type-get-names = intrinsic
 	""""
 		local function get_names(thread)
@@ -951,7 +951,7 @@ let tupleof-ascribed-names-reducer-thread-type-get-names = intrinsic
 		end
 		return get_names
 	:
-	prim-func-type ((thread : tupleof-ascribed-names-reducer-thread-type)) -> ((names : terms-gen-array))
+	host-func-type ((thread : tupleof-ascribed-names-reducer-thread-type)) -> ((names : terms-gen-array))
 let tupleof-ascribed-names-reducer-thread-type-get-args = intrinsic
 	""""
 		local function get_args(thread)
@@ -959,7 +959,7 @@ let tupleof-ascribed-names-reducer-thread-type-get-args = intrinsic
 		end
 		return get_args
 	:
-	prim-func-type ((thread : tupleof-ascribed-names-reducer-thread-type)) -> ((args : prim-inferrable-term))
+	host-func-type ((thread : tupleof-ascribed-names-reducer-thread-type)) -> ((args : host-inferrable-term))
 let tupleof-ascribed-names-reducer-thread-type-get-env = intrinsic
 	""""
 		local function get_env(thread)
@@ -967,45 +967,45 @@ let tupleof-ascribed-names-reducer-thread-type-get-env = intrinsic
 		end
 		return get_env
 	:
-	prim-func-type ((thread : tupleof-ascribed-names-reducer-thread-type)) -> ((env : prim-environment))
+	host-func-type ((thread : tupleof-ascribed-names-reducer-thread-type)) -> ((env : host-environment))
 
-let tupleof-ascribed-names-reducer-storage-defn = tuple-def-singleton(prim-type, prim-environment)
+let tupleof-ascribed-names-reducer-storage-defn = tuple-def-singleton(host-type, host-environment)
 
-let tupleof-ascribed-names-reducer-result2-defn = tuple-def-singleton(prim-type, tupleof-ascribed-names-reducer-thread-type)
+let tupleof-ascribed-names-reducer-result2-defn = tuple-def-singleton(host-type, tupleof-ascribed-names-reducer-thread-type)
 
 let tupleof-ascribed-names-match-result-defn =
-	# read as: (ok : prim-bool, _ : prim-if(ok, tupleof-ascribed-names-reducer-thread-type, prim-lua-error))
-	# or, more logically: (ok : prim-bool, ...) where:
+	# read as: (ok : host-bool, _ : host-if(ok, tupleof-ascribed-names-reducer-thread-type, host-lua-error))
+	# or, more logically: (ok : host-bool, ...) where:
 	# - ok == true:  `...` is tupleof-ascribed-names-reducer-thread-type
-	# - ok == false: `...` is prim-lua-error
-	# technically this should have a third element in the ok == true case, containing prim-syntax
+	# - ok == false: `...` is host-lua-error
+	# technically this should have a third element in the ok == true case, containing host-syntax
 	# but the syntax will always be nil, and the errors are annoying
-	tuple-def-elem prim-type
-		tuple-def-elem prim-type
-			tuple-def-empty prim-type
+	tuple-def-elem host-type
+		tuple-def-elem host-type
+			tuple-def-empty host-type
 			lambda ()
-				prim-bool
-		lambda ((ok : prim-bool))
-			prim-if(ok, tupleof-ascribed-names-reducer-thread-type, prim-lua-error)
+				host-bool
+		lambda ((ok : host-bool))
+			host-if(ok, tupleof-ascribed-names-reducer-thread-type, host-lua-error)
 
 # FIXME: tupleof_ascribed_names_inner can only produce tuple defs in star-0
 let tupleof-ascribed-names-reducer = intrinsic "return base_env.tupleof_ascribed_names_inner" :
-	reducer-type(prim-unit, tupleof-ascribed-names-reducer-storage-defn, tupleof-ascribed-names-reducer-result2-defn, tupleof-ascribed-names-match-result-defn)
+	reducer-type(host-unit, tupleof-ascribed-names-reducer-storage-defn, tupleof-ascribed-names-reducer-result2-defn, tupleof-ascribed-names-match-result-defn)
 
 let tupleof-ascribed-names-match-accept-handler = intrinsic "return metalanguage.accept_handler" :
-	reducible-handler-type(prim-unit, tupleof-ascribed-names-reducer-result2-defn, tupleof-ascribed-names-match-result-defn)
+	reducible-handler-type(host-unit, tupleof-ascribed-names-reducer-result2-defn, tupleof-ascribed-names-match-result-defn)
 let tupleof-ascribed-names-match-failure-handler = intrinsic "return metalanguage.failure_handler" :
-	failure-handler-type(prim-unit, tupleof-ascribed-names-match-result-defn)
+	failure-handler-type(host-unit, tupleof-ascribed-names-match-result-defn)
 
-let tuple-def-impl-type = operative-handler-type(prim-unit)
+let tuple-def-impl-type = operative-handler-type(host-unit)
 
-let tuple-def-impl = lambda (syn : prim-syntax, env : prim-environment, ud : prim-unit, goal : prim-goal)
-	let s = prim-tuple-of(prim-type, tupleof-ascribed-names-reducer-storage-defn)(env)
+let tuple-def-impl = lambda (syn : host-syntax, env : host-environment, ud : host-unit, goal : host-goal)
+	let s = host-tuple-of(host-type, tupleof-ascribed-names-reducer-storage-defn)(env)
 
-	let matcher-t = prim-matcher(prim-unit, tupleof-ascribed-names-match-result-defn)
+	let matcher-t = host-matcher(host-unit, tupleof-ascribed-names-match-result-defn)
 	let matcher =
-		prim-matcher-reducible
-			prim-unit
+		host-matcher-reducible
+			host-unit
 			tupleof-ascribed-names-reducer-storage-defn
 			tupleof-ascribed-names-reducer-result2-defn
 			tupleof-ascribed-names-match-result-defn
@@ -1014,55 +1014,55 @@ let tuple-def-impl = lambda (syn : prim-syntax, env : prim-environment, ud : pri
 			tupleof-ascribed-names-match-accept-handler
 
 	let matchers =
-		prim-array-set
-			prim-array-new matcher-t
+		host-array-set
+			host-array-new matcher-t
 			1
 			matcher
 
 	let (ok, thread) =
 		match-syntax
-			prim-unit
+			host-unit
 			tupleof-ascribed-names-match-result-defn
 			matchers
 			tupleof-ascribed-names-match-failure-handler
 			syn
-			prim-nil
+			host-nil
 
-	let thread = error-filter(tupleof-ascribed-names-reducer-thread-type, prim-lua-error, ok, thread)
+	let thread = error-filter(tupleof-ascribed-names-reducer-thread-type, host-lua-error, ok, thread)
 
 	let (args) = tupleof-ascribed-names-reducer-thread-type-get-args(thread)
 	let (env) = tupleof-ascribed-names-reducer-thread-type-get-env(thread)
 
 	let (args) = goalify-inferrable(goal, args)
 
-	tuple-of(prim-type, operative-result-defn(goal))(args, env)
+	tuple-of(host-type, operative-result-defn(goal))(args, env)
 
-let (tuple-def-op-type, tuple-def-op) = new-operative(prim-unit, prim-nil, tuple-def-impl)
+let (tuple-def-op-type, tuple-def-op) = new-operative(host-unit, host-nil, tuple-def-impl)
 
-let my-tuple-def = tuple-def-op(x : prim-number, y : prim-number)
+let my-tuple-def = tuple-def-op(x : host-number, y : host-number)
 let my-tuple-type = tuple-type(type_(0), my-tuple-def)
 my-tuple-type
 
-let prim-if-2-type = forall (result : prim-type, c2 : prim-type, a1 : prim-type, subject : prim-bool, consequent : prim-if(subject, result, c2), alternate : prim-if(subject, a1, result)) -> (r : result)
+let host-if-2-type = forall (result : host-type, c2 : host-type, a1 : host-type, subject : host-bool, consequent : host-if(subject, result, c2), alternate : host-if(subject, a1, result)) -> (r : result)
 
-let prim-if-2-wrap = intrinsic
+let host-if-2-wrap = intrinsic
 	""""
 		local typed = terms.typed_term
 		local string_array = terms_gen.declare_array(terms_gen.builtin_string)
 		return terms.value.closure(
-			"#prim-if-param",
+			"#host-if-param",
 			typed.tuple_elim(
 				string_array(
-					"#prim-if-result",
-					"#prim-if-c2",
-					"#prim-if-a1",
-					"#prim-if-subject",
-					"#prim-if-consequent",
-					"#prim-if-alternate"
+					"#host-if-result",
+					"#host-if-c2",
+					"#host-if-a1",
+					"#host-if-subject",
+					"#host-if-consequent",
+					"#host-if-alternate"
 				),
 				typed.bound_variable(1),
 				6,
-				typed.prim_if(
+				typed.host_if(
 					typed.bound_variable(5),
 					typed.bound_variable(6),
 					typed.bound_variable(7)
@@ -1071,21 +1071,21 @@ let prim-if-2-wrap = intrinsic
 			terms.runtime_context()
 		)
 	:
-	wrapped(prim-if-2-type)
-let prim-if-2 = unwrap(prim-if-2-type, prim-if-2-wrap)
+	wrapped(host-if-2-type)
+let host-if-2 = unwrap(host-if-2-type, host-if-2-wrap)
 
-let prim-true = intrinsic "return true" : prim-bool
-let prim-false = intrinsic "return false" : prim-bool
+let host-true = intrinsic "return true" : host-bool
+let host-false = intrinsic "return false" : host-bool
 
-let prim-if-test = lambda (
-		b : prim-bool,
-		x : prim-if(b, prim-string, prim-unit))
-	let default = intrinsic "return 'default'" : prim-if(b, prim-string, prim-string)
-	let foo = prim-if-2(prim-string, prim-unit, prim-string, b, x, default)
-	the prim-string foo
+let host-if-test = lambda (
+		b : host-bool,
+		x : host-if(b, host-string, host-unit))
+	let default = intrinsic "return 'default'" : host-if(b, host-string, host-string)
+	let foo = host-if-2(host-string, host-unit, host-string, b, x, default)
+	the host-string foo
 
-prim-if-test(prim-true, "foobar")
-prim-if-test(prim-false, prim-nil)
+host-if-test(host-true, "foobar")
+host-if-test(host-false, host-nil)
 
 let id = lambda_implicit (T : type_(10))
 	lambda ((x : T))
@@ -1104,9 +1104,9 @@ let tuple-of = lambda_implicit(T : type_(10))
 #	lambda (x : T, y : T)
 #		the point(T) tuple-of(x, y)
 #
-#let mul = intrinsic "return function(a, b) return a * b end" : prim-arith-binop
-#let add = intrinsic "return function(a, b) return a "+" b end" : prim-arith-binop
-#let sqmag = lambda ((r : tuple-type(tuple-def(x : prim-number, y : prim-number))))
+#let mul = intrinsic "return function(a, b) return a * b end" : host-arith-binop
+#let add = intrinsic "return function(a, b) return a "+" b end" : host-arith-binop
+#let sqmag = lambda ((r : tuple-type(tuple-def(x : host-number, y : host-number))))
 #	let (x y) = r
 #	add (mul x x) (mul y y)
 

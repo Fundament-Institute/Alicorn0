@@ -15,9 +15,9 @@ local visibility = terms.visibility
 local purity = terms.purity
 local result_info = terms.result_info
 local value = terms.value
---local prim_syntax_type = terms.prim_syntax_type
---local prim_environment_type = terms.prim_environment_type
---local prim_inferrable_term_type = terms.prim_inferrable_term_type
+--local host_syntax_type = terms.host_syntax_type
+--local host_environment_type = terms.host_environment_type
+--local host_inferrable_term_type = terms.host_inferrable_term_type
 
 local gen = require "./terms-generators"
 local array = gen.declare_array
@@ -100,9 +100,9 @@ local semantic_error = {
 	---@param terms any
 	---@param env any
 	---@return table
-	prim_function_argument_collect_failed = function(cause, anchors, terms, env)
+	host_function_argument_collect_failed = function(cause, anchors, terms, env)
 		return {
-			text = "prim_function_argument_collect_failed",
+			text = "host_function_argument_collect_failed",
 			cause = cause,
 			anchors = anchors,
 			terms = terms,
@@ -119,7 +119,7 @@ end
 
 local expression
 local collect_tuple
-local collect_prim_tuple
+local collect_host_tuple
 
 ---@class ExpressionArgs
 ---@field goal expression_goal
@@ -506,7 +506,8 @@ local function expression_pairhandler(args, a, b)
 	local function call_operative()
 		local handler, userdata_type = type_of_term:unwrap_operative_type()
 		-- operative input: env, syntax tree, goal type (if checked)
-		local tuple_args = value_array(value.prim(sargs), value.prim(env), value.prim(term), value.prim(goal))
+		local tuple_args =
+			value_array(value.host_value(sargs), value.host_value(env), value.host_value(term), value.host_value(goal))
 		local operative_result_val = evaluator.apply_value(handler, terms.value.tuple_value(tuple_args))
 		-- result should be able to be an inferred term, can fail
 		-- NYI: operative_cons in evaluator must use Maybe type once it exists
@@ -522,8 +523,8 @@ local function expression_pairhandler(args, a, b)
 
 		-- temporary, while it isn't a Maybe
 		local operative_result_elems = operative_result_val:unwrap_tuple_value()
-		local data = operative_result_elems[1]:unwrap_prim()
-		local env = operative_result_elems[2]:unwrap_prim()
+		local data = operative_result_elems[1]:unwrap_host_value()
+		local env = operative_result_elems[2]:unwrap_host_value()
 		--if not env then
 		--	print("operative_result_val.elements[2]", operative_result_val.elements[2]:pretty_print())
 		--	error "operative_result_val missing env"
@@ -590,19 +591,19 @@ local function expression_pairhandler(args, a, b)
 		return true, U.tag("call_pi", random, call_pi)
 	end
 
-	local function call_prim_func_type()
-		local param_type, result_type = type_of_term:unwrap_prim_function_type()
-		--print("checking prim_function_type call args with goal: (value term follows)")
+	local function call_host_func_type()
+		local param_type, result_type = type_of_term:unwrap_host_function_type()
+		--print("checking host_function_type call args with goal: (value term follows)")
 		--print(param_type)
 		-- multiple quantity of usages in tuple with usage in function arguments
 		local ok, tuple, env = sargs:match({
-			collect_prim_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
+			collect_host_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
 		}, metalanguage.failure_handler, nil)
 
 		if not ok then
-			error(semantic_error.prim_function_argument_collect_failed(tuple, { a.anchor, b.anchor }, {
-				prim_function_type = type_of_term,
-				prim_function_value = term,
+			error(semantic_error.host_function_argument_collect_failed(tuple, { a.anchor, b.anchor }, {
+				host_function_type = type_of_term,
+				host_function_value = term,
 			}, orig_env))
 		end
 
@@ -617,8 +618,8 @@ local function expression_pairhandler(args, a, b)
 		--print("success: " .. tostring(random))
 		return res, env
 	end
-	if type_of_term:is_prim_function_type() then
-		return true, U.tag("call_prim_func_type", random, call_prim_func_type)
+	if type_of_term:is_host_function_type() then
+		return true, U.tag("call_host_func_type", random, call_host_func_type)
 	end
 
 	print("!!! about to fail of invalid type")
@@ -706,12 +707,12 @@ local function expression_valuehandler(args, val)
 	if val.type == "f64" then
 		--p(val)
 		return true,
-			inferrable_term.typed(value.prim_number_type, usage_array(), typed_term.literal(value.prim(val.val))),
+			inferrable_term.typed(value.host_number_type, usage_array(), typed_term.literal(value.host_value(val.val))),
 			env
 	end
 	if val.type == "string" then
 		return true,
-			inferrable_term.typed(value.prim_string_type, usage_array(), typed_term.literal(value.prim(val.val))),
+			inferrable_term.typed(value.host_string_type, usage_array(), typed_term.literal(value.host_value(val.val))),
 			env
 	end
 	p("valuehandler error", val)
@@ -760,7 +761,7 @@ expression = metalanguage.reducer(
 local OperativeError = {}
 local external_error_mt = {
 	__tostring = function(self)
-		local message = "Lua error occured inside primitive operative "
+		local message = "Lua error occured inside host operative "
 			.. self.operative_name
 			.. " "
 			.. (self.anchor and tostring(self.anchor) or " at unknown position")
@@ -786,18 +787,18 @@ end
 ---@param fn lua_operative
 ---@param name string
 ---@return inferrable
-local function primitive_operative(fn, name)
+local function host_operative(fn, name)
 	local debuginfo = debug.getinfo(fn)
-	local debugstring = (name or error("name not passed to primitive_operative"))
+	local debugstring = (name or error("name not passed to host_operative"))
 		.. " "
 		.. debuginfo.short_src
 		.. ":"
 		.. debuginfo.linedefined
 	local aborting_fn = function(syn, env, userdata, goal)
 		if not env or not env.exit_block then
-			error("env passed to primitive_operative " .. debugstring .. " isn't an env or is nil", env)
+			error("env passed to host_operative " .. debugstring .. " isn't an env or is nil", env)
 		end
-		-- userdata isn't passed in as it's always empty for primitive operatives
+		-- userdata isn't passed in as it's always empty for host operatives
 		local ok, res, env = fn(syn, env, goal)
 		if not ok then
 			error(OperativeError.new(res, syn.anchor, debugstring))
@@ -808,7 +809,7 @@ local function primitive_operative(fn, name)
 		then
 			-- nothing to do, all is well
 		elseif goal:is_check() and inferrable_term.value_check(res) then
-			-- workaround primitive operatives that ignore goal and assume inferrable
+			-- workaround host operatives that ignore goal and assume inferrable
 			---@cast res inferrable
 			res = checkable_term.inferrable(res)
 		else
@@ -816,13 +817,13 @@ local function primitive_operative(fn, name)
 		end
 		if not env or not env.exit_block then
 			print(
-				"env returned from fn passed to alicorn-expressions.primitive_operative isn't an env or is nil",
+				"env returned from fn passed to alicorn-expressions.host_operative isn't an env or is nil",
 				env,
 				" in ",
 				debuginfo.short_src,
 				debuginfo.linedefined
 			)
-			error("invalid env from primitive_operative fn " .. debugstring)
+			error("invalid env from host_operative fn " .. debugstring)
 		end
 		return res, env
 	end
@@ -830,29 +831,29 @@ local function primitive_operative(fn, name)
 	-- (s : syntax, e : environment, u : wrapped_typed_term(userdata), g : goal) -> (goal_to_term(g), environment)
 	--   goal one of inferable, mechanism, checkable
 
-	-- 1: wrap fn as a typed prim
-	-- this way it can take a prim tuple and return a prim tuple
-	local typed_prim_fn = typed_term.literal(value.prim(aborting_fn))
-	-- 2: wrap it to convert a normal tuple argument to a prim tuple
-	-- and a prim tuple result to a normal tuple
+	-- 1: wrap fn as a typed host_value
+	-- this way it can take a host tuple and return a host tuple
+	local typed_host_fn = typed_term.literal(value.host_value(aborting_fn))
+	-- 2: wrap it to convert a normal tuple argument to a host tuple
+	-- and a host tuple result to a normal tuple
 	-- this way it can take a normal tuple and return a normal tuple
 	local nparams = 4
 	local tuple_conv_elements = typed_array(typed_term.bound_variable(2), typed_term.bound_variable(3))
-	local prim_tuple_conv_elements = typed_array()
+	local host_tuple_conv_elements = typed_array()
 	for i = 1, nparams do
 		-- + 1 because variable 1 is the argument tuple
 		-- all variables that follow are the destructured tuple
 		local var = typed_term.bound_variable(i + 1)
-		prim_tuple_conv_elements:append(var)
+		host_tuple_conv_elements:append(var)
 	end
 	local tuple_conv = typed_term.tuple_cons(tuple_conv_elements)
-	local prim_tuple_conv = typed_term.prim_tuple_cons(prim_tuple_conv_elements)
+	local host_tuple_conv = typed_term.host_tuple_cons(host_tuple_conv_elements)
 	local param_names = name_array("#syntax", "#env", "#userdata", "#goal")
-	local tuple_to_prim_tuple =
-		typed_term.tuple_elim(param_names, typed_term.bound_variable(1), nparams, prim_tuple_conv)
-	local tuple_to_prim_tuple_fn = typed_term.application(typed_prim_fn, tuple_to_prim_tuple)
+	local tuple_to_host_tuple =
+		typed_term.tuple_elim(param_names, typed_term.bound_variable(1), nparams, host_tuple_conv)
+	local tuple_to_host_tuple_fn = typed_term.application(typed_host_fn, tuple_to_host_tuple)
 	local result_names = name_array("#term", "#env")
-	local tuple_to_tuple_fn = typed_term.tuple_elim(result_names, tuple_to_prim_tuple_fn, 2, tuple_conv)
+	local tuple_to_tuple_fn = typed_term.tuple_elim(result_names, tuple_to_host_tuple_fn, 2, tuple_conv)
 	-- 3: wrap it in a closure with an empty capture, not a typed lambda
 	-- this ensures variable 1 is the argument tuple
 	local value_fn = value.closure("#OPERATIVE_PARAM", tuple_to_tuple_fn, runtime_context())
@@ -980,7 +981,7 @@ collect_tuple = metalanguage.reducer(
 	"collect_tuple"
 )
 
-collect_prim_tuple = metalanguage.reducer(
+collect_host_tuple = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param args ExpressionArgs
 	---@return boolean
@@ -1040,21 +1041,21 @@ collect_prim_tuple = metalanguage.reducer(
 		end
 
 		if goal:is_infer() then
-			return true, inferrable_term.prim_tuple_cons(collected_terms), env
+			return true, inferrable_term.host_tuple_cons(collected_terms), env
 		elseif goal:is_check() then
 			evaluator.typechecker_state:flow(
-				value.prim_tuple_type(decls),
+				value.host_tuple_type(decls),
 				env.typechecking_context,
 				goal_type,
 				env.typechecking_context,
-				"prim tuple type in collect_prim_tuple"
+				"host tuple type in collect_host_tuple"
 			)
-			return true, checkable_term.prim_tuple_cons(collected_terms), env
+			return true, checkable_term.host_tuple_cons(collected_terms), env
 		else
-			error("NYI: collect_prim_tuple goal case " .. goal.kind)
+			error("NYI: collect_host_tuple goal case " .. goal.kind)
 		end
 	end,
-	"collect_prim_tuple"
+	"collect_host_tuple"
 )
 
 local expressions_args = metalanguage.reducer(
@@ -1116,28 +1117,25 @@ local block = metalanguage.reducer(
 
 ---@param elems value[]
 ---@return value
-local function build_prim_type_tuple(elems)
+local function build_host_type_tuple(elems)
 	local result = terms.empty
 
 	for _, v in ipairs(elems) do
 		result = terms.cons(result, const_combinator(v))
 	end
 
-	return terms.value.prim_tuple_type(result)
+	return terms.value.host_tuple_type(result)
 end
 
 ---@param fn function
 ---@param params value[]
 ---@param results value[]
 ---@return inferrable
-local function primitive_applicative(fn, params, results)
-	local literal_prim_fn = terms.typed_term.literal(terms.value.prim(fn))
-	local prim_fn_type = terms.value.prim_function_type(
-		build_prim_type_tuple(params),
-		build_prim_type_tuple(results),
-		terms.value.result_info(terms.result_info(terms.purity.pure))
-	)
-	return terms.inferrable_term.typed(prim_fn_type, usage_array(), literal_prim_fn)
+local function host_applicative(fn, params, results)
+	local literal_host_fn = terms.typed_term.literal(terms.value.host_value(fn))
+	local host_fn_type =
+		terms.value.host_function_type(build_host_type_tuple(params), build_host_type_tuple(results), result_info_pure)
+	return terms.inferrable_term.typed(host_fn_type, usage_array(), literal_host_fn)
 end
 
 ---@param syntax ConstructedSyntax
@@ -1179,8 +1177,8 @@ local alicorn_expressions = {
 	-- constexpr = constexpr
 	block = block,
 	ExpressionArgs = ExpressionArgs,
-	primitive_operative = primitive_operative,
-	primitive_applicative = primitive_applicative,
+	host_operative = host_operative,
+	host_applicative = host_applicative,
 	--define_operate = define_operate,
 	collect_tuple = collect_tuple,
 	expressions_args = expressions_args,
