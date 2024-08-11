@@ -70,13 +70,7 @@ end
 
 local env = base_env.create()
 
-print("purity: " .. tostring(env.purity))
-print("DEPTH: " .. tostring(env.depth))
-
 local shadowed, env = env:enter_block(terms.block_purity.effectful)
-
-print("purity: " .. tostring(env.purity))
-print("DEPTH: " .. tostring(env.depth))
 
 print("Expression -> terms")
 if profile_run and profile_what == "match" then
@@ -101,12 +95,7 @@ if not ok then
 	return
 end
 
-print("DEPTH: " .. tostring(env.depth))
-
 local env, bound_expr, purity = env:exit_block(expr, shadowed)
-
-print("purity: " .. tostring(purity))
-print("DEPTH: " .. tostring(env.depth))
 
 print("got a term!")
 if print_inferrable then

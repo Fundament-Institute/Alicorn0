@@ -260,7 +260,6 @@ function environment:enter_block(purity)
 			purity = purity,
 			perms = self.perms,
 			typechecking_context = self.typechecking_context,
-			depth = self.depth + 1,
 		}
 end
 
@@ -276,7 +275,6 @@ function environment:exit_block(term, shadowed)
 	if self.purity:is_pure() then
 		purity = terms.purity.pure
 	elseif self.purity:is_effectful() then
-		print("storing effectful")
 		purity = terms.purity.effectful
 	else
 		error("nyi environment dependent purity")
@@ -289,7 +287,7 @@ function environment:exit_block(term, shadowed)
 		perms = outer.perms,
 		typechecking_context = outer.typechecking_context,
 		bindings = outer.bindings,
-		depth = outer.depth,
+		purity = outer.purity,
 	}
 	--print("exiting block and dropping " .. #self.bindings .. " bindings")
 	--self.typechecking_context:dump_names()
@@ -322,7 +320,6 @@ function environment:exit_block(term, shadowed)
 	eval.typechecker_state:exit_block()
 
 	if purity:is_effectful() then
-		print("got effectful")
 		wrapped = terms.inferrable_term.program_end(wrapped)
 	end
 	return env, wrapped, purity

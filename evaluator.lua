@@ -1609,6 +1609,12 @@ function infer(
 			error "must be a tuple defn"
 		end
 		return value.star(0), decl_usages, typed_term.host_tuple_type(decl_term)
+	elseif inferrable_term:is_program_end() then
+		local result = inferrable_term:unwrap_program_end()
+		local program_type, program_usages, program_term = infer(result, typechecking_context)
+		return value.program_type(value.effect_empty, program_type),
+			program_usages,
+			typed_term.program_end(program_term)
 	else
 		error("infer: unknown kind: " .. inferrable_term.kind)
 	end
@@ -2035,6 +2041,10 @@ function evaluate(typed_term, runtime_context)
 		local reln = evaluate(relation, runtime_context)
 
 		return value.range(lower_acc, upper_acc, reln)
+	elseif typed_term:is_program_end() then
+		local result = typed_term:unwrap_program_end()
+
+		return value.program_end(evaluate(result, runtime_context))
 	else
 		error("evaluate: unknown kind: " .. typed_term.kind)
 	end
