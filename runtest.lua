@@ -70,7 +70,13 @@ end
 
 local env = base_env.create()
 
+print("purity: " .. tostring(env.purity))
+print("DEPTH: " .. tostring(env.depth))
+
 local shadowed, env = env:enter_block(terms.block_purity.effectful)
+
+print("purity: " .. tostring(env.purity))
+print("DEPTH: " .. tostring(env.depth))
 
 print("Expression -> terms")
 if profile_run and profile_what == "match" then
@@ -95,7 +101,12 @@ if not ok then
 	return
 end
 
+print("DEPTH: " .. tostring(env.depth))
+
 local env, bound_expr, purity = env:exit_block(expr, shadowed)
+
+print("purity: " .. tostring(purity))
+print("DEPTH: " .. tostring(env.depth))
 
 print("got a term!")
 if print_inferrable then
@@ -124,7 +135,20 @@ if print_typed then
 	print("term: (typed term follows)")
 	print(term:pretty_print(terms.runtime_context()))
 end
--- TODO: constrain type against value.program_type(value.effect_row(set(unique_id)(terms.TCState), value.effect_empty), evaluator.typechecker_state:metavariable())
+
+local gen = require "./terms-generators"
+local set = gen.declare_set
+local unique_id = gen.builtin_table
+evaluator.typechecker_state:flow(
+	type,
+	nil,
+	terms.value.program_type(
+		terms.value.effect_row(set(unique_id)(terms.TCState), terms.value.effect_empty),
+		evaluator.typechecker_state:metavariable(terms.typechecking_context()):as_value()
+	),
+	nil,
+	"final flow check"
+)
 
 print("Evaluating")
 local result = evaluator.evaluate(term, terms.runtime_context())

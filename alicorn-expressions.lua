@@ -580,6 +580,15 @@ local function expression_pairhandler(args, a, b)
 		---@type inferrable | checkable
 		local res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
 
+		if result_info:unwrap_result_info().purity:is_effectful() then
+			if not env.purity:is_effectful() then
+				error("Calling effectful function in environment that is not effectful!")
+			end
+
+			env = env:bind_local(terms.binding.program_sequence(res))
+			res = env:get(res)
+		end
+
 		if goal:is_check() then
 			---@cast res inferrable
 			res = checkable_term.inferrable(res)
