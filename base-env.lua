@@ -205,7 +205,7 @@ local ascribed_name = metalang.reducer(
 		-- print(env.get)
 		-- print(env.enter_block)
 		local shadowed
-		shadowed, env = env:enter_block()
+		shadowed, env = env:enter_block(terms.block_purity.pure)
 		env = env:bind_local(
 			terms.binding.annotated_lambda("#prev", prev, syntax.anchor or backup_anchor, terms.visibility.explicit)
 		)
@@ -221,7 +221,7 @@ local ascribed_name = metalang.reducer(
 			return ok, name
 		end
 		---@cast env Environment
-		env, val = env:exit_block(val, shadowed)
+		local env, val, purity = env:exit_block(val, shadowed)
 		-- print("is env an environment? (end of ascribed name)")
 		-- print(env.get)
 		-- print(env.enter_block)
@@ -425,7 +425,7 @@ local function make_host_func_syntax(effectful)
 		--print("moving on to return type")
 
 		local shadowed
-		shadowed, env = env:enter_block()
+		shadowed, env = env:enter_block(terms.block_purity.pure)
 		-- tail.anchor can be nil so we fall back to the anchor for the start of this host func type if needed
 		-- TODO: use correct name in lambda parameter instead of adding an extra let
 		env = env:bind_local(
@@ -468,7 +468,7 @@ local function make_host_func_syntax(effectful)
 			results_args = terms.inferrable_term.program_type(effect_term, results_args)
 		end
 
-		local env, fn_res_term = env:exit_block(results_args, shadowed)
+		local env, fn_res_term, purity = env:exit_block(results_args, shadowed)
 		local fn_type_term = terms.inferrable_term.host_function_type(
 			params_args,
 			fn_res_term,
@@ -516,7 +516,7 @@ local function forall_type_impl(syntax, env)
 	--print("moving on to return type")
 
 	local shadowed
-	shadowed, env = env:enter_block()
+	shadowed, env = env:enter_block(terms.block_purity.pure)
 	-- tail.anchor can be nil so we fall back to the anchor for the start of this forall type if needed
 	-- TODO: use correct name in lambda parameter instead of adding an extra let
 	env = env:bind_local(
@@ -548,7 +548,7 @@ local function forall_type_impl(syntax, env)
 	local results_args = results_thread.args
 	env = results_thread.env
 
-	local env, fn_res_term = env:exit_block(results_args, shadowed)
+	local env, fn_res_term, purity = env:exit_block(results_args, shadowed)
 	local usage_array = gen.declare_array(gen.builtin_number)
 	local fn_type_term = terms.inferrable_term.pi(
 		params_args,
@@ -674,7 +674,7 @@ local function lambda_impl(syntax, env)
 
 	local single, args, names, env = thread.single, thread.args, thread.names, thread.env
 
-	local shadow, inner_env = env:enter_block()
+	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
 	-- TODO: use correct name in lambda parameter instead of adding an extra let
 	inner_env = inner_env:bind_local(
 		terms.binding.annotated_lambda("#lambda-arguments", thread.args, syntax.anchor, terms.visibility.explicit)
@@ -693,7 +693,7 @@ local function lambda_impl(syntax, env)
 	if not ok then
 		return ok, expr
 	end
-	local resenv, term = env:exit_block(expr, shadow)
+	local resenv, term, purity = env:exit_block(expr, shadow)
 	return true, term, resenv
 end
 
@@ -708,7 +708,7 @@ local function lambda_impl_implicit(syntax, env)
 
 	local single, args, names, env = thread.single, thread.args, thread.names, thread.env
 
-	local shadow, inner_env = env:enter_block()
+	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
 	-- TODO: use correct name in lambda parameter instead of adding an extra let
 	inner_env = inner_env:bind_local(
 		terms.binding.annotated_lambda(
@@ -732,7 +732,7 @@ local function lambda_impl_implicit(syntax, env)
 	if not ok then
 		return ok, expr
 	end
-	local resenv, term = env:exit_block(expr, shadow)
+	local resenv, term, purity = env:exit_block(expr, shadow)
 	return true, term, resenv
 end
 

@@ -661,11 +661,12 @@ let expression-args-new = intrinsic "return alicorn_expressions.ExpressionArgs.n
 	host-func-type (goal : host-goal, env : host-environment) -> ((args : host-expression-args))
 
 let host-shadow-environment = new-host-type(new-host-unique-id("shadow-environment"))
+let host-purity = new-host-type(new-host-unique-id("purity"))
 let enter-block = intrinsic
 	""""
 		-- wish environment.enter_block was accessible from internals
 		local function enter_block(env)
-			return env:enter_block()
+			return env:enter_block(terms.block_purity.pure)
 		end
 		return enter_block
 	:
@@ -678,7 +679,7 @@ let exit-block = intrinsic
 		end
 		return exit_block
 	:
-	host-func-type (inner : host-environment, term : host-inferrable-term, shadowed : host-shadow-environment) -> (env : host-environment, wrapped : host-inferrable-term)
+	host-func-type (inner : host-environment, term : host-inferrable-term, shadowed : host-shadow-environment) -> (env : host-environment, wrapped : host-inferrable-term, purity : host-purity)
 
 let host-matcher = new-host-type-family new-host-unique-id("matcher")
 	forall (userdata : host-type, result : tuple-def-type(host-type)) -> (T : host-type)
@@ -927,7 +928,7 @@ let do-impl = lambda (syn : host-syntax, env : host-environment, ud : host-unit,
 	let term = error-filter(host-term-of(goal-infer), host-lua-error, ok, term)
 	let inner_env = error-filter(host-environment, host-unit, ok, inner_env)
 
-	let (env, wrapped) = exit-block(inner_env, term, shadowed)
+	let (env, wrapped, purity) = exit-block(inner_env, term, shadowed)
 
 	let (wrapped) = goalify-inferrable(goal, wrapped)
 

@@ -549,6 +549,7 @@ local function expression_pairhandler(args, a, b)
 	end
 
 	local function call_pi()
+		-- TODO: if result_info is effectful, generate a program sequence and bind it to env
 		local param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
 
 		while param_info:unwrap_param_info():unwrap_visibility():is_implicit() do

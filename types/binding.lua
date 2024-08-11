@@ -22,10 +22,17 @@ function binding:is_annotated_lambda() end
 function binding:unwrap_annotated_lambda() end
 ---@return boolean, string, inferrable, Anchor, visibility
 function binding:as_annotated_lambda() end
+---@return boolean
+function binding:is_program_sequence() end
+---@return inferrable
+function binding:unwrap_program_sequence() end
+---@return boolean, inferrable
+function binding:as_program_sequence() end
 
 ---@class (exact) bindingType: EnumType
 ---@field define_enum fun(self: bindingType, name: string, variants: Variants): bindingType
 ---@field let fun(name: string, expr: inferrable): binding
 ---@field tuple_elim fun(names: ArrayValue, subject: inferrable): binding
 ---@field annotated_lambda fun(param_name: string, param_annotation: inferrable, anchor: Anchor, visible: visibility): binding
+---@field program_sequence fun(first: inferrable): binding
 return {}

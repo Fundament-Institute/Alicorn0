@@ -232,6 +232,7 @@ binding:define_enum("binding", {
 		"anchor",           anchor_type,
 		"visible",          visibility,
 	} },
+	{ "program_sequence", { "first", inferrable_term } },
 })
 
 -- checkable terms need a goal type to typecheck against
@@ -356,13 +357,14 @@ inferrable_term:define_enum("inferrable", {
 		"anchor", anchor_type,
 	} },
 	{ "program_sequence", {
-		"first", inferrable_term,
-		"continue", inferrable_term
+		"first",    inferrable_term,
+		"continue", inferrable_term,
 	} },
+	{ "program_end", { "result", inferrable_term } },
 	{ "program_type", {
 		"effect_type", inferrable_term,
-		"result_type", inferrable_term
-	} }
+		"result_type", inferrable_term,
+	} },
 })
 
 -- typed terms have been typechecked but do not store their type internally
@@ -481,28 +483,26 @@ typed_term:define_enum("typed", {
 	{ "range", {
 		  "lower_bounds", array(typed_term),
 		  "upper_bounds", array(typed_term),
-		  "relation", typed_term -- a subtyping relation. not currently represented.
+		  "relation",     typed_term, -- a subtyping relation. not currently represented.
 	} },
 
-	{ "program_end", {
-		"result", typed_term
-	} },
+	{ "program_end", { "result", typed_term } },
 	{ "program_invoke", {
 		"effect_tag", typed_term,
-		"effect_arg", typed_term
+		"effect_arg", typed_term,
 	} },
 	{ "program_continue", {
-		"first", typed_term,
-		"continue", typed_term
+		"first",    typed_term,
+		"continue", typed_term,
 	} },
 	{ "effect_type", {
 		"components", array(typed_term),
-		"base", typed_term
+		"base",       typed_term,
 	} },
 	{ "program_type", {
 		"effect_type", typed_term,
-		"result_type", typed_term
-	}}
+		"result_type", typed_term,
+	} },
 })
 
 local unique_id = gen.builtin_table
@@ -572,37 +572,32 @@ end
 
 ---@module './types/effect_id'
 local effect_id = gen.declare_type()
+-- stylua: ignore
 effect_id:define_record("effect_id", {
-	"primary",
-	unique_id,
-	"extension",
-	set(unique_id), --TODO: switch to a set
+	"primary",   unique_id,
+	"extension", set(unique_id), --TODO: switch to a set
 })
 
 local semantic_id = gen.declare_type()
+-- stylua: ignore
 semantic_id:define_record("semantic_id", {
-	"primary",
-	unique_id,
-	"extension",
-	set(unique_id), --TODO: switch to a set
+	"primary",   unique_id,
+	"extension", set(unique_id), --TODO: switch to a set
 })
 
 --TODO: consider switching to a nicer coterm representation
 ---@module './types/continuation'
 local continuation = gen.declare_type()
+-- stylua: ignore
 continuation:define_enum("continuation", {
 	{ "empty" },
 	{ "frame", {
-		"context",
-		runtime_context_type,
-		"code",
-		typed_term,
+		"context", runtime_context_type,
+		"code",    typed_term,
 	} },
 	{ "sequence", {
-		"first",
-		continuation,
-		"second",
-		continuation,
+		"first",  continuation,
+		"second", continuation,
 	} },
 })
 
@@ -647,7 +642,7 @@ value:define_enum("value", {
 	{ "range", {
 		  "lower_bounds", array(value),
 		  "upper_bounds", array(value),
-		  "relation", value -- a subtyping relation. not currently represented.
+		  "relation",     value, -- a subtyping relation. not currently represented.
 	} },
 
 	-- metaprogramming stuff
@@ -742,26 +737,24 @@ value:define_enum("value", {
 		"supertype", value,
 		"value",     value,
 	} },
-	{ "program_end", {
-		"result", value
-	} },
+	{ "program_end", { "result", value } },
 	{ "program_cont", {
-		"action", unique_id,
-		"argument", value,
-		"continuation", continuation
+		"action",       unique_id,
+		"argument",     value,
+		"continuation", continuation,
 	} },
 	{ "effect_empty" },
-	{ "effect_elem", { "tag", effect_id}},
+	{ "effect_elem", { "tag", effect_id } },
 	{ "effect_type" },
 	{ "effect_row", {
 		"components", set(unique_id),
-		"rest", value
+		"rest",       value,
 	} },
 	{ "effect_row_type" },
 	{ "program_type", {
 		"effect_sig", value,
-		"base_type", value
-	} }
+		"base_type",  value,
+	} },
 })
 
 -- stylua: ignore

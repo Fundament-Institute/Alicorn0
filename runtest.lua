@@ -70,7 +70,7 @@ end
 
 local env = base_env.create()
 
-local shadowed, env = env:enter_block()
+local shadowed, env = env:enter_block(terms.block_purity.effectful)
 
 print("Expression -> terms")
 if profile_run and profile_what == "match" then
@@ -95,7 +95,7 @@ if not ok then
 	return
 end
 
-local env, bound_expr = env:exit_block(expr, shadowed)
+local env, bound_expr, purity = env:exit_block(expr, shadowed)
 
 print("got a term!")
 if print_inferrable then
@@ -124,6 +124,7 @@ if print_typed then
 	print("term: (typed term follows)")
 	print(term:pretty_print(terms.runtime_context()))
 end
+-- TODO: constrain type against value.program_type(value.effect_row(set(unique_id)(terms.TCState), value.effect_empty), evaluator.typechecker_state:metavariable())
 
 print("Evaluating")
 local result = evaluator.evaluate(term, terms.runtime_context())
