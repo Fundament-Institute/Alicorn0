@@ -282,6 +282,7 @@ function typed:unwrap_program_type() end
 function typed:as_program_type() end
 
 ---@class (exact) typedType: EnumType
+---@field define_enum fun(self: typedType, name: string, variants: Variants): typedType
 ---@field bound_variable fun(index: number): typed
 ---@field literal fun(literal_value: value): typed
 ---@field lambda fun(param_name: string, body: typed): typed

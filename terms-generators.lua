@@ -94,7 +94,6 @@ local function validate_params_types(kind, params, params_types)
 end
 
 ---@class RecordType: Type
----@field define_record fun(RecordType, string, ParamsWithTypes): RecordType -- this is a lie
 ---@field derive fun(self: RecordType, deriver: Deriver, ...)
 ---@field _kind string
 ---@field derived_eq boolean?
@@ -193,7 +192,6 @@ local function gen_unit(self, kind)
 end
 
 ---@class EnumType: Type
----@field define_enum fun(EnumType, string, Variants): EnumType -- this is a lie
 ---@field derive fun(self: EnumType, deriver: Deriver, ...)
 ---@field _name string
 ---@field derived_eq boolean?

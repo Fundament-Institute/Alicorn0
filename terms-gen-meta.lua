@@ -23,6 +23,7 @@ local io = require "io"
 -- function purity:as_pure() end
 
 -- ---@class (exact) purityType: EnumType
+-- ---@field define_enum fun(self: purityType, name: string, variants: Variants): purityType
 -- ---@field effectful purity
 -- ---@field pure purity
 -- return {}
@@ -44,6 +45,7 @@ $(
 
 -- TODO: constructor annotation
 ---@class (exact) $moduletypename: RecordType
+---@field define_record fun(self: $moduletypename, kind: string, params_with_types: ParamsWithTypes): $moduletypename
 return {}]],
 
 	enum_definition = [[
@@ -54,6 +56,7 @@ $(
 )methods
 
 ---@class (exact) $moduletypename: EnumType
+---@field define_enum fun(self: $moduletypename, name: string, variants: Variants): $moduletypename
 $(
 )constructors
 return {}]],

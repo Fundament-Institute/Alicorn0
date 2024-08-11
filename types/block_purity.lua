@@ -30,6 +30,7 @@ function block_purity:unwrap_inherit() end
 function block_purity:as_inherit() end
 
 ---@class (exact) block_purityType: EnumType
+---@field define_enum fun(self: block_purityType, name: string, variants: Variants): block_purityType
 ---@field effectful block_purity
 ---@field pure block_purity
 ---@field dependent fun(val: value): block_purity

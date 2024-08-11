@@ -228,6 +228,7 @@ function inferrable:unwrap_program_type() end
 function inferrable:as_program_type() end
 
 ---@class (exact) inferrableType: EnumType
+---@field define_enum fun(self: inferrableType, name: string, variants: Variants): inferrableType
 ---@field bound_variable fun(index: number): inferrable
 ---@field typed fun(type: value, usage_counts: ArrayValue, typed_term: typed): inferrable
 ---@field annotated_lambda fun(param_name: string, param_annotation: inferrable, body: inferrable, anchor: Anchor, visible: visibility): inferrable

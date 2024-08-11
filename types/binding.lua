@@ -24,6 +24,7 @@ function binding:unwrap_annotated_lambda() end
 function binding:as_annotated_lambda() end
 
 ---@class (exact) bindingType: EnumType
+---@field define_enum fun(self: bindingType, name: string, variants: Variants): bindingType
 ---@field let fun(name: string, expr: inferrable): binding
 ---@field tuple_elim fun(names: ArrayValue, subject: inferrable): binding
 ---@field annotated_lambda fun(param_name: string, param_annotation: inferrable, anchor: Anchor, visible: visibility): binding

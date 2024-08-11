@@ -30,6 +30,7 @@ function checkable:unwrap_lambda() end
 function checkable:as_lambda() end
 
 ---@class (exact) checkableType: EnumType
+---@field define_enum fun(self: checkableType, name: string, variants: Variants): checkableType
 ---@field inferrable fun(inferrable_term: inferrable): checkable
 ---@field tuple_cons fun(elements: ArrayValue): checkable
 ---@field prim_tuple_cons fun(elements: ArrayValue): checkable

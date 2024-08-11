@@ -24,6 +24,7 @@ function free:unwrap_unique() end
 function free:as_unique() end
 
 ---@class (exact) freeType: EnumType
+---@field define_enum fun(self: freeType, name: string, variants: Variants): freeType
 ---@field metavariable fun(metavariable: Metavariable): free
 ---@field placeholder fun(index: number, debug: placeholder_debug): free
 ---@field unique fun(id: table): free

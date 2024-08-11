@@ -324,6 +324,7 @@ function value:unwrap_program_type() end
 function value:as_program_type() end
 
 ---@class (exact) valueType: EnumType
+---@field define_enum fun(self: valueType, name: string, variants: Variants): valueType
 ---@field visibility_type value
 ---@field visibility fun(visibility: visibility): value
 ---@field param_info_type value

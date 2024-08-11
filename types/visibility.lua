@@ -18,6 +18,7 @@ function visibility:unwrap_implicit() end
 function visibility:as_implicit() end
 
 ---@class (exact) visibilityType: EnumType
+---@field define_enum fun(self: visibilityType, name: string, variants: Variants): visibilityType
 ---@field explicit visibility
 ---@field implicit visibility
 return {}

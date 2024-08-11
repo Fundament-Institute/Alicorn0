@@ -24,6 +24,7 @@ function expression_goal:unwrap_mechanism() end
 function expression_goal:as_mechanism() end
 
 ---@class (exact) expression_goalType: EnumType
+---@field define_enum fun(self: expression_goalType, name: string, variants: Variants): expression_goalType
 ---@field infer expression_goal
 ---@field check fun(goal_type: value): expression_goal
 ---@field mechanism fun(TODO: value): expression_goal

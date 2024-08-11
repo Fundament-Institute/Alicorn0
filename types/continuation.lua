@@ -24,6 +24,7 @@ function continuation:unwrap_sequence() end
 function continuation:as_sequence() end
 
 ---@class (exact) continuationType: EnumType
+---@field define_enum fun(self: continuationType, name: string, variants: Variants): continuationType
 ---@field empty continuation
 ---@field frame fun(context: RuntimeContext, code: typed): continuation
 ---@field sequence fun(first: continuation, second: continuation): continuation

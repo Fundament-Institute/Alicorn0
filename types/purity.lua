@@ -18,6 +18,7 @@ function purity:unwrap_pure() end
 function purity:as_pure() end
 
 ---@class (exact) purityType: EnumType
+---@field define_enum fun(self: purityType, name: string, variants: Variants): purityType
 ---@field effectful purity
 ---@field pure purity
 return {}

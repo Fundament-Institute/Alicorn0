@@ -9,4 +9,5 @@ function effect_id:unwrap_effect_id() end
 
 -- TODO: constructor annotation
 ---@class (exact) effect_idType: RecordType
+---@field define_record fun(self: effect_idType, kind: string, params_with_types: ParamsWithTypes): effect_idType
 return {}

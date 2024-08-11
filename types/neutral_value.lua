@@ -84,6 +84,7 @@ function neutral_value:unwrap_prim_unwrap_stuck() end
 function neutral_value:as_prim_unwrap_stuck() end
 
 ---@class (exact) neutral_valueType: EnumType
+---@field define_enum fun(self: neutral_valueType, name: string, variants: Variants): neutral_valueType
 ---@field free fun(free: free): neutral_value
 ---@field application_stuck fun(f: neutral_value, arg: value): neutral_value
 ---@field enum_elim_stuck fun(mechanism: value, subject: neutral_value): neutral_value
