@@ -2,7 +2,7 @@
 
 local metalanguage = require "./metalanguage"
 -- local conexpr = require './contextual-exprs'
-local types = require "./typesystem"
+-- local types = require "./typesystem"
 
 local terms = require "./terms"
 local expression_goal = terms.expression_goal
@@ -80,12 +80,12 @@ local semantic_error = {
 			cause = cause,
 		}
 	end,
-	---@param t any
-	non_operable_combiner = function(t)
-		return {
-			text = "value in combiner slot that can't operate of type " .. types.type_name(t),
-		}
-	end,
+	-- ---@param t any
+	-- non_operable_combiner = function(t)
+	-- 	return {
+	-- 		text = "value in combiner slot that can't operate of type " .. types.type_name(t),
+	-- 	}
+	-- end,
 	---@param cause any
 	---@param anchors Anchor[]
 	operative_apply_failed = function(cause, anchors)
@@ -995,7 +995,7 @@ collect_prim_tuple = metalanguage.reducer(
 			collected_terms = array(checkable_term)()
 			goal_type = goal:unwrap_check()
 		else
-			collected_terms = inferrable_array
+			collected_terms = inferrable_array()
 		end
 
 		local ok, continue, next_term = true, true, nil

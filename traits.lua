@@ -17,7 +17,7 @@ local trait_type_mt = {
 			local implemented_methods = {}
 			for k, v in pairs(self.methods) do
 				implemented_methods[k] = methods[k]
-					or error("missing method " .. k .. " implementing trait " .. self.name .. " on " .. str(ty))
+					or error("missing method " .. k .. " implementing trait " .. self.name .. " on " .. tostring(ty))
 			end
 			self[ty] = implemented_methods
 		end,

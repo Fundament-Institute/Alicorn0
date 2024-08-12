@@ -731,11 +731,11 @@ local list_tail_ends = reducer(
 )
 
 local gen = require "./terms-generators"
-local constructed_syntax_type = gen.declare_foreign(gen.metatable_equality(constructed_syntax_mt))
-local reducer_type = gen.declare_foreign(gen.metatable_equality(reducer_mt))
+local constructed_syntax_type = gen.declare_foreign(gen.metatable_equality(constructed_syntax_mt), "ConstructedSyntax")
+local reducer_type = gen.declare_foreign(gen.metatable_equality(reducer_mt), "Reducer")
 local matcher_type = gen.declare_foreign(function(val)
 	return MatcherKind[val.kind] ~= nil
-end)
+end, "Matcher")
 
 local metalanguage = {
 	accept_handler = accept_handler,

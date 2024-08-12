@@ -61,7 +61,8 @@ function prettyprinting_context_mt:__len()
 	return self.bindings:len()
 end
 
-local prettyprinting_context_type = gen.declare_foreign(gen.metatable_equality(prettyprinting_context_mt))
+local prettyprinting_context_type =
+	gen.declare_foreign(gen.metatable_equality(prettyprinting_context_mt), "PrettyPrintingContext")
 
 ---@alias AnyContext PrettyPrintingContext | TypecheckingContext | RuntimeContext
 

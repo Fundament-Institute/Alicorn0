@@ -44,7 +44,7 @@ local name_array = string_array
 local typed = terms.typed_term
 
 ---@param luafunc function
----@param parameters Array -- example usage: name_array("#wrap-TODO1", "#wrap-TODO2")
+---@param parameters ArrayValue -- example usage: name_array("#wrap-TODO1", "#wrap-TODO2")
 ---@return value
 local function luatovalue(luafunc, parameters)
 	local len = parameters:len()
@@ -126,8 +126,8 @@ effect_row_srel = {
 ---@type SubtypeRelation
 local UniverseOmegaRelation
 
----@param onto Array
----@param with Array
+---@param onto ArrayValue
+---@param with ArrayValue
 local function add_arrays(onto, with)
 	local olen = #onto
 	for i, n in ipairs(with) do
@@ -686,8 +686,8 @@ function check_concrete(val, use)
 end
 
 ---@param enum_val value
----@param closures Array
----@return Array
+---@param closures ArrayValue
+---@return ArrayValue
 local function extract_tuple_elem_type_closures(enum_val, closures)
 	local constructor, arg = enum_val:unwrap_enum_value()
 	local elements = arg:unwrap_tuple_value()
@@ -714,7 +714,7 @@ end
 ---@param checkable_term checkable
 ---@param typechecking_context TypecheckingContext
 ---@param goal_type value
----@return Array, typed
+---@return ArrayValue, typed
 function check(
 	checkable_term, -- constructed from checkable_term
 	typechecking_context, -- todo
@@ -1085,7 +1085,7 @@ end
 
 ---@param inferrable_term inferrable
 ---@param typechecking_context TypecheckingContext
----@return value, Array, typed
+---@return value, ArrayValue, typed
 function infer(
 	inferrable_term, -- constructed from inferrable
 	typechecking_context -- todo
@@ -3051,9 +3051,9 @@ function TypeCheckerState:slice_constraints_for(mv)
 				and mvo:unwrap_neutral():is_free()
 				and mvo:unwrap_neutral():unwrap_free():is_metavariable()
 			then
-				mvo = mvo:unwrap_neutral():unwrap_free():unwrap_metavariable()
-				if mvo.block_level < self.block_level then
-					table.insert(below, self.values[edge.left][1])
+				local mvo_inner = mvo:unwrap_neutral():unwrap_free():unwrap_metavariable()
+				if mvo_inner.block_level < self.block_level then
+					table.insert(below, mvo)
 				end
 			else
 				error("incorrectly labelled as a metavariable")
@@ -3080,9 +3080,9 @@ function TypeCheckerState:slice_constraints_for(mv)
 				and mvo:unwrap_neutral():is_free()
 				and mvo:unwrap_neutral():unwrap_free():is_metavariable()
 			then
-				mvo = mvo:unwrap_neutral():unwrap_free():unwrap_metavariable()
-				if mvo.block_level < self.block_level then
-					table.insert(above, self.values[edge.left][1])
+				local mvo_inner = mvo:unwrap_neutral():unwrap_free():unwrap_metavariable()
+				if mvo_inner.block_level < self.block_level then
+					table.insert(above, mvo)
 				end
 			else
 				error("incorrectly labelled as a metavariable")

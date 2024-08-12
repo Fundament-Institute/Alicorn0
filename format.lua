@@ -430,4 +430,4 @@ local function parse(input, filename)
 	return ast
 end
 
-return { parse = parse }
+return { parse = parse, anchor_mt = anchor_mt }

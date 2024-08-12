@@ -16,6 +16,8 @@ local fibbuf = require "./fibonacci-buffer"
 local gen = require "./terms-generators"
 local derivers = require "./derivers"
 
+local format = require "./format"
+
 local map = gen.declare_map
 local array = gen.declare_array
 local set = gen.declare_set
@@ -32,7 +34,7 @@ local free = gen.declare_type()
 local placeholder_debug = gen.declare_type()
 ---@module "./types/value"
 local value = gen.declare_type()
----@module "./types/neutral"
+---@module "./types/neutral_value"
 local neutral_value = gen.declare_type()
 ---@module "./types/binding"
 local binding = gen.declare_type()
@@ -57,7 +59,7 @@ function Metavariable:as_value()
 end
 
 local metavariable_mt = { __index = Metavariable }
-local metavariable_type = gen.declare_foreign(gen.metatable_equality(metavariable_mt))
+local metavariable_type = gen.declare_foreign(gen.metatable_equality(metavariable_mt), "Metavariable")
 
 ---@class RuntimeContext
 ---@field bindings FibonacciBuffer
@@ -187,11 +189,13 @@ end
 -- empty for now, just used to mark the table
 local module_mt = {}
 
-local runtime_context_type = gen.declare_foreign(gen.metatable_equality(runtime_context_mt))
-local typechecking_context_type = gen.declare_foreign(gen.metatable_equality(typechecking_context_mt))
+local runtime_context_type = gen.declare_foreign(gen.metatable_equality(runtime_context_mt), "RuntimeContext")
+local typechecking_context_type =
+	gen.declare_foreign(gen.metatable_equality(typechecking_context_mt), "TypecheckingContext")
 local prim_user_defined_id = gen.declare_foreign(function(val)
 	return type(val) == "table" and type(val.name) == "string"
-end)
+end, "{ name: string }")
+local anchor_type = gen.declare_foreign(gen.metatable_equality(format.anchor_mt), "Anchor")
 
 -- implicit arguments are filled in through unification
 -- e.g. fn append(t : star(0), n : nat, xs : Array(t, n), val : t) -> Array(t, n+1)
@@ -225,7 +229,7 @@ binding:define_enum("binding", {
 	{ "annotated_lambda", {
 		"param_name",       gen.builtin_string,
 		"param_annotation", inferrable_term,
-		"anchor",           gen.anchor_type,
+		"anchor",           anchor_type,
 		"visible",          visibility,
 	} },
 })
@@ -255,7 +259,7 @@ inferrable_term:define_enum("inferrable", {
 		"param_name",       gen.builtin_string,
 		"param_annotation", inferrable_term,
 		"body",             inferrable_term,
-		"anchor",           gen.anchor_type,
+		"anchor",           anchor_type,
 		"visible",          visibility,
 	} },
 	{ "pi", {
@@ -349,7 +353,7 @@ inferrable_term:define_enum("inferrable", {
 	{ "prim_intrinsic", {
 		"source", checkable_term,
 		"type",   inferrable_term, --checkable_term,
-		"anchor", gen.anchor_type,
+		"anchor", anchor_type,
 	} },
 	{ "program_sequence", {
 		"first", inferrable_term,
@@ -470,7 +474,7 @@ typed_term:define_enum("typed", {
 	} },
 	{ "prim_intrinsic", {
 		"source", typed_term,
-		"anchor", gen.anchor_type,
+		"anchor", anchor_type,
 	} },
 
 	-- a list of upper and lower bounds, and a relation being bound with respect to
@@ -501,14 +505,12 @@ typed_term:define_enum("typed", {
 	}}
 })
 
-local unique_id = gen.declare_foreign(function(val)
-	return type(val) == "table"
-end)
+local unique_id = gen.builtin_table
 
 -- stylua: ignore
 placeholder_debug:define_record("placeholder_debug", {
 	"name",   gen.builtin_string,
-	"anchor", gen.anchor_type,
+	"anchor", anchor_type,
 })
 
 -- stylua: ignore
@@ -807,7 +809,7 @@ neutral_value:define_enum("neutral_value", {
 	} },
 	{ "prim_intrinsic_stuck", {
 		"source", neutral_value,
-		"anchor", gen.anchor_type,
+		"anchor", anchor_type,
 	} },
 	{ "prim_wrap_stuck", { "content", neutral_value } },
 	{ "prim_unwrap_stuck", { "container", neutral_value } },
@@ -846,24 +848,6 @@ end
 local empty = value.enum_value(DeclCons.empty, tup_val())
 local unit_type = value.tuple_type(empty)
 local unit_val = tup_val()
-
-for _, deriver in ipairs { derivers.as, derivers.eq, derivers.diff } do
-	checkable_term:derive(deriver)
-	inferrable_term:derive(deriver)
-	typed_term:derive(deriver)
-	visibility:derive(deriver)
-	free:derive(deriver)
-	value:derive(deriver)
-	neutral_value:derive(deriver)
-	binding:derive(deriver)
-	expression_goal:derive(deriver)
-	placeholder_debug:derive(deriver)
-	purity:derive(deriver)
-	result_info:derive(deriver)
-end
--- deriving `as` implies deriving `unwrap` in enums, but not in records
-placeholder_debug:derive(derivers.unwrap)
-result_info:derive(derivers.unwrap)
 
 --[[
 local tuple_defn = value.enum_value("variant",
@@ -927,7 +911,7 @@ local terms = {
 	lua_prog = lua_prog,
 }
 
-local override_prettys = require("./terms-pretty.lua")(terms)
+local override_prettys = require("./terms-pretty")(terms)
 local checkable_term_override_pretty = override_prettys.checkable_term_override_pretty
 local inferrable_term_override_pretty = override_prettys.inferrable_term_override_pretty
 local typed_term_override_pretty = override_prettys.typed_term_override_pretty
