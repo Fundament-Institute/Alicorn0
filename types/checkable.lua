@@ -17,11 +17,11 @@ function checkable:unwrap_tuple_cons() end
 ---@return boolean, ArrayValue
 function checkable:as_tuple_cons() end
 ---@return boolean
-function checkable:is_prim_tuple_cons() end
+function checkable:is_host_tuple_cons() end
 ---@return ArrayValue
-function checkable:unwrap_prim_tuple_cons() end
+function checkable:unwrap_host_tuple_cons() end
 ---@return boolean, ArrayValue
-function checkable:as_prim_tuple_cons() end
+function checkable:as_host_tuple_cons() end
 ---@return boolean
 function checkable:is_lambda() end
 ---@return string, checkable
@@ -33,6 +33,6 @@ function checkable:as_lambda() end
 ---@field define_enum fun(self: checkableType, name: string, variants: Variants): checkableType
 ---@field inferrable fun(inferrable_term: inferrable): checkable
 ---@field tuple_cons fun(elements: ArrayValue): checkable
----@field prim_tuple_cons fun(elements: ArrayValue): checkable
+---@field host_tuple_cons fun(elements: ArrayValue): checkable
 ---@field lambda fun(param_name: string, body: checkable): checkable
 return {}

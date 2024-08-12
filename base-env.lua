@@ -135,7 +135,7 @@ local function intrinsic(syntax, env)
 			metalang.accept_handler,
 			exprs.expression(
 				utils.accept_with_env,
-				exprs.ExpressionArgs.new(terms.expression_goal.check(value.prim_string_type), env)
+				exprs.ExpressionArgs.new(terms.expression_goal.check(value.host_string_type), env)
 			),
 			metalang.symbol_exact(metalang.accept_handler, ":")
 		),
@@ -158,7 +158,7 @@ local function intrinsic(syntax, env)
 		error "env nil in base-env.intrinsic"
 	end
 	return true,
-		terms.inferrable_term.prim_intrinsic(str, type--[[terms.checkable_term.inferrable(type)]], syntax.anchor),
+		terms.inferrable_term.host_intrinsic(str, type--[[terms.checkable_term.inferrable(type)]], syntax.anchor),
 		env
 end
 
@@ -307,7 +307,7 @@ local tupleof_ascribed_names = metalang.reducer(
 	"tupleof_ascribed_names"
 )
 
-local prim_tupleof_ascribed_names = metalang.reducer(
+local host_tupleof_ascribed_names = metalang.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
@@ -319,10 +319,10 @@ local prim_tupleof_ascribed_names = metalang.reducer(
 		if not ok then
 			return ok, thread
 		end
-		thread.args = terms.inferrable_term.prim_tuple_type(thread.args)
+		thread.args = terms.inferrable_term.host_tuple_type(thread.args)
 		return ok, thread
 	end,
-	"prim_tupleof_ascribed_names"
+	"host_tupleof_ascribed_names"
 )
 
 local ascribed_segment = metalang.reducer(
@@ -362,7 +362,7 @@ local ascribed_segment = metalang.reducer(
 	"ascribed_segment"
 )
 
-local prim_ascribed_segment = metalang.reducer(
+local host_ascribed_segment = metalang.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
@@ -376,7 +376,7 @@ local prim_ascribed_segment = metalang.reducer(
 
 		if multi then
 			local ok, thread = syntax:match({
-				prim_tupleof_ascribed_names(metalang.accept_handler, env),
+				host_tupleof_ascribed_names(metalang.accept_handler, env),
 			}, metalang.failure_handler, nil)
 
 			if not ok then
@@ -396,21 +396,21 @@ local prim_ascribed_segment = metalang.reducer(
 			return true, { single = true, names = name, args = type_val, env = type_env }
 		end
 	end,
-	"prim_ascribed_segment"
+	"host_ascribed_segment"
 )
 
--- TODO: abstract so can reuse for func type and prim func type
-local function make_prim_func_syntax(effectful)
+-- TODO: abstract so can reuse for func type and host func type
+local function make_host_func_syntax(effectful)
 	---@type lua_operative
-	local function prim_func_type_impl(syntax, env)
+	local function host_func_type_impl(syntax, env)
 		if not env or not env.enter_block then
-			error "env isn't an environment in prim_func_type_impl"
+			error "env isn't an environment in host_func_type_impl"
 		end
 
 		local ok, params_thread, tail = syntax:match({
 			metalang.listtail(
 				metalang.accept_handler,
-				prim_ascribed_segment(metalang.accept_handler, env),
+				host_ascribed_segment(metalang.accept_handler, env),
 				metalang.symbol_exact(metalang.accept_handler, "->")
 			),
 		}, metalang.failure_handler, nil)
@@ -426,17 +426,17 @@ local function make_prim_func_syntax(effectful)
 
 		local shadowed
 		shadowed, env = env:enter_block()
-		-- tail.anchor can be nil so we fall back to the anchor for the start of this prim func type if needed
+		-- tail.anchor can be nil so we fall back to the anchor for the start of this host func type if needed
 		-- TODO: use correct name in lambda parameter instead of adding an extra let
 		env = env:bind_local(
 			terms.binding.annotated_lambda(
-				"#prim-func-arguments",
+				"#host-func-arguments",
 				params_args,
 				tail.anchor or syntax.anchor,
 				terms.visibility.explicit
 			)
 		)
-		local ok, arg = env:get("#prim-func-arguments")
+		local ok, arg = env:get("#host-func-arguments")
 		if not ok then
 			error("wtf")
 		end
@@ -448,7 +448,7 @@ local function make_prim_func_syntax(effectful)
 		end
 
 		local ok, results_thread = tail:match({
-			metalang.listmatch(metalang.accept_handler, prim_ascribed_segment(metalang.accept_handler, env)),
+			metalang.listmatch(metalang.accept_handler, host_ascribed_segment(metalang.accept_handler, env)),
 		}, metalang.failure_handler, nil)
 		if not ok then
 			return ok, results_thread
@@ -469,7 +469,7 @@ local function make_prim_func_syntax(effectful)
 		end
 
 		local env, fn_res_term = env:exit_block(results_args, shadowed)
-		local fn_type_term = terms.inferrable_term.prim_function_type(
+		local fn_type_term = terms.inferrable_term.host_function_type(
 			params_args,
 			fn_res_term,
 			terms.checkable_term.inferrable(
@@ -483,15 +483,15 @@ local function make_prim_func_syntax(effectful)
 
 		--print("reached end of function type construction")
 		if not env.enter_block then
-			error "env isn't an environment at end in prim_func_type_impl"
+			error "env isn't an environment at end in host_func_type_impl"
 		end
 		return true, fn_type_term, env
 	end
 
-	return prim_func_type_impl
+	return host_func_type_impl
 end
 
--- TODO: abstract so can reuse for func type and prim func type
+-- TODO: abstract so can reuse for func type and host func type
 ---@type lua_operative
 local function forall_type_impl(syntax, env)
 	if not env or not env.enter_block then
@@ -577,7 +577,7 @@ local function forall_type_impl(syntax, env)
 end
 
 ---Constrains a type by using a checked expression goal and producing an annotated inferrable term
----(the prim-number 5) -> produces inferrable_term.annotated(lit(5), lit(prim-number))
+---(the host-number 5) -> produces inferrable_term.annotated(lit(5), lit(host-number))
 ---@type lua_operative
 local function the_operative_impl(syntax, env)
 	local ok, type_inferrable_term, tail = syntax:match({
@@ -637,8 +637,8 @@ local function apply_operative_impl(syntax, env)
 	local param_type, _
 	if type_of_fn:is_pi() then
 		param_type, _, _, _ = type_of_fn:unwrap_pi()
-	elseif type_of_fn:is_prim_function_type() then
-		param_type, _ = type_of_fn:unwrap_prim_function_type()
+	elseif type_of_fn:is_host_function_type() then
+		param_type, _ = type_of_fn:unwrap_host_function_type()
 	else
 		error "unknown fn type for apply operative"
 	end
@@ -756,7 +756,7 @@ local function startype_impl(syntax, env)
 	return true, term, env
 end
 
--- eg typed.prim_wrap, typed.prim_wrapped_type
+-- eg typed.host_wrap, typed.host_wrapped_type
 ---@param body_fn fun(typed): typed
 ---@param type_fn fun(typed): typed
 ---@return inferrable
@@ -807,7 +807,7 @@ local function build_wrap(body_fn, type_fn)
 	)
 end
 
--- eg typed.prim_unwrap, typed.prim_wrapped_type
+-- eg typed.host_unwrap, typed.host_wrapped_type
 ---@param body_fn fun(typed): typed
 ---@param type_fn fun(typed): typed
 ---@return inferrable
@@ -858,7 +858,7 @@ local function build_unwrap(body_fn, type_fn)
 	)
 end
 
--- eg typed.prim_wrapped_type,
+-- eg typed.host_wrapped_type,
 ---@param body_fn fun(typed): typed
 ---@return inferrable
 local function build_wrapped(body_fn)
@@ -887,7 +887,7 @@ local function build_wrapped(body_fn)
 			param_info_explicit,
 			value.closure(
 				pname_type,
-				typed.tuple_elim(names1, typed.bound_variable(1), 1, typed.literal(value.prim_type_type)),
+				typed.tuple_elim(names1, typed.bound_variable(1), 1, typed.literal(value.host_type_type)),
 				terms.runtime_context()
 			),
 			result_info_pure
@@ -896,57 +896,57 @@ local function build_wrapped(body_fn)
 end
 
 local core_operations = {
-	["+"] = exprs.primitive_applicative(function(a, b)
+	["+"] = exprs.host_applicative(function(a, b)
 		return a + b
-	end, { value.prim_number_type, value.prim_number_type }, { value.prim_number_type }),
-	["-"] = exprs.primitive_applicative(function(a, b)
+	end, { value.host_number_type, value.host_number_type }, { value.host_number_type }),
+	["-"] = exprs.host_applicative(function(a, b)
 		return a - b
-	end, { value.prim_number_type, value.prim_number_type }, { value.prim_number_type }),
-	["*"] = exprs.primitive_applicative(function(a, b)
+	end, { value.host_number_type, value.host_number_type }, { value.host_number_type }),
+	["*"] = exprs.host_applicative(function(a, b)
 		return a * b
-	end, { value.prim_number_type, value.prim_number_type }, { value.prim_number_type }),
-	["/"] = exprs.primitive_applicative(function(a, b)
+	end, { value.host_number_type, value.host_number_type }, { value.host_number_type }),
+	["/"] = exprs.host_applicative(function(a, b)
 		return a / b
-	end, { value.prim_number_type, value.prim_number_type }, { value.prim_number_type }),
-	["%"] = exprs.primitive_applicative(function(a, b)
+	end, { value.host_number_type, value.host_number_type }, { value.host_number_type }),
+	["%"] = exprs.host_applicative(function(a, b)
 		return a % b
-	end, { value.prim_number_type, value.prim_number_type }, { value.prim_number_type }),
-	neg = exprs.primitive_applicative(function(a)
+	end, { value.host_number_type, value.host_number_type }, { value.host_number_type }),
+	neg = exprs.host_applicative(function(a)
 		return -a
-	end, { value.prim_number_type }, { value.prim_number_type }),
+	end, { value.host_number_type }, { value.host_number_type }),
 
-	--["<"] = evaluator.primitive_applicative(function(args)
+	--["<"] = evaluator.host_applicative(function(args)
 	--  return { variant = (args[1] < args[2]) and 1 or 0, arg = types.unit_val }
 	--end, types.tuple {types.number, types.number}, types.cotuple({types.unit, types.unit})),
-	--["=="] = evaluator.primitive_applicative(function(args)
+	--["=="] = evaluator.host_applicative(function(args)
 	--  return { variant = (args[1] == args[2]) and 1 or 0, arg = types.unit_val }
 	--end, types.tuple {types.number, types.number}, types.cotuple({types.unit, types.unit})),
 
-	--["do"] = evaluator.primitive_operative(do_block),
-	let = exprs.primitive_operative(let_bind, "let_bind"),
-	record = exprs.primitive_operative(record_build, "record_build"),
-	intrinsic = exprs.primitive_operative(intrinsic, "intrinsic"),
-	["prim-number"] = lit_term(value.prim_number_type, value.prim_type_type),
-	["prim-type"] = lit_term(value.prim_type_type, value.star(1)),
-	["prim-func-type"] = exprs.primitive_operative(make_prim_func_syntax(false), "prim_func_type_impl"),
-	["prim-prog-type"] = exprs.primitive_operative(make_prim_func_syntax(true), "prim_prog_type_impl"),
+	--["do"] = evaluator.host_operative(do_block),
+	let = exprs.host_operative(let_bind, "let_bind"),
+	record = exprs.host_operative(record_build, "record_build"),
+	intrinsic = exprs.host_operative(intrinsic, "intrinsic"),
+	["host-number"] = lit_term(value.host_number_type, value.host_type_type),
+	["host-type"] = lit_term(value.host_type_type, value.star(1)),
+	["host-func-type"] = exprs.host_operative(make_host_func_syntax(false), "host_func_type_impl"),
+	["host-prog-type"] = exprs.host_operative(make_host_func_syntax(true), "host_prog_type_impl"),
 	type = lit_term(value.star(0), value.star(1)),
-	type_ = exprs.primitive_operative(startype_impl, "startype_impl"),
-	["forall"] = exprs.primitive_operative(forall_type_impl, "forall_type_impl"),
-	lambda = exprs.primitive_operative(lambda_impl, "lambda_impl"),
-	lambda_implicit = exprs.primitive_operative(lambda_impl_implicit, "lambda_impl_implicit"),
-	the = exprs.primitive_operative(the_operative_impl, "the"),
-	apply = exprs.primitive_operative(apply_operative_impl, "apply"),
-	wrap = build_wrap(typed.prim_wrap, typed.prim_wrapped_type),
-	["unstrict-wrap"] = build_wrap(typed.prim_unstrict_wrap, typed.prim_unstrict_wrapped_type),
-	wrapped = build_wrapped(typed.prim_wrapped_type),
-	["unstrict-wrapped"] = build_wrapped(typed.prim_unstrict_wrapped_type),
-	unwrap = build_unwrap(typed.prim_unwrap, typed.prim_wrapped_type),
-	["unstrict-unwrap"] = build_unwrap(typed.prim_unstrict_unwrap, typed.prim_unstrict_wrapped_type),
-	--["dump-env"] = evaluator.primitive_operative(function(syntax, env) print(environment.dump_env(env)); return true, types.unit_val, env end),
-	--["basic-fn"] = evaluator.primitive_operative(basic_fn),
-	--tuple = evaluator.primitive_operative(tuple_type_impl),
-	--["tuple-of"] = evaluator.primitive_operative(tuple_of_impl),
+	type_ = exprs.host_operative(startype_impl, "startype_impl"),
+	["forall"] = exprs.host_operative(forall_type_impl, "forall_type_impl"),
+	lambda = exprs.host_operative(lambda_impl, "lambda_impl"),
+	lambda_implicit = exprs.host_operative(lambda_impl_implicit, "lambda_impl_implicit"),
+	the = exprs.host_operative(the_operative_impl, "the"),
+	apply = exprs.host_operative(apply_operative_impl, "apply"),
+	wrap = build_wrap(typed.host_wrap, typed.host_wrapped_type),
+	["unstrict-wrap"] = build_wrap(typed.host_unstrict_wrap, typed.host_unstrict_wrapped_type),
+	wrapped = build_wrapped(typed.host_wrapped_type),
+	["unstrict-wrapped"] = build_wrapped(typed.host_unstrict_wrapped_type),
+	unwrap = build_unwrap(typed.host_unwrap, typed.host_wrapped_type),
+	["unstrict-unwrap"] = build_unwrap(typed.host_unstrict_unwrap, typed.host_unstrict_wrapped_type),
+	--["dump-env"] = evaluator.host_operative(function(syntax, env) print(environment.dump_env(env)); return true, types.unit_val, env end),
+	--["basic-fn"] = evaluator.host_operative(basic_fn),
+	--tuple = evaluator.host_operative(tuple_type_impl),
+	--["tuple-of"] = evaluator.host_operative(tuple_of_impl),
 	--number = { type = types.type, val = types.number }
 }
 

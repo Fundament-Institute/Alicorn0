@@ -41,34 +41,35 @@ end
 p("tup_val!", tup_val())
 local empty = terms.value.enum_value("empty", tup_val())
 
-local t_prim_num = terms.value.prim_number_type
-local two_tuple_decl = terms.value.prim_tuple_type(
-	cons(cons(empty, evaluator.const_combinator(t_prim_num)), evaluator.const_combinator(t_prim_num))
+local t_host_num = terms.value.host_number_type
+local two_tuple_decl = terms.value.host_tuple_type(
+	cons(cons(empty, evaluator.const_combinator(t_host_num)), evaluator.const_combinator(t_host_num))
 )
-local tuple_decl = terms.value.prim_tuple_type(cons(empty, evaluator.const_combinator(t_prim_num)))
+local tuple_decl = terms.value.host_tuple_type(cons(empty, evaluator.const_combinator(t_host_num)))
 
-local function prim_f(f)
-	return lit(terms.value.prim(f))
+local function host_f(f)
+	return lit(terms.value.host_value(f))
 end
 
-local add = prim_f(function(left, right)
+local add = host_f(function(left, right)
 	return left + right
 end)
-local inf_add = inf_typ(terms.value.prim_function_type(two_tuple_decl, tuple_decl), add)
-local inf_add_from_primitive_applicative = exprs.primitive_applicative(function(a, b)
+local result_info_pure = terms.value.result_info(terms.result_info(terms.purity.pure))
+local inf_add = inf_typ(terms.value.host_function_type(two_tuple_decl, tuple_decl, result_info_pure), add)
+local inf_add_from_host_applicative = exprs.host_applicative(function(a, b)
 	return a + b
-end, { t_prim_num, t_prim_num }, { t_prim_num })
+end, { t_host_num, t_host_num }, { t_host_num })
 
 print("hoof constructed add:")
 print(inf_add:pretty_print())
 
-print("primitive_applicative add:")
-print(inf_add_from_primitive_applicative:pretty_print())
+print("host_applicative add:")
+print(inf_add_from_host_applicative:pretty_print())
 
--- inf_add_from_primitive_applicative should be equivalent to hoof constructed inf_add
+-- inf_add_from_host_applicative should be equivalent to hoof constructed inf_add
 
 local env = environment.new_env({
-	nonlocals = trie.empty:put("+", inf_add_from_primitive_applicative),
+	nonlocals = trie.empty:put("+", inf_add_from_host_applicative),
 })
 
 p("env", environment.dump_env(env))
