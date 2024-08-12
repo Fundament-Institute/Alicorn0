@@ -1615,6 +1615,15 @@ function infer(
 		return value.program_type(value.effect_empty, program_type),
 			program_usages,
 			typed_term.program_end(program_term)
+	elseif inferrable_term:is_program_type() then
+		local effect_type, result_type = inferrable_term:unwrap_program_type()
+		local effect_type_type, effect_type_usages, effect_type_term = infer(effect_type, typechecking_context)
+		local result_type_type, result_type_usages, result_type_term = infer(result_type, typechecking_context)
+		local res_usages = usage_array()
+		add_arrays(res_usages, effect_type_usages)
+		add_arrays(res_usages, result_type_usages)
+		-- TODO: use biunification constraints for start level
+		return value.star(0), res_usages, typed_term.program_type(effect_type_term, result_type_term)
 	else
 		error("infer: unknown kind: " .. inferrable_term.kind)
 	end
@@ -2045,6 +2054,11 @@ function evaluate(typed_term, runtime_context)
 		local result = typed_term:unwrap_program_end()
 
 		return value.program_end(evaluate(result, runtime_context))
+	elseif typed_term:is_program_type() then
+		local effect_type, result_type = typed_term:unwrap_program_type()
+		local effect_type_val = evaluate(effect_type, runtime_context)
+		local result_type_val = evaluate(result_type, runtime_context)
+		return value.program_type(effect_type_val, result_type_val)
 	else
 		error("evaluate: unknown kind: " .. typed_term.kind)
 	end

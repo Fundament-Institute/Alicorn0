@@ -226,9 +226,6 @@ binding:define_enum("binding", {
 		"names",   array(gen.builtin_string),
 		"subject", inferrable_term,
 	} },
-	{ "program_sequence", {
-		"first", inferrable_term
-	} },
 	{ "annotated_lambda", {
 		"param_name",       gen.builtin_string,
 		"param_annotation", inferrable_term,
@@ -886,6 +883,7 @@ local terms = {
 	host_inferrable_term_type = host_inferrable_term_type,
 	host_checkable_term_type = host_checkable_term_type,
 	host_lua_error_type = host_lua_error_type,
+	unique_id = unique_id,
 
 	runtime_context = runtime_context,
 	typechecking_context = typechecking_context,
