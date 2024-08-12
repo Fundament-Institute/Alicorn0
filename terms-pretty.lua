@@ -954,7 +954,7 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function inferrable_term_override_pretty:host_function_type(pp, context)
-	local param_type, result_type = self:unwrap_host_function_type()
+	local param_type, result_type, _ = self:unwrap_host_function_type()
 	context = ensure_context(context)
 	local result_context = context
 	local param_is_tuple_type, param_decls = param_type:as_host_tuple_type()
@@ -1159,7 +1159,7 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function typed_term_override_pretty:host_function_type(pp, context)
-	local param_type, result_type = self:unwrap_host_function_type()
+	local param_type, result_type, _ = self:unwrap_host_function_type()
 	context = ensure_context(context)
 	local result_context = context
 	local param_is_tuple_type, param_decls = param_type:as_host_tuple_type()
@@ -1358,7 +1358,7 @@ end
 
 ---@param pp PrettyPrint
 function value_override_pretty:host_function_type(pp)
-	local param_type, result_type = self:unwrap_host_function_type()
+	local param_type, result_type, _ = self:unwrap_host_function_type()
 	local param_is_tuple_type, param_decls = param_type:as_host_tuple_type()
 	local result_is_readable, param_name, result_code, result_capture = result_type:as_closure()
 	local result_context, result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_decls

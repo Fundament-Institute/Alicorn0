@@ -195,8 +195,20 @@ function environment:bind_local(binding)
 		if self.purity:is_pure() then
 			error("binding.program_sequence is only allowed in effectful blocks")
 		end
+		local first = binding:unwrap_program_sequence()
+		local first_type, first_usages, first_term = infer(first, self.typechecking_context)
+		_, first_type = first_type:unwrap_program_type()
+		local n = #self.typechecking_context
+		local term = inferrable_term.bound_variable(n + 1)
+		local locals = self.locals:put("#program-sequence", term)
+		local evaled = eval.evaluate(first_term, self.typechecking_context.runtime_context)
+		local typechecking_context = self.typechecking_context:append("#program-sequence", first_type, evaled)
 		local bindings = self.bindings:append(binding)
-		return update_env(self, { bindings = bindings })
+		return update_env(self, {
+			locals = locals,
+			bindings = bindings,
+			typechecking_context = typechecking_context,
+		})
 	else
 		error("bind_local: unknown kind: " .. binding.kind)
 	end

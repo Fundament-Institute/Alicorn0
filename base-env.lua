@@ -476,7 +476,7 @@ local function make_host_func_syntax(effectful)
 				terms.inferrable_term.typed(
 					terms.value.result_info_type,
 					usage_array(),
-					terms.typed_term.literal(effectful and result_info_pure or result_info_effectful)
+					terms.typed_term.literal(effectful and result_info_effectful or result_info_pure)
 				)
 			)
 		)
@@ -638,7 +638,7 @@ local function apply_operative_impl(syntax, env)
 	if type_of_fn:is_pi() then
 		param_type, _, _, _ = type_of_fn:unwrap_pi()
 	elseif type_of_fn:is_host_function_type() then
-		param_type, _ = type_of_fn:unwrap_host_function_type()
+		param_type, _, _ = type_of_fn:unwrap_host_function_type()
 	else
 		error "unknown fn type for apply operative"
 	end

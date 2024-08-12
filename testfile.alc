@@ -305,7 +305,7 @@ let get-host-func-arg-inner =
 	intrinsic
 		""""
 			local function get_host_func_arg(subject, valid)
-				local param_type, result_type = subject:unwrap_host_function_type()
+				local param_type, result_type, result_info = subject:unwrap_host_function_type()
 				return param_type, nil
 			end
 			return get_host_func_arg
@@ -327,7 +327,7 @@ let get-host-func-res-inner =
 	intrinsic
 		""""
 			local function get_host_func_res(subject, valid)
-				local param_type, result_type = subject:unwrap_host_function_type()
+				local param_type, result_type, result_info = subject:unwrap_host_function_type()
 				local typed_array = terms_gen.declare_array(terms.typed_term)
 				local tuple_build = terms.typed_term.tuple_cons(
 					typed_array(
@@ -1117,14 +1117,16 @@ let _-_ = sub
 12 - 3 - 5
 
 let mutable-number = new-host-type(new-host-unique-id("mutable-number"))
-let mutate-number-type = host-prog-type (num : mutable-number, m : host-number, c : host-number) -> ()
-let mutate-number = intrinsic "return function(num, m, c) num.x = num.x * m + c end" : mutate-number-type
+let new-mutable-number = intrinsic "return function(x) return { x = x } end" :
+	host-prog-type ((num : host-number)) -> ((res : mutable-number))
 let get-mutable-number = intrinsic "return function(num) return num.x end" :
-	host-func-type ((num : mutable-number)) -> ((x : host-number))
+	host-prog-type ((num : mutable-number)) -> ((x : host-number))
+let mutate-number = intrinsic "return function(num, m, c) num.x = num.x * m + c end" :
+	host-prog-type (num : mutable-number, m : host-number, c : host-number) -> ()
 
-let my-mutable-number = intrinsic "return { x = 0 }" : mutable-number
+let (my-mutable-number) = new-mutable-number(0)
 let (x) = get-mutable-number(my-mutable-number)
-#let () = mutate-number(my-mutable-number, 3, 1)
+let () = mutate-number(my-mutable-number, 3, 1)
 mutate-number(my-mutable-number, 3, 1)
 let (y) = get-mutable-number(my-mutable-number)
 y

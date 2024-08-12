@@ -573,8 +573,14 @@ add_comparer("value.host_function_type", "value.host_function_type", function(a,
 		return true
 	end
 
-	local a_param_type, a_result_type = a:unwrap_host_function_type()
-	local b_param_type, b_result_type = b:unwrap_host_function_type()
+	local a_param_type, a_result_type, a_result_info = a:unwrap_host_function_type()
+	local b_param_type, b_result_type, b_result_info = b:unwrap_host_function_type()
+
+	local apurity = a_result_info:unwrap_result_info():unwrap_result_info()
+	local bpurity = b_result_info:unwrap_result_info():unwrap_result_info()
+	if apurity ~= bpurity then
+		return false, concrete_fail("host function result_info")
+	end
 
 	typechecker_state:queue_subtype(b_param_type, a_param_type, "host function parameters")
 	--local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
@@ -1215,7 +1221,7 @@ function infer(
 			end
 			return application_result_type, application_usages, application
 		elseif f_type:is_host_function_type() then
-			local f_param_type, f_result_type_closure = f_type:unwrap_host_function_type()
+			local f_param_type, f_result_type_closure, f_result_info = f_type:unwrap_host_function_type()
 
 			local arg_usages, arg_term = check(arg, typechecking_context, f_param_type)
 

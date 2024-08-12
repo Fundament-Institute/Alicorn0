@@ -549,7 +549,6 @@ local function expression_pairhandler(args, a, b)
 	end
 
 	local function call_pi()
-		-- TODO: if result_info is effectful, generate a program sequence and bind it to env
 		local param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
 
 		while param_info:unwrap_param_info():unwrap_visibility():is_implicit() do
@@ -569,6 +568,7 @@ local function expression_pairhandler(args, a, b)
 		end
 
 		-- multiple quantity of usages in tuple with usage in function arguments
+		---@type boolean, checkable|string, Environment
 		local ok, tuple, env = sargs:match({
 			collect_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
 		}, metalanguage.failure_handler, nil)
@@ -576,21 +576,23 @@ local function expression_pairhandler(args, a, b)
 		if not ok then
 			error(tuple)
 		end
+		---@cast tuple checkable
 
-		---@type inferrable | checkable
+		---@type string | inferrable | checkable
 		local res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
+		---@cast res inferrable
 
-		if result_info:unwrap_result_info().purity:is_effectful() then
-			if not env.purity:is_effectful() then
-				error("Calling effectful function in environment that is not effectful!")
-			end
-
+		if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
+			---@type Environment
 			env = env:bind_local(terms.binding.program_sequence(res))
-			res = env:get(res)
+			ok, res = env:get("#program-sequence")
+			if not ok then
+				error(res)
+			end
+			---@cast res inferrable
 		end
 
 		if goal:is_check() then
-			---@cast res inferrable
 			res = checkable_term.inferrable(res)
 		end
 
@@ -602,10 +604,11 @@ local function expression_pairhandler(args, a, b)
 	end
 
 	local function call_host_func_type()
-		local param_type, result_type = type_of_term:unwrap_host_function_type()
+		local param_type, result_type, result_info = type_of_term:unwrap_host_function_type()
 		--print("checking host_function_type call args with goal: (value term follows)")
 		--print(param_type)
 		-- multiple quantity of usages in tuple with usage in function arguments
+		---@type boolean, checkable|string, Environment
 		local ok, tuple, env = sargs:match({
 			collect_host_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
 		}, metalanguage.failure_handler, nil)
@@ -616,12 +619,23 @@ local function expression_pairhandler(args, a, b)
 				host_function_value = term,
 			}, orig_env))
 		end
+		---@cast tuple checkable
 
-		---@type inferrable | checkable
+		---@type string | inferrable | checkable
 		local res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
+		---@cast res inferrable
+
+		if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
+			---@type Environment
+			env = env:bind_local(terms.binding.program_sequence(res))
+			ok, res = env:get("#program-sequence")
+			if not ok then
+				error(res)
+			end
+			---@cast res inferrable
+		end
 
 		if goal:is_check() then
-			---@cast res inferrable
 			res = checkable_term.inferrable(res)
 		end
 
