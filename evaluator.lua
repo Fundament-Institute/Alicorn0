@@ -1615,6 +1615,54 @@ function infer(
 			error "must be a tuple defn"
 		end
 		return value.star(0), decl_usages, typed_term.host_tuple_type(decl_term)
+	elseif inferrable_term:is_program_sequence() then
+		local first, anchor, continue = inferrable_term:unwrap_program_sequence()
+		local first_type, first_usages, first_term = infer(first, typechecking_context)
+		if not first_type:is_program_type() then
+			error("program sequence must infer to a program type")
+		end
+		local first_effect_sig, first_base_type = first_type:unwrap_program_type()
+		local inner_context = typechecking_context:append("#program-sequence", first_base_type, nil, anchor)
+		local continue_type, continue_usages, continue_term = infer(continue, inner_context)
+		if not continue_type:is_program_type() then
+			error(
+				"rest of the program sequence must infer to a program type: "
+					.. continue:pretty_print(inner_context)
+					.. "\nbut it infers to "
+					.. continue_type:pretty_print()
+			)
+		end
+		local continue_effect_sig, continue_base_type = continue_type:unwrap_program_type()
+		local first_is_row, first_components, first_rest = first_effect_sig:as_effect_row()
+		local continue_is_row, continue_components, continue_rest = continue_effect_sig:as_effect_row()
+		local result_effect_sig
+		if first_is_row and continue_is_row then
+			if not first_rest:is_effect_empty() or not continue_rest:is_effect_empty() then
+				error("nyi polymorphic effects")
+			end
+			result_effect_sig = value.effect_row(first_components:union(continue_components), value.effect_empty)
+		elseif first_is_row then
+			if not continue_effect_sig:is_effect_empty() then
+				error("unknown effect sig")
+			end
+			result_effect_sig = first_effect_sig
+		elseif continue_is_row then
+			if not first_effect_sig:is_effect_empty() then
+				error("unknown effect sig")
+			end
+			result_effect_sig = continue_effect_sig
+		else
+			if not first_effect_sig:is_effect_empty() or not continue_effect_sig:is_effect_empty() then
+				error("unknown effect sig")
+			end
+			result_effect_sig = value.effect_empty
+		end
+		local result_usages = usage_array()
+		add_arrays(result_usages, first_usages)
+		add_arrays(result_usages, continue_usages)
+		return value.program_type(result_effect_sig, continue_base_type),
+			result_usages,
+			typed_term.program_sequence(first_term, continue_term)
 	elseif inferrable_term:is_program_end() then
 		local result = inferrable_term:unwrap_program_end()
 		local program_type, program_usages, program_term = infer(result, typechecking_context)

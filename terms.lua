@@ -61,6 +61,8 @@ end
 local metavariable_mt = { __index = Metavariable }
 local metavariable_type = gen.declare_foreign(gen.metatable_equality(metavariable_mt), "Metavariable")
 
+local anchor_type = gen.declare_foreign(gen.metatable_equality(format.anchor_mt), "Anchor")
+
 ---@class RuntimeContext
 ---@field bindings FibonacciBuffer
 local RuntimeContext = {}
@@ -149,9 +151,8 @@ end
 ---@param anchor Anchor?
 ---@return TypecheckingContext
 function TypecheckingContext:append(name, type, val, anchor)
-	-- TODO: typecheck
-	if name == nil or type == nil then
-		error("bug!!!")
+	if gen.builtin_string.value_check(name) ~= true then
+		error("TypecheckingContext:append parameter 'name' must be a string")
 	end
 	if value.value_check(type) ~= true then
 		print("type", type)
@@ -160,10 +161,19 @@ function TypecheckingContext:append(name, type, val, anchor)
 			print(k, v)
 		end
 		print(getmetatable(type))
-		error "TypecheckingContext:append type parameter of wrong type"
+		error("TypecheckingContext:append parameter 'type' must be a value")
 	end
 	if type:is_closure() then
 		error "BUG!!!"
+	end
+	if val ~= nil and value.value_check(val) ~= true then
+		error("TypecheckingContext:append parameter 'val' must be a value (or nil if given anchor)")
+	end
+	if anchor ~= nil and anchor_type.value_check(anchor) ~= true then
+		error("TypecheckingContext:append parameter 'anchor' must be an anchor (or nil if given val)")
+	end
+	if (val and anchor) or (not val and not anchor) then
+		error("TypecheckingContext:append expected either val or anchor")
 	end
 	local copy = {
 		bindings = self.bindings:append({ name = name, type = type }),
@@ -195,7 +205,6 @@ local typechecking_context_type =
 local host_user_defined_id = gen.declare_foreign(function(val)
 	return type(val) == "table" and type(val.name) == "string"
 end, "{ name: string }")
-local anchor_type = gen.declare_foreign(gen.metatable_equality(format.anchor_mt), "Anchor")
 
 -- implicit arguments are filled in through unification
 -- e.g. fn append(t : star(0), n : nat, xs : Array(t, n), val : t) -> Array(t, n+1)
@@ -232,7 +241,10 @@ binding:define_enum("binding", {
 		"anchor",           anchor_type,
 		"visible",          visibility,
 	} },
-	{ "program_sequence", { "first", inferrable_term } },
+	{ "program_sequence", {
+		"first",  inferrable_term,
+		"anchor", anchor_type,
+	} },
 })
 
 -- checkable terms need a goal type to typecheck against
@@ -358,6 +370,7 @@ inferrable_term:define_enum("inferrable", {
 	} },
 	{ "program_sequence", {
 		"first",    inferrable_term,
+		"anchor",   anchor_type,
 		"continue", inferrable_term,
 	} },
 	{ "program_end", { "result", inferrable_term } },
@@ -486,6 +499,10 @@ typed_term:define_enum("typed", {
 		  "relation",     typed_term, -- a subtyping relation. not currently represented.
 	} },
 
+	{ "program_sequence", {
+		"first",    typed_term,
+		"continue", typed_term,
+	} },
 	{ "program_end", { "result", typed_term } },
 	{ "program_invoke", {
 		"effect_tag", typed_term,

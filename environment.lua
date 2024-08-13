@@ -195,14 +195,16 @@ function environment:bind_local(binding)
 		if self.purity:is_pure() then
 			error("binding.program_sequence is only allowed in effectful blocks")
 		end
-		local first = binding:unwrap_program_sequence()
+		local first, anchor = binding:unwrap_program_sequence()
 		local first_type, first_usages, first_term = infer(first, self.typechecking_context)
-		_, first_type = first_type:unwrap_program_type()
+		if not first_type:is_program_type() then
+			error("program sequence must infer to a program type")
+		end
+		local first_effect_sig, first_base_type = first_type:unwrap_program_type()
 		local n = #self.typechecking_context
 		local term = inferrable_term.bound_variable(n + 1)
 		local locals = self.locals:put("#program-sequence", term)
-		local evaled = eval.evaluate(first_term, self.typechecking_context.runtime_context)
-		local typechecking_context = self.typechecking_context:append("#program-sequence", first_type, evaled)
+		local typechecking_context = self.typechecking_context:append("#program-sequence", first_base_type, nil, anchor)
 		local bindings = self.bindings:append(binding)
 		return update_env(self, {
 			locals = locals,
@@ -308,6 +310,9 @@ function environment:exit_block(term, shadowed)
 	--print "new"
 	--env.typechecking_context:dump_names()
 	local wrapped = term
+	if purity:is_effectful() then
+		wrapped = terms.inferrable_term.program_end(wrapped)
+	end
 	for idx = self.bindings:len(), 1, -1 do
 		local binding = self.bindings:get(idx)
 		if not binding then
@@ -323,17 +328,14 @@ function environment:exit_block(term, shadowed)
 			local name, annotation, anchor, visible = binding:unwrap_annotated_lambda()
 			wrapped = terms.inferrable_term.annotated_lambda(name, annotation, wrapped, anchor, visible)
 		elseif binding:is_program_sequence() then
-			local first = binding:unwrap_program_sequence()
-			wrapped = terms.inferrable_term.program_sequence(first, wrapped)
+			local first, anchor = binding:unwrap_program_sequence()
+			wrapped = terms.inferrable_term.program_sequence(first, anchor, wrapped)
 		else
 			error("exit_block: unknown kind: " .. binding.kind)
 		end
 	end
 	eval.typechecker_state:exit_block()
 
-	if purity:is_effectful() then
-		wrapped = terms.inferrable_term.program_end(wrapped)
-	end
 	return env, wrapped, purity
 end
 

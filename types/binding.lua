@@ -24,9 +24,9 @@ function binding:unwrap_annotated_lambda() end
 function binding:as_annotated_lambda() end
 ---@return boolean
 function binding:is_program_sequence() end
----@return inferrable
+---@return inferrable, Anchor
 function binding:unwrap_program_sequence() end
----@return boolean, inferrable
+---@return boolean, inferrable, Anchor
 function binding:as_program_sequence() end
 
 ---@class (exact) bindingType: EnumType
@@ -34,5 +34,5 @@ function binding:as_program_sequence() end
 ---@field let fun(name: string, expr: inferrable): binding
 ---@field tuple_elim fun(names: ArrayValue, subject: inferrable): binding
 ---@field annotated_lambda fun(param_name: string, param_annotation: inferrable, anchor: Anchor, visible: visibility): binding
----@field program_sequence fun(first: inferrable): binding
+---@field program_sequence fun(first: inferrable, anchor: Anchor): binding
 return {}

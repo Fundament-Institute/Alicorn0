@@ -584,7 +584,7 @@ local function expression_pairhandler(args, a, b)
 
 		if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
 			---@type Environment
-			env = env:bind_local(terms.binding.program_sequence(res))
+			env = env:bind_local(terms.binding.program_sequence(res, a.anchor))
 			ok, res = env:get("#program-sequence")
 			if not ok then
 				error(res)
@@ -627,7 +627,7 @@ local function expression_pairhandler(args, a, b)
 
 		if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
 			---@type Environment
-			env = env:bind_local(terms.binding.program_sequence(res))
+			env = env:bind_local(terms.binding.program_sequence(res, a.anchor))
 			ok, res = env:get("#program-sequence")
 			if not ok then
 				error(res)
