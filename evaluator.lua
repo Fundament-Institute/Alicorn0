@@ -2113,11 +2113,92 @@ function evaluate(typed_term, runtime_context)
 		local effect_type_val = evaluate(effect_type, runtime_context)
 		local result_type_val = evaluate(result_type, runtime_context)
 		return value.program_type(effect_type_val, result_type_val)
+	elseif typed_term:is_program_invoke() then
+		local effect_term, arg_term = typed_term:unwrap_program_invoke()
+		local effect_val = evaluate(effect_term, runtime_context)
+		local arg_val = evaluate(arg_term, runtime_context)
+		if effect_val:is_effect_elem() then
+			local effect_id = effect_val:unwrap_effect_elem()
+			return value.program_cont(effect_id, arg_val, terms.continuation.empty)
+		end
+		error "NYI stuck program invoke"
+	elseif typed_term:is_program_continue() then
+		local first, rest = typed_term:unwrap_program_continue()
+		local startprog = evaluate(first, runtime_context)
+		if startprog:is_program_end() then
+			local first_res = startprog:unwrap_program_end()
+			return evaluate(rest, runtime_context:append(first_res))
+		elseif startprog:is_program_cont() then
+			local effect_id, effect_arg, cont = startprog:unwrap_program_cont()
+			local restframe = terms.continuation.frame(runtime_context, rest)
+			return value.program_cont(effect_id, effect_arg, terms.continuation.sequence(cont, restframe))
+		else
+			error "unrecognized program variant"
+		end
 	else
 		error("evaluate: unknown kind: " .. typed_term.kind)
 	end
 
 	error("unreachable!?")
+end
+
+---@alias effect_handler fun(arg: value, cont: continuation): value
+---@type {[thread] : {[table] : effect_handler } }
+local thread_effect_handlers = setmetatable({}, { __mode = "k" })
+
+---given an evaluated program value, execute it for effects
+---@param prog value
+---@return value
+local function execute_program(prog)
+	if prog:is_program_end() then
+		return prog:unwrap_program_end()
+	elseif prog:is_program_cont() then
+		local effectid, effectarg, cont = prog:unwrap_program_cont()
+		local thr = coroutine.running()
+		local handler = thread_effect_handlers[thr][effectid]
+		return handler(effectarg, cont)
+	end
+	error "unrecognized program variant"
+end
+
+---resume a program after an effect completes
+---@param cont continuation
+---@param arg value
+local function invoke_continuation(cont, arg)
+	if cont:is_empty() then
+		return arg
+	elseif cont:is_frame() then
+		local ctx, term = cont:unwrap_frame()
+		local frameres = evaluate(term, ctx:append(arg))
+		return execute_program(frameres)
+	elseif cont:is_sequence() then
+		local first, rest = cont:unwrap_sequence()
+		--TODO: refold continuations and make stack tracing alicorn nice
+		local firstres = invoke_continuation(first, arg)
+		return invoke_continuation(rest, firstres)
+	end
+end
+
+---set an effect handler for a specified effect
+---@param effect_id table
+---@param handler effect_handler
+---@return effect_handler
+local function register_effect_handler(effect_id, handler)
+	local map = thread_effect_handlers[coroutine.running()]
+	local old = map[effect_id]
+	map[effect_id] = handler
+	return old
+end
+
+---@type effect_handler
+local function host_effect_handler(arg, cont)
+	---@type value, value
+	local func, farg = arg:unwrap_tuple_value():unpack()
+	if not func:is_host_value() or not farg:is_host_tuple_value() then
+		error "host effect information is the wrong kind"
+	end
+	local res = value.host_tuple_value(func:unwrap_host_value()(farg:unwrap_host_tuple_value():unpack()))
+	return invoke_continuation(cont, res)
 end
 
 ---@class SubtypeRelation
@@ -3244,6 +3325,11 @@ local evaluator = {
 	apply_value = apply_value,
 	index_tuple_value = index_tuple_value,
 	OMEGA = OMEGA,
+
+	execute_program = execute_program,
+	invoke_continuation = invoke_continuation,
+	host_effect_handler = host_effect_handler,
+	register_effect_handler = register_effect_handler,
 }
 internals_interface.evaluator = evaluator
 
