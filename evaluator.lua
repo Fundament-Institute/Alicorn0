@@ -2104,26 +2104,8 @@ function evaluate(typed_term, runtime_context)
 		local reln = evaluate(relation, runtime_context)
 
 		return value.range(lower_acc, upper_acc, reln)
-	elseif typed_term:is_program_end() then
-		local result = typed_term:unwrap_program_end()
-
-		return value.program_end(evaluate(result, runtime_context))
-	elseif typed_term:is_program_type() then
-		local effect_type, result_type = typed_term:unwrap_program_type()
-		local effect_type_val = evaluate(effect_type, runtime_context)
-		local result_type_val = evaluate(result_type, runtime_context)
-		return value.program_type(effect_type_val, result_type_val)
-	elseif typed_term:is_program_invoke() then
-		local effect_term, arg_term = typed_term:unwrap_program_invoke()
-		local effect_val = evaluate(effect_term, runtime_context)
-		local arg_val = evaluate(arg_term, runtime_context)
-		if effect_val:is_effect_elem() then
-			local effect_id = effect_val:unwrap_effect_elem()
-			return value.program_cont(effect_id, arg_val, terms.continuation.empty)
-		end
-		error "NYI stuck program invoke"
-	elseif typed_term:is_program_continue() then
-		local first, rest = typed_term:unwrap_program_continue()
+	elseif typed_term:is_program_sequence() then
+		local first, rest = typed_term:unwrap_program_sequence()
 		local startprog = evaluate(first, runtime_context)
 		if startprog:is_program_end() then
 			local first_res = startprog:unwrap_program_end()
@@ -2133,8 +2115,28 @@ function evaluate(typed_term, runtime_context)
 			local restframe = terms.continuation.frame(runtime_context, rest)
 			return value.program_cont(effect_id, effect_arg, terms.continuation.sequence(cont, restframe))
 		else
-			error "unrecognized program variant"
+			error(
+				"unrecognized program variant: expected program_end or program_cont, got " .. startprog:pretty_print()
+			)
 		end
+	elseif typed_term:is_program_end() then
+		local result = typed_term:unwrap_program_end()
+
+		return value.program_end(evaluate(result, runtime_context))
+	elseif typed_term:is_program_invoke() then
+		local effect_term, arg_term = typed_term:unwrap_program_invoke()
+		local effect_val = evaluate(effect_term, runtime_context)
+		local arg_val = evaluate(arg_term, runtime_context)
+		if effect_val:is_effect_elem() then
+			local effect_id = effect_val:unwrap_effect_elem()
+			return value.program_cont(effect_id, arg_val, terms.continuation.empty)
+		end
+		error "NYI stuck program invoke"
+	elseif typed_term:is_program_type() then
+		local effect_type, result_type = typed_term:unwrap_program_type()
+		local effect_type_val = evaluate(effect_type, runtime_context)
+		local result_type_val = evaluate(result_type, runtime_context)
+		return value.program_type(effect_type_val, result_type_val)
 	else
 		error("evaluate: unknown kind: " .. typed_term.kind)
 	end

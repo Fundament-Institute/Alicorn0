@@ -508,10 +508,6 @@ typed_term:define_enum("typed", {
 		"effect_tag", typed_term,
 		"effect_arg", typed_term,
 	} },
-	{ "program_continue", {
-		"first",    typed_term,
-		"continue", typed_term,
-	} },
 	{ "effect_type", {
 		"components", array(typed_term),
 		"base",       typed_term,

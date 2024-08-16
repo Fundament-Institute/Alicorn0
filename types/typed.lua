@@ -269,12 +269,6 @@ function typed:unwrap_program_invoke() end
 ---@return boolean, typed, typed
 function typed:as_program_invoke() end
 ---@return boolean
-function typed:is_program_continue() end
----@return typed, typed
-function typed:unwrap_program_continue() end
----@return boolean, typed, typed
-function typed:as_program_continue() end
----@return boolean
 function typed:is_effect_type() end
 ---@return ArrayValue, typed
 function typed:unwrap_effect_type() end
@@ -333,7 +327,6 @@ function typed:as_program_type() end
 ---@field program_sequence fun(first: typed, continue: typed): typed
 ---@field program_end fun(result: typed): typed
 ---@field program_invoke fun(effect_tag: typed, effect_arg: typed): typed
----@field program_continue fun(first: typed, continue: typed): typed
 ---@field effect_type fun(components: ArrayValue, base: typed): typed
 ---@field program_type fun(effect_type: typed, result_type: typed): typed
 return {}
