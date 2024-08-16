@@ -2067,7 +2067,8 @@ function evaluate(typed_term, runtime_context)
 	error("unreachable!?")
 end
 
----@type {[thread] : {[table] : fun(arg: any, cont: continuation): value } }
+---@alias effect_handler fun(arg: value, cont: continuation): value
+---@type {[thread] : {[table] : effect_handler } }
 local thread_effect_handlers = setmetatable({}, { __mode = "k" })
 
 ---given an evaluated program value, execute it for effects
@@ -2101,6 +2102,28 @@ local function invoke_continuation(cont, arg)
 		local firstres = invoke_continuation(first, arg)
 		return invoke_continuation(rest, firstres)
 	end
+end
+
+---set an effect handler for a specified effect
+---@param effect_id table
+---@param handler effect_handler
+---@return effect_handler
+local function register_effect_handler(effect_id, handler)
+	local map = thread_effect_handlers[coroutine.running()]
+	local old = map[effect_id]
+	map[effect_id] = handler
+	return old
+end
+
+---@type effect_handler
+local function host_effect_handler(arg, cont)
+	---@type value, value
+	local func, farg = arg:unwrap_tuple_value():unpack()
+	if not func:is_host_value() or not farg:is_host_tuple_value() then
+		error "host effect information is the wrong kind"
+	end
+	local res = value.host_tuple_value(func:unwrap_host_value()(farg:unwrap_host_tuple_value():unpack()))
+	return invoke_continuation(cont, res)
 end
 
 ---@class SubtypeRelation
@@ -3230,6 +3253,8 @@ local evaluator = {
 
 	execute_program = execute_program,
 	invoke_continuation = invoke_continuation,
+	host_effect_handler = host_effect_handler,
+	register_effect_handler = register_effect_handler,
 }
 internals_interface.evaluator = evaluator
 
