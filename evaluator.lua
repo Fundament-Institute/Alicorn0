@@ -2186,7 +2186,9 @@ end
 ---@param handler effect_handler
 ---@return effect_handler
 local function register_effect_handler(effect_id, handler)
-	local map = thread_effect_handlers[coroutine.running()]
+	local thr = coroutine.running()
+	local map = thread_effect_handlers[thr] or {}
+	thread_effect_handlers[thr] = map
 	local old = map[effect_id]
 	map[effect_id] = handler
 	return old
@@ -2202,6 +2204,8 @@ local function host_effect_handler(arg, cont)
 	local res = value.host_tuple_value(func:unwrap_host_value()(farg:unwrap_host_tuple_value():unpack()))
 	return invoke_continuation(cont, res)
 end
+
+register_effect_handler(terms.lua_prog, host_effect_handler)
 
 ---@class SubtypeRelation
 ---@field debug_name string

@@ -583,13 +583,7 @@ local function expression_pairhandler(args, a, b)
 		---@cast res inferrable
 
 		if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
-			---@type Environment
-			env = env:bind_local(terms.binding.program_sequence(res, a.anchor))
-			ok, res = env:get("#program-sequence")
-			if not ok then
-				error(res)
-			end
-			---@cast res inferrable
+			error("nyi")
 		end
 
 		if goal:is_check() then
@@ -622,16 +616,31 @@ local function expression_pairhandler(args, a, b)
 		---@cast tuple checkable
 
 		---@type string | inferrable | checkable
-		local res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
-		---@cast res inferrable
+		local res
 
 		if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
+			local tuple_usages, tuple_term = evaluator.check(tuple, env.typechecking_context, param_type)
+			local result_final = evaluator.evaluate(
+				typed_term.application(typed_term.literal(result_type), tuple_term),
+				env.typechecking_context.runtime_context
+			)
+			local app = inferrable_term.typed(
+				result_final,
+				usage_array(),
+				typed_term.program_invoke(
+					typed_term.literal(value.effect_elem(terms.lua_prog)),
+					typed_term.tuple_cons(typed_array(term, tuple_term))
+				)
+			)
 			---@type Environment
-			env = env:bind_local(terms.binding.program_sequence(res, a.anchor))
+			env = env:bind_local(terms.binding.program_sequence(app, a.anchor))
 			ok, res = env:get("#program-sequence")
 			if not ok then
 				error(res)
 			end
+			---@cast res inferrable
+		else
+			res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
 			---@cast res inferrable
 		end
 
