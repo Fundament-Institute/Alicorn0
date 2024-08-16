@@ -89,7 +89,9 @@ local function validate_params_types(kind, params, params_types)
 			)
 		end
 		if params_set[v] then
-			error("constructor " .. kind .. " must have unique parameter names (" .. v .. " was given more than once)")
+			error(
+				"constructor " .. kind .. " must have unique parameter names ('" .. v .. "' was given more than once)"
+			)
 		end
 		params_set[v] = true
 	end
