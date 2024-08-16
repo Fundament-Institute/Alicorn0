@@ -223,7 +223,7 @@ local function substitute_inner(val, mappings, context_len)
 		local decls = val:unwrap_tuple_type()
 		local decls = substitute_inner(decls, mappings, context_len)
 		return typed_term.tuple_type(decls)
-	elseif val:is_tuple_defn_type() then
+	elseif val:is_tuple_desc_type() then
 		return typed_term.literal(val)
 	elseif val:is_enum_value() then
 		local constructor, arg = val:unwrap_enum_value()
@@ -633,10 +633,10 @@ add_comparer("value.singleton", "value.singleton", function(a, b)
 	end
 end)
 
-add_comparer("value.tuple_defn_type", "value.tuple_defn_type", function(a, b)
-	local a_universe = a:unwrap_tuple_defn_type()
-	local b_universe = b:unwrap_tuple_defn_type()
-	typechecker_state:queue_subtype(a_universe, b_universe, "tuple_defn_type universes")
+add_comparer("value.tuple_desc_type", "value.tuple_desc_type", function(a, b)
+	local a_universe = a:unwrap_tuple_desc_type()
+	local b_universe = b:unwrap_tuple_desc_type()
+	typechecker_state:queue_subtype(a_universe, b_universe, "tuple_desc_type universes")
 	return true
 end)
 
@@ -697,13 +697,13 @@ end
 local function extract_tuple_elem_type_closures(enum_val, closures)
 	local constructor, arg = enum_val:unwrap_enum_value()
 	local elements = arg:unwrap_tuple_value()
-	if constructor == terms.DeclCons.empty then
+	if constructor == terms.DescCons.empty then
 		if #elements ~= 0 then
 			error "enum_value with constructor empty should have no args"
 		end
 		return closures
 	end
-	if constructor == terms.DeclCons.cons then
+	if constructor == terms.DescCons.cons then
 		if #elements ~= 2 then
 			error "enum_value with constructor cons should have two args"
 		end
@@ -969,9 +969,9 @@ end
 function make_inner_context(decls, make_prefix)
 	-- evaluate the type of the tuple
 	local constructor, arg = decls:unwrap_enum_value()
-	if constructor == terms.DeclCons.empty then
+	if constructor == terms.DescCons.empty then
 		return value_array(), 0, value_array()
-	elseif constructor == terms.DeclCons.cons then
+	elseif constructor == terms.DescCons.cons then
 		local details = arg:unwrap_tuple_value()
 		local tupletypes, n_elements, tuplevals = make_inner_context(details[1], make_prefix)
 		local f = details[2]
@@ -1025,11 +1025,11 @@ end
 function make_inner_context2(decls_a, make_prefix_a, decls_b, make_prefix_b)
 	local constructor_a, arg_a = decls_a:unwrap_enum_value()
 	local constructor_b, arg_b = decls_b:unwrap_enum_value()
-	if constructor_a == terms.DeclCons.empty and constructor_b == terms.DeclCons.empty then
+	if constructor_a == terms.DescCons.empty and constructor_b == terms.DescCons.empty then
 		return value_array(), value_array(), value_array(), 0
-	elseif constructor_a == terms.DeclCons.empty or constructor_b == terms.DeclCons.empty then
+	elseif constructor_a == terms.DescCons.empty or constructor_b == terms.DescCons.empty then
 		error("tuple decls lengths must be equal")
-	elseif constructor_a == terms.DeclCons.cons and constructor_b == terms.DeclCons.cons then
+	elseif constructor_a == terms.DescCons.cons and constructor_b == terms.DescCons.cons then
 		local details_a = arg_a:unwrap_tuple_value()
 		local details_b = arg_b:unwrap_tuple_value()
 		local tupletypes_a, tupletypes_b, tuplevals, n_elements =
@@ -1318,8 +1318,8 @@ function infer(
 	elseif inferrable_term:is_tuple_type() then
 		local definition = inferrable_term:unwrap_tuple_type()
 		local definition_type, definition_usages, definition_term = infer(definition, typechecking_context)
-		if not definition_type:is_tuple_defn_type() then
-			error "argument to tuple_type is not a tuple_defn"
+		if not definition_type:is_tuple_desc_type() then
+			error "argument to tuple_type is not a tuple_desc"
 		end
 		return terms.value.star(0), definition_usages, terms.typed_term.tuple_type(definition_term)
 	elseif inferrable_term:is_record_cons() then
@@ -1378,9 +1378,9 @@ function infer(
 		-- evaluate the type of the record
 		local function make_type(decls)
 			local constructor, arg = decls:unwrap_enum_value()
-			if constructor == terms.DeclCons.empty then
+			if constructor == terms.DescCons.empty then
 				return string_array(), string_value_map()
-			elseif constructor == terms.DeclCons.cons then
+			elseif constructor == terms.DescCons.cons then
 				local details = arg:unwrap_tuple_value()
 				local field_names, field_types = make_type(details[1])
 				local name = details[2]:unwrap_name()
@@ -1611,8 +1611,8 @@ function infer(
 	elseif inferrable_term:is_host_tuple_type() then
 		local decls = inferrable_term:unwrap_host_tuple_type()
 		local decl_type, decl_usages, decl_term = infer(decls, typechecking_context)
-		if not decl_type:is_tuple_defn_type() then
-			error "must be a tuple defn"
+		if not decl_type:is_tuple_desc_type() then
+			error "must be a tuple desc"
 		end
 		return value.star(0), decl_usages, typed_term.host_tuple_type(decl_term)
 	elseif inferrable_term:is_program_sequence() then

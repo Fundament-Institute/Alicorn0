@@ -346,14 +346,14 @@ local tupleof_ascribed_names_inner = metalang.reducer(
 		end
 		local function cons(...)
 			return terms.inferrable_term.enum_cons(
-				terms.value.tuple_defn_type(terms.value.star(0)),
-				terms.DeclCons.cons,
+				terms.value.tuple_desc_type(terms.value.star(0)),
+				terms.DescCons.cons,
 				tup_cons(...)
 			)
 		end
 		local empty = terms.inferrable_term.enum_cons(
-			terms.value.tuple_defn_type(terms.value.star(0)),
-			terms.DeclCons.empty,
+			terms.value.tuple_desc_type(terms.value.star(0)),
+			terms.DescCons.empty,
 			tup_cons()
 		)
 		local names = gen.declare_array(gen.builtin_string)()

@@ -684,17 +684,17 @@ value:define_enum("value", {
 
 	-- ordinary data
 	{ "tuple_value", { "elements", array(value) } },
-	{ "tuple_type", { "decls", value } },
-	{ "tuple_defn_type", { "universe", value } },
+	{ "tuple_type", { "desc", value } },
+	{ "tuple_desc_type", { "universe", value } },
 	{ "enum_value", {
 		"constructor", gen.builtin_string,
 		"arg",         value,
 	} },
-	{ "enum_type", { "decls", value } },
-	{ "enum_defn_type", { "universe", value } },
+	{ "enum_type", { "desc", value } },
+	{ "enum_desc_type", { "universe", value } },
 	{ "record_value", { "fields", map(gen.builtin_string, value) } },
-	{ "record_type", { "decls", value } },
-	{ "record_defn_type", { "universe", value } },
+	{ "record_type", { "desc", value } },
+	{ "record_desc_type", { "universe", value } },
 	{ "record_extend_stuck", {
 		"base",      neutral_value,
 		"extension", map(gen.builtin_string, value),
@@ -703,7 +703,7 @@ value:define_enum("value", {
 		"methods", map(gen.builtin_string, typed_term),
 		"capture", runtime_context_type,
 	} },
-	{ "object_type", { "decls", value } },
+	{ "object_type", { "desc", value } },
 	{ "level_type" },
 	{ "number_type" },
 	{ "number", { "number", gen.builtin_number } },
@@ -830,8 +830,8 @@ local host_checkable_term_type = value.host_user_defined_type({ name = "checkabl
 -- return ok, err
 local host_lua_error_type = value.host_user_defined_type({ name = "lua_error_type" }, array(value)())
 
----@class DeclConsContainer
-local DeclCons = --[[@enum DeclCons]]
+---@class DescConsContainer
+local DescCons = --[[@enum DescCons]]
 	{
 		cons = "cons",
 		empty = "empty",
@@ -848,15 +848,15 @@ end
 ---@param ... value
 ---@return value
 local function cons(...)
-	return value.enum_value(DeclCons.cons, tup_val(...))
+	return value.enum_value(DescCons.cons, tup_val(...))
 end
 
-local empty = value.enum_value(DeclCons.empty, tup_val())
+local empty = value.enum_value(DescCons.empty, tup_val())
 local unit_type = value.tuple_type(empty)
 local unit_val = tup_val()
 
 --[[
-local tuple_defn = value.enum_value("variant",
+local tuple_desc = value.enum_value("variant",
 	tup_val(
 		value.enum_value("variant",
 			tup_val(
@@ -904,7 +904,7 @@ local terms = {
 	runtime_context_type = runtime_context_type,
 	typechecking_context_type = typechecking_context_type,
 
-	DeclCons = DeclCons,
+	DescCons = DescCons,
 	tup_val = tup_val,
 	cons = cons,
 	empty = empty,
