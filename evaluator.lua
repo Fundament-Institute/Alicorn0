@@ -2035,11 +2035,72 @@ function evaluate(typed_term, runtime_context)
 		local reln = evaluate(relation, runtime_context)
 
 		return value.range(lower_acc, upper_acc, reln)
+	elseif typed_term:is_program_end() then
+		local result_term = typed_term:unwrap_program_end()
+		return value.program_end(evaluate(result_term, runtime_context))
+	elseif typed_term:is_program_invoke() then
+		local effect_term, arg_term = typed_term:unwrap_program_invoke()
+		local effect_val = evaluate(effect_term, runtime_context)
+		local arg_val = evaluate(arg_term, runtime_context)
+		if effect_val:is_effect_elem() then
+			local effect_id = effect_val:unwrap_effect_elem()
+			return value.program_cont(effect_id, arg_val, terms.continuation.empty)
+		end
+		error "NYI stuck program invoke"
+	elseif typed_term:is_program_continue() then
+		local first, rest = typed_term:unwrap_program_continue()
+		local startprog = evaluate(first, runtime_context)
+		if startprog:is_program_end() then
+			local first_res = startprog:unwrap_program_end()
+			return evaluate(rest, runtime_context:append(first_res))
+		elseif startprog:is_program_cont() then
+			local effect_id, effect_arg, cont = startprog:unwrap_program_cont()
+			local restframe = terms.continuation.frame(runtime_context, rest)
+			return value.program_cont(effect_id, effect_arg, terms.continuation.sequence(cont, restframe))
+		else
+			error "unrecognized program variant"
+		end
 	else
 		error("evaluate: unknown kind: " .. typed_term.kind)
 	end
 
 	error("unreachable!?")
+end
+
+---@type {[thread] : {[table] : fun(arg: any, cont: continuation): value } }
+local thread_effect_handlers = setmetatable({}, { __mode = "k" })
+
+---given an evaluated program value, execute it for effects
+---@param prog value
+---@return value
+local function execute_program(prog)
+	if prog:is_program_end() then
+		return prog:unwrap_program_end()
+	elseif prog:is_program_cont() then
+		local effectid, effectarg, cont = prog:unwrap_program_cont()
+		local thr = coroutine.running()
+		local handler = thread_effect_handlers[thr][effectid]
+		return handler(effectarg, cont)
+	end
+	error "unrecognized program variant"
+end
+
+---resume a program after an effect completes
+---@param cont continuation
+---@param arg value
+local function invoke_continuation(cont, arg)
+	if cont:is_empty() then
+		return arg
+	elseif cont:is_frame() then
+		local ctx, term = cont:unwrap_frame()
+		local frameres = evaluate(term, ctx:append(arg))
+		return execute_program(frameres)
+	elseif cont:is_sequence() then
+		local first, rest = cont:unwrap_sequence()
+		--TODO: refold continuations and make stack tracing alicorn nice
+		local firstres = invoke_continuation(first, arg)
+		return invoke_continuation(rest, firstres)
+	end
 end
 
 ---@class SubtypeRelation
@@ -3166,6 +3227,9 @@ local evaluator = {
 	apply_value = apply_value,
 	index_tuple_value = index_tuple_value,
 	OMEGA = OMEGA,
+
+	execute_program = execute_program,
+	invoke_continuation = invoke_continuation,
 }
 internals_interface.evaluator = evaluator
 
