@@ -2201,7 +2201,7 @@ local function host_effect_handler(arg, cont)
 	if not func:is_host_value() or not farg:is_host_tuple_value() then
 		error "host effect information is the wrong kind"
 	end
-	local res = value.host_tuple_value(func:unwrap_host_value()(farg:unwrap_host_tuple_value():unpack()))
+	local res = value.host_tuple_value(host_array(func:unwrap_host_value()(farg:unwrap_host_tuple_value():unpack())))
 	return invoke_continuation(cont, res)
 end
 
