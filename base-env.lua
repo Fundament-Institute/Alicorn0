@@ -116,7 +116,7 @@ end
 ---@type lua_operative
 local function record_build(syntax, env)
 	local ok, defs, env = syntax:match({
-		metalang.list_many_threaded(metalang.accept_handler, record_threaded_element, env),
+		metalang.list_many_fold(metalang.accept_handler, record_threaded_element, env),
 	}, metalang.failure_handler, nil)
 	if not ok then
 		return ok, defs
@@ -230,6 +230,107 @@ local ascribed_name = metalang.reducer(
 	"ascribed_name"
 )
 
+local curry_names_inner = metalang.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@return boolean
+	---@return {names: string[], args: inferrable, env: Environment}|string
+	function(syntax, env)
+		local close_enough = syntax.anchor
+		--print("start env: " .. tostring(env))
+
+		local ok, env = syntax:match({
+			metalang.list_many_fold(function(_, vals, thread)
+				return true, thread.env
+			end, function(thread)
+				--print("type_env: " .. tostring(thread.env))
+				return pure_ascribed_name(function(_, name, type_val, type_env)
+					type_env = type_env:bind_local(
+						terms.binding.annotated_lambda(name, type_val, close_enough, terms.visibility.implicit)
+					)
+					local newthread = {
+						env = type_env,
+					}
+					return true, { name = name, type = type_val }, newthread
+				end, thread.env)
+			end, {
+				env = env,
+			}),
+		}, metalang.failure_handler, nil)
+
+		if not ok then
+			return ok, env
+		end
+
+		--print("env return: " .. tostring(env))
+
+		return true, { env = env }
+	end,
+	"curry_names_inner"
+)
+
+local curry_names = metalang.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@return boolean
+	---@return {names: string[], args: inferrable, env: Environment}|string
+	function(syntax, env)
+		local ok, thread = syntax:match({
+			curry_names_inner(metalang.accept_handler, env),
+		}, metalang.failure_handler, nil)
+
+		if not ok then
+			return ok, thread
+		end
+		return ok, { env = thread.env }
+	end,
+	"curry_names"
+)
+
+local curry_segment = metalang.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@return boolean
+	---@return {single: boolean, names: string|string[], args: inferrable, env: Environment}|string
+	function(syntax, env)
+		local ok, thread = syntax:match({
+			curry_names(metalang.accept_handler, env),
+		}, metalang.failure_handler, nil)
+
+		if not ok then
+			return ok, thread
+		end
+
+		return true, { env = thread.env }
+	end,
+	"curry_segment"
+)
+
+---@type lua_operative
+local function lambda_curry_impl(syntax, env)
+	local shadow, env = env:enter_block(terms.block_purity.pure)
+
+	local ok, thread, tail = syntax:match({
+		metalang.listtail(metalang.accept_handler, curry_segment(metalang.accept_handler, env)),
+	}, metalang.failure_handler, nil)
+	if not ok then
+		return ok, thread
+	end
+
+	local env = thread.env
+
+	local ok, expr, env = tail:match(
+		{ exprs.block(metalang.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, env)) },
+		metalang.failure_handler,
+		nil
+	)
+	if not ok then
+		return ok, expr
+	end
+	local resenv, term, purity = env:exit_block(expr, shadow)
+	return true, term, resenv
+end
+
 local tupleof_ascribed_names_inner = metalang.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
@@ -260,7 +361,7 @@ local tupleof_ascribed_names_inner = metalang.reducer(
 		local close_enough = syntax.anchor
 
 		local ok, names, args, env = syntax:match({
-			metalang.list_many_threaded(function(_, vals, thread)
+			metalang.list_many_fold(function(_, vals, thread)
 				return true, thread.names, thread.args, thread.env
 			end, function(thread)
 				return ascribed_name(function(_, name, type_val, type_env)
@@ -698,7 +799,7 @@ local function lambda_impl(syntax, env)
 end
 
 ---@type lua_operative
-local function lambda_impl_implicit(syntax, env)
+local function lambda_implicit_impl(syntax, env)
 	local ok, thread, tail = syntax:match({
 		metalang.listtail(metalang.accept_handler, ascribed_segment(metalang.accept_handler, env)),
 	}, metalang.failure_handler, nil)
@@ -934,7 +1035,8 @@ local core_operations = {
 	type_ = exprs.host_operative(startype_impl, "startype_impl"),
 	["forall"] = exprs.host_operative(forall_type_impl, "forall_type_impl"),
 	lambda = exprs.host_operative(lambda_impl, "lambda_impl"),
-	lambda_implicit = exprs.host_operative(lambda_impl_implicit, "lambda_impl_implicit"),
+	lambda_implicit = exprs.host_operative(lambda_implicit_impl, "lambda_implicit_impl"),
+	lambda_curry = exprs.host_operative(lambda_curry_impl, "lambda_curry_impl"),
 	the = exprs.host_operative(the_operative_impl, "the"),
 	apply = exprs.host_operative(apply_operative_impl, "apply"),
 	wrap = build_wrap(typed.host_wrap, typed.host_wrapped_type),

@@ -1,8 +1,8 @@
 --[[
-Matcher(userdata : type, results : tuple-def) : type
+Matcher(userdata : type, results : tuple-desc) : type
 Syntax : type
 Literal : type
-Reducer(sig : tuple-def, res : tuple-def) : type
+Reducer(sig : tuple-desc, res : tuple-desc) : type
 Error : type
 --]]
 
@@ -39,7 +39,7 @@ local MatcherKind = --[[@enum MatcherKind]]
 --[[
 issymbol : forall
 	implicit userdata : type
-	implicit results : tuple-def
+	implicit results : tuple-desc
 	handler : (forall (u : userdata, s : string) -> res : tuple-type(results)))
 	->
 	Matcher(userdata, results)
@@ -57,7 +57,7 @@ end
 --[[
 ispair : forall
 	implicit userdata : type
-	implicit results : tuple-def
+	implicit results : tuple-desc
 	handler : (forall (u : userdata, a : Syntax, b : Syntax) -> res : tuple-type(results)))
 	->
 	Matcher(userdata, results)
@@ -75,7 +75,7 @@ end
 --[[
 isnil : forall
 	implicit userdata : type
-	implicit results : tuple-def
+	implicit results : tuple-desc
 	handler : (forall (u : userdata) -> res : tuple-type(results)))
 	->
 	Matcher(userdata, results)
@@ -96,7 +96,7 @@ end
 --[[
 isvalue : forall
 	implicit userdata : type
-	implicit results : tuple-def
+	implicit results : tuple-desc
 	handler : (forall (u : userdata, v : Literal) -> res : tuple-type(results)))
 	->
 	Matcher(userdata, results)
@@ -127,9 +127,9 @@ end
 --[[
 create_reducible : forall
 	implicit userdata : type
-	implicit reducer-sig : tuple-def
-	implicit reducer-res : tuple-def
-	implicit results : tuple-def
+	implicit reducer-sig : tuple-desc
+	implicit reducer-res : tuple-desc
+	implicit results : tuple-desc
 	reducer : Reducer(reducer-sig)
 	handler : (forall (u : userdata, ...vals : reducer-res ) -> res : tuple-type(results))
 	...rest : reducer-sig
@@ -273,9 +273,9 @@ end
 
 --[[
 reducer : forall
-	implicit storage : tuple-def
-	implicit results : tuple-def
-	defn : (forall (s : Syntax, ...extra : storage) -> (ok : bool, ...res : (if ok then results else tuple-def-singleton(Error))))
+	implicit storage : tuple-desc
+	implicit results : tuple-desc
+	defn : (forall (s : Syntax, ...extra : storage) -> (ok : bool, ...res : (if ok then results else tuple-desc-singleton(Error))))
 	name : string
 	->
 	res : Reducer(storage, results)
@@ -407,7 +407,7 @@ local ConstructedSyntax = {}
 match : forall
 	self : Syntax
 	implicit userdata : type
-	implicit results : tuple-def
+	implicit results : tuple-desc
 	matchers : List(Matcher(userdata, results))
 	unmatched : (forall (u : userdata) -> res : tuple-type(results))
 	extra : userdata
@@ -606,7 +606,7 @@ local listtail = reducer(ListTail, "list+tail")
 ---@return any?
 ---@return any?
 ---@return T?
-local function list_many_threaded_pair_handler(rule, a, b)
+local function list_many_fold_pair_handler(rule, a, b)
 	local ok, val, thread
 
 	ok, val, thread = a:match({ rule[1] }, failure_handler, nil)
@@ -627,14 +627,15 @@ local function list_many_nil_handler()
 	return true, false
 end
 
-local list_many_threaded_until = reducer(
+local list_many_fold_until = reducer(
+	---@generic T
 	---@param syntax ConstructedSyntax
-	---@param submatcher_fn fun(any): Matcher
-	---@param init_thread any
+	---@param submatcher_fn fun(T): Matcher
+	---@param init_thread T
 	---@param termination Matcher
 	---@return boolean
 	---@return any[]|string
-	---@return any?
+	---@return T?
 	---@return ConstructedSyntax?
 	function(syntax, submatcher_fn, init_thread, termination)
 		local vals = {}
@@ -643,7 +644,7 @@ local list_many_threaded_until = reducer(
 		while ok and cont do
 			thread = nextthread
 			ok, cont, val, nextthread, tail = tail:match({
-				ispair(list_many_threaded_pair_handler),
+				ispair(list_many_fold_pair_handler),
 				isnil(list_many_nil_handler),
 			}, failure_handler, { submatcher_fn(thread), termination })
 			vals[#vals + 1] = val
@@ -653,19 +654,20 @@ local list_many_threaded_until = reducer(
 		end
 		return ok, vals, thread, tail
 	end,
-	"list_many_threaded_until"
+	"list_many_fold_until"
 )
 
-local list_many_threaded = reducer(
+local list_many_fold = reducer(
+	---@generic T
 	---@param syntax ConstructedSyntax
-	---@param submatcher_fn fun(any): Matcher
-	---@param init_thread any
+	---@param submatcher_fn fun(T): Matcher
+	---@param init_thread T
 	---@return boolean
 	---@return any[]|string
-	---@return any?
+	---@return T?
 	function(syntax, submatcher_fn, init_thread)
 		local ok, vals, thread, tail = syntax:match(
-			{ list_many_threaded_until(accept_handler, submatcher_fn, init_thread, nil) },
+			{ list_many_fold_until(accept_handler, submatcher_fn, init_thread, nil) },
 			failure_handler,
 			nil
 		)
@@ -674,7 +676,7 @@ local list_many_threaded = reducer(
 		end
 		return ok, vals, thread
 	end,
-	"list_many_threaded"
+	"list_many_fold"
 )
 
 local list_many = reducer(
@@ -684,7 +686,7 @@ local list_many = reducer(
 	---@return any[]|string
 	function(syntax, submatcher)
 		local ok, vals, thread, tail = syntax:match(
-			{ list_many_threaded(accept_handler, function()
+			{ list_many_fold(accept_handler, function()
 				return submatcher
 			end, {}) },
 			failure_handler,
@@ -749,8 +751,8 @@ local metalanguage = {
 	oneof = oneof,
 	listtail = listtail,
 	list_many = list_many,
-	list_many_threaded = list_many_threaded,
-	list_many_threaded_until = list_many_threaded_until,
+	list_many_fold = list_many_fold,
+	list_many_fold_until = list_many_fold_until,
 	list_tail_ends = list_tail_ends,
 	reducer = reducer,
 	isnil = isnil,

@@ -7,7 +7,7 @@ let host-sub = (intrinsic "return function(a, b) return a - b end" : host-arith-
 #let subbed = host-sub foo.bar y
 
 let implicit-wrap =
-	lambda_implicit (T : type_(10))
+	lambda_curry (T : type_(10), U : type_(10))
 		lambda ((x : T))
 			wrap T x
 
