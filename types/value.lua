@@ -95,11 +95,11 @@ function value:unwrap_tuple_type() end
 ---@return boolean, value
 function value:as_tuple_type() end
 ---@return boolean
-function value:is_tuple_defn_type() end
+function value:is_tuple_desc_type() end
 ---@return value
-function value:unwrap_tuple_defn_type() end
+function value:unwrap_tuple_desc_type() end
 ---@return boolean, value
-function value:as_tuple_defn_type() end
+function value:as_tuple_desc_type() end
 ---@return boolean
 function value:is_enum_value() end
 ---@return string, value
@@ -113,11 +113,11 @@ function value:unwrap_enum_type() end
 ---@return boolean, value
 function value:as_enum_type() end
 ---@return boolean
-function value:is_enum_defn_type() end
+function value:is_enum_desc_type() end
 ---@return value
-function value:unwrap_enum_defn_type() end
+function value:unwrap_enum_desc_type() end
 ---@return boolean, value
-function value:as_enum_defn_type() end
+function value:as_enum_desc_type() end
 ---@return boolean
 function value:is_record_value() end
 ---@return MapValue
@@ -131,11 +131,11 @@ function value:unwrap_record_type() end
 ---@return boolean, value
 function value:as_record_type() end
 ---@return boolean
-function value:is_record_defn_type() end
+function value:is_record_desc_type() end
 ---@return value
-function value:unwrap_record_defn_type() end
+function value:unwrap_record_desc_type() end
 ---@return boolean, value
-function value:as_record_defn_type() end
+function value:as_record_desc_type() end
 ---@return boolean
 function value:is_record_extend_stuck() end
 ---@return neutral_value, MapValue
@@ -339,17 +339,17 @@ function value:as_program_type() end
 ---@field operative_value fun(userdata: value): value
 ---@field operative_type fun(handler: value, userdata_type: value): value
 ---@field tuple_value fun(elements: ArrayValue): value
----@field tuple_type fun(decls: value): value
----@field tuple_defn_type fun(universe: value): value
+---@field tuple_type fun(desc: value): value
+---@field tuple_desc_type fun(universe: value): value
 ---@field enum_value fun(constructor: string, arg: value): value
----@field enum_type fun(decls: value): value
----@field enum_defn_type fun(universe: value): value
+---@field enum_type fun(desc: value): value
+---@field enum_desc_type fun(universe: value): value
 ---@field record_value fun(fields: MapValue): value
----@field record_type fun(decls: value): value
----@field record_defn_type fun(universe: value): value
+---@field record_type fun(desc: value): value
+---@field record_desc_type fun(universe: value): value
 ---@field record_extend_stuck fun(base: neutral_value, extension: MapValue): value
 ---@field object_value fun(methods: MapValue, capture: RuntimeContext): value
----@field object_type fun(decls: value): value
+---@field object_type fun(desc: value): value
 ---@field level_type value
 ---@field number_type value
 ---@field number fun(number: number): value

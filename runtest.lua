@@ -19,6 +19,7 @@ local print_src = false
 local print_ast = false
 local print_inferrable = false
 local print_typed = false
+local print_evaluated = false
 local profile_run = false
 local profile_flame = false
 local profile_file = ""
@@ -37,6 +38,9 @@ if opts then
 	if string.find(opts, "t") then
 		print_typed = true
 	end
+	if string.find(opts, "e") then
+		print_evaluated = true
+	end
 	if string.find(opts, "p") then
 		profile_run = true
 		profile_flame = false
@@ -53,24 +57,25 @@ end
 
 local filename = path.resolve("testfile.alc")
 local src = fs.readFileSync(filename)
-print("read code")
 
+print("Read code")
 if print_src then
 	print(src)
 end
 
-print("parsing code")
+print("Parsing code")
 local code = format.read(src, filename)
 
+print("Parsed!")
 if print_ast then
-	print("printing raw ast")
+	print("Printing raw AST")
 	print(format.lispy_print(code))
-	print("end printing raw ast")
+	print("End printing raw AST")
 end
 
 local env = base_env.create()
 
-local shadowed, env = env:enter_block()
+local shadowed, env = env:enter_block(terms.block_purity.effectful)
 
 print("Expression -> terms")
 if profile_run and profile_what == "match" then
@@ -90,14 +95,14 @@ if profile_run and profile_what == "match" then
 	end
 end
 if not ok then
-	print("evaluating failed in " .. tostring(os.clock() - startTime) .. " seconds")
+	print("Evaluating failed in " .. tostring(os.clock() - startTime) .. " seconds")
 	print(expr)
 	return
 end
 
-local env, bound_expr = env:exit_block(expr, shadowed)
+local env, bound_expr, purity = env:exit_block(expr, shadowed)
 
-print("got a term!")
+print("Got a term!")
 if print_inferrable then
 	print("bound_expr: (inferrable term follows)")
 	print(bound_expr:pretty_print(terms.typechecking_context()))
@@ -116,6 +121,7 @@ if profile_run and profile_what == "infer" then
 		profile.dump(profile_file)
 	end
 end
+
 print("Inferred!")
 if print_typed then
 	print("type: (value term follows)")
@@ -125,7 +131,32 @@ if print_typed then
 	print(term:pretty_print(terms.runtime_context()))
 end
 
+local gen = require "./terms-generators"
+local set = gen.declare_set
+local unique_id = gen.builtin_table
+evaluator.typechecker_state:flow(
+	type,
+	nil,
+	terms.value.program_type(
+		terms.value.effect_row(set(unique_id)(terms.TCState), terms.value.effect_empty),
+		evaluator.typechecker_state:metavariable(terms.typechecking_context()):as_value()
+	),
+	nil,
+	"final flow check"
+)
+
 print("Evaluating")
 local result = evaluator.evaluate(term, terms.runtime_context())
-print("result: (value term follows)")
-print(result)
+
+print("Evaluated!")
+if print_evaluated then
+	print("result: (value term follows)")
+	print(result)
+end
+
+print("Executing")
+local result_exec = evaluator.execute_program(result)
+
+print("Executed!")
+print("result_exec: (value term follows)")
+print(result_exec)

@@ -75,6 +75,7 @@ local function validate_params_types(kind, params, params_types)
 	-- ensure there are at least as many param types as there are params
 	-- also ensure there is at least one param
 	local at_least_one = false
+	local params_set = {}
 	for i, v in ipairs(params) do
 		at_least_one = true
 		local param_type = params_types[i]
@@ -87,9 +88,15 @@ local function validate_params_types(kind, params, params_types)
 					.. " (possible typo?)"
 			)
 		end
+		if params_set[v] then
+			error(
+				"constructor " .. kind .. " must have unique parameter names ('" .. v .. "' was given more than once)"
+			)
+		end
+		params_set[v] = true
 	end
 	if not at_least_one then
-		error("trying to make a record type, or a record variant of an enum type, with no parameters")
+		error("constructor " .. kind .. " must take at least one parameter, or be changed to a unit")
 	end
 end
 
@@ -230,6 +237,9 @@ local function define_enum(self, name, variants)
 		local vname = v[1]
 		local vparams_with_types = v[2]
 		local vkind = name .. "." .. vname
+		if self[vname] then
+			error("enum variant " .. vkind .. " is defined multiple times")
+		end
 		derive_variants[i] = vname
 		if vparams_with_types then
 			local record_cons = {}

@@ -223,7 +223,7 @@ local function substitute_inner(val, mappings, context_len)
 		local decls = val:unwrap_tuple_type()
 		local decls = substitute_inner(decls, mappings, context_len)
 		return typed_term.tuple_type(decls)
-	elseif val:is_tuple_defn_type() then
+	elseif val:is_tuple_desc_type() then
 		return typed_term.literal(val)
 	elseif val:is_enum_value() then
 		local constructor, arg = val:unwrap_enum_value()
@@ -573,8 +573,14 @@ add_comparer("value.host_function_type", "value.host_function_type", function(a,
 		return true
 	end
 
-	local a_param_type, a_result_type = a:unwrap_host_function_type()
-	local b_param_type, b_result_type = b:unwrap_host_function_type()
+	local a_param_type, a_result_type, a_result_info = a:unwrap_host_function_type()
+	local b_param_type, b_result_type, b_result_info = b:unwrap_host_function_type()
+
+	local apurity = a_result_info:unwrap_result_info():unwrap_result_info()
+	local bpurity = b_result_info:unwrap_result_info():unwrap_result_info()
+	if apurity ~= bpurity then
+		return false, concrete_fail("host function result_info")
+	end
 
 	typechecker_state:queue_subtype(b_param_type, a_param_type, "host function parameters")
 	--local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
@@ -627,10 +633,10 @@ add_comparer("value.singleton", "value.singleton", function(a, b)
 	end
 end)
 
-add_comparer("value.tuple_defn_type", "value.tuple_defn_type", function(a, b)
-	local a_universe = a:unwrap_tuple_defn_type()
-	local b_universe = b:unwrap_tuple_defn_type()
-	typechecker_state:queue_subtype(a_universe, b_universe, "tuple_defn_type universes")
+add_comparer("value.tuple_desc_type", "value.tuple_desc_type", function(a, b)
+	local a_universe = a:unwrap_tuple_desc_type()
+	local b_universe = b:unwrap_tuple_desc_type()
+	typechecker_state:queue_subtype(a_universe, b_universe, "tuple_desc_type universes")
 	return true
 end)
 
@@ -691,13 +697,13 @@ end
 local function extract_tuple_elem_type_closures(enum_val, closures)
 	local constructor, arg = enum_val:unwrap_enum_value()
 	local elements = arg:unwrap_tuple_value()
-	if constructor == terms.DeclCons.empty then
+	if constructor == terms.DescCons.empty then
 		if #elements ~= 0 then
 			error "enum_value with constructor empty should have no args"
 		end
 		return closures
 	end
-	if constructor == terms.DeclCons.cons then
+	if constructor == terms.DescCons.cons then
 		if #elements ~= 2 then
 			error "enum_value with constructor cons should have two args"
 		end
@@ -963,9 +969,9 @@ end
 function make_inner_context(decls, make_prefix)
 	-- evaluate the type of the tuple
 	local constructor, arg = decls:unwrap_enum_value()
-	if constructor == terms.DeclCons.empty then
+	if constructor == terms.DescCons.empty then
 		return value_array(), 0, value_array()
-	elseif constructor == terms.DeclCons.cons then
+	elseif constructor == terms.DescCons.cons then
 		local details = arg:unwrap_tuple_value()
 		local tupletypes, n_elements, tuplevals = make_inner_context(details[1], make_prefix)
 		local f = details[2]
@@ -1019,11 +1025,11 @@ end
 function make_inner_context2(decls_a, make_prefix_a, decls_b, make_prefix_b)
 	local constructor_a, arg_a = decls_a:unwrap_enum_value()
 	local constructor_b, arg_b = decls_b:unwrap_enum_value()
-	if constructor_a == terms.DeclCons.empty and constructor_b == terms.DeclCons.empty then
+	if constructor_a == terms.DescCons.empty and constructor_b == terms.DescCons.empty then
 		return value_array(), value_array(), value_array(), 0
-	elseif constructor_a == terms.DeclCons.empty or constructor_b == terms.DeclCons.empty then
+	elseif constructor_a == terms.DescCons.empty or constructor_b == terms.DescCons.empty then
 		error("tuple decls lengths must be equal")
-	elseif constructor_a == terms.DeclCons.cons and constructor_b == terms.DeclCons.cons then
+	elseif constructor_a == terms.DescCons.cons and constructor_b == terms.DescCons.cons then
 		local details_a = arg_a:unwrap_tuple_value()
 		local details_b = arg_b:unwrap_tuple_value()
 		local tupletypes_a, tupletypes_b, tuplevals, n_elements =
@@ -1215,7 +1221,7 @@ function infer(
 			end
 			return application_result_type, application_usages, application
 		elseif f_type:is_host_function_type() then
-			local f_param_type, f_result_type_closure = f_type:unwrap_host_function_type()
+			local f_param_type, f_result_type_closure, f_result_info = f_type:unwrap_host_function_type()
 
 			local arg_usages, arg_term = check(arg, typechecking_context, f_param_type)
 
@@ -1312,8 +1318,8 @@ function infer(
 	elseif inferrable_term:is_tuple_type() then
 		local definition = inferrable_term:unwrap_tuple_type()
 		local definition_type, definition_usages, definition_term = infer(definition, typechecking_context)
-		if not definition_type:is_tuple_defn_type() then
-			error "argument to tuple_type is not a tuple_defn"
+		if not definition_type:is_tuple_desc_type() then
+			error "argument to tuple_type is not a tuple_desc"
 		end
 		return terms.value.star(0), definition_usages, terms.typed_term.tuple_type(definition_term)
 	elseif inferrable_term:is_record_cons() then
@@ -1372,9 +1378,9 @@ function infer(
 		-- evaluate the type of the record
 		local function make_type(decls)
 			local constructor, arg = decls:unwrap_enum_value()
-			if constructor == terms.DeclCons.empty then
+			if constructor == terms.DescCons.empty then
 				return string_array(), string_value_map()
-			elseif constructor == terms.DeclCons.cons then
+			elseif constructor == terms.DescCons.cons then
 				local details = arg:unwrap_tuple_value()
 				local field_names, field_types = make_type(details[1])
 				local name = details[2]:unwrap_name()
@@ -1605,10 +1611,73 @@ function infer(
 	elseif inferrable_term:is_host_tuple_type() then
 		local decls = inferrable_term:unwrap_host_tuple_type()
 		local decl_type, decl_usages, decl_term = infer(decls, typechecking_context)
-		if not decl_type:is_tuple_defn_type() then
-			error "must be a tuple defn"
+		if not decl_type:is_tuple_desc_type() then
+			error "must be a tuple desc"
 		end
 		return value.star(0), decl_usages, typed_term.host_tuple_type(decl_term)
+	elseif inferrable_term:is_program_sequence() then
+		local first, anchor, continue = inferrable_term:unwrap_program_sequence()
+		local first_type, first_usages, first_term = infer(first, typechecking_context)
+		if not first_type:is_program_type() then
+			error("program sequence must infer to a program type")
+		end
+		local first_effect_sig, first_base_type = first_type:unwrap_program_type()
+		local inner_context = typechecking_context:append("#program-sequence", first_base_type, nil, anchor)
+		local continue_type, continue_usages, continue_term = infer(continue, inner_context)
+		if not continue_type:is_program_type() then
+			error(
+				"rest of the program sequence must infer to a program type: "
+					.. continue:pretty_print(inner_context)
+					.. "\nbut it infers to "
+					.. continue_type:pretty_print()
+			)
+		end
+		local continue_effect_sig, continue_base_type = continue_type:unwrap_program_type()
+		local first_is_row, first_components, first_rest = first_effect_sig:as_effect_row()
+		local continue_is_row, continue_components, continue_rest = continue_effect_sig:as_effect_row()
+		local result_effect_sig
+		if first_is_row and continue_is_row then
+			if not first_rest:is_effect_empty() or not continue_rest:is_effect_empty() then
+				error("nyi polymorphic effects")
+			end
+			result_effect_sig = value.effect_row(first_components:union(continue_components), value.effect_empty)
+		elseif first_is_row then
+			if not continue_effect_sig:is_effect_empty() then
+				error("unknown effect sig")
+			end
+			result_effect_sig = first_effect_sig
+		elseif continue_is_row then
+			if not first_effect_sig:is_effect_empty() then
+				error("unknown effect sig")
+			end
+			result_effect_sig = continue_effect_sig
+		else
+			if not first_effect_sig:is_effect_empty() or not continue_effect_sig:is_effect_empty() then
+				error("unknown effect sig")
+			end
+			result_effect_sig = value.effect_empty
+		end
+		local result_usages = usage_array()
+		add_arrays(result_usages, first_usages)
+		add_arrays(result_usages, continue_usages)
+		return value.program_type(result_effect_sig, continue_base_type),
+			result_usages,
+			typed_term.program_sequence(first_term, continue_term)
+	elseif inferrable_term:is_program_end() then
+		local result = inferrable_term:unwrap_program_end()
+		local program_type, program_usages, program_term = infer(result, typechecking_context)
+		return value.program_type(value.effect_empty, program_type),
+			program_usages,
+			typed_term.program_end(program_term)
+	elseif inferrable_term:is_program_type() then
+		local effect_type, result_type = inferrable_term:unwrap_program_type()
+		local effect_type_type, effect_type_usages, effect_type_term = infer(effect_type, typechecking_context)
+		local result_type_type, result_type_usages, result_type_term = infer(result_type, typechecking_context)
+		local res_usages = usage_array()
+		add_arrays(res_usages, effect_type_usages)
+		add_arrays(res_usages, result_type_usages)
+		-- TODO: use biunification constraints for start level
+		return value.star(0), res_usages, typed_term.program_type(effect_type_term, result_type_term)
 	else
 		error("infer: unknown kind: " .. inferrable_term.kind)
 	end
@@ -2035,20 +2104,8 @@ function evaluate(typed_term, runtime_context)
 		local reln = evaluate(relation, runtime_context)
 
 		return value.range(lower_acc, upper_acc, reln)
-	elseif typed_term:is_program_end() then
-		local result_term = typed_term:unwrap_program_end()
-		return value.program_end(evaluate(result_term, runtime_context))
-	elseif typed_term:is_program_invoke() then
-		local effect_term, arg_term = typed_term:unwrap_program_invoke()
-		local effect_val = evaluate(effect_term, runtime_context)
-		local arg_val = evaluate(arg_term, runtime_context)
-		if effect_val:is_effect_elem() then
-			local effect_id = effect_val:unwrap_effect_elem()
-			return value.program_cont(effect_id, arg_val, terms.continuation.empty)
-		end
-		error "NYI stuck program invoke"
-	elseif typed_term:is_program_continue() then
-		local first, rest = typed_term:unwrap_program_continue()
+	elseif typed_term:is_program_sequence() then
+		local first, rest = typed_term:unwrap_program_sequence()
 		local startprog = evaluate(first, runtime_context)
 		if startprog:is_program_end() then
 			local first_res = startprog:unwrap_program_end()
@@ -2058,8 +2115,28 @@ function evaluate(typed_term, runtime_context)
 			local restframe = terms.continuation.frame(runtime_context, rest)
 			return value.program_cont(effect_id, effect_arg, terms.continuation.sequence(cont, restframe))
 		else
-			error "unrecognized program variant"
+			error(
+				"unrecognized program variant: expected program_end or program_cont, got " .. startprog:pretty_print()
+			)
 		end
+	elseif typed_term:is_program_end() then
+		local result = typed_term:unwrap_program_end()
+
+		return value.program_end(evaluate(result, runtime_context))
+	elseif typed_term:is_program_invoke() then
+		local effect_term, arg_term = typed_term:unwrap_program_invoke()
+		local effect_val = evaluate(effect_term, runtime_context)
+		local arg_val = evaluate(arg_term, runtime_context)
+		if effect_val:is_effect_elem() then
+			local effect_id = effect_val:unwrap_effect_elem()
+			return value.program_cont(effect_id, arg_val, terms.continuation.empty)
+		end
+		error "NYI stuck program invoke"
+	elseif typed_term:is_program_type() then
+		local effect_type, result_type = typed_term:unwrap_program_type()
+		local effect_type_val = evaluate(effect_type, runtime_context)
+		local result_type_val = evaluate(result_type, runtime_context)
+		return value.program_type(effect_type_val, result_type_val)
 	else
 		error("evaluate: unknown kind: " .. typed_term.kind)
 	end
@@ -2109,7 +2186,9 @@ end
 ---@param handler effect_handler
 ---@return effect_handler
 local function register_effect_handler(effect_id, handler)
-	local map = thread_effect_handlers[coroutine.running()]
+	local thr = coroutine.running()
+	local map = thread_effect_handlers[thr] or {}
+	thread_effect_handlers[thr] = map
 	local old = map[effect_id]
 	map[effect_id] = handler
 	return old
@@ -2122,9 +2201,11 @@ local function host_effect_handler(arg, cont)
 	if not func:is_host_value() or not farg:is_host_tuple_value() then
 		error "host effect information is the wrong kind"
 	end
-	local res = value.host_tuple_value(func:unwrap_host_value()(farg:unwrap_host_tuple_value():unpack()))
+	local res = value.host_tuple_value(host_array(func:unwrap_host_value()(farg:unwrap_host_tuple_value():unpack())))
 	return invoke_continuation(cont, res)
 end
+
+register_effect_handler(terms.lua_prog, host_effect_handler)
 
 ---@class SubtypeRelation
 ---@field debug_name string

@@ -568,6 +568,7 @@ local function expression_pairhandler(args, a, b)
 		end
 
 		-- multiple quantity of usages in tuple with usage in function arguments
+		---@type boolean, checkable|string, Environment
 		local ok, tuple, env = sargs:match({
 			collect_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
 		}, metalanguage.failure_handler, nil)
@@ -575,12 +576,17 @@ local function expression_pairhandler(args, a, b)
 		if not ok then
 			error(tuple)
 		end
+		---@cast tuple checkable
 
-		---@type inferrable | checkable
+		---@type string | inferrable | checkable
 		local res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
+		---@cast res inferrable
+
+		if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
+			error("nyi")
+		end
 
 		if goal:is_check() then
-			---@cast res inferrable
 			res = checkable_term.inferrable(res)
 		end
 
@@ -592,10 +598,11 @@ local function expression_pairhandler(args, a, b)
 	end
 
 	local function call_host_func_type()
-		local param_type, result_type = type_of_term:unwrap_host_function_type()
+		local param_type, result_type, result_info = type_of_term:unwrap_host_function_type()
 		--print("checking host_function_type call args with goal: (value term follows)")
 		--print(param_type)
 		-- multiple quantity of usages in tuple with usage in function arguments
+		---@type boolean, checkable|string, Environment
 		local ok, tuple, env = sargs:match({
 			collect_host_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
 		}, metalanguage.failure_handler, nil)
@@ -606,12 +613,38 @@ local function expression_pairhandler(args, a, b)
 				host_function_value = term,
 			}, orig_env))
 		end
+		---@cast tuple checkable
 
-		---@type inferrable | checkable
-		local res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
+		---@type string | inferrable | checkable
+		local res
+
+		if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
+			local tuple_usages, tuple_term = evaluator.check(tuple, env.typechecking_context, param_type)
+			local result_final = evaluator.evaluate(
+				typed_term.application(typed_term.literal(result_type), tuple_term),
+				env.typechecking_context.runtime_context
+			)
+			local app = inferrable_term.typed(
+				result_final,
+				usage_array(),
+				typed_term.program_invoke(
+					typed_term.literal(value.effect_elem(terms.lua_prog)),
+					typed_term.tuple_cons(typed_array(term, tuple_term))
+				)
+			)
+			---@type Environment
+			env = env:bind_local(terms.binding.program_sequence(app, a.anchor))
+			ok, res = env:get("#program-sequence")
+			if not ok then
+				error(res)
+			end
+			---@cast res inferrable
+		else
+			res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
+			---@cast res inferrable
+		end
 
 		if goal:is_check() then
-			---@cast res inferrable
 			res = checkable_term.inferrable(res)
 		end
 

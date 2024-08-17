@@ -116,7 +116,7 @@ end
 ---@type lua_operative
 local function record_build(syntax, env)
 	local ok, defs, env = syntax:match({
-		metalang.list_many_threaded(metalang.accept_handler, record_threaded_element, env),
+		metalang.list_many_fold(metalang.accept_handler, record_threaded_element, env),
 	}, metalang.failure_handler, nil)
 	if not ok then
 		return ok, defs
@@ -205,7 +205,7 @@ local ascribed_name = metalang.reducer(
 		-- print(env.get)
 		-- print(env.enter_block)
 		local shadowed
-		shadowed, env = env:enter_block()
+		shadowed, env = env:enter_block(terms.block_purity.pure)
 		env = env:bind_local(
 			terms.binding.annotated_lambda("#prev", prev, syntax.anchor or backup_anchor, terms.visibility.explicit)
 		)
@@ -221,7 +221,7 @@ local ascribed_name = metalang.reducer(
 			return ok, name
 		end
 		---@cast env Environment
-		env, val = env:exit_block(val, shadowed)
+		local env, val, purity = env:exit_block(val, shadowed)
 		-- print("is env an environment? (end of ascribed name)")
 		-- print(env.get)
 		-- print(env.enter_block)
@@ -229,6 +229,107 @@ local ascribed_name = metalang.reducer(
 	end,
 	"ascribed_name"
 )
+
+local curry_names_inner = metalang.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@return boolean
+	---@return {names: string[], args: inferrable, env: Environment}|string
+	function(syntax, env)
+		local close_enough = syntax.anchor
+		--print("start env: " .. tostring(env))
+
+		local ok, env = syntax:match({
+			metalang.list_many_fold(function(_, vals, thread)
+				return true, thread.env
+			end, function(thread)
+				--print("type_env: " .. tostring(thread.env))
+				return pure_ascribed_name(function(_, name, type_val, type_env)
+					type_env = type_env:bind_local(
+						terms.binding.annotated_lambda(name, type_val, close_enough, terms.visibility.implicit)
+					)
+					local newthread = {
+						env = type_env,
+					}
+					return true, { name = name, type = type_val }, newthread
+				end, thread.env)
+			end, {
+				env = env,
+			}),
+		}, metalang.failure_handler, nil)
+
+		if not ok then
+			return ok, env
+		end
+
+		--print("env return: " .. tostring(env))
+
+		return true, { env = env }
+	end,
+	"curry_names_inner"
+)
+
+local curry_names = metalang.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@return boolean
+	---@return {names: string[], args: inferrable, env: Environment}|string
+	function(syntax, env)
+		local ok, thread = syntax:match({
+			curry_names_inner(metalang.accept_handler, env),
+		}, metalang.failure_handler, nil)
+
+		if not ok then
+			return ok, thread
+		end
+		return ok, { env = thread.env }
+	end,
+	"curry_names"
+)
+
+local curry_segment = metalang.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@return boolean
+	---@return {single: boolean, names: string|string[], args: inferrable, env: Environment}|string
+	function(syntax, env)
+		local ok, thread = syntax:match({
+			curry_names(metalang.accept_handler, env),
+		}, metalang.failure_handler, nil)
+
+		if not ok then
+			return ok, thread
+		end
+
+		return true, { env = thread.env }
+	end,
+	"curry_segment"
+)
+
+---@type lua_operative
+local function lambda_curry_impl(syntax, env)
+	local shadow, env = env:enter_block(terms.block_purity.pure)
+
+	local ok, thread, tail = syntax:match({
+		metalang.listtail(metalang.accept_handler, curry_segment(metalang.accept_handler, env)),
+	}, metalang.failure_handler, nil)
+	if not ok then
+		return ok, thread
+	end
+
+	local env = thread.env
+
+	local ok, expr, env = tail:match(
+		{ exprs.block(metalang.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, env)) },
+		metalang.failure_handler,
+		nil
+	)
+	if not ok then
+		return ok, expr
+	end
+	local resenv, term, purity = env:exit_block(expr, shadow)
+	return true, term, resenv
+end
 
 local tupleof_ascribed_names_inner = metalang.reducer(
 	---@param syntax ConstructedSyntax
@@ -245,14 +346,14 @@ local tupleof_ascribed_names_inner = metalang.reducer(
 		end
 		local function cons(...)
 			return terms.inferrable_term.enum_cons(
-				terms.value.tuple_defn_type(terms.value.star(0)),
-				terms.DeclCons.cons,
+				terms.value.tuple_desc_type(terms.value.star(0)),
+				terms.DescCons.cons,
 				tup_cons(...)
 			)
 		end
 		local empty = terms.inferrable_term.enum_cons(
-			terms.value.tuple_defn_type(terms.value.star(0)),
-			terms.DeclCons.empty,
+			terms.value.tuple_desc_type(terms.value.star(0)),
+			terms.DescCons.empty,
 			tup_cons()
 		)
 		local names = gen.declare_array(gen.builtin_string)()
@@ -260,7 +361,7 @@ local tupleof_ascribed_names_inner = metalang.reducer(
 		local close_enough = syntax.anchor
 
 		local ok, names, args, env = syntax:match({
-			metalang.list_many_threaded(function(_, vals, thread)
+			metalang.list_many_fold(function(_, vals, thread)
 				return true, thread.names, thread.args, thread.env
 			end, function(thread)
 				return ascribed_name(function(_, name, type_val, type_env)
@@ -425,7 +526,7 @@ local function make_host_func_syntax(effectful)
 		--print("moving on to return type")
 
 		local shadowed
-		shadowed, env = env:enter_block()
+		shadowed, env = env:enter_block(terms.block_purity.pure)
 		-- tail.anchor can be nil so we fall back to the anchor for the start of this host func type if needed
 		-- TODO: use correct name in lambda parameter instead of adding an extra let
 		env = env:bind_local(
@@ -468,7 +569,7 @@ local function make_host_func_syntax(effectful)
 			results_args = terms.inferrable_term.program_type(effect_term, results_args)
 		end
 
-		local env, fn_res_term = env:exit_block(results_args, shadowed)
+		local env, fn_res_term, purity = env:exit_block(results_args, shadowed)
 		local fn_type_term = terms.inferrable_term.host_function_type(
 			params_args,
 			fn_res_term,
@@ -476,7 +577,7 @@ local function make_host_func_syntax(effectful)
 				terms.inferrable_term.typed(
 					terms.value.result_info_type,
 					usage_array(),
-					terms.typed_term.literal(effectful and result_info_pure or result_info_effectful)
+					terms.typed_term.literal(effectful and result_info_effectful or result_info_pure)
 				)
 			)
 		)
@@ -516,7 +617,7 @@ local function forall_type_impl(syntax, env)
 	--print("moving on to return type")
 
 	local shadowed
-	shadowed, env = env:enter_block()
+	shadowed, env = env:enter_block(terms.block_purity.pure)
 	-- tail.anchor can be nil so we fall back to the anchor for the start of this forall type if needed
 	-- TODO: use correct name in lambda parameter instead of adding an extra let
 	env = env:bind_local(
@@ -548,7 +649,7 @@ local function forall_type_impl(syntax, env)
 	local results_args = results_thread.args
 	env = results_thread.env
 
-	local env, fn_res_term = env:exit_block(results_args, shadowed)
+	local env, fn_res_term, purity = env:exit_block(results_args, shadowed)
 	local usage_array = gen.declare_array(gen.builtin_number)
 	local fn_type_term = terms.inferrable_term.pi(
 		params_args,
@@ -638,7 +739,7 @@ local function apply_operative_impl(syntax, env)
 	if type_of_fn:is_pi() then
 		param_type, _, _, _ = type_of_fn:unwrap_pi()
 	elseif type_of_fn:is_host_function_type() then
-		param_type, _ = type_of_fn:unwrap_host_function_type()
+		param_type, _, _ = type_of_fn:unwrap_host_function_type()
 	else
 		error "unknown fn type for apply operative"
 	end
@@ -674,7 +775,7 @@ local function lambda_impl(syntax, env)
 
 	local single, args, names, env = thread.single, thread.args, thread.names, thread.env
 
-	local shadow, inner_env = env:enter_block()
+	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
 	-- TODO: use correct name in lambda parameter instead of adding an extra let
 	inner_env = inner_env:bind_local(
 		terms.binding.annotated_lambda("#lambda-arguments", thread.args, syntax.anchor, terms.visibility.explicit)
@@ -693,12 +794,12 @@ local function lambda_impl(syntax, env)
 	if not ok then
 		return ok, expr
 	end
-	local resenv, term = env:exit_block(expr, shadow)
+	local resenv, term, purity = env:exit_block(expr, shadow)
 	return true, term, resenv
 end
 
 ---@type lua_operative
-local function lambda_impl_implicit(syntax, env)
+local function lambda_implicit_impl(syntax, env)
 	local ok, thread, tail = syntax:match({
 		metalang.listtail(metalang.accept_handler, ascribed_segment(metalang.accept_handler, env)),
 	}, metalang.failure_handler, nil)
@@ -708,7 +809,7 @@ local function lambda_impl_implicit(syntax, env)
 
 	local single, args, names, env = thread.single, thread.args, thread.names, thread.env
 
-	local shadow, inner_env = env:enter_block()
+	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
 	-- TODO: use correct name in lambda parameter instead of adding an extra let
 	inner_env = inner_env:bind_local(
 		terms.binding.annotated_lambda(
@@ -732,7 +833,7 @@ local function lambda_impl_implicit(syntax, env)
 	if not ok then
 		return ok, expr
 	end
-	local resenv, term = env:exit_block(expr, shadow)
+	local resenv, term, purity = env:exit_block(expr, shadow)
 	return true, term, resenv
 end
 
@@ -934,7 +1035,8 @@ local core_operations = {
 	type_ = exprs.host_operative(startype_impl, "startype_impl"),
 	["forall"] = exprs.host_operative(forall_type_impl, "forall_type_impl"),
 	lambda = exprs.host_operative(lambda_impl, "lambda_impl"),
-	lambda_implicit = exprs.host_operative(lambda_impl_implicit, "lambda_impl_implicit"),
+	lambda_implicit = exprs.host_operative(lambda_implicit_impl, "lambda_implicit_impl"),
+	lambda_curry = exprs.host_operative(lambda_curry_impl, "lambda_curry_impl"),
 	the = exprs.host_operative(the_operative_impl, "the"),
 	apply = exprs.host_operative(apply_operative_impl, "apply"),
 	wrap = build_wrap(typed.host_wrap, typed.host_wrapped_type),

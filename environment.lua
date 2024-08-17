@@ -89,6 +89,9 @@ end
 function environment:bind_local(binding)
 	--print("bind_local: (binding term follows)")
 	--print(binding:pretty_print(self.typechecking_context))
+	if not self.purity:is_pure() and not self.purity:is_effectful() then
+		error("nyi environment dependent purity")
+	end
 	if binding:is_let() then
 		local name, expr = binding:unwrap_let()
 		local expr_type, expr_usages, expr_term = infer(expr, self.typechecking_context)
@@ -188,6 +191,26 @@ function environment:bind_local(binding)
 			typechecking_context = typechecking_context,
 		})
 		--error "NYI lambda bindings"
+	elseif binding:is_program_sequence() then
+		if self.purity:is_pure() then
+			error("binding.program_sequence is only allowed in effectful blocks")
+		end
+		local first, anchor = binding:unwrap_program_sequence()
+		local first_type, first_usages, first_term = infer(first, self.typechecking_context)
+		if not first_type:is_program_type() then
+			error("program sequence must infer to a program type")
+		end
+		local first_effect_sig, first_base_type = first_type:unwrap_program_type()
+		local n = #self.typechecking_context
+		local term = inferrable_term.bound_variable(n + 1)
+		local locals = self.locals:put("#program-sequence", term)
+		local typechecking_context = self.typechecking_context:append("#program-sequence", first_base_type, nil, anchor)
+		local bindings = self.bindings:append(binding)
+		return update_env(self, {
+			locals = locals,
+			bindings = bindings,
+			typechecking_context = typechecking_context,
+		})
 	else
 		error("bind_local: unknown kind: " .. binding.kind)
 	end
@@ -234,17 +257,21 @@ function environment:unlet_local(name)
 end
 
 ---enter a new block, shadowing the current context and allowing new bindings
----@param pure block_purity
+---@param purity block_purity
 ---@return ShadowEnvironment
 ---@return Environment
-function environment:enter_block(pure)
+function environment:enter_block(purity)
 	--print "entering block"
 	--self.typechecking_context:dump_names()
+	if purity:is_inherit() then
+		purity = self.purity
+	end
 	eval.typechecker_state:enter_block()
 	return { shadowed = self },
 		new_env {
 			-- locals = nil,
 			nonlocals = self.in_scope,
+			purity = purity,
 			perms = self.perms,
 			typechecking_context = self.typechecking_context,
 		}
@@ -258,6 +285,14 @@ end
 ---@return purity
 function environment:exit_block(term, shadowed)
 	-- -> env, term
+	local purity
+	if self.purity:is_pure() then
+		purity = terms.purity.pure
+	elseif self.purity:is_effectful() then
+		purity = terms.purity.effectful
+	else
+		error("nyi environment dependent purity")
+	end
 	local outer = shadowed.shadowed or error "shadowed.shadowed missing"
 	local env = new_env {
 		locals = outer.locals,
@@ -266,6 +301,7 @@ function environment:exit_block(term, shadowed)
 		perms = outer.perms,
 		typechecking_context = outer.typechecking_context,
 		bindings = outer.bindings,
+		purity = outer.purity,
 	}
 	--print("exiting block and dropping " .. #self.bindings .. " bindings")
 	--self.typechecking_context:dump_names()
@@ -274,6 +310,9 @@ function environment:exit_block(term, shadowed)
 	--print "new"
 	--env.typechecking_context:dump_names()
 	local wrapped = term
+	if purity:is_effectful() then
+		wrapped = terms.inferrable_term.program_end(wrapped)
+	end
 	for idx = self.bindings:len(), 1, -1 do
 		local binding = self.bindings:get(idx)
 		if not binding then
@@ -288,11 +327,16 @@ function environment:exit_block(term, shadowed)
 		elseif binding:is_annotated_lambda() then
 			local name, annotation, anchor, visible = binding:unwrap_annotated_lambda()
 			wrapped = terms.inferrable_term.annotated_lambda(name, annotation, wrapped, anchor, visible)
+		elseif binding:is_program_sequence() then
+			local first, anchor = binding:unwrap_program_sequence()
+			wrapped = terms.inferrable_term.program_sequence(first, anchor, wrapped)
+		else
+			error("exit_block: unknown kind: " .. binding.kind)
 		end
 	end
 	eval.typechecker_state:exit_block()
 
-	return env, wrapped
+	return env, wrapped, purity
 end
 
 environment_mt = { __index = environment }

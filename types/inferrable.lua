@@ -216,10 +216,16 @@ function inferrable:unwrap_host_intrinsic() end
 function inferrable:as_host_intrinsic() end
 ---@return boolean
 function inferrable:is_program_sequence() end
----@return inferrable, inferrable
+---@return inferrable, Anchor, inferrable
 function inferrable:unwrap_program_sequence() end
----@return boolean, inferrable, inferrable
+---@return boolean, inferrable, Anchor, inferrable
 function inferrable:as_program_sequence() end
+---@return boolean
+function inferrable:is_program_end() end
+---@return inferrable
+function inferrable:unwrap_program_end() end
+---@return boolean, inferrable
+function inferrable:as_program_end() end
 ---@return boolean
 function inferrable:is_program_type() end
 ---@return inferrable, inferrable
@@ -264,6 +270,7 @@ function inferrable:as_program_type() end
 ---@field host_unstrict_unwrap fun(container: inferrable): inferrable
 ---@field host_if fun(subject: checkable, consequent: inferrable, alternate: inferrable): inferrable
 ---@field host_intrinsic fun(source: checkable, type: inferrable, anchor: Anchor): inferrable
----@field program_sequence fun(first: inferrable, continue: inferrable): inferrable
+---@field program_sequence fun(first: inferrable, anchor: Anchor, continue: inferrable): inferrable
+---@field program_end fun(result: inferrable): inferrable
 ---@field program_type fun(effect_type: inferrable, result_type: inferrable): inferrable
 return {}

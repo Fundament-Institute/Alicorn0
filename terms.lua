@@ -61,6 +61,8 @@ end
 local metavariable_mt = { __index = Metavariable }
 local metavariable_type = gen.declare_foreign(gen.metatable_equality(metavariable_mt), "Metavariable")
 
+local anchor_type = gen.declare_foreign(gen.metatable_equality(format.anchor_mt), "Anchor")
+
 ---@class RuntimeContext
 ---@field bindings FibonacciBuffer
 local RuntimeContext = {}
@@ -149,9 +151,8 @@ end
 ---@param anchor Anchor?
 ---@return TypecheckingContext
 function TypecheckingContext:append(name, type, val, anchor)
-	-- TODO: typecheck
-	if name == nil or type == nil then
-		error("bug!!!")
+	if gen.builtin_string.value_check(name) ~= true then
+		error("TypecheckingContext:append parameter 'name' must be a string")
 	end
 	if value.value_check(type) ~= true then
 		print("type", type)
@@ -160,10 +161,19 @@ function TypecheckingContext:append(name, type, val, anchor)
 			print(k, v)
 		end
 		print(getmetatable(type))
-		error "TypecheckingContext:append type parameter of wrong type"
+		error("TypecheckingContext:append parameter 'type' must be a value")
 	end
 	if type:is_closure() then
 		error "BUG!!!"
+	end
+	if val ~= nil and value.value_check(val) ~= true then
+		error("TypecheckingContext:append parameter 'val' must be a value (or nil if given anchor)")
+	end
+	if anchor ~= nil and anchor_type.value_check(anchor) ~= true then
+		error("TypecheckingContext:append parameter 'anchor' must be an anchor (or nil if given val)")
+	end
+	if (val and anchor) or (not val and not anchor) then
+		error("TypecheckingContext:append expected either val or anchor")
 	end
 	local copy = {
 		bindings = self.bindings:append({ name = name, type = type }),
@@ -195,7 +205,6 @@ local typechecking_context_type =
 local host_user_defined_id = gen.declare_foreign(function(val)
 	return type(val) == "table" and type(val.name) == "string"
 end, "{ name: string }")
-local anchor_type = gen.declare_foreign(gen.metatable_equality(format.anchor_mt), "Anchor")
 
 -- implicit arguments are filled in through unification
 -- e.g. fn append(t : star(0), n : nat, xs : Array(t, n), val : t) -> Array(t, n+1)
@@ -231,6 +240,10 @@ binding:define_enum("binding", {
 		"param_annotation", inferrable_term,
 		"anchor",           anchor_type,
 		"visible",          visibility,
+	} },
+	{ "program_sequence", {
+		"first",  inferrable_term,
+		"anchor", anchor_type,
 	} },
 })
 
@@ -356,13 +369,15 @@ inferrable_term:define_enum("inferrable", {
 		"anchor", anchor_type,
 	} },
 	{ "program_sequence", {
-		"first", inferrable_term,
-		"continue", inferrable_term
+		"first",    inferrable_term,
+		"anchor",   anchor_type,
+		"continue", inferrable_term,
 	} },
+	{ "program_end", { "result", inferrable_term } },
 	{ "program_type", {
 		"effect_type", inferrable_term,
-		"result_type", inferrable_term
-	} }
+		"result_type", inferrable_term,
+	} },
 })
 
 -- typed terms have been typechecked but do not store their type internally
@@ -481,28 +496,26 @@ typed_term:define_enum("typed", {
 	{ "range", {
 		  "lower_bounds", array(typed_term),
 		  "upper_bounds", array(typed_term),
-		  "relation", typed_term -- a subtyping relation. not currently represented.
+		  "relation",     typed_term, -- a subtyping relation. not currently represented.
 	} },
 
-	{ "program_end", {
-		"result", typed_term
+	{ "program_sequence", {
+		"first",    typed_term,
+		"continue", typed_term,
 	} },
+	{ "program_end", { "result", typed_term } },
 	{ "program_invoke", {
 		"effect_tag", typed_term,
-		"effect_arg", typed_term
-	} },
-	{ "program_continue", {
-		"first", typed_term,
-		"continue", typed_term
+		"effect_arg", typed_term,
 	} },
 	{ "effect_type", {
 		"components", array(typed_term),
-		"base", typed_term
+		"base",       typed_term,
 	} },
 	{ "program_type", {
 		"effect_type", typed_term,
-		"result_type", typed_term
-	}}
+		"result_type", typed_term,
+	} },
 })
 
 local unique_id = gen.builtin_table
@@ -572,37 +585,32 @@ end
 
 ---@module './types/effect_id'
 local effect_id = gen.declare_type()
+-- stylua: ignore
 effect_id:define_record("effect_id", {
-	"primary",
-	unique_id,
-	"extension",
-	set(unique_id), --TODO: switch to a set
+	"primary",   unique_id,
+	"extension", set(unique_id), --TODO: switch to a set
 })
 
 local semantic_id = gen.declare_type()
+-- stylua: ignore
 semantic_id:define_record("semantic_id", {
-	"primary",
-	unique_id,
-	"extension",
-	set(unique_id), --TODO: switch to a set
+	"primary",   unique_id,
+	"extension", set(unique_id), --TODO: switch to a set
 })
 
 --TODO: consider switching to a nicer coterm representation
 ---@module './types/continuation'
 local continuation = gen.declare_type()
+-- stylua: ignore
 continuation:define_enum("continuation", {
 	{ "empty" },
 	{ "frame", {
-		"context",
-		runtime_context_type,
-		"code",
-		typed_term,
+		"context", runtime_context_type,
+		"code",    typed_term,
 	} },
 	{ "sequence", {
-		"first",
-		continuation,
-		"second",
-		continuation,
+		"first",  continuation,
+		"second", continuation,
 	} },
 })
 
@@ -647,7 +655,7 @@ value:define_enum("value", {
 	{ "range", {
 		  "lower_bounds", array(value),
 		  "upper_bounds", array(value),
-		  "relation", value -- a subtyping relation. not currently represented.
+		  "relation",     value, -- a subtyping relation. not currently represented.
 	} },
 
 	-- metaprogramming stuff
@@ -676,17 +684,17 @@ value:define_enum("value", {
 
 	-- ordinary data
 	{ "tuple_value", { "elements", array(value) } },
-	{ "tuple_type", { "decls", value } },
-	{ "tuple_defn_type", { "universe", value } },
+	{ "tuple_type", { "desc", value } },
+	{ "tuple_desc_type", { "universe", value } },
 	{ "enum_value", {
 		"constructor", gen.builtin_string,
 		"arg",         value,
 	} },
-	{ "enum_type", { "decls", value } },
-	{ "enum_defn_type", { "universe", value } },
+	{ "enum_type", { "desc", value } },
+	{ "enum_desc_type", { "universe", value } },
 	{ "record_value", { "fields", map(gen.builtin_string, value) } },
-	{ "record_type", { "decls", value } },
-	{ "record_defn_type", { "universe", value } },
+	{ "record_type", { "desc", value } },
+	{ "record_desc_type", { "universe", value } },
 	{ "record_extend_stuck", {
 		"base",      neutral_value,
 		"extension", map(gen.builtin_string, value),
@@ -695,7 +703,7 @@ value:define_enum("value", {
 		"methods", map(gen.builtin_string, typed_term),
 		"capture", runtime_context_type,
 	} },
-	{ "object_type", { "decls", value } },
+	{ "object_type", { "desc", value } },
 	{ "level_type" },
 	{ "number_type" },
 	{ "number", { "number", gen.builtin_number } },
@@ -742,26 +750,24 @@ value:define_enum("value", {
 		"supertype", value,
 		"value",     value,
 	} },
-	{ "program_end", {
-		"result", value
-	} },
+	{ "program_end", { "result", value } },
 	{ "program_cont", {
-		"action", unique_id,
-		"argument", value,
-		"continuation", continuation
+		"action",       unique_id,
+		"argument",     value,
+		"continuation", continuation,
 	} },
 	{ "effect_empty" },
-	{ "effect_elem", { "tag", effect_id}},
+	{ "effect_elem", { "tag", effect_id } },
 	{ "effect_type" },
 	{ "effect_row", {
 		"components", set(unique_id),
-		"rest", value
+		"rest",       value,
 	} },
 	{ "effect_row_type" },
 	{ "program_type", {
 		"effect_sig", value,
-		"base_type", value
-	} }
+		"base_type",  value,
+	} },
 })
 
 -- stylua: ignore
@@ -824,8 +830,8 @@ local host_checkable_term_type = value.host_user_defined_type({ name = "checkabl
 -- return ok, err
 local host_lua_error_type = value.host_user_defined_type({ name = "lua_error_type" }, array(value)())
 
----@class DeclConsContainer
-local DeclCons = --[[@enum DeclCons]]
+---@class DescConsContainer
+local DescCons = --[[@enum DescCons]]
 	{
 		cons = "cons",
 		empty = "empty",
@@ -842,15 +848,15 @@ end
 ---@param ... value
 ---@return value
 local function cons(...)
-	return value.enum_value(DeclCons.cons, tup_val(...))
+	return value.enum_value(DescCons.cons, tup_val(...))
 end
 
-local empty = value.enum_value(DeclCons.empty, tup_val())
+local empty = value.enum_value(DescCons.empty, tup_val())
 local unit_type = value.tuple_type(empty)
 local unit_val = tup_val()
 
 --[[
-local tuple_defn = value.enum_value("variant",
+local tuple_desc = value.enum_value("variant",
 	tup_val(
 		value.enum_value("variant",
 			tup_val(
@@ -890,6 +896,7 @@ local terms = {
 	host_inferrable_term_type = host_inferrable_term_type,
 	host_checkable_term_type = host_checkable_term_type,
 	host_lua_error_type = host_lua_error_type,
+	unique_id = unique_id,
 
 	runtime_context = runtime_context,
 	typechecking_context = typechecking_context,
@@ -897,7 +904,7 @@ local terms = {
 	runtime_context_type = runtime_context_type,
 	typechecking_context_type = typechecking_context_type,
 
-	DeclCons = DeclCons,
+	DescCons = DescCons,
 	tup_val = tup_val,
 	cons = cons,
 	empty = empty,
