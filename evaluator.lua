@@ -220,9 +220,9 @@ local function substitute_inner(val, mappings, context_len)
 		end
 		return typed_term.tuple_cons(res)
 	elseif val:is_tuple_type() then
-		local decls = val:unwrap_tuple_type()
-		local decls = substitute_inner(decls, mappings, context_len)
-		return typed_term.tuple_type(decls)
+		local desc = val:unwrap_tuple_type()
+		desc = substitute_inner(desc, mappings, context_len)
+		return typed_term.tuple_type(desc)
 	elseif val:is_tuple_desc_type() then
 		return typed_term.literal(val)
 	elseif val:is_enum_value() then
@@ -230,15 +230,15 @@ local function substitute_inner(val, mappings, context_len)
 		local arg = substitute_inner(arg, mappings, context_len)
 		return typed_term.enum_cons(constructor, arg)
 	elseif val:is_enum_type() then
-		local decls = val:unwrap_enum_type()
-		-- TODO: Handle decls properly, because it's a value.
+		local desc = val:unwrap_enum_type()
+		-- TODO: Handle desc properly, because it's a value.
 		return typed_term.literal(val)
 	elseif val:is_record_value() then
 		-- TODO: How to deal with a map?
 		error("Records not yet implemented")
 	elseif val:is_record_type() then
-		local decls = val:unwrap_record_type()
-		-- TODO: Handle decls properly, because it's a value.
+		local desc = val:unwrap_record_type()
+		-- TODO: Handle desc properly, because it's a value.
 		error("Records not yet implemented")
 	elseif val:is_record_extend_stuck() then
 		-- Needs to handle the nuetral value and map of values
@@ -246,7 +246,7 @@ local function substitute_inner(val, mappings, context_len)
 	elseif val:is_object_value() then
 		return typed_term.literal(val)
 	elseif val:is_object_type() then
-		-- local decls = val:unwrap_object_type()
+		-- local desc = val:unwrap_object_type()
 		-- TODO: this needs to be evaluated properly because it contains a value
 		error("Not yet implemented")
 	elseif val:is_level_type() then
@@ -405,9 +405,9 @@ local function substitute_inner(val, mappings, context_len)
 	elseif val:is_host_tuple_value() then
 		return typed_term.literal(val)
 	elseif val:is_host_tuple_type() then
-		local decls = val:unwrap_host_tuple_type()
-		local decls = substitute_inner(decls, mappings, context_len)
-		return typed_term.host_tuple_type(decls)
+		local desc = val:unwrap_host_tuple_type()
+		desc = substitute_inner(desc, mappings, context_len)
+		return typed_term.host_tuple_type(desc)
 	elseif val:is_range() then
 		local lower_bounds, upper_bounds, relation = val:unwrap_range()
 		local sub_lower_bounds = typed_array()
@@ -753,7 +753,7 @@ function check(
 		local elements = checkable_term:unwrap_tuple_cons()
 		local usages = usage_array()
 		local new_elements = typed_array()
-		local decls = terms.empty
+		local desc = terms.empty
 
 		for _, v in ipairs(elements) do
 			local el_type_metavar = typechecker_state:metavariable(typechecking_context)
@@ -765,8 +765,8 @@ function check(
 
 			local el_val = evaluate(el_term, typechecking_context.runtime_context)
 
-			decls = terms.cons(
-				decls,
+			desc = terms.cons(
+				desc,
 				value.closure(
 					"#check-tuple-cons-param",
 					typed_term.literal(value.singleton(el_type, el_val)),
@@ -776,7 +776,7 @@ function check(
 		end
 
 		typechecker_state:flow(
-			value.tuple_type(decls),
+			value.tuple_type(desc),
 			typechecking_context,
 			goal_type,
 			typechecking_context,
@@ -788,7 +788,7 @@ function check(
 		local elements = checkable_term:unwrap_host_tuple_cons()
 		local usages = usage_array()
 		local new_elements = typed_array()
-		local decls = terms.empty
+		local desc = terms.empty
 
 		for _, v in ipairs(elements) do
 			local el_type_metavar = typechecker_state:metavariable(typechecking_context)
@@ -800,8 +800,8 @@ function check(
 
 			local el_val = evaluate(el_term, typechecking_context.runtime_context)
 
-			decls = terms.cons(
-				decls,
+			desc = terms.cons(
+				desc,
 				value.closure(
 					"#check-tuple-cons-param",
 					typed_term.literal(value.singleton(el_type, el_val)),
@@ -811,7 +811,7 @@ function check(
 		end
 
 		typechecker_state:flow(
-			value.host_tuple_type(decls),
+			value.host_tuple_type(desc),
 			typechecking_context,
 			goal_type,
 			typechecking_context,
@@ -906,9 +906,9 @@ end
 ---@return value
 ---@return fun(i: any) : value
 local function make_tuple_prefix(subject_type, subject_value)
-	local decls, make_prefix
+	local desc, make_prefix
 	if subject_type:is_tuple_type() then
-		decls = subject_type:unwrap_tuple_type()
+		desc = subject_type:unwrap_tuple_type()
 
 		if subject_value:is_tuple_value() then
 			local subject_elements = subject_value:unwrap_tuple_value()
@@ -928,7 +928,7 @@ local function make_tuple_prefix(subject_type, subject_value)
 			error("make_tuple_prefix, is_tuple_type, subject_value: expected a tuple")
 		end
 	elseif subject_type:is_host_tuple_type() then
-		decls = subject_type:unwrap_host_tuple_type()
+		desc = subject_type:unwrap_host_tuple_type()
 
 		if subject_value:is_host_tuple_value() then
 			local subject_elements = subject_value:unwrap_host_tuple_value()
@@ -957,18 +957,18 @@ local function make_tuple_prefix(subject_type, subject_value)
 		error("make_tuple_prefix, subject_type: expected a term with a tuple type, but got " .. subject_type.kind)
 	end
 
-	return decls, make_prefix
+	return desc, make_prefix
 end
 
 -- TODO: create a typechecking context append variant that merges two
----@param decls value
+---@param desc value
 ---@param make_prefix fun(i: integer): value
 ---@return value[]
 ---@return integer
 ---@return value[]
-function make_inner_context(decls, make_prefix)
+function make_inner_context(desc, make_prefix)
 	-- evaluate the type of the tuple
-	local constructor, arg = decls:unwrap_enum_value()
+	local constructor, arg = desc:unwrap_enum_value()
 	if constructor == terms.DescCons.empty then
 		return value_array(), 0, value_array()
 	elseif constructor == terms.DescCons.cons then
@@ -1000,8 +1000,8 @@ end
 ---@return integer
 ---@return value[]
 function infer_tuple_type_unwrapped(subject_type, subject_value)
-	local decls, make_prefix = make_tuple_prefix(subject_type, subject_value)
-	return make_inner_context(decls, make_prefix)
+	local desc, make_prefix = make_tuple_prefix(subject_type, subject_value)
+	return make_inner_context(desc, make_prefix)
 end
 
 ---@param subject_type value
@@ -1014,21 +1014,21 @@ function infer_tuple_type(subject_type, subject_value)
 	return infer_tuple_type_unwrapped(subject_type, subject_value)
 end
 
----@param decls_a value
+---@param desc_a value
 ---@param make_prefix_a fun(i: integer): value
----@param decls_b value
+---@param desc_b value
 ---@param make_prefix_b fun(i: integer): value
 ---@return value[]
 ---@return value[]
 ---@return value[]
 ---@return integer
-function make_inner_context2(decls_a, make_prefix_a, decls_b, make_prefix_b)
-	local constructor_a, arg_a = decls_a:unwrap_enum_value()
-	local constructor_b, arg_b = decls_b:unwrap_enum_value()
+function make_inner_context2(desc_a, make_prefix_a, desc_b, make_prefix_b)
+	local constructor_a, arg_a = desc_a:unwrap_enum_value()
+	local constructor_b, arg_b = desc_b:unwrap_enum_value()
 	if constructor_a == terms.DescCons.empty and constructor_b == terms.DescCons.empty then
 		return value_array(), value_array(), value_array(), 0
 	elseif constructor_a == terms.DescCons.empty or constructor_b == terms.DescCons.empty then
-		error("tuple decls lengths must be equal")
+		error("tuple desc lengths must be equal")
 	elseif constructor_a == terms.DescCons.cons and constructor_b == terms.DescCons.cons then
 		local details_a = arg_a:unwrap_tuple_value()
 		local details_b = arg_b:unwrap_tuple_value()
@@ -1071,9 +1071,9 @@ end
 ---@return value[]
 ---@return integer
 function infer_tuple_type_unwrapped2(subject_type_a, subject_type_b, subject_value)
-	local decls_a, make_prefix_a = make_tuple_prefix(subject_type_a, subject_value)
-	local decls_b, make_prefix_b = make_tuple_prefix(subject_type_b, subject_value)
-	return make_inner_context2(decls_a, make_prefix_a, decls_b, make_prefix_b)
+	local desc_a, make_prefix_a = make_tuple_prefix(subject_type_a, subject_value)
+	local desc_b, make_prefix_b = make_tuple_prefix(subject_type_b, subject_value)
+	return make_inner_context2(desc_a, make_prefix_a, desc_b, make_prefix_b)
 end
 
 ---@param typ value
@@ -1316,12 +1316,12 @@ function infer(
 		add_arrays(result_usages, body_usages)
 		return body_type, result_usages, typed_term.tuple_elim(names, subject_term, n_elements, body_term)
 	elseif inferrable_term:is_tuple_type() then
-		local definition = inferrable_term:unwrap_tuple_type()
-		local definition_type, definition_usages, definition_term = infer(definition, typechecking_context)
-		if not definition_type:is_tuple_desc_type() then
+		local desc = inferrable_term:unwrap_tuple_type()
+		local desc_type, desc_usages, desc_term = infer(desc, typechecking_context)
+		if not desc_type:is_tuple_desc_type() then
 			error "argument to tuple_type is not a tuple_desc"
 		end
-		return terms.value.star(0), definition_usages, terms.typed_term.tuple_type(definition_term)
+		return terms.value.star(0), desc_usages, terms.typed_term.tuple_type(desc_term)
 	elseif inferrable_term:is_record_cons() then
 		local fields = inferrable_term:unwrap_record_cons()
 		-- type_data is either "empty", an empty tuple,
@@ -1344,7 +1344,7 @@ function infer(
 	elseif inferrable_term:is_record_elim() then
 		local subject, field_names, body = inferrable_term:unwrap_record_elim()
 		local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
-		local ok, decls = subject_type:as_record_type()
+		local ok, desc = subject_type:as_record_type()
 		if not ok then
 			error("infer, is_record_elim, subject_type: expected a term with a record type")
 		end
@@ -1376,8 +1376,8 @@ function infer(
 		end
 
 		-- evaluate the type of the record
-		local function make_type(decls)
-			local constructor, arg = decls:unwrap_enum_value()
+		local function make_type(desc)
+			local constructor, arg = desc:unwrap_enum_value()
 			if constructor == terms.DescCons.empty then
 				return string_array(), string_value_map()
 			elseif constructor == terms.DescCons.cons then
@@ -1394,12 +1394,12 @@ function infer(
 				error("infer: unknown tuple type data constructor")
 			end
 		end
-		local decls_field_names, decls_field_types = make_type(decls)
+		local desc_field_names, desc_field_types = make_type(desc)
 
 		-- reorder the fields into the requested order
 		local inner_context = typechecking_context
 		for _, v in ipairs(field_names) do
-			local t = decls_field_types[v]
+			local t = desc_field_types[v]
 			if t == nil then
 				error("infer: trying to access a nonexistent record field")
 			end
@@ -1416,17 +1416,17 @@ function infer(
 	elseif inferrable_term:is_enum_cons() then
 		local enum_type, constructor, arg = inferrable_term:unwrap_enum_cons()
 		local arg_type, arg_usages, arg_term = infer(arg, typechecking_context)
-		-- TODO: check arg_type against enum_type decls
+		-- TODO: check arg_type against enum_type desc
 		return enum_type, arg_usages, typed_term.enum_cons(constructor, arg_term)
 	elseif inferrable_term:is_enum_elim() then
 		local subject, mechanism = inferrable_term:unwrap_enum_elim()
 		local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
-		-- local ok, decls = subject_type:as_enum_type()
+		-- local ok, desc = subject_type:as_enum_type()
 		-- if not ok then
 		--   error("infer, is_enum_elim, subject_type: expected a term with an enum type")
 		-- end
 		local mechanism_type, mechanism_usages, mechanism_term = infer(mechanism, typechecking_context)
-		-- TODO: check subject decls against mechanism decls
+		-- TODO: check subject desc against mechanism desc
 		error("nyi")
 	elseif inferrable_term:is_object_cons() then
 		local methods = inferrable_term:unwrap_object_cons()
@@ -1609,12 +1609,12 @@ function infer(
 		add_arrays(res_usages, resinfo_usages)
 		return value.host_type_type, res_usages, typed_term.host_function_type(arg_term, return_term, resinfo_term)
 	elseif inferrable_term:is_host_tuple_type() then
-		local decls = inferrable_term:unwrap_host_tuple_type()
-		local decl_type, decl_usages, decl_term = infer(decls, typechecking_context)
-		if not decl_type:is_tuple_desc_type() then
+		local desc = inferrable_term:unwrap_host_tuple_type()
+		local desc_type, desc_usages, desc_term = infer(desc, typechecking_context)
+		if not desc_type:is_tuple_desc_type() then
 			error "must be a tuple desc"
 		end
-		return value.star(0), decl_usages, typed_term.host_tuple_type(decl_term)
+		return value.star(0), desc_usages, typed_term.host_tuple_type(desc_term)
 	elseif inferrable_term:is_program_sequence() then
 		local first, anchor, continue = inferrable_term:unwrap_program_sequence()
 		local first_type, first_usages, first_term = infer(first, typechecking_context)
@@ -1836,10 +1836,9 @@ function evaluate(typed_term, runtime_context)
 		--print(tuple)
 		return index_tuple_value(tuple, index)
 	elseif typed_term:is_tuple_type() then
-		local definition_term = typed_term:unwrap_tuple_type()
-		local definition =
-			U.tag("evaluate", { definition_term = definition_term }, evaluate, definition_term, runtime_context)
-		return terms.value.tuple_type(definition)
+		local desc_term = typed_term:unwrap_tuple_type()
+		local desc = U.tag("evaluate", { desc_term = desc_term }, evaluate, desc_term, runtime_context)
+		return terms.value.tuple_type(desc)
 	elseif typed_term:is_record_cons() then
 		local fields = typed_term:unwrap_record_cons()
 		local new_fields = string_value_map()
@@ -2086,9 +2085,9 @@ function evaluate(typed_term, runtime_context)
 		local level = typed_term:unwrap_prop()
 		return value.prop(level)
 	elseif typed_term:is_host_tuple_type() then
-		local decl = typed_term:unwrap_host_tuple_type()
-		local decl_val = evaluate(decl, runtime_context)
-		return value.host_tuple_type(decl_val)
+		local desc = typed_term:unwrap_host_tuple_type()
+		local desc_val = evaluate(desc, runtime_context)
+		return value.host_tuple_type(desc_val)
 	elseif typed_term:is_range() then
 		local lower_bounds, upper_bounds, relation = typed_term:unwrap_range()
 		local lower_acc, upper_acc = value_array(), value_array()

@@ -291,7 +291,7 @@ inferrable_term:define_enum("inferrable", {
 		"subject", inferrable_term,
 		"body",    inferrable_term,
 	} },
-	{ "tuple_type", { "definition", inferrable_term } },
+	{ "tuple_type", { "desc", inferrable_term } },
 	{ "record_cons", { "fields", map(gen.builtin_string, inferrable_term) } },
 	{ "record_elim", {
 		"subject",     inferrable_term,
@@ -307,7 +307,7 @@ inferrable_term:define_enum("inferrable", {
 		"subject",   inferrable_term,
 		"mechanism", inferrable_term,
 	} },
-	{ "enum_type", { "definition", inferrable_term } },
+	{ "enum_type", { "desc", inferrable_term } },
 	{ "object_cons", { "methods", map(gen.builtin_string, inferrable_term) } },
 	{ "object_elim", {
 		"subject",   inferrable_term,
@@ -345,7 +345,7 @@ inferrable_term:define_enum("inferrable", {
 		"id",          host_user_defined_id, -- host_user_defined_type
 		"family_args", array(inferrable_term), -- host_value
 	} },
-	{ "host_tuple_type", { "decls", inferrable_term } }, -- just like an ordinary tuple type but can only hold host_values
+	{ "host_tuple_type", { "desc", inferrable_term } }, -- just like an ordinary tuple type but can only hold host_values
 	{ "host_function_type", {
 		"param_type",  inferrable_term, -- must be a host_tuple_type
 		-- host functions can only have explicit arguments
@@ -425,7 +425,7 @@ typed_term:define_enum("typed", {
 		"subject", typed_term,
 		"index",   gen.builtin_number,
 	} },
-	{ "tuple_type", { "definition", typed_term } },
+	{ "tuple_type", { "desc", typed_term } },
 	{ "record_cons", { "fields", map(gen.builtin_string, typed_term) } },
 	{ "record_extend", {
 		"base",   typed_term,
@@ -465,7 +465,7 @@ typed_term:define_enum("typed", {
 		"id",          host_user_defined_id,
 		"family_args", array(typed_term), -- host_value
 	} },
-	{ "host_tuple_type", { "decls", typed_term } }, -- just like an ordinary tuple type but can only hold host_values
+	{ "host_tuple_type", { "desc", typed_term } }, -- just like an ordinary tuple type but can only hold host_values
 	{ "host_function_type", {
 		"param_type",  typed_term, -- must be a host_tuple_type
 		-- host functions can only have explicit arguments
@@ -733,7 +733,7 @@ value:define_enum("value", {
 	{ "host_nil_type" },
 	--NOTE: host_tuple is not considered a host type because it's not a first class value in lua.
 	{ "host_tuple_value", { "elements", array(gen.any_lua_type) } },
-	{ "host_tuple_type", { "decls", value } }, -- just like an ordinary tuple type but can only hold host_values
+	{ "host_tuple_type", { "desc", value } }, -- just like an ordinary tuple type but can only hold host_values
 
 	-- type of key and value of key -> type of the value
 	-- {"host_table_type"},
