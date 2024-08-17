@@ -74,8 +74,8 @@ let new-host-type-family = lambda (unique-id : host-unique-id, signature : type_
 			end
 			local function new_host_type_family(unique_id, sig)
 				local param_type, _, _, _ = sig:unwrap_pi()
-				local param_decls = param_type:unwrap_tuple_type()
-				local nparams = length(param_decls)
+				local param_desc = param_type:unwrap_tuple_type()
+				local nparams = length(param_desc)
 				local params = typed_array()
 				local param_names = string_array()
 				for i = 1, nparams do
@@ -205,9 +205,9 @@ let host-tuple-type-to-tuple-type-inner =
 	intrinsic
 		""""
 			local function host_tuple_to_tuple(host_tuple_type)
-				local decls = host_tuple_type:unwrap_host_tuple_type()
+				local desc = host_tuple_type:unwrap_host_tuple_type()
 				-- this conversion happens to work since the eliminator for host tuples and tuples is the same term
-				local newbasetype = terms.value.tuple_type(decls)
+				local newbasetype = terms.value.tuple_type(desc)
 				return newbasetype
 			end
 			return host_tuple_to_tuple
@@ -246,7 +246,7 @@ let tuple-to-host-tuple-inner =
 				local leading = terms_gen.declare_array(terms_gen.any_lua_type)()
 				local stuck = false
 				local stuck_elem = nil
-				local trailing = terms_gen.declare_ array(terms.value)()
+				local trailing = terms_gen.declare_array(terms.value)()
 				for _, v in ipairs(elems) do
 					if stuck then
 						trailing:append(v)
@@ -465,32 +465,32 @@ let tuple-desc-type-inner = intrinsic "return terms.value.tuple_desc_type" :
 let tuple-desc-type = lambda ((U : universe))
 	let (T) = tuple-desc-type-inner(implicit-wrap(U))
 	implicit-unwrap(T)
-let tuple-type = lambda (U : universe, decls : tuple-desc-type(U))
+let tuple-type = lambda (U : universe, desc : tuple-desc-type(U))
 	let inner = intrinsic "return terms.value.tuple_type" :
-		host-func-type ((decls : wrapped(tuple-desc-type(U)))) -> ((T : wrapped(host-type)))
-	let (T) = inner(implicit-wrap(decls))
+		host-func-type ((desc : wrapped(tuple-desc-type(U)))) -> ((T : wrapped(host-type)))
+	let (T) = inner(implicit-wrap(desc))
 	# FIXME: implicit-unwrap here causes nearest_star_level to fail in tuple-desc-elem
 	#implicit-unwrap(T)
 	unwrap(host-type, T)
-let host-tuple-type = lambda (U : universe, decls : tuple-desc-type(U))
+let host-tuple-type = lambda (U : universe, desc : tuple-desc-type(U))
 	let inner = intrinsic "return terms.value.host_tuple_type" :
-		host-func-type ((decls : wrapped(tuple-desc-type(U)))) -> ((T : wrapped(host-type)))
-	let (T) = inner(implicit-wrap(decls))
+		host-func-type ((desc : wrapped(tuple-desc-type(U)))) -> ((T : wrapped(host-type)))
+	let (T) = inner(implicit-wrap(desc))
 	implicit-unwrap(T)
 # FIXME: these implicit functions don't seem to work at all
 let tuple-type-implicit = lambda_implicit (U : universe)
-	lambda (decls : tuple-desc-type(U))
+	lambda (desc : tuple-desc-type(U))
 		let inner = intrinsic "return terms.value.tuple_type" :
-			host-func-type ((decls : wrapped(tuple-desc-type(U)))) -> ((T : wrapped(host-type)))
-		let (T) = inner(implicit-wrap(decls))
+			host-func-type ((desc : wrapped(tuple-desc-type(U)))) -> ((T : wrapped(host-type)))
+		let (T) = inner(implicit-wrap(desc))
 		# FIXME: implicit-unwrap here causes nearest_star_level to fail in tuple-desc-elem
 		#implicit-unwrap(T)
 		unwrap(host-type, T)
 let host-tuple-type-implicit = lambda_implicit (U : universe)
-	lambda (decls : tuple-desc-type(U))
+	lambda (desc : tuple-desc-type(U))
 		let inner = intrinsic "return terms.value.host_tuple_type" :
-			host-func-type ((decls : wrapped(tuple-desc-type(U)))) -> ((T : wrapped(host-type)))
-		let (T) = inner(implicit-wrap(decls))
+			host-func-type ((desc : wrapped(tuple-desc-type(U)))) -> ((T : wrapped(host-type)))
+		let (T) = inner(implicit-wrap(desc))
 		implicit-unwrap(T)
 let tuple-desc-empty = lambda ((U : universe))
 	let T = tuple-desc-type(U)
@@ -553,7 +553,7 @@ let tuple-desc-concat = lambda (U : universe, head : tuple-desc-type(U), tail : 
 			-- desc is head + (gradually) parts of tail
 			-- elem expects only parts of tail, need to wrap to handle head
 			-- head_n and tail_n are the lengths of the head and tail component of desc
-			local function tuple_def_elem(desc, elem, head_n, head_names, tail_n, tail_names)
+			local function tuple_desc_elem(desc, elem, head_n, head_names, tail_n, tail_names)
 				-- in theory the only placeholder name will be in reference to the last
 				-- element of head, which is always lost (and sometimes not even asked for)
 				local names = string_array()
@@ -580,7 +580,7 @@ let tuple-desc-concat = lambda (U : universe, head : tuple-desc-type(U), tail : 
 				local elem_wrap = terms.value.closure("#tuple-desc-concat", body, terms.runtime_context())
 				return terms.cons(desc, elem_wrap)
 			end
-			local function tuple_def_concat(head, tail)
+			local function tuple_desc_concat(head, tail)
 				local head_n, head_elems = traverse(head)
 				local tail_n, tail_elems = traverse(tail)
 				local head_last = head_elems[1]
@@ -592,11 +592,11 @@ let tuple-desc-concat = lambda (U : universe, head : tuple-desc-type(U), tail : 
 					local elem = tail_elems[i]
 					local _, tail_code, _ = elem:unwrap_closure()
 					local tail_names, _, _, _ = tail_code:unwrap_tuple_elim()
-					desc = tuple_def_elem(desc, elem, head_n, head_names, tail_n_now, tail_names)
+					desc = tuple_desc_elem(desc, elem, head_n, head_names, tail_n_now, tail_names)
 				end
 				return desc
 			end
-			return tuple_def_concat
+			return tuple_desc_concat
 		:
 		host-func-type (head : wrapped(tuple-desc-type(U)), tail : wrapped(tuple-desc-type(U))) -> ((cat : wrapped(tuple-desc-type(U))))
 	let (cat) = inner(implicit-wrap(head), implicit-wrap(tail))
@@ -989,7 +989,7 @@ let tupleof-ascribed-names-match-result-desc =
 		lambda ((ok : host-bool))
 			host-if(ok, tupleof-ascribed-names-reducer-thread-type, host-lua-error)
 
-# FIXME: tupleof_ascribed_names_inner can only produce tuple defs in star-0
+# FIXME: tupleof_ascribed_names_inner can only produce tuple descs in star-0
 let tupleof-ascribed-names-reducer = intrinsic "return base_env.tupleof_ascribed_names_inner" :
 	reducer-type(host-unit, tupleof-ascribed-names-reducer-storage-desc, tupleof-ascribed-names-reducer-result2-desc, tupleof-ascribed-names-match-result-desc)
 

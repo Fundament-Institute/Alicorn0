@@ -134,13 +134,13 @@ function environment:bind_local(binding)
 		-- extract subject type and evaled for each elem in tuple
 		local tupletypes, n_elements = eval.infer_tuple_type(subject_type, subject_value)
 
-		--local decls
+		--local desc
 		--[[
 
 		if inner_type:is_tuple_type() then
-			decls = subject_type:unwrap_tuple_type()
+			desc = subject_type:unwrap_tuple_type()
 		elseif inner_type:is_host_tuple_type() then
-			decls = subject_type:unwrap_host_tuple_type()
+			desc = subject_type:unwrap_host_tuple_type()
 		else
 			error("bind_local tuple_elim, subject_type: expected a term with a tuple type, but got " .. subject_type.kind)
 		end
@@ -155,7 +155,7 @@ function environment:bind_local(binding)
 		end
 
 		for i, v in ipairs(names) do
-			--local constructor, arg = decls:unwrap_enum_value()
+			--local constructor, arg = desc:unwrap_enum_value()
 			-- if constructor ~= "cons" then
 			-- 	error("todo: this error message")
 			-- end

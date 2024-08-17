@@ -942,7 +942,7 @@ collect_tuple = metalanguage.reducer(
 	function(syntax, args)
 		local goal, env = args:unwrap()
 		local goal_type, collected_terms
-		local decls = terms.empty
+		local desc = terms.empty
 
 		if goal:is_check() then
 			collected_terms = array(checkable_term)()
@@ -966,8 +966,8 @@ collect_tuple = metalanguage.reducer(
 					collected_terms:append(next_term)
 					local _, next_typed = evaluator.check(next_term, env.typechecking_context, next_elem_type)
 					local next_val = evaluator.evaluate(next_typed, env.typechecking_context.runtime_context)
-					decls = terms.cons(
-						decls,
+					desc = terms.cons(
+						desc,
 						value.closure(
 							"#collect-tuple-param",
 							typed_term.literal(value.singleton(next_elem_type, next_val)),
@@ -997,10 +997,10 @@ collect_tuple = metalanguage.reducer(
 		elseif goal:is_check() then
 			U.tag(
 				"flow",
-				{ val = value.tuple_type(decls), use = goal_type },
+				{ val = value.tuple_type(desc), use = goal_type },
 				evaluator.typechecker_state.flow,
 				evaluator.typechecker_state,
-				value.tuple_type(decls),
+				value.tuple_type(desc),
 				env.typechecking_context,
 				goal_type,
 				env.typechecking_context,
@@ -1023,7 +1023,7 @@ collect_host_tuple = metalanguage.reducer(
 	function(syntax, args)
 		local goal, env = args:unwrap()
 		local goal_type, collected_terms
-		local decls = terms.empty
+		local desc = terms.empty
 
 		if goal:is_check() then
 			collected_terms = array(checkable_term)()
@@ -1047,8 +1047,8 @@ collect_host_tuple = metalanguage.reducer(
 					collected_terms:append(next_term)
 					local _, next_typed = evaluator.check(next_term, env.typechecking_context, next_elem_type)
 					local next_val = evaluator.evaluate(next_typed, env.typechecking_context.runtime_context)
-					decls = terms.cons(
-						decls,
+					desc = terms.cons(
+						desc,
 						value.closure(
 							"#collect-tuple-param",
 							typed_term.literal(value.singleton(next_elem_type, next_val)),
@@ -1077,7 +1077,7 @@ collect_host_tuple = metalanguage.reducer(
 			return true, inferrable_term.host_tuple_cons(collected_terms), env
 		elseif goal:is_check() then
 			evaluator.typechecker_state:flow(
-				value.host_tuple_type(decls),
+				value.host_tuple_type(desc),
 				env.typechecking_context,
 				goal_type,
 				env.typechecking_context,
