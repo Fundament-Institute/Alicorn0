@@ -280,6 +280,12 @@ function typed:is_program_type() end
 function typed:unwrap_program_type() end
 ---@return boolean, typed, typed
 function typed:as_program_type() end
+---@return boolean
+function typed:is_srel_type() end
+---@return typed
+function typed:unwrap_srel_type() end
+---@return boolean, typed
+function typed:as_srel_type() end
 
 ---@class (exact) typedType: EnumType
 ---@field define_enum fun(self: typedType, name: string, variants: Variants): typedType
@@ -329,4 +335,5 @@ function typed:as_program_type() end
 ---@field program_invoke fun(effect_tag: typed, effect_arg: typed): typed
 ---@field effect_type fun(components: ArrayValue, base: typed): typed
 ---@field program_type fun(effect_type: typed, result_type: typed): typed
+---@field srel_type fun(target_type: typed): typed
 return {}

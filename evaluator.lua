@@ -85,6 +85,37 @@ local function FunctionRelation(srel)
 end
 FunctionRelation = U.memoize(FunctionRelation)
 
+---@param ... SubtypeRelation
+---@return SubtypeRelation
+local function IndepTupleRelation(...)
+	local args = { ... }
+	local names = {}
+	for i, v in ipairs(args) do
+		names[i] = v.debug_name
+	end
+	return {
+		debug_name = "IndepTupleRelation(" .. table.concat(names, ", ") .. ")",
+		srels = args,
+		Rel = luatovalue(function(a, b) end, name_array("a", "b")),
+		refl = luatovalue(function(a) end, name_array("a")),
+		antisym = luatovalue(function(a, b, r1, r2) end, name_array("a", "b", "r1", "r2")),
+		constrain = luatovalue(
+			---constrain tuple elements
+			---@param val value
+			---@param use value
+			function(val, use)
+				local val_elems = val:unwrap_tuple_value()
+				local use_elems = use:unwrap_tuple_value()
+				for i = 1, val_elems:len() do
+					typechecker_state:queue_constrain(val_elems[i], args[i], use_elems[i], "tuple element constraint")
+				end
+			end,
+			name_array("val", "use")
+		),
+	}
+end
+IndepTupleRelation = U.memoize(IndepTupleRelation)
+
 ---@type SubtypeRelation
 local effect_row_srel
 effect_row_srel = {
@@ -524,7 +555,7 @@ local function tuple_compare(a, b)
 
 		if ta ~= tb then
 			if tb:is_neutral() then
-				typechecker_state:queue_subtype(ta, tb, "Nuetral value in tuple_compare")
+				typechecker_state:queue_subtype(ta, tb, "Neutral value in tuple_compare")
 			else
 				typechecker_state:queue_subtype(ta, tb, "tuple_compare")
 			end
@@ -593,6 +624,43 @@ add_comparer("value.host_function_type", "value.host_function_type", function(a,
 		b_result_type,
 		"host function results"
 	)
+	return true
+end)
+
+---@type {[table] : SubtypeRelation}
+local host_srel_map = {}
+add_comparer("value.host_user_defined_type", "value.host_user_defined_type", function(a, b)
+	local a_id, a_args = a:unwrap_host_user_defined_type()
+	local b_id, b_args = b:unwrap_host_user_defined_type()
+
+	if not a_id == b_id then
+		error(
+			"ids do not match in host user defined types: "
+				.. a_id.name
+				.. "("
+				.. tostring(a_id)
+				.. ") ~= "
+				.. b_id.name
+				.. "("
+				.. tostring(b_id)
+				.. ")"
+		)
+	end
+	apply_value(host_srel_map[a_id].constrain, value.tuple_value(value_array(a_args, b_args)))
+	return true
+end)
+
+---define subtyping for a user defined host type
+---@param id table
+---@param rel SubtypeRelation
+local function register_host_srel(id, rel)
+	host_srel_map[id] = rel
+end
+
+add_comparer("value.srel_type", "value.srel_type", function(a, b)
+	local a_target = a:unwrap_srel_type()
+	local b_target = b:unwrap_srel_type()
+	typechecker_state:queue_subtype(a_target, b_target, "srel target")
 	return true
 end)
 
@@ -2140,6 +2208,9 @@ function evaluate(typed_term, runtime_context)
 		local effect_type_val = evaluate(effect_type, runtime_context)
 		local result_type_val = evaluate(result_type, runtime_context)
 		return value.program_type(effect_type_val, result_type_val)
+	elseif typed_term:is_srel_type() then
+		local target = typed_term:unwrap_srel_type()
+		return value.srel_type(evaluate(target, runtime_context))
 	else
 		error("evaluate: unknown kind: " .. typed_term.kind)
 	end
@@ -3339,6 +3410,11 @@ local evaluator = {
 	invoke_continuation = invoke_continuation,
 	host_effect_handler = host_effect_handler,
 	register_effect_handler = register_effect_handler,
+
+	UniverseOmegaRelation = UniverseOmegaRelation,
+	FunctionRelation = FunctionRelation,
+	IndepTupleRelation = IndepTupleRelation,
+	register_host_srel = register_host_srel,
 }
 internals_interface.evaluator = evaluator
 

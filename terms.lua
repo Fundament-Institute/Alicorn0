@@ -516,6 +516,9 @@ typed_term:define_enum("typed", {
 		"effect_type", typed_term,
 		"result_type", typed_term,
 	} },
+	{ "srel_type", {
+		"target_type", typed_term,
+	} }
 })
 
 local unique_id = gen.builtin_table
@@ -768,6 +771,9 @@ value:define_enum("value", {
 		"effect_sig", value,
 		"base_type",  value,
 	} },
+	{ "srel_type", {
+		"target_type", value,
+	} }
 })
 
 -- stylua: ignore

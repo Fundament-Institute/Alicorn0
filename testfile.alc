@@ -42,6 +42,34 @@ let host-lua-error       = implicit-unwrap(host-lua-error-wrap)
 let host-string-concat = intrinsic "return function(a, b) return a .. b end" :
 	host-func-type (a : host-string, b : host-string) -> ((c : host-string))
 
+let host-srel-type =
+	lambda_implicit (U : type_(10))
+		implicit-unwrap
+			intrinsic
+				""""
+					local string_array = terms_gen.declare_array(terms_gen.builtin_string)
+					return terms.value.closure(
+						"#srel-arg",
+						terms.typed_term.tuple_elim(
+							string_array("target"),
+							terms.typed_term.bound_variable(1),
+							1,
+							terms.typed_term.srel_type(
+								terms.typed_term.bound_variable(2)
+							)
+						),
+						terms.runtime_context()
+					)
+				:
+				wrapped (forall ((x : U)) -> (res : U))
+
+let subtyping =
+	implicit-unwrap
+		intrinsic "return terms.value.host(evaluator.UniverseOmegaRelation)" : wrapped(host-srel-type(type_(9)))
+
+
+
+# TODO: now that we have effectful programs, work to switch this into using an effect to serialize the operations
 # lmao bootstrapping problem
 let host-unique-id-wrap = intrinsic
 	"return terms.value.host_user_defined_type({ name = \"unique_id\" }, terms_gen.declare_array(terms.value)())"

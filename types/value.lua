@@ -322,6 +322,12 @@ function value:is_program_type() end
 function value:unwrap_program_type() end
 ---@return boolean, value, value
 function value:as_program_type() end
+---@return boolean
+function value:is_srel_type() end
+---@return value
+function value:unwrap_srel_type() end
+---@return boolean, value
+function value:as_srel_type() end
 
 ---@class (exact) valueType: EnumType
 ---@field define_enum fun(self: valueType, name: string, variants: Variants): valueType
@@ -378,4 +384,5 @@ function value:as_program_type() end
 ---@field effect_row fun(components: SetValue, rest: value): value
 ---@field effect_row_type value
 ---@field program_type fun(effect_sig: value, base_type: value): value
+---@field srel_type fun(target_type: value): value
 return {}
