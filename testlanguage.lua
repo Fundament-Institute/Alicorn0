@@ -1,6 +1,10 @@
 local U = require "alicorn-utils"
 local metalanguage = require "metalanguage"
 
+-- This file is a simple language built with metalanguage
+-- it could be used to create tests of metalanguage that don't rely
+-- on other parts of Alicorn
+
 local eval
 
 local function eval_passhandler(env, val)

@@ -1,5 +1,9 @@
 -- SPDX-License-Identifier: Apache-2.0
 -- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
+
+-- This schema was used as the target for Alicorn's format however
+-- it's not currently up to date with what format/format-adapter do.
+-- If the schema system is used it'll need updated
 local schema = require "schema"
 
 local S = schema.create(
