@@ -557,7 +557,8 @@ local function expression_pairhandler(args, a, b)
 			local metaresult = evaluator.apply_value(result_type, metavalue)
 			if not metaresult:is_pi() then
 				error(
-					"calling function with implicit args, result type applied on implicit args must be a function type"
+					"calling function with implicit args, result type applied on implicit args must be a function type: "
+						.. metaresult:pretty_print()
 				)
 			end
 

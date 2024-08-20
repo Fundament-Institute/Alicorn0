@@ -221,7 +221,7 @@ local function substitute_inner(val, mappings, context_len)
 		return typed_term.tuple_cons(res)
 	elseif val:is_tuple_type() then
 		local desc = val:unwrap_tuple_type()
-		desc = substitute_inner(desc, mappings, context_len)
+		local desc = substitute_inner(desc, mappings, context_len)
 		return typed_term.tuple_type(desc)
 	elseif val:is_tuple_desc_type() then
 		return typed_term.literal(val)
@@ -406,7 +406,7 @@ local function substitute_inner(val, mappings, context_len)
 		return typed_term.literal(val)
 	elseif val:is_host_tuple_type() then
 		local desc = val:unwrap_host_tuple_type()
-		desc = substitute_inner(desc, mappings, context_len)
+		local desc = substitute_inner(desc, mappings, context_len)
 		return typed_term.host_tuple_type(desc)
 	elseif val:is_range() then
 		local lower_bounds, upper_bounds, relation = val:unwrap_range()
@@ -1197,7 +1197,8 @@ function infer(
 				local metaresult = apply_value(f_result_type, metavar:as_value())
 				if not metaresult:is_pi() then
 					error(
-						"calling function with implicit args, result type applied on implicit args must be a function type"
+						"calling function with implicit args, result type applied on implicit args must be a function type: "
+							.. metaresult:pretty_print()
 					)
 				end
 				f_term = typed_term.application(f_term, typed_term.literal(metavar:as_value()))
@@ -1217,7 +1218,10 @@ function infer(
 
 			if value.value_check(application_result_type) ~= true then
 				local bindings = typechecking_context:get_runtime_context().bindings
-				error("application_result_type isn't a value inferring application of pi type")
+				error(
+					"calling function with implicit args, result type applied on implicit args must be a function type: "
+						.. application_result_type:pretty_print()
+				)
 			end
 			return application_result_type, application_usages, application
 		elseif f_type:is_host_function_type() then
