@@ -440,7 +440,9 @@ match : forall
 ---@param extra U
 ---@return ...
 function ConstructedSyntax:match(matchers, unmatched, extra)
-	assert(matchers["kind"] == nil, "Unexpected matchers parameter")
+	if matchers.kind ~= nil then
+		error("matchers must be a list of matchers (not a matcher itself)")
+	end
 
 	local lasterr = nil
 	for _, matcher in ipairs(matchers) do
