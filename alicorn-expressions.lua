@@ -388,6 +388,40 @@ local function expression_infix_handler(_, left, symbol, right)
 	return true, OperatorType.Infix, symbol, left, right
 end
 
+---@param env Environment
+---@param metaval value
+---@return boolean, value
+local function speculate_pi_type(env, metaval)
+	return evaluator.typechecker_state:speculate(function()
+		local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+		local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+		local pi = value.pi(
+			param_mv:as_value(),
+			param_info_explicit,
+			value.closure(
+				"#spec-pi",
+				typed_term.literal(result_mv:as_value()),
+				env.typechecking_context.runtime_context
+			),
+			result_info_pure
+		)
+
+		U.tag(
+			"flow",
+			{ val = metaval, use = pi },
+			evaluator.typechecker_state.flow,
+			evaluator.typechecker_state,
+			metaval,
+			env.typechecking_context,
+			pi,
+			env.typechecking_context,
+			"Speculating on pi type"
+		)
+
+		return pi
+	end)
+end
+
 ---@param args ExpressionArgs
 ---@param a ConstructedSyntax
 ---@param b ConstructedSyntax
@@ -469,34 +503,7 @@ local function expression_pairhandler(args, a, b)
 		) or type_of_term:is_range()
 	then
 		-- Speculate that this is a pi type
-		local ok, pi = evaluator.typechecker_state:speculate(function()
-			local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
-			local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
-			local pi = value.pi(
-				param_mv:as_value(),
-				param_info_explicit,
-				value.closure(
-					"#spec-pi",
-					typed_term.literal(result_mv:as_value()),
-					env.typechecking_context.runtime_context
-				),
-				result_info_pure
-			)
-
-			U.tag(
-				"flow",
-				{ val = type_of_term, usa = pi },
-				evaluator.typechecker_state.flow,
-				evaluator.typechecker_state,
-				type_of_term,
-				env.typechecking_context,
-				pi,
-				env.typechecking_context,
-				"Speculating on pi type"
-			)
-
-			return pi
-		end)
+		local ok, pi = speculate_pi_type(env, type_of_term)
 		if not ok then
 			error("speculate DID NOT work for pi!: " .. tostring(pi))
 		end
@@ -555,7 +562,10 @@ local function expression_pairhandler(args, a, b)
 			local metavar = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			local metavalue = metavar:as_value()
 			local metaresult = evaluator.apply_value(result_type, metavalue)
-			if not metaresult:is_pi() then
+
+			local ok, pi = speculate_pi_type(env, metaresult)
+
+			if not ok then
 				error(
 					"calling function with implicit args, result type applied on implicit args must be a function type: "
 						.. metaresult:pretty_print()
@@ -564,7 +574,7 @@ local function expression_pairhandler(args, a, b)
 
 			-- local new_term = inferrable_term.application(inferrable_term.typed(type_of_term, usage_array(), term), checkable_term.inferrable(inferrable_term.typed(param_type, usage_array(), terms.typed_term.literal(metavar:as_value()))))
 			term = typed_term.application(term, terms.typed_term.literal(metavar:as_value()))
-			type_of_term = metaresult
+			type_of_term = pi
 			param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
 		end
 
