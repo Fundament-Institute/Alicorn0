@@ -288,6 +288,14 @@ local function substitute_inner(val, mappings, context_len)
 	elseif val:is_record_extend_stuck() then
 		-- Needs to handle the nuetral value and map of values
 		error("Records not yet implemented")
+	elseif val:is_srel_type() then
+		local target = val:unwrap_srel_type()
+		target = substitute_inner(target, mappings, context_len)
+		return typed_term.srel_type(target)
+	elseif val:is_variance_type() then
+		local target = val:unwrap_variance_type()
+		target = substitute_inner(target, mappings, context_len)
+		return typed_term.variance_type(target)
 	elseif val:is_object_value() then
 		return typed_term.literal(val)
 	elseif val:is_object_type() then
@@ -683,6 +691,13 @@ add_comparer("value.srel_type", "value.srel_type", function(a, b)
 	local a_target = a:unwrap_srel_type()
 	local b_target = b:unwrap_srel_type()
 	typechecker_state:queue_subtype(a_target, b_target, "srel target")
+	return true
+end)
+
+add_comparer("value.variance_type", "value.variance_type", function(a, b)
+	local a_target = a:unwrap_variance_type()
+	local b_target = b:unwrap_variance_type()
+	typechecker_state:queue_subtype(a_target, b_target, "variance target")
 	return true
 end)
 
@@ -1986,6 +2001,11 @@ function evaluate(typed_term, runtime_context)
 		else
 			error("evaluate, is_enum_elim, subject_value: expected an enum")
 		end
+	elseif typed_term:is_variance_cons() then
+		local positive, srel = typed_term:unwrap_variance_cons()
+		local positive_value = U.tag("evaluate", { positive = positive }, evaluate, arg, runtime_context)
+		local srel_value = U.tag("evaluate", { srel = srel }, evaluate, srel, runtime_context)
+		return value.variance_cons(positive_value, srel_value)
 	elseif typed_term:is_object_cons() then
 		return value.object_value(typed_term:unwrap_object_cons(), runtime_context)
 	elseif typed_term:is_object_elim() then
