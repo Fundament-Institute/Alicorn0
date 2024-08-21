@@ -85,13 +85,13 @@ local function FunctionRelation(srel)
 end
 FunctionRelation = U.memoize(FunctionRelation)
 
----@param ... SubtypeRelation
+---@param ... Variance
 ---@return SubtypeRelation
 local function IndepTupleRelation(...)
 	local args = { ... }
 	local names = {}
 	for i, v in ipairs(args) do
-		names[i] = v.debug_name
+		names[i] = (v.positive and "+" or "-") .. v.srel.debug_name
 	end
 	return {
 		debug_name = "IndepTupleRelation(" .. table.concat(names, ", ") .. ")",
@@ -107,7 +107,21 @@ local function IndepTupleRelation(...)
 				local val_elems = val:unwrap_tuple_value()
 				local use_elems = use:unwrap_tuple_value()
 				for i = 1, val_elems:len() do
-					typechecker_state:queue_constrain(val_elems[i], args[i], use_elems[i], "tuple element constraint")
+					if args[i].positive then
+						typechecker_state:queue_constrain(
+							val_elems[i],
+							args[i].srel,
+							use_elems[i],
+							"tuple element constraint"
+						)
+					else
+						typechecker_state:queue_constrain(
+							use_elems[i],
+							args[i].srel,
+							val_elems[i],
+							"tuple element constraint"
+						)
+					end
 				end
 			end,
 			name_array("val", "use")
@@ -646,7 +660,15 @@ add_comparer("value.host_user_defined_type", "value.host_user_defined_type", fun
 				.. ")"
 		)
 	end
-	apply_value(host_srel_map[a_id].constrain, value.tuple_value(value_array(a_args, b_args)))
+	if not host_srel_map[a_id] then
+		error("No variance specified for user defined host type " .. a_id.name)
+	end
+	apply_value(
+		host_srel_map[a_id].constrain,
+		value.tuple_value(
+			value_array(value.host_value(value.tuple_value(a_args)), value.host_value(value.tuple_value(b_args)))
+		)
+	)
 	return true
 end)
 
@@ -2288,6 +2310,11 @@ register_effect_handler(terms.lua_prog, host_effect_handler)
 ---@field antisym value -- : (a:T, B:T, Rel(a,b), Rel(b,a)) -> a == b
 ---@field constrain value -- : (Node(T), Node(T)) -> [TCState] ()
 local SubtypeRelation = {}
+
+---@class Variance
+---@field positive boolean
+---@field srel SubtypeRelation
+local Variance = {}
 
 ---@type SubtypeRelation
 UniverseOmegaRelation = {

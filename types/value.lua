@@ -328,6 +328,24 @@ function value:is_srel_type() end
 function value:unwrap_srel_type() end
 ---@return boolean, value
 function value:as_srel_type() end
+---@return boolean
+function value:is_variance_type() end
+---@return value
+function value:unwrap_variance_type() end
+---@return boolean, value
+function value:as_variance_type() end
+---@return boolean
+function value:is_intersection_type() end
+---@return value, value
+function value:unwrap_intersection_type() end
+---@return boolean, value, value
+function value:as_intersection_type() end
+---@return boolean
+function value:is_union_type() end
+---@return value, value
+function value:unwrap_union_type() end
+---@return boolean, value, value
+function value:as_union_type() end
 
 ---@class (exact) valueType: EnumType
 ---@field define_enum fun(self: valueType, name: string, variants: Variants): valueType
@@ -374,7 +392,7 @@ function value:as_srel_type() end
 ---@field host_user_defined_type fun(id: { name: string }, family_args: ArrayValue): value
 ---@field host_nil_type value
 ---@field host_tuple_value fun(elements: ArrayValue): value
----@field host_tuple_type fun(decls: value): value
+---@field host_tuple_type fun(desc: value): value
 ---@field singleton fun(supertype: value, value: value): value
 ---@field program_end fun(result: value): value
 ---@field program_cont fun(action: table, argument: value, continuation: continuation): value
@@ -385,4 +403,7 @@ function value:as_srel_type() end
 ---@field effect_row_type value
 ---@field program_type fun(effect_sig: value, base_type: value): value
 ---@field srel_type fun(target_type: value): value
+---@field variance_type fun(target_type: value): value
+---@field intersection_type fun(left: value, right: value): value
+---@field union_type fun(left: value, right: value): value
 return {}

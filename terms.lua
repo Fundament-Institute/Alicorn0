@@ -518,8 +518,23 @@ typed_term:define_enum("typed", {
 	} },
 	{ "srel_type", {
 		"target_type", typed_term,
+	} },
+	{ "variance_type", {
+		"target_type", typed_term,
+	} },
+	{ "variance_cons", {
+		"positive", typed_term,
+		"srel", typed_term
+	} },
+	{ "intersection_type", {
+		"left", typed_term,
+		"right", typed_term
+	} },
+	{ "union_type", {
+		"left", typed_term,
+		"right", typed_term
 	} }
-})
+}) 
 
 local unique_id = gen.builtin_table
 
@@ -773,6 +788,17 @@ value:define_enum("value", {
 	} },
 	{ "srel_type", {
 		"target_type", value,
+	} },
+	{ "variance_type",{
+		"target_type", value
+	} },
+	{ "intersection_type", {
+		"left", value,
+		"right", value
+	} },
+	{ "union_type", {
+		"left", value,
+		"right", value
 	} }
 })
 

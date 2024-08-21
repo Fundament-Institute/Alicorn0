@@ -7,7 +7,7 @@ let host-sub = (intrinsic "return function(a, b) return a - b end" : host-arith-
 #let subbed = host-sub foo.bar y
 
 let implicit-wrap =
-	lambda_curry (T : type_(10), U : type_(10))
+	lambda_curry ((T : type_(10)))
 		lambda ((x : T))
 			wrap T x
 
@@ -67,12 +67,105 @@ let subtyping =
 	implicit-unwrap
 		intrinsic "return terms.value.host_value(evaluator.UniverseOmegaRelation)" : wrapped(host-srel-type(type_(9)))
 
+let _|_ =
+	lambda_implicit (U : type_(10))
+		implicit-unwrap
+			intrinsic
+				""""
+					local string_array = terms_gen.declare_array(terms_gen.builtin_string)
+					return terms.value.closure(
+						"#union-args",
+						terms.typed_term.tuple_elim(
+							string_array("left", "right"),
+							terms.typed_term.bound_variable(1),
+							2,
+							terms.typed_term.union_type(
+								terms.typed_term.bound_variable(2),
+								terms.typed_term.bound_variable(3)
+							)
+						),
+						terms.runtime_context()
+					)
+				:
+				wrapped (forall (a : U, b : U) -> (res : U))
 
+let _&_ =
+	lambda_implicit (U : type_(10))
+		implicit-unwrap
+			intrinsic
+				""""
+					local string_array = terms_gen.declare_array(terms_gen.builtin_string)
+					return terms.value.closure(
+						"#intersection-args",
+						terms.typed_term.tuple_elim(
+							string_array("left", "right"),
+							terms.typed_term.bound_variable(1),
+							2,
+							terms.typed_term.intersection_type(
+								terms.typed_term.bound_variable(2),
+								terms.typed_term.bound_variable(3)
+							)
+						),
+						terms.runtime_context()
+					)
+				:
+				wrapped (forall (a : U, b : U) -> (res : U))
+
+let covariant = 
+	lambda_implicit (U : type_(10))
+		implicit-unwrap
+			intrinsic
+				""""
+					local string_array = terms_gen.declare_array(terms_gen.builtin_string)
+					return terms.value.closure(
+						"#covariant-args",
+						terms.typed_term.tuple_elim(
+							string_array("left", "right"),
+							terms.typed_term.bound_variable(1),
+							1,
+							terms.typed_term.variance_cons(
+								terms.typed_term.literal(
+									terms.value.host_value(true)
+								),
+								terms.typed_term.bound_variable(2)
+							)
+						),
+						terms.runtime_context()
+					)
+				:
+				wrapped (forall ((a : U)) -> (res : U))
+
+let contravariant = 
+	lambda_implicit (U : type_(10))
+		implicit-unwrap
+			intrinsic
+				""""
+					local string_array = terms_gen.declare_array(terms_gen.builtin_string)
+					return terms.value.closure(
+						"#contravariant-args",
+						terms.typed_term.tuple_elim(
+							string_array("left", "right"),
+							terms.typed_term.bound_variable(1),
+							1,
+							terms.typed_term.variance_cons(
+								terms.typed_term.literal(
+									terms.value.host_value(false)
+								),
+								terms.typed_term.bound_variable(2)
+							)
+						),
+						terms.runtime_context()
+					)
+				:
+				wrapped (forall ((a : U)) -> (res : U))
 
 # TODO: now that we have effectful programs, work to switch this into using an effect to serialize the operations
 # lmao bootstrapping problem
 let host-unique-id-wrap = intrinsic
-	"return terms.value.host_user_defined_type({ name = \"unique_id\" }, terms_gen.declare_array(terms.value)())"
+	""""
+		local id = { name = "unique_id" }
+		evaluator.register_host_srel(id, evaluator.IndepTupleRelation())
+		return terms.value.host_user_defined_type(id, terms_gen.declare_array(terms.value)())
 	:
 	wrapped(host-type)
 let host-unique-id = implicit-unwrap(host-unique-id-wrap)

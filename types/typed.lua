@@ -286,6 +286,30 @@ function typed:is_srel_type() end
 function typed:unwrap_srel_type() end
 ---@return boolean, typed
 function typed:as_srel_type() end
+---@return boolean
+function typed:is_variance_type() end
+---@return typed
+function typed:unwrap_variance_type() end
+---@return boolean, typed
+function typed:as_variance_type() end
+---@return boolean
+function typed:is_variance_cons() end
+---@return typed, typed
+function typed:unwrap_variance_cons() end
+---@return boolean, typed, typed
+function typed:as_variance_cons() end
+---@return boolean
+function typed:is_intersection_type() end
+---@return typed, typed
+function typed:unwrap_intersection_type() end
+---@return boolean, typed, typed
+function typed:as_intersection_type() end
+---@return boolean
+function typed:is_union_type() end
+---@return typed, typed
+function typed:unwrap_union_type() end
+---@return boolean, typed, typed
+function typed:as_union_type() end
 
 ---@class (exact) typedType: EnumType
 ---@field define_enum fun(self: typedType, name: string, variants: Variants): typedType
@@ -304,7 +328,7 @@ function typed:as_srel_type() end
 ---@field tuple_cons fun(elements: ArrayValue): typed
 ---@field tuple_elim fun(names: ArrayValue, subject: typed, length: number, body: typed): typed
 ---@field tuple_element_access fun(subject: typed, index: number): typed
----@field tuple_type fun(definition: typed): typed
+---@field tuple_type fun(desc: typed): typed
 ---@field record_cons fun(fields: MapValue): typed
 ---@field record_extend fun(base: typed, fields: MapValue): typed
 ---@field record_elim fun(subject: typed, field_names: ArrayValue, body: typed): typed
@@ -318,7 +342,7 @@ function typed:as_srel_type() end
 ---@field operative_type_cons fun(handler: typed, userdata_type: typed): typed
 ---@field host_tuple_cons fun(elements: ArrayValue): typed
 ---@field host_user_defined_type_cons fun(id: { name: string }, family_args: ArrayValue): typed
----@field host_tuple_type fun(decls: typed): typed
+---@field host_tuple_type fun(desc: typed): typed
 ---@field host_function_type fun(param_type: typed, result_type: typed, result_info: typed): typed
 ---@field host_wrapped_type fun(type: typed): typed
 ---@field host_unstrict_wrapped_type fun(type: typed): typed
@@ -336,4 +360,8 @@ function typed:as_srel_type() end
 ---@field effect_type fun(components: ArrayValue, base: typed): typed
 ---@field program_type fun(effect_type: typed, result_type: typed): typed
 ---@field srel_type fun(target_type: typed): typed
+---@field variance_type fun(target_type: typed): typed
+---@field variance_cons fun(positive: typed, srel: typed): typed
+---@field intersection_type fun(left: typed, right: typed): typed
+---@field union_type fun(left: typed, right: typed): typed
 return {}
