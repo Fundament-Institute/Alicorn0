@@ -65,7 +65,7 @@ let host-srel-type =
 
 let subtyping =
 	implicit-unwrap
-		intrinsic "return terms.value.host(evaluator.UniverseOmegaRelation)" : wrapped(host-srel-type(type_(9)))
+		intrinsic "return terms.value.host_value(evaluator.UniverseOmegaRelation)" : wrapped(host-srel-type(type_(9)))
 
 
 
