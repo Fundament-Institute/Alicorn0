@@ -159,6 +159,10 @@ let contravariant =
 				:
 				wrapped (forall ((a : U)) -> (res : U))
 
+let tuple-of = lambda_implicit(T : type_(10))
+	lambda (xs : T)
+		xs
+
 # TODO: now that we have effectful programs, work to switch this into using an effect to serialize the operations
 # lmao bootstrapping problem
 let host-unique-id-wrap = intrinsic
@@ -175,7 +179,58 @@ let new-host-unique-id = lambda ((name : host-string))
 	let (source2) = host-string-concat(source1, "\" }")
 	intrinsic source2 : host-unique-id
 
-let new-host-type-family = lambda (unique-id : host-unique-id, signature : type_(1))
+let host-family-sig-srels = lambda ((signature : type_(1)))
+	let inner = intrinsic
+		""""
+			local typed_array = terms_gen.declare_array(terms.typed_term)
+			local value_array = terms_gen.declare_array(terms.value)
+			local string_array = terms_gen.declare_array(terms_gen.builtin_string)
+			local function convert_desc(desc)
+				local constructor, arg = desc:unwrap_enum_value()
+				if constructor == terms.DescCons.empty then
+					return desc
+				elseif constructor == terms.DescCons.cons then
+					local elements = arg:unwrap_tuple_value()
+					local next_desc, type_fun = elements[1], elements[2]
+					local convert_next = convert_desc(next_desc)
+					local convert_type =
+						terms.value.srel_type(
+							evaluator.apply_value(
+								type_fun,
+								terms.value.neutral(
+									terms.neutral_value.free(terms.free.unique{})
+								)
+							)
+						)
+					local convert_type_fun = terms.value.closure(
+						"#tuple-prefix",
+						terms.typed_term.literal(convert_type),
+						terms.runtime_context())
+					return terms.value.enum_value(
+						terms.DescCons.cons,
+						terms.value.tuple_value(
+							value_array(
+								convert_next, convert_type_fun
+							)
+						)
+					)
+				else
+					error "unknown tuple desc constructor"
+				end
+			end
+			local function convert_sig(sig)
+				local param_type, _, _, _ = sig:unwrap_pi()
+				local param_desc = param_type:unwrap_tuple_type()
+				return terms.value.tuple_type(convert_desc(param_desc))
+			end
+			return convert_sig
+		:
+		host-func-type ((signature : wrapped(type_(1)))) -> ((srel_type : wrapped(type_(1))))
+	let (srels-t) = inner(implicit-wrap(signature))
+	implicit-unwrap(srels-t)
+
+
+let new-host-type-family = lambda (unique-id : host-unique-id, signature : type_(1), variance : host-family-sig-srels(signature))
 	let inner = intrinsic
 		""""
 			local typed_array = terms_gen.declare_array(terms.typed_term)
@@ -193,10 +248,21 @@ let new-host-type-family = lambda (unique-id : host-unique-id, signature : type_
 					error("unknown tuple desc constructor")
 				end
 			end
-			local function new_host_type_family(unique_id, sig)
+			local function new_host_type_family(unique_id, sig, variance)
 				local param_type, _, _, _ = sig:unwrap_pi()
 				local param_desc = param_type:unwrap_tuple_type()
 				local nparams = length(param_desc)
+
+				local variance_elems = variance:unwrap_tuple_value()
+				local variances = {}
+				for i, v in variance_elems:ipairs() do
+					variances[i] = v:unwrap_host_value()
+				end
+
+				local tunpack = table.unpack or unpack
+				local srel = evaluator.IndepTupleRelation(tunpack(variances))
+				evaluator.register_host_srel(unique_id, srel)
+
 				local params = typed_array()
 				local param_names = string_array()
 				for i = 1, nparams do
@@ -216,16 +282,18 @@ let new-host-type-family = lambda (unique-id : host-unique-id, signature : type_
 			end
 			return new_host_type_family
 		:
-		host-func-type (unique-id : host-unique-id, signature_ : wrapped(type_(1))) -> ((family    : wrapped(signature)))
-	let (family) = inner(unique-id, implicit-wrap(signature))
+		host-func-type (unique-id : host-unique-id, signature_ : wrapped(type_(1)), variance_ : wrapped(host-family-sig-srels(implicit-unwrap(signature_)))) -> ((family    : wrapped(signature)))
+	let (family) = inner(unique-id, implicit-wrap(signature), implicit-wrap(variance))
 	implicit-unwrap(family)
 let new-host-type = lambda ((unique-id : host-unique-id))
 	let Tfam = new-host-type-family unique-id
 		forall () -> (T : host-type)
+		tuple-of()
 	Tfam()
 
 let host-array-type = new-host-type-family new-host-unique-id("array")
 	forall ((T : host-type)) -> (T : host-type)
+	tuple-of covariant(subtyping)
 
 let host-array-new = lambda ((T : host-type))
 	let inner = intrinsic
@@ -1213,9 +1281,6 @@ let id = lambda_implicit (T : type_(10))
 	lambda ((x : T))
 		x
 
-let tuple-of = lambda_implicit(T : type_(10))
-	lambda (xs : T)
-		xs
 
 # TODO: test this when tuple-desc-op can do more than just star-0
 #let point = lambda_implicit (U : type_(10))

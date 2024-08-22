@@ -792,10 +792,6 @@ value:define_enum("value", {
 	{ "variance_type",{
 		"target_type", value
 	} },
-	{ "variance_cons", {
-		"positive", value,
-		"srel", value
-	} },
 	{ "intersection_type", {
 		"left", value,
 		"right", value

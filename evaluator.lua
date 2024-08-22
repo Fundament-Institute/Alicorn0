@@ -2003,9 +2003,14 @@ function evaluate(typed_term, runtime_context)
 		end
 	elseif typed_term:is_variance_cons() then
 		local positive, srel = typed_term:unwrap_variance_cons()
-		local positive_value = U.tag("evaluate", { positive = positive }, evaluate, arg, runtime_context)
+		local positive_value = U.tag("evaluate", { positive = positive }, evaluate, positive, runtime_context)
 		local srel_value = U.tag("evaluate", { srel = srel }, evaluate, srel, runtime_context)
-		return value.variance_cons(positive_value, srel_value)
+		---@type Variance
+		local variance = {
+			positive = positive_value:unwrap_host_value(),
+			srel = srel_value:unwrap_host_value(),
+		}
+		return value.host_value(variance)
 	elseif typed_term:is_object_cons() then
 		return value.object_value(typed_term:unwrap_object_cons(), runtime_context)
 	elseif typed_term:is_object_elim() then
