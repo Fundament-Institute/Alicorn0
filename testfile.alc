@@ -63,9 +63,9 @@ let host-srel-type =
 				:
 				wrapped (forall ((x : U)) -> (res : U))
 
-let subtyping =
-	implicit-unwrap
-		intrinsic "return terms.value.host_value(evaluator.UniverseOmegaRelation)" : wrapped(host-srel-type(type_(9)))
+let subtyping = intrinsic "return evaluator.UniverseOmegaRelation" : host-srel-type(type_(9))
+
+let tuple-desc-relation = intrinsic "return evaluator.TupleDescRelation" : host-srel-type(type_(9))
 
 let _|_ =
 	lambda_implicit (U : type_(10))
@@ -159,7 +159,7 @@ let contravariant =
 				:
 				wrapped (forall ((a : U)) -> (res : U))
 
-let tuple-of = lambda_implicit(T : type_(10))
+let tuple-of-implicit = lambda_implicit(T : type_(10))
 	lambda (xs : T)
 		xs
 
@@ -288,12 +288,12 @@ let new-host-type-family = lambda (unique-id : host-unique-id, signature : type_
 let new-host-type = lambda ((unique-id : host-unique-id))
 	let Tfam = new-host-type-family unique-id
 		forall () -> (T : host-type)
-		tuple-of()
+		tuple-of-implicit()
 	Tfam()
 
 let host-array-type = new-host-type-family new-host-unique-id("array")
 	forall ((T : host-type)) -> (T : host-type)
-	tuple-of covariant(subtyping)
+	tuple-of-implicit covariant(subtyping)
 
 let host-array-new = lambda ((T : host-type))
 	let inner = intrinsic
@@ -872,6 +872,7 @@ let exit-block = intrinsic
 
 let host-matcher = new-host-type-family new-host-unique-id("matcher")
 	forall (userdata : host-type, result : tuple-desc-type(host-type)) -> (T : host-type)
+	tuple-of-implicit covariant(subtyping) contravariant(tuple-desc-relation)
 
 let nil-handler-type = lambda (userdata : host-type, result : tuple-desc-type(host-type))
 	host-func-type ((ud : userdata)) -> (r : host-tuple-type(host-type, result))

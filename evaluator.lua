@@ -171,6 +171,49 @@ effect_row_srel = {
 ---@type SubtypeRelation
 local UniverseOmegaRelation
 
+local infer_tuple_type_unwrapped2
+---@type SubtypeRelation
+local TupleDescRelation = {
+	debug_name = "TupleDescRelation",
+	Rel = luatovalue(function(a, b)
+		error("nyi")
+	end, name_array("a", "b")),
+	refl = luatovalue(function(a)
+		error("nyi")
+	end, name_array("a")),
+	antisym = luatovalue(function(a, b, r1, r2)
+		error("nyi")
+	end, name_array("a", "b", "r1", "r2")),
+	constrain = luatovalue(
+		---@param val value
+		---@param use value
+		function(val, use)
+			-- FIXME: this should probably be handled elsewhere
+			if val:is_neutral() and val == use then
+				return
+			end
+			-- FIXME: this is quick'n'dirty copypaste, slightly edited to jankily call existing code
+			-- this HAPPENS to work
+			-- this WILL need to be refactored
+			local placeholder = value.neutral(neutral_value.free(free.unique({})))
+			local tuple_types_val, tuple_types_use, tuple_vals, n =
+				infer_tuple_type_unwrapped2(value.tuple_type(val), value.tuple_type(use), placeholder)
+			for i = 1, n do
+				local tv, tu = tuple_types_val[i], tuple_types_use[i]
+
+				if tv ~= tu then
+					if tu:is_neutral() then
+						typechecker_state:queue_subtype(tv, tu, "Neutral value in tuple_compare")
+					else
+						typechecker_state:queue_subtype(tv, tu, "tuple_compare")
+					end
+				end
+			end
+		end,
+		name_array("val", "use")
+	),
+}
+
 ---@param onto ArrayValue
 ---@param with ArrayValue
 local function add_arrays(onto, with)
@@ -507,7 +550,7 @@ end
 local make_inner_context
 local infer_tuple_type, infer_tuple_type_unwrapped
 local make_inner_context2
-local infer_tuple_type2, infer_tuple_type_unwrapped2
+local infer_tuple_type2
 
 local check_concrete
 -- indexed by kind x kind
@@ -685,6 +728,19 @@ end)
 ---@param rel SubtypeRelation
 local function register_host_srel(id, rel)
 	host_srel_map[id] = rel
+end
+
+for i, host_type in ipairs {
+	terms.host_syntax_type,
+	terms.host_environment_type,
+	terms.host_typed_term_type,
+	terms.host_goal_type,
+	terms.host_inferrable_term_type,
+	terms.host_checkable_term_type,
+	terms.host_lua_error_type,
+} do
+	local id, family_args = host_type:unwrap_host_user_defined_type()
+	register_host_srel(id, IndepTupleRelation())
 end
 
 add_comparer("value.srel_type", "value.srel_type", function(a, b)
@@ -3466,6 +3522,7 @@ local evaluator = {
 	UniverseOmegaRelation = UniverseOmegaRelation,
 	FunctionRelation = FunctionRelation,
 	IndepTupleRelation = IndepTupleRelation,
+	TupleDescRelation = TupleDescRelation,
 	register_host_srel = register_host_srel,
 }
 internals_interface.evaluator = evaluator
