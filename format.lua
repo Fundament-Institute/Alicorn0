@@ -42,8 +42,56 @@ local function space_tokens(pattern)
 	return pattern * token_spacer
 end
 
+-- Incrementally Fold Repetitions at Match Time
+-- incrementally fold the stack into actual tables to prevent stack overflows
+local function IFRmt(pattern, numtimes)
+	if _VERSION == "Lua 5.1" then
+		table.unpack = unpack
+	end
+
+	local repetition
+
+	if numtimes == 0 then
+		repetition = Cg(Ct(pattern ^ -1), "IFRmt_acc")
+			* Cg(
+					Cmt(Cb("IFRmt_acc") * pattern, function(_, _, prev, newval)
+						table.insert(prev, newval)
+						return true, prev
+					end),
+					"IFRmt_acc"
+				)
+				^ 0
+	elseif numtimes > 0 then
+		repetition = Cg(Ct(pattern), "IFRmt_acc")
+			* Cg(
+					Cmt(Cb("IFRmt_acc") * pattern, function(_, _, prev, newval)
+						table.insert(prev, newval)
+						return true, prev
+					end),
+					"IFRmt_acc"
+				)
+				^ (numtimes - 1)
+	end
+
+	-- / func can return multiple values which become multiple distinct captures
+	-- which prevents needing to change the behavior of list
+	repetition = repetition * (Cb("IFRmt_acc") / function(vals)
+		return table.unpack(vals)
+	end)
+
+	return repetition
+end
+
 local function list(pattern)
-	return element("list", Cg(Ct(space_tokens(pattern)), "elements") * Cg(V "textpos", "endpos"))
+	return (V "textpos" * Ct(pattern) * V "textpos")
+		/ function(anchor, elements, endpos)
+			return {
+				anchor = anchor,
+				elements = elements,
+				endpos = endpos,
+				kind = "list",
+			}
+		end
 end
 
 ---@class Literal
@@ -134,8 +182,8 @@ local grammar = P {
 	foreward = Cg(Cc(0), "indent_level"),
 
 	ast = V "foreward" * list(
-		((V "empty_line" + ((V "newline" + V "filestart") * V "baselevel" * V "naked_list")) ^ 0) * V "eof"
-	) * clear_ffp(),
+		IFRmt(V "empty_line" + ((V "newline" + V "filestart") * V "baselevel" * V "naked_list"), 0)
+	) * V "eof" * clear_ffp(),
 
 	-- either match the newline or match the beginning of the file
 	filestart = Cmt(P "", function(_, mypos)
@@ -271,7 +319,7 @@ local grammar = P {
 		+ list(
 			(((list(V "tokens" ^ 1 * V "semicolon") + V "semicolon") ^ 1 * V "tokens" ^ 0) + V "tokens" ^ 1)
 				* V "indent"
-				* ((V "blockline" * V "naked_list") + V "empty_line") ^ 0
+				* IFRmt(((V "blockline" * V "naked_list") + V "empty_line"), 0)
 		),
 
 	-- PARENTHETICAL LIST BEHAVIOR
@@ -290,11 +338,11 @@ local grammar = P {
 	),
 
 	psemicolon = update_ffp(";", P ";" * V "paren_spacers"),
-	semicolon_body = list(V "paren_tokens" ^ 1 * V "psemicolon") ^ 1 * V "paren_tokens" ^ 0,
+	semicolon_body = list(IFRmt(V "paren_tokens", 1) * V "psemicolon") ^ 1 * IFRmt(V "paren_tokens", 0),
 
 	comma = update_ffp('","', P "," * V "paren_spacers"),
-	comma_paren_body = ((list(V "paren_tokens" ^ 2) + V "paren_tokens") * V "comma") ^ 1
-		* (list(V "paren_tokens" ^ 2) + V "paren_tokens"),
+	comma_paren_body = ((list(IFRmt(V "paren_tokens", 2)) + V "paren_tokens") * V "comma") ^ 1
+		* (list(IFRmt(V "paren_tokens", 2)) + V "paren_tokens"),
 
 	open_brace = Cg(C(P "("), "bracetype")
 		+ (Cg(C(P "["), "bracetype") * symbol(Cc("braced_list")))
