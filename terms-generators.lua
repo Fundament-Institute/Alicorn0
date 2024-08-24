@@ -323,6 +323,8 @@ end
 ---@field reset fun(MapValue, Value)
 ---@field get fun(MapValue, Value): Value?
 ---@field pairs fun(MapValue): function, MapValue, Value?
+---@field copy fun(MapValue, MapValue?, function?): MapValue
+---@field union fun(MapValue, MapValue, function): MapValue
 ---@field pretty_print fun(MapValue, ...)
 ---@field default_print fun(MapValue, ...)
 
@@ -376,26 +378,33 @@ local function gen_map_methods(self, key_type, value_type)
 		pairs = function(val)
 			return pairs(val._map)
 		end,
-		copy = function(val, onto)
+		copy = function(val, onto, conflict)
 			if not onto then
 				onto = self()
+			elseif not conflict then
+				error("map:copy onto requires a conflict resolution function")
 			end
 			local rt = getmetatable(onto)
 			if self ~= rt then
 				error("map:copy must be passed maps of the same type")
 			end
 			for k, v in val:pairs() do
-				onto:set(k, v)
+				local old = onto:get(k)
+				if old then
+					onto:set(k, conflict(old, v))
+				else
+					onto:set(k, v)
+				end
 			end
 			return onto
 		end,
-		union = function(left, right)
+		union = function(left, right, conflict)
 			local rt = getmetatable(right)
 			if self ~= rt then
 				error("map:union must be passed maps of the same type")
 			end
 			local new = left:copy()
-			right:copy(new)
+			right:copy(new, conflict)
 			return new
 		end,
 	}
