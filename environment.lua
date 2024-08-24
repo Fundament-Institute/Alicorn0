@@ -115,6 +115,7 @@ function environment:bind_local(binding)
 		})
 	elseif binding:is_tuple_elim() then
 		local names, subject = binding:unwrap_tuple_elim()
+		-- TODO: speculate the tuple type because it might be a metavariable
 		local subject_type, subject_usages, subject_term = infer(subject, self.typechecking_context)
 		--local subject_qty, subject_type = subject_type:unwrap_qtype()
 		--DEBUG:
