@@ -230,11 +230,11 @@ local ascribed_name = metalang.reducer(
 	"ascribed_name"
 )
 
-local curry_names_inner = metalang.reducer(
+local curry_segment = metalang.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
-	---@return {names: string[], args: inferrable, env: Environment}|string
+	---@return Environment|string
 	function(syntax, env)
 		local close_enough = syntax.anchor
 		--print("start env: " .. tostring(env))
@@ -264,44 +264,7 @@ local curry_names_inner = metalang.reducer(
 
 		--print("env return: " .. tostring(env))
 
-		return true, { env = env }
-	end,
-	"curry_names_inner"
-)
-
-local curry_names = metalang.reducer(
-	---@param syntax ConstructedSyntax
-	---@param env Environment
-	---@return boolean
-	---@return {names: string[], args: inferrable, env: Environment}|string
-	function(syntax, env)
-		local ok, thread = syntax:match({
-			curry_names_inner(metalang.accept_handler, env),
-		}, metalang.failure_handler, nil)
-
-		if not ok then
-			return ok, thread
-		end
-		return ok, { env = thread.env }
-	end,
-	"curry_names"
-)
-
-local curry_segment = metalang.reducer(
-	---@param syntax ConstructedSyntax
-	---@param env Environment
-	---@return boolean
-	---@return {single: boolean, names: string|string[], args: inferrable, env: Environment}|string
-	function(syntax, env)
-		local ok, thread = syntax:match({
-			curry_names(metalang.accept_handler, env),
-		}, metalang.failure_handler, nil)
-
-		if not ok then
-			return ok, thread
-		end
-
-		return true, { env = thread.env }
+		return true, env
 	end,
 	"curry_segment"
 )
@@ -310,14 +273,12 @@ local curry_segment = metalang.reducer(
 local function lambda_curry_impl(syntax, env)
 	local shadow, env = env:enter_block(terms.block_purity.pure)
 
-	local ok, thread, tail = syntax:match({
+	local ok, env, tail = syntax:match({
 		metalang.listtail(metalang.accept_handler, curry_segment(metalang.accept_handler, env)),
 	}, metalang.failure_handler, nil)
 	if not ok then
-		return ok, thread
+		return ok, env
 	end
-
-	local env = thread.env
 
 	local ok, expr, env = tail:match(
 		{ exprs.block(metalang.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, env)) },
@@ -776,14 +737,14 @@ local function lambda_impl(syntax, env)
 	local single, args, names, env = thread.single, thread.args, thread.names, thread.env
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
-	-- TODO: use correct name in lambda parameter instead of adding an extra let
-	inner_env = inner_env:bind_local(
-		terms.binding.annotated_lambda("#lambda-arguments", thread.args, syntax.anchor, terms.visibility.explicit)
-	)
-	local _, arg = inner_env:get("#lambda-arguments")
 	if single then
-		inner_env = inner_env:bind_local(terms.binding.let(names, arg))
+		inner_env =
+			inner_env:bind_local(terms.binding.annotated_lambda(names, args, syntax.anchor, terms.visibility.explicit))
 	else
+		inner_env = inner_env:bind_local(
+			terms.binding.annotated_lambda("#lambda-arguments", args, syntax.anchor, terms.visibility.explicit)
+		)
+		local _, arg = inner_env:get("#lambda-arguments")
 		inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
 	end
 	local ok, expr, env = tail:match(
@@ -810,19 +771,15 @@ local function lambda_implicit_impl(syntax, env)
 	local single, args, names, env = thread.single, thread.args, thread.names, thread.env
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
-	-- TODO: use correct name in lambda parameter instead of adding an extra let
-	inner_env = inner_env:bind_local(
-		terms.binding.annotated_lambda(
-			"#lambda-implicit-arguments",
-			thread.args,
-			syntax.anchor,
-			terms.visibility.implicit
-		)
-	)
-	local _, arg = inner_env:get("#lambda-implicit-arguments")
 	if single then
-		inner_env = inner_env:bind_local(terms.binding.let(names, arg))
+		inner_env =
+			inner_env:bind_local(terms.binding.annotated_lambda(names, args, syntax.anchor, terms.visibility.implicit))
 	else
+		print("WARNING: try replacing lambda_implicit with lambda_curry " .. tostring(syntax.anchor))
+		inner_env = inner_env:bind_local(
+			terms.binding.annotated_lambda("#lambda-implicit-arguments", args, syntax.anchor, terms.visibility.implicit)
+		)
+		local _, arg = inner_env:get("#lambda-implicit-arguments")
 		inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
 	end
 	local ok, expr, env = tail:match(

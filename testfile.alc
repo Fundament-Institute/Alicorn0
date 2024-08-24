@@ -6,15 +6,13 @@ let host-sub = (intrinsic "return function(a, b) return a - b end" : host-arith-
 #let foo = (record (bar = 5) (baz = 6))
 #let subbed = host-sub foo.bar y
 
-let implicit-wrap =
-	lambda_curry ((T : type_(10)))
-		lambda ((x : T))
-			wrap T x
+let implicit-wrap = lambda_curry ((T : type_(10)))
+	lambda ((x : T))
+		wrap T x
 
-let implicit-unwrap =
-	lambda_implicit (T : type_(10))
-		lambda ((x : wrapped(T)))
-			unwrap T x
+let implicit-unwrap = lambda_implicit (T : type_(10))
+	lambda ((x : wrapped(T)))
+		unwrap T x
 
 # FIXME: type of universe
 # we need to wrap this, and wrap takes a type in star-10
@@ -668,7 +666,7 @@ let host-tuple-type = lambda (U : universe, desc : tuple-desc-type(U))
 	implicit-unwrap(T)
 # FIXME: these implicit functions don't seem to work at all
 let tuple-type-implicit = lambda_implicit (U : universe)
-	lambda (desc : tuple-desc-type(U))
+	lambda ((desc : tuple-desc-type(U)))
 		let inner = intrinsic "return terms.value.tuple_type" :
 			host-func-type ((desc : wrapped(tuple-desc-type(U)))) -> ((T : wrapped(host-type)))
 		let (T) = inner(implicit-wrap(desc))
@@ -676,7 +674,7 @@ let tuple-type-implicit = lambda_implicit (U : universe)
 		#implicit-unwrap(T)
 		unwrap(host-type, T)
 let host-tuple-type-implicit = lambda_implicit (U : universe)
-	lambda (desc : tuple-desc-type(U))
+	lambda ((desc : tuple-desc-type(U)))
 		let inner = intrinsic "return terms.value.host_tuple_type" :
 			host-func-type ((desc : wrapped(tuple-desc-type(U)))) -> ((T : wrapped(host-type)))
 		let (T) = inner(implicit-wrap(desc))

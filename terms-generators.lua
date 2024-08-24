@@ -376,6 +376,28 @@ local function gen_map_methods(self, key_type, value_type)
 		pairs = function(val)
 			return pairs(val._map)
 		end,
+		copy = function(val, onto)
+			if not onto then
+				onto = self()
+			end
+			local rt = getmetatable(onto)
+			if self ~= rt then
+				error("map:copy must be passed maps of the same type")
+			end
+			for k, v in val:pairs() do
+				onto:set(k, v)
+			end
+			return onto
+		end,
+		union = function(left, right)
+			local rt = getmetatable(right)
+			if self ~= rt then
+				error("map:union must be passed maps of the same type")
+			end
+			local new = left:copy()
+			right:copy(new)
+			return new
+		end,
 	}
 end
 
@@ -506,7 +528,7 @@ local function gen_set_methods(self, key_type)
 				error("set:copy must be passed sets of the same type")
 			end
 			for k in val:pairs() do
-				onto:set(k)
+				onto:put(k)
 			end
 			return onto
 		end,

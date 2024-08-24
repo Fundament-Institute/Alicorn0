@@ -1,7 +1,9 @@
-local endTime = os.time() + 3
+--local endTime = os.time() + 3
 --while os.time() < endTime do end
 
 local startTime = os.clock()
+local checkpointTime = startTime
+local checkpointTime2 = startTime
 local metalanguage = require "./metalanguage"
 local evaluator = require "./evaluator"
 local format = require "./format-adapter"
@@ -58,7 +60,9 @@ end
 local filename = path.resolve("testfile.alc")
 local src = fs.readFileSync(filename)
 
+checkpointTime = os.clock()
 print("Read code")
+checkpointTime2 = checkpointTime
 if print_src then
 	print(src)
 end
@@ -66,7 +70,9 @@ end
 print("Parsing code")
 local code = format.read(src, filename)
 
-print("Parsed!")
+checkpointTime = os.clock()
+print(("Parsed! in %.3f seconds"):format(checkpointTime - checkpointTime2))
+checkpointTime2 = checkpointTime
 if print_ast then
 	print("Printing raw AST")
 	print(format.lispy_print(code))
@@ -95,14 +101,17 @@ if profile_run and profile_what == "match" then
 	end
 end
 if not ok then
-	print("Evaluating failed in " .. tostring(os.clock() - startTime) .. " seconds")
+	checkpointTime = os.clock()
+	print(("Evaluating failed in %.3f seconds"):format(checkpointTime - checkpointTime2))
 	print(expr)
 	return
 end
 
 local env, bound_expr, purity = env:exit_block(expr, shadowed)
 
-print("Got a term!")
+checkpointTime = os.clock()
+print(("Got a term! in %.3f seconds"):format(checkpointTime - checkpointTime2))
+checkpointTime2 = checkpointTime
 if print_inferrable then
 	print("bound_expr: (inferrable term follows)")
 	print(bound_expr:pretty_print(terms.typechecking_context()))
@@ -122,7 +131,9 @@ if profile_run and profile_what == "infer" then
 	end
 end
 
-print("Inferred!")
+checkpointTime = os.clock()
+print(("Inferred! in %.3f seconds"):format(checkpointTime - checkpointTime2))
+checkpointTime2 = checkpointTime
 if print_typed then
 	print("type: (value term follows)")
 	print(type)
@@ -148,7 +159,9 @@ evaluator.typechecker_state:flow(
 print("Evaluating")
 local result = evaluator.evaluate(term, terms.runtime_context())
 
-print("Evaluated!")
+checkpointTime = os.clock()
+print(("Evaluated! in %.3f seconds"):format(checkpointTime - checkpointTime2))
+checkpointTime2 = checkpointTime
 if print_evaluated then
 	print("result: (value term follows)")
 	print(result)
@@ -157,6 +170,10 @@ end
 print("Executing")
 local result_exec = evaluator.execute_program(result)
 
-print("Executed!")
+checkpointTime = os.clock()
+print(("Executed! in %.3f seconds"):format(checkpointTime - checkpointTime2))
+checkpointTime2 = checkpointTime
 print("result_exec: (value term follows)")
 print(result_exec)
+
+print(("Runtest succeeded in %.3f seconds"):format(checkpointTime - startTime))
