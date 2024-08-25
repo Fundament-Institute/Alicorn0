@@ -115,7 +115,6 @@ function environment:bind_local(binding)
 		})
 	elseif binding:is_tuple_elim() then
 		local names, subject = binding:unwrap_tuple_elim()
-		-- TODO: speculate the tuple type because it might be a metavariable
 		local subject_type, subject_usages, subject_term = infer(subject, self.typechecking_context)
 		--local subject_qty, subject_type = subject_type:unwrap_qtype()
 		--DEBUG:
@@ -124,55 +123,114 @@ function environment:bind_local(binding)
 			print(subject:pretty_print(self.typechecking_context))
 		end
 
-		-- evaluating the subject is necessary for inferring the type of the body
-		local subject_value = U.tag(
-			"evaluate",
-			{ subject_term = subject_term },
-			eval.evaluate,
-			subject_term,
-			self.typechecking_context:get_runtime_context()
-		)
-		-- extract subject type and evaled for each elem in tuple
-		local tupletypes, n_elements = eval.infer_tuple_type(subject_type, subject_value)
-
-		--local desc
-		--[[
-
-		if inner_type:is_tuple_type() then
-			desc = subject_type:unwrap_tuple_type()
-		elseif inner_type:is_host_tuple_type() then
-			desc = subject_type:unwrap_host_tuple_type()
-		else
-			error("bind_local tuple_elim, subject_type: expected a term with a tuple type, but got " .. subject_type.kind)
+		local desc = terms.empty
+		for _ in ipairs(names) do
+			local next_elem_type_mv = eval.typechecker_state:metavariable(self.typechecking_context)
+			local next_elem_type = next_elem_type_mv:as_value()
+			desc = terms.cons(
+				desc,
+				terms.value.closure(
+					"#env-tuple-elim-param",
+					terms.typed_term.literal(next_elem_type),
+					self.typechecking_context.runtime_context
+				)
+			)
 		end
-		]]
+		local spec_type = terms.value.tuple_type(desc)
+		local host_spec_type = terms.value.host_tuple_type(desc)
+		local function rest_of_the_tuple_elim(spec_type)
+			eval.typechecker_state:flow(
+				subject_type,
+				self.typechecking_context,
+				spec_type,
+				self.typechecking_context,
+				"environment tuple-elim"
+			)
 
-		local typechecking_context = self.typechecking_context
-		local n = #typechecking_context
-		local locals = self.locals
+			-- evaluating the subject is necessary for inferring the type of the body
+			local subject_value = U.tag(
+				"evaluate",
+				{ subject_term = subject_term },
+				eval.evaluate,
+				subject_term,
+				self.typechecking_context:get_runtime_context()
+			)
+			-- extract subject type and evaled for each elem in tuple
+			local tupletypes, n_elements = eval.infer_tuple_type(spec_type, subject_value)
 
-		if not (n_elements == #names) then
-			error("attempted to bind " .. n_elements .. " tuple elements to " .. #names .. " variables")
+			--local desc
+			--[[
+
+			if inner_type:is_tuple_type() then
+				desc = subject_type:unwrap_tuple_type()
+			elseif inner_type:is_host_tuple_type() then
+				desc = subject_type:unwrap_host_tuple_type()
+			else
+				error("bind_local tuple_elim, subject_type: expected a term with a tuple type, but got " .. subject_type.kind)
+			end
+			]]
+
+			local typechecking_context = self.typechecking_context
+			local n = #typechecking_context
+			local locals = self.locals
+
+			if not (n_elements == #names) then
+				error("attempted to bind " .. n_elements .. " tuple elements to " .. #names .. " variables")
+			end
+
+			for i, v in ipairs(names) do
+				--local constructor, arg = desc:unwrap_enum_value()
+				-- if constructor ~= "cons" then
+				-- 	error("todo: this error message")
+				-- end
+				local term = inferrable_term.bound_variable(n + i)
+				locals = locals:put(v, term)
+
+				local evaled = eval.index_tuple_value(subject_value, i)
+				--log_binding(v, tupletypes[i], evaled)
+				typechecking_context = typechecking_context:append(v, tupletypes[i], evaled)
+			end
+			local bindings = self.bindings:append(binding)
+			return update_env(self, {
+				locals = locals,
+				bindings = bindings,
+				typechecking_context = typechecking_context,
+			})
 		end
-
-		for i, v in ipairs(names) do
-			--local constructor, arg = desc:unwrap_enum_value()
-			-- if constructor ~= "cons" then
-			-- 	error("todo: this error message")
-			-- end
-			local term = inferrable_term.bound_variable(n + i)
-			locals = locals:put(v, term)
-
-			local evaled = eval.index_tuple_value(subject_value, i)
-			--log_binding(v, tupletypes[i], evaled)
-			typechecking_context = typechecking_context:append(v, tupletypes[i], evaled)
+		local unique = {}
+		local ok, res1, res2
+		ok, res1 = eval.typechecker_state:speculate(function()
+			return rest_of_the_tuple_elim(spec_type)
+		end)
+		-- local ok, res = U.tag(
+		-- 	"speculate",
+		-- 	{ unique = unique },
+		-- 	eval.typechecker_state.speculate,
+		-- 	eval.typechecker_state,
+		-- 	function()
+		-- 		return rest_of_the_tuple_elim(spec_type)
+		-- 	end
+		-- )
+		if ok then
+			return res1
 		end
-		local bindings = self.bindings:append(binding)
-		return update_env(self, {
-			locals = locals,
-			bindings = bindings,
-			typechecking_context = typechecking_context,
-		})
+		ok, res2 = eval.typechecker_state:speculate(function()
+			return rest_of_the_tuple_elim(host_spec_type)
+		end)
+		-- ok, res = U.tag(
+		-- 	"speculate",
+		-- 	{ unique = unique },
+		-- 	eval.typechecker_state.speculate,
+		-- 	eval.typechecker_state,
+		-- 	function()
+		-- 		return rest_of_the_tuple_elim(host_spec_type)
+		-- 	end
+		-- )
+		if ok then
+			return res2
+		end
+		--error(res2)
+		error("tuple elim speculation failed! debugging this is left as an exercise to the maintainer")
 	elseif binding:is_annotated_lambda() then
 		local param_name, param_annotation, anchor, visible = binding:unwrap_annotated_lambda()
 		if not anchor or not anchor.sourceid then
