@@ -185,6 +185,24 @@ function M.commit(t)
 	return original
 end
 
+---Given a shadowed table, unlocks the shadowed table below (you should drop this table immediately)
+---@generic T : table
+---@param t T
+---@return T
+function M.revert(t)
+	setmetatable(t, nil)
+	local original = t.__shadow
+	local length = t.__length
+	t.__shadow = nil
+	t.__length = nil
+
+	if original then
+		rawset(original, "__lock", nil)
+	end
+
+	return original
+end
+
 ---@generic T : table
 ---@param src T
 ---@return T
