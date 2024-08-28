@@ -558,9 +558,8 @@ end
 ---@param val value
 ---@param index integer
 ---@param param_name string?
----@param typechecking_context TypecheckingContext
 ---@return value
-local function substitute_type_variables(val, index, param_name, typechecking_context)
+local function substitute_type_variables(val, index, param_name)
 	param_name = param_name and "#sub-" .. param_name or "#sub-param"
 	--print("value before substituting (val): (value term follows)")
 	--print(val)
@@ -1339,8 +1338,7 @@ function infer(
 			substitute_type_variables,
 			body_type,
 			#inner_context,
-			param_name,
-			typechecking_context
+			param_name
 		)
 		--print("INFER ANNOTATED LAMBDA")
 		--print("result_type")
@@ -1462,10 +1460,7 @@ function infer(
 			local el_val = evaluate(el_term, typechecking_context.runtime_context)
 			type_data = terms.cons(
 				type_data,
-				value.singleton(
-					substitute_type_variables(el_type, #typechecking_context + 1, nil, typechecking_context),
-					el_val
-				)
+				value.singleton(substitute_type_variables(el_type, #typechecking_context + 1), el_val)
 			)
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
@@ -1493,10 +1488,7 @@ function infer(
 			local el_val = evaluate(el_term, typechecking_context.runtime_context)
 			type_data = terms.cons(
 				type_data,
-				value.singleton(
-					substitute_type_variables(el_type, #typechecking_context + 1, nil, typechecking_context),
-					el_val
-				)
+				value.singleton(substitute_type_variables(el_type, #typechecking_context + 1), el_val)
 			)
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
@@ -1540,11 +1532,8 @@ function infer(
 		local new_fields = string_typed_map()
 		for k, v in pairs(fields) do
 			local field_type, field_usages, field_term = infer(v, typechecking_context)
-			type_data = terms.cons(
-				type_data,
-				value.name(k),
-				substitute_type_variables(field_type, #typechecking_context + 1, nil, typechecking_context)
-			)
+			type_data =
+				terms.cons(type_data, value.name(k), substitute_type_variables(field_type, #typechecking_context + 1))
 			add_arrays(usages, field_usages)
 			new_fields[k] = field_term
 		end
