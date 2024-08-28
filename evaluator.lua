@@ -74,7 +74,9 @@ local function FunctionRelation(srel)
 		refl = luatovalue(function(a) end, name_array("a")),
 		antisym = luatovalue(function(a, b, r1, r2) end, name_array("a", "b", "r1", "r2")),
 		constrain = luatovalue(function(val, use)
-			local u = value.neutral(neutral_value.free(free.unique({})))
+			local u = value.neutral(
+				neutral_value.free(free.unique({ debug = "FunctionRelation(" .. srel.debug_name .. ").constrain" }))
+			)
 
 			local applied_val = U.tag("apply_value", { val = val, use = use }, apply_value, val, u)
 			local applied_use = U.tag("apply_value", { val = val, use = use }, apply_value, use, u)
@@ -223,7 +225,8 @@ local TupleDescRelation = {
 			-- FIXME: this is quick'n'dirty copypaste, slightly edited to jankily call existing code
 			-- this HAPPENS to work
 			-- this WILL need to be refactored
-			local placeholder = value.neutral(neutral_value.free(free.unique({})))
+			local placeholder =
+				value.neutral(neutral_value.free(free.unique({ debug = "TupleDescRelation.constrain" })))
 			local tuple_types_val, tuple_types_use, tuple_vals, n =
 				infer_tuple_type_unwrapped2(value.tuple_type(val), value.tuple_type(use), placeholder)
 			for i = 1, n do
@@ -231,9 +234,9 @@ local TupleDescRelation = {
 
 				if tv ~= tu then
 					if tu:is_neutral() then
-						typechecker_state:queue_subtype(tv, tu, "Neutral value in tuple_compare")
+						typechecker_state:queue_subtype(tv, tu, "Neutral value in TupleDescRelation.constrain")
 					else
-						typechecker_state:queue_subtype(tv, tu, "tuple_compare")
+						typechecker_state:queue_subtype(tv, tu, "TupleDescRelation.constrain")
 					end
 				end
 			end
@@ -300,7 +303,7 @@ local function substitute_inner(val, mappings, context_len)
 		return typed_term.pi(param_type, param_info, result_type, result_info)
 	elseif val:is_closure() then
 		local param_name, code, capture = val:unwrap_closure()
-		local unique = {}
+		local unique = { debug = "substitute_inner, val:is_closure" }
 		local arg = value.neutral(neutral_value.free(free.unique(unique)))
 		val = apply_value(val, arg)
 		--print("applied closure during substitution: (value term follows)")
@@ -641,7 +644,7 @@ add_comparer(value.host_type_type.kind, value.host_type_type.kind, always_fits_c
 ---@type value_comparer
 local function tuple_compare(a, b)
 	-- fixme lol
-	local placeholder = value.neutral(neutral_value.free(free.unique({})))
+	local placeholder = value.neutral(neutral_value.free(free.unique({ debug = "tuple_compare" })))
 	local tuple_types_a, tuple_types_b, tuple_vals, n = infer_tuple_type_unwrapped2(a, b, placeholder)
 	for i = 1, n do
 		local ta, tb = tuple_types_a[i], tuple_types_b[i]
