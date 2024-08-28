@@ -57,7 +57,7 @@ local function luatovalue(luafunc)
 	end
 
 	return value.closure(
-		"#args",
+		"#luatovalue-args",
 		typed.application(
 			typed.literal(value.host_value(luafunc)),
 			typed.tuple_elim(parameters, typed.bound_variable(1), len, typed.host_tuple_cons(new_body))
@@ -224,7 +224,7 @@ enum_desc_srel = {
 	),
 }
 
-local infer_tuple_type_unwrapped2
+local infer_tuple_type_unwrapped2, substitute_type_variables
 ---@type SubtypeRelation
 local TupleDescRelation = {
 	debug_name = "TupleDescRelation",
@@ -248,20 +248,19 @@ local TupleDescRelation = {
 			-- FIXME: this is quick'n'dirty copypaste, slightly edited to jankily call existing code
 			-- this HAPPENS to work
 			-- this WILL need to be refactored
-			local placeholder =
-				value.neutral(neutral_value.free(free.unique({ debug = "TupleDescRelation.constrain" })))
+			local unique = { debug = "TupleDescRelation.constrain" }
+			local placeholder = value.neutral(neutral_value.free(free.unique(unique)))
 			local tuple_types_val, tuple_types_use, tuple_vals, n =
 				infer_tuple_type_unwrapped2(value.tuple_type(val), value.tuple_type(use), placeholder)
 			for i = 1, n do
-				local tv, tu = tuple_types_val[i], tuple_types_use[i]
-
-				if tv ~= tu then
-					if tu:is_neutral() then
-						typechecker_state:queue_subtype(tv, tu, "Neutral value in TupleDescRelation.constrain")
-					else
-						typechecker_state:queue_subtype(tv, tu, "TupleDescRelation.constrain")
-					end
-				end
+				local tv = substitute_type_variables(tuple_types_val[i], unique)
+				local tu = substitute_type_variables(tuple_types_use[i], unique)
+				typechecker_state:queue_constrain(
+					tv,
+					FunctionRelation(UniverseOmegaRelation),
+					tu,
+					"TupleDescRelation.constrain"
+				)
 			end
 		end
 	),
@@ -585,7 +584,7 @@ end
 ---@param index integer
 ---@param param_name string?
 ---@return value
-local function substitute_type_variables(val, index, param_name)
+function substitute_type_variables(val, index, param_name)
 	param_name = param_name and "#sub-" .. param_name or "#sub-param"
 	--print("value before substituting (val): (value term follows)")
 	--print(val)
@@ -1066,7 +1065,8 @@ function apply_value(f, arg)
 
 	if f:is_closure() then
 		local param_name, code, capture = f:unwrap_closure()
-		return U.notail(U.tag("evaluate", { code = code }, evaluate, code, capture:append(arg)))
+		--return U.notail(U.tag("evaluate", { code = code }, evaluate, code, capture:append(arg)))
+		return evaluate(code, capture:append(arg))
 	elseif f:is_neutral() then
 		return value.neutral(neutral_value.application_stuck(f:unwrap_neutral(), arg))
 	elseif f:is_host_value() then
@@ -1991,7 +1991,7 @@ function evaluate(typed_term, runtime_context)
 		end
 	elseif typed_term:is_tuple_elim() then
 		local names, subject, length, body = typed_term:unwrap_tuple_elim()
-		local subject_value = U.tag("evaluate", { subject = subject, a = "a" }, evaluate, subject, runtime_context)
+		local subject_value = U.tag("evaluate", { subject = subject }, evaluate, subject, runtime_context)
 		local inner_context = runtime_context
 		if subject_value:is_tuple_value() then
 			local subject_elements = subject_value:unwrap_tuple_value()
@@ -3285,7 +3285,7 @@ function TypeCheckerState:check_heads(left, right, rel)
 		-- TODO: how do we pass in the type contexts???
 		U.tag(
 			"apply_value",
-			{ lvalue = lvalue, rvalue = rvalue },
+			{ lvalue = lvalue, rvalue = rvalue, block_level = typechecker_state.block_level },
 			apply_value,
 			rel.constrain,
 			value.tuple_value(tuple_params)
