@@ -449,6 +449,22 @@ typed_term:define_enum("typed", {
 		"subject",   typed_term,
 		"mechanism", typed_term,
 	} },
+	{ "enum_desc_cons", {
+		"variants", map(gen.builtin_string, typed_term),
+		"rest", typed_term
+	} },
+	{ "enum_type", {
+		"desc", typed_term
+	}},
+	{ "enum_case", {
+		"target", typed_term,
+		"variants", map(gen.builtin_string, typed_term),
+		"default", typed_term
+	}},
+	{ "enum_absurd", {
+		"target", typed_term,
+		"debug", gen.builtin_string
+	}},
 	{ "object_cons", { "methods", map(gen.builtin_string, typed_term) } },
 	{ "object_corec_cons", { "methods", map(gen.builtin_string, typed_term) } },
 	{ "object_elim", {
@@ -710,6 +726,9 @@ value:define_enum("value", {
 	} },
 	{ "enum_type", { "desc", value } },
 	{ "enum_desc_type", { "universe", value } },
+	{ "enum_desc_value", {
+		"variants", gen.declare_map(gen.builtin_string, value)
+	} },
 	{ "record_value", { "fields", map(gen.builtin_string, value) } },
 	{ "record_type", { "desc", value } },
 	{ "record_desc_type", { "universe", value } },

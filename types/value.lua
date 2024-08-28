@@ -119,6 +119,12 @@ function value:unwrap_enum_desc_type() end
 ---@return boolean, value
 function value:as_enum_desc_type() end
 ---@return boolean
+function value:is_enum_desc_value() end
+---@return MapValue
+function value:unwrap_enum_desc_value() end
+---@return boolean, MapValue
+function value:as_enum_desc_value() end
+---@return boolean
 function value:is_record_value() end
 ---@return MapValue
 function value:unwrap_record_value() end
@@ -368,6 +374,7 @@ function value:as_union_type() end
 ---@field enum_value fun(constructor: string, arg: value): value
 ---@field enum_type fun(desc: value): value
 ---@field enum_desc_type fun(universe: value): value
+---@field enum_desc_value fun(variants: MapValue): value
 ---@field record_value fun(fields: MapValue): value
 ---@field record_type fun(desc: value): value
 ---@field record_desc_type fun(universe: value): value

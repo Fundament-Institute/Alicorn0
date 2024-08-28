@@ -171,6 +171,34 @@ effect_row_srel = {
 ---@type SubtypeRelation
 local UniverseOmegaRelation
 
+---@type SubtypeRelation
+local enum_desc_srel
+enum_desc_srel = {
+	debug_name = "enum_desc_srel",
+	Rel = luatovalue(function(a, b) end, name_array("a", "b")),
+	refl = luatovalue(function(a) end, name_array("a")),
+	antisym = luatovalue(function(a, b, r1, r2) end, name_array("a", "b", "r1", "r2")),
+
+	constrain = luatovalue(
+		---@param val value
+		---@param use value
+		function(val, use)
+			if not val:is_enum_desc_value() then
+				error "production is not an enum description"
+			end
+			local val_variants = val:unwrap_enum_desc_value()
+			if not use:is_enum_desc_value() then
+				error "consumption is not an enum description"
+			end
+			local use_variants = use:unwrap_enum_desc_value()
+			for name, use_type in use_variants:pairs() do
+				typechecker_state:queue_subtype(val_variants:get(name), use_type, "enum variant")
+			end
+		end,
+		name_array("val", "use")
+	),
+}
+
 local infer_tuple_type_unwrapped2
 ---@type SubtypeRelation
 local TupleDescRelation = {
@@ -630,6 +658,18 @@ local function tuple_compare(a, b)
 end
 add_comparer("value.tuple_type", "value.tuple_type", tuple_compare)
 add_comparer("value.host_tuple_type", "value.host_tuple_type", tuple_compare)
+add_comparer("value.enum_desc_type", "value.enum_desc_type", function(a, b)
+	local a_univ = a:unwrap_enum_desc_type()
+	local b_univ = b:unwrap_enum_desc_type()
+	typechecker_state:queue_subtype(a_univ, b_univ, "enum desc universe covariance")
+	return true
+end)
+add_comparer("value.enum_type", "value.enum_type", function(a, b)
+	local a_desc = a:unwrap_enum_type()
+	local b_desc = b:unwrap_enum_type()
+	typechecker_state:queue_constrain(a_desc, enum_desc_srel, b_desc, "enum type description")
+	return true
+end)
 add_comparer("value.pi", "value.pi", function(a, b)
 	if a == b then
 		return true
@@ -2057,6 +2097,42 @@ function evaluate(typed_term, runtime_context)
 		else
 			error("evaluate, is_enum_elim, subject_value: expected an enum")
 		end
+	elseif typed_term:is_enum_desc_cons() then
+		local variants, rest = typed_term:unwrap_enum_desc_cons()
+		local result = string_value_map()
+		for k, v in variants:pairs() do
+			local v_res = evaluate(v, runtime_context)
+			result:set(k, v_res)
+		end
+		local res_rest = evaluate(rest, runtime_context)
+		if res_rest:is_enum_desc_value() then
+			local variants_rest = res_rest:unwrap_enum_desc_value()
+			return value.enum_desc_value(result:union(variants_rest, function(a, b)
+				return a
+			end))
+		else
+			error "non-concrete enum desc in rest slot, TODO"
+		end
+	elseif typed_term:is_enum_type() then
+		local desc = typed_term:unwrap_enum_type()
+		local desc_val = evaluate(desc, runtime_context)
+		return value.enum_type(desc_val)
+	elseif typed_term:is_enum_case() then
+		local target, variants, default = typed_term:unwrap_enum_case()
+		local target_val = evaluate(target, runtime_context)
+		if target_val:is_enum_value() then
+			local variant, arg = target_val:unwrap_enum_value()
+			if variants[variant] then
+				return evaluate(variants[variant], runtime_context:append(arg))
+			else
+				return evaluate(default, runtime_context:append(target_val))
+			end
+		else
+			error "enum case expression didn't evaluate to an enum_value"
+		end
+	elseif typed_term:is_enum_absurd() then
+		local target, debug = typed_term:unwrap_enum_absurd()
+		error("ENUM ABSURD OCCURRED: " .. debug)
 	elseif typed_term:is_variance_cons() then
 		local positive, srel = typed_term:unwrap_variance_cons()
 		local positive_value = U.tag("evaluate", { positive = positive }, evaluate, positive, runtime_context)

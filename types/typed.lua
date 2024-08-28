@@ -137,6 +137,30 @@ function typed:unwrap_enum_rec_elim() end
 ---@return boolean, typed, typed
 function typed:as_enum_rec_elim() end
 ---@return boolean
+function typed:is_enum_desc_cons() end
+---@return MapValue, typed
+function typed:unwrap_enum_desc_cons() end
+---@return boolean, MapValue, typed
+function typed:as_enum_desc_cons() end
+---@return boolean
+function typed:is_enum_type() end
+---@return typed
+function typed:unwrap_enum_type() end
+---@return boolean, typed
+function typed:as_enum_type() end
+---@return boolean
+function typed:is_enum_case() end
+---@return typed, MapValue, typed
+function typed:unwrap_enum_case() end
+---@return boolean, typed, MapValue, typed
+function typed:as_enum_case() end
+---@return boolean
+function typed:is_enum_absurd() end
+---@return typed, string
+function typed:unwrap_enum_absurd() end
+---@return boolean, typed, string
+function typed:as_enum_absurd() end
+---@return boolean
 function typed:is_object_cons() end
 ---@return MapValue
 function typed:unwrap_object_cons() end
@@ -335,6 +359,10 @@ function typed:as_union_type() end
 ---@field enum_cons fun(constructor: string, arg: typed): typed
 ---@field enum_elim fun(subject: typed, mechanism: typed): typed
 ---@field enum_rec_elim fun(subject: typed, mechanism: typed): typed
+---@field enum_desc_cons fun(variants: MapValue, rest: typed): typed
+---@field enum_type fun(desc: typed): typed
+---@field enum_case fun(target: typed, variants: MapValue, default: typed): typed
+---@field enum_absurd fun(target: typed, debug: string): typed
 ---@field object_cons fun(methods: MapValue): typed
 ---@field object_corec_cons fun(methods: MapValue): typed
 ---@field object_elim fun(subject: typed, mechanism: typed): typed
