@@ -549,6 +549,10 @@ local function substitute_inner(val, mappings, context_len)
 		end
 		local sub_relation = substitute_inner(relation, mappings, context_len)
 		return typed_term.range(sub_lower_bounds, sub_upper_bounds, sub_relation)
+	elseif val:is_singleton() then
+		local supertype, value = val:unwrap_singleton()
+		local supertype = substitute_inner(supertype, mappings, context_len)
+		return typed_term.singleton(supertype, value)
 	else
 		error("Unhandled value kind in substitute_inner: " .. val.kind)
 	end
@@ -1458,10 +1462,8 @@ function infer(
 		for _, v in ipairs(elements) do
 			local el_type, el_usages, el_term = infer(v, typechecking_context)
 			local el_val = evaluate(el_term, typechecking_context.runtime_context)
-			type_data = terms.cons(
-				type_data,
-				value.singleton(substitute_type_variables(el_type, #typechecking_context + 1), el_val)
-			)
+			local el_singleton = value.singleton(el_type, el_val)
+			type_data = terms.cons(type_data, substitute_type_variables(el_singleton, #typechecking_context + 1))
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
 		end
@@ -1486,10 +1488,8 @@ function infer(
 			--print "inferring element of tuple construction"
 			--print(el_type:pretty_print())
 			local el_val = evaluate(el_term, typechecking_context.runtime_context)
-			type_data = terms.cons(
-				type_data,
-				value.singleton(substitute_type_variables(el_type, #typechecking_context + 1), el_val)
-			)
+			local el_singleton = value.singleton(el_type, el_val)
+			type_data = terms.cons(type_data, substitute_type_variables(el_singleton, #typechecking_context + 1))
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
 		end
@@ -2346,6 +2346,10 @@ function evaluate(typed_term, runtime_context)
 		local reln = evaluate(relation, runtime_context)
 
 		return value.range(lower_acc, upper_acc, reln)
+	elseif typed_term:is_singleton() then
+		local supertype, value = typed_term:unwrap_singleton()
+		local supertype_val = evaluate(supertype, runtime_context)
+		return value.singleton(supertype_val, value)
 	elseif typed_term:is_program_sequence() then
 		local first, rest = typed_term:unwrap_program_sequence()
 		local startprog = evaluate(first, runtime_context)

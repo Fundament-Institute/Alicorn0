@@ -515,6 +515,11 @@ typed_term:define_enum("typed", {
 		  "relation",     typed_term, -- a subtyping relation. not currently represented.
 	} },
 
+	{ "singleton", {
+		  "supertype", typed_term,
+		  "value",     value,
+	} },
+
 	{ "program_sequence", {
 		"first",    typed_term,
 		"continue", typed_term,
