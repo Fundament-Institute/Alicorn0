@@ -666,26 +666,18 @@ end
 
 -- types of types
 add_comparer(value.host_type_type.kind, value.host_type_type.kind, always_fits_comparer)
----@type value_comparer
-local function tuple_compare(a, b)
-	-- fixme lol
-	local placeholder = value.neutral(neutral_value.free(free.unique({ debug = "tuple_compare" })))
-	local tuple_types_a, tuple_types_b, tuple_vals, n = infer_tuple_type_unwrapped2(a, b, placeholder)
-	for i = 1, n do
-		local ta, tb = tuple_types_a[i], tuple_types_b[i]
-
-		if ta ~= tb then
-			if tb:is_neutral() then
-				typechecker_state:queue_subtype(ta, tb, "Neutral value in tuple_compare")
-			else
-				typechecker_state:queue_subtype(ta, tb, "tuple_compare")
-			end
-		end
-	end
+add_comparer("value.tuple_type", "value.tuple_type", function(a, b)
+	local desc_a = a:unwrap_tuple_type()
+	local desc_b = b:unwrap_tuple_type()
+	typechecker_state:queue_constrain(desc_a, TupleDescRelation, desc_b, "tuple type")
 	return true
-end
-add_comparer("value.tuple_type", "value.tuple_type", tuple_compare)
-add_comparer("value.host_tuple_type", "value.host_tuple_type", tuple_compare)
+end)
+add_comparer("value.host_tuple_type", "value.host_tuple_type", function(a, b)
+	local desc_a = a:unwrap_host_tuple_type()
+	local desc_b = b:unwrap_host_tuple_type()
+	typechecker_state:queue_constrain(desc_a, TupleDescRelation, desc_b, "host tuple type")
+	return true
+end)
 add_comparer("value.enum_desc_type", "value.enum_desc_type", function(a, b)
 	local a_univ = a:unwrap_enum_desc_type()
 	local b_univ = b:unwrap_enum_desc_type()
