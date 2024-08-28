@@ -257,7 +257,6 @@ checkable_term:define_enum("checkable", {
 		"param_name", gen.builtin_string,
 		"body",       checkable_term,
 	} },
-	-- TODO: enum_cons
 })
 -- inferrable terms can have their type inferred / don't need a goal type
 -- stylua: ignore

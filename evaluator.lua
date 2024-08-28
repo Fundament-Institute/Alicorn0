@@ -2700,10 +2700,31 @@ local function IndexedCollection(indices)
 		end
 	end
 
+	local function revert_tree_node(n)
+		setmetatable(n, nil)
+		assert(type(n) == "table")
+		local base = rawget(n, "__shadow")
+		if base then
+			rawset(n, "__shadow", nil)
+			rawset(base, "__lock", nil)
+			rawset(base, "__locktrace", nil)
+		end
+	end
+
 	function res:commit()
 		U.commit(self._collection)
 
 		commit_tree_node(self._index_store)
+		local orig = rawget(self, "__shadow")
+		rawset(orig, "__lock", nil)
+		rawset(orig, "__locktrace", nil)
+		rawset(self, "__shadow", nil)
+	end
+
+	function res:revert()
+		U.revert(self._collection)
+
+		revert_tree_node(self._index_store)
 		local orig = rawget(self, "__shadow")
 		rawset(orig, "__lock", nil)
 		rawset(orig, "__locktrace", nil)
@@ -2724,6 +2745,10 @@ end
 
 function TraitRegistry:commit()
 	U.commit(self.traits)
+end
+
+function TraitRegistry:revert()
+	U.revert(self.traits)
 end
 
 trait_registry_mt = { __index = TraitRegistry }
@@ -2774,6 +2799,7 @@ local TypeCheckerState = {}
 ---@field between fun(self: ConstrainCollection,left: NodeID, right: NodeID): ConstrainEdge[]
 ---@field shadow fun(self: ConstrainCollection) : ConstrainCollection
 ---@field commit fun(self: ConstrainCollection)
+---@field revert fun(self: ConstrainCollection)
 
 ---@class LeftCallCollection
 ---@field add fun(self: LeftCallCollection,edge: LeftCallEdge)
@@ -2783,6 +2809,7 @@ local TypeCheckerState = {}
 ---@field between fun(self: LeftCallCollection,left: NodeID, right: NodeID): LeftCallEdge[]
 ---@field shadow fun(self: LeftCallCollection) : LeftCallCollection
 ---@field commit fun(self: LeftCallCollection)
+---@field revert fun(self: LeftCallCollection)
 
 ---@class RightCallCollection
 ---@field add fun(self: RightCallCollection,edge: RightCallEdge)
@@ -2792,6 +2819,7 @@ local TypeCheckerState = {}
 ---@field between fun(self: RightCallCollection,left: NodeID, right: NodeID): RightCallEdge[]
 ---@field shadow fun(self: RightCallCollection) : RightCallCollection
 ---@field commit fun(self: RightCallCollection)
+---@field revert fun(self: RightCallCollection)
 
 ---@class Reachability
 ---@field constrain_edges ConstrainCollection
@@ -2815,6 +2843,12 @@ function Reachability:commit()
 	self.constrain_edges:commit()
 	self.leftcall_edges:commit()
 	self.rightcall_edges:commit()
+end
+
+function Reachability:revert()
+	self.constrain_edges:revert()
+	self.leftcall_edges:revert()
+	self.rightcall_edges:revert()
 end
 
 ---@class (exact) EdgeNotifConstrain
@@ -3556,6 +3590,16 @@ function TypeCheckerState:commit()
 	rawset(self, "__shadow", nil)
 end
 
+function TypeCheckerState:revert()
+	U.revert(self.pending)
+	self.graph:revert()
+	U.revert(self.values)
+	U.revert(self.valcheck)
+	U.revert(self.usecheck)
+	self.trait_registry:revert()
+	rawset(self, "__shadow", nil)
+end
+
 function TypeCheckerState:enter_block()
 	self.block_level = self.block_level + 1
 end
@@ -3611,6 +3655,8 @@ function TypeCheckerState:speculate(fn)
 		if ok then
 			-- flattens all our changes back on to self
 			typechecker_state:commit()
+		else
+			typechecker_state:revert()
 		end
 		typechecker_state = self
 		evaluator.typechecker_state = self
