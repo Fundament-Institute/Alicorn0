@@ -44,13 +44,15 @@ local name_array = string_array
 local typed = terms.typed_term
 
 ---@param luafunc function
----@param parameters ArrayValue -- example usage: name_array("#wrap-TODO1", "#wrap-TODO2")
 ---@return value
-local function luatovalue(luafunc, parameters)
-	local len = parameters:len()
+local function luatovalue(luafunc)
+	local luafunc_debug = debug.getinfo(luafunc, "u")
+	local parameters = name_array()
+	local len = luafunc_debug.nparams
 	local new_body = typed_array()
 
 	for i = 1, len do
+		parameters:append(debug.getlocal(luafunc, i))
 		new_body:append(typed.bound_variable(i + 1))
 	end
 
@@ -70,9 +72,15 @@ local function FunctionRelation(srel)
 	return {
 		debug_name = "FunctionRelation(" .. srel.debug_name .. ")",
 		srel = srel,
-		Rel = luatovalue(function(a, b) end, name_array("a", "b")),
-		refl = luatovalue(function(a) end, name_array("a")),
-		antisym = luatovalue(function(a, b, r1, r2) end, name_array("a", "b", "r1", "r2")),
+		Rel = luatovalue(function(a, b)
+			error("nyi")
+		end),
+		refl = luatovalue(function(a)
+			error("nyi")
+		end),
+		antisym = luatovalue(function(a, b, r1, r2)
+			error("nyi")
+		end),
 		constrain = luatovalue(function(val, use)
 			local u = value.neutral(
 				neutral_value.free(free.unique({ debug = "FunctionRelation(" .. srel.debug_name .. ").constrain" }))
@@ -82,7 +90,7 @@ local function FunctionRelation(srel)
 			local applied_use = U.tag("apply_value", { val = val, use = use }, apply_value, use, u)
 
 			typechecker_state:queue_constrain(applied_val, srel, applied_use, "FunctionRelation inner")
-		end, name_array("val", "use")),
+		end),
 	}
 end
 FunctionRelation = U.memoize(FunctionRelation)
@@ -98,9 +106,15 @@ local function IndepTupleRelation(...)
 	return {
 		debug_name = "IndepTupleRelation(" .. table.concat(names, ", ") .. ")",
 		srels = args,
-		Rel = luatovalue(function(a, b) end, name_array("a", "b")),
-		refl = luatovalue(function(a) end, name_array("a")),
-		antisym = luatovalue(function(a, b, r1, r2) end, name_array("a", "b", "r1", "r2")),
+		Rel = luatovalue(function(a, b)
+			error("nyi")
+		end),
+		refl = luatovalue(function(a)
+			error("nyi")
+		end),
+		antisym = luatovalue(function(a, b, r1, r2)
+			error("nyi")
+		end),
 		constrain = luatovalue(
 			---constrain tuple elements
 			---@param val value
@@ -125,8 +139,7 @@ local function IndepTupleRelation(...)
 						)
 					end
 				end
-			end,
-			name_array("val", "use")
+			end
 		),
 	}
 end
@@ -136,9 +149,15 @@ IndepTupleRelation = U.memoize(IndepTupleRelation)
 local effect_row_srel
 effect_row_srel = {
 	debug_name = "effect_row_srel",
-	Rel = luatovalue(function(a, b) end, name_array("a", "b")),
-	refl = luatovalue(function(a) end, name_array("a")),
-	antisym = luatovalue(function(a, b, r1, r2) end, name_array("a", "b", "r1", "r2")),
+	Rel = luatovalue(function(a, b)
+		error("nyi")
+	end),
+	refl = luatovalue(function(a)
+		error("nyi")
+	end),
+	antisym = luatovalue(function(a, b, r1, r2)
+		error("nyi")
+	end),
 
 	constrain = luatovalue(
 		---@param val value
@@ -165,8 +184,7 @@ effect_row_srel = {
 				end
 				error "NYI effect polymorphism"
 			end
-		end,
-		name_array("val", "use")
+		end
 	),
 }
 
@@ -177,9 +195,15 @@ local UniverseOmegaRelation
 local enum_desc_srel
 enum_desc_srel = {
 	debug_name = "enum_desc_srel",
-	Rel = luatovalue(function(a, b) end, name_array("a", "b")),
-	refl = luatovalue(function(a) end, name_array("a")),
-	antisym = luatovalue(function(a, b, r1, r2) end, name_array("a", "b", "r1", "r2")),
+	Rel = luatovalue(function(a, b)
+		error("nyi")
+	end),
+	refl = luatovalue(function(a)
+		error("nyi")
+	end),
+	antisym = luatovalue(function(a, b, r1, r2)
+		error("nyi")
+	end),
 
 	constrain = luatovalue(
 		---@param val value
@@ -196,8 +220,7 @@ enum_desc_srel = {
 			for name, use_type in use_variants:pairs() do
 				typechecker_state:queue_subtype(val_variants:get(name), use_type, "enum variant")
 			end
-		end,
-		name_array("val", "use")
+		end
 	),
 }
 
@@ -207,13 +230,13 @@ local TupleDescRelation = {
 	debug_name = "TupleDescRelation",
 	Rel = luatovalue(function(a, b)
 		error("nyi")
-	end, name_array("a", "b")),
+	end),
 	refl = luatovalue(function(a)
 		error("nyi")
-	end, name_array("a")),
+	end),
 	antisym = luatovalue(function(a, b, r1, r2)
 		error("nyi")
-	end, name_array("a", "b", "r1", "r2")),
+	end),
 	constrain = luatovalue(
 		---@param val value
 		---@param use value
@@ -240,8 +263,7 @@ local TupleDescRelation = {
 					end
 				end
 			end
-		end,
-		name_array("val", "use")
+		end
 	),
 }
 
@@ -2472,9 +2494,15 @@ local Variance = {}
 ---@type SubtypeRelation
 UniverseOmegaRelation = {
 	debug_name = "UniverseOmegaRelation",
-	Rel = luatovalue(function(a, b) end, name_array("a", "b")),
-	refl = luatovalue(function(a) end, name_array("a")),
-	antisym = luatovalue(function(a, b, r1, r2) end, name_array("a", "b", "r1", "r2")),
+	Rel = luatovalue(function(a, b)
+		error("nyi")
+	end),
+	refl = luatovalue(function(a)
+		error("nyi")
+	end),
+	antisym = luatovalue(function(a, b, r1, r2)
+		error("nyi")
+	end),
 	constrain = luatovalue(function(val, use)
 		local ok, err = U.tag(
 			"check_concrete",
@@ -2486,7 +2514,7 @@ UniverseOmegaRelation = {
 		if not ok then
 			error(err)
 		end
-	end, name_array("val", "use")),
+	end),
 }
 
 ---@class OrderedSet
