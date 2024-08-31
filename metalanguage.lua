@@ -238,7 +238,12 @@ local function custom_traceback(err)
 			local _, fn = debug.getlocal(i, 3)
 			--i = i + 1
 			--info = debug.getinfo(i, "Sfln")
-			s = s .. string.format("\n%s [%s:%d] (%s)", name, info.short_src, info.currentline, pdump(tag))
+			local ok, err = pcall(function()
+				s = s .. string.format("\n%s [%s:%d] (%s)", name, info.short_src, info.currentline, pdump(tag))
+			end)
+			if not ok then
+				s = s .. string.format("\nTRACE FAIL: %s [%s:%d] (%s)", name, info.short_src, info.currentline, err)
+			end
 		else
 			local name = info.name or string.format("<%s:%d>", info.short_src, info.linedefined)
 			local args = {}

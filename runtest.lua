@@ -1,6 +1,40 @@
 --local endTime = os.time() + 3
 --while os.time() < endTime do end
 
+local old_ipairs = ipairs
+function _G.ipairs(t)
+	local mt = getmetatable(t)
+	local mt_ipairs = mt and mt.__ipairs
+	if mt_ipairs then
+		return mt_ipairs(t)
+	else
+		return old_ipairs(t)
+	end
+end
+local old_pairs = pairs
+function _G.pairs(t)
+	local mt = getmetatable(t)
+	local mt_pairs = mt and mt.__pairs
+	if mt_pairs then
+		return mt_pairs(t)
+	else
+		return old_pairs(t)
+	end
+end
+function _G.len(t)
+	local mt = getmetatable(t)
+	local mt_len = mt and mt.__len
+	if mt_len then
+		return mt_len(t)
+	else
+		return #t
+	end
+end
+if not table.unpack then
+	table.unpack = unpack
+end
+require "pretty-printer" -- has side-effect of loading global p()
+
 local startTime = os.clock()
 local checkpointTime = startTime
 local checkpointTime2 = startTime
@@ -8,15 +42,16 @@ local metalanguage = require "./metalanguage"
 local evaluator = require "./evaluator"
 local format = require "./format-adapter"
 local base_env = require "./base-env"
-local p = require "pretty-print".prettyPrint
+--local p = require "pretty-print".prettyPrint
 local terms = require "./terms"
 local exprs = require "./alicorn-expressions"
 local profile = require "./profile"
-local fs = require "fs"
-local path = require "path"
+--local fs = require "fs"
+--local path = require "path"
 
-local argv = process.argv
-local opts = argv[2]
+local argv = arg or process.argv
+local argv_base = arg and 0 or 1
+local opts = argv[argv_base + 1]
 local print_src = false
 local print_ast = false
 local print_inferrable = false
@@ -46,19 +81,23 @@ if opts then
 	if string.find(opts, "p") then
 		profile_run = true
 		profile_flame = false
-		profile_file = argv[3]
-		profile_what = argv[4] or "match"
+		profile_file = argv[argv_base + 2]
+		profile_what = argv[argv_base + 3] or "match"
 	end
 	if string.find(opts, "P") then
 		profile_run = true
 		profile_flame = true
-		profile_file = argv[3]
-		profile_what = argv[4] or "match"
+		profile_file = argv[argv_base + 2]
+		profile_what = argv[argv_base + 3] or "match"
 	end
 end
 
-local filename = path.resolve("testfile.alc")
-local src = fs.readFileSync(filename)
+local filename = "testfile.alc"
+local src_file, err = io.open(filename)
+if not src_file then
+	error(err)
+end
+local src = src_file:read("a")
 
 checkpointTime = os.clock()
 print("Read code")

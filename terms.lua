@@ -120,7 +120,7 @@ function TypecheckingContext:get_name(index)
 	return self.bindings:get(index).name
 end
 function TypecheckingContext:dump_names()
-	for i = 1, #self do
+	for i = 1, self:len() do
 		print(i, self:get_name(i))
 	end
 end
@@ -128,7 +128,7 @@ end
 ---@return string
 function TypecheckingContext:format_names()
 	local msg = ""
-	for i = 1, #self do
+	for i = 1, self:len() do
 		msg = msg .. tostring(i) .. "\t" .. self:get_name(i) .. "\n"
 	end
 	return msg
@@ -178,17 +178,20 @@ function TypecheckingContext:append(name, type, val, anchor)
 	local copy = {
 		bindings = self.bindings:append({ name = name, type = type }),
 		runtime_context = self.runtime_context:append(
-			val or value.neutral(neutral_value.free(free.placeholder(#self + 1, placeholder_debug(name, anchor))))
+			val or value.neutral(neutral_value.free(free.placeholder(self:len() + 1, placeholder_debug(name, anchor))))
 		),
 	}
 	return setmetatable(copy, typechecking_context_mt)
 end
 
+---@return integer
+function TypecheckingContext:len()
+	return self.bindings:len()
+end
+
 typechecking_context_mt = {
 	__index = TypecheckingContext,
-	__len = function(self)
-		return self.bindings:len()
-	end,
+	__len = TypecheckingContext.len,
 }
 
 ---@return TypecheckingContext
