@@ -56,10 +56,12 @@ function PrettyprintingContext:append(name)
 	return setmetatable(copy, prettyprinting_context_mt)
 end
 
-prettyprinting_context_mt.__index = PrettyprintingContext
-function prettyprinting_context_mt:__len()
+function PrettyprintingContext:len()
 	return self.bindings:len()
 end
+
+prettyprinting_context_mt.__index = PrettyprintingContext
+prettyprinting_context_mt.__len = PrettyprintingContext.len
 
 local prettyprinting_context_type =
 	gen.declare_foreign(gen.metatable_equality(prettyprinting_context_mt), "PrettyPrintingContext")
@@ -150,7 +152,7 @@ end
 ---@param members TupleDescFlat[]
 ---@param names string[]?
 local function tuple_type_helper(pp, members, names)
-	local m = #members
+	local m = len(members)
 
 	if m == 0 then
 		return
@@ -162,7 +164,7 @@ local function tuple_type_helper(pp, members, names)
 		names = members[m][1]
 	end
 
-	local n = type(names) == "table" and #names or 0
+	local n = type(names) == "table" and names:len() or 0
 
 	for i, mem in ipairs(members) do
 		if i > 1 then
@@ -303,7 +305,7 @@ local function inferrable_destructure_helper(term, context)
 		-- so we pretty this anyway
 		local name, expr, body = term:unwrap_let()
 		local ok, index = expr:as_bound_variable()
-		local is_destructure = ok and index == #context
+		local is_destructure = ok and index == context:len()
 		if is_destructure then
 			context = context:append(name)
 			return true, true, name, body, context
@@ -311,7 +313,7 @@ local function inferrable_destructure_helper(term, context)
 	elseif term:is_tuple_elim() then
 		local names, subject, body = term:unwrap_tuple_elim()
 		local ok, index = subject:as_bound_variable()
-		local is_destructure = ok and index == #context
+		local is_destructure = ok and index == context:len()
 		if is_destructure then
 			for _, name in ipairs(names) do
 				context = context:append(name)
@@ -339,7 +341,7 @@ local function typed_destructure_helper(term, context)
 		-- so we pretty this anyway
 		local name, expr, body = term:unwrap_let()
 		local ok, index = expr:as_bound_variable()
-		local is_destructure = ok and index == #context
+		local is_destructure = ok and index == context:len()
 		if is_destructure then
 			context = context:append(name)
 			return is_destructure, true, name, body, context
@@ -347,7 +349,7 @@ local function typed_destructure_helper(term, context)
 	elseif term:is_tuple_elim() then
 		local names, subject, _, body = term:unwrap_tuple_elim()
 		local ok, index = subject:as_bound_variable()
-		local is_destructure = ok and index == #context
+		local is_destructure = ok and index == context:len()
 		if is_destructure then
 			for _, name in ipairs(names) do
 				context = context:append(name)
@@ -375,7 +377,7 @@ local function inferrable_tuple_type_flatten(desc, context)
 		return true, {}, 0
 	elseif constructor == DescCons.cons then
 		local elements = arg:unwrap_tuple_cons()
-		if #elements ~= 2 then
+		if elements:len() ~= 2 then
 			return false
 		end
 		local desc = elements[1]
@@ -410,7 +412,7 @@ local function typed_tuple_type_flatten(desc, context)
 		return true, {}, 0
 	elseif constructor == DescCons.cons then
 		local elements = arg:unwrap_tuple_cons()
-		if #elements ~= 2 then
+		if elements:len() ~= 2 then
 			return false
 		end
 		local desc = elements[1]
@@ -444,7 +446,7 @@ local function value_tuple_type_flatten(desc)
 		return true, {}, 0
 	elseif constructor == DescCons.cons then
 		local elements = arg:unwrap_tuple_value()
-		if #elements ~= 2 then
+		if elements:len() ~= 2 then
 			return false
 		end
 		local desc = elements[1]
@@ -537,7 +539,7 @@ function inferrable_term_override_pretty:bound_variable(pp, context)
 
 	pp:_enter()
 
-	if #context >= index then
+	if context:len() >= index then
 		pp:unit(context:get_name(index))
 	else
 		-- TODO: warn on context too short?
@@ -563,7 +565,7 @@ function typed_term_override_pretty:bound_variable(pp, context)
 
 	pp:_enter()
 
-	if #context >= index then
+	if context:len() >= index then
 		pp:unit(context:get_name(index))
 	else
 		-- TODO: warn on context too short?
@@ -692,7 +694,7 @@ function inferrable_term_override_pretty:annotated_lambda(pp, context)
 	if is_tuple_type and is_destructure then
 		---@cast names string[]
 		---@cast members TupleDescFlat[]
-		if #members == 0 then
+		if len(members) == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -768,7 +770,7 @@ function typed_term_override_pretty:lambda(pp, context)
 
 	if is_destructure then
 		---@cast names string[]
-		if #names == 0 then
+		if names:len() == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -822,7 +824,7 @@ function value_override_pretty:closure(pp)
 
 	if is_destructure then
 		---@cast names string[]
-		if #names == 0 then
+		if names:len() == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -901,7 +903,7 @@ function inferrable_term_override_pretty:pi(pp, context)
 	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
 		---@cast param_members TupleDescFlat[]
-		if #param_members == 0 then
+		if len(param_members) == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -946,7 +948,7 @@ function inferrable_term_override_pretty:pi(pp, context)
 		pp:any(result_type, context)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
-		if #result_members == 0 then
+		if len(result_members) == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -1002,7 +1004,7 @@ function inferrable_term_override_pretty:host_function_type(pp, context)
 	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
 		---@cast param_members TupleDescFlat[]
-		if #param_members == 0 then
+		if len(param_members) == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -1047,7 +1049,7 @@ function inferrable_term_override_pretty:host_function_type(pp, context)
 		pp:any(result_type, context)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
-		if #result_members == 0 then
+		if len(result_members) == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -1106,7 +1108,7 @@ function typed_term_override_pretty:pi(pp, context)
 	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
 		---@cast param_members TupleDescFlat[]
-		if #param_members == 0 then
+		if len(param_members) == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -1151,7 +1153,7 @@ function typed_term_override_pretty:pi(pp, context)
 		pp:any(result_type, context)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
-		if #result_members == 0 then
+		if len(result_members) == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -1207,7 +1209,7 @@ function typed_term_override_pretty:host_function_type(pp, context)
 	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
 		---@cast param_members TupleDescFlat[]
-		if #param_members == 0 then
+		if len(param_members) == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -1252,7 +1254,7 @@ function typed_term_override_pretty:host_function_type(pp, context)
 		pp:any(result_type, context)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
-		if #result_members == 0 then
+		if len(result_members) == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -1306,7 +1308,7 @@ function value_override_pretty:pi(pp)
 	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
 		---@cast param_members TupleDescFlat[]
-		if #param_members == 0 then
+		if len(param_members) == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -1351,7 +1353,7 @@ function value_override_pretty:pi(pp)
 		pp:any(result_type)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
-		if #result_members == 0 then
+		if len(result_members) == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -1405,7 +1407,7 @@ function value_override_pretty:host_function_type(pp)
 	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
 		---@cast param_members TupleDescFlat[]
-		if #param_members == 0 then
+		if len(param_members) == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -1450,7 +1452,7 @@ function value_override_pretty:host_function_type(pp)
 		pp:any(result_type)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
-		if #result_members == 0 then
+		if len(result_members) == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -1485,7 +1487,7 @@ function inferrable_term_override_pretty:application(pp, context)
 
 		-- print pretty on certain conditions, or fall back to apply()
 		if
-			(f_is_application or (f_is_typed and f_is_bound_variable and #context >= f_index))
+			(f_is_application or (f_is_typed and f_is_bound_variable and context:len() >= f_index))
 			and (arg:is_tuple_cons() or arg:is_host_tuple_cons())
 		then
 			if f_is_application then
@@ -1566,7 +1568,7 @@ function typed_term_override_pretty:application(pp, context)
 
 		-- print pretty on certain conditions, or fall back to apply()
 		if
-			(f_is_application or (f_is_bound_variable and #context >= f_index))
+			(f_is_application or (f_is_bound_variable and context:len() >= f_index))
 			and (arg:is_tuple_cons() or arg:is_host_tuple_cons())
 		then
 			if f_is_application then
@@ -1795,7 +1797,7 @@ function typed_term_override_pretty:tuple_element_access(pp, context)
 	context = ensure_context(context)
 	local subject_is_bound_variable, subject_index = subject:as_bound_variable()
 
-	if subject_is_bound_variable and #context >= subject_index then
+	if subject_is_bound_variable and context:len() >= subject_index then
 		pp:_enter()
 
 		pp:unit(context:get_name(subject_index))
@@ -1833,7 +1835,7 @@ function typed_term_override_pretty:host_intrinsic(pp, context)
 		-- get first line
 		-- ellipsize further lines
 		local source_print = string.gsub(source_text, "^%c*(%C*)(.*)", function(visible, rest)
-			if #rest > 0 then
+			if len(rest) > 0 then
 				return visible .. " ..."
 			else
 				return visible

@@ -719,7 +719,7 @@ local function expression_symbolhandler(args, name)
 			part = inferrable_term.record_elim(
 				part,
 				name_array(front or name),
-				inferrable_term.bound_variable(#env.typechecking_context + 1)
+				inferrable_term.bound_variable(env.typechecking_context:len() + 1)
 			)
 		end
 		if goal:is_check() then
@@ -990,7 +990,11 @@ collect_tuple = metalanguage.reducer(
 					)
 				end
 				if not ok and type(continue) == "string" then
-					continue = continue .. " (should have " .. ", found " .. tostring(#collected_terms) .. " so far)"
+					continue = continue
+						.. " (should have "
+						.. ", found "
+						.. tostring(collected_terms:len())
+						.. " so far)"
 				end
 			else
 				ok, continue, next_term, syntax, env = syntax:match({
@@ -1071,7 +1075,11 @@ collect_host_tuple = metalanguage.reducer(
 					)
 				end
 				if not ok and type(continue) == "string" then
-					continue = continue .. " (should have " .. ", found " .. tostring(#collected_terms) .. " so far)"
+					continue = continue
+						.. " (should have "
+						.. ", found "
+						.. tostring(collected_terms:len())
+						.. " so far)"
 				end
 			else
 				ok, continue, next_term, syntax, env = syntax:match({
