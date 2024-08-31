@@ -702,6 +702,11 @@ local function gen_array_index_fns(t, value_type)
 			p(key)
 			error("key passed to array indexing is not an integer")
 		end
+		-- puc-rio lua 5.3 ipairs() always produces an iterator that looks for the first nil
+		-- instead of deferring to __ipairs metamethod like in 5.2
+		if key == self.n + 1 then
+			return nil
+		end
 		if key < 1 or key > self.n then
 			p(key, self.n)
 			error("key passed to array indexing is out of bounds")
