@@ -1,10 +1,8 @@
 -- get new version of let and do working with terms
 
-local metalanguage = require "./metalanguage"
--- local conexpr = require './contextual-exprs'
--- local types = require "./typesystem"
+local metalanguage = require "metalanguage"
 
-local terms = require "./terms"
+local terms = require "terms"
 local expression_goal = terms.expression_goal
 local runtime_context = terms.runtime_context
 --local typechecking_context = terms.typechecking_context
@@ -19,7 +17,7 @@ local value = terms.value
 --local host_environment_type = terms.host_environment_type
 --local host_inferrable_term_type = terms.host_inferrable_term_type
 
-local gen = require "./terms-generators"
+local gen = require "terms-generators"
 local array = gen.declare_array
 --local checkable_array = array(checkable_term)
 local inferrable_array = array(inferrable_term)
@@ -31,14 +29,13 @@ local name_array = array(gen.builtin_string)
 local param_info_explicit = value.param_info(value.visibility(visibility.explicit))
 local result_info_pure = value.result_info(result_info(purity.pure))
 
-local evaluator = require "./evaluator"
+local evaluator = require "evaluator"
 local const_combinator = evaluator.const_combinator
 local infer = evaluator.infer
 -- BUG: do not uncomment this, as speculation relies on changing evaluator.typechecking_state, which is masked by the local
 --local typechecker_state = evaluator.typechecker_state
 
---local p = require "pretty-print".prettyPrint
-local U = require "./alicorn-utils"
+local U = require "alicorn-utils"
 
 local semantic_error_mt = {
 	__tostring = function(self)
@@ -1240,6 +1237,6 @@ local alicorn_expressions = {
 	eval = eval,
 	eval_block = eval_block,
 }
-local internals_interface = require "./internals-interface"
+local internals_interface = require "internals-interface"
 internals_interface.alicorn_expressions = alicorn_expressions
 return alicorn_expressions

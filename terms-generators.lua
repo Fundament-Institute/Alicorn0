@@ -1,4 +1,4 @@
-local derivers = require "./derivers"
+local derivers = require "derivers"
 
 -- record and enum are nominative types.
 -- this means that two record types, given the same arguments, are distinct.
@@ -841,6 +841,6 @@ local terms_gen = {
 		return true
 	end, "any"),
 }
-local internals_interface = require "./internals-interface"
+local internals_interface = require "internals-interface"
 internals_interface.terms_gen = terms_gen
 return terms_gen

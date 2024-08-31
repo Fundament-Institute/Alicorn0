@@ -1,6 +1,6 @@
-local derivers = require "./derivers"
+local derivers = require "derivers"
 local eq = derivers.eq
-local gen = require "./terms-generators"
+local gen = require "terms-generators"
 
 local mytype1 = gen.declare_enum("mytype1", {
 	{ "foo" },

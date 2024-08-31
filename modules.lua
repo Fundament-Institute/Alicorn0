@@ -1,8 +1,8 @@
-local types = require "./typesystem"
-local evaluator = require "./alicorn-evaluator"
-local environment = require "./environment"
-local metalang = require "./metalanguage"
-local treemap = require "./lazy-prefix-tree"
+local types = require "typesystem"
+local evaluator = require "alicorn-evaluator"
+local environment = require "environment"
+local metalanguage = require "metalanguage"
+local trie = require "lazy-prefix-tree"
 
 local module_type = {
 	kind = {
@@ -64,8 +64,8 @@ end
 
 local function use_mod_op_impl(syntax, env)
 	local ok, modval, env = syntax:match({
-		evaluator.evaluates_args(metalang.accept_handler, env),
-	}, metalang.failure_handler, nil)
+		evaluator.evaluates_args(metalanguage.accept_handler, env),
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, modval
 	end
@@ -77,8 +77,8 @@ end
 
 local function open_mod_op_impl(syntax, env)
 	local ok, modval, env = syntax:match({
-		evaluator.evaluates_args(metalang.accept_handler, env),
-	}, metalang.failure_handler, nil)
+		evaluator.evaluates_args(metalanguage.accept_handler, env),
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, modval
 	end
@@ -90,11 +90,11 @@ end
 
 local function get_op_impl(syntax, env)
 	local ok, modval, env, name = syntax:match({
-		metalang.listmatch(
-			metalang.accept_handler,
-			{ evaluator.evaluates(metalang.accept_handler, env), metalang.issymbol(metalang.accept_handler) }
-		),
-	}, metalang.failure_handler, nil)
+		metalanguage.listmatch(metalanguage.accept_handler, {
+			evaluator.evaluates(metalanguage.accept_handler, env),
+			metalanguage.issymbol(metalanguage.accept_handler),
+		}),
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, modval
 	end
@@ -108,8 +108,8 @@ end
 local function mod_op_impl(syntax, env)
 	local childenv = env:child_scope()
 	local ok, val, childenv = syntax:match({
-		evaluator.block(metalang.accept_handler, childenv),
-	}, metalang.failure_handler, nil)
+		evaluator.block(metalanguage.accept_handler, childenv),
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, val
 	end
@@ -123,7 +123,7 @@ local function build_mod(tab)
 	for k, v in pairs(tab) do
 		tmp[k] = { kind = "reusable", val = v }
 	end
-	local val = { values = treemap.build(tmp) }
+	local val = { values = trie.build(tmp) }
 	if val.values == nil then
 		error "tried to build a module that went to nil"
 	end

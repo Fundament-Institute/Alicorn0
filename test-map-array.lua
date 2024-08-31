@@ -1,4 +1,4 @@
-local gen = require "./terms-generators"
+local gen = require "terms-generators"
 local map = gen.declare_map
 local array = gen.declare_array
 

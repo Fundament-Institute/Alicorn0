@@ -1,5 +1,5 @@
-local fibbuf = require("./fibonacci-buffer")
-local gen = require("./terms-generators")
+local fibbuf = require "fibonacci-buffer"
+local gen = require "terms-generators"
 local typechecking_context_type
 local runtime_context_type
 local DescCons

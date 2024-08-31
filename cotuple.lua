@@ -1,10 +1,8 @@
-local types = require "./typesystem"
-local modules = require "./modules"
-local evaluator = require "./alicorn-evaluator"
-local metalang = require "./metalanguage"
-local utils = require "./reducer-utils"
-
-local p = require "pretty-print".prettyPrint
+local types = require "typesystem"
+local modules = require "modules"
+local evaluator = require "alicorn-evaluator"
+local metalanguage = require "metalanguage"
+local utils = require "reducer-utils"
 
 local function cotuple_construct(t, idx, val)
 	if t.kind == types.cotuple_kind then
@@ -23,14 +21,14 @@ end
 
 local function new_cotuple_op_impl(syntax, env)
 	local ok, cotuple_type_syntax, constructor_syntax = syntax:match({
-		metalang.ispair(metalang.accept_handler),
-	}, metalang.failure_handler, nil)
+		metalanguage.ispair(metalanguage.accept_handler),
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, cotuple_type_syntax
 	end
 	local ok, cotuple_type_val, env = cotuple_type_syntax:match({
-		evaluator.evaluates(metalang.accept_handler, env),
-	}, metalang.failure_handler, nil)
+		evaluator.evaluates(metalanguage.accept_handler, env),
+	}, metalanguage.failure_handler, nil)
 	if cotuple_type_val.type ~= types.type then
 		return false, "first argument of cotuple construction must evaluate to a type"
 	end
@@ -42,12 +40,12 @@ local function new_cotuple_op_impl(syntax, env)
 		return ok, cotuple_type
 	end
 	local ok, constructor_idx_val, constructor_arg = constructor_syntax:match({
-		metalang.listmatch(
-			metalang.accept_handler,
-			metalang.isvalue(metalang.accept_handler),
+		metalanguage.listmatch(
+			metalanguage.accept_handler,
+			metalanguage.isvalue(metalanguage.accept_handler),
 			evaluator.evaluates(utils.accept_with_env, env)
 		),
-	}, metalang.failure_handler, nil)
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, constructor_idx_val
 	end
@@ -66,8 +64,8 @@ end
 
 local function cotuple_type_impl(syntax, env)
 	local ok, typeargs, env = syntax:match({
-		evaluator.collect_tuple(metalang.accept_handler, env),
-	}, metalang.failure_handler, nil)
+		evaluator.collect_tuple(metalanguage.accept_handler, env),
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, typeargs
 	end
@@ -81,8 +79,8 @@ end
 
 local function cotuple_dispatch_impl(syntax, env)
 	local ok, subject_eval, tail = syntax:match({
-		metalang.listtail(metalang.accept_handler, evaluator.evaluates(utils.accept_with_env, env)),
-	}, metalang.failure_handler, nil)
+		metalanguage.listtail(metalanguage.accept_handler, evaluator.evaluates(utils.accept_with_env, env)),
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, subject_eval
 	end
@@ -95,15 +93,15 @@ local function cotuple_dispatch_impl(syntax, env)
 	-- TODO: check that there aren't too many clauses?
 	for i = 0, subject.val.variant do
 		ok, clause, tail = tail:match({
-			metalang.ispair(metalang.accept_handler),
-		}, metalang.failure_handler, nil)
+			metalanguage.ispair(metalanguage.accept_handler),
+		}, metalanguage.failure_handler, nil)
 		if not ok then
 			return ok, clause
 		end
 	end
 	local ok, name, tail = clause:match({
-		metalang.listtail(metalang.accept_handler, metalang.issymbol(metalang.accept_handler)),
-	}, metalang.failure_handler, nil)
+		metalanguage.listtail(metalanguage.accept_handler, metalanguage.issymbol(metalanguage.accept_handler)),
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, name
 	end
@@ -113,8 +111,8 @@ local function cotuple_dispatch_impl(syntax, env)
 	childenv = childenv:bind_local(name, { val = subject.val.arg, type = subject.type.params[subject.val.variant + 1] })
 	-- eval consequent in child scope
 	local ok, val, childenv = tail:match({
-		evaluator.block(metalang.accept_handler, childenv),
-	}, metalang.failure_handler, nil)
+		evaluator.block(metalanguage.accept_handler, childenv),
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, val
 	end
@@ -128,8 +126,8 @@ local function cotuple_flow_impl(syntax, env)
 	-- re-evaluate the subject every loop.
 	-- but maybe shared behavior can be factored out
 	local ok, subject_eval, tail = syntax:match({
-		metalang.listtail(metalang.accept_handler, evaluator.evaluates(utils.accept_with_env, env)),
-	}, metalang.failure_handler, nil)
+		metalanguage.listtail(metalanguage.accept_handler, evaluator.evaluates(utils.accept_with_env, env)),
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, subject_eval
 	end
@@ -143,14 +141,14 @@ local function cotuple_flow_impl(syntax, env)
 	-- every loop is re-interpreted though
 	for i = 1, #subject.type.params - 1 do
 		ok, clause, tail = tail:match({
-			metalang.ispair(metalang.accept_handler),
-		}, metalang.failure_handler, nil)
+			metalanguage.ispair(metalanguage.accept_handler),
+		}, metalanguage.failure_handler, nil)
 		if not ok then
 			return ok, clause
 		end
 		local ok, name, block = clause:match({
-			metalang.listtail(metalang.accept_handler, metalang.issymbol(metalang.accept_handler)),
-		}, metalang.failure_handler, nil)
+			metalanguage.listtail(metalanguage.accept_handler, metalanguage.issymbol(metalanguage.accept_handler)),
+		}, metalanguage.failure_handler, nil)
 		if not ok then
 			return ok, name
 		end
@@ -158,8 +156,8 @@ local function cotuple_flow_impl(syntax, env)
 	end
 	-- make sure this is the end
 	local ok, err = tail:match({
-		metalang.isnil(metalang.accept_handler),
-	}, metalang.failure_handler, nil)
+		metalanguage.isnil(metalanguage.accept_handler),
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, err
 	end
@@ -172,8 +170,8 @@ local function cotuple_flow_impl(syntax, env)
 			type = subject.type.params[subject.val.variant + 1],
 		})
 		local ok, new_subject, childenv = block:match({
-			evaluator.block(metalang.accept_handler, childenv),
-		}, metalang.failure_handler, nil)
+			evaluator.block(metalanguage.accept_handler, childenv),
+		}, metalanguage.failure_handler, nil)
 		if not ok then
 			return ok, new_subject
 		end

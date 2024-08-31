@@ -1,14 +1,11 @@
-local environment = require "./environment"
-local treemap = require "./lazy-prefix-tree"
---local types = require "./typesystem"
-local metalang = require "./metalanguage"
-local utils = require "./reducer-utils"
-local exprs = require "./alicorn-expressions"
-local terms = require "./terms"
-local gen = require "./terms-generators"
-local evaluator = require "./evaluator"
-
---local p = require "pretty-print".prettyPrint
+local environment = require "environment"
+local trie = require "lazy-prefix-tree"
+local metalanguage = require "metalanguage"
+local utils = require "reducer-utils"
+local exprs = require "alicorn-expressions"
+local terms = require "terms"
+local gen = require "terms-generators"
+local evaluator = require "evaluator"
 
 local value = terms.value
 local typed = terms.typed_term
@@ -35,16 +32,16 @@ end
 ---@type lua_operative
 local function let_bind(syntax, env)
 	local ok, name, tail = syntax:match({
-		metalang.listtail(
-			metalang.accept_handler,
-			metalang.oneof(
-				metalang.accept_handler,
-				metalang.issymbol(metalang.accept_handler),
-				metalang.list_many(metalang.accept_handler, metalang.issymbol(metalang.accept_handler))
+		metalanguage.listtail(
+			metalanguage.accept_handler,
+			metalanguage.oneof(
+				metalanguage.accept_handler,
+				metalanguage.issymbol(metalanguage.accept_handler),
+				metalanguage.list_many(metalanguage.accept_handler, metalanguage.issymbol(metalanguage.accept_handler))
 			),
-			metalang.symbol_exact(metalang.accept_handler, "=")
+			metalanguage.symbol_exact(metalanguage.accept_handler, "=")
 		),
-	}, metalang.failure_handler, nil)
+	}, metalanguage.failure_handler, nil)
 
 	if not ok then
 		return false, name
@@ -52,8 +49,8 @@ local function let_bind(syntax, env)
 
 	local expr
 	ok, expr = tail:match({
-		metalang.listmatch(metalang.accept_handler, metalang.any(metalang.accept_handler)),
-	}, metalang.failure_handler)
+		metalanguage.listmatch(metalanguage.accept_handler, metalanguage.any(metalanguage.accept_handler)),
+	}, metalanguage.failure_handler)
 	if not ok then
 		expr = tail
 	end
@@ -61,7 +58,7 @@ local function let_bind(syntax, env)
 	local bind
 	ok, bind = expr:match({
 		exprs.inferred_expression(utils.accept_with_env, env),
-	}, metalang.failure_handler, nil)
+	}, metalanguage.failure_handler, nil)
 
 	if not ok then
 		return false, bind
@@ -105,10 +102,10 @@ end
 ---@param env Environment
 ---@return Matcher
 local function record_threaded_element(env)
-	return metalang.listmatch(
+	return metalanguage.listmatch(
 		record_threaded_element_acceptor,
-		metalang.issymbol(metalang.accept_handler),
-		metalang.symbol_exact(metalang.accept_handler, "="),
+		metalanguage.issymbol(metalanguage.accept_handler),
+		metalanguage.symbol_exact(metalanguage.accept_handler, "="),
 		exprs.inferred_expression(utils.accept_with_env, env)
 	)
 end
@@ -116,8 +113,8 @@ end
 ---@type lua_operative
 local function record_build(syntax, env)
 	local ok, defs, env = syntax:match({
-		metalang.list_many_fold(metalang.accept_handler, record_threaded_element, env),
-	}, metalang.failure_handler, nil)
+		metalanguage.list_many_fold(metalanguage.accept_handler, record_threaded_element, env),
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, defs
 	end
@@ -131,15 +128,15 @@ end
 ---@type lua_operative
 local function intrinsic(syntax, env)
 	local ok, str_env, syntax = syntax:match({
-		metalang.listtail(
-			metalang.accept_handler,
+		metalanguage.listtail(
+			metalanguage.accept_handler,
 			exprs.expression(
 				utils.accept_with_env,
 				exprs.ExpressionArgs.new(terms.expression_goal.check(value.host_string_type), env)
 			),
-			metalang.symbol_exact(metalang.accept_handler, ":")
+			metalanguage.symbol_exact(metalanguage.accept_handler, ":")
 		),
-	}, metalang.failure_handler, nil)
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, str_env
 	end
@@ -148,8 +145,8 @@ local function intrinsic(syntax, env)
 		error "env nil in base-env.intrinsic"
 	end
 	local ok, type_env = syntax:match({
-		metalang.listmatch(metalang.accept_handler, exprs.inferred_expression(utils.accept_with_env, env)),
-	}, metalang.failure_handler, nil)
+		metalanguage.listmatch(metalanguage.accept_handler, exprs.inferred_expression(utils.accept_with_env, env)),
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, type_env
 	end
@@ -162,7 +159,7 @@ local function intrinsic(syntax, env)
 		env
 end
 
-local pure_ascribed_name = metalang.reducer(
+local pure_ascribed_name = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
@@ -171,13 +168,13 @@ local pure_ascribed_name = metalang.reducer(
 	---@return Environment?
 	function(syntax, env)
 		local ok, name, type_env = syntax:match({
-			metalang.listmatch(
-				metalang.accept_handler,
-				metalang.issymbol(metalang.accept_handler),
-				metalang.symbol_exact(metalang.accept_handler, ":"),
+			metalanguage.listmatch(
+				metalanguage.accept_handler,
+				metalanguage.issymbol(metalanguage.accept_handler),
+				metalanguage.symbol_exact(metalanguage.accept_handler, ":"),
 				exprs.inferred_expression(utils.accept_with_env, env)
 			),
-		}, metalang.failure_handler, nil)
+		}, metalanguage.failure_handler, nil)
 		if not ok then
 			return ok, name
 		end
@@ -187,7 +184,7 @@ local pure_ascribed_name = metalang.reducer(
 	"pure_ascribed_name"
 )
 
-local ascribed_name = metalang.reducer(
+local ascribed_name = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@param prev inferrable
@@ -216,7 +213,7 @@ local ascribed_name = metalang.reducer(
 		---@cast prev_binding -string
 		env = env:bind_local(terms.binding.tuple_elim(names, prev_binding))
 		local ok, name, val, env =
-			syntax:match({ pure_ascribed_name(metalang.accept_handler, env) }, metalang.failure_handler, nil)
+			syntax:match({ pure_ascribed_name(metalanguage.accept_handler, env) }, metalanguage.failure_handler, nil)
 		if not ok then
 			return ok, name
 		end
@@ -230,7 +227,7 @@ local ascribed_name = metalang.reducer(
 	"ascribed_name"
 )
 
-local curry_segment = metalang.reducer(
+local curry_segment = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
@@ -240,7 +237,7 @@ local curry_segment = metalang.reducer(
 		--print("start env: " .. tostring(env))
 
 		local ok, env = syntax:match({
-			metalang.list_many_fold(function(_, vals, thread)
+			metalanguage.list_many_fold(function(_, vals, thread)
 				return true, thread.env
 			end, function(thread)
 				--print("type_env: " .. tostring(thread.env))
@@ -256,7 +253,7 @@ local curry_segment = metalang.reducer(
 			end, {
 				env = env,
 			}),
-		}, metalang.failure_handler, nil)
+		}, metalanguage.failure_handler, nil)
 
 		if not ok then
 			return ok, env
@@ -274,15 +271,15 @@ local function lambda_curry_impl(syntax, env)
 	local shadow, env = env:enter_block(terms.block_purity.pure)
 
 	local ok, env, tail = syntax:match({
-		metalang.listtail(metalang.accept_handler, curry_segment(metalang.accept_handler, env)),
-	}, metalang.failure_handler, nil)
+		metalanguage.listtail(metalanguage.accept_handler, curry_segment(metalanguage.accept_handler, env)),
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, env
 	end
 
 	local ok, expr, env = tail:match(
-		{ exprs.block(metalang.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, env)) },
-		metalang.failure_handler,
+		{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, env)) },
+		metalanguage.failure_handler,
 		nil
 	)
 	if not ok then
@@ -292,7 +289,7 @@ local function lambda_curry_impl(syntax, env)
 	return true, term, resenv
 end
 
-local tupleof_ascribed_names_inner = metalang.reducer(
+local tupleof_ascribed_names_inner = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
@@ -322,7 +319,7 @@ local tupleof_ascribed_names_inner = metalang.reducer(
 		local close_enough = syntax.anchor
 
 		local ok, names, args, env = syntax:match({
-			metalang.list_many_fold(function(_, vals, thread)
+			metalanguage.list_many_fold(function(_, vals, thread)
 				return true, thread.names, thread.args, thread.env
 			end, function(thread)
 				return ascribed_name(function(_, name, type_val, type_env)
@@ -340,7 +337,7 @@ local tupleof_ascribed_names_inner = metalang.reducer(
 				args = empty,
 				env = env,
 			}),
-		}, metalang.failure_handler, nil)
+		}, metalanguage.failure_handler, nil)
 
 		if not ok then
 			return ok, names
@@ -351,15 +348,15 @@ local tupleof_ascribed_names_inner = metalang.reducer(
 	"tupleof_ascribed_names_inner"
 )
 
-local tupleof_ascribed_names = metalang.reducer(
+local tupleof_ascribed_names = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
 	---@return {names: string[], args: inferrable, env: Environment}|string
 	function(syntax, env)
 		local ok, thread = syntax:match({
-			tupleof_ascribed_names_inner(metalang.accept_handler, env),
-		}, metalang.failure_handler, nil)
+			tupleof_ascribed_names_inner(metalanguage.accept_handler, env),
+		}, metalanguage.failure_handler, nil)
 		if not ok then
 			return ok, thread
 		end
@@ -369,15 +366,15 @@ local tupleof_ascribed_names = metalang.reducer(
 	"tupleof_ascribed_names"
 )
 
-local host_tupleof_ascribed_names = metalang.reducer(
+local host_tupleof_ascribed_names = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
 	---@return {names: string[], args: inferrable, env: Environment}|string
 	function(syntax, env)
 		local ok, thread = syntax:match({
-			tupleof_ascribed_names_inner(metalang.accept_handler, env),
-		}, metalang.failure_handler, nil)
+			tupleof_ascribed_names_inner(metalanguage.accept_handler, env),
+		}, metalanguage.failure_handler, nil)
 		if not ok then
 			return ok, thread
 		end
@@ -387,7 +384,7 @@ local host_tupleof_ascribed_names = metalang.reducer(
 	"host_tupleof_ascribed_names"
 )
 
-local ascribed_segment = metalang.reducer(
+local ascribed_segment = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
@@ -395,14 +392,14 @@ local ascribed_segment = metalang.reducer(
 	function(syntax, env)
 		-- check whether syntax starts with a paren list, or is empty
 		local multi, _, _ = syntax:match({
-			metalang.isnil(metalang.accept_handler),
-			metalang.listtail(metalang.accept_handler, metalang.ispair(metalang.accept_handler)),
-		}, metalang.failure_handler, nil)
+			metalanguage.isnil(metalanguage.accept_handler),
+			metalanguage.listtail(metalanguage.accept_handler, metalanguage.ispair(metalanguage.accept_handler)),
+		}, metalanguage.failure_handler, nil)
 
 		if multi then
 			local ok, thread = syntax:match({
-				tupleof_ascribed_names(metalang.accept_handler, env),
-			}, metalang.failure_handler, nil)
+				tupleof_ascribed_names(metalanguage.accept_handler, env),
+			}, metalanguage.failure_handler, nil)
 
 			if not ok then
 				return ok, thread
@@ -411,8 +408,8 @@ local ascribed_segment = metalang.reducer(
 			return true, { single = false, names = thread.names, args = thread.args, env = thread.env }
 		else
 			local ok, name, type_val, type_env = syntax:match({
-				pure_ascribed_name(metalang.accept_handler, env),
-			}, metalang.failure_handler, nil)
+				pure_ascribed_name(metalanguage.accept_handler, env),
+			}, metalanguage.failure_handler, nil)
 
 			if not ok then
 				return ok, name
@@ -424,7 +421,7 @@ local ascribed_segment = metalang.reducer(
 	"ascribed_segment"
 )
 
-local host_ascribed_segment = metalang.reducer(
+local host_ascribed_segment = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
@@ -432,14 +429,14 @@ local host_ascribed_segment = metalang.reducer(
 	function(syntax, env)
 		-- check whether syntax starts with a paren list
 		local multi, _, _ = syntax:match({
-			metalang.isnil(metalang.accept_handler),
-			metalang.listtail(metalang.accept_handler, metalang.ispair(metalang.accept_handler)),
-		}, metalang.failure_handler, nil)
+			metalanguage.isnil(metalanguage.accept_handler),
+			metalanguage.listtail(metalanguage.accept_handler, metalanguage.ispair(metalanguage.accept_handler)),
+		}, metalanguage.failure_handler, nil)
 
 		if multi then
 			local ok, thread = syntax:match({
-				host_tupleof_ascribed_names(metalang.accept_handler, env),
-			}, metalang.failure_handler, nil)
+				host_tupleof_ascribed_names(metalanguage.accept_handler, env),
+			}, metalanguage.failure_handler, nil)
 
 			if not ok then
 				return ok, thread
@@ -448,8 +445,8 @@ local host_ascribed_segment = metalang.reducer(
 			return true, { single = false, names = thread.names, args = thread.args, env = thread.env }
 		else
 			local ok, name, type_val, type_env = syntax:match({
-				pure_ascribed_name(metalang.accept_handler, env),
-			}, metalang.failure_handler, nil)
+				pure_ascribed_name(metalanguage.accept_handler, env),
+			}, metalanguage.failure_handler, nil)
 
 			if not ok then
 				return ok, name
@@ -470,12 +467,12 @@ local function make_host_func_syntax(effectful)
 		end
 
 		local ok, params_thread, tail = syntax:match({
-			metalang.listtail(
-				metalang.accept_handler,
-				host_ascribed_segment(metalang.accept_handler, env),
-				metalang.symbol_exact(metalang.accept_handler, "->")
+			metalanguage.listtail(
+				metalanguage.accept_handler,
+				host_ascribed_segment(metalanguage.accept_handler, env),
+				metalanguage.symbol_exact(metalanguage.accept_handler, "->")
 			),
-		}, metalang.failure_handler, nil)
+		}, metalanguage.failure_handler, nil)
 		if not ok then
 			return ok, params_thread
 		end
@@ -510,8 +507,11 @@ local function make_host_func_syntax(effectful)
 		end
 
 		local ok, results_thread = tail:match({
-			metalang.listmatch(metalang.accept_handler, host_ascribed_segment(metalang.accept_handler, env)),
-		}, metalang.failure_handler, nil)
+			metalanguage.listmatch(
+				metalanguage.accept_handler,
+				host_ascribed_segment(metalanguage.accept_handler, env)
+			),
+		}, metalanguage.failure_handler, nil)
 		if not ok then
 			return ok, results_thread
 		end
@@ -561,12 +561,12 @@ local function forall_type_impl(syntax, env)
 	end
 
 	local ok, params_thread, tail = syntax:match({
-		metalang.listtail(
-			metalang.accept_handler,
-			ascribed_segment(metalang.accept_handler, env),
-			metalang.symbol_exact(metalang.accept_handler, "->")
+		metalanguage.listtail(
+			metalanguage.accept_handler,
+			ascribed_segment(metalanguage.accept_handler, env),
+			metalanguage.symbol_exact(metalanguage.accept_handler, "->")
 		),
-	}, metalang.failure_handler, nil)
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, params_thread
 	end
@@ -601,8 +601,8 @@ local function forall_type_impl(syntax, env)
 	end
 
 	local ok, results_thread = tail:match({
-		metalang.listmatch(metalang.accept_handler, ascribed_segment(metalang.accept_handler, env)),
-	}, metalang.failure_handler, nil)
+		metalanguage.listmatch(metalanguage.accept_handler, ascribed_segment(metalanguage.accept_handler, env)),
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, results_thread
 	end
@@ -643,8 +643,8 @@ end
 ---@type lua_operative
 local function the_operative_impl(syntax, env)
 	local ok, type_inferrable_term, tail = syntax:match({
-		metalang.listtail(metalang.accept_handler, exprs.inferred_expression(metalang.accept_handler, env)),
-	}, metalang.failure_handler, nil)
+		metalanguage.listtail(metalanguage.accept_handler, exprs.inferred_expression(metalanguage.accept_handler, env)),
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, type_inferrable_term, tail
 	end
@@ -658,18 +658,18 @@ local function the_operative_impl(syntax, env)
 	--print(evaled_type)
 	--print("tail", tail)
 	local ok, val, tail = tail:match({
-		metalang.ispair(metalang.accept_handler),
-	}, metalang.failure_handler, nil)
+		metalanguage.ispair(metalanguage.accept_handler),
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return false, val
 	end
 	local ok, val, env = val:match({
 		exprs.expression(
-			metalang.accept_handler,
+			metalanguage.accept_handler,
 			-- FIXME: do we infer here if evaled_type is stuck / a placeholder?
 			exprs.ExpressionArgs.new(terms.expression_goal.check(evaled_type), env)
 		),
-	}, metalang.failure_handler, nil)
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, val
 	end
@@ -683,13 +683,14 @@ end
 ---apply(fn, args) calls fn with an existing args tuple
 ---@type lua_operative
 local function apply_operative_impl(syntax, env)
-	local ok, fn, tail = syntax:match({ metalang.ispair(metalang.accept_handler) }, metalang.failure_handler, nil)
+	local ok, fn, tail =
+		syntax:match({ metalanguage.ispair(metalanguage.accept_handler) }, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, fn
 	end
 
 	local ok, fn_inferrable_term, env =
-		fn:match({ exprs.inferred_expression(metalang.accept_handler, env) }, metalang.failure_handler, nil)
+		fn:match({ exprs.inferred_expression(metalanguage.accept_handler, env) }, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, fn_inferrable_term
 	end
@@ -706,15 +707,15 @@ local function apply_operative_impl(syntax, env)
 	end
 
 	local ok, args_inferrable_term = tail:match({
-		metalang.listmatch(
-			metalang.accept_handler,
+		metalanguage.listmatch(
+			metalanguage.accept_handler,
 			exprs.expression(
 				utils.accept_with_env,
 				-- FIXME: do we infer here if evaled_type is stuck / a placeholder?
 				exprs.ExpressionArgs.new(terms.expression_goal.check(param_type), env)
 			)
 		),
-	}, metalang.failure_handler, nil)
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, args_inferrable_term
 	end
@@ -728,8 +729,8 @@ end
 ---@type lua_operative
 local function lambda_impl(syntax, env)
 	local ok, thread, tail = syntax:match({
-		metalang.listtail(metalang.accept_handler, ascribed_segment(metalang.accept_handler, env)),
-	}, metalang.failure_handler, nil)
+		metalanguage.listtail(metalanguage.accept_handler, ascribed_segment(metalanguage.accept_handler, env)),
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, thread
 	end
@@ -748,8 +749,8 @@ local function lambda_impl(syntax, env)
 		inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
 	end
 	local ok, expr, env = tail:match(
-		{ exprs.block(metalang.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env)) },
-		metalang.failure_handler,
+		{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env)) },
+		metalanguage.failure_handler,
 		nil
 	)
 	if not ok then
@@ -762,8 +763,8 @@ end
 ---@type lua_operative
 local function lambda_implicit_impl(syntax, env)
 	local ok, thread, tail = syntax:match({
-		metalang.listtail(metalang.accept_handler, ascribed_segment(metalang.accept_handler, env)),
-	}, metalang.failure_handler, nil)
+		metalanguage.listtail(metalanguage.accept_handler, ascribed_segment(metalanguage.accept_handler, env)),
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, thread
 	end
@@ -783,8 +784,8 @@ local function lambda_implicit_impl(syntax, env)
 		inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
 	end
 	local ok, expr, env = tail:match(
-		{ exprs.block(metalang.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env)) },
-		metalang.failure_handler,
+		{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env)) },
+		metalanguage.failure_handler,
 		nil
 	)
 	if not ok then
@@ -797,8 +798,8 @@ end
 ---@type lua_operative
 local function startype_impl(syntax, env)
 	local ok, level_val = syntax:match({
-		metalang.listmatch(metalang.accept_handler, metalang.isvalue(metalang.accept_handler)),
-	}, metalang.failure_handler, nil)
+		metalanguage.listmatch(metalanguage.accept_handler, metalanguage.isvalue(metalanguage.accept_handler)),
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, level_val
 	end
@@ -1010,12 +1011,12 @@ local core_operations = {
 }
 
 -- FIXME: use these once reimplemented with terms
---local modules = require './modules'
---local cotuple = require './cotuple'
+--local modules = require "modules"
+--local cotuple = require "cotuple"
 
 local function create()
 	local env = environment.new_env {
-		nonlocals = treemap.build(core_operations),
+		nonlocals = trie.build(core_operations),
 	}
 	-- p(env)
 	-- p(modules.mod)
@@ -1029,6 +1030,6 @@ local base_env = {
 	tupleof_ascribed_names_inner = tupleof_ascribed_names_inner,
 	create = create,
 }
-local internals_interface = require "./internals-interface"
+local internals_interface = require "internals-interface"
 internals_interface.base_env = base_env
 return base_env

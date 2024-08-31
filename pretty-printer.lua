@@ -2,7 +2,7 @@
 local PrettyPrint = {}
 local PrettyPrint_mt = { __index = PrettyPrint }
 
-local prettyprintable = require "./pretty-printable-trait"
+local pretty_printable = require "pretty-printable-trait"
 
 local kind_field = "kind"
 local hidden_fields = {
@@ -40,7 +40,7 @@ function PrettyPrint:any(unknown, ...)
 			return
 		end
 		local mt = getmetatable(unknown)
-		local via_trait = mt and prettyprintable[mt]
+		local via_trait = mt and pretty_printable[mt]
 		if via_trait and via_trait.print then
 			via_trait.print(unknown, self, ...)
 		elseif mt and mt.__tostring then
@@ -288,7 +288,7 @@ _G["p"] = p
 
 return {
 	PrettyPrint = PrettyPrint,
-	prettyprintable = prettyprintable,
+	pretty_printable = pretty_printable,
 	s = s,
 	p = p,
 }

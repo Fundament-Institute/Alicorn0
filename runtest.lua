@@ -38,16 +38,13 @@ require "pretty-printer" -- has side-effect of loading global p()
 local startTime = os.clock()
 local checkpointTime = startTime
 local checkpointTime2 = startTime
-local metalanguage = require "./metalanguage"
-local evaluator = require "./evaluator"
-local format = require "./format-adapter"
-local base_env = require "./base-env"
---local p = require "pretty-print".prettyPrint
-local terms = require "./terms"
-local exprs = require "./alicorn-expressions"
-local profile = require "./profile"
---local fs = require "fs"
---local path = require "path"
+local metalanguage = require "metalanguage"
+local evaluator = require "evaluator"
+local format = require "format-adapter"
+local base_env = require "base-env"
+local terms = require "terms"
+local exprs = require "alicorn-expressions"
+local profile = require "profile"
 
 local argv = arg or process.argv
 local argv_base = arg and 0 or 1
@@ -181,7 +178,7 @@ if print_typed then
 	print(term:pretty_print(terms.runtime_context()))
 end
 
-local gen = require "./terms-generators"
+local gen = require "terms-generators"
 local set = gen.declare_set
 local unique_id = gen.builtin_table
 evaluator.typechecker_state:flow(

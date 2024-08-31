@@ -214,12 +214,11 @@ local function augment_error(syntax, reducer_name, ok, err_msg, ...)
 	return err_msg, ...
 end
 
---local pdump = require "pretty-print".dump
-local pdump = require("./pretty-printer").s
+local pdump = require "pretty-printer".s
 -- local function pdump(_)
 -- 	return ""
 -- end
-local U = require("./alicorn-utils")
+local U = require "alicorn-utils"
 
 -- this function should be called as an xpcall error handler
 ---@param err table | string
@@ -737,7 +736,7 @@ local list_tail_ends = reducer(
 	"list_tail_ends"
 )
 
-local gen = require "./terms-generators"
+local gen = require "terms-generators"
 local constructed_syntax_type = gen.declare_foreign(gen.metatable_equality(constructed_syntax_mt), "ConstructedSyntax")
 local reducer_type = gen.declare_foreign(gen.metatable_equality(reducer_mt), "Reducer")
 local matcher_type = gen.declare_foreign(function(val)
@@ -772,6 +771,6 @@ local metalanguage = {
 	custom_traceback = custom_traceback,
 	stack_trace = stack_trace,
 }
-local internals_interface = require "./internals-interface"
+local internals_interface = require "internals-interface"
 internals_interface.metalanguage = metalanguage
 return metalanguage

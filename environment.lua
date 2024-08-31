@@ -1,14 +1,14 @@
-local trie = require "./lazy-prefix-tree"
-local fibbuf = require "./fibonacci-buffer"
-local U = require "./alicorn-utils"
+local trie = require "lazy-prefix-tree"
+local fibbuf = require "fibonacci-buffer"
+local U = require "alicorn-utils"
 
-local terms = require "./terms"
+local terms = require "terms"
 local inferrable_term = terms.inferrable_term
 local typechecking_context = terms.typechecking_context
 local module_mt = {}
 
-local eval = require "./evaluator"
-local infer = eval.infer
+local evaluator = require "evaluator"
+local infer = evaluator.infer
 
 local environment_mt
 
@@ -102,7 +102,7 @@ function environment:bind_local(binding)
 		local n = self.typechecking_context:len()
 		local term = inferrable_term.bound_variable(n + 1)
 		local locals = self.locals:put(name, term)
-		local evaled = eval.evaluate(expr_term, self.typechecking_context.runtime_context)
+		local evaled = evaluator.evaluate(expr_term, self.typechecking_context.runtime_context)
 		-- print "doing let binding"
 		-- print(expr:pretty_print())
 		--log_binding(name, expr_type, evaled)
@@ -125,7 +125,7 @@ function environment:bind_local(binding)
 
 		local desc = terms.empty
 		for _ in ipairs(names) do
-			local next_elem_type_mv = eval.typechecker_state:metavariable(self.typechecking_context)
+			local next_elem_type_mv = evaluator.typechecker_state:metavariable(self.typechecking_context)
 			local next_elem_type = next_elem_type_mv:as_value()
 			desc = terms.cons(
 				desc,
@@ -139,7 +139,7 @@ function environment:bind_local(binding)
 		local spec_type = terms.value.tuple_type(desc)
 		local host_spec_type = terms.value.host_tuple_type(desc)
 		local function rest_of_the_tuple_elim(spec_type)
-			eval.typechecker_state:flow(
+			evaluator.typechecker_state:flow(
 				subject_type,
 				self.typechecking_context,
 				spec_type,
@@ -151,12 +151,12 @@ function environment:bind_local(binding)
 			local subject_value = U.tag(
 				"evaluate",
 				{ subject_term = subject_term },
-				eval.evaluate,
+				evaluator.evaluate,
 				subject_term,
 				self.typechecking_context:get_runtime_context()
 			)
 			-- extract subject type and evaled for each elem in tuple
-			local tupletypes, n_elements = eval.infer_tuple_type(spec_type, subject_value)
+			local tupletypes, n_elements = evaluator.infer_tuple_type(spec_type, subject_value)
 
 			--local desc
 			--[[
@@ -186,7 +186,7 @@ function environment:bind_local(binding)
 				local term = inferrable_term.bound_variable(n + i)
 				locals = locals:put(v, term)
 
-				local evaled = eval.index_tuple_value(subject_value, i)
+				local evaled = evaluator.index_tuple_value(subject_value, i)
 				--log_binding(v, tupletypes[i], evaled)
 				typechecking_context = typechecking_context:append(v, tupletypes[i], evaled)
 			end
@@ -199,14 +199,14 @@ function environment:bind_local(binding)
 		end
 		local unique = {}
 		local ok, res1, res2
-		ok, res1 = eval.typechecker_state:speculate(function()
+		ok, res1 = evaluator.typechecker_state:speculate(function()
 			return rest_of_the_tuple_elim(spec_type)
 		end)
 		-- local ok, res = U.tag(
 		-- 	"speculate",
 		-- 	{ unique = unique },
-		-- 	eval.typechecker_state.speculate,
-		-- 	eval.typechecker_state,
+		-- 	evaluator.typechecker_state.speculate,
+		-- 	evaluator.typechecker_state,
 		-- 	function()
 		-- 		return rest_of_the_tuple_elim(spec_type)
 		-- 	end
@@ -214,14 +214,14 @@ function environment:bind_local(binding)
 		if ok then
 			return res1
 		end
-		ok, res2 = eval.typechecker_state:speculate(function()
+		ok, res2 = evaluator.typechecker_state:speculate(function()
 			return rest_of_the_tuple_elim(host_spec_type)
 		end)
 		-- ok, res = U.tag(
 		-- 	"speculate",
 		-- 	{ unique = unique },
-		-- 	eval.typechecker_state.speculate,
-		-- 	eval.typechecker_state,
+		-- 	evaluator.typechecker_state.speculate,
+		-- 	evaluator.typechecker_state,
 		-- 	function()
 		-- 		return rest_of_the_tuple_elim(host_spec_type)
 		-- 	end
@@ -241,7 +241,7 @@ function environment:bind_local(binding)
 		local annotation_type, annotation_usages, annotation_term = infer(param_annotation, self.typechecking_context)
 		--print("binding lambda annotation: (typed term follows)")
 		--print(annotation_term:pretty_print(self.typechecking_context))
-		local evaled = eval.evaluate(annotation_term, self.typechecking_context.runtime_context)
+		local evaled = evaluator.evaluate(annotation_term, self.typechecking_context.runtime_context)
 		local bindings = self.bindings:append(binding)
 		local locals = self.locals:put(param_name, inferrable_term.bound_variable(self.typechecking_context:len() + 1))
 		local typechecking_context = self.typechecking_context:append(param_name, evaled, nil, anchor)
@@ -326,7 +326,7 @@ function environment:enter_block(purity)
 	if purity:is_inherit() then
 		purity = self.purity
 	end
-	eval.typechecker_state:enter_block()
+	evaluator.typechecker_state:enter_block()
 	return { shadowed = self },
 		new_env {
 			-- locals = nil,
@@ -394,7 +394,7 @@ function environment:exit_block(term, shadowed)
 			error("exit_block: unknown kind: " .. binding.kind)
 		end
 	end
-	eval.typechecker_state:exit_block()
+	evaluator.typechecker_state:exit_block()
 
 	return env, wrapped, purity
 end

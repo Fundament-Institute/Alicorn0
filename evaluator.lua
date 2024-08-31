@@ -1,8 +1,8 @@
-local terms = require "./terms"
-local metalanguage = require "./metalanguage"
-local U = require "./alicorn-utils"
+local terms = require "terms"
+local metalanguage = require "metalanguage"
+local U = require "alicorn-utils"
 local runtime_context = terms.runtime_context
-local s = require("./pretty-printer").s
+local s = require "pretty-printer".s
 --local new_typechecking_context = terms.typechecking_context
 --local checkable_term = terms.checkable_term
 --local inferrable_term = terms.inferrable_term
@@ -19,7 +19,7 @@ local host_typed_term_type = terms.host_typed_term_type
 local host_goal_type = terms.host_goal_type
 local host_inferrable_term_type = terms.host_inferrable_term_type
 
-local gen = require "./terms-generators"
+local gen = require "terms-generators"
 local map = gen.declare_map
 local string_typed_map = map(gen.builtin_string, typed_term)
 local string_value_map = map(gen.builtin_string, value)
@@ -30,13 +30,11 @@ local host_array = array(gen.any_lua_type)
 local usage_array = array(gen.builtin_number)
 local string_array = array(gen.builtin_string)
 
-local internals_interface = require "./internals-interface"
+local internals_interface = require "internals-interface"
 
 local param_info_explicit = value.param_info(value.visibility(visibility.explicit))
 local result_info_pure = value.result_info(result_info(purity.pure))
 
---local derivers = require "./derivers"
---local traits = require "./traits"
 local OMEGA = 10
 local typechecker_state
 local evaluate, infer, check, apply_value

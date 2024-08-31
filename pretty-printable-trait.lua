@@ -1,6 +1,6 @@
-local traits = require "./traits"
+local traits = require "traits"
 
-local prettyprintable = traits.declare_trait("prettyprintable")
-prettyprintable:declare_method("print")
+local pretty_printable = traits.declare_trait("pretty_printable")
+pretty_printable:declare_method("print")
 
-return prettyprintable
+return pretty_printable

@@ -1,8 +1,8 @@
-local evaluator = require "./evaluator"
+local evaluator = require "evaluator"
 local profile, profile_n, profile_samples
 
 local function start()
-	profile = require("jit.profile")
+	profile = require "jit.profile"
 	profile_n = 0
 	profile_samples = {}
 	profile.start("li10", function(thread, samples, vmstate)

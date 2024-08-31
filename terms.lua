@@ -8,37 +8,34 @@
 -- typechecker is allowed to fail, typechecker monad carries failures upwards
 --   for now fail fast, but design should vaguely support multiple failures
 
---local metalang = require "./metalanguage"
---local types = require "./typesystem"
+local fibbuf = require "fibonacci-buffer"
 
-local fibbuf = require "./fibonacci-buffer"
+local gen = require "terms-generators"
+local derivers = require "derivers"
 
-local gen = require "./terms-generators"
-local derivers = require "./derivers"
-
-local format = require "./format"
+local format = require "format"
 
 local map = gen.declare_map
 local array = gen.declare_array
 local set = gen.declare_set
 
----@module "./types/checkable"
+---@module "types.checkable"
 local checkable_term = gen.declare_type()
----@module "./types/inferrable"
+---@module "types.inferrable"
 local inferrable_term = gen.declare_type()
----@module "./types/typed"
+---@module "types.typed"
 local typed_term = gen.declare_type()
----@module "./types/free"
+---@module "types.free"
 local free = gen.declare_type()
----@module "./types/placeholder"
+---@module "types.placeholder"
 local placeholder_debug = gen.declare_type()
----@module "./types/value"
+---@module "types.value"
 local value = gen.declare_type()
----@module "./types/neutral_value"
+---@module "types.neutral_value"
 local neutral_value = gen.declare_type()
----@module "./types/binding"
+---@module "types.binding"
 local binding = gen.declare_type()
----@module "./types/expression_goal"
+---@module "types.expression_goal"
 local expression_goal = gen.declare_type()
 
 local runtime_context_mt
@@ -212,7 +209,7 @@ end, "{ name: string }")
 -- implicit arguments are filled in through unification
 -- e.g. fn append(t : star(0), n : nat, xs : Array(t, n), val : t) -> Array(t, n+1)
 --      t and n can be implicit, given the explicit argument xs, as they're filled in by unification
----@module "./types/visibility"
+---@module "types.visibility"
 local visibility = gen.declare_enum("visibility", {
 	{ "explicit" },
 	{ "implicit" },
@@ -582,13 +579,13 @@ free:define_enum("free", {
 -- an effectful function must return a monad
 -- calling an effectful function implicitly inserts a monad bind between the
 -- function return and getting the result of the call
----@module "./types/purity"
+---@module "types.purity"
 local purity = gen.declare_enum("purity", {
 	{ "effectful" },
 	{ "pure" },
 })
 
----@module './types/block_purity'
+---@module 'types.block_purity'
 local block_purity = gen.declare_enum("block_purity", {
 	{ "effectful" },
 	{ "pure" },
@@ -596,7 +593,7 @@ local block_purity = gen.declare_enum("block_purity", {
 	{ "inherit" },
 })
 
----@module "./types/result_info"
+---@module "types.result_info"
 local result_info = gen.declare_record("result_info", { "purity", purity })
 
 ---@class Registry
@@ -624,7 +621,7 @@ local function new_registry(name)
 	return setmetatable({ name = name }, registry_mt)
 end
 
----@module './types/effect_id'
+---@module 'types.effect_id'
 local effect_id = gen.declare_type()
 -- stylua: ignore
 effect_id:define_record("effect_id", {
@@ -640,7 +637,7 @@ semantic_id:define_record("semantic_id", {
 })
 
 --TODO: consider switching to a nicer coterm representation
----@module './types/continuation'
+---@module 'types.continuation'
 local continuation = gen.declare_type()
 -- stylua: ignore
 continuation:define_enum("continuation", {
@@ -976,7 +973,7 @@ local terms = {
 	lua_prog = lua_prog,
 }
 
-local override_prettys = require("./terms-pretty")(terms)
+local override_prettys = require "terms-pretty"(terms)
 local checkable_term_override_pretty = override_prettys.checkable_term_override_pretty
 local inferrable_term_override_pretty = override_prettys.inferrable_term_override_pretty
 local typed_term_override_pretty = override_prettys.typed_term_override_pretty
@@ -996,6 +993,6 @@ placeholder_debug:derive(derivers.pretty_print)
 purity:derive(derivers.pretty_print)
 result_info:derive(derivers.pretty_print)
 
-local internals_interface = require "./internals-interface"
+local internals_interface = require "internals-interface"
 internals_interface.terms = terms
 return terms

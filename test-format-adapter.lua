@@ -1,4 +1,4 @@
-local metalanguage = require "./metalanguage"
+local metalanguage = require "metalanguage"
 local format = require "temp-format"
 
 local function syntax_convert(tree)

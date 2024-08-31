@@ -1,7 +1,7 @@
-local traits = require "./traits"
+local gen = require "terms-generators"
+local traits = require "traits"
 
 local function test_trait()
-	local gen = require("./terms-generators")
 	local quantity = gen.declare_enum("quantity", {
 		{ "erased" },
 		{ "linear" },
