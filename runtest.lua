@@ -1,38 +1,6 @@
 --local endTime = os.time() + 3
 --while os.time() < endTime do end
 
-local old_ipairs = ipairs
-function _G.ipairs(t)
-	local mt = getmetatable(t)
-	local mt_ipairs = mt and mt.__ipairs
-	if mt_ipairs then
-		return mt_ipairs(t)
-	else
-		return old_ipairs(t)
-	end
-end
-local old_pairs = pairs
-function _G.pairs(t)
-	local mt = getmetatable(t)
-	local mt_pairs = mt and mt.__pairs
-	if mt_pairs then
-		return mt_pairs(t)
-	else
-		return old_pairs(t)
-	end
-end
-function _G.len(t)
-	local mt = getmetatable(t)
-	local mt_len = mt and mt.__len
-	if mt_len then
-		return mt_len(t)
-	else
-		return #t
-	end
-end
-if not table.unpack then
-	table.unpack = unpack
-end
 require "pretty-printer" -- has side-effect of loading global p()
 
 local startTime = os.clock()

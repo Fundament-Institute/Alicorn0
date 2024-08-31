@@ -68,7 +68,7 @@ function M.append(list, value)
 	end
 
 	-- If this is a shadowed array it'll trigger the __newindex overload that increments length
-	list[len(list) + 1] = value
+	list[#list + 1] = value
 
 	--[[for i = 1, #list do
 		if list[i] == nil then
@@ -87,8 +87,8 @@ function M.pop(list)
 		error("Modifying a shadowed object! This should never happen!")
 	end
 
-	local value = list[len(list)]
-	rawset(list, len(list), nil)
+	local value = list[#list]
+	rawset(list, #list, nil)
 	if rawget(list, "__length") then
 		rawset(list, "__length", rawget(list, "__length") - 1)
 	end
@@ -99,13 +99,13 @@ end
 local shadowarray_mt = {
 	__index = function(t, k)
 		-- Our length can go below the length of the array we're shadowing, so handle that case
-		if k > len(t) then
+		if k > #t then
 			return nil
 		end
 		return rawget(t, "__shadow")[k]
 	end,
 	__newindex = function(t, k, v)
-		if k == len(t) + 1 then
+		if k == #t + 1 then
 			t.__length = t.__length + 1
 		end
 		rawset(t, k, v)
@@ -145,7 +145,7 @@ end
 ---@return { [integer]: T, __length: integer }
 function M.shadowarray(t)
 	rawset(t, "__lock", true)
-	return setmetatable({ __shadow = t, __length = len(t), __depth = rawget(t, "__depth") or 1 }, shadowarray_mt)
+	return setmetatable({ __shadow = t, __length = #t, __depth = rawget(t, "__depth") or 1 }, shadowarray_mt)
 end
 
 function M.getshadowdepth(t)
@@ -173,7 +173,7 @@ function M.commit(t)
 
 	-- If this is an array, truncate the shadowed array in case we removed elements
 	if length then
-		for i = length + 1, len(original) do
+		for i = length + 1, #original do
 			rawset(original, i, nil)
 		end
 

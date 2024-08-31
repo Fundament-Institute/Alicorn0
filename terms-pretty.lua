@@ -152,7 +152,7 @@ end
 ---@param members TupleDescFlat[]
 ---@param names string[]?
 local function tuple_type_helper(pp, members, names)
-	local m = len(members)
+	local m = #members
 
 	if m == 0 then
 		return
@@ -694,7 +694,7 @@ function inferrable_term_override_pretty:annotated_lambda(pp, context)
 	if is_tuple_type and is_destructure then
 		---@cast names string[]
 		---@cast members TupleDescFlat[]
-		if len(members) == 0 then
+		if #members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -903,7 +903,7 @@ function inferrable_term_override_pretty:pi(pp, context)
 	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
 		---@cast param_members TupleDescFlat[]
-		if len(param_members) == 0 then
+		if #param_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -948,7 +948,7 @@ function inferrable_term_override_pretty:pi(pp, context)
 		pp:any(result_type, context)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
-		if len(result_members) == 0 then
+		if #result_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -1004,7 +1004,7 @@ function inferrable_term_override_pretty:host_function_type(pp, context)
 	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
 		---@cast param_members TupleDescFlat[]
-		if len(param_members) == 0 then
+		if #param_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -1049,7 +1049,7 @@ function inferrable_term_override_pretty:host_function_type(pp, context)
 		pp:any(result_type, context)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
-		if len(result_members) == 0 then
+		if #result_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -1108,7 +1108,7 @@ function typed_term_override_pretty:pi(pp, context)
 	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
 		---@cast param_members TupleDescFlat[]
-		if len(param_members) == 0 then
+		if #param_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -1153,7 +1153,7 @@ function typed_term_override_pretty:pi(pp, context)
 		pp:any(result_type, context)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
-		if len(result_members) == 0 then
+		if #result_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -1209,7 +1209,7 @@ function typed_term_override_pretty:host_function_type(pp, context)
 	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
 		---@cast param_members TupleDescFlat[]
-		if len(param_members) == 0 then
+		if #param_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -1254,7 +1254,7 @@ function typed_term_override_pretty:host_function_type(pp, context)
 		pp:any(result_type, context)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
-		if len(result_members) == 0 then
+		if #result_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -1308,7 +1308,7 @@ function value_override_pretty:pi(pp)
 	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
 		---@cast param_members TupleDescFlat[]
-		if len(param_members) == 0 then
+		if #param_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -1353,7 +1353,7 @@ function value_override_pretty:pi(pp)
 		pp:any(result_type)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
-		if len(result_members) == 0 then
+		if #result_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -1407,7 +1407,7 @@ function value_override_pretty:host_function_type(pp)
 	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names string[]
 		---@cast param_members TupleDescFlat[]
-		if len(param_members) == 0 then
+		if #param_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -1452,7 +1452,7 @@ function value_override_pretty:host_function_type(pp)
 		pp:any(result_type)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
-		if len(result_members) == 0 then
+		if #result_members == 0 then
 			pp:unit(pp:_color())
 			pp:unit("()")
 			pp:unit(pp:_resetcolor())
@@ -1835,7 +1835,7 @@ function typed_term_override_pretty:host_intrinsic(pp, context)
 		-- get first line
 		-- ellipsize further lines
 		local source_print = string.gsub(source_text, "^%c*(%C*)(.*)", function(visible, rest)
-			if len(rest) > 0 then
+			if #rest > 0 then
 				return visible .. " ..."
 			else
 				return visible

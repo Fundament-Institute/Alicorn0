@@ -2432,7 +2432,7 @@ local function execute_program(prog)
 		return prog:unwrap_program_end()
 	elseif prog:is_program_cont() then
 		local effectid, effectarg, cont = prog:unwrap_program_cont()
-		local thr = coroutine.running() or "main"
+		local thr = coroutine.running()
 		local handler = thread_effect_handlers[thr][effectid]
 		return handler(effectarg, cont)
 	end
@@ -2462,7 +2462,7 @@ end
 ---@param handler effect_handler
 ---@return effect_handler
 local function register_effect_handler(effect_id, handler)
-	local thr = coroutine.running() or "main"
+	local thr = coroutine.running()
 	local map = thread_effect_handlers[thr] or {}
 	thread_effect_handlers[thr] = map
 	local old = map[effect_id]
@@ -2534,7 +2534,7 @@ function OrderedSet:insert(t)
 	if self.set[t] ~= nil then
 		return false
 	end
-	self.set[t] = len(self.array) + 1
+	self.set[t] = #self.array + 1
 	U.append(self.array, t)
 	return true
 end
@@ -2545,7 +2545,7 @@ function OrderedSet:insert_aux(t, ...)
 	if self.set[t] ~= nil then
 		return false
 	end
-	self.set[t] = len(self.array) + 1
+	self.set[t] = #self.array + 1
 	U.append(self.array, { t, ... })
 	return true
 end
@@ -2584,10 +2584,10 @@ local function IndexedCollection(indices)
 				)
 			end
 			local args = { ... }
-			assert(len(args) == len(v), "Must have one argument per key extractor")
+			assert(#args == #v, "Must have one argument per key extractor")
 
 			local store = self._index_store[k]
-			for i = 1, len(v) do
+			for i = 1, #v do
 				if store[args[i]] == nil then
 					-- We early return here to make things easier, but if you require that all nodes have a persistent identity,
 					-- you'll have to re-implement the behavior below where it inserts empty tables until the search query succeeds.
@@ -2618,7 +2618,7 @@ local function IndexedCollection(indices)
 			level = -1
 		end
 		local curlevel = U.getshadowdepth(store)
-		if i > len(extractors) then
+		if i > #extractors then
 			if level > 0 then
 				for j = curlevel + 1, level do
 					store = U.shadowarray(store)
@@ -2687,7 +2687,7 @@ local function IndexedCollection(indices)
 	local function store_copy(store)
 		local copy = {}
 		for name, extractors in pairs(indices) do
-			local depth = len(extractors)
+			local depth = #extractors
 			copy[name] = store_copy_inner(depth, store[name])
 		end
 		return copy
@@ -3245,9 +3245,9 @@ function TypeCheckerState:check_value(v, tag, context)
 
 	if v:is_range() then
 		U.append(self.values, { v, TypeCheckerTag.RANGE, context })
-		self.valcheck[v] = len(self.values)
-		self.usecheck[v] = len(self.values)
-		local v_id = len(self.values)
+		self.valcheck[v] = #self.values
+		self.usecheck[v] = #self.values
+		local v_id = #self.values
 
 		local lower_bounds, upper_bounds, relation = v:unwrap_range()
 
@@ -3262,8 +3262,8 @@ function TypeCheckerState:check_value(v, tag, context)
 		return v_id
 	else
 		U.append(self.values, { v, tag, context })
-		checker[v] = len(self.values)
-		return len(self.values)
+		checker[v] = #self.values
+		return #self.values
 	end
 end
 
@@ -3271,7 +3271,7 @@ end
 ---@param context TypecheckingContext
 ---@param trait boolean?
 function TypeCheckerState:metavariable(context, trait)
-	local i = len(self.values) + 1
+	local i = #self.values + 1
 	local mv = setmetatable(
 		-- block level here should probably be inside the context and not inside the metavariable
 		{ value = i, usage = i, trait = trait or false, block_level = self.block_level },
@@ -3462,12 +3462,12 @@ end
 ---@return ...
 function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cause)
 	assert(val and use, "empty val or use passed into constrain!")
-	assert(len(self.pending) == 0, "pending not empty at start of constrain!")
+	assert(#self.pending == 0, "pending not empty at start of constrain!")
 	--TODO: add contexts to queue_work if appropriate
 	--self:queue_work(val, val_context, use, use_context, cause)
 	self:queue_constrain(val, rel, use, cause)
 
-	while len(self.pending) > 0 do
+	while #self.pending > 0 do
 		local item = U.pop(self.pending)
 
 		if item.kind == "constrain" then
@@ -3510,7 +3510,7 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 		end
 	end
 
-	assert(len(self.pending) == 0, "pending was not drained!")
+	assert(#self.pending == 0, "pending was not drained!")
 	return true
 end
 

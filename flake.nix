@@ -29,6 +29,7 @@
             rev = "50936d784474747b4569d988767f1b5bab8bb6d0";
             hash = "sha256-oPU3hwSgL+d/4yW7r7maugDi+LA8QmvFN7ssEgC9B70=";
           };
+          enable52Compat = true;
         };
         alicorn-check = file:
           pkgs.runCommandNoCC "alicorn-check-${file}" { } ''
