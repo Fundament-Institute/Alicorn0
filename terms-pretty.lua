@@ -375,6 +375,9 @@ local function inferrable_tuple_type_flatten(desc, context)
 		return true, {}, 0
 	elseif constructor == DescCons.cons then
 		local elements = arg:unwrap_tuple_cons()
+		if #elements ~= 2 then
+			return false
+		end
 		local desc = elements[1]
 		local f = elements[2]
 		local ok, param_name, _, body, _ = f:as_annotated_lambda()
@@ -407,6 +410,9 @@ local function typed_tuple_type_flatten(desc, context)
 		return true, {}, 0
 	elseif constructor == DescCons.cons then
 		local elements = arg:unwrap_tuple_cons()
+		if #elements ~= 2 then
+			return false
+		end
 		local desc = elements[1]
 		local f = elements[2]
 		local ok, param_name, body = f:as_lambda()
@@ -438,6 +444,9 @@ local function value_tuple_type_flatten(desc)
 		return true, {}, 0
 	elseif constructor == DescCons.cons then
 		local elements = arg:unwrap_tuple_value()
+		if #elements ~= 2 then
+			return false
+		end
 		local desc = elements[1]
 		local f = elements[2]
 		local ok, param_name, code, capture = f:as_closure()

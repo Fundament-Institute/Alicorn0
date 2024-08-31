@@ -1,4 +1,4 @@
-local p = require "pretty-print".prettyPrint
+--local p = require "pretty-print".prettyPrint
 
 local prefix_tree_mt
 

@@ -269,7 +269,7 @@ local TupleDescRelation = {
 ---@param onto ArrayValue
 ---@param with ArrayValue
 local function add_arrays(onto, with)
-	local olen = #onto
+	local olen = onto:len()
 	for i, n in ipairs(with) do
 		local x
 		if i > olen then
@@ -571,9 +571,9 @@ local function substitute_inner(val, mappings, context_len)
 		local sub_relation = substitute_inner(relation, mappings, context_len)
 		return typed_term.range(sub_lower_bounds, sub_upper_bounds, sub_relation)
 	elseif val:is_singleton() then
-		local supertype, value = val:unwrap_singleton()
+		local supertype, val = val:unwrap_singleton()
 		local supertype = substitute_inner(supertype, mappings, context_len)
-		return typed_term.singleton(supertype, value)
+		return typed_term.singleton(supertype, val)
 	else
 		error("Unhandled value kind in substitute_inner: " .. val.kind)
 	end
@@ -918,13 +918,13 @@ local function extract_tuple_elem_type_closures(enum_val, closures)
 	local constructor, arg = enum_val:unwrap_enum_value()
 	local elements = arg:unwrap_tuple_value()
 	if constructor == terms.DescCons.empty then
-		if #elements ~= 0 then
+		if elements:len() ~= 0 then
 			error "enum_value with constructor empty should have no args"
 		end
 		return closures
 	end
 	if constructor == terms.DescCons.cons then
-		if #elements ~= 2 then
+		if elements:len() ~= 2 then
 			error "enum_value with constructor cons should have two args"
 		end
 		extract_tuple_elem_type_closures(elements[1], closures)
@@ -1107,12 +1107,12 @@ local function index_tuple_value(subject, index)
 		local inner = subject:unwrap_neutral()
 		if inner:is_host_tuple_stuck() then
 			local leading, stuck_elem, trailing = inner:unwrap_host_tuple_stuck()
-			if #leading >= index then
+			if leading:len() >= index then
 				return terms.value.host_value(leading[index])
-			elseif #leading + 1 == index then
+			elseif leading:len() + 1 == index then
 				return terms.value.neutral(stuck_elem)
-			elseif #leading + 1 + #trailing >= index then
-				return trailing[index - #leading - 1]
+			elseif leading:len() + 1 + trailing:len() >= index then
+				return trailing[index - leading:len() - 1]
 			else
 				error "tuple index out of bounds"
 			end
@@ -1146,7 +1146,10 @@ local function make_tuple_prefix(subject_type, subject_value)
 				return value.tuple_value(prefix_elements)
 			end
 		else
-			error("make_tuple_prefix, is_tuple_type, subject_value: expected a tuple")
+			error(
+				"make_tuple_prefix, is_tuple_type, subject_value: expected a tuple, instead got "
+					.. subject_value:pretty_print()
+			)
 		end
 	elseif subject_type:is_host_tuple_type() then
 		desc = subject_type:unwrap_host_tuple_type()
@@ -1171,7 +1174,10 @@ local function make_tuple_prefix(subject_type, subject_value)
 				return value.tuple_value(prefix_elements)
 			end
 		else
-			error("make_tuple_prefix, is_host_tuple_type, subject_value: expected a host tuple")
+			error(
+				"make_tuple_prefix, is_host_tuple_type, subject_value: expected a host tuple, instead got "
+					.. subject_value:pretty_print()
+			)
 		end
 	else
 		print(subject_type:pretty_print())
@@ -1197,7 +1203,7 @@ function make_inner_context(desc, make_prefix)
 		local tupletypes, n_elements, tuplevals = make_inner_context(details[1], make_prefix)
 		local f = details[2]
 		local element_type
-		if #tupletypes == #tuplevals then
+		if tupletypes:len() == tuplevals:len() then
 			local prefix = value.tuple_value(tuplevals)
 			element_type = apply_value(f, prefix)
 			if element_type:is_singleton() then
@@ -1259,7 +1265,7 @@ function make_inner_context2(desc_a, make_prefix_a, desc_b, make_prefix_b)
 		local f_b = details_b[2]
 		local element_type_a
 		local element_type_b
-		if #tupletypes_a == #tuplevals then
+		if tupletypes_a:len() == tuplevals:len() then
 			local prefix = value.tuple_value(tuplevals)
 			element_type_a = apply_value(f_a, prefix)
 			element_type_b = apply_value(f_b, prefix)
@@ -1329,7 +1335,7 @@ function infer(
 		local index = inferrable_term:unwrap_bound_variable()
 		local typeof_bound = typechecking_context:get_type(index)
 		local usage_counts = usage_array()
-		local context_size = #typechecking_context
+		local context_size = typechecking_context:len()
 		for _ = 1, context_size do
 			usage_counts:append(0)
 		end
@@ -1352,17 +1358,17 @@ function infer(
 
 		local result_type = U.tag(
 			"substitute_type_variables",
-			{ body_type = body_type, index = #inner_context, block_level = typechecker_state.block_level },
+			{ body_type = body_type, index = inner_context:len(), block_level = typechecker_state.block_level },
 			substitute_type_variables,
 			body_type,
-			#inner_context,
+			inner_context:len(),
 			param_name
 		)
 		--print("INFER ANNOTATED LAMBDA")
 		--print("result_type")
 		--print(result_type:pretty_print(typechecking_context))
-		local body_usages_param = body_usages[#body_usages]
-		local lambda_usages = body_usages:copy(1, #body_usages - 1)
+		local body_usages_param = body_usages[body_usages:len()]
+		local lambda_usages = body_usages:copy(1, body_usages:len() - 1)
 		local lambda_type =
 			value.pi(param_type, value.param_info(value.visibility(param_visibility)), result_type, result_info_pure)
 		local lambda_term = typed_term.lambda(param_name, body_term)
@@ -1477,7 +1483,7 @@ function infer(
 			local el_type, el_usages, el_term = infer(v, typechecking_context)
 			local el_val = evaluate(el_term, typechecking_context.runtime_context)
 			local el_singleton = value.singleton(el_type, el_val)
-			type_data = terms.cons(type_data, substitute_type_variables(el_singleton, #typechecking_context + 1))
+			type_data = terms.cons(type_data, substitute_type_variables(el_singleton, typechecking_context:len() + 1))
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
 		end
@@ -1503,7 +1509,7 @@ function infer(
 			--print(el_type:pretty_print())
 			local el_val = evaluate(el_term, typechecking_context.runtime_context)
 			local el_singleton = value.singleton(el_type, el_val)
-			type_data = terms.cons(type_data, substitute_type_variables(el_singleton, #typechecking_context + 1))
+			type_data = terms.cons(type_data, substitute_type_variables(el_singleton, typechecking_context:len() + 1))
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
 		end
@@ -1546,8 +1552,11 @@ function infer(
 		local new_fields = string_typed_map()
 		for k, v in pairs(fields) do
 			local field_type, field_usages, field_term = infer(v, typechecking_context)
-			type_data =
-				terms.cons(type_data, value.name(k), substitute_type_variables(field_type, #typechecking_context + 1))
+			type_data = terms.cons(
+				type_data,
+				value.name(k),
+				substitute_type_variables(field_type, typechecking_context:len() + 1)
+			)
 			add_arrays(usages, field_usages)
 			new_fields[k] = field_term
 		end
@@ -1951,6 +1960,12 @@ function evaluate(typed_term, runtime_context)
 		local f_value = U.tag("evaluate", { f = f }, evaluate, f, runtime_context)
 		local arg_value = U.tag("evaluate", { arg = arg }, evaluate, arg, runtime_context)
 		return U.notail(apply_value(f_value, arg_value))
+		-- if you want to debug things that go through this call, you may comment above and uncomment below
+		-- but beware that this single change has caused tremendous performance degradation
+		-- on the order of 20x slower
+		--return U.notail(
+		--	U.tag("apply_value", { f_value = f_value, arg_value = arg_value }, apply_value, f_value, arg_value)
+		--)
 	elseif typed_term:is_tuple_cons() then
 		local elements = typed_term:unwrap_tuple_cons()
 		local new_elements = value_array()
@@ -1995,8 +2010,8 @@ function evaluate(typed_term, runtime_context)
 		local inner_context = runtime_context
 		if subject_value:is_tuple_value() then
 			local subject_elements = subject_value:unwrap_tuple_value()
-			if #subject_elements ~= length then
-				print("tuple has only", #subject_elements, "elements but expected", length)
+			if subject_elements:len() ~= length then
+				print("tuple has only", subject_elements:len(), "elements but expected", length)
 				print("tuple being eliminated", subject_value)
 				error("evaluate: mismatch in tuple length from typechecking and evaluation")
 			end
@@ -2005,11 +2020,11 @@ function evaluate(typed_term, runtime_context)
 			end
 		elseif subject_value:is_host_tuple_value() then
 			local subject_elements = subject_value:unwrap_host_tuple_value()
-			local real_length = #subject_elements
+			local real_length = subject_elements:len()
 			if real_length ~= length then
 				print("evaluating typed tuple_elim error")
 				print("got, expected:")
-				print(#subject_elements, length)
+				print(subject_elements:len(), length)
 				print("names:")
 				print(names:pretty_print())
 				print("subject:")
@@ -2292,8 +2307,8 @@ function evaluate(typed_term, runtime_context)
 			for k, v in pairs(internals_interface) do
 				load_env[k] = v
 			end
-			local require_generator = require "require"
-			load_env.require = require_generator(anchor.sourceid)
+			--local require_generator = require "require"
+			--load_env.require = require_generator(anchor.sourceid)
 			local res = assert(load(source_str, "host_intrinsic", "t", load_env))()
 			intrinsic_memo[source_str] = res
 			return value.host_value(res)
@@ -2361,9 +2376,9 @@ function evaluate(typed_term, runtime_context)
 
 		return value.range(lower_acc, upper_acc, reln)
 	elseif typed_term:is_singleton() then
-		local supertype, value = typed_term:unwrap_singleton()
+		local supertype, val = typed_term:unwrap_singleton()
 		local supertype_val = evaluate(supertype, runtime_context)
-		return value.singleton(supertype_val, value)
+		return value.singleton(supertype_val, val)
 	elseif typed_term:is_program_sequence() then
 		local first, rest = typed_term:unwrap_program_sequence()
 		local startprog = evaluate(first, runtime_context)
@@ -2419,7 +2434,7 @@ local function execute_program(prog)
 		return prog:unwrap_program_end()
 	elseif prog:is_program_cont() then
 		local effectid, effectarg, cont = prog:unwrap_program_cont()
-		local thr = coroutine.running()
+		local thr = coroutine.running() or "main"
 		local handler = thread_effect_handlers[thr][effectid]
 		return handler(effectarg, cont)
 	end
@@ -2449,7 +2464,7 @@ end
 ---@param handler effect_handler
 ---@return effect_handler
 local function register_effect_handler(effect_id, handler)
-	local thr = coroutine.running()
+	local thr = coroutine.running() or "main"
 	local map = thread_effect_handlers[thr] or {}
 	thread_effect_handlers[thr] = map
 	local old = map[effect_id]
@@ -2521,7 +2536,7 @@ function OrderedSet:insert(t)
 	if self.set[t] ~= nil then
 		return false
 	end
-	self.set[t] = #self.array + 1
+	self.set[t] = len(self.array) + 1
 	U.append(self.array, t)
 	return true
 end
@@ -2532,7 +2547,7 @@ function OrderedSet:insert_aux(t, ...)
 	if self.set[t] ~= nil then
 		return false
 	end
-	self.set[t] = #self.array + 1
+	self.set[t] = len(self.array) + 1
 	U.append(self.array, { t, ... })
 	return true
 end
@@ -2571,10 +2586,10 @@ local function IndexedCollection(indices)
 				)
 			end
 			local args = { ... }
-			assert(#args == #v, "Must have one argument per key extractor")
+			assert(len(args) == len(v), "Must have one argument per key extractor")
 
 			local store = self._index_store[k]
-			for i = 1, #v do
+			for i = 1, len(v) do
 				if store[args[i]] == nil then
 					-- We early return here to make things easier, but if you require that all nodes have a persistent identity,
 					-- you'll have to re-implement the behavior below where it inserts empty tables until the search query succeeds.
@@ -2605,7 +2620,7 @@ local function IndexedCollection(indices)
 			level = -1
 		end
 		local curlevel = U.getshadowdepth(store)
-		if i > #extractors then
+		if i > len(extractors) then
 			if level > 0 then
 				for j = curlevel + 1, level do
 					store = U.shadowarray(store)
@@ -2674,7 +2689,7 @@ local function IndexedCollection(indices)
 	local function store_copy(store)
 		local copy = {}
 		for name, extractors in pairs(indices) do
-			local depth = #extractors
+			local depth = len(extractors)
 			copy[name] = store_copy_inner(depth, store[name])
 		end
 		return copy
@@ -3004,7 +3019,12 @@ function Reachability:add_constrain_edge(left, right, rel, shallowest_block)
 
 	for _, edge in ipairs(self.constrain_edges:between(left, right)) do
 		if edge.rel ~= rel then
-			error "edges are not unique and have mismatched constraints"
+			error(
+				"edges are not unique and have mismatched constraints: "
+					.. tostring(edge.rel.debug_name)
+					.. " ~= "
+					.. tostring(rel.debug_name)
+			)
 			--TODO: maybe allow between concrete heads
 		end
 		return false
@@ -3227,9 +3247,9 @@ function TypeCheckerState:check_value(v, tag, context)
 
 	if v:is_range() then
 		U.append(self.values, { v, TypeCheckerTag.RANGE, context })
-		self.valcheck[v] = #self.values
-		self.usecheck[v] = #self.values
-		local v_id = #self.values
+		self.valcheck[v] = len(self.values)
+		self.usecheck[v] = len(self.values)
+		local v_id = len(self.values)
 
 		local lower_bounds, upper_bounds, relation = v:unwrap_range()
 
@@ -3244,8 +3264,8 @@ function TypeCheckerState:check_value(v, tag, context)
 		return v_id
 	else
 		U.append(self.values, { v, tag, context })
-		checker[v] = #self.values
-		return #self.values
+		checker[v] = len(self.values)
+		return len(self.values)
 	end
 end
 
@@ -3253,7 +3273,7 @@ end
 ---@param context TypecheckingContext
 ---@param trait boolean?
 function TypeCheckerState:metavariable(context, trait)
-	local i = #self.values + 1
+	local i = len(self.values) + 1
 	local mv = setmetatable(
 		-- block level here should probably be inside the context and not inside the metavariable
 		{ value = i, usage = i, trait = trait or false, block_level = self.block_level },
@@ -3444,12 +3464,12 @@ end
 ---@return ...
 function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cause)
 	assert(val and use, "empty val or use passed into constrain!")
-	assert(#self.pending == 0, "pending not empty at start of constrain!")
+	assert(len(self.pending) == 0, "pending not empty at start of constrain!")
 	--TODO: add contexts to queue_work if appropriate
 	--self:queue_work(val, val_context, use, use_context, cause)
 	self:queue_constrain(val, rel, use, cause)
 
-	while #self.pending > 0 do
+	while len(self.pending) > 0 do
 		local item = U.pop(self.pending)
 
 		if item.kind == "constrain" then
@@ -3492,7 +3512,7 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 		end
 	end
 
-	assert(#self.pending == 0, "pending was not drained!")
+	assert(len(self.pending) == 0, "pending was not drained!")
 	return true
 end
 

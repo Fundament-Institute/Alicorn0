@@ -344,8 +344,15 @@ let host-array-get = lambda_implicit (T : host-type)
 let host-file-read =
 	intrinsic
 		""""
-			local fs = require 'fs'
-			return fs.readFileSync
+			local function file_read(fname)
+				local file, err = io.open(fname)
+				if not file then
+					error(err)
+				end
+				local content = file:read("a")
+				return content
+			end
+			return file_read
 		:
 		host-func-type ((fname : host-string)) -> ((content : host-string))
 

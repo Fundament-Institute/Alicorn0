@@ -569,6 +569,9 @@ local function expression_pairhandler(args, a, b)
 				error(
 					"calling function with implicit args, result type applied on implicit args must be a function type: "
 						.. metaresult:pretty_print()
+						.. "\n@@@tb1@@@\n"
+						.. pi
+						.. "\n@@@tb2@@@"
 				)
 			end
 

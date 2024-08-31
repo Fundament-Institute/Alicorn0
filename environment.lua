@@ -99,7 +99,7 @@ function environment:bind_local(binding)
 			print("expr", expr)
 			error("infer returned a bad type for expr in bind_local")
 		end
-		local n = #self.typechecking_context
+		local n = self.typechecking_context:len()
 		local term = inferrable_term.bound_variable(n + 1)
 		local locals = self.locals:put(name, term)
 		local evaled = eval.evaluate(expr_term, self.typechecking_context.runtime_context)
@@ -171,11 +171,11 @@ function environment:bind_local(binding)
 			]]
 
 			local typechecking_context = self.typechecking_context
-			local n = #typechecking_context
+			local n = typechecking_context:len()
 			local locals = self.locals
 
-			if not (n_elements == #names) then
-				error("attempted to bind " .. n_elements .. " tuple elements to " .. #names .. " variables")
+			if not (n_elements == names:len()) then
+				error("attempted to bind " .. n_elements .. " tuple elements to " .. names:len() .. " variables")
 			end
 
 			for i, v in ipairs(names) do
@@ -243,7 +243,7 @@ function environment:bind_local(binding)
 		--print(annotation_term:pretty_print(self.typechecking_context))
 		local evaled = eval.evaluate(annotation_term, self.typechecking_context.runtime_context)
 		local bindings = self.bindings:append(binding)
-		local locals = self.locals:put(param_name, inferrable_term.bound_variable(#self.typechecking_context + 1))
+		local locals = self.locals:put(param_name, inferrable_term.bound_variable(self.typechecking_context:len() + 1))
 		local typechecking_context = self.typechecking_context:append(param_name, evaled, nil, anchor)
 		return update_env(self, {
 			locals = locals,
@@ -261,7 +261,7 @@ function environment:bind_local(binding)
 			error("program sequence must infer to a program type")
 		end
 		local first_effect_sig, first_base_type = first_type:unwrap_program_type()
-		local n = #self.typechecking_context
+		local n = self.typechecking_context:len()
 		local term = inferrable_term.bound_variable(n + 1)
 		local locals = self.locals:put("#program-sequence", term)
 		local typechecking_context = self.typechecking_context:append("#program-sequence", first_base_type, nil, anchor)
