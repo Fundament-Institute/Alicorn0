@@ -894,4 +894,47 @@ return mktype]],
 	end
 end
 
+function test_unformatter()
+	local filename = "testfile.alc"
+	local unformat = require "./unformatter"
+
+	local f = io.open(filename, "r")
+	if not f then
+		luaunit.fail(filename .. " does not exist")
+	end
+	f:close()
+
+	local src = ""
+	for line in io.lines("testfile.alc") do
+		src = src .. "\n" .. line
+	end
+
+	local function compare_lists(a, b)
+		assert(a.kind == "list")
+		assert(b.kind == "list")
+
+		for i = 1, #a.elements do
+			if not (a.elements[i].kind == b.elements[i].kind) then
+				print(a.elements[i].kind, b.elements[i].kind, i)
+				return false
+			end
+			if a.elements[i].kind == "list" then
+				if not compare_lists(a.elements[i], b.elements[i]) then
+					return false
+				end
+			end
+		end
+
+		return true
+	end
+
+	local formatted = format.parse(src, filename)
+
+	local unformatted = unformat.unformat(formatted)
+
+	local format_verify = format.parse(unformatted, filename)
+
+	luaunit.assertTrue(compare_lists(formatted, format_verify))
+end
+
 os.exit(luaunit.LuaUnit.run())
