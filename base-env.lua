@@ -834,14 +834,11 @@ local function build_wrap(body_fn, type_fn)
 		),
 		value.pi(
 			value.tuple_type(
-				terms.cons(
-					terms.cons(
-						terms.empty,
-						value.closure(
-							pname_type,
-							typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),
-							terms.runtime_context()
-						)
+				terms.tuple_desc(
+					value.closure(
+						pname_type,
+						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),
+						terms.runtime_context()
 					),
 					value.closure(
 						pname_type,
@@ -885,14 +882,11 @@ local function build_unwrap(body_fn, type_fn)
 		),
 		value.pi(
 			value.tuple_type(
-				terms.cons(
-					terms.cons(
-						terms.empty,
-						value.closure(
-							pname_type,
-							typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),
-							terms.runtime_context()
-						)
+				terms.tuple_desc(
+					value.closure(
+						pname_type,
+						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),
+						terms.runtime_context()
 					),
 					value.closure(
 						pname_type,
@@ -934,8 +928,7 @@ local function build_wrapped(body_fn)
 		),
 		value.pi(
 			value.tuple_type(
-				terms.cons(
-					terms.empty,
+				terms.tuple_desc(
 					value.closure(
 						pname_type,
 						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),

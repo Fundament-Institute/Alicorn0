@@ -127,19 +127,23 @@ function environment:bind_local(binding)
 		for _ in ipairs(names) do
 			local next_elem_type_mv = evaluator.typechecker_state:metavariable(self.typechecking_context)
 			local next_elem_type = next_elem_type_mv:as_value()
-			desc = terms.cons(
-				desc,
-				terms.value.closure(
-					"#env-tuple-elim-param",
-					terms.typed_term.literal(next_elem_type),
-					self.typechecking_context.runtime_context
-				)
-			)
+			desc = terms.cons(desc, next_elem_type)
 		end
 		local spec_type = terms.value.tuple_type(desc)
 		local host_spec_type = terms.value.host_tuple_type(desc)
 		local function rest_of_the_tuple_elim(spec_type)
-			evaluator.typechecker_state:flow(
+			-- evaluator.typechecker_state:flow(
+			-- 	subject_type,
+			-- 	self.typechecking_context,
+			-- 	spec_type,
+			-- 	self.typechecking_context,
+			-- 	"environment tuple-elim"
+			-- )
+			U.tag(
+				"flow",
+				{ subject_type = subject_type, spec_type = spec_type },
+				evaluator.typechecker_state.flow,
+				evaluator.typechecker_state,
 				subject_type,
 				self.typechecking_context,
 				spec_type,

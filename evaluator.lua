@@ -246,19 +246,15 @@ local TupleDescRelation = {
 			-- FIXME: this is quick'n'dirty copypaste, slightly edited to jankily call existing code
 			-- this HAPPENS to work
 			-- this WILL need to be refactored
+			-- i have considered exploiting the linked-list structure of tuple desc for recursive
+			-- checking, but doing it naively won't work because the unique (representing the tuple
+			-- value) should be the same across the whole desc
 			local unique = { debug = "TupleDescRelation.constrain" }
 			local placeholder = value.neutral(neutral_value.free(free.unique(unique)))
 			local tuple_types_val, tuple_types_use, tuple_vals, n =
 				infer_tuple_type_unwrapped2(value.tuple_type(val), value.tuple_type(use), placeholder)
 			for i = 1, n do
-				local tv = substitute_type_variables(tuple_types_val[i], unique)
-				local tu = substitute_type_variables(tuple_types_use[i], unique)
-				typechecker_state:queue_constrain(
-					tv,
-					FunctionRelation(UniverseOmegaRelation),
-					tu,
-					"TupleDescRelation.constrain"
-				)
+				typechecker_state:queue_subtype(tuple_types_val[i], tuple_types_use[i], "TupleDescRelation.constrain")
 			end
 		end
 	),
@@ -1681,14 +1677,10 @@ function infer(
 		local handler, userdata_type = inferrable_term:unwrap_operative_type_cons()
 		local goal_type = value.pi(
 			value.tuple_type(
-				terms.cons(
-					terms.cons(
-						terms.cons(
-							terms.cons(terms.empty, const_combinator(host_syntax_type)),
-							const_combinator(host_environment_type)
-						),
-						const_combinator(host_typed_term_type)
-					),
+				terms.tuple_desc(
+					const_combinator(host_syntax_type),
+					const_combinator(host_environment_type),
+					const_combinator(host_typed_term_type),
 					const_combinator(host_goal_type)
 				)
 			),
@@ -1696,8 +1688,8 @@ function infer(
 			param_info_explicit,
 			const_combinator(
 				value.tuple_type(
-					terms.cons(
-						terms.cons(terms.empty, const_combinator(host_inferrable_term_type)),
+					terms.tuple_desc(
+						const_combinator(host_inferrable_term_type),
 						const_combinator(host_environment_type)
 					)
 				)
@@ -3303,7 +3295,7 @@ function TypeCheckerState:check_heads(left, right, rel)
 		-- TODO: how do we pass in the type contexts???
 		U.tag(
 			"apply_value",
-			{ lvalue = lvalue, rvalue = rvalue, block_level = typechecker_state.block_level },
+			{ lvalue = lvalue, rvalue = rvalue, block_level = typechecker_state.block_level, rel = rel.debug_name },
 			apply_value,
 			rel.constrain,
 			value.tuple_value(tuple_params)
@@ -3478,7 +3470,7 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 				self.graph:constrain_transitivity(edge, self.pending, cause)
 				U.tag(
 					"check_heads",
-					{ left = left, right = right, rel = rel },
+					{ left = left, right = right, rel = rel.debug_name },
 					self.check_heads,
 					self,
 					left,

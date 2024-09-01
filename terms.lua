@@ -910,20 +910,23 @@ local empty = value.enum_value(DescCons.empty, tup_val())
 local unit_type = value.tuple_type(empty)
 local unit_val = tup_val()
 
---[[
-local tuple_desc = value.enum_value("variant",
-	tup_val(
-		value.enum_value("variant",
-			tup_val(
-				value.enum_value("empty", tup_val()),
-				value.host_value "element",
-				value.closure()
-			)
-		),
+---@param a value
+---@param e value
+---@param ... value
+---@return value
+local function tuple_desc_inner(a, e, ...)
+	if e == nil then
+		return a
+	else
+		return tuple_desc_inner(cons(a, e), ...)
+	end
+end
 
-
-	)
-)]]
+---@param ... value
+---@return value
+local function tuple_desc(...)
+	return tuple_desc_inner(empty, ...)
+end
 
 local effect_registry = new_registry("effect")
 local TCState =
@@ -963,6 +966,7 @@ local terms = {
 	tup_val = tup_val,
 	cons = cons,
 	empty = empty,
+	tuple_desc = tuple_desc,
 	unit_type = unit_type,
 	unit_val = unit_val,
 	effect_id = effect_id,
