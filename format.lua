@@ -143,9 +143,10 @@ local function clear_ffp()
 	end
 end
 
-local function create_literal(anchor, elements)
+local function create_literal(anchor, elements, endpos)
 	local val = {
 		anchor = anchor,
+		endpos = endpos,
 		kind = "literal",
 		literaltype = "bytes",
 		val = {},
@@ -265,8 +266,8 @@ local grammar = P {
 		"subordinate indent",
 		V "newline"
 			* Cmt(Cb("indent_level") * V "count_tabs", function(_, _, prev_indent, tabscount)
-				local normalized_tabs = string.rep("\t", tabscount - prev_indent - 1)
-				return tabscount > prev_indent, normalized_tabs
+				local normalized_tabs = string.rep("\t", tabscount - prev_indent)
+				return tabscount >= prev_indent, normalized_tabs
 			end)
 	),
 
@@ -277,7 +278,7 @@ local grammar = P {
 
 	string_literal = V "textpos" * Cs(
 		(V "escape_chars" + V "unicode_escape" + C(1 - (S [["\]] + V "newline" + V "splice"))) ^ 1
-	) / create_literal,
+	) * V "textpos" / create_literal,
 	string = element(
 		"string",
 		P '"'
@@ -288,33 +289,47 @@ local grammar = P {
 
 	longstring_literal = V "textpos" * Cs(
 		((V "subordinate_indent" + V "empty_line") + C((V "unicode_escape" + (1 - (V "newline" + V "splice"))))) ^ 1
-	) / create_literal,
-	longstring = element("string", P '""""' * Cg(Ct((V "longstring_literal" + V "splice") ^ 0), "elements")),
+	) * V "textpos" / create_literal,
+	longstring = element(
+		"string",
+		P '""""'
+			* V "indent"
+			* Cg(Ct((V "longstring_literal" + V "splice") ^ 0), "elements")
+			* Cg(V "textpos", "endpos")
+			* V "dedent"
+	),
 
 	comment_body = C((1 - V "newline") ^ 1),
-	line_comment = update_ffp("comment", element("comment", (P "#" * Cg(V "comment_body", "val")))),
 	comment = update_ffp(
-		"comment",
-		element("comment", (P "#" * Cg(Cs((V "subordinate_indent" + V "comment_body" + V "empty_line") ^ 0), "val")))
+		"line comment",
+		element("comment", (P "#" * Cg(V "comment_body" ^ -1, "val") * Cg(V "textpos", "endpos")))
+	),
+	block_comment = update_ffp(
+		"block comment",
+		element(
+			"comment",
+			(
+				P "####"
+				* V "indent"
+				* Cg(Cs((V "subordinate_indent" + V "comment_body" + V "empty_line") ^ 0), "val")
+				* Cg(V "textpos", "endpos")
+				* V "dedent"
+			)
+		)
 	),
 
 	tokens = update_ffp(
 		"token",
 		space_tokens(
-			V "line_comment"
-				+ V "function_call"
-				+ V "paren_list"
-				+ V "longstring"
-				+ V "string"
-				+ V "number"
-				+ V "symbol"
+			V "comment" + V "function_call" + V "paren_list" + V "longstring" + V "string" + V "number" + V "symbol"
 		)
 	),
 
-	semicolon = update_ffp(";", space_tokens(P ";") * (V "line_comment" * #(V "newline" + V "eof")) ^ -1),
+	semicolon = update_ffp(";", space_tokens(P ";") * (V "comment" * #(V "newline" + V "eof")) ^ -1),
 	naked_list = V "empty_line"
-		+ (V "tokens" * V "line_comment" ^ -1 * #(V "superior_indent" + V "eof"))
-		+ (V "comment") --
+		+ (V "tokens" * V "comment" ^ -1 * #(V "superior_indent" + V "eof"))
+		+ (V "comment" * #(V "superior_indent" + V "eof"))
+		+ (V "block_comment") --
 		+ (list(V "tokens" ^ 0 * V "semicolon") * #(V "blockline" + V "eof"))
 		+ list(
 			(((list(V "tokens" ^ 1 * V "semicolon") + V "semicolon") ^ 1 * V "tokens" ^ 0) + V "tokens" ^ 1)
@@ -324,9 +339,10 @@ local grammar = P {
 
 	-- PARENTHETICAL LIST BEHAVIOR
 	paren_spacers = (
-		erase(V "subordinate_indent") --
-		+ (V "line_comment" * #(V "newline" + V "eof"))
-		+ V "empty_line"
+		V "empty_line"
+		+ (erase(V "subordinate_indent") * V "block_comment" * #(V "newline" + V "eof"))
+		+ erase(V "subordinate_indent") --
+		+ (V "comment" * #(V "newline" + V "eof"))
 		+ S "\t " ^ 1
 	) ^ 0,
 	paren_tokens = update_ffp(
@@ -360,9 +376,10 @@ local grammar = P {
 	),
 	paren_list = list(
 		V "open_brace"
+			* V "indent"
 			* V "paren_spacers"
 			* (V "comma_paren_body" + V "semicolon_body" + V "paren_tokens" ^ 1) ^ -1
-			* V "close_brace"
+			* ((V "dedent" * V "blockline") ^ -1 * V "close_brace")
 	),
 
 	function_call = V "symbol" * Ct(
