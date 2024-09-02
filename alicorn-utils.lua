@@ -260,4 +260,8 @@ function M.memoize(fn)
 	return wrapfn
 end
 
+function M.strip_ansi(s)
+	return s:gsub("\x1b[^m]*m", "")
+end
+
 return M
