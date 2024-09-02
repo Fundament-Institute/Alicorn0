@@ -968,7 +968,14 @@ collect_tuple = metalanguage.reducer(
 					collected_terms:append(next_term)
 					local _, next_typed = evaluator.check(next_term, env.typechecking_context, next_elem_type)
 					local next_val = evaluator.evaluate(next_typed, env.typechecking_context.runtime_context)
-					desc = terms.cons(desc, value.singleton(next_elem_type, next_val))
+					desc = terms.cons(
+						desc,
+						value.closure(
+							"#prev",
+							terms.typed_term.literal(value.singleton(next_elem_type, next_val)),
+							terms.runtime_context()
+						)
+					)
 				end
 				if not ok and type(continue) == "string" then
 					continue = continue
@@ -1046,7 +1053,14 @@ collect_host_tuple = metalanguage.reducer(
 					collected_terms:append(next_term)
 					local _, next_typed = evaluator.check(next_term, env.typechecking_context, next_elem_type)
 					local next_val = evaluator.evaluate(next_typed, env.typechecking_context.runtime_context)
-					desc = terms.cons(desc, value.singleton(next_elem_type, next_val))
+					desc = terms.cons(
+						desc,
+						value.closure(
+							"#prev",
+							terms.typed_term.literal(value.singleton(next_elem_type, next_val)),
+							terms.runtime_context()
+						)
+					)
 				end
 				if not ok and type(continue) == "string" then
 					continue = continue

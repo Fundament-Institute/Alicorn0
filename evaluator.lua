@@ -1077,7 +1077,7 @@ function apply_value(f, arg)
 			error("apply_value, is_host_value, arg: expected a host tuple argument")
 		end
 	else
-		error("apply_value, f: expected a function/closure")
+		error("apply_value, f: expected a function/closure, but got " .. tostring(f))
 	end
 
 	error("unreachable!?")
@@ -3290,6 +3290,12 @@ function TypeCheckerState:check_heads(left, right, rel)
 	local rvalue, rtag, rctx = table.unpack(self.values[right])
 
 	if ltag == TypeCheckerTag.VALUE and rtag == TypeCheckerTag.USAGE then
+		if lvalue:is_neutral() and lvalue:unwrap_neutral():is_application_stuck() then
+			return
+		end
+		if rvalue:is_neutral() and rvalue:unwrap_neutral():is_application_stuck() then
+			return
+		end
 		-- Unpacking tuples hasn't been fixed in VSCode yet (despite the issue being closed???) so we have to override the types: https://github.com/LuaLS/lua-language-server/issues/1816
 		local tuple_params = value_array(value.host_value(lvalue), value.host_value(rvalue))
 		-- TODO: how do we pass in the type contexts???
@@ -3322,7 +3328,9 @@ function TypeCheckerState:constrain_induce_call(left, right, rel)
 	---@type value, TypeCheckerTag, TypecheckingContext
 	local rvalue, rtag, rctx = table.unpack(self.values[right])
 
-	if ltag == TypeCheckerTag.METAVAR and lvalue:is_neutral() and lvalue:unwrap_neutral():is_application_stuck() then
+	if --[[ltag == TypeCheckerTag.METAVAR and]]
+		lvalue:is_neutral() and lvalue:unwrap_neutral():is_application_stuck()
+	then
 		local f, arg = lvalue:unwrap_neutral():unwrap_application_stuck()
 		local l = self:check_value(value.neutral(f), TypeCheckerTag.VALUE, nil)
 		U.append(
@@ -3331,7 +3339,9 @@ function TypeCheckerState:constrain_induce_call(left, right, rel)
 		)
 	end
 
-	if rtag == TypeCheckerTag.METAVAR and rvalue:is_neutral() and rvalue:unwrap_neutral():is_application_stuck() then
+	if --[[rtag == TypeCheckerTag.METAVAR and]]
+		rvalue:is_neutral() and rvalue:unwrap_neutral():is_application_stuck()
+	then
 		local f, arg = rvalue:unwrap_neutral():unwrap_application_stuck()
 		local r = self:check_value(value.neutral(f), TypeCheckerTag.USAGE, nil)
 		U.append(
