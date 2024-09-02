@@ -392,7 +392,16 @@ local function speculate_pi_type(env, metaval)
 	return evaluator.typechecker_state:speculate(function()
 		local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 		local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
-		local pi = value.pi(param_mv:as_value(), param_info_explicit, result_mv:as_value(), result_info_pure)
+		local pi = value.pi(
+			param_mv:as_value(),
+			param_info_explicit,
+			value.closure(
+				"#spec-pi",
+				typed_term.literal(result_mv:as_value()),
+				env.typechecking_context.runtime_context
+			),
+			result_info_pure
+		)
 
 		U.tag(
 			"flow",
@@ -971,9 +980,9 @@ collect_tuple = metalanguage.reducer(
 					desc = terms.cons(
 						desc,
 						value.closure(
-							"#prev",
-							terms.typed_term.literal(value.singleton(next_elem_type, next_val)),
-							terms.runtime_context()
+							"#collect-tuple-param",
+							typed_term.literal(value.singleton(next_elem_type, next_val)),
+							env.typechecking_context.runtime_context
 						)
 					)
 				end
@@ -1056,9 +1065,9 @@ collect_host_tuple = metalanguage.reducer(
 					desc = terms.cons(
 						desc,
 						value.closure(
-							"#prev",
-							terms.typed_term.literal(value.singleton(next_elem_type, next_val)),
-							terms.runtime_context()
+							"#collect-host-tuple-param",
+							typed_term.literal(value.singleton(next_elem_type, next_val)),
+							env.typechecking_context.runtime_context
 						)
 					)
 				end
