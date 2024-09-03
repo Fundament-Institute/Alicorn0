@@ -260,6 +260,10 @@ function M.memoize(fn)
 	return wrapfn
 end
 
+---strips ansi character attributes (e.g. colors) from a string
+---@param s string
+---@return string
+---@return integer
 function M.strip_ansi(s)
 	return s:gsub("\x1b[^m]*m", "")
 end
