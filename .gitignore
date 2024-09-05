@@ -6,3 +6,5 @@
 /deps/
 /luaunit.lua
 /.vscode/
+/target/
+Cargo.lock
