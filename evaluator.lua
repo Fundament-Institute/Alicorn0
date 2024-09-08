@@ -3193,7 +3193,7 @@ function TypeCheckerState:queue_subtype(val, use, cause)
 	local r = U.tag("check_value", { val = val, use = use }, self.check_value, self, use, TypeCheckerTag.USAGE, nil)
 	assert(type(l) == "number", "l isn't number, instead found " .. tostring(l))
 	assert(type(r) == "number", "r isn't number, instead found " .. tostring(r))
-	U.append(self.pending, EdgeNotif.Constrain(l, UniverseOmegaRelation, r, cause))
+	U.append(self.pending, EdgeNotif.Constrain(l, UniverseOmegaRelation, r, self.block_level, cause))
 end
 
 ---@param val value
@@ -3205,7 +3205,7 @@ function TypeCheckerState:queue_constrain(val, rel, use, cause)
 	local r = U.tag("check_value", { val = val, use = use }, self.check_value, self, use, TypeCheckerTag.USAGE, nil)
 	assert(type(l) == "number", "l isn't number, instead found " .. tostring(l))
 	assert(type(r) == "number", "r isn't number, instead found " .. tostring(r))
-	U.append(self.pending, EdgeNotif.Constrain(l, rel, r, cause))
+	U.append(self.pending, EdgeNotif.Constrain(l, rel, r, self.block_level, cause))
 end
 
 ---@param v value
