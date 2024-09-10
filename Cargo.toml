@@ -1,0 +1,28 @@
+[package]
+name = "alicorn"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.77.0"
+authors = ["Erik McClure  "]
+description = """
+Rust embedding of the Alicorn compiler
+"""
+homepage = "https://github.com/Fundament-Software/alicorn0"
+repository = "https://github.com/Fundament-Software/alicorn0"
+readme = "README.md"
+keywords = [
+  "compiler"
+]
+license = "Apache-2.0"
+links = "alicorn"
+
+[lib]
+path = "lib.rs"
+doctest = false
+
+[dependencies]
+mlua = { version = "0.9.9", features = ["luajit52", "vendored"] }
+
+[build-dependencies]
+mlua = { version = "0.9.9", features = ["luajit52", "vendored"] }
+cc = "1.1"

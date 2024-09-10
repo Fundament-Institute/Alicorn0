@@ -74,6 +74,7 @@
               statix.enable = true;
               nixpkgs-fmt.enable = true;
               stylua.enable = true;
+              stylua.excludes = [ "vendor/" ];
               deadnix.enable = true;
             };
           };
