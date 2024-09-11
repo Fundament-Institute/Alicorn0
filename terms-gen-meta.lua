@@ -233,4 +233,13 @@ for k, v in pairs(terms) do
 	end
 end
 
+local aux = require "evaluator-types"
+
+for k, v in pairs(aux) do
+	if k and type(v) == "table" and v.derive then
+		---@cast v Type
+		v:derive(gen_type)
+	end
+end
+
 return {}
