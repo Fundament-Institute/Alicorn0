@@ -32,6 +32,10 @@ local string_array = array(gen.builtin_string)
 
 local internals_interface = require "internals-interface"
 
+local eval_types = require "evaluator-types"
+local subtype_relation_mt, SubtypeRelation, EdgeNotif =
+	eval_types.subtype_relation_mt, eval_types.SubtypeRelation, eval_types.EdgeNotif
+
 local param_info_explicit = value.param_info(value.visibility(visibility.explicit))
 local result_info_pure = value.result_info(result_info(purity.pure))
 
@@ -67,7 +71,7 @@ end
 ---@param srel SubtypeRelation
 ---@return SubtypeRelation
 local function FunctionRelation(srel)
-	return {
+	return setmetatable({
 		debug_name = "FunctionRelation(" .. srel.debug_name .. ")",
 		srel = srel,
 		Rel = luatovalue(function(a, b)
@@ -89,7 +93,7 @@ local function FunctionRelation(srel)
 
 			typechecker_state:queue_constrain(applied_val, srel, applied_use, "FunctionRelation inner")
 		end),
-	}
+	}, subtype_relation_mt)
 end
 FunctionRelation = U.memoize(FunctionRelation)
 
@@ -101,7 +105,7 @@ local function IndepTupleRelation(...)
 	for i, v in ipairs(args) do
 		names[i] = (v.positive and "+" or "-") .. v.srel.debug_name
 	end
-	return {
+	return setmetatable({
 		debug_name = "IndepTupleRelation(" .. table.concat(names, ", ") .. ")",
 		srels = args,
 		Rel = luatovalue(function(a, b)
@@ -139,13 +143,13 @@ local function IndepTupleRelation(...)
 				end
 			end
 		),
-	}
+	}, subtype_relation_mt)
 end
 IndepTupleRelation = U.memoize(IndepTupleRelation)
 
 ---@type SubtypeRelation
 local effect_row_srel
-effect_row_srel = {
+effect_row_srel = setmetatable({
 	debug_name = "effect_row_srel",
 	Rel = luatovalue(function(a, b)
 		error("nyi")
@@ -184,14 +188,14 @@ effect_row_srel = {
 			end
 		end
 	),
-}
+}, subtype_relation_mt)
 
 ---@type SubtypeRelation
 local UniverseOmegaRelation
 
 ---@type SubtypeRelation
 local enum_desc_srel
-enum_desc_srel = {
+enum_desc_srel = setmetatable({
 	debug_name = "enum_desc_srel",
 	Rel = luatovalue(function(a, b)
 		error("nyi")
@@ -220,11 +224,11 @@ enum_desc_srel = {
 			end
 		end
 	),
-}
+}, subtype_relation_mt)
 
 local infer_tuple_type_unwrapped2, substitute_type_variables
 ---@type SubtypeRelation
-local TupleDescRelation = {
+local TupleDescRelation = setmetatable({
 	debug_name = "TupleDescRelation",
 	Rel = luatovalue(function(a, b)
 		error("nyi")
@@ -258,7 +262,7 @@ local TupleDescRelation = {
 			end
 		end
 	),
-}
+}, subtype_relation_mt)
 
 ---@param onto ArrayValue
 ---@param with ArrayValue
@@ -2475,21 +2479,13 @@ end
 
 register_effect_handler(terms.lua_prog, host_effect_handler)
 
----@class SubtypeRelation
----@field debug_name string
----@field Rel value -- : (a:T,b:T) -> Prop__
----@field refl value -- : (a:T) -> Rel(a,a)
----@field antisym value -- : (a:T, B:T, Rel(a,b), Rel(b,a)) -> a == b
----@field constrain value -- : (Node(T), Node(T)) -> [TCState] ()
-local SubtypeRelation = {}
-
 ---@class Variance
 ---@field positive boolean
 ---@field srel SubtypeRelation
 local Variance = {}
 
 ---@type SubtypeRelation
-UniverseOmegaRelation = {
+UniverseOmegaRelation = setmetatable({
 	debug_name = "UniverseOmegaRelation",
 	Rel = luatovalue(function(a, b)
 		error("nyi")
@@ -2512,7 +2508,7 @@ UniverseOmegaRelation = {
 			error(err)
 		end
 	end),
-}
+}, subtype_relation_mt)
 
 ---@class OrderedSet
 ---@field set { [any]: integer }
@@ -2790,6 +2786,34 @@ local TypeCheckerState = {}
 
 ---@alias NodeID integer the ID of a node in the graph
 
+---@module "evaluator.edge"
+local CEdge = gen.declare_type()
+
+-- stylua: ignore
+CEdge:define_enum("edge", {
+	{ "ConstrainEdge", {
+		"left",  gen.builtin_number,
+		"rel",  SubtypeRelation,
+		"shallowest_block", gen.builtin_number,
+		"right", gen.builtin_number,
+	} },
+	{ "LeftCallEdge", {
+		"left",  gen.builtin_number,
+		"arg",  value,
+		"rel",  SubtypeRelation,
+		"shallowest_block", gen.builtin_number,
+		"right", gen.builtin_number,
+	} },
+	{ "RightCallEdge", {
+		"left",  gen.builtin_number,
+		"rel",  SubtypeRelation,
+		"shallowest_block", gen.builtin_number,
+		"right", gen.builtin_number,
+		"arg",  value,
+	} },
+}
+)
+
 ---@class ConstrainEdge
 ---@field left NodeID
 ---@field rel SubtypeRelation
@@ -2872,92 +2896,7 @@ function Reachability:revert()
 	self.rightcall_edges:revert()
 end
 
----@class (exact) EdgeNotifConstrain
----@field kind string
----@field left integer
----@field right integer
----@field rel SubtypeRelation
----@field cause any
-local EdgeNotif_Constrain = {}
-local EdgeNotif_Constrain_mt = { __index = EdgeNotif_Constrain }
-
----@class (exact) EdgeNotifCallLeft
----@field kind string
----@field arg value
----@field left integer
----@field right integer
----@field rel SubtypeRelation
----@field cause any
-local EdgeNotif_CallLeft = {}
-local EdgeNotif_CallLeft_mt = { __index = EdgeNotif_CallLeft }
-
----@class (exact) EdgeNotifCallRight
----@field kind string
----@field left integer
----@field right integer
----@field rel SubtypeRelation
----@field arg value
----@field cause any
-local EdgeNotif_CallRight = {}
-local EdgeNotif_CallRight_mt = { __index = EdgeNotif_CallRight }
-
-local EdgeNotif = {
-	---@param left integer
-	---@param rel SubtypeRelation
-	---@param right integer
-	---@param shallowest_block integer
-	---@param cause any
-	---@return EdgeNotifConstrain
-	Constrain = function(left, rel, right, shallowest_block, cause)
-		return {
-			kind = "constrain",
-			left = left,
-			rel = rel,
-			right = right,
-			shallowest_block = shallowest_block,
-			cause = cause,
-		}
-	end,
-	---@param left integer
-	---@param argument value
-	---@param rel SubtypeRelation
-	---@param right integer
-	---@param shallowest_block integer
-	---@param cause any
-	---@return EdgeNotifCallLeft
-	CallLeft = function(left, argument, rel, right, shallowest_block, cause)
-		return {
-			kind = "call_left",
-			left = left,
-			arg = argument,
-			rel = rel,
-			right = right,
-			shallowest_block = shallowest_block,
-			cause = cause,
-		}
-	end,
-	---@param left integer
-	---@param rel SubtypeRelation
-	---@param right integer
-	---@param argument value
-	---@param shallowest_block integer
-	---@param cause any
-	---@return EdgeNotifCallRight
-	CallRight = function(left, rel, right, argument, shallowest_block, cause)
-		return {
-			kind = "call_right",
-			left = left,
-			rel = rel,
-			right = right,
-			arg = argument,
-			shallowest_block = shallowest_block,
-			cause = cause,
-		}
-	end,
-}
-
----@alias EdgeNotif EdgeNotifConstrain | EdgeNotifCallRight | EdgeNotifCallLeft
----@alias ReachabilityQueue EdgeNotif[]
+---@alias ReachabilityQueue edgenotif[]
 
 ---check for combinations of constrain edges that induce new constraints in response to a constrain edges
 ---@param edge ConstrainEdge
@@ -3472,8 +3411,9 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 	while #self.pending > 0 do
 		local item = U.pop(self.pending)
 
-		if item.kind == "constrain" then
-			local left, right, rel, cause = item.left, item.right, item.rel, item.cause
+		if item:is_Constrain() then
+			local left, rel, right, shallowest_block, cause = item:unwrap_Constrain()
+
 			if self.graph:add_constrain_edge(left, right, rel, self.block_level) then
 				---@type ConstrainEdge
 				local edge = { left = left, rel = rel, right = right, shallowest_block = self.block_level }
@@ -3491,16 +3431,16 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 				self:constrain_leftcall_compose_1(edge)
 				self:rightcall_constrain_compose_2(edge)
 			end
-		elseif item.kind == "call_left" then
-			local left, right, rel, arg, cause = item.left, item.right, item.rel, item.arg, item.cause
+		elseif item:is_CallLeft() then
+			local left, arg, rel, right, shallowest_block, cause = item:unwrap_CallLeft()
 
 			if self.graph:add_call_left_edge(left, arg, rel, right, self.block_level) then
 				---@type LeftCallEdge
 				local edge = { left = left, arg = arg, rel = rel, right = right, shallowest_block = self.block_level }
 				self:constrain_leftcall_compose_2(edge)
 			end
-		elseif item.kind == "call_right" then
-			local left, right, rel, arg, cause = item.left, item.right, item.rel, item.arg, item.cause
+		elseif item:is_CallRight() then
+			local left, rel, right, arg, shallowest_block, cause = item:unwrap_CallRight()
 
 			if self.graph:add_call_right_edge(left, rel, right, arg, self.block_level) then
 				---@type RightCallEdge
