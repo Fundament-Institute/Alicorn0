@@ -1,6 +1,5 @@
 local luaunit = require "luaunit"
 local format = require "format"
-local inspect = require "inspect"
 
 local function simplify_list(list)
 	if not list then
@@ -541,31 +540,31 @@ end
 function testcomments()
 	local example = {
 		"1\n# list of one\n1",
-		"# i am a normal comment created by a normal human\n\tand this comment is intended to be useful\n\t\tsee?\n\n\tall of this is on one line ",
+		"#### i am a normal comment created by a normal human\n\tand this comment is intended to be useful\n\t\tsee?\n\n\tall of this is on one line ",
 		"# i",
 
 		"# comment A\ntoken",
-		"# comment B\n\ttoken",
-		"token\n# comment C\n\ttoken",
+		"#### comment B\n\ttoken",
+		"token\n#### comment C\n\ttoken",
 		"token\n\ttoken\n\t# comment D\n\ttoken",
-		"# comment G\n\t\ttoken",
-		"# comment H\n\t\t\ttoken",
-		"# comment I\n\ttoken\n\ttoken",
-		"# comment J\n\t\ttoken\n\ttoken",
-		"# comment K\n\t\ttoken\n\t\ttoken",
-		"# comment L\n\ttoken\n\t\ttoken",
+		"#### comment G\n\t\ttoken",
+		"#### comment H\n\t\t\ttoken",
+		"#### comment I\n\ttoken\n\ttoken",
+		"#### comment J\n\t\ttoken\n\ttoken",
+		"#### comment K\n\t\ttoken\n\t\ttoken",
+		"#### comment L\n\ttoken\n\t\ttoken",
 		"token\n\t# comment M\n\ttoken\n\t\ttoken",
 		"token\n\t# comment N\n\ttoken\ntoken",
-		"token\n\t# comment O\n\t\ttoken\ntoken",
-		"token\n\t# comment P\n\t\ttoken\n\ttoken",
-		"token\n\t# comment Q\n\t\ttoken\n\t\ttoken",
-		"token\n\t# comment R\n\t\ttoken\n\t\t\ttoken",
+		"token\n\t#### comment O\n\t\ttoken\ntoken",
+		"token\n\t#### comment P\n\t\ttoken\n\ttoken",
+		"token\n\t#### comment Q\n\t\ttoken\n\t\ttoken",
+		"token\n\t#### comment R\n\t\ttoken\n\t\t\ttoken",
 		"token # comment S1\ntoken",
 		"token # comment S2\n\ttoken",
 		"token # comment S3\n\ttoken\n\ttoken",
 		"token # comment S4\n\ttoken\n\t\ttoken",
 		"token # comment T# comment # comment",
-		'# comment U\n\t""""',
+		'#### comment U\n\t""""',
 
 		[[let (orig-results) = get-prim-func-res-inner(wrap(type, foo), prim-nil)
 let orig-results = unwrap(func-conv-res-type(oldargs), orig-results)
@@ -893,6 +892,49 @@ return mktype]],
 		luaunit.assertTrue(forward_moving_cursor(results))
 		luaunit.assertTrue(samelength_testfile_list(example[i], results))
 	end
+end
+
+function test_unformatter()
+	local filename = "testfile.alc"
+	local unformat = require "./unformatter"
+
+	local f = io.open(filename, "r")
+	if not f then
+		luaunit.fail(filename .. " does not exist")
+	end
+	f:close()
+
+	local src = ""
+	for line in io.lines("testfile.alc") do
+		src = src .. "\n" .. line
+	end
+
+	local function compare_lists(a, b)
+		assert(a.kind == "list")
+		assert(b.kind == "list")
+
+		for i = 1, #a.elements do
+			if not (a.elements[i].kind == b.elements[i].kind) then
+				print(a.elements[i].kind, b.elements[i].kind, i)
+				return false
+			end
+			if a.elements[i].kind == "list" then
+				if not compare_lists(a.elements[i], b.elements[i]) then
+					return false
+				end
+			end
+		end
+
+		return true
+	end
+
+	local formatted = format.parse(src, filename)
+
+	local unformatted = unformat.unformat(formatted)
+
+	local format_verify = format.parse(unformatted, filename)
+
+	luaunit.assertTrue(compare_lists(formatted, format_verify))
 end
 
 os.exit(luaunit.LuaUnit.run())
