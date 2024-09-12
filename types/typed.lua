@@ -340,6 +340,12 @@ function typed:is_union_type() end
 function typed:unwrap_union_type() end
 ---@return boolean, typed, typed
 function typed:as_union_type() end
+---@return boolean
+function typed:is_constrained_type() end
+---@return ArrayValue
+function typed:unwrap_constrained_type() end
+---@return boolean, ArrayValue
+function typed:as_constrained_type() end
 
 ---@class (exact) typedType: EnumType
 ---@field define_enum fun(self: typedType, name: string, variants: Variants): typedType
@@ -399,4 +405,5 @@ function typed:as_union_type() end
 ---@field variance_cons fun(positive: typed, srel: typed): typed
 ---@field intersection_type fun(left: typed, right: typed): typed
 ---@field union_type fun(left: typed, right: typed): typed
+---@field constrained_type fun(constraints: ArrayValue): typed
 return {}

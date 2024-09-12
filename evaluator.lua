@@ -2409,6 +2409,62 @@ function evaluate(typed_term, runtime_context)
 	elseif typed_term:is_srel_type() then
 		local target = typed_term:unwrap_srel_type()
 		return value.srel_type(evaluate(target, runtime_context))
+	elseif typed_term:is_constrained_type() then
+		local constraints = typed_term:unwrap_constrained_type()
+		local mv = typechecker_state:metavariable(nil, false)
+		for i, constraint in constraints:pair() do
+			---@cast constraint constraintelem
+			if constraint:is_sliced_constrain() then
+				local rel, right, cause = constraint:unwrap_sliced_constrain()
+				typechecker_state:constrain(mv:as_value(), nil, evaluate(right, runtime_context), nil, rel, cause)
+			elseif constraint:is_constrain_sliced() then
+				local left, rel, cause = constraint:unwrap_constrain_sliced()
+				typechecker_state:constrain(evaluate(left, runtime_context), nil, mv:as_value(), nil, rel, cause)
+			elseif constraint:is_sliced_leftcall() then
+				local arg, rel, right, cause = constraint:unwrap_sliced_leftcall()
+				typechecker_state:constrain(
+					apply_value(mv:as_value(), evaluate(arg, runtime_context)),
+					nil,
+					evaluate(right, runtime_context),
+					nil,
+					rel,
+					cause
+				)
+			elseif constraint:is_leftcall_sliced() then
+				local left, arg, rel, cause = constraint:unwrap_leftcall_sliced()
+				typechecker_state:constrain(
+					apply_value(evaluate(left, runtime_context), evaluate(arg, runtime_context)),
+					nil,
+					mv:as_value(),
+					nil,
+					rel,
+					cause
+				)
+			elseif constraint:is_sliced_rightcall() then
+				local rel, right, arg, cause = constraint:unwrap_sliced_rightcall()
+				typechecker_state:constrain(
+					mv:as_value(),
+					nil,
+					apply_value(evaluate(right, runtime_context), evaluate(arg, runtime_context)),
+					nil,
+					rel,
+					cause
+				)
+			elseif constraint:is_rightcall_sliced() then
+				local left, rel, arg, cause = constraint:unwrap_rightcall_sliced()
+				typechecker_state:constrain(
+					evaluate(left, runtime_context),
+					nil,
+					apply_value(mv:as_value(), evaluate(arg, runtime_context)),
+					nil,
+					rel,
+					cause
+				)
+			else
+				error "unrecognized constraint kind"
+			end
+		end
+		return mv:as_value()
 	else
 		error("evaluate: unknown kind: " .. typed_term.kind)
 	end
