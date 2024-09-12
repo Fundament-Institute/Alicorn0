@@ -7,15 +7,7 @@ local value = terms.value
 ---@module "evaluator.edgenotif"
 local EdgeNotif = gen.declare_type()
 
----@class SubtypeRelation
----@field debug_name string
----@field Rel value -- : (a:T,b:T) -> Prop__
----@field refl value -- : (a:T) -> Rel(a,a)
----@field antisym value -- : (a:T, B:T, Rel(a,b), Rel(b,a)) -> a == b
----@field constrain value -- : (Node(T), Node(T)) -> [TCState] ()
-local subtype_relation_mt = {}
-
-local SubtypeRelation = gen.declare_foreign(gen.metatable_equality(subtype_relation_mt), "SubtypeRelation")
+local SubtypeRelation = terms.SubtypeRelation
 
 -- stylua: ignore
 EdgeNotif:define_enum("edgenotif", {
@@ -47,4 +39,4 @@ EdgeNotif:define_enum("edgenotif", {
 
 EdgeNotif:derive(derivers.pretty_print)
 
-return { subtype_relation_mt = subtype_relation_mt, SubtypeRelation = SubtypeRelation, EdgeNotif = EdgeNotif }
+return { subtype_relation_mt = terms.subtype_relation_mt, SubtypeRelation = SubtypeRelation, EdgeNotif = EdgeNotif }

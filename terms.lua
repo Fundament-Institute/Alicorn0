@@ -379,6 +379,87 @@ inferrable_term:define_enum("inferrable", {
 	} },
 })
 
+---@class SubtypeRelation
+---@field debug_name string
+---@field Rel value -- : (a:T,b:T) -> Prop__
+---@field refl value -- : (a:T) -> Rel(a,a)
+---@field antisym value -- : (a:T, B:T, Rel(a,b), Rel(b,a)) -> a == b
+---@field constrain value -- : (Node(T), Node(T)) -> [TCState] ()
+local subtype_relation_mt = {}
+
+local SubtypeRelation = gen.declare_foreign(gen.metatable_equality(subtype_relation_mt), "SubtypeRelation")
+
+local constraintelem = gen.declare_enum("constraintelem", {
+	{ "sliced_constrain", {
+		"rel",
+		SubtypeRelation,
+		"right",
+		typed_term,
+		"cause",
+		gen.any_lua_type,
+	} },
+	{ "constrain_sliced", {
+		"left",
+		typed_term,
+		"rel",
+		SubtypeRelation,
+		"cause",
+		gen.any_lua_type,
+	} },
+	{
+		"sliced_leftcall",
+		{
+			"arg",
+			typed_term,
+			"rel",
+			SubtypeRelation,
+			"right",
+			typed_term,
+			"cause",
+			gen.any_lua_type,
+		},
+	},
+	{
+		"leftcall_sliced",
+		{
+			"left",
+			typed_term,
+			"arg",
+			typed_term,
+			"rel",
+			SubtypeRelation,
+			"cause",
+			gen.any_lua_type,
+		},
+	},
+	{
+		"sliced_rightcall",
+		{
+			"rel",
+			SubtypeRelation,
+			"right",
+			typed_term,
+			"arg",
+			typed_term,
+			"cause",
+			gen.any_lua_type,
+		},
+	},
+	{
+		"rightcall_sliced",
+		{
+			"left",
+			typed_term,
+			"rel",
+			SubtypeRelation,
+			"arg",
+			typed_term,
+			"cause",
+			gen.any_lua_type,
+		},
+	},
+})
+
 -- typed terms have been typechecked but do not store their type internally
 -- stylua: ignore
 typed_term:define_enum("typed", {
@@ -553,7 +634,10 @@ typed_term:define_enum("typed", {
 	{ "union_type", {
 		"left", typed_term,
 		"right", typed_term
-	} }
+	} },
+	{ "constrained_type", {
+		"constraints", array(constraintelem)
+	}}
 }) 
 
 local unique_id = gen.builtin_table
@@ -961,6 +1045,9 @@ local terms = {
 	module_mt = module_mt,
 	runtime_context_type = runtime_context_type,
 	typechecking_context_type = typechecking_context_type,
+	subtype_relation_mt = subtype_relation_mt,
+	SubtypeRelation = SubtypeRelation,
+	constraintelem = constraintelem,
 
 	DescCons = DescCons,
 	tup_val = tup_val,

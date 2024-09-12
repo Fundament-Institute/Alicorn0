@@ -676,11 +676,11 @@ let tuple-desc-type = lambda ((U : universe))
 	implicit-unwrap(T)
 let tuple-type = lambda (U : universe, desc : tuple-desc-type(U))
 	let inner = intrinsic "return terms.value.tuple_type" :
-		host-func-type ((desc : wrapped(tuple-desc-type(U)))) -> ((T : wrapped(host-type)))
+		host-func-type ((desc : wrapped(tuple-desc-type(U)))) -> ((T : wrapped(U)))
 	let (T) = inner(implicit-wrap(desc))
 	# FIXME: implicit-unwrap here causes nearest_star_level to fail in tuple-desc-elem
 	#implicit-unwrap(T)
-	unwrap(host-type, T)
+	unwrap(U, T)
 let host-tuple-type = lambda (U : universe, desc : tuple-desc-type(U))
 	let inner = intrinsic "return terms.value.host_tuple_type" :
 		host-func-type ((desc : wrapped(tuple-desc-type(U)))) -> ((T : wrapped(host-type)))
@@ -690,11 +690,11 @@ let host-tuple-type = lambda (U : universe, desc : tuple-desc-type(U))
 let tuple-type-implicit = lambda_implicit (U : universe)
 	lambda ((desc : tuple-desc-type(U)))
 		let inner = intrinsic "return terms.value.tuple_type" :
-			host-func-type ((desc : wrapped(tuple-desc-type(U)))) -> ((T : wrapped(host-type)))
+			host-func-type ((desc : wrapped(tuple-desc-type(U)))) -> ((T : wrapped(U)))
 		let (T) = inner(implicit-wrap(desc))
 		# FIXME: implicit-unwrap here causes nearest_star_level to fail in tuple-desc-elem
 		#implicit-unwrap(T)
-		unwrap(host-type, T)
+		unwrap(U, T)
 let host-tuple-type-implicit = lambda_implicit (U : universe)
 	lambda ((desc : tuple-desc-type(U)))
 		let inner = intrinsic "return terms.value.host_tuple_type" :
