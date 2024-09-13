@@ -389,6 +389,7 @@ local subtype_relation_mt = {}
 
 local SubtypeRelation = gen.declare_foreign(gen.metatable_equality(subtype_relation_mt), "SubtypeRelation")
 
+---@module 'types.constraintelem'
 local constraintelem = gen.declare_enum("constraintelem", {
 	{ "sliced_constrain", {
 		"rel",

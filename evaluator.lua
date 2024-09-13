@@ -421,25 +421,7 @@ local function substitute_inner(val, mappings, context_len)
 				local mv = free:unwrap_metavariable()
 
 				if not (mv.block_level < typechecker_state.block_level) then
-					local above, below, reln = typechecker_state:slice_constraints_for(mv)
-
-					local above_acc, below_acc = typed_array(), typed_array()
-
-					for _, v in ipairs(above) do
-						local subject_term = substitute_inner(v, mappings, context_len)
-						above_acc:append(subject_term)
-					end
-
-					for _, v in ipairs(below) do
-						local subject_term = substitute_inner(v, mappings, context_len)
-						below_acc:append(subject_term)
-					end
-
-					return terms.typed_term.range(
-						below_acc,
-						above_acc,
-						terms.typed_term.literal(terms.value.host_value(reln))
-					)
+					return typechecker_state:slice_constraints_for(mv, mappings, context_len)
 				else
 					lookup = free:unwrap_metavariable()
 				end
@@ -572,6 +554,18 @@ local function substitute_inner(val, mappings, context_len)
 		local supertype, val = val:unwrap_singleton()
 		local supertype = substitute_inner(supertype, mappings, context_len)
 		return typed_term.singleton(supertype, val)
+	elseif val:is_union_type() then
+		local a, b = val:unwrap_union_type()
+		return typed_term.union_type(
+			substitute_inner(a, mappings, context_len),
+			substitute_inner(b, mappings, context_len)
+		)
+	elseif val:is_intersection_type() then
+		local a, b = val:unwrap_intersection_type()
+		return typed_term.intersection_type(
+			substitute_inner(a, mappings, context_len),
+			substitute_inner(b, mappings, context_len)
+		)
 	else
 		error("Unhandled value kind in substitute_inner: " .. val.kind)
 	end
@@ -891,6 +885,20 @@ function check_concrete(val, use)
 	if val:is_singleton() and not use:is_singleton() then
 		local val_supertype, _ = val:unwrap_singleton()
 		typechecker_state:queue_subtype(val_supertype, use, "singleton subtype")
+		return true
+	end
+
+	if val:is_union_type() then
+		local vala, valb = val:unwrap_union_type()
+		typechecker_state:queue_subtype(vala, use, "union dissasembly")
+		typechecker_state:queue_subtype(valb, use, "union dissasembly")
+		return true
+	end
+
+	if use:is_intersection_type() then
+		local usea, useb = use:unwrap_intersection_type()
+		typechecker_state:queue_subtype(val, usea, "union dissasembly")
+		typechecker_state:queue_subtype(val, useb, "union dissasembly")
 		return true
 	end
 
@@ -1397,9 +1405,10 @@ function infer(
 		)
 		local result_type_result_type_result =
 			apply_value(result_type_result_type, evaluate(param_type_term, typechecking_context.runtime_context))
-		local sort = value.star(
-			math.max(nearest_star_level(param_type_type), nearest_star_level(result_type_result_type_result), 0)
-		)
+		local sort = value.union_type(param_type_type, value.union_type(result_type_result_type_result, value.star(0)))
+		-- local sort = value.star(
+		-- 	math.max(nearest_star_level(param_type_type), nearest_star_level(result_type_result_type_result), 0)
+		-- )
 
 		local term = typed_term.pi(param_type_term, param_info_term, result_type_term, result_info_term)
 
@@ -2412,7 +2421,7 @@ function evaluate(typed_term, runtime_context)
 	elseif typed_term:is_constrained_type() then
 		local constraints = typed_term:unwrap_constrained_type()
 		local mv = typechecker_state:metavariable(nil, false)
-		for i, constraint in constraints:pair() do
+		for i, constraint in constraints:ipairs() do
 			---@cast constraint constraintelem
 			if constraint:is_sliced_constrain() then
 				local rel, right, cause = constraint:unwrap_sliced_constrain()
@@ -2465,6 +2474,12 @@ function evaluate(typed_term, runtime_context)
 			end
 		end
 		return mv:as_value()
+	elseif typed_term:is_union_type() then
+		local a, b = typed_term:unwrap_union_type()
+		return value.union_type(evaluate(a, runtime_context), evaluate(b, runtime_context))
+	elseif typed_term:is_intersection_type() then
+		local a, b = typed_term:unwrap_intersection_type()
+		return value.intersection_type(evaluate(a, runtime_context), evaluate(b, runtime_context))
 	else
 		error("evaluate: unknown kind: " .. typed_term.kind)
 	end
@@ -3514,8 +3529,10 @@ end
 
 ---extract a region of a graph based on the block depth around a metavariable, for use in substitution
 ---@param mv Metavariable
----@return value[], value[], SubtypeRelation
-function TypeCheckerState:slice_constraints_for(mv)
+---@param mappings {[integer]: typed} the placeholder we are trying to get rid of by substituting
+---@param context_len integer number of bindings in the runtime context already used - needed for closures
+---@return typed
+function TypeCheckerState:slice_constraints_for(mv, mappings, context_len)
 	-- take only the constraints that are against this metavariable in such a way that it remains valid as we exit the block
 	-- if the metavariable came from a "lower" block it is still in scope and may gain additional constraints in the future
 	-- because this metavariable is from an outer scope, it doesn't have any constraints against something that is in the deeper scope and needs to be substituted,
@@ -3525,74 +3542,108 @@ function TypeCheckerState:slice_constraints_for(mv)
 	-- things flow ltr
 	-- values flow to usages
 
-	local above = {}
-	local below = {}
-	local reln = nil
+	local constraints = array(terms.constraintelem)()
 
-	--cut off metavariables that are the same level as this metavar or deeper
-	--retain all concrete constraints
-	for _, edge in ipairs(self.graph.constrain_edges:to(mv.usage)) do
-		if self.values[edge.left][2] == TypeCheckerTag.METAVAR then
-			local mvo = self.values[edge.left][1]
-
-			if
-				mvo:is_neutral()
-				and mvo:unwrap_neutral():is_free()
-				and mvo:unwrap_neutral():unwrap_free():is_metavariable()
-			then
-				local mvo_inner = mvo:unwrap_neutral():unwrap_free():unwrap_metavariable()
-				if mvo_inner.block_level < self.block_level then
-					table.insert(below, mvo)
-				end
-			else
-				error("incorrectly labelled as a metavariable")
-			end
-		else
-			if not (self.values[edge.left][2] == TypeCheckerTag.RANGE) then
-				table.insert(below, self.values[edge.left][1])
-			end
-		end
-
-		if reln and reln ~= edge.rel then
-			error "relations don't match"
-		end
-		if not reln then
-			reln = edge.rel
-		end
+	local function getnode(id)
+		return self.values[id][1]
 	end
-	for _, edge in ipairs(self.graph.constrain_edges:from(mv.value)) do
-		if self.values[edge.left][2] == TypeCheckerTag.METAVAR then
-			local mvo = self.values[edge.left][1]
+	local function slice_edgeset(edgeset, extractor, callback)
+		for _, edge in ipairs(edgeset) do
+			if self.values[extractor(edge)][2] == TypeCheckerTag.METAVAR then
+				local mvo = self.values[extractor(edge)][1]
 
-			if
-				mvo:is_neutral()
-				and mvo:unwrap_neutral():is_free()
-				and mvo:unwrap_neutral():unwrap_free():is_metavariable()
-			then
-				local mvo_inner = mvo:unwrap_neutral():unwrap_free():unwrap_metavariable()
-				if mvo_inner.block_level < self.block_level then
-					table.insert(above, mvo)
+				if
+					mvo:is_neutral()
+					and mvo:unwrap_neutral():is_free()
+					and mvo:unwrap_neutral():unwrap_free():is_metavariable()
+				then
+					local mvo_inner = mvo:unwrap_neutral():unwrap_free():unwrap_metavariable()
+					if mvo_inner.block_level < self.block_level then
+						callback(edge)
+					end
+				else
+					error "incorrectly labelled as a metavariable"
 				end
 			else
-				error("incorrectly labelled as a metavariable")
+				if not (self.values[extractor(edge)][2] == TypeCheckerTag.RANGE) then
+					callback(edge)
+				end
 			end
-		else
-			if not (self.values[edge.left][2] == TypeCheckerTag.RANGE) then
-				table.insert(above, self.values[edge.left][1])
-			end
-		end
-
-		if reln and reln ~= edge.rel then
-			error "relations don't match"
-		end
-		if not reln then
-			reln = edge.rel
 		end
 	end
 
-	assert(reln, "reln is still nil! " .. tostring(mv.value) .. " " .. tostring(mv.usage))
+	slice_edgeset(self.graph.constrain_edges:to(mv.usage), function(edge)
+		return edge.left
+	end, function(edge)
+		constraints:append(
+			terms.constraintelem.constrain_sliced(
+				substitute_inner(getnode(edge.left), mappings, context_len),
+				edge.rel,
+				edge.cause
+			)
+		)
+	end)
+	slice_edgeset(self.graph.constrain_edges:from(mv.usage), function(edge)
+		return edge.right
+	end, function(edge)
+		constraints:append(
+			terms.constraintelem.sliced_constrain(
+				edge.rel,
+				substitute_inner(getnode(edge.right), mappings, context_len),
+				edge.cause
+			)
+		)
+	end)
+	slice_edgeset(self.graph.leftcall_edges:to(mv.usage), function(edge)
+		return edge.left
+	end, function(edge)
+		constraints:append(
+			terms.constraintelem.leftcall_sliced(
+				substitute_inner(getnode(edge.left), mappings, context_len),
+				substitute_inner(edge.arg, mappings, context_len),
+				edge.rel,
+				edge.cause
+			)
+		)
+	end)
+	slice_edgeset(self.graph.leftcall_edges:from(mv.usage), function(edge)
+		return edge.right
+	end, function(edge)
+		constraints:append(
+			terms.constraintelem.sliced_leftcall(
+				substitute_inner(edge.arg, mappings, context_len),
+				edge.rel,
+				substitute_inner(getnode(edge.right), mappings, context_len),
+				edge.cause
+			)
+		)
+	end)
+	slice_edgeset(self.graph.rightcall_edges:to(mv.usage), function(edge)
+		return edge.left
+	end, function(edge)
+		constraints:append(
+			terms.constraintelem.rightcall_sliced(
+				substitute_inner(getnode(edge.left), mappings, context_len),
+				edge.rel,
+				substitute_inner(edge.arg, mappings, context_len),
+				edge.cause
+			)
+		)
+	end)
+	slice_edgeset(self.graph.rightcall_edges:from(mv.usage), function(edge)
+		return edge.right
+	end, function(edge)
+		constraints:append(
+			terms.constraintelem.sliced_rightcall(
+				edge.rel,
+				substitute_inner(getnode(edge.right), mappings, context_len),
+				substitute_inner(edge.arg, mappings, context_len),
+				edge.cause
+			)
+		)
+	end)
 
-	return above, below, reln
+	return typed.constrained_type(constraints)
 end
 
 local typechecker_state_mt = { __index = TypeCheckerState }
