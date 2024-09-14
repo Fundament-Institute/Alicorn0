@@ -390,75 +390,42 @@ local subtype_relation_mt = {}
 local SubtypeRelation = gen.declare_foreign(gen.metatable_equality(subtype_relation_mt), "SubtypeRelation")
 
 ---@module 'types.constraintelem'
+-- stylua: ignore
 local constraintelem = gen.declare_enum("constraintelem", {
 	{ "sliced_constrain", {
-		"rel",
-		SubtypeRelation,
-		"right",
-		typed_term,
-		"cause",
-		gen.any_lua_type,
+		"rel",   SubtypeRelation,
+		"right", typed_term,
+		"cause", gen.any_lua_type,
 	} },
 	{ "constrain_sliced", {
-		"left",
-		typed_term,
-		"rel",
-		SubtypeRelation,
-		"cause",
-		gen.any_lua_type,
+		"left",  typed_term,
+		"rel",   SubtypeRelation,
+		"cause", gen.any_lua_type,
 	} },
-	{
-		"sliced_leftcall",
-		{
-			"arg",
-			typed_term,
-			"rel",
-			SubtypeRelation,
-			"right",
-			typed_term,
-			"cause",
-			gen.any_lua_type,
-		},
-	},
-	{
-		"leftcall_sliced",
-		{
-			"left",
-			typed_term,
-			"arg",
-			typed_term,
-			"rel",
-			SubtypeRelation,
-			"cause",
-			gen.any_lua_type,
-		},
-	},
-	{
-		"sliced_rightcall",
-		{
-			"rel",
-			SubtypeRelation,
-			"right",
-			typed_term,
-			"arg",
-			typed_term,
-			"cause",
-			gen.any_lua_type,
-		},
-	},
-	{
-		"rightcall_sliced",
-		{
-			"left",
-			typed_term,
-			"rel",
-			SubtypeRelation,
-			"arg",
-			typed_term,
-			"cause",
-			gen.any_lua_type,
-		},
-	},
+	{ "sliced_leftcall", {
+		"arg",   typed_term,
+		"rel",   SubtypeRelation,
+		"right", typed_term,
+		"cause", gen.any_lua_type,
+	} },
+	{ "leftcall_sliced", {
+		"left",  typed_term,
+		"arg",   typed_term,
+		"rel",   SubtypeRelation,
+		"cause", gen.any_lua_type,
+	} },
+	{ "sliced_rightcall", {
+		"rel",   SubtypeRelation,
+		"right", typed_term,
+		"arg",   typed_term,
+		"cause", gen.any_lua_type,
+	} },
+	{ "rightcall_sliced", {
+		"left",  typed_term,
+		"rel",   SubtypeRelation,
+		"arg",   typed_term,
+		"cause", gen.any_lua_type,
+	} },
 })
 
 -- typed terms have been typechecked but do not store their type internally
@@ -532,20 +499,18 @@ typed_term:define_enum("typed", {
 	} },
 	{ "enum_desc_cons", {
 		"variants", map(gen.builtin_string, typed_term),
-		"rest", typed_term
+		"rest",     typed_term,
 	} },
-	{ "enum_type", {
-		"desc", typed_term
-	}},
+	{ "enum_type", { "desc", typed_term } },
 	{ "enum_case", {
-		"target", typed_term,
+		"target",   typed_term,
 		"variants", map(gen.builtin_string, typed_term),
-		"default", typed_term
-	}},
+		"default",  typed_term,
+	} },
 	{ "enum_absurd", {
 		"target", typed_term,
-		"debug", gen.builtin_string
-	}},
+		"debug",  gen.builtin_string,
+	} },
 	{ "object_cons", { "methods", map(gen.builtin_string, typed_term) } },
 	{ "object_corec_cons", { "methods", map(gen.builtin_string, typed_term) } },
 	{ "object_elim", {
@@ -591,14 +556,14 @@ typed_term:define_enum("typed", {
 
 	-- a list of upper and lower bounds, and a relation being bound with respect to
 	{ "range", {
-		  "lower_bounds", array(typed_term),
-		  "upper_bounds", array(typed_term),
-		  "relation",     typed_term, -- a subtyping relation. not currently represented.
+		"lower_bounds", array(typed_term),
+		"upper_bounds", array(typed_term),
+		"relation",     typed_term, -- a subtyping relation. not currently represented.
 	} },
 
 	{ "singleton", {
-		  "supertype", typed_term,
-		  "value",     value,
+		"supertype", typed_term,
+		"value",     value,
 	} },
 
 	{ "program_sequence", {
@@ -618,27 +583,21 @@ typed_term:define_enum("typed", {
 		"effect_type", typed_term,
 		"result_type", typed_term,
 	} },
-	{ "srel_type", {
-		"target_type", typed_term,
-	} },
-	{ "variance_type", {
-		"target_type", typed_term,
-	} },
+	{ "srel_type", { "target_type", typed_term } },
+	{ "variance_type", { "target_type", typed_term } },
 	{ "variance_cons", {
 		"positive", typed_term,
-		"srel", typed_term
+		"srel",     typed_term,
 	} },
 	{ "intersection_type", {
-		"left", typed_term,
-		"right", typed_term
+		"left",  typed_term,
+		"right", typed_term,
 	} },
 	{ "union_type", {
-		"left", typed_term,
-		"right", typed_term
+		"left",  typed_term,
+		"right", typed_term,
 	} },
-	{ "constrained_type", {
-		"constraints", array(constraintelem)
-	}}
+	{ "constrained_type", { "constraints", array(constraintelem) } },
 }) 
 
 local unique_id = gen.builtin_table
@@ -776,9 +735,9 @@ value:define_enum("value", {
 
 	-- a list of upper and lower bounds, and a relation being bound with respect to
 	{ "range", {
-		  "lower_bounds", array(value),
-		  "upper_bounds", array(value),
-		  "relation",     value, -- a subtyping relation. not currently represented.
+		"lower_bounds", array(value),
+		"upper_bounds", array(value),
+		"relation",     value, -- a subtyping relation. not currently represented.
 	} },
 
 	-- metaprogramming stuff
@@ -815,9 +774,7 @@ value:define_enum("value", {
 	} },
 	{ "enum_type", { "desc", value } },
 	{ "enum_desc_type", { "universe", value } },
-	{ "enum_desc_value", {
-		"variants", gen.declare_map(gen.builtin_string, value)
-	} },
+	{ "enum_desc_value", { "variants", gen.declare_map(gen.builtin_string, value) } },
 	{ "record_value", { "fields", map(gen.builtin_string, value) } },
 	{ "record_type", { "desc", value } },
 	{ "record_desc_type", { "universe", value } },
@@ -894,20 +851,16 @@ value:define_enum("value", {
 		"effect_sig", value,
 		"base_type",  value,
 	} },
-	{ "srel_type", {
-		"target_type", value,
-	} },
-	{ "variance_type",{
-		"target_type", value
-	} },
+	{ "srel_type", { "target_type", value } },
+	{ "variance_type", { "target_type", value } },
 	{ "intersection_type", {
-		"left", value,
-		"right", value
+		"left",  value,
+		"right", value,
 	} },
 	{ "union_type", {
-		"left", value,
-		"right", value
-	} }
+		"left",  value,
+		"right", value,
+	} },
 })
 
 -- stylua: ignore
