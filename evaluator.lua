@@ -897,8 +897,8 @@ function check_concrete(val, use)
 
 	if use:is_intersection_type() then
 		local usea, useb = use:unwrap_intersection_type()
-		typechecker_state:queue_subtype(val, usea, "union dissasembly")
-		typechecker_state:queue_subtype(val, useb, "union dissasembly")
+		typechecker_state:queue_subtype(val, usea, "intersection dissasembly")
+		typechecker_state:queue_subtype(val, useb, "intersection dissasembly")
 		return true
 	end
 
