@@ -6,18 +6,18 @@ let host-sub = (intrinsic "return function(a, b) return a - b end" : host-arith-
 #let foo = (record (bar = 5) (baz = 6))
 #let subbed = host-sub foo.bar y
 
-let implicit-wrap = lambda_curry ((T : type_(10)))
+let implicit-wrap = lambda_curry ((T : type_(10, 0)))
 	lambda ((x : T))
 		wrap T x
 
-let implicit-unwrap = lambda_implicit (T : type_(10))
+let implicit-unwrap = lambda_implicit (T : type_(10, 0))
 	lambda ((x : wrapped(T)))
 		unwrap T x
 
 # FIXME: type of universe
 # we need to wrap this, and wrap takes a type in star-10
 # so we have to settle for star-9
-let universe = type_(9)
+let universe = type_(9, 1)
 
 let host-bool-wrap            = intrinsic "return terms.value.host_bool_type"      : wrapped(host-type)
 let host-string-wrap          = intrinsic "return terms.value.host_string_type"    : wrapped(host-type)
@@ -41,7 +41,7 @@ let host-string-concat = intrinsic "return function(a, b) return a .. b end" :
 	host-func-type (a : host-string, b : host-string) -> ((c : host-string))
 
 let host-srel-type =
-	lambda_implicit (U : type_(10))
+	lambda_implicit (U : type_(10, 0))
 		implicit-unwrap
 			intrinsic
 				""""
@@ -61,12 +61,12 @@ let host-srel-type =
 				:
 				wrapped (forall ((x : U)) -> (res : U))
 
-let subtyping = intrinsic "return evaluator.UniverseOmegaRelation" : host-srel-type(type_(9))
+let subtyping = intrinsic "return evaluator.UniverseOmegaRelation" : host-srel-type(type_(9, 0))
 
-let tuple-desc-relation = intrinsic "return evaluator.TupleDescRelation" : host-srel-type(type_(9))
+let tuple-desc-relation = intrinsic "return evaluator.TupleDescRelation" : host-srel-type(type_(9, 0))
 
 let _|_ =
-	lambda_implicit (U : type_(10))
+	lambda_implicit (U : type_(10, 0))
 		implicit-unwrap
 			intrinsic
 				""""
@@ -88,7 +88,7 @@ let _|_ =
 				wrapped (forall (a : U, b : U) -> (res : U))
 
 let _&_ =
-	lambda_implicit (U : type_(10))
+	lambda_implicit (U : type_(10, 0))
 		implicit-unwrap
 			intrinsic
 				""""
@@ -110,7 +110,7 @@ let _&_ =
 				wrapped (forall (a : U, b : U) -> (res : U))
 
 let covariant = 
-	lambda_implicit (U : type_(10))
+	lambda_implicit (U : type_(10, 0))
 		implicit-unwrap
 			intrinsic
 				""""
@@ -134,7 +134,7 @@ let covariant =
 				wrapped (forall ((a : U)) -> (res : U))
 
 let contravariant = 
-	lambda_implicit (U : type_(10))
+	lambda_implicit (U : type_(10, 0))
 		implicit-unwrap
 			intrinsic
 				""""
@@ -157,7 +157,7 @@ let contravariant =
 				:
 				wrapped (forall ((a : U)) -> (res : U))
 
-let tuple-of-implicit = lambda_implicit(T : type_(10))
+let tuple-of-implicit = lambda_implicit(T : type_(10, 0))
 	lambda (xs : T)
 		xs
 
@@ -177,7 +177,7 @@ let new-host-unique-id = lambda ((name : host-string))
 	let (source2) = host-string-concat(source1, "\" }")
 	intrinsic source2 : host-unique-id
 
-let host-family-sig-srels = lambda ((signature : type_(1)))
+let host-family-sig-srels = lambda ((signature : type_(1, 0)))
 	let inner = intrinsic
 		""""
 			local typed_array = terms_gen.declare_array(terms.typed_term)
@@ -223,12 +223,12 @@ let host-family-sig-srels = lambda ((signature : type_(1)))
 			end
 			return convert_sig
 		:
-		host-func-type ((signature : wrapped(type_(1)))) -> ((srel_type : wrapped(type_(1))))
+		host-func-type ((signature : wrapped(type_(1, 0)))) -> ((srel_type : wrapped(type_(1, 0))))
 	let (srels-t) = inner(implicit-wrap(signature))
 	implicit-unwrap(srels-t)
 
 
-let new-host-type-family = lambda (unique-id : host-unique-id, signature : type_(1), variance : host-family-sig-srels(signature))
+let new-host-type-family = lambda (unique-id : host-unique-id, signature : type_(1, 0), variance : host-family-sig-srels(signature))
 	let inner = intrinsic
 		""""
 			local typed_array = terms_gen.declare_array(terms.typed_term)
@@ -282,7 +282,7 @@ let new-host-type-family = lambda (unique-id : host-unique-id, signature : type_
 		:
 		host-func-type (
 				unique-id  : host-unique-id,
-				signature_ : wrapped(type_(1)),
+				signature_ : wrapped(type_(1, 0)),
 				variance_  : wrapped(host-family-sig-srels(implicit-unwrap(signature_))))
 			->
 			((family : wrapped(signature)))

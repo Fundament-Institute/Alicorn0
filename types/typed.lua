@@ -66,9 +66,9 @@ function typed:unwrap_level_max() end
 function typed:as_level_max() end
 ---@return boolean
 function typed:is_star() end
----@return number
+---@return number, number
 function typed:unwrap_star() end
----@return boolean, number
+---@return boolean, number, number
 function typed:as_star() end
 ---@return boolean
 function typed:is_prop() end
@@ -359,7 +359,7 @@ function typed:as_constrained_type() end
 ---@field level0 typed
 ---@field level_suc fun(previous_level: typed): typed
 ---@field level_max fun(level_a: typed, level_b: typed): typed
----@field star fun(level: number): typed
+---@field star fun(level: number, depth: number): typed
 ---@field prop fun(level: number): typed
 ---@field tuple_cons fun(elements: ArrayValue): typed
 ---@field tuple_elim fun(names: ArrayValue, subject: typed, length: number, body: typed): typed

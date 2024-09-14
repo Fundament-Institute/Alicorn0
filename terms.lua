@@ -459,7 +459,7 @@ typed_term:define_enum("typed", {
 		"level_a", typed_term,
 		"level_b", typed_term,
 	} },
-	{ "star", { "level", gen.builtin_number } },
+	{ "star", { "level", gen.builtin_number, "depth", gen.builtin_number } },
 	{ "prop", { "level", gen.builtin_number } },
 	{ "tuple_cons", { "elements", array(typed_term) } },
 	--{"tuple_extend", {"base", typed_term, "fields", array(typed_term)}}, -- maybe?
@@ -791,7 +791,7 @@ value:define_enum("value", {
 	{ "number_type" },
 	{ "number", { "number", gen.builtin_number } },
 	{ "level", { "level", gen.builtin_number } },
-	{ "star", { "level", gen.builtin_number } },
+	{ "star", { "level", gen.builtin_number, "depth", gen.builtin_number } },
 	{ "prop", { "level", gen.builtin_number } },
 	{ "neutral", { "neutral", neutral_value } },
 

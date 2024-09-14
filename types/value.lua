@@ -186,9 +186,9 @@ function value:unwrap_level() end
 function value:as_level() end
 ---@return boolean
 function value:is_star() end
----@return number
+---@return number, number
 function value:unwrap_star() end
----@return boolean, number
+---@return boolean, number, number
 function value:as_star() end
 ---@return boolean
 function value:is_prop() end
@@ -385,7 +385,7 @@ function value:as_union_type() end
 ---@field number_type value
 ---@field number fun(number: number): value
 ---@field level fun(level: number): value
----@field star fun(level: number): value
+---@field star fun(level: number, depth: number): value
 ---@field prop fun(level: number): value
 ---@field neutral fun(neutral: neutral_value): value
 ---@field host_value fun(host_value: any): value

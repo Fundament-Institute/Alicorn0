@@ -304,13 +304,13 @@ local tupleof_ascribed_names_inner = metalanguage.reducer(
 		end
 		local function cons(...)
 			return terms.inferrable_term.enum_cons(
-				terms.value.tuple_desc_type(terms.value.star(0)),
+				terms.value.tuple_desc_type(terms.value.star(0, 0)),
 				terms.DescCons.cons,
 				tup_cons(...)
 			)
 		end
 		local empty = terms.inferrable_term.enum_cons(
-			terms.value.tuple_desc_type(terms.value.star(0)),
+			terms.value.tuple_desc_type(terms.value.star(0, 0)),
 			terms.DescCons.empty,
 			tup_cons()
 		)
@@ -797,8 +797,12 @@ end
 
 ---@type lua_operative
 local function startype_impl(syntax, env)
-	local ok, level_val = syntax:match({
-		metalanguage.listmatch(metalanguage.accept_handler, metalanguage.isvalue(metalanguage.accept_handler)),
+	local ok, level_val, depth_val = syntax:match({
+		metalanguage.listmatch(
+			metalanguage.accept_handler,
+			metalanguage.isvalue(metalanguage.accept_handler),
+			metalanguage.isvalue(metalanguage.accept_handler)
+		),
 	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, level_val
@@ -809,8 +813,17 @@ local function startype_impl(syntax, env)
 	if level_val.val % 1 ~= 0 then
 		return false, "literal must be an integer for type levels"
 	end
-	local term =
-		terms.inferrable_term.typed(value.star(level_val.val + 1), usage_array(), terms.typed_term.star(level_val.val))
+	if depth_val.type ~= "f64" then
+		return false, "literal must be a number for type levels"
+	end
+	if depth_val.val % 1 ~= 0 then
+		return false, "literal must be an integer for type levels"
+	end
+	local term = terms.inferrable_term.typed(
+		value.star(level_val.val + 1, depth_val.val + 1),
+		usage_array(),
+		terms.typed_term.star(level_val.val, depth_val.val)
+	)
 
 	return true, term, env
 end
@@ -837,7 +850,7 @@ local function build_wrap(body_fn, type_fn)
 				terms.tuple_desc(
 					value.closure(
 						pname_type,
-						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),
+						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA, 0)),
 						terms.runtime_context()
 					),
 					value.closure(
@@ -885,7 +898,7 @@ local function build_unwrap(body_fn, type_fn)
 				terms.tuple_desc(
 					value.closure(
 						pname_type,
-						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),
+						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA, 0)),
 						terms.runtime_context()
 					),
 					value.closure(
@@ -931,7 +944,7 @@ local function build_wrapped(body_fn)
 				terms.tuple_desc(
 					value.closure(
 						pname_type,
-						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA)),
+						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA, 0)),
 						terms.runtime_context()
 					)
 				)
@@ -979,10 +992,10 @@ local core_operations = {
 	record = exprs.host_operative(record_build, "record_build"),
 	intrinsic = exprs.host_operative(intrinsic, "intrinsic"),
 	["host-number"] = lit_term(value.host_number_type, value.host_type_type),
-	["host-type"] = lit_term(value.host_type_type, value.star(1)),
+	["host-type"] = lit_term(value.host_type_type, value.star(1, 0)),
 	["host-func-type"] = exprs.host_operative(make_host_func_syntax(false), "host_func_type_impl"),
 	["host-prog-type"] = exprs.host_operative(make_host_func_syntax(true), "host_prog_type_impl"),
-	type = lit_term(value.star(0), value.star(1)),
+	type = lit_term(value.star(0, 0), value.star(1, 1)),
 	type_ = exprs.host_operative(startype_impl, "startype_impl"),
 	["forall"] = exprs.host_operative(forall_type_impl, "forall_type_impl"),
 	lambda = exprs.host_operative(lambda_impl, "lambda_impl"),

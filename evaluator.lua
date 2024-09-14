@@ -811,17 +811,23 @@ end)
 for _, type_of_type in ipairs({
 	value.host_type_type,
 }) do
-	add_comparer(type_of_type.kind, value.star(0).kind, always_fits_comparer)
+	add_comparer(type_of_type.kind, value.star(0, 0).kind, always_fits_comparer)
 end
 
-add_comparer(value.star(0).kind, value.star(0).kind, function(a, b)
-	local alevel = a:unwrap_star()
-	local blevel = b:unwrap_star()
+add_comparer(value.star(0, 0).kind, value.star(0, 0).kind, function(a, b)
+	local alevel, adepth = a:unwrap_star()
+	local blevel, bdepth = b:unwrap_star()
 	if alevel > blevel then
 		print("star-comparer error:")
-		print("a:", alevel)
-		print("b:", blevel)
+		print("a level:", alevel)
+		print("b level:", blevel)
 		return false, "a.level > b.level"
+	end
+	if adepth < bdepth then
+		print("star-comparer error:")
+		print("a depth:", adepth)
+		print("b depth:", bdepth)
+		return false, "a.depth < b.depth"
 	end
 	return true
 end)
@@ -1405,7 +1411,8 @@ function infer(
 		)
 		local result_type_result_type_result =
 			apply_value(result_type_result_type, evaluate(param_type_term, typechecking_context.runtime_context))
-		local sort = value.union_type(param_type_type, value.union_type(result_type_result_type_result, value.star(0)))
+		local sort =
+			value.union_type(param_type_type, value.union_type(result_type_result_type_result, value.star(0, 0)))
 		-- local sort = value.star(
 		-- 	math.max(nearest_star_level(param_type_type), nearest_star_level(result_type_result_type_result), 0)
 		-- )
@@ -1548,7 +1555,7 @@ function infer(
 		if not desc_type:is_tuple_desc_type() then
 			error "argument to tuple_type is not a tuple_desc"
 		end
-		return terms.value.star(0), desc_usages, terms.typed_term.tuple_type(desc_term)
+		return terms.value.star(0, 0), desc_usages, terms.typed_term.tuple_type(desc_term)
 	elseif inferrable_term:is_record_cons() then
 		local fields = inferrable_term:unwrap_record_cons()
 		-- type_data is either "empty", an empty tuple,
@@ -1718,7 +1725,7 @@ function infer(
 		local handler_level = get_level(goal_type)
 		local userdata_type_level = get_level(userdata_type_type)
 		local operative_type_level = math.max(handler_level, userdata_type_level)
-		return value.star(operative_type_level),
+		return value.star(operative_type_level, 0),
 			operative_type_usages,
 			typed_term.operative_type_cons(handler_term, userdata_type_term)
 	elseif inferrable_term:is_host_user_defined_type_cons() then
@@ -1837,7 +1844,7 @@ function infer(
 		if not desc_type:is_tuple_desc_type() then
 			error "must be a tuple desc"
 		end
-		return value.star(0), desc_usages, typed_term.host_tuple_type(desc_term)
+		return value.star(0, 0), desc_usages, typed_term.host_tuple_type(desc_term)
 	elseif inferrable_term:is_program_sequence() then
 		local first, anchor, continue = inferrable_term:unwrap_program_sequence()
 		local first_type, first_usages, first_term = infer(first, typechecking_context)
@@ -1900,7 +1907,7 @@ function infer(
 		add_arrays(res_usages, effect_type_usages)
 		add_arrays(res_usages, result_type_usages)
 		-- TODO: use biunification constraints for start level
-		return value.star(0), res_usages, typed_term.program_type(effect_type_term, result_type_term)
+		return value.star(0, 0), res_usages, typed_term.program_type(effect_type_term, result_type_term)
 	else
 		error("infer: unknown kind: " .. inferrable_term.kind)
 	end
@@ -2354,8 +2361,8 @@ function evaluate(typed_term, runtime_context)
 	elseif typed_term:is_level_type() then
 		return value.level_type
 	elseif typed_term:is_star() then
-		local level = typed_term:unwrap_star()
-		return value.star(level)
+		local level, depth = typed_term:unwrap_star()
+		return value.star(level, depth)
 	elseif typed_term:is_prop() then
 		local level = typed_term:unwrap_prop()
 		return value.prop(level)
