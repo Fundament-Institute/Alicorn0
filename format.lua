@@ -360,9 +360,12 @@ local grammar = P {
 	comma_paren_body = ((list(IFRmt(V "paren_tokens", 2)) + V "paren_tokens") * V "comma") ^ 1
 		* (list(IFRmt(V "paren_tokens", 2)) + V "paren_tokens"),
 
-	open_brace = Cg(C(P "("), "bracetype")
-		+ (Cg(C(P "["), "bracetype") * symbol(Cc("braced_list")))
-		+ (Cg(C(P "{"), "bracetype") * symbol(Cc("curly-list"))),
+	open_paren = Cg(C(P "("), "bracetype"),
+	open_bracket = Cg(C(P "["), "bracetype"),
+	open_curly = Cg(C(P "{"), "bracetype"),
+	open_brace = V "open_paren" + (V "open_bracket" * symbol(Cc("braced_list"))) + (V "open_curly" * symbol(
+		Cc("curly-list")
+	)),
 	close_brace = update_ffp(
 		"matching close brace",
 		Cmt(Cb("bracetype") * C(S "])}"), function(_, _, bracetype, brace)
@@ -384,10 +387,14 @@ local grammar = P {
 
 	function_call = V "symbol" * Ct(
 		list(
-			P "("
+			(
+				V "open_paren"
+				+ (V "open_bracket" * Cg(symbol(Cc("_[_]")), "brace"))
+				+ (V "open_curly" * Cg(symbol(Cc("_{_}")), "brace"))
+			)
 				* V "paren_spacers"
 				* (V "comma_paren_body" + V "paren_tokens") ^ -1
-				* update_ffp("close brace", P ")")
+				* V "close_brace"
 		) ^ 1
 	) / function(symbol, argcalls)
 		local acc = {}
@@ -395,11 +402,20 @@ local grammar = P {
 		acc = table.remove(argcalls, 1)
 		table.insert(acc.elements, 1, symbol)
 		acc.anchor = symbol.anchor
+		if acc.elements["brace"] then
+			table.insert(acc.elements, 1, acc.elements["brace"])
+			acc.elements[1].anchor = acc.anchor
+		end
 
 		for _, v in ipairs(argcalls) do
 			table.insert(v.elements, 1, acc)
 			v.anchor = acc.anchor
 			acc = v
+
+			if acc.elements["brace"] then
+				table.insert(acc.elements, 1, acc.elements["brace"])
+				acc.elements[1].anchor = acc.anchor
+			end
 		end
 
 		return acc
