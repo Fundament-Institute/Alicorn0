@@ -29,6 +29,8 @@ local anchor_mt = {
 	__index = Anchor,
 }
 
+lpeg.locale(lpeg)
+
 local function element(kind, pattern)
 	return Ct(Cg(V "textpos", "anchor") * Cg(Cc(kind), "kind") * pattern)
 end
@@ -321,7 +323,14 @@ local grammar = P {
 	tokens = update_ffp(
 		"token",
 		space_tokens(
-			V "comment" + V "function_call" + V "paren_list" + V "longstring" + V "string" + V "number" + V "symbol"
+			V "comment"
+				+ V "infix_brace"
+				+ V "function_call"
+				+ V "paren_list"
+				+ V "longstring"
+				+ V "string"
+				+ V "number"
+				+ V "symbol"
 		)
 	),
 
@@ -359,6 +368,36 @@ local grammar = P {
 	comma = update_ffp('","', P "," * V "paren_spacers"),
 	comma_paren_body = ((list(IFRmt(V "paren_tokens", 2)) + V "paren_tokens") * V "comma") ^ 1
 		* (list(IFRmt(V "paren_tokens", 2)) + V "paren_tokens"),
+
+	braced_symbol = symbol(V "symbol_chars" ^ -1 * ((P "[_]" + P "{_}") * V "symbol_chars" ^ 0) ^ 1),
+	infix_brace = V "braced_symbol" + list(
+		Cg(C(V "symbol_chars" ^ 1), "braceacc")
+			* ((V "open_bracket" + V "open_curly") * list(
+					V "paren_spacers" * (V "comma_paren_body" + V "paren_tokens") ^ -1
+				) * V "infix_braceclose_accumulator")
+				^ 1
+	) / function(list)
+		assert(list.elements["braceacc"])
+
+		table.insert(list.elements, 1, {
+			kind = "symbol",
+			str = list.elements["braceacc"],
+			anchor = list.anchor,
+		})
+
+		list.elements["braceacc"] = nil
+
+		return list
+	end,
+
+	infix_braceclose_accumulator = V "close_brace" * Cg(
+		Cb("braceacc")
+			* Cs(Cb("bracetype") / { ["["] = "[_]", ["{"] = "{_}" } * C(V "symbol_chars"))
+			/ function(prev, new)
+				return prev .. new
+			end,
+		"braceacc"
+	),
 
 	open_paren = Cg(C(P "("), "bracetype"),
 	open_bracket = Cg(C(P "["), "bracetype"),
@@ -435,7 +474,8 @@ local grammar = P {
 	big_e = V "decimal" * (P "e" * V "decimal") ^ -1,
 	float_special = P "+inf" + P "-inf" + P "nan",
 
-	symbol = symbol((1 - (S "\\#()[]{};,\t \n\r")) ^ 1),
+	symbol_chars = (1 - (S '\\#()[]{};,"\t\r\n ' + lpeg.space)) ^ 1,
+	symbol = symbol(V "symbol_chars"),
 }
 
 local function span_error(position, subject, msg)
