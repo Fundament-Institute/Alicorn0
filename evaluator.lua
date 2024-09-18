@@ -657,14 +657,48 @@ local function revealing(ctx, typ)
 	error "NYI, revealing something that isn't a tuple access"
 end
 
+---take apart a symbolic tuple value to produce a (simplified? hopefully?) prefix suitable for use in upcasting and downcasting
+---@param subject value
+---@param idx integer
+---@return value
+local function tuple_slice(subject, idx)
+	if subject:is_neutral() then
+		local nv = subject:unwrap_neutral()
+		if nv:is_free() then
+			return subject
+		end
+	end
+	error "NYI any other tuple plsfix" --FIXME --TODO
+end
+
 ---extract a specified element type from a given tuple desc
 ---@param subject value
 ---@param desc value
 ---@param idx integer
 ---@return value
 local function extract_desc_nth(subject, desc, idx)
-	--TODO: loop through the description until finding the desired element and instantiate the type
-	error "NYI extract_desc_nth"
+	local slices = {}
+	repeat
+		local variant, args = desc:unwrap_enum_value()
+		local done = false
+		if variant == terms.DescCons.empty then
+			done = true
+		elseif variant == terms.DescCons.cons then
+			local pfx, elem = args:unwrap_tuple_value():unpack()
+			slices[#slices + 1] = elem
+			desc = pfx
+		else
+			error "unknown constructor; broken tuple desc?"
+		end
+	until done
+
+	if #slices < idx then
+		error("tuple is too short for specified index " .. tostring(#slices) .. " < " .. tostring(idx))
+	end
+	local type_former = slices[#slices - idx + 1]
+	local prefix = tuple_slice(subject, idx)
+	local elem_type = apply_value(type_former, prefix)
+	return elem_type
 end
 
 ---@param ctx TypecheckingContext
@@ -690,7 +724,7 @@ local function upcast(ctx, typ)
 				--TODO: speculate on tuple type and reformulate extraction in terms of constraining
 				if boundstype:is_tuple_type() then
 					local desc = boundstype:unwrap_tuple_type()
-					local member = extract_desc_nth(value.neutral(subject), desc, idx)
+					local member = extract_desc_nth(value.neutral(subject), desc, elem)
 					--TODO: level srel? speculate on member types?
 					if member:is_star() then
 						local level, depth = member:unwrap_star()
@@ -1009,6 +1043,7 @@ function check_concrete(lctx, val, rctx, use)
 		if vnv:is_tuple_element_access_stuck() then
 			local innerctx, bound = upcast(lctx, val)
 			typechecker_state:queue_subtype(innerctx, bound, rctx, use)
+			return true
 		end
 	end
 
