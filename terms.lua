@@ -395,10 +395,12 @@ local constraintelem = gen.declare_enum("constraintelem", {
 	{ "sliced_constrain", {
 		"rel",   SubtypeRelation,
 		"right", typed_term,
+		"rightctx", typechecking_context_type,
 		"cause", gen.any_lua_type,
 	} },
 	{ "constrain_sliced", {
 		"left",  typed_term,
+		"leftctx", typechecking_context_type,
 		"rel",   SubtypeRelation,
 		"cause", gen.any_lua_type,
 	} },
@@ -406,10 +408,12 @@ local constraintelem = gen.declare_enum("constraintelem", {
 		"arg",   typed_term,
 		"rel",   SubtypeRelation,
 		"right", typed_term,
+		"rightctx", typechecking_context_type,
 		"cause", gen.any_lua_type,
 	} },
 	{ "leftcall_sliced", {
 		"left",  typed_term,
+		"leftctx", typechecking_context_type,
 		"arg",   typed_term,
 		"rel",   SubtypeRelation,
 		"cause", gen.any_lua_type,
@@ -417,11 +421,13 @@ local constraintelem = gen.declare_enum("constraintelem", {
 	{ "sliced_rightcall", {
 		"rel",   SubtypeRelation,
 		"right", typed_term,
+		"rightctx", typechecking_context_type,
 		"arg",   typed_term,
 		"cause", gen.any_lua_type,
 	} },
 	{ "rightcall_sliced", {
 		"left",  typed_term,
+		"leftctx", typechecking_context_type,
 		"rel",   SubtypeRelation,
 		"arg",   typed_term,
 		"cause", gen.any_lua_type,
