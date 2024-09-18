@@ -2384,15 +2384,6 @@ function evaluate(typed_term, runtime_context)
 		return value.host_wrapped_type(type_value)
 	elseif typed_term:is_host_wrap() then
 		local content = typed_term:unwrap_host_wrap()
-		local content_val = evaluate(content, runtime_context)
-		if content_val:is_neutral() then
-			local nval = content_val:unwrap_neutral()
-			return value.neutral(neutral_value.host_wrap_stuck(nval))
-		end
-		return value.host_value(content_val)
-	elseif typed_term:is_host_unstrict_wrap() then
-		local content = typed_term:unwrap_host_unstrict_wrap()
-		local content_val = evaluate(content, runtime_context)
 		return value.host_value(content_val)
 	elseif typed_term:is_host_unwrap() then
 		local unwrapped = typed_term:unwrap_host_unwrap()
@@ -2591,48 +2582,48 @@ function evaluate(typed_term, runtime_context)
 			---@cast constraint constraintelem
 			if constraint:is_sliced_constrain() then
 				local rel, right, ctx, cause = constraint:unwrap_sliced_constrain()
-				typechecker_state:constrain(mv:as_value(), nil, evaluate(right, runtime_context), ctx, rel, cause)
+				typechecker_state:send_constrain(nil, mv:as_value(), rel, ctx, evaluate(right, runtime_context), cause)
 			elseif constraint:is_constrain_sliced() then
 				local left, ctx, rel, cause = constraint:unwrap_constrain_sliced()
-				typechecker_state:constrain(evaluate(left, runtime_context), ctx, mv:as_value(), nil, rel, cause)
+				typechecker_state:send_constrain(ctx, evaluate(left, runtime_context), rel, nil, mv:as_value(), cause)
 			elseif constraint:is_sliced_leftcall() then
 				local arg, rel, right, ctx, cause = constraint:unwrap_sliced_leftcall()
-				typechecker_state:constrain(
-					apply_value(mv:as_value(), evaluate(arg, runtime_context)),
+				typechecker_state:send_constrain(
 					nil,
-					evaluate(right, runtime_context),
-					ctx,
+					apply_value(mv:as_value(), evaluate(arg, runtime_context)),
 					rel,
+					ctx,
+					evaluate(right, runtime_context),
 					cause
 				)
 			elseif constraint:is_leftcall_sliced() then
 				local left, ctx, arg, rel, cause = constraint:unwrap_leftcall_sliced()
-				typechecker_state:constrain(
-					apply_value(evaluate(left, runtime_context), evaluate(arg, runtime_context)),
+				typechecker_state:send_constrain(
 					ctx,
-					mv:as_value(),
-					nil,
+					apply_value(evaluate(left, runtime_context), evaluate(arg, runtime_context)),
 					rel,
+					nil,
+					mv:as_value(),
 					cause
 				)
 			elseif constraint:is_sliced_rightcall() then
 				local rel, right, ctx, arg, cause = constraint:unwrap_sliced_rightcall()
-				typechecker_state:constrain(
-					mv:as_value(),
+				typechecker_state:send_constrain(
 					nil,
-					apply_value(evaluate(right, runtime_context), evaluate(arg, runtime_context)),
-					ctx,
+					mv:as_value(),
 					rel,
+					ctx,
+					apply_value(evaluate(right, runtime_context), evaluate(arg, runtime_context)),
 					cause
 				)
 			elseif constraint:is_rightcall_sliced() then
 				local left, ctx, rel, arg, cause = constraint:unwrap_rightcall_sliced()
-				typechecker_state:constrain(
-					evaluate(left, runtime_context),
+				typechecker_state:send_constrain(
 					ctx,
-					apply_value(mv:as_value(), evaluate(arg, runtime_context)),
-					nil,
+					evaluate(left, runtime_context),
 					rel,
+					nil,
+					apply_value(mv:as_value(), evaluate(arg, runtime_context)),
 					cause
 				)
 			else
@@ -3388,6 +3379,20 @@ function TypeCheckerState:queue_constrain(lctx, val, rel, rctx, use, cause)
 	assert(type(l) == "number", "l isn't number, instead found " .. tostring(l))
 	assert(type(r) == "number", "r isn't number, instead found " .. tostring(r))
 	U.append(self.pending, EdgeNotif.Constrain(l, rel, r, self.block_level, cause))
+end
+
+---@param lctx TypecheckingContext
+---@param val value
+---@param rel SubtypeRelation
+---@param rctx TypecheckingContext
+---@param use value
+---@param cause any
+function TypeCheckerState:send_constrain(lctx, val, rel, rctx, use, cause)
+	if #self.pending == 0 then
+		self:constrain(val, lctx, use, rctx, rel, cause)
+	else
+		self:queue_constrain(lctx, val, rel, rctx, use, cause)
+	end
 end
 
 ---@param v value
