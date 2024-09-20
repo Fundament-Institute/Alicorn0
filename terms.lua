@@ -389,6 +389,59 @@ local subtype_relation_mt = {}
 
 local SubtypeRelation = gen.declare_foreign(gen.metatable_equality(subtype_relation_mt), "SubtypeRelation")
 
+---@module 'types.constraintcause'
+local constraintcause = gen.declare_type()
+
+constraintcause:define_enum("constraintcause", {
+	{ "primitive", {
+		"description",
+		gen.builtin_string,
+		"position",
+		anchor_type,
+	} },
+	{ "composition", {
+		"left",
+		constraintcause,
+		"right",
+		constraintcause,
+		"position",
+		anchor_type,
+	} },
+	{
+		"leftcall_discharge",
+		{
+			"call",
+			constraintcause,
+			"constraint",
+			constraintcause,
+			"position",
+			anchor_type,
+		},
+	},
+	{
+		"rightcall_discharge",
+		{
+			"constraint",
+			constraintcause,
+			"call",
+			constraintcause,
+			"position",
+			anchor_type,
+		},
+	},
+	{
+		"lost",
+		{ --Information has been lost, please generate any information you can to help someone debug the lost information in the future
+			"unique_string",
+			gen.builtin_string,
+			"stacktrace",
+			gen.builtin_string,
+			"auxiliary",
+			gen.any_lua_type,
+		},
+	},
+})
+
 ---@module 'types.constraintelem'
 -- stylua: ignore
 local constraintelem = gen.declare_enum("constraintelem", {
@@ -1008,6 +1061,7 @@ local terms = {
 	subtype_relation_mt = subtype_relation_mt,
 	SubtypeRelation = SubtypeRelation,
 	constraintelem = constraintelem,
+	constraintcause = constraintcause,
 
 	DescCons = DescCons,
 	tup_val = tup_val,

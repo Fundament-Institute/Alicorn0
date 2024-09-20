@@ -1030,20 +1030,25 @@ end)
 function check_concrete(lctx, val, rctx, use)
 	assert(val and use, "nil value or usage passed into check_concrete!")
 
-	if val:is_neutral() and use:is_neutral() then
-		if val == use then
-			return true
-		end
-		--TODO: enable the x.A <: y.A case
-		return false, "both values are neutral, but they aren't equal: " .. tostring(val) .. " ~= " .. tostring(use)
-	end
-
 	if val:is_neutral() then
+		if use:is_neutral() then
+			if val == use then
+				return true
+			end
+		end
 		local vnv = val:unwrap_neutral()
 		if vnv:is_tuple_element_access_stuck() then
 			local innerctx, bound = upcast(lctx, val)
 			typechecker_state:queue_subtype(innerctx, bound, rctx, use)
 			return true
+		end
+	end
+
+	if use:is_neutral() then
+		--TODO: downcast and test
+
+		if val:is_neutral() then
+			return false, "both values are neutral, but they aren't equal: " .. tostring(val) .. " ~= " .. tostring(use)
 		end
 	end
 
