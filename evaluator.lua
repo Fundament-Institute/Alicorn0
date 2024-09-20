@@ -2384,6 +2384,15 @@ function evaluate(typed_term, runtime_context)
 		return value.host_wrapped_type(type_value)
 	elseif typed_term:is_host_wrap() then
 		local content = typed_term:unwrap_host_wrap()
+		local content_val = evaluate(content, runtime_context)
+		if content_val:is_neutral() then
+			local nval = content_val:unwrap_neutral()
+			return value.neutral(neutral_value.host_wrap_stuck(nval))
+		end
+		return value.host_value(content_val)
+	elseif typed_term:is_host_unstrict_wrap() then
+		local content = typed_term:unwrap_host_unstrict_wrap()
+		local content_val = evaluate(content, runtime_context)
 		return value.host_value(content_val)
 	elseif typed_term:is_host_unwrap() then
 		local unwrapped = typed_term:unwrap_host_unwrap()
