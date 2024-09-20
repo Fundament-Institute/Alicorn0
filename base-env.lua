@@ -697,33 +697,68 @@ local function apply_operative_impl(syntax, env)
 
 	local type_of_fn, usages, fn_typed_term = evaluator.infer(fn_inferrable_term, env.typechecking_context)
 
-	local param_type, _
-	if type_of_fn:is_pi() then
-		param_type, _, _, _ = type_of_fn:unwrap_pi()
-	elseif type_of_fn:is_host_function_type() then
-		param_type, _, _ = type_of_fn:unwrap_host_function_type()
-	else
-		error "unknown fn type for apply operative"
-	end
+	-- TODO: apply operative?
+	-- TODO: param info and result info
+	local param_type_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+	--local param_info_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+	local result_type_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+	--local result_info_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+	local param_type = param_type_mv:as_value()
+	--local param_info = param_info_type_mv:as_value()
+	local param_info = param_info_explicit
+	local result_type = result_type_mv:as_value()
+	--local result_info = result_info_type_mv:as_value()
+	local result_info = result_info_pure
+	local spec_type = value.pi(param_type, param_info, result_type, result_info)
+	local host_spec_type = value.host_function_type(param_type, result_type, result_info)
 
-	local ok, args_inferrable_term = tail:match({
-		metalanguage.listmatch(
-			metalanguage.accept_handler,
-			exprs.expression(
-				utils.accept_with_env,
-				-- FIXME: do we infer here if evaled_type is stuck / a placeholder?
-				exprs.ExpressionArgs.new(terms.expression_goal.check(param_type), env)
-			)
+	local function rest_of_apply(spec_type)
+		evaluator.typechecker_state:flow(
+			type_of_fn,
+			env.typechecking_context,
+			spec_type,
+			env.typechecking_context,
+			"apply"
+		)
+
+		local ok, args_inferrable_term = tail:match({
+			metalanguage.listmatch(
+				metalanguage.accept_handler,
+				exprs.expression(
+					utils.accept_with_env,
+					-- FIXME: do we infer here if evaled_type is stuck / a placeholder?
+					exprs.ExpressionArgs.new(terms.expression_goal.check(param_type), env)
+				)
+			),
+		}, metalanguage.failure_handler, nil)
+		if not ok then
+			return ok, args_inferrable_term
+		end
+
+		local inf_term, env = utils.unpack_val_env(args_inferrable_term)
+		return terms.inferrable_term.application(
+			terms.inferrable_term.typed(spec_type, usages, fn_typed_term),
+			inf_term
 		),
-	}, metalanguage.failure_handler, nil)
-	if not ok then
-		return ok, args_inferrable_term
+			env
 	end
 
-	local inf_term, env = utils.unpack_val_env(args_inferrable_term)
-	return true,
-		terms.inferrable_term.application(terms.inferrable_term.typed(type_of_fn, usages, fn_typed_term), inf_term),
-		env
+	local ok, res1, res1env, res2, res2env
+	ok, res1, res1env = evaluator.typechecker_state:speculate(function()
+		return rest_of_apply(spec_type)
+	end)
+	if ok then
+		return true, res1, res1env
+	end
+	ok, res2, res2env = evaluator.typechecker_state:speculate(function()
+		return rest_of_apply(host_spec_type)
+	end)
+	if ok then
+		return true, res2, res2env
+	end
+	--error(res1)
+	--error(res2)
+	error("apply() speculation failed! debugging this is left as an exercise to the maintainer")
 end
 
 ---@type lua_operative
