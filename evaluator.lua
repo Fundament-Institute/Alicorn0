@@ -1698,7 +1698,31 @@ function infer(
 
 		-- evaluating the subject is necessary for inferring the type of the body
 		local subject_value = evaluate(subject_term, typechecking_context:get_runtime_context())
-		local tupletypes, n_elements = infer_tuple_type(subject_type, subject_value)
+
+		local desc = terms.empty
+		for _ in ipairs(names) do
+			local next_elem_type_mv = typechecker_state:metavariable(typechecking_context)
+			local next_elem_type = next_elem_type_mv:as_value()
+			desc = terms.cons(desc, next_elem_type)
+		end
+		local spec_type = terms.value.tuple_type(desc)
+		local host_spec_type = terms.value.host_tuple_type(desc)
+
+		local ok, tupletypes, n_elements = typechecker_state:speculate(function()
+			typechecker_state:flow(subject_type, typechecking_context, spec_type, typechecking_context)
+			return infer_tuple_type(spec_type, subject_value)
+		end)
+		--local tupletypes, n_elements = infer_tuple_type(subject_type, subject_value)
+		if not ok then
+			ok, tupletypes, n_elements = typechecker_state:speculate(function()
+				typechecker_state:flow(subject_type, typechecking_context, host_spec_type, typechecking_context)
+				return infer_tuple_type(host_spec_type, subject_value)
+			end)
+		end
+
+		if not ok then
+			error(tupletypes)
+		end
 
 		local inner_context = typechecking_context
 

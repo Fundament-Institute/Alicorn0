@@ -1106,14 +1106,14 @@ let new-operative = lambda (userdata : host-type, ud : userdata, handler : opera
 	# lol look how horrible tuple types are
 	# read as: (op-type : host-type, op : op-type)
 	let result-desc =
-		tuple-desc-elem type_(1)
-			tuple-desc-elem type_(1)
-				tuple-desc-empty type_(1)
+		tuple-desc-elem type_(1, 0)
+			tuple-desc-elem type_(1, 0)
+				tuple-desc-empty type_(1, 0)
 				lambda ()
 					host-type
 			lambda ((op-type : host-type))
 				op-type
-	tuple-of(type_(1), result-desc)(op-type, op)
+	tuple-of(type_(1, 0), result-desc)(op-type, op)
 let new-operative-implicit = lambda_implicit (userdata : host-type)
 	lambda (ud : userdata, handler : operative-handler-type(userdata))
 		let inner = intrinsic
@@ -1143,14 +1143,14 @@ let new-operative-implicit = lambda_implicit (userdata : host-type)
 		# lol look how horrible tuple types are
 		# read as: (op-type : host-type, op : op-type)
 		let result-desc =
-			tuple-desc-elem type_(1)
-				tuple-desc-elem type_(1)
-					tuple-desc-empty type_(1)
+			tuple-desc-elem type_(1, 0)
+				tuple-desc-elem type_(1, 0)
+					tuple-desc-empty type_(1, 0)
 					lambda ()
 						host-type
 				lambda ((op-type : host-type))
 					op-type
-		tuple-of(type_(1), result-desc)(op-type, op)
+		tuple-of(type_(1, 0), result-desc)(op-type, op)
 
 let block-reducer-storage-desc = tuple-desc-singleton(host-type, host-expression-args)
 
