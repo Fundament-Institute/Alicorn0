@@ -566,6 +566,7 @@ local function expression_pairhandler(args, a, b)
 
 		-- temporary, while it isn't a Maybe
 		if not operative_result_val:is_tuple_value() then
+			print("bad operative?", handler)
 			print("bad result val", operative_result_val)
 			error "operative handler didn't complete properly"
 		end

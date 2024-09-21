@@ -1,6 +1,7 @@
 local terms = require "terms"
 local metalanguage = require "metalanguage"
 local U = require "alicorn-utils"
+local utils = require "alicorn-utils"
 local runtime_context = terms.runtime_context
 local s = require "pretty-printer".s
 --local new_typechecking_context = terms.typechecking_context
@@ -85,7 +86,9 @@ local function FunctionRelation(srel)
 		end),
 		constrain = luatovalue(function(lctx, val, rctx, use)
 			local u = value.neutral(
-				neutral_value.free(free.unique({ debug = "FunctionRelation(" .. srel.debug_name .. ").constrain" }))
+				neutral_value.free(
+					free.unique({ debug = "FunctionRelation(" .. srel.debug_name .. ").constrain " .. utils.here() })
+				)
 			)
 
 			local applied_val = U.tag("apply_value", { val = val, use = use }, apply_value, val, u)
@@ -271,7 +274,7 @@ local TupleDescRelation = setmetatable({
 			-- i have considered exploiting the linked-list structure of tuple desc for recursive
 			-- checking, but doing it naively won't work because the unique (representing the tuple
 			-- value) should be the same across the whole desc
-			local unique = { debug = "TupleDescRelation.constrain" }
+			local unique = { debug = "TupleDescRelation.constrain" .. utils.here() }
 			local placeholder = value.neutral(neutral_value.free(free.unique(unique)))
 			local tuple_types_val, tuple_types_use, tuple_vals, n =
 				infer_tuple_type_unwrapped2(value.tuple_type(val), value.tuple_type(use), placeholder)
@@ -346,7 +349,7 @@ local function substitute_inner(val, mappings, context_len)
 		return typed_term.pi(param_type, param_info, result_type, result_info)
 	elseif val:is_closure() then
 		local param_name, code, capture = val:unwrap_closure()
-		local unique = { debug = "substitute_inner, val:is_closure" }
+		local unique = { debug = "substitute_inner, val:is_closure" .. utils.here() }
 		local arg = value.neutral(neutral_value.free(free.unique(unique)))
 		val = apply_value(val, arg)
 		--print("applied closure during substitution: (value term follows)")

@@ -268,4 +268,9 @@ function M.strip_ansi(s)
 	return s:gsub("\x1b[^m]*m", "")
 end
 
+function M.here()
+	local info = debug.getinfo(2, "Sl")
+	return " @ " .. info.source .. ":" .. info.currentline
+end
+
 return M
