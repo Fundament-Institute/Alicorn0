@@ -419,6 +419,41 @@ local function speculate_pi_type(env, metaval)
 	end)
 end
 
+---HORRIBLE HACK MAKE THIS BETTER
+---@param env Environment
+---@param metaval value
+---@return boolean, value
+local function operative_test_hack(env, metaval)
+	local edges = evaluator.typechecker_state.graph.constrain_edges:to(
+		metaval:unwrap_neutral():unwrap_free():unwrap_metavariable().usage
+	)
+	local res = nil
+	for _, edge in ipairs(edges) do
+		if not edge.rel == evaluator.UniverseOmegaRelation then
+			do
+				return false
+			end
+			error "not a subtyping relation"
+		end
+		if evaluator.typechecker_state.values[edge.left][1]:is_operative_type() then
+			if not res then
+				res = evaluator.typechecker_state.values[edge.left][1]
+			else
+				do
+					return false
+				end
+				error "too many edges, couldn't pick one"
+			end
+		else
+			do
+				return false
+			end
+			error "was bound to something that wasn't an operative"
+		end
+	end
+	return true, res
+end
+
 ---@param args ExpressionArgs
 ---@param a ConstructedSyntax
 ---@param b ConstructedSyntax
@@ -499,12 +534,16 @@ local function expression_pairhandler(args, a, b)
 			and type_of_term:unwrap_neutral():unwrap_free():is_metavariable()
 		) or type_of_term:is_range()
 	then
+		local ok, updated_type
 		-- Speculate that this is a pi type
-		local ok, pi = speculate_pi_type(env, type_of_term)
+		ok, updated_type = speculate_pi_type(env, type_of_term)
+		if not ok then
+			ok, updated_type = operative_test_hack(env, type_of_term)
+		end
 		if not ok then
 			error("speculate DID NOT work for pi!: " .. tostring(pi))
 		end
-		type_of_term = pi
+		type_of_term = updated_type
 	end
 
 	local function call_operative()
@@ -526,6 +565,10 @@ local function expression_pairhandler(args, a, b)
 		--end
 
 		-- temporary, while it isn't a Maybe
+		if not operative_result_val:is_tuple_value() then
+			print("bad result val", operative_result_val)
+			error "operative handler didn't complete properly"
+		end
 		local operative_result_elems = operative_result_val:unwrap_tuple_value()
 		local data = operative_result_elems[1]:unwrap_host_value()
 		local env = operative_result_elems[2]:unwrap_host_value()
