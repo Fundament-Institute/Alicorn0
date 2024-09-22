@@ -658,10 +658,27 @@ local array_type_mt = {
 	end,
 }
 
+local function array_next(state, control)
+	local i = control + 1
+	if i > state:len() then
+		return nil
+	else
+		return i, state[i]
+	end
+end
+
+local function array_unpack(array, i, ...)
+	if i > 0 then
+		return array_unpack(array, i - 1, array[i], ...)
+	else
+		return ...
+	end
+end
+
 local function gen_array_methods(self, value_type)
 	return {
 		ipairs = function(val)
-			return ipairs(val.array)
+			return array_next, val, 0
 		end,
 		len = function(val)
 			return val.n
@@ -679,7 +696,7 @@ local function gen_array_methods(self, value_type)
 			return new
 		end,
 		unpack = function(val)
-			return table.unpack(val.array)
+			return array_unpack(val.array, val.n)
 		end,
 	}
 end
