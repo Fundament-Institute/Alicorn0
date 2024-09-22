@@ -2623,14 +2623,14 @@ function evaluate(typed_term, runtime_context)
 			---@cast constraint constraintelem
 			if constraint:is_sliced_constrain() then
 				local rel, right, ctx, cause = constraint:unwrap_sliced_constrain()
-				typechecker_state:send_constrain(nil, mv:as_value(), rel, ctx, evaluate(right, runtime_context), cause)
+				typechecker_state:send_constrain(ctx, mv:as_value(), rel, ctx, evaluate(right, runtime_context), cause)
 			elseif constraint:is_constrain_sliced() then
 				local left, ctx, rel, cause = constraint:unwrap_constrain_sliced()
-				typechecker_state:send_constrain(ctx, evaluate(left, runtime_context), rel, nil, mv:as_value(), cause)
+				typechecker_state:send_constrain(ctx, evaluate(left, runtime_context), rel, ctx, mv:as_value(), cause)
 			elseif constraint:is_sliced_leftcall() then
 				local arg, rel, right, ctx, cause = constraint:unwrap_sliced_leftcall()
 				typechecker_state:send_constrain(
-					nil,
+					ctx,
 					apply_value(mv:as_value(), evaluate(arg, runtime_context)),
 					rel,
 					ctx,
@@ -2643,14 +2643,14 @@ function evaluate(typed_term, runtime_context)
 					ctx,
 					apply_value(evaluate(left, runtime_context), evaluate(arg, runtime_context)),
 					rel,
-					nil,
+					ctx,
 					mv:as_value(),
 					cause
 				)
 			elseif constraint:is_sliced_rightcall() then
 				local rel, right, ctx, arg, cause = constraint:unwrap_sliced_rightcall()
 				typechecker_state:send_constrain(
-					nil,
+					ctx,
 					mv:as_value(),
 					rel,
 					ctx,
@@ -2663,7 +2663,7 @@ function evaluate(typed_term, runtime_context)
 					ctx,
 					evaluate(left, runtime_context),
 					rel,
-					nil,
+					ctx,
 					apply_value(mv:as_value(), evaluate(arg, runtime_context)),
 					cause
 				)
