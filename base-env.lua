@@ -863,6 +863,171 @@ local function startype_impl(syntax, env)
 	return true, term, env
 end
 
+---@param goal goal
+---@return value
+local function host_term_of_inner(goal)
+	if goal:is_infer() then
+		return terms.host_inferrable_term_type
+	elseif goal:is_check() then
+		return terms.checkable_inferrable_term_type
+	else
+		error("host_term_of_inner: unknown goal")
+	end
+end
+local host_term_of_inner_type = value.host_function_type(
+	value.host_tuple_type(
+		terms.tuple_desc(value.closure("#htoit-empty", typed.literal(terms.host_goal_type), terms.runtime_context()))
+	),
+	value.closure(
+		"#htoit-params",
+		typed.literal(
+			value.host_tuple_type(
+				terms.tuple_desc(
+					value.closure(
+						"#htoit-empty",
+						typed.host_wrapped_type(typed.literal(value.host_type_type)),
+						terms.runtime_context()
+					)
+				)
+			)
+		),
+		terms.runtime_context()
+	),
+	result_info_pure
+)
+
+---@param goal typed
+---@param context_len integer
+---@return typed
+local function host_term_of(goal, context_len)
+	local teees = gen.declare_array(typed)
+	local names = gen.declare_array(gen.builtin_string)
+	local t = names("#host_term_of-t")
+	return typed.tuple_elim(
+		t,
+		typed.application(typed.literal(value.host_value(host_term_of_inner)), typed.host_tuple_cons(teees(goal))),
+		1,
+		typed.host_unwrap(typed.bound_variable(context_len + 1))
+	)
+end
+
+---@param ud_type value
+---@return value
+local function operative_handler_type(ud_type)
+	local teees = gen.declare_array(typed)
+	local names = gen.declare_array(gen.builtin_string)
+	local namesp4 = names(
+		"#operative_handler_type-syn",
+		"#operative_handler_type-env",
+		"#operative_handler_type-ud",
+		"#operative_handler_type-goal"
+	)
+	local pnamep0 = "#operative_handler_type-empty"
+	local pnamep1 = "#operative_handler_type-syn"
+	local pnamep2 = "#operative_handler_type-syn-env"
+	local pnamep3 = "#operative_handler_type-syn-env-ud"
+	local pnamer = "#operative_handler_type-params"
+	local pnamer0 = "#operative_handler_type-result-empty"
+	local pnamer1 = "#operative_handler_type-result-term"
+	return value.pi(
+		value.tuple_type(
+			terms.tuple_desc(
+				value.closure(pnamep0, typed.literal(terms.host_syntax_type), terms.runtime_context()),
+				value.closure(pnamep1, typed.literal(terms.host_environment_type), terms.runtime_context()),
+				value.closure(pnamep2, typed.literal(ud_type), terms.runtime_context()),
+				value.closure(pnamep3, typed.literal(terms.host_goal_type), terms.runtime_context())
+			)
+		),
+		param_info_explicit,
+		value.closure(
+			pnamer,
+			typed.tuple_elim(
+				namesp4,
+				typed.bound_variable(1),
+				4,
+				typed.tuple_type(
+					typed.enum_cons(
+						terms.DescCons.cons,
+						typed.tuple_cons(
+							teees(
+								typed.enum_cons(
+									terms.DescCons.cons,
+									typed.tuple_cons(
+										teees(
+											typed.enum_cons(terms.DescCons.empty, typed.tuple_cons(teees())),
+											typed.lambda(pnamer0, host_term_of(typed.bound_variable(5), 6))
+										)
+									)
+								),
+								typed.lambda(pnamer1, typed.literal(terms.host_environment_type))
+							)
+						)
+					)
+				)
+			),
+			terms.runtime_context()
+		),
+		result_info_pure
+	)
+end
+
+---@type lua_operative
+local function into_operative_impl(syntax, env)
+	local ok, ud_type_syntax, ud_syntax, handler_syntax = syntax:match({
+		metalanguage.listmatch(
+			metalanguage.accept_handler,
+			metalanguage.any(metalanguage.accept_handler),
+			metalanguage.any(metalanguage.accept_handler),
+			metalanguage.any(metalanguage.accept_handler)
+		),
+	}, metalanguage.failure_handler)
+	if not ok then
+		return false, ud_type_syntax
+	end
+
+	local ok, ud_type_chk, env = ud_type_syntax:match({
+		exprs.expression(
+			metalanguage.accept_handler,
+			exprs.ExpressionArgs.new(terms.expression_goal.check(value.host_type_type), env)
+		),
+	}, metalanguage.failure_handler)
+	if not ok then
+		return false, ud_type_chk
+	end
+	local ud_type_usages, ud_type_t = evaluator.check(ud_type_chk, env.typechecking_context, value.host_type_type)
+	local ud_type = evaluator.evaluate(ud_type_t, env.typechecking_context.runtime_context)
+
+	local ok, ud_chk, env = ud_syntax:match({
+		exprs.expression(
+			metalanguage.accept_handler,
+			exprs.ExpressionArgs.new(terms.expression_goal.check(ud_type), env)
+		),
+	}, metalanguage.failure_handler)
+	if not ok then
+		return false, ud_chk
+	end
+	local ud_usages, ud_t = evaluator.check(ud_chk, env.typechecking_context, ud_type)
+	local ud = evaluator.evaluate(ud_t, env.typechecking_context.runtime_context)
+
+	local ok, handler_chk, env = handler_syntax:match({
+		exprs.expression(
+			metalanguage.accept_handler,
+			exprs.ExpressionArgs.new(terms.expression_goal.check(operative_handler_type(ud_type)), env)
+		),
+	}, metalanguage.failure_handler)
+	if not ok then
+		return false, handler_chk
+	end
+	local handler_usages, handler_t =
+		evaluator.check(handler_chk, env.typechecking_context, operative_handler_type(ud_type))
+	local handler = evaluator.evaluate(handler_t, env.typechecking_context.runtime_context)
+
+	local op_type = value.operative_type(handler, ud_type)
+	local op_val = value.operative_value(ud)
+
+	return true, terms.inferrable_term.typed(op_type, usage_array(), typed.literal(op_val)), env
+end
+
 -- eg typed.host_wrap, typed.host_wrapped_type
 ---@param body_fn fun(typed): typed
 ---@param type_fn fun(typed): typed
@@ -1049,6 +1214,12 @@ local core_operations = {
 	--tuple = evaluator.host_operative(tuple_type_impl),
 	--["tuple-of"] = evaluator.host_operative(tuple_of_impl),
 	--number = { type = types.type, val = types.number }
+	["into-operative"] = exprs.host_operative(into_operative_impl, "into_operative_impl"),
+	["hackhack-host-term-of-inner"] = terms.inferrable_term.typed(
+		host_term_of_inner_type,
+		usage_array(),
+		typed.literal(value.host_value(host_term_of_inner))
+	),
 }
 
 -- FIXME: use these once reimplemented with terms

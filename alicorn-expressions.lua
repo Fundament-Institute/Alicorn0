@@ -901,7 +901,7 @@ local function host_operative(fn, name)
 			---@cast res inferrable
 			res = checkable_term.inferrable(res)
 		else
-			error("mismatch in goal and returned term")
+			error("mismatch in goal and returned term\ngoal: " .. tostring(goal) .. "\nres: " .. tostring(res))
 		end
 		if not env or not env.exit_block then
 			print(

@@ -1037,20 +1037,21 @@ let match-syntax-implicit = lambda_implicit (userdata        : host-type)
 				(r : host-tuple-type(host-type, result))
 		inner(matchers, failure-handler, syn, implicit-wrap(ud))
 
-let host-term-of-inner = intrinsic
-	""""
-		local function host_term_of(goal)
-			if goal:is_infer() then
-				return terms.host_inferrable_term_type
-			elseif goal:is_check() then
-				return terms.host_checkable_term_type
-			else
-				error("host-term-of: unknown goal")
-			end
-		end
-		return host_term_of
-	:
-	host-func-type ((goal : host-goal)) -> ((t : wrapped(host-type)))
+#let host-term-of-inner = intrinsic
+#	""""
+#		local function host_term_of(goal)
+#			if goal:is_infer() then
+#				return terms.host_inferrable_term_type
+#			elseif goal:is_check() then
+#				return terms.host_checkable_term_type
+#			else
+#				error("host-term-of: unknown goal")
+#			end
+#		end
+#		return host_term_of
+#	:
+#	host-func-type ((goal : host-goal)) -> ((t : wrapped(host-type)))
+let host-term-of-inner = hackhack-host-term-of-inner
 let host-term-of = lambda ((goal : host-goal))
 	let (t) = host-term-of-inner(goal)
 	implicit-unwrap(t)
@@ -1300,7 +1301,8 @@ let do-impl = lambda (syn : host-syntax, env : host-environment, ud : host-unit,
 	tuple-of(host-type, operative-result-desc(goal))(wrapped, env)
 
 #	let (do-type, do) = new-operative(host-unit, host-nil, do-impl)
-let do = core-operative(host-nil, do-impl)
+#let do = core-operative(host-nil, do-impl)
+let do = into-operative(host-unit, host-nil, do-impl)
 
 let foo = "baz"
 let x = do
@@ -1404,10 +1406,11 @@ let tuple-desc-impl = lambda (syn : host-syntax, env : host-environment, ud : ho
 
 	tuple-of(host-type, operative-result-desc(goal))(args, env)
 
-let (tuple-desc-op-type, tuple-desc-op) = new-operative(host-unit, host-nil, tuple-desc-impl)
+#let (tuple-desc-op-type, tuple-desc-op) = new-operative(host-unit, host-nil, tuple-desc-impl)
+let tuple-desc-op = into-operative(host-unit, host-nil, tuple-desc-impl)
 
 let my-tuple-desc = tuple-desc-op(x : host-number, y : host-number)
-let my-tuple-type = tuple-type(type_(0), my-tuple-desc)
+let my-tuple-type = tuple-type(type_(0, 0), my-tuple-desc)
 my-tuple-type
 
 let host-if-2-type = forall (
@@ -1462,7 +1465,7 @@ let host-if-test = lambda (
 host-if-test(host-true, "foobar")
 host-if-test(host-false, host-nil)
 
-let id = lambda_implicit (T : type_(10))
+let id = lambda_implicit (T : type_(10, 0))
 	lambda ((x : T))
 		x
 
