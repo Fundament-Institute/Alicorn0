@@ -29,6 +29,8 @@ local anchor_mt = {
 	__index = Anchor,
 }
 
+lpeg.locale(lpeg)
+
 local function element(kind, pattern)
 	return Ct(Cg(V "textpos", "anchor") * Cg(Cc(kind), "kind") * pattern)
 end
@@ -321,7 +323,14 @@ local grammar = P {
 	tokens = update_ffp(
 		"token",
 		space_tokens(
-			V "comment" + V "function_call" + V "paren_list" + V "longstring" + V "string" + V "number" + V "symbol"
+			V "comment"
+				+ V "infix_brace"
+				+ V "function_call"
+				+ V "paren_list"
+				+ V "longstring"
+				+ V "string"
+				+ V "number"
+				+ V "symbol"
 		)
 	),
 
@@ -360,9 +369,42 @@ local grammar = P {
 	comma_paren_body = ((list(IFRmt(V "paren_tokens", 2)) + V "paren_tokens") * V "comma") ^ 1
 		* (list(IFRmt(V "paren_tokens", 2)) + V "paren_tokens"),
 
-	open_brace = Cg(C(P "("), "bracetype")
-		+ (Cg(C(P "["), "bracetype") * symbol(Cc("braced_list")))
-		+ (Cg(C(P "{"), "bracetype") * symbol(Cc("curly-list"))),
+	braced_symbol = symbol(V "symbol_chars" ^ -1 * ((P "[_]" + P "{_}") * V "symbol_chars" ^ 0) ^ 1),
+	infix_brace = V "braced_symbol" + list(
+		Cg(C(V "symbol_chars" ^ 1), "braceacc")
+			* ((V "open_bracket" + V "open_curly") * list(
+					V "paren_spacers" * (V "comma_paren_body" + V "paren_tokens") ^ -1
+				) * V "infix_braceclose_accumulator")
+				^ 1
+	) / function(list)
+		assert(list.elements["braceacc"])
+
+		table.insert(list.elements, 1, {
+			kind = "symbol",
+			str = list.elements["braceacc"],
+			anchor = list.anchor,
+		})
+
+		list.elements["braceacc"] = nil
+
+		return list
+	end,
+
+	infix_braceclose_accumulator = V "close_brace" * Cg(
+		Cb("braceacc")
+			* Cs(Cb("bracetype") / { ["["] = "[_]", ["{"] = "{_}" } * C(V "symbol_chars"))
+			/ function(prev, new)
+				return prev .. new
+			end,
+		"braceacc"
+	),
+
+	open_paren = Cg(C(P "("), "bracetype"),
+	open_bracket = Cg(C(P "["), "bracetype"),
+	open_curly = Cg(C(P "{"), "bracetype"),
+	open_brace = V "open_paren" + (V "open_bracket" * symbol(Cc("braced_list"))) + (V "open_curly" * symbol(
+		Cc("curly-list")
+	)),
 	close_brace = update_ffp(
 		"matching close brace",
 		Cmt(Cb("bracetype") * C(S "])}"), function(_, _, bracetype, brace)
@@ -384,10 +426,14 @@ local grammar = P {
 
 	function_call = V "symbol" * Ct(
 		list(
-			P "("
+			(
+				V "open_paren"
+				+ (V "open_bracket" * Cg(symbol(Cc("_[_]")), "brace"))
+				+ (V "open_curly" * Cg(symbol(Cc("_{_}")), "brace"))
+			)
 				* V "paren_spacers"
 				* (V "comma_paren_body" + V "paren_tokens") ^ -1
-				* update_ffp("close brace", P ")")
+				* V "close_brace"
 		) ^ 1
 	) / function(symbol, argcalls)
 		local acc = {}
@@ -395,11 +441,20 @@ local grammar = P {
 		acc = table.remove(argcalls, 1)
 		table.insert(acc.elements, 1, symbol)
 		acc.anchor = symbol.anchor
+		if acc.elements["brace"] then
+			table.insert(acc.elements, 1, acc.elements["brace"])
+			acc.elements[1].anchor = acc.anchor
+		end
 
 		for _, v in ipairs(argcalls) do
 			table.insert(v.elements, 1, acc)
 			v.anchor = acc.anchor
 			acc = v
+
+			if acc.elements["brace"] then
+				table.insert(acc.elements, 1, acc.elements["brace"])
+				acc.elements[1].anchor = acc.anchor
+			end
 		end
 
 		return acc
@@ -419,7 +474,8 @@ local grammar = P {
 	big_e = V "decimal" * (P "e" * V "decimal") ^ -1,
 	float_special = P "+inf" + P "-inf" + P "nan",
 
-	symbol = symbol((1 - (S "\\#()[]{};,\t \n\r")) ^ 1),
+	symbol_chars = (1 - (S '\\#()[]{};,"\t\r\n ' + lpeg.space)) ^ 1,
+	symbol = symbol(V "symbol_chars"),
 }
 
 local function span_error(position, subject, msg)

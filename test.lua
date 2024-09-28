@@ -361,6 +361,9 @@ function testSymbols()
 		"str+str",
 		"_42",
 		"=303",
+		"-[_]/[_]->",
+		"[_][_]{_}",
+		"_[_]",
 	}
 
 	local expected = {
@@ -375,6 +378,9 @@ function testSymbols()
 		{ "str+str" },
 		{ "_42" },
 		{ "=303" },
+		{ "-[_]/[_]->" },
+		{ "[_][_]{_}" },
+		{ "_[_]" },
 	}
 
 	for i = 1, #example do
@@ -520,6 +526,8 @@ function testbracedlist()
 		"(hello (hi (another)) greetings)",
 		"(hello; (greetings;); anothertest)",
 		"(hello\n\tfailure \n\n\t\t\t\n\t\t(hi (another)) greetings)",
+		"a[b][c](d)",
+		"a -[b]/[c]-> d",
 	}
 
 	local expected = {
@@ -527,6 +535,8 @@ function testbracedlist()
 		{ { "hello", { "hi", { "another" } }, "greetings" } },
 		{ { { "hello" }, { { { "greetings" } } }, "anothertest" } },
 		{ { "hello", "failure", { "hi", { "another" } }, "greetings" } },
+		{ { { "_[_]", { "_[_]", "a", "b" }, "c" }, "d" } },
+		{ { "a", { "-[_]/[_]->", { "b" }, { "c" } }, "d" } },
 	}
 
 	for i = 1, #example do
