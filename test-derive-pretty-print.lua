@@ -1,6 +1,6 @@
-local derivers = require "./derivers"
+local derivers = require "derivers"
 local pretty_print = derivers.pretty_print
-local gen = require "./terms-generators"
+local gen = require "terms-generators"
 
 local mytype1 = gen.declare_enum("mytype1", {
 	{ "foo" },
@@ -54,7 +54,7 @@ print(n)
 
 assert(tostring(n) == n:pretty_print())
 
-local PrettyPrint = require "./pretty-printer".PrettyPrint
+local PrettyPrint = require "pretty-printer".PrettyPrint
 local pp = PrettyPrint:new()
 pp:any(n)
 print(pp)

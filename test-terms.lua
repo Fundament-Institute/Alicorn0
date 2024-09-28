@@ -1,5 +1,5 @@
-local terms = require "./terms"
-local evaluator = require "./evaluator"
+local terms = require "terms"
+local evaluator = require "evaluator"
 local inferrable_term = terms.inferrable_term
 local infer = evaluator.infer
 local evaluate = evaluator.evaluate

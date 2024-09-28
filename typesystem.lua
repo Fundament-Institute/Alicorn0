@@ -15,8 +15,6 @@
 --
 -- A parameterized kind is represented
 
-local p = require "pretty-print".prettyPrint
-
 local hasfixedlayout = {}
 
 local typeerror_mt = {

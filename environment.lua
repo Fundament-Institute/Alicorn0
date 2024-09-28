@@ -1,14 +1,14 @@
-local trie = require "./lazy-prefix-tree"
-local fibbuf = require "./fibonacci-buffer"
-local U = require "./alicorn-utils"
+local trie = require "lazy-prefix-tree"
+local fibbuf = require "fibonacci-buffer"
+local U = require "alicorn-utils"
 
-local terms = require "./terms"
+local terms = require "terms"
 local inferrable_term = terms.inferrable_term
 local typechecking_context = terms.typechecking_context
 local module_mt = {}
 
-local eval = require "./evaluator"
-local infer = eval.infer
+local evaluator = require "evaluator"
+local infer = evaluator.infer
 
 local environment_mt
 
@@ -99,10 +99,10 @@ function environment:bind_local(binding)
 			print("expr", expr)
 			error("infer returned a bad type for expr in bind_local")
 		end
-		local n = #self.typechecking_context
+		local n = self.typechecking_context:len()
 		local term = inferrable_term.bound_variable(n + 1)
 		local locals = self.locals:put(name, term)
-		local evaled = eval.evaluate(expr_term, self.typechecking_context.runtime_context)
+		local evaled = evaluator.evaluate(expr_term, self.typechecking_context.runtime_context)
 		-- print "doing let binding"
 		-- print(expr:pretty_print())
 		--log_binding(name, expr_type, evaled)
@@ -123,55 +123,119 @@ function environment:bind_local(binding)
 			print(subject:pretty_print(self.typechecking_context))
 		end
 
-		-- evaluating the subject is necessary for inferring the type of the body
-		local subject_value = U.tag(
-			"evaluate",
-			{ subject_term = subject_term },
-			eval.evaluate,
-			subject_term,
-			self.typechecking_context:get_runtime_context()
-		)
-		-- extract subject type and evaled for each elem in tuple
-		local tupletypes, n_elements = eval.infer_tuple_type(subject_type, subject_value)
-
-		--local desc
-		--[[
-
-		if inner_type:is_tuple_type() then
-			desc = subject_type:unwrap_tuple_type()
-		elseif inner_type:is_host_tuple_type() then
-			desc = subject_type:unwrap_host_tuple_type()
-		else
-			error("bind_local tuple_elim, subject_type: expected a term with a tuple type, but got " .. subject_type.kind)
+		local desc = terms.empty
+		for _ in ipairs(names) do
+			local next_elem_type_mv = evaluator.typechecker_state:metavariable(self.typechecking_context)
+			local next_elem_type = next_elem_type_mv:as_value()
+			desc = terms.cons(desc, next_elem_type)
 		end
-		]]
+		local spec_type = terms.value.tuple_type(desc)
+		local host_spec_type = terms.value.host_tuple_type(desc)
+		local function rest_of_the_tuple_elim(spec_type)
+			-- evaluator.typechecker_state:flow(
+			-- 	subject_type,
+			-- 	self.typechecking_context,
+			-- 	spec_type,
+			-- 	self.typechecking_context,
+			-- 	"environment tuple-elim"
+			-- )
+			U.tag(
+				"flow",
+				{ subject_type = subject_type, spec_type = spec_type },
+				evaluator.typechecker_state.flow,
+				evaluator.typechecker_state,
+				subject_type,
+				self.typechecking_context,
+				spec_type,
+				self.typechecking_context,
+				"environment tuple-elim"
+			)
 
-		local typechecking_context = self.typechecking_context
-		local n = #typechecking_context
-		local locals = self.locals
+			-- evaluating the subject is necessary for inferring the type of the body
+			local subject_value = U.tag(
+				"evaluate",
+				{ subject_term = subject_term },
+				evaluator.evaluate,
+				subject_term,
+				self.typechecking_context:get_runtime_context()
+			)
+			-- extract subject type and evaled for each elem in tuple
+			local tupletypes, n_elements = evaluator.infer_tuple_type(spec_type, subject_value)
 
-		if not (n_elements == #names) then
-			error("attempted to bind " .. n_elements .. " tuple elements to " .. #names .. " variables")
+			--local desc
+			--[[
+
+			if inner_type:is_tuple_type() then
+				desc = subject_type:unwrap_tuple_type()
+			elseif inner_type:is_host_tuple_type() then
+				desc = subject_type:unwrap_host_tuple_type()
+			else
+				error("bind_local tuple_elim, subject_type: expected a term with a tuple type, but got " .. subject_type.kind)
+			end
+			]]
+
+			local typechecking_context = self.typechecking_context
+			local n = typechecking_context:len()
+			local locals = self.locals
+
+			if not (n_elements == names:len()) then
+				error("attempted to bind " .. n_elements .. " tuple elements to " .. names:len() .. " variables")
+			end
+
+			for i, v in ipairs(names) do
+				--local constructor, arg = desc:unwrap_enum_value()
+				-- if constructor ~= "cons" then
+				-- 	error("todo: this error message")
+				-- end
+				local term = inferrable_term.bound_variable(n + i)
+				locals = locals:put(v, term)
+
+				local evaled = evaluator.index_tuple_value(subject_value, i)
+				--log_binding(v, tupletypes[i], evaled)
+				typechecking_context = typechecking_context:append(v, tupletypes[i], evaled)
+			end
+			local bindings = self.bindings:append(binding)
+			return update_env(self, {
+				locals = locals,
+				bindings = bindings,
+				typechecking_context = typechecking_context,
+			})
 		end
-
-		for i, v in ipairs(names) do
-			--local constructor, arg = desc:unwrap_enum_value()
-			-- if constructor ~= "cons" then
-			-- 	error("todo: this error message")
-			-- end
-			local term = inferrable_term.bound_variable(n + i)
-			locals = locals:put(v, term)
-
-			local evaled = eval.index_tuple_value(subject_value, i)
-			--log_binding(v, tupletypes[i], evaled)
-			typechecking_context = typechecking_context:append(v, tupletypes[i], evaled)
+		local unique = {}
+		local ok, res1, res2
+		ok, res1 = evaluator.typechecker_state:speculate(function()
+			return rest_of_the_tuple_elim(spec_type)
+		end)
+		-- local ok, res = U.tag(
+		-- 	"speculate",
+		-- 	{ unique = unique },
+		-- 	evaluator.typechecker_state.speculate,
+		-- 	evaluator.typechecker_state,
+		-- 	function()
+		-- 		return rest_of_the_tuple_elim(spec_type)
+		-- 	end
+		-- )
+		if ok then
+			return res1
 		end
-		local bindings = self.bindings:append(binding)
-		return update_env(self, {
-			locals = locals,
-			bindings = bindings,
-			typechecking_context = typechecking_context,
-		})
+		ok, res2 = evaluator.typechecker_state:speculate(function()
+			return rest_of_the_tuple_elim(host_spec_type)
+		end)
+		-- ok, res = U.tag(
+		-- 	"speculate",
+		-- 	{ unique = unique },
+		-- 	evaluator.typechecker_state.speculate,
+		-- 	evaluator.typechecker_state,
+		-- 	function()
+		-- 		return rest_of_the_tuple_elim(host_spec_type)
+		-- 	end
+		-- )
+		if ok then
+			return res2
+		end
+		--error(res1)
+		--error(res2)
+		error("tuple elim speculation failed! debugging this is left as an exercise to the maintainer")
 	elseif binding:is_annotated_lambda() then
 		local param_name, param_annotation, anchor, visible = binding:unwrap_annotated_lambda()
 		if not anchor or not anchor.sourceid then
@@ -181,9 +245,9 @@ function environment:bind_local(binding)
 		local annotation_type, annotation_usages, annotation_term = infer(param_annotation, self.typechecking_context)
 		--print("binding lambda annotation: (typed term follows)")
 		--print(annotation_term:pretty_print(self.typechecking_context))
-		local evaled = eval.evaluate(annotation_term, self.typechecking_context.runtime_context)
+		local evaled = evaluator.evaluate(annotation_term, self.typechecking_context.runtime_context)
 		local bindings = self.bindings:append(binding)
-		local locals = self.locals:put(param_name, inferrable_term.bound_variable(#self.typechecking_context + 1))
+		local locals = self.locals:put(param_name, inferrable_term.bound_variable(self.typechecking_context:len() + 1))
 		local typechecking_context = self.typechecking_context:append(param_name, evaled, nil, anchor)
 		return update_env(self, {
 			locals = locals,
@@ -201,7 +265,7 @@ function environment:bind_local(binding)
 			error("program sequence must infer to a program type")
 		end
 		local first_effect_sig, first_base_type = first_type:unwrap_program_type()
-		local n = #self.typechecking_context
+		local n = self.typechecking_context:len()
 		local term = inferrable_term.bound_variable(n + 1)
 		local locals = self.locals:put("#program-sequence", term)
 		local typechecking_context = self.typechecking_context:append("#program-sequence", first_base_type, nil, anchor)
@@ -266,7 +330,7 @@ function environment:enter_block(purity)
 	if purity:is_inherit() then
 		purity = self.purity
 	end
-	eval.typechecker_state:enter_block()
+	evaluator.typechecker_state:enter_block()
 	return { shadowed = self },
 		new_env {
 			-- locals = nil,
@@ -334,7 +398,7 @@ function environment:exit_block(term, shadowed)
 			error("exit_block: unknown kind: " .. binding.kind)
 		end
 	end
-	eval.typechecker_state:exit_block()
+	evaluator.typechecker_state:exit_block()
 
 	return env, wrapped, purity
 end

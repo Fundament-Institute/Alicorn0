@@ -1,7 +1,7 @@
-local traits = require "./traits"
-local terms = require "./terms"
-local gen = require "./terms-generators"
-local evaluator = require "./evaluator"
+local traits = require "traits"
+local terms = require "terms"
+local gen = require "terms-generators"
+local evaluator = require "evaluator"
 
 local value = terms.value
 local typed = terms.typed_term

@@ -185,6 +185,24 @@ function M.commit(t)
 	return original
 end
 
+---Given a shadowed table, unlocks the shadowed table below (you should drop this table immediately)
+---@generic T : table
+---@param t T
+---@return T
+function M.revert(t)
+	setmetatable(t, nil)
+	local original = t.__shadow
+	local length = t.__length
+	t.__shadow = nil
+	t.__length = nil
+
+	if original then
+		rawset(original, "__lock", nil)
+	end
+
+	return original
+end
+
 ---@generic T : table
 ---@param src T
 ---@return T
@@ -240,6 +258,19 @@ function M.memoize(fn)
 		return thismemo[memo_end_tag]
 	end
 	return wrapfn
+end
+
+---strips ansi character attributes (e.g. colors) from a string
+---@param s string
+---@return string
+---@return integer
+function M.strip_ansi(s)
+	return s:gsub("\x1b[^m]*m", "")
+end
+
+function M.here()
+	local info = debug.getinfo(2, "Sl")
+	return " @ " .. info.source .. ":" .. info.currentline
 end
 
 return M

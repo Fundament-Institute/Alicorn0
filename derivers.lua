@@ -422,7 +422,7 @@ end]]
 
 ---@param info RecordDeriveInfo
 ---@return fun(self: Type, pp: PrettyPrint, ...)
-local function record_prettyprintable_trait(info)
+local function record_pretty_printable_trait(info)
 	local kind = info.kind
 	local params = info.params
 
@@ -440,12 +440,12 @@ return function(self, pp, ...)
 end]]
 	chunk = chunk:format(kind, all_fields)
 
-	derive_print("derive prettyprintable_trait chunk: " .. kind)
+	derive_print("derive pretty_printable_trait chunk: " .. kind)
 	derive_print("###")
 	derive_print(chunk)
 	derive_print("###")
 
-	local compiled, message = load(chunk, "derive-prettyprintable_trait", "t")
+	local compiled, message = load(chunk, "derive-pretty_printable_trait", "t")
 	if not compiled then
 		print(chunk)
 	end
@@ -453,21 +453,21 @@ end]]
 	return compiled()
 end
 
-local function map_prettyprintable_trait(self, pp, ...)
+local function map_pretty_printable_trait(self, pp, ...)
 	return pp:table(self._map, ...)
 end
 
-local function set_prettyprintable_trait(self, pp, ...)
+local function set_pretty_printable_trait(self, pp, ...)
 	return pp:table(self._set, ...)
 end
 
-local function array_prettyprintable_trait(self, pp, ...)
+local function array_pretty_printable_trait(self, pp, ...)
 	return pp:array(self.array, ...)
 end
 
-local pretty_printer = require "./pretty-printer"
+local pretty_printer = require "pretty-printer"
 local PrettyPrint = pretty_printer.PrettyPrint
-local prettyprintable = pretty_printer.prettyprintable
+local pretty_printable = pretty_printer.pretty_printable
 
 ---@type Deriver
 local pretty_print = {
@@ -480,16 +480,16 @@ local pretty_print = {
 		local idx = t.__index or {}
 		t.__index = idx
 
-		local prettyprintable_print = record_prettyprintable_trait(info)
+		local pretty_printable_print = record_pretty_printable_trait(info)
 		local function pretty(self, pp, ...)
 			if override_pretty and not pp.force_default then
 				override_pretty(self, pp, ...)
 			else
-				prettyprintable_print(self, pp, ...)
+				pretty_printable_print(self, pp, ...)
 			end
 		end
 
-		prettyprintable:implement_on(t, { print = pretty })
+		pretty_printable:implement_on(t, { print = pretty })
 
 		local function pretty_print(self, ...)
 			local pp = PrettyPrint.new()
@@ -528,12 +528,12 @@ local pretty_print = {
 			local vtype = vdata.type
 			local vinfo = vdata.info
 			local override_pretty_v = override_pretty and override_pretty[vname]
-			local variant_prettyprintable_print
+			local variant_pretty_printable_print
 			if vtype == EnumDeriveInfoVariantKind.Record then
 				---@cast vinfo RecordDeriveInfo
-				variant_prettyprintable_print = record_prettyprintable_trait(vinfo)
+				variant_pretty_printable_print = record_pretty_printable_trait(vinfo)
 			elseif vtype == EnumDeriveInfoVariantKind.Unit then
-				variant_prettyprintable_print = function(self, pp)
+				variant_pretty_printable_print = function(self, pp)
 					pp:unit(self.kind)
 				end
 			else
@@ -543,20 +543,20 @@ local pretty_print = {
 				if override_pretty_v and not pp.force_default then
 					override_pretty_v(self, pp, ...)
 				else
-					variant_prettyprintable_print(self, pp, ...)
+					variant_pretty_printable_print(self, pp, ...)
 				end
 			end
 		end
 
-		local function prettyprintable_print(self, prefix, ...)
+		local function pretty_printable_print(self, prefix, ...)
 			return variant_printers[self.kind](self, prefix, ...)
 		end
 
-		prettyprintable:implement_on(t, { print = prettyprintable_print })
+		pretty_printable:implement_on(t, { print = pretty_printable_print })
 
 		local function pretty_print(self, ...)
 			local pp = PrettyPrint.new()
-			prettyprintable_print(self, pp, ...)
+			pretty_printable_print(self, pp, ...)
 			return tostring(pp)
 		end
 		idx.pretty_print = pretty_print
@@ -564,7 +564,7 @@ local pretty_print = {
 		local function default_print(self, ...)
 			local pp = PrettyPrint.new()
 			pp.force_default = true
-			prettyprintable_print(self, pp, ...)
+			pretty_printable_print(self, pp, ...)
 			return tostring(pp)
 		end
 		idx.default_print = default_print
@@ -584,13 +584,13 @@ local pretty_print = {
 
 		local idx = t.__index
 
-		prettyprintable:implement_on(t, {
-			print = map_prettyprintable_trait,
+		pretty_printable:implement_on(t, {
+			print = map_pretty_printable_trait,
 		})
 
 		local function pretty_print(self, ...)
 			local pp = PrettyPrint.new()
-			map_prettyprintable_trait(self, pp, ...)
+			map_pretty_printable_trait(self, pp, ...)
 			return tostring(pp)
 		end
 		idx.pretty_print = pretty_print
@@ -598,7 +598,7 @@ local pretty_print = {
 		local function default_print(self, ...)
 			local pp = PrettyPrint.new()
 			pp.force_default = true
-			map_prettyprintable_trait(self, pp, ...)
+			map_pretty_printable_trait(self, pp, ...)
 			return tostring(pp)
 		end
 		idx.default_print = default_print
@@ -615,13 +615,13 @@ local pretty_print = {
 
 		local idx = t.__index
 
-		prettyprintable:implement_on(t, {
-			print = set_prettyprintable_trait,
+		pretty_printable:implement_on(t, {
+			print = set_pretty_printable_trait,
 		})
 
 		local function pretty_print(self, ...)
 			local pp = PrettyPrint.new()
-			set_prettyprintable_trait(self, pp, ...)
+			set_pretty_printable_trait(self, pp, ...)
 			return tostring(pp)
 		end
 		idx.pretty_print = pretty_print
@@ -629,7 +629,7 @@ local pretty_print = {
 		local function default_print(self, ...)
 			local pp = PrettyPrint.new()
 			pp.force_default = true
-			set_prettyprintable_trait(self, pp, ...)
+			set_pretty_printable_trait(self, pp, ...)
 			return tostring(pp)
 		end
 		idx.default_print = default_print
@@ -646,13 +646,13 @@ local pretty_print = {
 
 		local methods = t.methods
 
-		prettyprintable:implement_on(t, {
-			print = array_prettyprintable_trait,
+		pretty_printable:implement_on(t, {
+			print = array_pretty_printable_trait,
 		})
 
 		local function pretty_print(self, ...)
 			local pp = PrettyPrint.new()
-			array_prettyprintable_trait(self, pp, ...)
+			array_pretty_printable_trait(self, pp, ...)
 			return tostring(pp)
 		end
 		methods.pretty_print = pretty_print
@@ -660,7 +660,7 @@ local pretty_print = {
 		local function default_print(self, ...)
 			local pp = PrettyPrint.new()
 			pp.force_default = true
-			array_prettyprintable_trait(self, pp, ...)
+			array_pretty_printable_trait(self, pp, ...)
 			return tostring(pp)
 		end
 		methods.default_print = default_print

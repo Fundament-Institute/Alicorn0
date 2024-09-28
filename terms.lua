@@ -8,37 +8,34 @@
 -- typechecker is allowed to fail, typechecker monad carries failures upwards
 --   for now fail fast, but design should vaguely support multiple failures
 
---local metalang = require "./metalanguage"
---local types = require "./typesystem"
+local fibbuf = require "fibonacci-buffer"
 
-local fibbuf = require "./fibonacci-buffer"
+local gen = require "terms-generators"
+local derivers = require "derivers"
 
-local gen = require "./terms-generators"
-local derivers = require "./derivers"
-
-local format = require "./format"
+local format = require "format"
 
 local map = gen.declare_map
 local array = gen.declare_array
 local set = gen.declare_set
 
----@module "./types/checkable"
+---@module "types.checkable"
 local checkable_term = gen.declare_type()
----@module "./types/inferrable"
+---@module "types.inferrable"
 local inferrable_term = gen.declare_type()
----@module "./types/typed"
+---@module "types.typed"
 local typed_term = gen.declare_type()
----@module "./types/free"
+---@module "types.free"
 local free = gen.declare_type()
----@module "./types/placeholder"
+---@module "types.placeholder"
 local placeholder_debug = gen.declare_type()
----@module "./types/value"
+---@module "types.value"
 local value = gen.declare_type()
----@module "./types/neutral_value"
+---@module "types.neutral_value"
 local neutral_value = gen.declare_type()
----@module "./types/binding"
+---@module "types.binding"
 local binding = gen.declare_type()
----@module "./types/expression_goal"
+---@module "types.expression_goal"
 local expression_goal = gen.declare_type()
 
 local runtime_context_mt
@@ -120,7 +117,7 @@ function TypecheckingContext:get_name(index)
 	return self.bindings:get(index).name
 end
 function TypecheckingContext:dump_names()
-	for i = 1, #self do
+	for i = 1, self:len() do
 		print(i, self:get_name(i))
 	end
 end
@@ -128,7 +125,7 @@ end
 ---@return string
 function TypecheckingContext:format_names()
 	local msg = ""
-	for i = 1, #self do
+	for i = 1, self:len() do
 		msg = msg .. tostring(i) .. "\t" .. self:get_name(i) .. "\n"
 	end
 	return msg
@@ -178,17 +175,20 @@ function TypecheckingContext:append(name, type, val, anchor)
 	local copy = {
 		bindings = self.bindings:append({ name = name, type = type }),
 		runtime_context = self.runtime_context:append(
-			val or value.neutral(neutral_value.free(free.placeholder(#self + 1, placeholder_debug(name, anchor))))
+			val or value.neutral(neutral_value.free(free.placeholder(self:len() + 1, placeholder_debug(name, anchor))))
 		),
 	}
 	return setmetatable(copy, typechecking_context_mt)
 end
 
+---@return integer
+function TypecheckingContext:len()
+	return self.bindings:len()
+end
+
 typechecking_context_mt = {
 	__index = TypecheckingContext,
-	__len = function(self)
-		return self.bindings:len()
-	end,
+	__len = TypecheckingContext.len,
 }
 
 ---@return TypecheckingContext
@@ -209,7 +209,7 @@ end, "{ name: string }")
 -- implicit arguments are filled in through unification
 -- e.g. fn append(t : star(0), n : nat, xs : Array(t, n), val : t) -> Array(t, n+1)
 --      t and n can be implicit, given the explicit argument xs, as they're filled in by unification
----@module "./types/visibility"
+---@module "types.visibility"
 local visibility = gen.declare_enum("visibility", {
 	{ "explicit" },
 	{ "implicit" },
@@ -257,7 +257,6 @@ checkable_term:define_enum("checkable", {
 		"param_name", gen.builtin_string,
 		"body",       checkable_term,
 	} },
-	-- TODO: enum_cons
 })
 -- inferrable terms can have their type inferred / don't need a goal type
 -- stylua: ignore
@@ -380,6 +379,114 @@ inferrable_term:define_enum("inferrable", {
 	} },
 })
 
+---@class SubtypeRelation
+---@field debug_name string
+---@field Rel value -- : (a:T,b:T) -> Prop__
+---@field refl value -- : (a:T) -> Rel(a,a)
+---@field antisym value -- : (a:T, B:T, Rel(a,b), Rel(b,a)) -> a == b
+---@field constrain value -- : (Node(T), Node(T)) -> [TCState] ()
+local subtype_relation_mt = {}
+
+local SubtypeRelation = gen.declare_foreign(gen.metatable_equality(subtype_relation_mt), "SubtypeRelation")
+
+---@module 'types.constraintcause'
+local constraintcause = gen.declare_type()
+
+constraintcause:define_enum("constraintcause", {
+	{ "primitive", {
+		"description",
+		gen.builtin_string,
+		"position",
+		anchor_type,
+	} },
+	{ "composition", {
+		"left",
+		constraintcause,
+		"right",
+		constraintcause,
+		"position",
+		anchor_type,
+	} },
+	{
+		"leftcall_discharge",
+		{
+			"call",
+			constraintcause,
+			"constraint",
+			constraintcause,
+			"position",
+			anchor_type,
+		},
+	},
+	{
+		"rightcall_discharge",
+		{
+			"constraint",
+			constraintcause,
+			"call",
+			constraintcause,
+			"position",
+			anchor_type,
+		},
+	},
+	{
+		"lost",
+		{ --Information has been lost, please generate any information you can to help someone debug the lost information in the future
+			"unique_string",
+			gen.builtin_string,
+			"stacktrace",
+			gen.builtin_string,
+			"auxiliary",
+			gen.any_lua_type,
+		},
+	},
+})
+
+---@module 'types.constraintelem'
+-- stylua: ignore
+local constraintelem = gen.declare_enum("constraintelem", {
+	{ "sliced_constrain", {
+		"rel",   SubtypeRelation,
+		"right", typed_term,
+		"rightctx", typechecking_context_type,
+		"cause", gen.any_lua_type,
+	} },
+	{ "constrain_sliced", {
+		"left",  typed_term,
+		"leftctx", typechecking_context_type,
+		"rel",   SubtypeRelation,
+		"cause", gen.any_lua_type,
+	} },
+	{ "sliced_leftcall", {
+		"arg",   typed_term,
+		"rel",   SubtypeRelation,
+		"right", typed_term,
+		"rightctx", typechecking_context_type,
+		"cause", gen.any_lua_type,
+	} },
+	{ "leftcall_sliced", {
+		"left",  typed_term,
+		"leftctx", typechecking_context_type,
+		"arg",   typed_term,
+		"rel",   SubtypeRelation,
+		"cause", gen.any_lua_type,
+	} },
+	{ "sliced_rightcall", {
+		"rel",   SubtypeRelation,
+		"right", typed_term,
+		"rightctx", typechecking_context_type,
+		"arg",   typed_term,
+		"cause", gen.any_lua_type,
+	} },
+	{ "rightcall_sliced", {
+		"left",  typed_term,
+		"leftctx", typechecking_context_type,
+		"rel",   SubtypeRelation,
+		"arg",   typed_term,
+		"cause", gen.any_lua_type,
+	} },
+})
+
 -- typed terms have been typechecked but do not store their type internally
 -- stylua: ignore
 typed_term:define_enum("typed", {
@@ -411,7 +518,7 @@ typed_term:define_enum("typed", {
 		"level_a", typed_term,
 		"level_b", typed_term,
 	} },
-	{ "star", { "level", gen.builtin_number } },
+	{ "star", { "level", gen.builtin_number, "depth", gen.builtin_number } },
 	{ "prop", { "level", gen.builtin_number } },
 	{ "tuple_cons", { "elements", array(typed_term) } },
 	--{"tuple_extend", {"base", typed_term, "fields", array(typed_term)}}, -- maybe?
@@ -448,6 +555,20 @@ typed_term:define_enum("typed", {
 	{ "enum_rec_elim", {
 		"subject",   typed_term,
 		"mechanism", typed_term,
+	} },
+	{ "enum_desc_cons", {
+		"variants", map(gen.builtin_string, typed_term),
+		"rest",     typed_term,
+	} },
+	{ "enum_type", { "desc", typed_term } },
+	{ "enum_case", {
+		"target",   typed_term,
+		"variants", map(gen.builtin_string, typed_term),
+		"default",  typed_term,
+	} },
+	{ "enum_absurd", {
+		"target", typed_term,
+		"debug",  gen.builtin_string,
 	} },
 	{ "object_cons", { "methods", map(gen.builtin_string, typed_term) } },
 	{ "object_corec_cons", { "methods", map(gen.builtin_string, typed_term) } },
@@ -494,9 +615,14 @@ typed_term:define_enum("typed", {
 
 	-- a list of upper and lower bounds, and a relation being bound with respect to
 	{ "range", {
-		  "lower_bounds", array(typed_term),
-		  "upper_bounds", array(typed_term),
-		  "relation",     typed_term, -- a subtyping relation. not currently represented.
+		"lower_bounds", array(typed_term),
+		"upper_bounds", array(typed_term),
+		"relation",     typed_term, -- a subtyping relation. not currently represented.
+	} },
+
+	{ "singleton", {
+		"supertype", typed_term,
+		"value",     value,
 	} },
 
 	{ "program_sequence", {
@@ -516,7 +642,22 @@ typed_term:define_enum("typed", {
 		"effect_type", typed_term,
 		"result_type", typed_term,
 	} },
-})
+	{ "srel_type", { "target_type", typed_term } },
+	{ "variance_type", { "target_type", typed_term } },
+	{ "variance_cons", {
+		"positive", typed_term,
+		"srel",     typed_term,
+	} },
+	{ "intersection_type", {
+		"left",  typed_term,
+		"right", typed_term,
+	} },
+	{ "union_type", {
+		"left",  typed_term,
+		"right", typed_term,
+	} },
+	{ "constrained_type", { "constraints", array(constraintelem) } },
+}) 
 
 local unique_id = gen.builtin_table
 
@@ -541,13 +682,13 @@ free:define_enum("free", {
 -- an effectful function must return a monad
 -- calling an effectful function implicitly inserts a monad bind between the
 -- function return and getting the result of the call
----@module "./types/purity"
+---@module "types.purity"
 local purity = gen.declare_enum("purity", {
 	{ "effectful" },
 	{ "pure" },
 })
 
----@module './types/block_purity'
+---@module 'types.block_purity'
 local block_purity = gen.declare_enum("block_purity", {
 	{ "effectful" },
 	{ "pure" },
@@ -555,7 +696,7 @@ local block_purity = gen.declare_enum("block_purity", {
 	{ "inherit" },
 })
 
----@module "./types/result_info"
+---@module "types.result_info"
 local result_info = gen.declare_record("result_info", { "purity", purity })
 
 ---@class Registry
@@ -583,7 +724,7 @@ local function new_registry(name)
 	return setmetatable({ name = name }, registry_mt)
 end
 
----@module './types/effect_id'
+---@module 'types.effect_id'
 local effect_id = gen.declare_type()
 -- stylua: ignore
 effect_id:define_record("effect_id", {
@@ -599,7 +740,7 @@ semantic_id:define_record("semantic_id", {
 })
 
 --TODO: consider switching to a nicer coterm representation
----@module './types/continuation'
+---@module 'types.continuation'
 local continuation = gen.declare_type()
 -- stylua: ignore
 continuation:define_enum("continuation", {
@@ -653,9 +794,9 @@ value:define_enum("value", {
 
 	-- a list of upper and lower bounds, and a relation being bound with respect to
 	{ "range", {
-		  "lower_bounds", array(value),
-		  "upper_bounds", array(value),
-		  "relation",     value, -- a subtyping relation. not currently represented.
+		"lower_bounds", array(value),
+		"upper_bounds", array(value),
+		"relation",     value, -- a subtyping relation. not currently represented.
 	} },
 
 	-- metaprogramming stuff
@@ -692,6 +833,7 @@ value:define_enum("value", {
 	} },
 	{ "enum_type", { "desc", value } },
 	{ "enum_desc_type", { "universe", value } },
+	{ "enum_desc_value", { "variants", gen.declare_map(gen.builtin_string, value) } },
 	{ "record_value", { "fields", map(gen.builtin_string, value) } },
 	{ "record_type", { "desc", value } },
 	{ "record_desc_type", { "universe", value } },
@@ -708,7 +850,7 @@ value:define_enum("value", {
 	{ "number_type" },
 	{ "number", { "number", gen.builtin_number } },
 	{ "level", { "level", gen.builtin_number } },
-	{ "star", { "level", gen.builtin_number } },
+	{ "star", { "level", gen.builtin_number, "depth", gen.builtin_number } },
 	{ "prop", { "level", gen.builtin_number } },
 	{ "neutral", { "neutral", neutral_value } },
 
@@ -767,6 +909,16 @@ value:define_enum("value", {
 	{ "program_type", {
 		"effect_sig", value,
 		"base_type",  value,
+	} },
+	{ "srel_type", { "target_type", value } },
+	{ "variance_type", { "target_type", value } },
+	{ "intersection_type", {
+		"left",  value,
+		"right", value,
+	} },
+	{ "union_type", {
+		"left",  value,
+		"right", value,
 	} },
 })
 
@@ -855,20 +1007,23 @@ local empty = value.enum_value(DescCons.empty, tup_val())
 local unit_type = value.tuple_type(empty)
 local unit_val = tup_val()
 
---[[
-local tuple_desc = value.enum_value("variant",
-	tup_val(
-		value.enum_value("variant",
-			tup_val(
-				value.enum_value("empty", tup_val()),
-				value.host_value "element",
-				value.closure()
-			)
-		),
+---@param a value
+---@param e value
+---@param ... value
+---@return value
+local function tuple_desc_inner(a, e, ...)
+	if e == nil then
+		return a
+	else
+		return tuple_desc_inner(cons(a, e), ...)
+	end
+end
 
-
-	)
-)]]
+---@param ... value
+---@return value
+local function tuple_desc(...)
+	return tuple_desc_inner(empty, ...)
+end
 
 local effect_registry = new_registry("effect")
 local TCState =
@@ -903,11 +1058,16 @@ local terms = {
 	module_mt = module_mt,
 	runtime_context_type = runtime_context_type,
 	typechecking_context_type = typechecking_context_type,
+	subtype_relation_mt = subtype_relation_mt,
+	SubtypeRelation = SubtypeRelation,
+	constraintelem = constraintelem,
+	constraintcause = constraintcause,
 
 	DescCons = DescCons,
 	tup_val = tup_val,
 	cons = cons,
 	empty = empty,
+	tuple_desc = tuple_desc,
 	unit_type = unit_type,
 	unit_val = unit_val,
 	effect_id = effect_id,
@@ -918,7 +1078,7 @@ local terms = {
 	lua_prog = lua_prog,
 }
 
-local override_prettys = require("./terms-pretty")(terms)
+local override_prettys = require "terms-pretty"(terms)
 local checkable_term_override_pretty = override_prettys.checkable_term_override_pretty
 local inferrable_term_override_pretty = override_prettys.inferrable_term_override_pretty
 local typed_term_override_pretty = override_prettys.typed_term_override_pretty
@@ -938,6 +1098,6 @@ placeholder_debug:derive(derivers.pretty_print)
 purity:derive(derivers.pretty_print)
 result_info:derive(derivers.pretty_print)
 
-local internals_interface = require "./internals-interface"
+local internals_interface = require "internals-interface"
 internals_interface.terms = terms
 return terms

@@ -1,7 +1,6 @@
-local terms = require "./terms"
-local derivers = require "./derivers"
-local acg = require "abstract-codegen"
-local io = require "io"
+local terms = require "terms"
+local derivers = require "derivers"
+local acg = require "libs.abstract-codegen"
 
 -- minimal example:
 -- ---@meta "purity.lua"
@@ -107,7 +106,7 @@ local function build_meta_file_for_record(info)
 	}
 	return meta_gen {
 		kind = "file",
-		filename = kind .. ".lua",
+		filename = "types." .. kind,
 		definition = {
 			kind = "record_definition",
 			typename = kind,
@@ -179,7 +178,7 @@ local function build_meta_file_for_enum(info)
 	end
 	return meta_gen {
 		kind = "file",
-		filename = name .. ".lua",
+		filename = "types." .. name,
 		definition = {
 			kind = "enum_definition",
 			typename = name,
@@ -231,6 +230,15 @@ for k, v in pairs(terms) do
 		-- for a, b in pairs(getmetatable(v)) do
 		--     print(a, b)
 		-- end
+	end
+end
+
+local aux = require "evaluator-types"
+
+for k, v in pairs(aux) do
+	if k and type(v) == "table" and v.derive then
+		---@cast v Type
+		v:derive(gen_type)
 	end
 end
 

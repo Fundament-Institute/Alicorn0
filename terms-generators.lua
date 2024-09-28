@@ -1,4 +1,4 @@
-local derivers = require "./derivers"
+local derivers = require "derivers"
 
 -- record and enum are nominative types.
 -- this means that two record types, given the same arguments, are distinct.
@@ -323,6 +323,8 @@ end
 ---@field reset fun(MapValue, Value)
 ---@field get fun(MapValue, Value): Value?
 ---@field pairs fun(MapValue): function, MapValue, Value?
+---@field copy fun(MapValue, MapValue?, function?): MapValue
+---@field union fun(MapValue, MapValue, function): MapValue
 ---@field pretty_print fun(MapValue, ...)
 ---@field default_print fun(MapValue, ...)
 
@@ -375,6 +377,35 @@ local function gen_map_methods(self, key_type, value_type)
 		end,
 		pairs = function(val)
 			return pairs(val._map)
+		end,
+		copy = function(val, onto, conflict)
+			if not onto then
+				onto = self()
+			elseif not conflict then
+				error("map:copy onto requires a conflict resolution function")
+			end
+			local rt = getmetatable(onto)
+			if self ~= rt then
+				error("map:copy must be passed maps of the same type")
+			end
+			for k, v in val:pairs() do
+				local old = onto:get(k)
+				if old then
+					onto:set(k, conflict(old, v))
+				else
+					onto:set(k, v)
+				end
+			end
+			return onto
+		end,
+		union = function(left, right, conflict)
+			local rt = getmetatable(right)
+			if self ~= rt then
+				error("map:union must be passed maps of the same type")
+			end
+			local new = left:copy()
+			right:copy(new, conflict)
+			return new
 		end,
 	}
 end
@@ -506,7 +537,7 @@ local function gen_set_methods(self, key_type)
 				error("set:copy must be passed sets of the same type")
 			end
 			for k in val:pairs() do
-				onto:set(k)
+				onto:put(k)
 			end
 			return onto
 		end,
@@ -627,10 +658,27 @@ local array_type_mt = {
 	end,
 }
 
+local function array_next(state, control)
+	local i = control + 1
+	if i > state:len() then
+		return nil
+	else
+		return i, state[i]
+	end
+end
+
+local function array_unpack(array, i, ...)
+	if i > 0 then
+		return array_unpack(array, i - 1, array[i], ...)
+	else
+		return ...
+	end
+end
+
 local function gen_array_methods(self, value_type)
 	return {
 		ipairs = function(val)
-			return ipairs(val.array)
+			return array_next, val, 0
 		end,
 		len = function(val)
 			return val.n
@@ -648,7 +696,7 @@ local function gen_array_methods(self, value_type)
 			return new
 		end,
 		unpack = function(val)
-			return table.unpack(val.array)
+			return array_unpack(val.array, val.n)
 		end,
 	}
 end
@@ -670,6 +718,11 @@ local function gen_array_index_fns(t, value_type)
 		if math.floor(key) ~= key then
 			p(key)
 			error("key passed to array indexing is not an integer")
+		end
+		-- puc-rio lua 5.3 ipairs() always produces an iterator that looks for the first nil
+		-- instead of deferring to __ipairs metamethod like in 5.2
+		if key == self.n + 1 then
+			return nil
 		end
 		if key < 1 or key > self.n then
 			p(key, self.n)
@@ -810,6 +863,6 @@ local terms_gen = {
 		return true
 	end, "any"),
 }
-local internals_interface = require "./internals-interface"
+local internals_interface = require "internals-interface"
 internals_interface.terms_gen = terms_gen
 return terms_gen

@@ -1,11 +1,11 @@
-local terms = require "./terms"
+local terms = require "terms"
 local runtime_context = terms.runtime_context
 local typechecking_context = terms.typechecking_context
 local inferrable_term = terms.inferrable_term
 local typed_term = terms.typed_term
 local value = terms.value
 
-local gen = require "./terms-generators"
+local gen = require "terms-generators"
 local map = gen.declare_map
 local string_inferrable_map = map(gen.builtin_string, inferrable_term)
 local string_typed_map = map(gen.builtin_string, typed_term)
@@ -24,10 +24,10 @@ local function cons(...)
 end
 local empty = value.enum_value("empty", tup_val())
 
-local eval = require "./evaluator"
-local const_combinator = eval.const_combinator
-local infer = eval.infer
-local evaluate = eval.evaluate
+local evaluator = require "evaluator"
+local const_combinator = evaluator.const_combinator
+local infer = evaluator.infer
+local evaluate = evaluator.evaluate
 
 print("PART ONE!!!!!!!!!!")
 
@@ -196,7 +196,7 @@ local result_2 = app(prim_add, t) -- add(5, -1) -> 4
 local result_3 = typed_term.tuple_elim(result_2, 1, var(1))
 eval_test("repacking_tuples", result_3)
 
--- local fmt = require './format-adapter'
+-- local fmt = require "format-adapter"
 -- local user_defined_prim_a_id = { name = "syntax" }
 -- local user_defined_prim_a_cons = inferrable_term.prim_user_defined_type_cons(user_defined_prim_a_id, inferrable_array())
 -- local value_user_defined_prim_a = infer_and_eval("syn_prim_cons", user_defined_prim_a_cons)

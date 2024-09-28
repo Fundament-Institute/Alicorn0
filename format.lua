@@ -276,7 +276,7 @@ local grammar = P {
 	-- probably works but it doesn't have complex tests
 	splice = P "${" * V "naked_list" * P "}" + P "$" * V "symbol",
 	escape_chars = Cs(P [[\\]] / [[\]] + P [[\"]] / [["]] + P [[\n]] / "\n" + P [[\r]] / "\r" + P [[\t]] / "\t"),
-	unicode_escape = P "\\u" * (V "hex_digit") ^ 4 ^ -4,
+	unicode_escape = P "\\u" * (V "hex_digit") ^ -4,
 
 	string_literal = V "textpos" * Cs(
 		(V "escape_chars" + V "unicode_escape" + C(1 - (S [["\]] + V "newline" + V "splice"))) ^ 1

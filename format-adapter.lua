@@ -1,5 +1,5 @@
-local metalanguage = require "./metalanguage"
-local format = require "./format"
+local metalanguage = require "metalanguage"
+local format = require "format"
 
 local function syntax_convert(tree)
 	if tree.kind == "list" then
@@ -98,6 +98,6 @@ local format_adapter = {
 	read = read,
 	lispy_print = lispy_print,
 }
-local internals_interface = require "./internals-interface"
+local internals_interface = require "internals-interface"
 internals_interface.format_adapter = format_adapter
 return format_adapter

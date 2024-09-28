@@ -1,10 +1,8 @@
 -- get new version of let and do working with terms
 
-local metalanguage = require "./metalanguage"
--- local conexpr = require './contextual-exprs'
--- local types = require "./typesystem"
+local metalanguage = require "metalanguage"
 
-local terms = require "./terms"
+local terms = require "terms"
 local expression_goal = terms.expression_goal
 local runtime_context = terms.runtime_context
 --local typechecking_context = terms.typechecking_context
@@ -19,7 +17,7 @@ local value = terms.value
 --local host_environment_type = terms.host_environment_type
 --local host_inferrable_term_type = terms.host_inferrable_term_type
 
-local gen = require "./terms-generators"
+local gen = require "terms-generators"
 local array = gen.declare_array
 --local checkable_array = array(checkable_term)
 local inferrable_array = array(inferrable_term)
@@ -31,14 +29,13 @@ local name_array = array(gen.builtin_string)
 local param_info_explicit = value.param_info(value.visibility(visibility.explicit))
 local result_info_pure = value.result_info(result_info(purity.pure))
 
-local evaluator = require "./evaluator"
+local evaluator = require "evaluator"
 local const_combinator = evaluator.const_combinator
 local infer = evaluator.infer
 -- BUG: do not uncomment this, as speculation relies on changing evaluator.typechecking_state, which is masked by the local
 --local typechecker_state = evaluator.typechecker_state
 
---local p = require "pretty-print".prettyPrint
-local U = require "./alicorn-utils"
+local U = require "alicorn-utils"
 
 local semantic_error_mt = {
 	__tostring = function(self)
@@ -388,6 +385,75 @@ local function expression_infix_handler(_, left, symbol, right)
 	return true, OperatorType.Infix, symbol, left, right
 end
 
+---@param env Environment
+---@param metaval value
+---@return boolean, value
+local function speculate_pi_type(env, metaval)
+	return evaluator.typechecker_state:speculate(function()
+		local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+		local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+		local pi = value.pi(
+			param_mv:as_value(),
+			param_info_explicit,
+			value.closure(
+				"#spec-pi",
+				typed_term.literal(result_mv:as_value()),
+				env.typechecking_context.runtime_context
+			),
+			result_info_pure
+		)
+
+		U.tag(
+			"flow",
+			{ val = metaval, use = pi },
+			evaluator.typechecker_state.flow,
+			evaluator.typechecker_state,
+			metaval,
+			env.typechecking_context,
+			pi,
+			env.typechecking_context,
+			"Speculating on pi type"
+		)
+
+		return pi
+	end)
+end
+
+---HORRIBLE HACK MAKE THIS BETTER
+---@param env Environment
+---@param metaval value
+---@return boolean, value
+local function operative_test_hack(env, metaval)
+	local edges = evaluator.typechecker_state.graph.constrain_edges:to(
+		metaval:unwrap_neutral():unwrap_free():unwrap_metavariable().usage
+	)
+	local res = nil
+	for _, edge in ipairs(edges) do
+		if not edge.rel == evaluator.UniverseOmegaRelation then
+			do
+				return false
+			end
+			error "not a subtyping relation"
+		end
+		if evaluator.typechecker_state.values[edge.left][1]:is_operative_type() then
+			if not res then
+				res = evaluator.typechecker_state.values[edge.left][1]
+			else
+				do
+					return false
+				end
+				error "too many edges, couldn't pick one"
+			end
+		else
+			do
+				return false
+			end
+			error "was bound to something that wasn't an operative"
+		end
+	end
+	return true, res
+end
+
 ---@param args ExpressionArgs
 ---@param a ConstructedSyntax
 ---@param b ConstructedSyntax
@@ -468,39 +534,16 @@ local function expression_pairhandler(args, a, b)
 			and type_of_term:unwrap_neutral():unwrap_free():is_metavariable()
 		) or type_of_term:is_range()
 	then
+		local ok, updated_type
 		-- Speculate that this is a pi type
-		local ok, pi = evaluator.typechecker_state:speculate(function()
-			local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
-			local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
-			local pi = value.pi(
-				param_mv:as_value(),
-				param_info_explicit,
-				value.closure(
-					"#spec-pi",
-					typed_term.literal(result_mv:as_value()),
-					env.typechecking_context.runtime_context
-				),
-				result_info_pure
-			)
-
-			U.tag(
-				"flow",
-				{ val = type_of_term, usa = pi },
-				evaluator.typechecker_state.flow,
-				evaluator.typechecker_state,
-				type_of_term,
-				env.typechecking_context,
-				pi,
-				env.typechecking_context,
-				"Speculating on pi type"
-			)
-
-			return pi
-		end)
+		ok, updated_type = speculate_pi_type(env, type_of_term)
+		if not ok then
+			ok, updated_type = operative_test_hack(env, type_of_term)
+		end
 		if not ok then
 			error("speculate DID NOT work for pi!: " .. tostring(pi))
 		end
-		type_of_term = pi
+		type_of_term = updated_type
 	end
 
 	local function call_operative()
@@ -522,6 +565,11 @@ local function expression_pairhandler(args, a, b)
 		--end
 
 		-- temporary, while it isn't a Maybe
+		if not operative_result_val:is_tuple_value() then
+			print("bad operative?", handler)
+			print("bad result val", operative_result_val)
+			error "operative handler didn't complete properly"
+		end
 		local operative_result_elems = operative_result_val:unwrap_tuple_value()
 		local data = operative_result_elems[1]:unwrap_host_value()
 		local env = operative_result_elems[2]:unwrap_host_value()
@@ -555,16 +603,22 @@ local function expression_pairhandler(args, a, b)
 			local metavar = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			local metavalue = metavar:as_value()
 			local metaresult = evaluator.apply_value(result_type, metavalue)
-			if not metaresult:is_pi() then
+
+			local ok, pi = speculate_pi_type(env, metaresult)
+
+			if not ok then
 				error(
 					"calling function with implicit args, result type applied on implicit args must be a function type: "
 						.. metaresult:pretty_print()
+						.. "\n@@@tb1@@@\n"
+						.. pi
+						.. "\n@@@tb2@@@"
 				)
 			end
 
 			-- local new_term = inferrable_term.application(inferrable_term.typed(type_of_term, usage_array(), term), checkable_term.inferrable(inferrable_term.typed(param_type, usage_array(), terms.typed_term.literal(metavar:as_value()))))
 			term = typed_term.application(term, terms.typed_term.literal(metavar:as_value()))
-			type_of_term = metaresult
+			type_of_term = pi
 			param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
 		end
 
@@ -706,7 +760,7 @@ local function expression_symbolhandler(args, name)
 			part = inferrable_term.record_elim(
 				part,
 				name_array(front or name),
-				inferrable_term.bound_variable(#env.typechecking_context + 1)
+				inferrable_term.bound_variable(env.typechecking_context:len() + 1)
 			)
 		end
 		if goal:is_check() then
@@ -847,7 +901,7 @@ local function host_operative(fn, name)
 			---@cast res inferrable
 			res = checkable_term.inferrable(res)
 		else
-			error("mismatch in goal and returned term")
+			error("mismatch in goal and returned term\ngoal: " .. tostring(goal) .. "\nres: " .. tostring(res))
 		end
 		if not env or not env.exit_block then
 			print(
@@ -977,7 +1031,11 @@ collect_tuple = metalanguage.reducer(
 					)
 				end
 				if not ok and type(continue) == "string" then
-					continue = continue .. " (should have " .. ", found " .. tostring(#collected_terms) .. " so far)"
+					continue = continue
+						.. " (should have "
+						.. ", found "
+						.. tostring(collected_terms:len())
+						.. " so far)"
 				end
 			else
 				ok, continue, next_term, syntax, env = syntax:match({
@@ -1051,14 +1109,18 @@ collect_host_tuple = metalanguage.reducer(
 					desc = terms.cons(
 						desc,
 						value.closure(
-							"#collect-tuple-param",
+							"#collect-host-tuple-param",
 							typed_term.literal(value.singleton(next_elem_type, next_val)),
 							env.typechecking_context.runtime_context
 						)
 					)
 				end
 				if not ok and type(continue) == "string" then
-					continue = continue .. " (should have " .. ", found " .. tostring(#collected_terms) .. " so far)"
+					continue = continue
+						.. " (should have "
+						.. ", found "
+						.. tostring(collected_terms:len())
+						.. " so far)"
 				end
 			else
 				ok, continue, next_term, syntax, env = syntax:match({
@@ -1219,6 +1281,6 @@ local alicorn_expressions = {
 	eval = eval,
 	eval_block = eval_block,
 }
-local internals_interface = require "./internals-interface"
+local internals_interface = require "internals-interface"
 internals_interface.alicorn_expressions = alicorn_expressions
 return alicorn_expressions
