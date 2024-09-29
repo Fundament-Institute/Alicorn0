@@ -189,12 +189,11 @@ local ascribed_name = metalanguage.reducer(
 	---@param env Environment
 	---@param prev inferrable
 	---@param names string[]
-	---@param backup_anchor Anchor
 	---@return boolean
 	---@return string
 	---@return inferrable?
 	---@return Environment?
-	function(syntax, env, prev, names, backup_anchor)
+	function(syntax, env, prev, names)
 		-- print("ascribed_name trying")
 		-- p(syntax)
 		-- print(prev:pretty_print())
@@ -203,9 +202,7 @@ local ascribed_name = metalanguage.reducer(
 		-- print(env.enter_block)
 		local shadowed
 		shadowed, env = env:enter_block(terms.block_purity.pure)
-		env = env:bind_local(
-			terms.binding.annotated_lambda("#prev", prev, syntax.anchor or backup_anchor, terms.visibility.explicit)
-		)
+		env = env:bind_local(terms.binding.annotated_lambda("#prev", prev, syntax.anchor, terms.visibility.explicit))
 		local ok, prev_binding = env:get("#prev")
 		if not ok then
 			error "#prev should always be bound, was just added"
@@ -233,7 +230,6 @@ local curry_segment = metalanguage.reducer(
 	---@return boolean
 	---@return Environment|string
 	function(syntax, env)
-		local close_enough = syntax.anchor
 		--print("start env: " .. tostring(env))
 
 		local ok, env = syntax:match({
@@ -243,7 +239,7 @@ local curry_segment = metalanguage.reducer(
 				--print("type_env: " .. tostring(thread.env))
 				return pure_ascribed_name(function(_, name, type_val, type_env)
 					type_env = type_env:bind_local(
-						terms.binding.annotated_lambda(name, type_val, close_enough, terms.visibility.implicit)
+						terms.binding.annotated_lambda(name, type_val, syntax.anchor, terms.visibility.implicit)
 					)
 					local newthread = {
 						env = type_env,
@@ -316,11 +312,9 @@ local tupleof_ascribed_names_inner = metalanguage.reducer(
 		)
 		local names = gen.declare_array(gen.builtin_string)()
 
-		local close_enough = syntax.anchor
-
-		local ok, names, args, env = syntax:match({
+		local ok, thread = syntax:match({
 			metalanguage.list_many_fold(function(_, vals, thread)
-				return true, thread.names, thread.args, thread.env
+				return true, thread
 			end, function(thread)
 				return ascribed_name(function(_, name, type_val, type_env)
 					local names = thread.names:copy()
@@ -331,7 +325,7 @@ local tupleof_ascribed_names_inner = metalanguage.reducer(
 						env = type_env,
 					}
 					return true, { name = name, type = type_val }, newthread
-				end, thread.env, build_type_term(thread.args), thread.names, close_enough)
+				end, thread.env, build_type_term(thread.args), thread.names)
 			end, {
 				names = names,
 				args = empty,
@@ -339,11 +333,7 @@ local tupleof_ascribed_names_inner = metalanguage.reducer(
 			}),
 		}, metalanguage.failure_handler, nil)
 
-		if not ok then
-			return ok, names
-		end
-
-		return true, { names = names, args = args, env = env }
+		return ok, thread
 	end,
 	"tupleof_ascribed_names_inner"
 )
@@ -456,6 +446,143 @@ local host_ascribed_segment = metalanguage.reducer(
 		end
 	end,
 	"host_ascribed_segment"
+)
+
+local tuplewrap_ascribed_name_inner = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@return boolean
+	---@return {names: string[], args: inferrable, env: Environment}|string
+	function(syntax, env)
+		local function build_type_term(args)
+			return terms.inferrable_term.tuple_type(args)
+		end
+		local inf_array = gen.declare_array(terms.inferrable_term)
+		local function tup_cons(...)
+			return terms.inferrable_term.tuple_cons(inf_array(...))
+		end
+		local function cons(...)
+			return terms.inferrable_term.enum_cons(
+				terms.value.tuple_desc_type(terms.value.star(0, 0)),
+				terms.DescCons.cons,
+				tup_cons(...)
+			)
+		end
+		local empty = terms.inferrable_term.enum_cons(
+			terms.value.tuple_desc_type(terms.value.star(0, 0)),
+			terms.DescCons.empty,
+			tup_cons()
+		)
+		local names = gen.declare_array(gen.builtin_string)()
+		local args = empty
+		local ok, name, type_val, type_env = syntax:match({
+			ascribed_name(metalanguage.accept_handler, env, build_type_term(args), names),
+		}, metalanguage.failure_handler, nil)
+		if not ok then
+			return ok, name
+		end
+
+		names = names:copy()
+		names:append(name)
+		args = cons(args, type_val)
+		env = type_env
+		return ok, { names = names, args = args, env = env }
+	end,
+	"tuplewrap_ascribed_name_inner"
+)
+
+local tuplewrap_ascribed_name = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@return boolean
+	---@return {names: string[], args: inferrable, env: Environment}|string
+	function(syntax, env)
+		local ok, thread = syntax:match({
+			tuplewrap_ascribed_name_inner(metalanguage.accept_handler, env),
+		}, metalanguage.failure_handler, nil)
+		if not ok then
+			return ok, thread
+		end
+		thread.args = terms.inferrable_term.tuple_type(thread.args)
+		return ok, thread
+	end,
+	"tuplewrap_ascribed_name"
+)
+
+local host_tuplewrap_ascribed_name = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@return boolean
+	---@return {names: string[], args: inferrable, env: Environment}|string
+	function(syntax, env)
+		local ok, thread = syntax:match({
+			tuplewrap_ascribed_name_inner(metalanguage.accept_handler, env),
+		}, metalanguage.failure_handler, nil)
+		if not ok then
+			return ok, thread
+		end
+		thread.args = terms.inferrable_term.host_tuple_type(thread.args)
+		return ok, thread
+	end,
+	"host_tuplewrap_ascribed_name"
+)
+
+local ascribed_segment_2 = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@return boolean
+	---@return {names: string[], args: inferrable, env: Environment}|string
+	function(syntax, env)
+		-- check whether syntax starts with a paren list, or is empty
+		local multi, _, _ = syntax:match({
+			metalanguage.isnil(metalanguage.accept_handler),
+			metalanguage.listtail(metalanguage.accept_handler, metalanguage.ispair(metalanguage.accept_handler)),
+		}, metalanguage.failure_handler, nil)
+
+		local ok, thread
+
+		if multi then
+			ok, thread = syntax:match({
+				tupleof_ascribed_names(metalanguage.accept_handler, env),
+			}, metalanguage.failure_handler, nil)
+		else
+			ok, thread = syntax:match({
+				tuplewrap_ascribed_name(metalanguage.accept_handler, env),
+			}, metalanguage.failure_handler, nil)
+		end
+
+		return ok, thread
+	end,
+	"ascribed_segment_2"
+)
+
+local host_ascribed_segment_2 = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@return boolean
+	---@return {names: string[], args: inferrable, env: Environment}|string
+	function(syntax, env)
+		-- check whether syntax starts with a paren list
+		local multi, _, _ = syntax:match({
+			metalanguage.isnil(metalanguage.accept_handler),
+			metalanguage.listtail(metalanguage.accept_handler, metalanguage.ispair(metalanguage.accept_handler)),
+		}, metalanguage.failure_handler, nil)
+
+		local ok, thread
+
+		if multi then
+			ok, thread = syntax:match({
+				host_tupleof_ascribed_names(metalanguage.accept_handler, env),
+			}, metalanguage.failure_handler, nil)
+		else
+			ok, thread = syntax:match({
+				host_tuplewrap_ascribed_name(metalanguage.accept_handler, env),
+			}, metalanguage.failure_handler, nil)
+		end
+
+		return ok, thread
+	end,
+	"host_ascribed_segment_2"
 )
 
 -- TODO: abstract so can reuse for func type and host func type
@@ -764,25 +891,46 @@ end
 ---@type lua_operative
 local function lambda_impl(syntax, env)
 	local ok, thread, tail = syntax:match({
-		metalanguage.listtail(metalanguage.accept_handler, ascribed_segment(metalanguage.accept_handler, env)),
+		metalanguage.listtail(metalanguage.accept_handler, ascribed_segment_2(metalanguage.accept_handler, env)),
 	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, thread
 	end
 
-	local single, args, names, env = thread.single, thread.args, thread.names, thread.env
+	local args, names, env = thread.args, thread.names, thread.env
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
-	if single then
-		inner_env =
-			inner_env:bind_local(terms.binding.annotated_lambda(names, args, syntax.anchor, terms.visibility.explicit))
-	else
-		inner_env = inner_env:bind_local(
-			terms.binding.annotated_lambda("#lambda-arguments", args, syntax.anchor, terms.visibility.explicit)
-		)
-		local _, arg = inner_env:get("#lambda-arguments")
-		inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
+	inner_env = inner_env:bind_local(
+		terms.binding.annotated_lambda("#lambda-arguments", args, syntax.anchor, terms.visibility.explicit)
+	)
+	local _, arg = inner_env:get("#lambda-arguments")
+	inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
+	local ok, expr, env = tail:match(
+		{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env)) },
+		metalanguage.failure_handler,
+		nil
+	)
+	if not ok then
+		return ok, expr
 	end
+	local resenv, term, purity = env:exit_block(expr, shadow)
+	return true, term, resenv
+end
+
+---@type lua_operative
+local function lambda_single_impl(syntax, env)
+	local ok, thread, tail = syntax:match({
+		metalanguage.listtail(metalanguage.accept_handler, pure_ascribed_name(utils.accept_bundled, env)),
+	}, metalanguage.failure_handler, nil)
+	if not ok then
+		return ok, thread
+	end
+
+	local name, arg, env = table.unpack(thread)
+
+	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
+	inner_env =
+		inner_env:bind_local(terms.binding.annotated_lambda(name, arg, syntax.anchor, terms.visibility.explicit))
 	local ok, expr, env = tail:match(
 		{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env)) },
 		metalanguage.failure_handler,
@@ -798,26 +946,17 @@ end
 ---@type lua_operative
 local function lambda_implicit_impl(syntax, env)
 	local ok, thread, tail = syntax:match({
-		metalanguage.listtail(metalanguage.accept_handler, ascribed_segment(metalanguage.accept_handler, env)),
+		metalanguage.listtail(metalanguage.accept_handler, pure_ascribed_name(utils.accept_bundled, env)),
 	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, thread
 	end
 
-	local single, args, names, env = thread.single, thread.args, thread.names, thread.env
+	local name, arg, env = table.unpack(thread)
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
-	if single then
-		inner_env =
-			inner_env:bind_local(terms.binding.annotated_lambda(names, args, syntax.anchor, terms.visibility.implicit))
-	else
-		print("WARNING: try replacing lambda_implicit with lambda_curry " .. tostring(syntax.anchor))
-		inner_env = inner_env:bind_local(
-			terms.binding.annotated_lambda("#lambda-implicit-arguments", args, syntax.anchor, terms.visibility.implicit)
-		)
-		local _, arg = inner_env:get("#lambda-implicit-arguments")
-		inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
-	end
+	inner_env =
+		inner_env:bind_local(terms.binding.annotated_lambda(name, arg, syntax.anchor, terms.visibility.implicit))
 	local ok, expr, env = tail:match(
 		{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env)) },
 		metalanguage.failure_handler,
@@ -1199,6 +1338,7 @@ local core_operations = {
 	type_ = exprs.host_operative(startype_impl, "startype_impl"),
 	["forall"] = exprs.host_operative(forall_type_impl, "forall_type_impl"),
 	lambda = exprs.host_operative(lambda_impl, "lambda_impl"),
+	lambda_single = exprs.host_operative(lambda_single_impl, "lambda_single_impl"),
 	lambda_implicit = exprs.host_operative(lambda_implicit_impl, "lambda_implicit_impl"),
 	lambda_curry = exprs.host_operative(lambda_curry_impl, "lambda_curry_impl"),
 	the = exprs.host_operative(the_operative_impl, "the"),
