@@ -891,8 +891,9 @@ local value_name = {
 			-- already derived, don't derive again
 			return
 		end
+		local kind = info.kind
 		t.value_name = function()
-			return info.kind
+			return kind
 		end
 		t.derived_value_name = true
 	end,

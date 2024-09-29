@@ -110,11 +110,13 @@ end
 ---@field derived_pretty_print boolean?
 ---@field __tostring function(RecordValue): string
 ---@field derived_diff boolean?
+---@field derived_serialize boolean?
 
 ---@class RecordValue: Value
 ---@field pretty_print fun(RecordValue, ...)
 ---@field default_print fun(RecordValue, ...)
 ---@field diff fun(RecordValue)
+---@field serialize(RecordValue): string
 
 ---@param self table
 ---@param cons table
@@ -210,11 +212,13 @@ end
 ---@field derived_pretty_print boolean?
 ---@field __tostring function(EnumValue): string
 ---@field derived_diff boolean?
+---@field derived_serialize boolean?
 
 ---@class EnumValue: Value
 ---@field pretty_print fun(EnumValue, ...)
 ---@field default_print fun(EnumValue, ...)
 ---@field diff fun(EnumValue)
+---@field serialize(EnumValue): string
 
 local enum_type_mt = {
 	__tostring = function(self)
@@ -316,6 +320,7 @@ end
 ---@field __pairs function(MapValue): function, MapValue, Value?
 ---@field derived_pretty_print boolean?
 ---@field __tostring function(MapValue): string
+---@field derived_serialize boolean?
 
 ---@class MapValue: Value
 ---@field _map { [Value]: Value }
@@ -327,6 +332,7 @@ end
 ---@field union fun(MapValue, MapValue, function): MapValue
 ---@field pretty_print fun(MapValue, ...)
 ---@field default_print fun(MapValue, ...)
+---@field serialize(MapValue): string
 
 local map_type_mt = {
 	__call = function(self)
@@ -468,6 +474,7 @@ end
 ---@field __pairs function(SetValue): function, SetValue, Value?
 ---@field derived_pretty_print boolean?
 ---@field __tostring function(SetValue): string
+---@field derived_serialize boolean?
 
 ---@class SetValue: Value
 ---@field _set { [Value]: boolean }
@@ -481,6 +488,7 @@ end
 ---@field superset fun(SetValue, SetValue): boolean
 ---@field pretty_print fun(SetValue, ...)
 ---@field default_print fun(SetValue, ...)
+---@field serialize(SetValue): string
 
 local set_type_mt = {
 	__call = function(self)
@@ -624,6 +632,7 @@ end
 ---@field derived_pretty_print boolean?
 ---@field __tostring function(ArrayValue): string
 ---@field derived_diff boolean?
+---@field derived_serialize boolean?
 
 ---@class ArrayValue: Value
 ---@field n integer
@@ -636,6 +645,7 @@ end
 ---@field pretty_print fun(ArrayValue, ...)
 ---@field default_print fun(ArrayValue, ...)
 ---@field diff fun(ArrayValue)
+---@field serialize(ArrayValue): string
 
 local array_type_mt = {
 	__call = function(self, ...)
