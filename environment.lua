@@ -124,7 +124,7 @@ function environment:bind_local(binding)
 		end
 
 		local desc = terms.empty
-		for _ in ipairs(names) do
+		for _ in names:ipairs() do
 			local next_elem_type_mv = evaluator.typechecker_state:metavariable(self.typechecking_context)
 			local next_elem_type = next_elem_type_mv:as_value()
 			desc = terms.cons(desc, next_elem_type)
@@ -182,7 +182,7 @@ function environment:bind_local(binding)
 				error("attempted to bind " .. n_elements .. " tuple elements to " .. names:len() .. " variables")
 			end
 
-			for i, v in ipairs(names) do
+			for i, v in names:ipairs() do
 				--local constructor, arg = desc:unwrap_enum_value()
 				-- if constructor ~= "cons" then
 				-- 	error("todo: this error message")

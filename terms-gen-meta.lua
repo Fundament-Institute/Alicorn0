@@ -1,5 +1,6 @@
 local terms = require "terms"
 local derivers = require "derivers"
+local traits = require "traits"
 local acg = require "libs.abstract-codegen"
 
 -- minimal example:
@@ -88,7 +89,7 @@ local function build_meta_file_for_record(info)
 	local unwraptypes = {}
 	for i, param in ipairs(params) do
 		local param_type = params_types[i]
-		local ptype = param_type.value_name()
+		local ptype = traits.value_name:get(param_type).value_name()
 		params_ascribed[#params_ascribed + 1] = param .. ": " .. ptype
 		unwraptypes[#unwraptypes + 1] = ptype
 	end
@@ -136,7 +137,7 @@ local function build_meta_file_for_enum(info)
 		if vtype == derivers.EnumDeriveInfoVariantKind.Record then
 			for i, param in ipairs(vinfo.params) do
 				local param_type = vinfo.params_types[i]
-				local ptype = param_type.value_name()
+				local ptype = traits.value_name:get(param_type).value_name()
 				params_ascribed[#params_ascribed + 1] = param .. ": " .. ptype
 				unwraptypes[#unwraptypes + 1] = ptype
 				astypes[#astypes + 1] = ptype
@@ -204,18 +205,6 @@ local gen_type = {
 			file:write(build_meta_file_for_enum(info))
 			file:close()
 		end
-	end,
-	foreign = function(t, info)
-		-- p(info)
-	end,
-	map = function(t, info)
-		-- p(info)
-	end,
-	set = function(t, info)
-		-- p(info)
-	end,
-	array = function(t, info)
-		-- p(info)
 	end,
 }
 
