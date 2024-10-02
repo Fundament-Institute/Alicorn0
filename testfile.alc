@@ -922,7 +922,7 @@ let exit-block = intrinsic
 
 let host-matcher = new-host-type-family new-host-unique-id("matcher")
 	forall (userdata : host-type, result : tuple-desc-type(host-type)) -> (T : host-type)
-	tuple-of-implicit covariant(subtyping) contravariant(tuple-desc-relation)
+	tuple-of-implicit contravariant(subtyping) covariant(tuple-desc-relation)
 
 let nil-handler-type = lambda (userdata : host-type, result : tuple-desc-type(host-type))
 	host-func-type ((ud : userdata)) -> (r : host-tuple-type(result))
