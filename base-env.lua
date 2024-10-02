@@ -159,6 +159,21 @@ local function intrinsic(syntax, env)
 		env
 end
 
+---make a checkable term of a specific literal purity
+---@param purity purity
+---@return checkable
+local function make_literal_purity(purity)
+	return terms.checkable_term.inferrable(
+		terms.inferrable_term.typed(
+			terms.host_purity_type,
+			usage_array(),
+			terms.typed_term.literal(terms.value.host_value(purity))
+		)
+	)
+end
+local literal_purity_pure = make_literal_purity(terms.purity.pure)
+local literal_purity_effectful = make_literal_purity(terms.purity.effectful)
+
 local pure_ascribed_name = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
@@ -204,7 +219,13 @@ local ascribed_name = metalanguage.reducer(
 		local shadowed
 		shadowed, env = env:enter_block(terms.block_purity.pure)
 		env = env:bind_local(
-			terms.binding.annotated_lambda("#prev", prev, syntax.anchor or backup_anchor, terms.visibility.explicit)
+			terms.binding.annotated_lambda(
+				"#prev",
+				prev,
+				syntax.anchor or backup_anchor,
+				terms.visibility.explicit,
+				literal_purity_pure
+			)
 		)
 		local ok, prev_binding = env:get("#prev")
 		if not ok then
@@ -243,7 +264,13 @@ local curry_segment = metalanguage.reducer(
 				--print("type_env: " .. tostring(thread.env))
 				return pure_ascribed_name(function(_, name, type_val, type_env)
 					type_env = type_env:bind_local(
-						terms.binding.annotated_lambda(name, type_val, close_enough, terms.visibility.implicit)
+						terms.binding.annotated_lambda(
+							name,
+							type_val,
+							close_enough,
+							terms.visibility.implicit,
+							literal_purity_pure
+						)
 					)
 					local newthread = {
 						env = type_env,
@@ -492,7 +519,8 @@ local function make_host_func_syntax(effectful)
 				"#host-func-arguments",
 				params_args,
 				tail.anchor or syntax.anchor,
-				terms.visibility.explicit
+				terms.visibility.explicit,
+				literal_purity_pure
 			)
 		)
 		local ok, arg = env:get("#host-func-arguments")
@@ -586,7 +614,8 @@ local function forall_type_impl(syntax, env)
 			"#forall-arguments",
 			params_args,
 			tail.anchor or syntax.anchor,
-			terms.visibility.explicit
+			terms.visibility.explicit,
+			literal_purity_pure
 		)
 	)
 	local ok, arg = env:get("#forall-arguments")
@@ -774,11 +803,65 @@ local function lambda_impl(syntax, env)
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
 	if single then
-		inner_env =
-			inner_env:bind_local(terms.binding.annotated_lambda(names, args, syntax.anchor, terms.visibility.explicit))
+		inner_env = inner_env:bind_local(
+			terms.binding.annotated_lambda(names, args, syntax.anchor, terms.visibility.explicit, literal_purity_pure)
+		)
 	else
 		inner_env = inner_env:bind_local(
-			terms.binding.annotated_lambda("#lambda-arguments", args, syntax.anchor, terms.visibility.explicit)
+			terms.binding.annotated_lambda(
+				"#lambda-arguments",
+				args,
+				syntax.anchor,
+				terms.visibility.explicit,
+				literal_purity_pure
+			)
+		)
+		local _, arg = inner_env:get("#lambda-arguments")
+		inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
+	end
+	local ok, expr, env = tail:match(
+		{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env)) },
+		metalanguage.failure_handler,
+		nil
+	)
+	if not ok then
+		return ok, expr
+	end
+	local resenv, term, purity = env:exit_block(expr, shadow)
+	return true, term, resenv
+end
+
+---@type lua_operative
+local function lambda_prog_impl(syntax, env)
+	local ok, thread, tail = syntax:match({
+		metalanguage.listtail(metalanguage.accept_handler, ascribed_segment(metalanguage.accept_handler, env)),
+	}, metalanguage.failure_handler, nil)
+	if not ok then
+		return ok, thread
+	end
+
+	local single, args, names, env = thread.single, thread.args, thread.names, thread.env
+
+	local shadow, inner_env = env:enter_block(terms.block_purity.effectful)
+	if single then
+		inner_env = inner_env:bind_local(
+			terms.binding.annotated_lambda(
+				names,
+				args,
+				syntax.anchor,
+				terms.visibility.explicit,
+				literal_purity_effectful
+			)
+		)
+	else
+		inner_env = inner_env:bind_local(
+			terms.binding.annotated_lambda(
+				"#lambda-arguments",
+				args,
+				syntax.anchor,
+				terms.visibility.explicit,
+				literal_purity_effectful
+			)
 		)
 		local _, arg = inner_env:get("#lambda-arguments")
 		inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
@@ -808,12 +891,19 @@ local function lambda_implicit_impl(syntax, env)
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
 	if single then
-		inner_env =
-			inner_env:bind_local(terms.binding.annotated_lambda(names, args, syntax.anchor, terms.visibility.implicit))
+		inner_env = inner_env:bind_local(
+			terms.binding.annotated_lambda(names, args, syntax.anchor, terms.visibility.implicit, literal_purity_pure)
+		)
 	else
 		print("WARNING: try replacing lambda_implicit with lambda_curry " .. tostring(syntax.anchor))
 		inner_env = inner_env:bind_local(
-			terms.binding.annotated_lambda("#lambda-implicit-arguments", args, syntax.anchor, terms.visibility.implicit)
+			terms.binding.annotated_lambda(
+				"#lambda-implicit-arguments",
+				args,
+				syntax.anchor,
+				terms.visibility.implicit,
+				literal_purity_pure
+			)
 		)
 		local _, arg = inner_env:get("#lambda-implicit-arguments")
 		inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
@@ -980,7 +1070,7 @@ local function into_operative_impl(syntax, env)
 			metalanguage.any(metalanguage.accept_handler),
 			metalanguage.any(metalanguage.accept_handler)
 		),
-	}, metalanguage.failure_handler)
+	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return false, ud_type_syntax
 	end
@@ -1199,6 +1289,7 @@ local core_operations = {
 	type_ = exprs.host_operative(startype_impl, "startype_impl"),
 	["forall"] = exprs.host_operative(forall_type_impl, "forall_type_impl"),
 	lambda = exprs.host_operative(lambda_impl, "lambda_impl"),
+	["lambda-prog"] = exprs.host_operative(lambda_prog_impl, "lambda_prog_impl"),
 	lambda_implicit = exprs.host_operative(lambda_implicit_impl, "lambda_implicit_impl"),
 	lambda_curry = exprs.host_operative(lambda_curry_impl, "lambda_curry_impl"),
 	the = exprs.host_operative(the_operative_impl, "the"),

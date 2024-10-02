@@ -593,6 +593,17 @@ local function substitute_inner(val, mappings, context_len)
 			substitute_inner(a, mappings, context_len),
 			substitute_inner(b, mappings, context_len)
 		)
+	elseif val:is_program_type() then
+		local effect, res = val:unwrap_program_type()
+		return typed_term.program_type(
+			substitute_inner(effect, mappings, context_len),
+			substitute_inner(res, mappings, context_len)
+		)
+	elseif val:is_effect_row() then
+		local row, rest = val:unwrap_effect_row()
+		return typed_term.effect_row_resolve(row, substitute_inner(rest, mappings, context_len))
+	elseif val:is_effect_empty() then
+		return typed_term.literal(val) -- Singleton constructor can't be substituted further
 	else
 		error("Unhandled value kind in substitute_inner: " .. val.kind)
 	end
@@ -1529,10 +1540,12 @@ function infer(
 	elseif inferrable_term:is_typed() then
 		return inferrable_term:unwrap_typed()
 	elseif inferrable_term:is_annotated_lambda() then
-		local param_name, param_annotation, body, anchor, param_visibility = inferrable_term:unwrap_annotated_lambda()
+		local param_name, param_annotation, body, anchor, param_visibility, purity =
+			inferrable_term:unwrap_annotated_lambda()
 		local _, _, param_term = infer(param_annotation, typechecking_context)
 		local param_type = evaluate(param_term, typechecking_context:get_runtime_context())
 		local inner_context = typechecking_context:append(param_name, param_type, nil, anchor)
+		local _, purity_term = check(purity, inner_context, terms.host_purity_type)
 		local body_type, body_usages, body_term = infer(body, inner_context)
 
 		local result_type = U.tag(
@@ -1546,10 +1559,13 @@ function infer(
 		--print("INFER ANNOTATED LAMBDA")
 		--print("result_type")
 		--print(result_type:pretty_print(typechecking_context))
+		local result_info = value.result_info(
+			result_info(evaluate(purity_term, typechecking_context:get_runtime_context()):unwrap_host_value())
+		) --TODO make more flexible
 		local body_usages_param = body_usages[body_usages:len()]
 		local lambda_usages = body_usages:copy(1, body_usages:len() - 1)
 		local lambda_type =
-			value.pi(param_type, value.param_info(value.visibility(param_visibility)), result_type, result_info_pure)
+			value.pi(param_type, value.param_info(value.visibility(param_visibility)), result_type, result_info)
 		local lambda_term = typed_term.lambda(param_name, body_term)
 		return lambda_type, lambda_usages, lambda_term
 	elseif inferrable_term:is_pi() then
@@ -2508,8 +2524,9 @@ function evaluate(typed_term, runtime_context)
 			for k, v in pairs(internals_interface) do
 				load_env[k] = v
 			end
-			--local require_generator = require "require"
-			--load_env.require = require_generator(anchor.sourceid)
+			--TODO figure out how to make this modular
+			local require_generator = require "require"
+			load_env.require = require_generator(anchor.sourceid)
 			local res = assert(load(source_str, "host_intrinsic", "t", load_env))()
 			intrinsic_memo[source_str] = res
 			return value.host_value(res)
@@ -2678,6 +2695,9 @@ function evaluate(typed_term, runtime_context)
 	elseif typed_term:is_intersection_type() then
 		local a, b = typed_term:unwrap_intersection_type()
 		return value.intersection_type(evaluate(a, runtime_context), evaluate(b, runtime_context))
+	elseif typed_term:is_effect_row_resolve() then
+		local ids, rest = typed_term:unwrap_effect_row_resolve()
+		return value.effect_row(ids, evaluate(rest, runtime_context))
 	else
 		error("evaluate: unknown kind: " .. typed_term.kind)
 	end
