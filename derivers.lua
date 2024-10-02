@@ -424,12 +424,12 @@ local diff = {
 			elseif n == 1 then
 				local d = diff_params[1]
 				print("difference in param: " .. d)
-				local ldiff = traits.diff:get(params_types[d])
-				if ldiff then
+				local diff_impl = traits.diff:get(params_types[d])
+				if diff_impl then
 					-- tail call
-					return ldiff.diff(left[d], right[d])
+					return diff_impl.diff(left[d], right[d])
 				else
-					print("stopping diff (missing diff method)")
+					print("stopping diff (missing diff impl)")
 					return
 				end
 			else
@@ -475,12 +475,12 @@ local diff = {
 					elseif n == 1 then
 						local d = diff_params[1]
 						print("difference in param: " .. d)
-						local ldiff = traits.diff:get(vparams_types[d])
-						if ldiff then
+						local diff_impl = traits.diff:get(vparams_types[d])
+						if diff_impl then
 							-- tail call
-							return ldiff.diff(left[d], right[d])
+							return diff_impl.diff(left[d], right[d])
 						else
-							print("stopping diff (missing diff method)")
+							print("stopping diff (missing diff impl)")
 							return
 						end
 					else

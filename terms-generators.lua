@@ -820,12 +820,12 @@ local function gen_array_diff_fn(self, value_type)
 		elseif n == 1 then
 			local d = diff_elems[1]
 			print("difference in element: " .. tostring(d))
-			local ldiff = traits.diff:get(value_type)
-			if ldiff then
+			local diff_impl = traits.diff:get(value_type)
+			if diff_impl then
 				-- tail call
-				return ldiff.diff(left[d], right[d])
+				return diff_impl.diff(left[d], right[d])
 			else
-				print("stopping diff (missing diff method)")
+				print("stopping diff (missing diff impl)")
 				return
 			end
 		else
