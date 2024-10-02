@@ -215,6 +215,24 @@ local visibility = gen.declare_enum("visibility", {
 	{ "implicit" },
 })
 
+-- whether a function is effectful or pure
+-- an effectful function must return a monad
+-- calling an effectful function implicitly inserts a monad bind between the
+-- function return and getting the result of the call
+---@module "types.purity"
+local purity = gen.declare_enum("purity", {
+	{ "effectful" },
+	{ "pure" },
+})
+
+---@module 'types.block_purity'
+local block_purity = gen.declare_enum("block_purity", {
+	{ "effectful" },
+	{ "pure" },
+	{ "dependent", { "val", value } },
+	{ "inherit" },
+})
+
 expression_goal:define_enum("expression_goal", {
 	-- infer
 	{ "infer" },
@@ -240,6 +258,7 @@ binding:define_enum("binding", {
 		"param_annotation", inferrable_term,
 		"anchor",           anchor_type,
 		"visible",          visibility,
+		"pure",             checkable_term,
 	} },
 	{ "program_sequence", {
 		"first",  inferrable_term,
@@ -273,6 +292,7 @@ inferrable_term:define_enum("inferrable", {
 		"body",             inferrable_term,
 		"anchor",           anchor_type,
 		"visible",          visibility,
+		"pure",             checkable_term,
 	} },
 	{ "pi", {
 		"param_type",  inferrable_term,
@@ -487,6 +507,8 @@ local constraintelem = gen.declare_enum("constraintelem", {
 	} },
 })
 
+local unique_id = gen.builtin_table
+
 -- typed terms have been typechecked but do not store their type internally
 -- stylua: ignore
 typed_term:define_enum("typed", {
@@ -638,6 +660,14 @@ typed_term:define_enum("typed", {
 		"components", array(typed_term),
 		"base",       typed_term,
 	} },
+	{ "effect_row", {
+		"elems",      array(typed_term),
+		"rest",       typed_term,
+	} },
+	{ "effect_row_resolve", {
+		"elems",      set(unique_id),
+		"rest",       typed_term,
+	} },
 	{ "program_type", {
 		"effect_type", typed_term,
 		"result_type", typed_term,
@@ -659,8 +689,6 @@ typed_term:define_enum("typed", {
 	{ "constrained_type", { "constraints", array(constraintelem) } },
 }) 
 
-local unique_id = gen.builtin_table
-
 -- stylua: ignore
 placeholder_debug:define_record("placeholder_debug", {
 	"name",   gen.builtin_string,
@@ -676,24 +704,6 @@ free:define_enum("free", {
 	} },
 	{ "unique", { "id", unique_id } },
 	-- TODO: axiom
-})
-
--- whether a function is effectful or pure
--- an effectful function must return a monad
--- calling an effectful function implicitly inserts a monad bind between the
--- function return and getting the result of the call
----@module "types.purity"
-local purity = gen.declare_enum("purity", {
-	{ "effectful" },
-	{ "pure" },
-})
-
----@module 'types.block_purity'
-local block_purity = gen.declare_enum("block_purity", {
-	{ "effectful" },
-	{ "pure" },
-	{ "dependent", { "val", value } },
-	{ "inherit" },
 })
 
 ---@module "types.result_info"
@@ -979,6 +989,8 @@ local host_typed_term_type = value.host_user_defined_type({ name = "typed_term" 
 local host_goal_type = value.host_user_defined_type({ name = "goal" }, array(value)())
 local host_inferrable_term_type = value.host_user_defined_type({ name = "inferrable_term" }, array(value)())
 local host_checkable_term_type = value.host_user_defined_type({ name = "checkable_term" }, array(value)())
+local host_purity_type = value.host_user_defined_type({ name = "purity" }, array(value)())
+local host_block_purity_type = value.host_user_defined_type({ name = "block_purity" }, array(value)())
 -- return ok, err
 local host_lua_error_type = value.host_user_defined_type({ name = "lua_error_type" }, array(value)())
 
@@ -1050,6 +1062,8 @@ local terms = {
 	host_goal_type = host_goal_type,
 	host_inferrable_term_type = host_inferrable_term_type,
 	host_checkable_term_type = host_checkable_term_type,
+	host_purity_type = host_purity_type,
+	host_block_purity_type = host_block_purity_type,
 	host_lua_error_type = host_lua_error_type,
 	unique_id = unique_id,
 

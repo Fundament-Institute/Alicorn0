@@ -18,9 +18,9 @@ function inferrable:unwrap_typed() end
 function inferrable:as_typed() end
 ---@return boolean
 function inferrable:is_annotated_lambda() end
----@return string, inferrable, inferrable, Anchor, visibility
+---@return string, inferrable, inferrable, Anchor, visibility, checkable
 function inferrable:unwrap_annotated_lambda() end
----@return boolean, string, inferrable, inferrable, Anchor, visibility
+---@return boolean, string, inferrable, inferrable, Anchor, visibility, checkable
 function inferrable:as_annotated_lambda() end
 ---@return boolean
 function inferrable:is_pi() end
@@ -237,7 +237,7 @@ function inferrable:as_program_type() end
 ---@field define_enum fun(self: inferrableType, name: string, variants: Variants): inferrableType
 ---@field bound_variable fun(index: number): inferrable
 ---@field typed fun(type: value, usage_counts: ArrayValue, typed_term: typed): inferrable
----@field annotated_lambda fun(param_name: string, param_annotation: inferrable, body: inferrable, anchor: Anchor, visible: visibility): inferrable
+---@field annotated_lambda fun(param_name: string, param_annotation: inferrable, body: inferrable, anchor: Anchor, visible: visibility, pure: checkable): inferrable
 ---@field pi fun(param_type: inferrable, param_info: checkable, result_type: inferrable, result_info: checkable): inferrable
 ---@field application fun(f: inferrable, arg: checkable): inferrable
 ---@field tuple_cons fun(elements: ArrayValue): inferrable

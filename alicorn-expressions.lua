@@ -638,7 +638,12 @@ local function expression_pairhandler(args, a, b)
 		---@cast res inferrable
 
 		if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
-			error("nyi")
+			local bind = terms.binding.program_sequence(res, a.anchor)
+			env = env:bind_local(bind)
+			ok, res = env:get("#program-sequence") --TODO refactor
+			if not ok then
+				error "broken environment?"
+			end
 		end
 
 		if goal:is_check() then
