@@ -422,7 +422,7 @@ end
 ---HORRIBLE HACK MAKE THIS BETTER
 ---@param env Environment
 ---@param metaval value
----@return boolean, value
+---@return boolean, value?
 local function operative_test_hack(env, metaval)
 	local edges = evaluator.typechecker_state.graph.constrain_edges:to(
 		metaval:unwrap_neutral():unwrap_free():unwrap_metavariable().usage
@@ -543,6 +543,7 @@ local function expression_pairhandler(args, a, b)
 		if not ok then
 			error("speculate DID NOT work for pi!: " .. tostring(pi))
 		end
+		---@cast updated_type -nil
 		type_of_term = updated_type
 	end
 
@@ -639,6 +640,15 @@ local function expression_pairhandler(args, a, b)
 
 		if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
 			error("nyi")
+		end
+
+		if result_info:unwrap_result_info().purity:is_effectful() then
+			if not env.purity:is_effectful() then
+				error("Calling effectful function in environment that is not effectful!")
+			end
+
+			env = env:bind_local(terms.binding.program_sequence(res))
+			res = env:get(res)
 		end
 
 		if goal:is_check() then

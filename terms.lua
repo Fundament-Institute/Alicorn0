@@ -235,6 +235,9 @@ binding:define_enum("binding", {
 		"names",   array(gen.builtin_string),
 		"subject", inferrable_term,
 	} },
+	{ "program_sequence", {
+		"first", inferrable_term
+	} },
 	{ "annotated_lambda", {
 		"param_name",       gen.builtin_string,
 		"param_annotation", inferrable_term,

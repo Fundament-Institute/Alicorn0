@@ -1,4 +1,5 @@
 local evaluator = require "evaluator"
+local U = require "./alicorn-utils"
 local profile, profile_n, profile_samples
 
 local function start()
@@ -15,36 +16,45 @@ local function start()
 			if not d then
 				break
 			end
-			local infer = d.func == evaluator.infer
-			local check = d.func == evaluator.check
-			local term, context, goal, inferred_type
-			if infer or check then
-				_, term = debug.getlocal(thread, i, 1)
-				_, context = debug.getlocal(thread, i, 2)
+			if
+				d.func ~= xpcall
+				and d.func ~= require
+				and d.func ~= U.tag
+				and d.func ~= U.notail
+				and d.name ~= "funcwrapper"
+				and d.name ~= "augment_error"
+			then
+				local infer = d.func == evaluator.infer
+				local check = d.func == evaluator.check
+				local term, context, goal, inferred_type
+				if infer or check then
+					_, term = debug.getlocal(thread, i, 1)
+					_, context = debug.getlocal(thread, i, 2)
+				end
+				if check then
+					_, goal = debug.getlocal(thread, i, 3)
+					--_, inferred_type = debug.getlocal(thread, i, 5)
+				end
+				stack_n = stack_n + 1
+				stack[stack_n] = {
+					i = i,
+					name = d.name,
+					namewhat = d.namewhat,
+					source = d.source,
+					short_src = d.short_src,
+					linedefined = d.linedefined,
+					lastlinedefined = d.lastlinedefined,
+					what = d.what,
+					currentline = d.currentline,
+					func = d.func,
+					infer = infer,
+					check = check,
+					term = term,
+					context = context,
+					goal = goal,
+					inferred_type = inferred_type,
+				}
 			end
-			if check then
-				_, goal = debug.getlocal(thread, i, 3)
-				--_, inferred_type = debug.getlocal(thread, i, 5)
-			end
-			stack_n = stack_n + 1
-			stack[stack_n] = {
-				i = i,
-				name = d.name,
-				namewhat = d.namewhat,
-				source = d.source,
-				short_src = d.short_src,
-				linedefined = d.linedefined,
-				lastlinedefined = d.lastlinedefined,
-				what = d.what,
-				currentline = d.currentline,
-				func = d.func,
-				infer = infer,
-				check = check,
-				term = term,
-				context = context,
-				goal = goal,
-				inferred_type = inferred_type,
-			}
 		end
 		profile_n = profile_n + 1
 		profile_samples[profile_n] = {

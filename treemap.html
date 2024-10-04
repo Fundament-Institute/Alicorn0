@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<head>
+  <script src="https://unpkg.com/d3"></script>
+
+  <script src="https://unpkg.com/treemap-chart"></script>
+  <!--<script src="../../dist/treemap-chart.js"></script>-->
+
+  <style>body { margin: 0; padding: 0; overflow: hidden; }</style>
+</head>
+<body>
+  <div id="chart"></div>
+
+  <script>    
+    const number_regex = /[^\s]+$/g;
+    fetch('./capture.fg')
+    .then(response => response.text())
+    .then((data) => {
+      const lines = data.split(/\r?\n/);
+      let dict = {};
+      
+      for(i in lines) {
+        const line = lines[i]
+        const loc = line.trim().search(number_regex);
+        const main = line.substring(0, loc).trim();
+        const count = parseInt(line.substring(loc));
+        
+        const points = main.split(';')
+        for(j in points) {
+          const point = points[j]
+          let id = point.trim();
+          if(dict.hasOwnProperty(id)) {
+            dict[id] = dict[id] + count
+          } else {
+            dict[id] = count
+          }
+        }
+      }
+      
+      let list = [];
+      for(k in dict) {
+        list.push({ name: k, value: dict[k] })
+      }
+      const color = d3.scaleOrdinal(d3.schemePaired);
+       const nodes = { name: "root", children: list };
+       
+      Treemap()
+        .data(nodes)
+        .color(d => color(d.name.split(':')[0]))
+        .showLabels(true)
+        .minBlockArea(5)
+        .excludeRoot(true)
+        .tooltipContent((d, node) => `Size: <i>${node.value}</i>`)
+        (document.getElementById('chart'));
+    })
+  </script>
+</body>
