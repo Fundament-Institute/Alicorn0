@@ -956,12 +956,16 @@ let host-matcher-is-value = lambda (userdata : host-type, result : tuple-desc-ty
 	let (m) = inner(accept-handler)
 	m
 
+let reducer-type = new-host-type-family new-host-unique-id("host-reducer")
+	forall (storage : tuple-desc-type(host-type), result2 : tuple-desc-type(host-type)) -> (T : host-type)
+	tuple-of-implicit covariant(tuple-desc-relation) contravariant(tuple-desc-relation)
+
 let reducible-handler-type = lambda (userdata : host-type, result2 : tuple-desc-type(host-type), result : tuple-desc-type(host-type))
 	# prepend userdata to result2
 	let userdata-desc = tuple-desc-singleton(host-type, userdata)
 	let params = tuple-desc-concat(host-type, userdata-desc, result2)
 	host-func-type (p : host-tuple-type(params)) -> (r : host-tuple-type(result))
-let reducer-type = lambda (
+let reducible-constructor-type = lambda (
 		userdata : host-type,
 		storage  : tuple-desc-type(host-type),
 		result2  : tuple-desc-type(host-type),
@@ -971,14 +975,27 @@ let reducer-type = lambda (
 	let accept-handler-desc = tuple-desc-singleton(host-type, accept-handler-type)
 	let params = tuple-desc-concat(host-type, accept-handler-desc, storage)
 	host-func-type (p : host-tuple-type(params)) -> ((m : host-matcher(userdata, result)))
+let get-reducible-constructor = lambda (
+		userdata : host-type,
+		storage  : tuple-desc-type(host-type),
+		result2  : tuple-desc-type(host-type),
+		result   : tuple-desc-type(host-type),
+		red      : reducer-type(storage, result2))
+	let inner = intrinsic "return function(r) return r end" :
+		host-func-type ((r : reducer-type(storage, result2))) -> ((c : reducible-constructor-type(userdata, storage, result2, result)))
+	let (c) = inner(red)
+	c
+
 let host-matcher-reducible = lambda (
 		userdata       : host-type,
 		storage        : tuple-desc-type(host-type),
 		result2        : tuple-desc-type(host-type),
 		result         : tuple-desc-type(host-type),
-		red            : reducer-type(userdata, storage, result2, result),
+		red            : reducer-type(storage, result2),
 		s              : host-tuple-type(storage),
 		accept-handler : reducible-handler-type(userdata, result2, result))
+	let c = get-reducible-constructor(userdata, storage, result2, result, red)
+
 	let accept-handler-type = reducible-handler-type(userdata, result2, result)
 	let accept-handler-desc = tuple-desc-singleton(host-type, accept-handler-type)
 	let red-param-desc = tuple-desc-concat(host-type, accept-handler-desc, storage)
@@ -988,9 +1005,10 @@ let host-matcher-reducible = lambda (
 	let red-param = host-tuple-concat(host-type, accept-handler-desc, storage, accept-handler-tuple, s)
 
 	# look ma, no intrinsics!
-	let (m) = apply(red, red-param)
+	let (m) = apply(c, red-param)
 	m
 # FIXME: implicit here doesn't work
+# FIXME: out of date
 let host-matcher-reducible-implicit = lambda_implicit (userdata       : host-type)
 	lambda (
 			storage        : tuple-desc-type(host-type),
@@ -1238,7 +1256,7 @@ let block-match-result-desc = lambda (goal : host-goal)
 
 let block-reducer = lambda (goal : host-goal)
 	intrinsic "return alicorn_expressions.block" :
-		reducer-type(host-unit, block-reducer-storage-desc, block-reducer-result2-desc(goal), block-match-result-desc(goal))
+		reducer-type(block-reducer-storage-desc, block-reducer-result2-desc(goal))
 
 let block-match-accept-handler = lambda (goal : host-goal)
 	intrinsic "return metalanguage.accept_handler" :
@@ -1383,7 +1401,7 @@ let tupleof-ascribed-names-match-result-desc =
 
 # FIXME: tupleof_ascribed_names_inner can only produce tuple descs in star-0
 let tupleof-ascribed-names-reducer = intrinsic "return base_env.tupleof_ascribed_names_inner" :
-	reducer-type(host-unit, tupleof-ascribed-names-reducer-storage-desc, tupleof-ascribed-names-reducer-result2-desc, tupleof-ascribed-names-match-result-desc)
+	reducer-type(tupleof-ascribed-names-reducer-storage-desc, tupleof-ascribed-names-reducer-result2-desc)
 
 let tupleof-ascribed-names-match-accept-handler = intrinsic "return metalanguage.accept_handler" :
 	reducible-handler-type(host-unit, tupleof-ascribed-names-reducer-result2-desc, tupleof-ascribed-names-match-result-desc)
