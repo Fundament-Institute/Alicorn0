@@ -753,6 +753,44 @@ local function upcast(ctx, typ)
 	error "NYI upcast something or other"
 end
 
+---@param ctx TypecheckingContext
+---@param typ value
+---@return TypecheckingContext, value
+local function downcast(ctx, typ)
+	if not typ:is_neutral() then
+		return ctx, typ
+	end
+
+	local nv = typ:unwrap_neutral()
+
+	if nv:is_tuple_element_access_stuck() then
+		local subject, elem = nv:unwrap_tuple_element_access_stuck()
+		if subject:is_free() then
+			local var = subject:unwrap_free()
+			if var:is_placeholder() then
+				local idx, dbg = var:unwrap_placeholder()
+				local inner = ctx:get_type(idx)
+				--local inner_bound = value.tuple_type(typechecker_state:metavariable(ctx, false):as_value())
+				local context2, boundstype = U.tag("revealing", { T = inner }, revealing, ctx, inner)
+				--TODO: speculate for bottom
+				--TODO: speculate on tuple type and reformulate extraction in terms of constraining
+				if boundstype:is_tuple_type() then
+					local desc = boundstype:unwrap_tuple_type()
+					local member = extract_desc_nth(value.neutral(subject), desc, elem)
+					--TODO: level srel? speculate on member types?
+					if member:is_star() then
+						local level, depth = member:unwrap_star()
+						if depth > 0 then
+							return ctx, value.star(level - 1, depth - 1)
+						end
+					end
+				end
+			end
+		end
+	end
+	error "NYI downcast something or other"
+end
+
 ---@alias value_comparer fun(lctx: TypecheckingContext, a: value, rctx: TypecheckingContext, b: value): boolean, (string|ConcreteFail)?
 
 ---@param ka string
@@ -1058,18 +1096,38 @@ function check_concrete(lctx, val, rctx, use)
 		end
 	end
 
-	if use:is_neutral() then
-		--TODO: downcast and test
-
-		if val:is_neutral() then
-			return false, "both values are neutral, but they aren't equal: " .. tostring(val) .. " ~= " .. tostring(use)
-		end
-	end
-
 	if val:is_singleton() and not use:is_singleton() then
 		local val_supertype, _ = val:unwrap_singleton()
 		typechecker_state:queue_subtype(lctx, val_supertype, rctx, use, "singleton subtype")
 		return true
+	end
+
+	if use:is_neutral() then
+		local unv = use:unwrap_neutral()
+		if unv:is_tuple_element_access_stuck() then
+			local innerctx, bound = downcast(rctx, use)
+			typechecker_state:queue_subtype(lctx, val, innerctx, bound)
+			return true
+		elseif unv:is_free() then
+			local uf = unv:unwrap_free()
+			if uf:is_placeholder() then
+				local idx = uf:unwrap_placeholder()
+				local inner = rctx:get_type(idx)
+				--TODO revealing?
+				if inner:is_star() then
+					local level, depth = inner:unwrap_star()
+					error "IDK about this case yet"
+					typechecker_state:queue_subtype(lctx, val, rctx, value.star(level - 1, depth - 1))
+					return true
+				else
+					error("unable to work with inner " .. inner.kind)
+				end
+			end
+		end
+
+		if val:is_neutral() then
+			return false, "both values are neutral, but they aren't equal: " .. tostring(val) .. " ~= " .. tostring(use)
+		end
 	end
 
 	if val:is_union_type() then
@@ -1093,7 +1151,7 @@ function check_concrete(lctx, val, rctx, use)
 	local comparer = (concrete_comparers[val.kind] or {})[use.kind]
 	if not comparer then
 		return false,
-			"no valid concerete comparer between value " .. val.kind .. " and usage " .. use.kind .. ": " .. tostring(
+			"no valid concrete comparer between value " .. val.kind .. " and usage " .. use.kind .. ": " .. tostring(
 				val
 			) .. " compared against " .. tostring(use)
 	end
@@ -1506,13 +1564,14 @@ local function nearest_star_level(typ)
 	end
 end
 
----@param inferrable_term inferrable
+---@param inferrable_term anchored_inferrable
 ---@param typechecking_context TypecheckingContext
 ---@return value, ArrayValue, typed
 function infer(
 	inferrable_term, -- constructed from inferrable
 	typechecking_context -- todo
 )
+	local anchor, term = inferrable_term:unwrap_anchored_inferrable()
 	-- -> type of term, usage counts, a typed term,
 	if terms.inferrable_term.value_check(inferrable_term) ~= true then
 		error("infer, inferrable_term: expected an inferrable term")
@@ -1521,8 +1580,8 @@ function infer(
 		error("infer, typechecking_context: expected a typechecking context")
 	end
 
-	if inferrable_term:is_bound_variable() then
-		local index = inferrable_term:unwrap_bound_variable()
+	if term:is_bound_variable() then
+		local index = term:unwrap_bound_variable()
 		local typeof_bound = typechecking_context:get_type(index)
 		local usage_counts = usage_array()
 		local context_size = typechecking_context:len()
@@ -1532,16 +1591,15 @@ function infer(
 		usage_counts[index] = 1
 		local bound = typed_term.bound_variable(index)
 		return typeof_bound, usage_counts, bound
-	elseif inferrable_term:is_annotated() then
-		local checkable_term, inferrable_goal_type = inferrable_term:unwrap_annotated()
+	elseif term:is_annotated() then
+		local checkable_term, inferrable_goal_type = term:unwrap_annotated()
 		local type_of_type, usages, goal_typed_term = infer(inferrable_goal_type, typechecking_context)
 		local goal_type = evaluate(goal_typed_term, typechecking_context.runtime_context)
 		return goal_type, check(checkable_term, typechecking_context, goal_type)
-	elseif inferrable_term:is_typed() then
-		return inferrable_term:unwrap_typed()
-	elseif inferrable_term:is_annotated_lambda() then
-		local param_name, param_annotation, body, anchor, param_visibility, purity =
-			inferrable_term:unwrap_annotated_lambda()
+	elseif term:is_typed() then
+		return term:unwrap_typed()
+	elseif term:is_annotated_lambda() then
+		local param_name, param_annotation, body, anchor, param_visibility, purity = term:unwrap_annotated_lambda()
 		local _, _, param_term = infer(param_annotation, typechecking_context)
 		local param_type = evaluate(param_term, typechecking_context:get_runtime_context())
 		local inner_context = typechecking_context:append(param_name, param_type, nil, anchor)
@@ -1568,8 +1626,8 @@ function infer(
 			value.pi(param_type, value.param_info(value.visibility(param_visibility)), result_type, result_info)
 		local lambda_term = typed_term.lambda(param_name, body_term)
 		return lambda_type, lambda_usages, lambda_term
-	elseif inferrable_term:is_pi() then
-		local param_type, param_info, result_type, result_info = inferrable_term:unwrap_pi()
+	elseif term:is_pi() then
+		local param_type, param_info, result_type, result_info = term:unwrap_pi()
 		local param_type_type, param_type_usages, param_type_term = infer(param_type, typechecking_context)
 		local param_info_usages, param_info_term = check(param_info, typechecking_context, value.param_info_type)
 		local result_type_type, result_type_usages, result_type_term = infer(result_type, typechecking_context)
@@ -1609,8 +1667,8 @@ function infer(
 		add_arrays(usages, result_info_usages)
 
 		return sort, usages, term
-	elseif inferrable_term:is_application() then
-		local f, arg = inferrable_term:unwrap_application()
+	elseif term:is_application() then
+		local f, arg = term:unwrap_application()
 		local f_type, f_usages, f_term = infer(f, typechecking_context)
 
 		if f_type:is_pi() then
@@ -1668,8 +1726,8 @@ function infer(
 			p(f_type)
 			error("infer, is_application, f_type: expected a term with a function type")
 		end
-	elseif inferrable_term:is_tuple_cons() then
-		local elements = inferrable_term:unwrap_tuple_cons()
+	elseif term:is_tuple_cons() then
+		local elements = term:unwrap_tuple_cons()
 		-- type_data is either "empty", an empty tuple,
 		-- or "cons", a tuple with the previous type_data and a function that
 		-- takes all previous values and produces the type of the next element
@@ -1685,14 +1743,14 @@ function infer(
 			new_elements:append(el_term)
 		end
 		return value.tuple_type(type_data), usages, typed_term.tuple_cons(new_elements)
-	elseif inferrable_term:is_host_tuple_cons() then
+	elseif term:is_host_tuple_cons() then
 		--print "inferring tuple construction"
 		--print(inferrable_term:pretty_print())
 		--print "environment_names"
 		--for i = 1, #typechecking_context do
 		--	print(i, typechecking_context:get_name(i))
 		--end
-		local elements = inferrable_term:unwrap_host_tuple_cons()
+		local elements = term:unwrap_host_tuple_cons()
 		-- type_data is either "empty", an empty tuple,
 		-- or "cons", a tuple with the previous type_data and a function that
 		-- takes all previous values and produces the type of the next element
@@ -1711,8 +1769,8 @@ function infer(
 			new_elements:append(el_term)
 		end
 		return value.host_tuple_type(type_data), usages, typed_term.host_tuple_cons(new_elements)
-	elseif inferrable_term:is_tuple_elim() then
-		local names, subject, body = inferrable_term:unwrap_tuple_elim()
+	elseif term:is_tuple_elim() then
+		local names, subject, body = term:unwrap_tuple_elim()
 		local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
 
 		-- evaluating the subject is necessary for inferring the type of the body
@@ -1756,15 +1814,15 @@ function infer(
 		add_arrays(result_usages, subject_usages)
 		add_arrays(result_usages, body_usages)
 		return body_type, result_usages, typed_term.tuple_elim(names, subject_term, n_elements, body_term)
-	elseif inferrable_term:is_tuple_type() then
-		local desc = inferrable_term:unwrap_tuple_type()
+	elseif term:is_tuple_type() then
+		local desc = term:unwrap_tuple_type()
 		local desc_type, desc_usages, desc_term = infer(desc, typechecking_context)
 		if not desc_type:is_tuple_desc_type() then
 			error "argument to tuple_type is not a tuple_desc"
 		end
 		return terms.value.star(0, 0), desc_usages, terms.typed_term.tuple_type(desc_term)
-	elseif inferrable_term:is_record_cons() then
-		local fields = inferrable_term:unwrap_record_cons()
+	elseif term:is_record_cons() then
+		local fields = term:unwrap_record_cons()
 		-- type_data is either "empty", an empty tuple,
 		-- or "cons", a tuple with the previous type_data and a function that
 		-- takes all previous values and produces the type of the next element
@@ -1782,8 +1840,8 @@ function infer(
 			new_fields[k] = field_term
 		end
 		return value.record_type(type_data), usages, typed_term.record_cons(new_fields)
-	elseif inferrable_term:is_record_elim() then
-		local subject, field_names, body = inferrable_term:unwrap_record_elim()
+	elseif term:is_record_elim() then
+		local subject, field_names, body = term:unwrap_record_elim()
 		local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
 		local ok, desc = subject_type:as_record_type()
 		if not ok then
@@ -1854,13 +1912,13 @@ function infer(
 		add_arrays(result_usages, subject_usages)
 		add_arrays(result_usages, body_usages)
 		return body_type, result_usages, typed_term.record_elim(subject_term, field_names, body_term)
-	elseif inferrable_term:is_enum_cons() then
-		local enum_type, constructor, arg = inferrable_term:unwrap_enum_cons()
+	elseif term:is_enum_cons() then
+		local enum_type, constructor, arg = term:unwrap_enum_cons()
 		local arg_type, arg_usages, arg_term = infer(arg, typechecking_context)
 		-- TODO: check arg_type against enum_type desc
 		return enum_type, arg_usages, typed_term.enum_cons(constructor, arg_term)
-	elseif inferrable_term:is_enum_elim() then
-		local subject, mechanism = inferrable_term:unwrap_enum_elim()
+	elseif term:is_enum_elim() then
+		local subject, mechanism = term:unwrap_enum_elim()
 		local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
 		-- local ok, desc = subject_type:as_enum_type()
 		-- if not ok then
@@ -1869,8 +1927,8 @@ function infer(
 		local mechanism_type, mechanism_usages, mechanism_term = infer(mechanism, typechecking_context)
 		-- TODO: check subject desc against mechanism desc
 		error("nyi")
-	elseif inferrable_term:is_object_cons() then
-		local methods = inferrable_term:unwrap_object_cons()
+	elseif term:is_object_cons() then
+		local methods = term:unwrap_object_cons()
 		local type_data = terms.empty
 		local new_methods = string_typed_map()
 		for k, v in pairs(methods) do
@@ -1880,11 +1938,11 @@ function infer(
 		end
 		-- TODO: usages
 		return value.object_type(type_data), usage_array(), typed_term.object_cons(new_methods)
-	elseif inferrable_term:is_object_elim() then
-		local subject, mechanism = inferrable_term:unwrap_object_elim()
+	elseif term:is_object_elim() then
+		local subject, mechanism = term:unwrap_object_elim()
 		error("nyi")
-	elseif inferrable_term:is_operative_cons() then
-		local operative_type, userdata = inferrable_term:unwrap_operative_cons()
+	elseif term:is_operative_cons() then
+		local operative_type, userdata = term:unwrap_operative_cons()
 		local operative_type_type, operative_type_usages, operative_type_term =
 			infer(operative_type, typechecking_context)
 		local operative_type_value = evaluate(operative_type_term, typechecking_context:get_runtime_context())
@@ -1900,8 +1958,8 @@ function infer(
 		add_arrays(operative_usages, operative_type_usages)
 		add_arrays(operative_usages, userdata_usages)
 		return operative_type_value, operative_usages, typed_term.operative_cons(userdata_term)
-	elseif inferrable_term:is_operative_type_cons() then
-		local handler, userdata_type = inferrable_term:unwrap_operative_type_cons()
+	elseif term:is_operative_type_cons() then
+		local handler, userdata_type = term:unwrap_operative_type_cons()
 		local goal_type = value.pi(
 			value.tuple_type(
 				terms.tuple_desc(
@@ -1935,8 +1993,8 @@ function infer(
 		return value.star(operative_type_level, 0),
 			operative_type_usages,
 			typed_term.operative_type_cons(handler_term, userdata_type_term)
-	elseif inferrable_term:is_host_user_defined_type_cons() then
-		local id, family_args = inferrable_term:unwrap_host_user_defined_type_cons()
+	elseif term:is_host_user_defined_type_cons() then
+		local id, family_args = term:unwrap_host_user_defined_type_cons()
 		local new_family_args = typed_array()
 		local result_usages = usage_array()
 		for _, v in ipairs(family_args) do
@@ -1946,35 +2004,35 @@ function infer(
 			new_family_args:append(e_term)
 		end
 		return value.host_type_type, result_usages, typed_term.host_user_defined_type_cons(id, new_family_args)
-	elseif inferrable_term:is_host_wrapped_type() then
-		local type_inf = inferrable_term:unwrap_host_wrapped_type()
+	elseif term:is_host_wrapped_type() then
+		local type_inf = term:unwrap_host_wrapped_type()
 		local content_type_type, content_type_usages, content_type_term = infer(type_inf, typechecking_context)
 		if not is_type_of_types(content_type_type) then
 			error "infer: type being boxed must be a type"
 		end
 		return value.host_type_type, content_type_usages, typed_term.host_wrapped_type(content_type_term)
-	elseif inferrable_term:is_host_wrap() then
-		local content = inferrable_term:unwrap_host_wrap()
+	elseif term:is_host_wrap() then
+		local content = term:unwrap_host_wrap()
 		local content_type, content_usages, content_term = infer(content, typechecking_context)
 		return value.host_wrapped_type(content_type), content_usages, typed_term.host_wrap(content_term)
-	elseif inferrable_term:is_host_unstrict_wrap() then
-		local content = inferrable_term:unwrap_host_wrap()
+	elseif term:is_host_unstrict_wrap() then
+		local content = term:unwrap_host_wrap()
 		local content_type, content_usages, content_term = infer(content, typechecking_context)
 		return value.host_unstrict_wrapped_type(content_type),
 			content_usages,
 			typed_term.host_unstrict_wrap(content_term)
-	elseif inferrable_term:is_host_unwrap() then
-		local container = inferrable_term:unwrap_host_unwrap()
+	elseif term:is_host_unwrap() then
+		local container = term:unwrap_host_unwrap()
 		local container_type, container_usages, container_term = infer(container, typechecking_context)
 		local content_type = container_type:unwrap_host_wrapped_type()
 		return content_type, container_usages, typed_term.host_unwrap(container_term)
-	elseif inferrable_term:is_host_unstrict_unwrap() then
-		local container = inferrable_term:unwrap_host_unwrap()
+	elseif term:is_host_unstrict_unwrap() then
+		local container = term:unwrap_host_unwrap()
 		local container_type, container_usages, container_term = infer(container, typechecking_context)
 		local content_type = container_type:unwrap_host_unstrict_wrapped_type()
 		return content_type, container_usages, typed_term.host_unstrict_unwrap(container_term)
-	elseif inferrable_term:is_host_if() then
-		local subject, consequent, alternate = inferrable_term:unwrap_host_if()
+	elseif term:is_host_if() then
+		local subject, consequent, alternate = term:unwrap_host_if()
 		-- for each thing in typechecking context check if it == the subject, replace with literal true
 		-- same for alternate but literal false
 
@@ -1998,9 +2056,9 @@ function infer(
 		add_arrays(result_usages, cusages)
 		add_arrays(result_usages, ausages)
 		return restype, result_usages, typed_term.host_if(sterm, cterm, aterm)
-	elseif inferrable_term:is_let() then
-		-- print(inferrable_term:pretty_print())
-		local name, expr, body = inferrable_term:unwrap_let()
+	elseif term:is_let() then
+		-- print(term:pretty_print())
+		local name, expr, body = term:unwrap_let()
 		local exprtype, exprusages, exprterm = infer(expr, typechecking_context)
 		typechecking_context =
 			typechecking_context:append(name, exprtype, evaluate(exprterm, typechecking_context.runtime_context))
@@ -2011,8 +2069,8 @@ function infer(
 		add_arrays(result_usages, exprusages)
 		add_arrays(result_usages, bodyusages)
 		return bodytype, result_usages, terms.typed_term.let(name, exprterm, bodyterm)
-	elseif inferrable_term:is_host_intrinsic() then
-		local source, type, anchor = inferrable_term:unwrap_host_intrinsic()
+	elseif term:is_host_intrinsic() then
+		local source, type, anchor = term:unwrap_host_intrinsic()
 		local source_usages, source_term = check(source, typechecking_context, value.host_string_type)
 		local type_type, type_usages, type_term = infer(type, typechecking_context) --check(type, typechecking_context, value.qtype_type(0))
 
@@ -2024,19 +2082,19 @@ function infer(
 		-- FIXME: type_type, source_type are ignored, need checked?
 		local type_val = evaluate(type_term, typechecking_context.runtime_context)
 		return type_val, source_usages, typed_term.host_intrinsic(source_term, anchor)
-	elseif inferrable_term:is_level_max() then
-		local level_a, level_b = inferrable_term:unwrap_level_max()
+	elseif term:is_level_max() then
+		local level_a, level_b = term:unwrap_level_max()
 		local arg_type_a, arg_usages_a, arg_term_a = infer(level_a, typechecking_context)
 		local arg_type_b, arg_usages_b, arg_term_b = infer(level_b, typechecking_context)
 		return value.level_type, usage_array(), typed_term.level_max(arg_term_a, arg_term_b)
-	elseif inferrable_term:is_level_suc() then
-		local previous_level = inferrable_term:unwrap_level_suc()
+	elseif term:is_level_suc() then
+		local previous_level = term:unwrap_level_suc()
 		local arg_type, arg_usages, arg_term = infer(previous_level, typechecking_context)
 		return value.level_type, usage_array(), typed_term.level_suc(arg_term)
-	elseif inferrable_term:is_level0() then
+	elseif term:is_level0() then
 		return value.level_type, usage_array(), typed_term.level0
-	elseif inferrable_term:is_host_function_type() then
-		local args, returns, resinfo = inferrable_term:unwrap_host_function_type()
+	elseif term:is_host_function_type() then
+		local args, returns, resinfo = term:unwrap_host_function_type()
 		local arg_type, arg_usages, arg_term = infer(args, typechecking_context)
 		local return_type, return_usages, return_term = infer(returns, typechecking_context)
 		local resinfo_usages, resinfo_term = check(resinfo, typechecking_context, value.result_info_type)
@@ -2045,15 +2103,15 @@ function infer(
 		add_arrays(res_usages, return_usages)
 		add_arrays(res_usages, resinfo_usages)
 		return value.host_type_type, res_usages, typed_term.host_function_type(arg_term, return_term, resinfo_term)
-	elseif inferrable_term:is_host_tuple_type() then
-		local desc = inferrable_term:unwrap_host_tuple_type()
+	elseif term:is_host_tuple_type() then
+		local desc = term:unwrap_host_tuple_type()
 		local desc_type, desc_usages, desc_term = infer(desc, typechecking_context)
 		if not desc_type:is_tuple_desc_type() then
 			error "must be a tuple desc"
 		end
 		return value.star(0, 0), desc_usages, typed_term.host_tuple_type(desc_term)
-	elseif inferrable_term:is_program_sequence() then
-		local first, anchor, continue = inferrable_term:unwrap_program_sequence()
+	elseif term:is_program_sequence() then
+		local first, anchor, continue = term:unwrap_program_sequence()
 		local first_type, first_usages, first_term = infer(first, typechecking_context)
 		if not first_type:is_program_type() then
 			error("program sequence must infer to a program type")
@@ -2100,14 +2158,14 @@ function infer(
 		return value.program_type(result_effect_sig, continue_base_type),
 			result_usages,
 			typed_term.program_sequence(first_term, continue_term)
-	elseif inferrable_term:is_program_end() then
-		local result = inferrable_term:unwrap_program_end()
+	elseif term:is_program_end() then
+		local result = term:unwrap_program_end()
 		local program_type, program_usages, program_term = infer(result, typechecking_context)
 		return value.program_type(value.effect_empty, program_type),
 			program_usages,
 			typed_term.program_end(program_term)
-	elseif inferrable_term:is_program_type() then
-		local effect_type, result_type = inferrable_term:unwrap_program_type()
+	elseif term:is_program_type() then
+		local effect_type, result_type = term:unwrap_program_type()
 		local effect_type_type, effect_type_usages, effect_type_term = infer(effect_type, typechecking_context)
 		local result_type_type, result_type_usages, result_type_term = infer(result_type, typechecking_context)
 		local res_usages = usage_array()
@@ -2116,7 +2174,7 @@ function infer(
 		-- TODO: use biunification constraints for start level
 		return value.star(0, 0), res_usages, typed_term.program_type(effect_type_term, result_type_term)
 	else
-		error("infer: unknown kind: " .. inferrable_term.kind)
+		error("infer: unknown kind: " .. term.kind)
 	end
 
 	error("unreachable!?")
@@ -3110,6 +3168,7 @@ CEdge:define_enum("edge", {
 ---@field rel SubtypeRelation
 ---@field shallowest_block integer
 ---@field right NodeID
+---@field cause constraintcause
 
 ---@class LeftCallEdge
 ---@field left NodeID
@@ -3117,6 +3176,7 @@ CEdge:define_enum("edge", {
 ---@field rel SubtypeRelation
 ---@field shallowest_block integer
 ---@field right NodeID
+---@field cause constraintcause
 
 ---@class RightCallEdge
 ---@field left NodeID
@@ -3124,6 +3184,7 @@ CEdge:define_enum("edge", {
 ---@field shallowest_block integer
 ---@field right NodeID
 ---@field arg value
+---@field cause constraintcause
 
 -- I wish I had generics in LuaCATS
 
@@ -3232,8 +3293,9 @@ end
 ---@param right integer
 ---@param rel SubtypeRelation
 ---@param shallowest_block integer
+---@param cause constraintcause
 ---@return boolean
-function Reachability:add_constrain_edge(left, right, rel, shallowest_block)
+function Reachability:add_constrain_edge(left, right, rel, shallowest_block, cause)
 	assert(type(left) == "number", "left isn't an integer!")
 	assert(type(right) == "number", "right isn't an integer!")
 
@@ -3251,7 +3313,7 @@ function Reachability:add_constrain_edge(left, right, rel, shallowest_block)
 	end
 
 	---@type ConstrainEdge
-	local edge = { left = left, right = right, rel = rel, shallowest_block = shallowest_block }
+	local edge = { left = left, right = right, rel = rel, shallowest_block = shallowest_block, cause = cause }
 
 	self.constrain_edges:add(edge)
 
@@ -3263,8 +3325,9 @@ end
 ---@param rel SubtypeRelation
 ---@param right integer
 ---@param shallowest_block integer
+---@param cause constraintcause
 ---@return boolean
-function Reachability:add_call_left_edge(left, arg, rel, right, shallowest_block)
+function Reachability:add_call_left_edge(left, arg, rel, right, shallowest_block, cause)
 	assert(type(left) == "number", "left isn't an integer!")
 	assert(type(right) == "number", "right isn't an integer!")
 
@@ -3280,6 +3343,7 @@ function Reachability:add_call_left_edge(left, arg, rel, right, shallowest_block
 		rel = rel,
 		right = right,
 		shallowest_block = shallowest_block,
+		cause = cause,
 	}
 
 	self.leftcall_edges:add(edge)
@@ -3292,8 +3356,9 @@ end
 ---@param right integer
 ---@param arg value
 ---@param shallowest_block integer
+---@param cause constraintcause
 ---@return boolean
-function Reachability:add_call_right_edge(left, rel, right, arg, shallowest_block)
+function Reachability:add_call_right_edge(left, rel, right, arg, shallowest_block, cause)
 	assert(type(left) == "number", "left isn't an integer!")
 	assert(type(right) == "number", "right isn't an integer!")
 
@@ -3309,6 +3374,7 @@ function Reachability:add_call_right_edge(left, rel, right, arg, shallowest_bloc
 		rel = rel,
 		right = right,
 		shallowest_block = shallowest_block,
+		cause = cause,
 	}
 
 	self.rightcall_edges:add(edge)
@@ -3622,7 +3688,8 @@ function TypeCheckerState:constrain_leftcall_compose_1(edge)
 					r2.arg,
 					r2.rel,
 					r2.right,
-					math.min(edge.shallowest_block, r2.shallowest_block) "constrain leftcall composition induced by constrain"
+					math.min(edge.shallowest_block, r2.shallowest_block),
+					"constrain leftcall composition induced by constrain"
 				)
 			)
 		end
@@ -3734,7 +3801,7 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 				self.graph:constrain_transitivity(edge, self.pending, cause)
 				U.tag(
 					"check_heads",
-					{ left = left, right = right, rel = rel.debug_name },
+					{ left = left, right = right, rel = rel.debug_name, cause = cause },
 					self.check_heads,
 					self,
 					left,

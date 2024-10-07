@@ -21,8 +21,10 @@ local set = gen.declare_set
 
 ---@module "types.checkable"
 local checkable_term = gen.declare_type()
----@module "types.inferrable"
-local inferrable_term = gen.declare_type()
+---@module "types.unanchored_inferrable"
+local unanchored_inferrable_term = gen.declare_type()
+---@module "types.anchored_inferrable"
+local anchored_inferrable_term = gen.declare_type()
 ---@module "types.typed"
 local typed_term = gen.declare_type()
 ---@module "types.free"
@@ -247,21 +249,21 @@ expression_goal:define_enum("expression_goal", {
 binding:define_enum("binding", {
 	{ "let", {
 		"name", gen.builtin_string,
-		"expr", inferrable_term,
+		"expr", anchored_inferrable_term,
 	} },
 	{ "tuple_elim", {
 		"names",   array(gen.builtin_string),
-		"subject", inferrable_term,
+		"subject", anchored_inferrable_term,
 	} },
 	{ "annotated_lambda", {
 		"param_name",       gen.builtin_string,
-		"param_annotation", inferrable_term,
+		"param_annotation", anchored_inferrable_term,
 		"anchor",           anchor_type,
 		"visible",          visibility,
 		"pure",             checkable_term,
 	} },
 	{ "program_sequence", {
-		"first",  inferrable_term,
+		"first",  anchored_inferrable_term,
 		"anchor", anchor_type,
 	} },
 })
@@ -269,7 +271,7 @@ binding:define_enum("binding", {
 -- checkable terms need a goal type to typecheck against
 -- stylua: ignore
 checkable_term:define_enum("checkable", {
-	{ "inferrable", { "inferrable_term", inferrable_term } },
+	{ "inferrable", { "inferrable_term",  anchored_inferrable_term } },
 	{ "tuple_cons", { "elements", array(checkable_term) } },
 	{ "host_tuple_cons", { "elements", array(checkable_term) } },
 	{ "lambda", {
@@ -279,7 +281,12 @@ checkable_term:define_enum("checkable", {
 })
 -- inferrable terms can have their type inferred / don't need a goal type
 -- stylua: ignore
-inferrable_term:define_enum("inferrable", {
+anchored_inferrable_term:define_record("anchored_inferrable", {
+	"anchor", anchor_type,
+	"term", unanchored_inferrable_term
+})
+-- stylua: ignore
+unanchored_inferrable_term:define_enum("unanchored_inferrable", {
 	{ "bound_variable", { "index", gen.builtin_number } },
 	{ "typed", {
 		"type",         value,
@@ -288,114 +295,114 @@ inferrable_term:define_enum("inferrable", {
 	} },
 	{ "annotated_lambda", {
 		"param_name",       gen.builtin_string,
-		"param_annotation", inferrable_term,
-		"body",             inferrable_term,
+		"param_annotation", anchored_inferrable_term,
+		"body",             anchored_inferrable_term,
 		"anchor",           anchor_type,
 		"visible",          visibility,
 		"pure",             checkable_term,
 	} },
 	{ "pi", {
-		"param_type",  inferrable_term,
+		"param_type",  anchored_inferrable_term,
 		"param_info",  checkable_term,
-		"result_type", inferrable_term,
+		"result_type", anchored_inferrable_term,
 		"result_info", checkable_term,
 	} },
 	{ "application", {
-		"f",   inferrable_term,
+		"f",   anchored_inferrable_term,
 		"arg", checkable_term,
 	} },
-	{ "tuple_cons", { "elements", array(inferrable_term) } },
+	{ "tuple_cons", { "elements", array( anchored_inferrable_term) } },
 	{ "tuple_elim", {
 		"names",   array(gen.builtin_string),
-		"subject", inferrable_term,
-		"body",    inferrable_term,
+		"subject", anchored_inferrable_term,
+		"body",    anchored_inferrable_term,
 	} },
-	{ "tuple_type", { "desc", inferrable_term } },
-	{ "record_cons", { "fields", map(gen.builtin_string, inferrable_term) } },
+	{ "tuple_type", { "desc", anchored_inferrable_term } },
+	{ "record_cons", { "fields", map(gen.builtin_string, anchored_inferrable_term) } },
 	{ "record_elim", {
-		"subject",     inferrable_term,
+		"subject",     anchored_inferrable_term,
 		"field_names", array(gen.builtin_string),
-		"body",        inferrable_term,
+		"body",        anchored_inferrable_term,
 	} },
 	{ "enum_cons", {
 		"enum_type",   value,
 		"constructor", gen.builtin_string,
-		"arg",         inferrable_term,
+		"arg",         anchored_inferrable_term,
 	} },
 	{ "enum_elim", {
-		"subject",   inferrable_term,
-		"mechanism", inferrable_term,
+		"subject",   anchored_inferrable_term,
+		"mechanism", anchored_inferrable_term,
 	} },
-	{ "enum_type", { "desc", inferrable_term } },
-	{ "object_cons", { "methods", map(gen.builtin_string, inferrable_term) } },
+	{ "enum_type", { "desc", anchored_inferrable_term } },
+	{ "object_cons", { "methods", map(gen.builtin_string, anchored_inferrable_term) } },
 	{ "object_elim", {
-		"subject",   inferrable_term,
-		"mechanism", inferrable_term,
+		"subject",   anchored_inferrable_term,
+		"mechanism", anchored_inferrable_term,
 	} },
 	{ "let", {
 		"name", gen.builtin_string,
-		"expr", inferrable_term,
-		"body", inferrable_term,
+		"expr", anchored_inferrable_term,
+		"body", anchored_inferrable_term,
 	} },
 	{ "operative_cons", {
-		"operative_type", inferrable_term,
-		"userdata",       inferrable_term,
+		"operative_type", anchored_inferrable_term,
+		"userdata",       anchored_inferrable_term,
 	} },
 	{ "operative_type_cons", {
 		"handler",       checkable_term,
-		"userdata_type", inferrable_term,
+		"userdata_type", anchored_inferrable_term,
 	} },
 	{ "level_type" },
 	{ "level0" },
-	{ "level_suc", { "previous_level", inferrable_term } },
+	{ "level_suc", { "previous_level", anchored_inferrable_term } },
 	{ "level_max", {
-		"level_a", inferrable_term,
-		"level_b", inferrable_term,
+		"level_a", anchored_inferrable_term,
+		"level_b", anchored_inferrable_term,
 	} },
 	--{"star"},
 	--{"prop"},
 	--{"prim"},
 	{ "annotated", {
 		"annotated_term", checkable_term,
-		"annotated_type", inferrable_term,
+		"annotated_type", anchored_inferrable_term,
 	} },
-	{ "host_tuple_cons", { "elements", array(inferrable_term) } }, -- host_value
+	{ "host_tuple_cons", { "elements", array( anchored_inferrable_term) } }, -- host_value
 	{ "host_user_defined_type_cons", {
 		"id",          host_user_defined_id, -- host_user_defined_type
-		"family_args", array(inferrable_term), -- host_value
+		"family_args", array( anchored_inferrable_term), -- host_value
 	} },
-	{ "host_tuple_type", { "desc", inferrable_term } }, -- just like an ordinary tuple type but can only hold host_values
+	{ "host_tuple_type", { "desc",  anchored_inferrable_term } }, -- just like an ordinary tuple type but can only hold host_values
 	{ "host_function_type", {
-		"param_type",  inferrable_term, -- must be a host_tuple_type
+		"param_type",   anchored_inferrable_term, -- must be a host_tuple_type
 		-- host functions can only have explicit arguments
-		"result_type", inferrable_term, -- must be a host_tuple_type
+		"result_type",  anchored_inferrable_term, -- must be a host_tuple_type
 		"result_info", checkable_term,
 	} },
-	{ "host_wrapped_type", { "type", inferrable_term } },
-	{ "host_unstrict_wrapped_type", { "type", inferrable_term } },
-	{ "host_wrap", { "content", inferrable_term } },
-	{ "host_unstrict_wrap", { "content", inferrable_term } },
-	{ "host_unwrap", { "container", inferrable_term } },
-	{ "host_unstrict_unwrap", { "container", inferrable_term } },
+	{ "host_wrapped_type", { "type",  anchored_inferrable_term } },
+	{ "host_unstrict_wrapped_type", { "type",  anchored_inferrable_term } },
+	{ "host_wrap", { "content",  anchored_inferrable_term } },
+	{ "host_unstrict_wrap", { "content",  anchored_inferrable_term } },
+	{ "host_unwrap", { "container",  anchored_inferrable_term } },
+	{ "host_unstrict_unwrap", { "container",  anchored_inferrable_term } },
 	{ "host_if", {
 		"subject",    checkable_term, -- checkable because we always know must be of host_bool_type
-		"consequent", inferrable_term,
-		"alternate",  inferrable_term,
+		"consequent",  anchored_inferrable_term,
+		"alternate",   anchored_inferrable_term,
 	} },
 	{ "host_intrinsic", {
 		"source", checkable_term,
-		"type",   inferrable_term, --checkable_term,
+		"type",    anchored_inferrable_term, --checkable_term,
 		"anchor", anchor_type,
 	} },
 	{ "program_sequence", {
-		"first",    inferrable_term,
+		"first",     anchored_inferrable_term,
 		"anchor",   anchor_type,
-		"continue", inferrable_term,
+		"continue",  anchored_inferrable_term,
 	} },
-	{ "program_end", { "result", inferrable_term } },
+	{ "program_end", { "result",  anchored_inferrable_term } },
 	{ "program_type", {
-		"effect_type", inferrable_term,
-		"result_type", inferrable_term,
+		"effect_type",  anchored_inferrable_term,
+		"result_type",  anchored_inferrable_term,
 	} },
 })
 
@@ -987,7 +994,7 @@ local host_syntax_type = value.host_user_defined_type({ name = "syntax" }, array
 local host_environment_type = value.host_user_defined_type({ name = "environment" }, array(value)())
 local host_typed_term_type = value.host_user_defined_type({ name = "typed_term" }, array(value)())
 local host_goal_type = value.host_user_defined_type({ name = "goal" }, array(value)())
-local host_inferrable_term_type = value.host_user_defined_type({ name = "inferrable_term" }, array(value)())
+local host_inferrable_term_type = value.host_user_defined_type({ name = " anchored_inferrable_term" }, array(value)())
 local host_checkable_term_type = value.host_user_defined_type({ name = "checkable_term" }, array(value)())
 local host_purity_type = value.host_user_defined_type({ name = "purity" }, array(value)())
 local host_block_purity_type = value.host_user_defined_type({ name = "block_purity" }, array(value)())
@@ -1045,7 +1052,8 @@ local lua_prog = effect_id(effect_registry:register("lua_prog", "running effectf
 local terms = {
 	metavariable_mt = metavariable_mt,
 	checkable_term = checkable_term, -- {}
-	inferrable_term = inferrable_term, -- {}
+	anchored_inferrable_term = anchored_inferrable_term, -- {}
+	unanchored_inferrable_term = unanchored_inferrable_term,
 	typed_term = typed_term, -- {}
 	free = free,
 	visibility = visibility,
@@ -1100,7 +1108,7 @@ local value_override_pretty = override_prettys.value_override_pretty
 local binding_override_pretty = override_prettys.binding_override_pretty
 
 checkable_term:derive(derivers.pretty_print, checkable_term_override_pretty)
-inferrable_term:derive(derivers.pretty_print, inferrable_term_override_pretty)
+unanchored_inferrable_term:derive(derivers.pretty_print, inferrable_term_override_pretty)
 typed_term:derive(derivers.pretty_print, typed_term_override_pretty)
 visibility:derive(derivers.pretty_print)
 free:derive(derivers.pretty_print)

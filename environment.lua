@@ -3,7 +3,7 @@ local fibbuf = require "fibonacci-buffer"
 local U = require "alicorn-utils"
 
 local terms = require "terms"
-local inferrable_term = terms.inferrable_term
+local anchored_inferrable_term = terms.anchored_inferrable_terminferrable_term
 local typechecking_context = terms.typechecking_context
 local module_mt = {}
 
@@ -57,7 +57,7 @@ local environment = {}
 
 ---@param name string
 ---@return boolean
----@return inferrable|string
+---@return anchored_inferrable|string
 function environment:get(name)
 	local present, binding = self.in_scope:get(name)
 	if not present then
