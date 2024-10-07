@@ -1062,8 +1062,8 @@ let host-matcher-reducible = lambda (
 
 	let accept-handler-type = reducible-handler-type(userdata, result2, result)
 	let accept-handler-desc = tuple-desc-singleton(host-type, accept-handler-type)
-	let red-param-desc = tuple-desc-concat(host-type, accept-handler-desc, storage)
-	let red-result-desc = tuple-desc-singleton(host-type, host-matcher(userdata, result))
+	# let red-param-desc = tuple-desc-concat(host-type, accept-handler-desc, storage)
+	# let red-result-desc = tuple-desc-singleton(host-type, host-matcher(userdata, result))
 
 	let accept-handler-tuple = host-tuple-of(host-type, accept-handler-desc)(accept-handler)
 	let red-param = host-tuple-concat(host-type, accept-handler-desc, storage, accept-handler-tuple, s)
@@ -1083,8 +1083,8 @@ let host-matcher-reducible = lambda (
 			accept-handler : reducible-handler-type(userdata, result2, result))
 		let accept-handler-type = reducible-handler-type(userdata, result2, result)
 		let accept-handler-desc = tuple-desc-singleton(host-type, accept-handler-type)
-		let red-param-desc = tuple-desc-concat(host-type, accept-handler-desc, storage)
-		let red-result-desc = tuple-desc-singleton(host-type, host-matcher(userdata, result))
+		# let red-param-desc = tuple-desc-concat(host-type, accept-handler-desc, storage)
+		# let red-result-desc = tuple-desc-singleton(host-type, host-matcher(userdata, result))
 
 		let accept-handler-tuple = host-tuple-of(host-type, accept-handler-desc)(accept-handler)
 		let red-param = host-tuple-concat(host-type, accept-handler-desc, storage, accept-handler-tuple, s)
