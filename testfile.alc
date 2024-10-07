@@ -1009,7 +1009,7 @@ let host-matcher-reducible = lambda (
 	m
 # FIXME: implicit here doesn't work
 # FIXME: out of date
-let host-matcher-reducible-implicit = lambda_implicit (userdata       : host-type)
+####let host-matcher-reducible-implicit = lambda_implicit (userdata       : host-type)
 	lambda (
 			storage        : tuple-desc-type(host-type),
 			result2        : tuple-desc-type(host-type),
