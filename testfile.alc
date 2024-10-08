@@ -6,6 +6,19 @@ let host-sub = (intrinsic "return function(a, b) return a - b end" : host-arith-
 #let foo = (record (bar = 5) (baz = 6))
 #let subbed = host-sub foo.bar y
 
+# FIXME: type of universe
+# we need to wrap this, and wrap takes a type in star-10
+# so we have to settle for star-9
+let omega = 9
+# FIXME: apparently variables aren't allowed here
+#let universe = type_(omega, 1)
+let universe = type_(9, 1)
+
+# nor expressions
+####let implicit-wrap = lambda_curry ((T : type_(omega + 1, 0)))
+	lambda (x : T)
+		wrap T x
+
 let implicit-wrap = lambda_curry ((T : type_(10, 0)))
 	lambda (x : T)
 		wrap T x
@@ -17,11 +30,6 @@ let implicit-unwrap = lambda_implicit (T : type_(10, 0))
 let explicit-unwrap = unwrap
 let wrap = implicit-wrap
 let unwrap = implicit-unwrap
-
-# FIXME: type of universe
-# we need to wrap this, and wrap takes a type in star-10
-# so we have to settle for star-9
-let universe = type_(9, 1)
 
 let host-bool-wrap            = intrinsic "return terms.value.host_bool_type"      : wrapped(host-type)
 let host-string-wrap          = intrinsic "return terms.value.host_string_type"    : wrapped(host-type)
@@ -1580,3 +1588,16 @@ let terms-gen-map = new-host-type(new-host-unique-id("terms-gen-map"))
 # 	aa
 # 	aa
 #     a
+
+let host-mul = (intrinsic "return function(a, b) return a * b end" : host-arith-binop)
+let mul = lambda (a : host-number, b : host-number)
+	let (c) = host-mul(a, b)
+	c
+let _*_ = mul
+
+let sqr = lambda (x)
+	x * x
+sqr 6
+let sqr_overcomplicated = lambda (t, x : t)
+	x * x
+sqr_overcomplicated(host-number, 6)

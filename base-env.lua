@@ -167,18 +167,37 @@ local pure_ascribed_name = metalanguage.reducer(
 	---@return inferrable?
 	---@return Environment?
 	function(syntax, env)
-		local ok, name, type_env = syntax:match({
-			metalanguage.listmatch(
+		local ok, name, tail = syntax:match({
+			metalanguage.issymbol(metalanguage.accept_handler),
+			metalanguage.listtail(
 				metalanguage.accept_handler,
 				metalanguage.issymbol(metalanguage.accept_handler),
-				metalanguage.symbol_exact(metalanguage.accept_handler, ":"),
-				exprs.inferred_expression(utils.accept_with_env, env)
+				metalanguage.symbol_exact(metalanguage.accept_handler, ":")
 			),
 		}, metalanguage.failure_handler, nil)
 		if not ok then
 			return ok, name
 		end
-		local type, env = utils.unpack_val_env(type_env)
+		local type
+		if tail then
+			local ok, type_env = tail:match({
+				metalanguage.listmatch(
+					metalanguage.accept_handler,
+					exprs.inferred_expression(utils.accept_with_env, env)
+				),
+			}, metalanguage.failure_handler, nil)
+			if not ok then
+				return ok, type_env
+			end
+			type, env = utils.unpack_val_env(type_env)
+		else
+			local type_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+			type = terms.inferrable_term.typed(
+				value.star(evaluator.OMEGA, 1),
+				usage_array(),
+				typed.literal(type_mv:as_value())
+			)
+		end
 		return true, name, type, env
 	end,
 	"pure_ascribed_name"
@@ -380,33 +399,37 @@ local ascribed_segment = metalanguage.reducer(
 	---@return boolean
 	---@return {single: boolean, names: string|string[], args: inferrable, env: Environment}|string
 	function(syntax, env)
-		-- check whether syntax starts with a paren list, or is empty
-		local multi, _, _ = syntax:match({
-			metalanguage.isnil(metalanguage.accept_handler),
-			metalanguage.listtail(metalanguage.accept_handler, metalanguage.ispair(metalanguage.accept_handler)),
+		-- check whether syntax looks like a single annotated param
+		local single, _, _, _ = syntax:match({
+			metalanguage.listmatch(
+				metalanguage.accept_handler,
+				metalanguage.any(metalanguage.accept_handler),
+				metalanguage.symbol_exact(metalanguage.accept_handler, ":"),
+				metalanguage.any(metalanguage.accept_handler)
+			),
 		}, metalanguage.failure_handler, nil)
 
-		if multi then
-			local ok, thread = syntax:match({
-				tupleof_ascribed_names(metalanguage.accept_handler, env),
-			}, metalanguage.failure_handler, nil)
+		local ok, thread
 
-			if not ok then
-				return ok, thread
-			end
-
-			return true, { single = false, names = thread.names, args = thread.args, env = thread.env }
-		else
+		if single then
 			local ok, name, type_val, type_env = syntax:match({
 				pure_ascribed_name(metalanguage.accept_handler, env),
 			}, metalanguage.failure_handler, nil)
-
 			if not ok then
 				return ok, name
 			end
-
-			return true, { single = true, names = name, args = type_val, env = type_env }
+			thread = { names = name, args = type_val, env = type_env }
+		else
+			ok, thread = syntax:match({
+				tupleof_ascribed_names(metalanguage.accept_handler, env),
+			}, metalanguage.failure_handler, nil)
+			if not ok then
+				return ok, thread
+			end
 		end
+
+		thread.single = single
+		return true, thread
 	end,
 	"ascribed_segment"
 )
@@ -417,33 +440,37 @@ local host_ascribed_segment = metalanguage.reducer(
 	---@return boolean
 	---@return {single: boolean, names: string|string[], args: inferrable, env: Environment}|string
 	function(syntax, env)
-		-- check whether syntax starts with a paren list
-		local multi, _, _ = syntax:match({
-			metalanguage.isnil(metalanguage.accept_handler),
-			metalanguage.listtail(metalanguage.accept_handler, metalanguage.ispair(metalanguage.accept_handler)),
+		-- check whether syntax looks like a single annotated param
+		local single, _, _, _ = syntax:match({
+			metalanguage.listmatch(
+				metalanguage.accept_handler,
+				metalanguage.any(metalanguage.accept_handler),
+				metalanguage.symbol_exact(metalanguage.accept_handler, ":"),
+				metalanguage.any(metalanguage.accept_handler)
+			),
 		}, metalanguage.failure_handler, nil)
 
-		if multi then
-			local ok, thread = syntax:match({
-				host_tupleof_ascribed_names(metalanguage.accept_handler, env),
-			}, metalanguage.failure_handler, nil)
+		local ok, thread
 
-			if not ok then
-				return ok, thread
-			end
-
-			return true, { single = false, names = thread.names, args = thread.args, env = thread.env }
-		else
+		if single then
 			local ok, name, type_val, type_env = syntax:match({
 				pure_ascribed_name(metalanguage.accept_handler, env),
 			}, metalanguage.failure_handler, nil)
-
 			if not ok then
 				return ok, name
 			end
-
-			return true, { single = true, names = name, args = type_val, env = type_env }
+			thread = { names = name, args = type_val, env = type_env }
+		else
+			ok, thread = syntax:match({
+				host_tupleof_ascribed_names(metalanguage.accept_handler, env),
+			}, metalanguage.failure_handler, nil)
+			if not ok then
+				return ok, thread
+			end
 		end
+
+		thread.single = single
+		return true, thread
 	end,
 	"host_ascribed_segment"
 )
@@ -533,21 +560,25 @@ local ascribed_segment_2 = metalanguage.reducer(
 	---@return boolean
 	---@return {names: string[], args: inferrable, env: Environment}|string
 	function(syntax, env)
-		-- check whether syntax starts with a paren list, or is empty
-		local multi, _, _ = syntax:match({
-			metalanguage.isnil(metalanguage.accept_handler),
-			metalanguage.listtail(metalanguage.accept_handler, metalanguage.ispair(metalanguage.accept_handler)),
+		-- check whether syntax looks like a single annotated param
+		local single, _, _, _ = syntax:match({
+			metalanguage.listmatch(
+				metalanguage.accept_handler,
+				metalanguage.any(metalanguage.accept_handler),
+				metalanguage.symbol_exact(metalanguage.accept_handler, ":"),
+				metalanguage.any(metalanguage.accept_handler)
+			),
 		}, metalanguage.failure_handler, nil)
 
 		local ok, thread
 
-		if multi then
+		if single then
 			ok, thread = syntax:match({
-				tupleof_ascribed_names(metalanguage.accept_handler, env),
+				tuplewrap_ascribed_name(metalanguage.accept_handler, env),
 			}, metalanguage.failure_handler, nil)
 		else
 			ok, thread = syntax:match({
-				tuplewrap_ascribed_name(metalanguage.accept_handler, env),
+				tupleof_ascribed_names(metalanguage.accept_handler, env),
 			}, metalanguage.failure_handler, nil)
 		end
 
@@ -562,21 +593,25 @@ local host_ascribed_segment_2 = metalanguage.reducer(
 	---@return boolean
 	---@return {names: string[], args: inferrable, env: Environment}|string
 	function(syntax, env)
-		-- check whether syntax starts with a paren list
-		local multi, _, _ = syntax:match({
-			metalanguage.isnil(metalanguage.accept_handler),
-			metalanguage.listtail(metalanguage.accept_handler, metalanguage.ispair(metalanguage.accept_handler)),
+		-- check whether syntax looks like a single annotated param
+		local single, _, _, _ = syntax:match({
+			metalanguage.listmatch(
+				metalanguage.accept_handler,
+				metalanguage.any(metalanguage.accept_handler),
+				metalanguage.symbol_exact(metalanguage.accept_handler, ":"),
+				metalanguage.any(metalanguage.accept_handler)
+			),
 		}, metalanguage.failure_handler, nil)
 
 		local ok, thread
 
-		if multi then
+		if single then
 			ok, thread = syntax:match({
-				host_tupleof_ascribed_names(metalanguage.accept_handler, env),
+				host_tuplewrap_ascribed_name(metalanguage.accept_handler, env),
 			}, metalanguage.failure_handler, nil)
 		else
 			ok, thread = syntax:match({
-				host_tuplewrap_ascribed_name(metalanguage.accept_handler, env),
+				host_tupleof_ascribed_names(metalanguage.accept_handler, env),
 			}, metalanguage.failure_handler, nil)
 		end
 
@@ -1189,7 +1224,7 @@ local function build_wrap(body_fn, type_fn)
 				terms.tuple_desc(
 					value.closure(
 						pname_type,
-						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA, 0)),
+						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA + 1, 0)),
 						terms.runtime_context()
 					),
 					value.closure(
@@ -1237,7 +1272,7 @@ local function build_unwrap(body_fn, type_fn)
 				terms.tuple_desc(
 					value.closure(
 						pname_type,
-						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA, 0)),
+						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA + 1, 0)),
 						terms.runtime_context()
 					),
 					value.closure(
@@ -1283,7 +1318,7 @@ local function build_wrapped(body_fn)
 				terms.tuple_desc(
 					value.closure(
 						pname_type,
-						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA, 0)),
+						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA + 1, 0)),
 						terms.runtime_context()
 					)
 				)
