@@ -34,6 +34,8 @@ function PrettyPrint:any(unknown, ...)
 	local ty = type(unknown)
 	if ty == "string" then
 		self[#self + 1] = string.format("%q", unknown)
+	elseif ty == "function" then
+		self:func(unknown)
 	elseif ty == "table" then
 		if self.depth and self.depth > 50 then
 			self[#self + 1] = "DEPTH LIMIT EXCEEDED"
@@ -45,6 +47,8 @@ function PrettyPrint:any(unknown, ...)
 			via_trait.print(unknown, self, ...)
 		elseif mt and mt.__tostring then
 			self[#self + 1] = tostring(unknown)
+		elseif mt and mt.__call then
+			self:func(mt.__call)
 		else
 			self:table(unknown)
 		end
@@ -264,6 +268,19 @@ end
 ---@param name string
 function PrettyPrint:unit(name)
 	self[#self + 1] = name
+end
+
+function PrettyPrint:func(f)
+	local d = debug.getinfo(f, "Su")
+	local params = {}
+	for i = 1, d.nparams do
+		params[#params + 1] = debug.getlocal(f, i)
+	end
+	if d.isvararg then
+		params[#params + 1] = "..."
+	end
+	self[#self + 1] =
+		string.format("%s function(%s): %s:%d", d.what, table.concat(params, ", "), d.source, d.linedefined)
 end
 
 function PrettyPrint_mt:__tostring()
