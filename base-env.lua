@@ -1043,7 +1043,7 @@ local function host_term_of_inner(goal)
 	if goal:is_infer() then
 		return terms.host_inferrable_term_type
 	elseif goal:is_check() then
-		return terms.checkable_inferrable_term_type
+		return terms.host_checkable_term_type
 	else
 		error("host_term_of_inner: unknown goal")
 	end
