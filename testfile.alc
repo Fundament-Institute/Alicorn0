@@ -1598,3 +1598,6 @@ let _*_ = mul
 let sqr = lambda (x)
 	x * x
 sqr 6
+let sqr_overcomplicated = lambda ((t), x : t)
+	x * x
+sqr_overcomplicated(host-number, 6)
