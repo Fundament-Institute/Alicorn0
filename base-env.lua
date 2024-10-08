@@ -167,19 +167,35 @@ local pure_ascribed_name = metalanguage.reducer(
 	---@return inferrable?
 	---@return Environment?
 	function(syntax, env)
-		local ok, name, type_env = syntax:match({
-			metalanguage.listmatch(
+		local ok, name, tail = syntax:match({
+			metalanguage.listtail(
 				metalanguage.accept_handler,
 				metalanguage.issymbol(metalanguage.accept_handler),
-				metalanguage.symbol_exact(metalanguage.accept_handler, ":"),
-				exprs.inferred_expression(utils.accept_with_env, env)
+				metalanguage.symbol_exact(metalanguage.accept_handler, ":")
 			),
 		}, metalanguage.failure_handler, nil)
-		if not ok then
-			return ok, name
+		if ok then
+			local ok, type_env = tail:match({
+				metalanguage.listmatch(
+					metalanguage.accept_handler,
+					exprs.inferred_expression(utils.accept_with_env, env)
+				),
+			}, metalanguage.failure_handler, nil)
+			if not ok then
+				return ok, type_env
+			end
+			local type, env = utils.unpack_val_env(type_env)
+			return true, name, type, env
+		else
+			local ok, name = syntax:match({
+				metalanguage.listmatch(metalanguage.accept_handler, metalanguage.issymbol(metalanguage.accept_handler)),
+			}, metalanguage.failure_handler, nil)
+			if not ok then
+				return ok, name
+			end
+			local type = evaluator.typechecker_state:metavariable(env.typechecking_context)
+			return true, name, type, env
 		end
-		local type, env = utils.unpack_val_env(type_env)
-		return true, name, type, env
 	end,
 	"pure_ascribed_name"
 )
