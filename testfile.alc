@@ -1022,7 +1022,7 @@ let host-matcher-is-value = lambda (userdata : host-type, result : tuple-desc-ty
 
 let reducer-type = new-host-type-family new-host-unique-id("host-reducer")
 	forall (storage : tuple-desc-type(host-type), result2 : tuple-desc-type(host-type)) -> (T : host-type)
-	tuple-of-implicit covariant(tuple-desc-relation) contravariant(tuple-desc-relation)
+	tuple-of-implicit contravariant(tuple-desc-relation) covariant(tuple-desc-relation)
 
 let reducible-handler-type = lambda (userdata : host-type, result2 : tuple-desc-type(host-type), result : tuple-desc-type(host-type))
 	# prepend userdata to result2
