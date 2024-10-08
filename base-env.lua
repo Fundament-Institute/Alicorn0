@@ -193,7 +193,12 @@ local pure_ascribed_name = metalanguage.reducer(
 			if not ok then
 				return ok, name
 			end
-			local type = evaluator.typechecker_state:metavariable(env.typechecking_context)
+			local type_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+			local type = terms.inferrable_term.typed(
+				value.star(evaluator.OMEGA, 1),
+				usage_array(),
+				typed.literal(type_mv:as_value())
+			)
 			return true, name, type, env
 		end
 	end,
@@ -1205,7 +1210,7 @@ local function build_wrap(body_fn, type_fn)
 				terms.tuple_desc(
 					value.closure(
 						pname_type,
-						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA, 0)),
+						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA + 1, 0)),
 						terms.runtime_context()
 					),
 					value.closure(
@@ -1253,7 +1258,7 @@ local function build_unwrap(body_fn, type_fn)
 				terms.tuple_desc(
 					value.closure(
 						pname_type,
-						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA, 0)),
+						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA + 1, 0)),
 						terms.runtime_context()
 					),
 					value.closure(
@@ -1299,7 +1304,7 @@ local function build_wrapped(body_fn)
 				terms.tuple_desc(
 					value.closure(
 						pname_type,
-						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA, 0)),
+						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA + 1, 0)),
 						terms.runtime_context()
 					)
 				)

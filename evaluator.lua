@@ -40,7 +40,7 @@ local subtype_relation_mt, SubtypeRelation, EdgeNotif =
 local param_info_explicit = value.param_info(value.visibility(visibility.explicit))
 local result_info_pure = value.result_info(result_info(purity.pure))
 
-local OMEGA = 10
+local OMEGA = 9
 local typechecker_state
 local evaluate, infer, check, apply_value
 local name_array = string_array
