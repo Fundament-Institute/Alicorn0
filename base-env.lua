@@ -168,13 +168,18 @@ local pure_ascribed_name = metalanguage.reducer(
 	---@return Environment?
 	function(syntax, env)
 		local ok, name, tail = syntax:match({
+			metalanguage.issymbol(metalanguage.accept_handler),
 			metalanguage.listtail(
 				metalanguage.accept_handler,
 				metalanguage.issymbol(metalanguage.accept_handler),
 				metalanguage.symbol_exact(metalanguage.accept_handler, ":")
 			),
 		}, metalanguage.failure_handler, nil)
-		if ok then
+		if not ok then
+			return ok, name
+		end
+		local type
+		if tail then
 			local ok, type_env = tail:match({
 				metalanguage.listmatch(
 					metalanguage.accept_handler,
@@ -184,23 +189,16 @@ local pure_ascribed_name = metalanguage.reducer(
 			if not ok then
 				return ok, type_env
 			end
-			local type, env = utils.unpack_val_env(type_env)
-			return true, name, type, env
+			type, env = utils.unpack_val_env(type_env)
 		else
-			local ok, name = syntax:match({
-				metalanguage.listmatch(metalanguage.accept_handler, metalanguage.issymbol(metalanguage.accept_handler)),
-			}, metalanguage.failure_handler, nil)
-			if not ok then
-				return ok, name
-			end
 			local type_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
-			local type = terms.inferrable_term.typed(
+			type = terms.inferrable_term.typed(
 				value.star(evaluator.OMEGA, 1),
 				usage_array(),
 				typed.literal(type_mv:as_value())
 			)
-			return true, name, type, env
 		end
+		return true, name, type, env
 	end,
 	"pure_ascribed_name"
 )
@@ -554,21 +552,25 @@ local ascribed_segment_2 = metalanguage.reducer(
 	---@return boolean
 	---@return {names: string[], args: inferrable, env: Environment}|string
 	function(syntax, env)
-		-- check whether syntax starts with a paren list, or is empty
-		local multi, _, _ = syntax:match({
-			metalanguage.isnil(metalanguage.accept_handler),
-			metalanguage.listtail(metalanguage.accept_handler, metalanguage.ispair(metalanguage.accept_handler)),
+		-- check whether syntax looks like a single annotated param
+		local single, _, _, _ = syntax:match({
+			metalanguage.listmatch(
+				metalanguage.accept_handler,
+				metalanguage.any(metalanguage.accept_handler),
+				metalanguage.symbol_exact(metalanguage.accept_handler, ":"),
+				metalanguage.any(metalanguage.accept_handler)
+			),
 		}, metalanguage.failure_handler, nil)
 
 		local ok, thread
 
-		if multi then
+		if single then
 			ok, thread = syntax:match({
-				tupleof_ascribed_names(metalanguage.accept_handler, env),
+				tuplewrap_ascribed_name(metalanguage.accept_handler, env),
 			}, metalanguage.failure_handler, nil)
 		else
 			ok, thread = syntax:match({
-				tuplewrap_ascribed_name(metalanguage.accept_handler, env),
+				tupleof_ascribed_names(metalanguage.accept_handler, env),
 			}, metalanguage.failure_handler, nil)
 		end
 
