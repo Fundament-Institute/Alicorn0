@@ -2510,7 +2510,7 @@ function evaluate(typed_term, runtime_context)
 			end
 			--local require_generator = require "require"
 			--load_env.require = require_generator(anchor.sourceid)
-			local res = assert(load(source_str, "host_intrinsic", "t", load_env))()
+			local res = assert(load(source_str, "host_intrinsic<" .. tostring(anchor) .. ">", "t", load_env))()
 			intrinsic_memo[source_str] = res
 			return value.host_value(res)
 		elseif source_val:is_neutral() then
