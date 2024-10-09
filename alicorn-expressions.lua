@@ -633,9 +633,12 @@ local function expression_pairhandler(args, a, b)
 		end
 		---@cast tuple checkable
 
-		---@type string | inferrable | checkable
-		local res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
-		---@cast res inferrable
+		---@type string | anchored_inferrable | checkable
+		local res = terms.anchored_inferrable_term(
+			anchor,
+			inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
+		)
+		---@cast res anchored_inferrable
 
 		if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
 			local bind = terms.binding.program_sequence(res, a.anchor)

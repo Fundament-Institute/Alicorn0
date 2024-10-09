@@ -129,7 +129,7 @@ local function record_build(syntax, env)
 	for _, v in ipairs(defs) do
 		map[v.name] = v.expr
 	end
-	return true, terms.inferrable_term.record_cons(map), env
+	return true, terms.anchored_inferrable_term(syntax.anchor, terms.unanchored_inferrable_term.record_cons(map), env)
 end
 
 ---@type lua_operative
@@ -162,7 +162,14 @@ local function intrinsic(syntax, env)
 		error "env nil in base-env.intrinsic"
 	end
 	return true,
-		terms.inferrable_term.host_intrinsic(str, type--[[terms.checkable_term.inferrable(type)]], syntax.anchor),
+		terms.anchored_inferrable_term(
+			syntax.anchor,
+			terms.unanchored_inferrable_term.host_intrinsic(
+				str,
+				type --[[terms.checkable_term.inferrable(type)]],
+				syntax.anchor
+			)
+		),
 		env
 end
 
@@ -809,9 +816,18 @@ local function apply_operative_impl(syntax, env)
 		end
 
 		local inf_term, env = utils.unpack_val_env(args_inferrable_term)
-		return terms.inferrable_term.application(
-			terms.inferrable_term.typed(spec_type, usages, fn_typed_term),
-			inf_term
+		return terms.anchored_inferrable_term(
+			syntax.anchor,
+			terms.unanchored_inferrable_term.application(
+				terms.anchored_inferrable_term(
+					syntax.anchor,
+					terms.anchored_inferrable_term(
+						syntax.anchor,
+						terms.unanchored_inferrable_term.typed(spec_type, usages, fn_typed_term)
+					)
+				),
+				inf_term
+			)
 		),
 			env
 	end
@@ -988,10 +1004,13 @@ local function startype_impl(syntax, env)
 	if depth_val.val % 1 ~= 0 then
 		return false, "literal must be an integer for type levels"
 	end
-	local term = terms.inferrable_term.typed(
-		value.star(level_val.val + 1, depth_val.val + 1),
-		usage_array(),
-		terms.typed_term.star(level_val.val, depth_val.val)
+	local term = terms.anchored_inferrable_term(
+		syntax.anchor,
+		terms.unanchored_inferrable_term.typed(
+			value.star(level_val.val + 1, depth_val.val + 1),
+			usage_array(),
+			terms.typed_term.star(level_val.val, depth_val.val)
+		)
 	)
 
 	return true, term, env
@@ -1159,7 +1178,12 @@ local function into_operative_impl(syntax, env)
 	local op_type = value.operative_type(handler, ud_type)
 	local op_val = value.operative_value(ud)
 
-	return true, terms.inferrable_term.typed(op_type, usage_array(), typed.literal(op_val)), env
+	return true,
+		terms.anchored_inferrable_term(
+			syntax.anchor,
+			terms.unanchored_inferrable_term.typed(op_type, usage_array(), typed.literal(op_val))
+		),
+		env
 end
 
 -- eg typed.host_wrap, typed.host_wrapped_type
