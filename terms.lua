@@ -143,7 +143,7 @@ function TypecheckingContext:get_runtime_context()
 end
 
 ---@param name string
----@param type any
+---@param type value
 ---@param val value?
 ---@param anchor Anchor?
 ---@return TypecheckingContext
