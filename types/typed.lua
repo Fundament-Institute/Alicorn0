@@ -305,6 +305,18 @@ function typed:unwrap_effect_type() end
 ---@return boolean, ArrayValue, typed
 function typed:as_effect_type() end
 ---@return boolean
+function typed:is_effect_row() end
+---@return ArrayValue, typed
+function typed:unwrap_effect_row() end
+---@return boolean, ArrayValue, typed
+function typed:as_effect_row() end
+---@return boolean
+function typed:is_effect_row_resolve() end
+---@return SetValue, typed
+function typed:unwrap_effect_row_resolve() end
+---@return boolean, SetValue, typed
+function typed:as_effect_row_resolve() end
+---@return boolean
 function typed:is_program_type() end
 ---@return typed, typed
 function typed:unwrap_program_type() end
@@ -399,6 +411,8 @@ function typed:as_constrained_type() end
 ---@field program_end fun(result: typed): typed
 ---@field program_invoke fun(effect_tag: typed, effect_arg: typed): typed
 ---@field effect_type fun(components: ArrayValue, base: typed): typed
+---@field effect_row fun(elems: ArrayValue, rest: typed): typed
+---@field effect_row_resolve fun(elems: SetValue, rest: typed): typed
 ---@field program_type fun(effect_type: typed, result_type: typed): typed
 ---@field srel_type fun(target_type: typed): typed
 ---@field variance_type fun(target_type: typed): typed

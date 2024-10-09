@@ -233,8 +233,8 @@ function environment:bind_local(binding)
 		if ok then
 			return res2
 		end
-		--error(res1)
-		--error(res2)
+		-- error(res1)
+		error(res2)
 		error("tuple elim speculation failed! debugging this is left as an exercise to the maintainer")
 	elseif binding:is_annotated_lambda() then
 		local param_name, param_annotation, anchor, visible = binding:unwrap_annotated_lambda()
@@ -378,6 +378,7 @@ function environment:exit_block(term, shadowed)
 		wrapped = terms.inferrable_term.program_end(wrapped)
 	end
 	for idx = self.bindings:len(), 1, -1 do
+		---@type binding
 		local binding = self.bindings:get(idx)
 		if not binding then
 			error "missing binding"
@@ -389,8 +390,8 @@ function environment:exit_block(term, shadowed)
 			local names, subject = binding:unwrap_tuple_elim()
 			wrapped = terms.inferrable_term.tuple_elim(names, subject, wrapped)
 		elseif binding:is_annotated_lambda() then
-			local name, annotation, anchor, visible = binding:unwrap_annotated_lambda()
-			wrapped = terms.inferrable_term.annotated_lambda(name, annotation, wrapped, anchor, visible)
+			local name, annotation, anchor, visible, purity = binding:unwrap_annotated_lambda()
+			wrapped = terms.inferrable_term.annotated_lambda(name, annotation, wrapped, anchor, visible, purity)
 		elseif binding:is_program_sequence() then
 			local first, anchor = binding:unwrap_program_sequence()
 			wrapped = terms.inferrable_term.program_sequence(first, anchor, wrapped)
