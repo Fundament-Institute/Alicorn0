@@ -2685,9 +2685,10 @@ function evaluate(typed_term, runtime_context)
 			for k, v in pairs(internals_interface) do
 				load_env[k] = v
 			end
-			--TODO figure out how to make this modular
-			--local require_generator = require "require"
-			--load_env.require = require_generator(anchor.sourceid)
+			local has_luvit_require, require_generator = pcall(require, "require")
+			if has_luvit_require then
+				load_env.require = require_generator(anchor.sourceid)
+			end
 			local res = assert(load(source_str, "host_intrinsic<" .. tostring(anchor) .. ">", "t", load_env))()
 			intrinsic_memo[source_str] = res
 			return value.host_value(res)
