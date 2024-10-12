@@ -1192,7 +1192,8 @@ local block = metalanguage.reducer(
 	function(syntax, args)
 		local goal, env = args:unwrap()
 		assert(goal:is_infer(), "NYI non-infer cases for block")
-		local lastval, newval
+		local lastval = inferrable_term.tuple_cons(inferrable_array())
+		local newval
 		local ok, continue = true, true
 		while ok and continue do
 			ok, continue, newval, syntax, env = syntax:match({
