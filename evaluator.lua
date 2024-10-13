@@ -1977,7 +1977,6 @@ function infer(
 		local variants = string_value_map()
 		variants:set(constructor, arg_type)
 		local enum_type = value.enum_type(value.enum_desc_value(variants))
-		-- TODO: check arg_type against enum_type desc
 		return enum_type, arg_usages, typed_term.enum_cons(constructor, arg_term)
 	elseif inferrable_term:is_enum_elim() then
 		local subject, mechanism = inferrable_term:unwrap_enum_elim()
