@@ -366,12 +366,9 @@ end
 ---@return TupleDescFlat[]?
 ---@return integer?
 local function inferrable_tuple_type_flatten(desc, context)
-	local enum_type, constructor, arg = desc:unwrap_enum_cons()
-	local ok, universe = enum_type:as_tuple_desc_type()
-	-- TODO: what is universe?
+	local ok, constructor, arg = desc:as_enum_cons()
 	if not ok then
-		-- non-fatal, but weird
-		print("override_pretty: inferrable.tuple_type: enum_type must be tuple_desc_type")
+		return false
 	end
 	if constructor == DescCons.empty then
 		return true, {}, 0
@@ -406,7 +403,10 @@ end
 ---@return (inferrable|string)[]
 ---@return integer
 local function inferrable_tuple_type_hydraulicpress(desc)
-	local enum_type, constructor, arg = desc:unwrap_enum_cons()
+	local ok, constructor, arg = desc:as_enum_cons()
+	if not ok then
+		return { "<UNHANDLED EDGE CASE>" }, 1
+	end
 	if constructor == DescCons.empty then
 		return {}, 0
 	elseif constructor == DescCons.cons then
@@ -431,7 +431,10 @@ end
 ---@return TupleDescFlat[]?
 ---@return integer?
 local function typed_tuple_type_flatten(desc, context)
-	local constructor, arg = desc:unwrap_enum_cons()
+	local ok, constructor, arg = desc:as_enum_cons()
+	if not ok then
+		return false
+	end
 	if constructor == DescCons.empty then
 		return true, {}, 0
 	elseif constructor == DescCons.cons then
@@ -465,7 +468,10 @@ end
 ---@return (typed|string)[]
 ---@return integer
 local function typed_tuple_type_hydraulicpress(desc)
-	local constructor, arg = desc:unwrap_enum_cons()
+	local ok, constructor, arg = desc:as_enum_cons()
+	if not ok then
+		return { "<UNHANDLED EDGE CASE>" }, 1
+	end
 	if constructor == DescCons.empty then
 		return {}, 0
 	elseif constructor == DescCons.cons then
