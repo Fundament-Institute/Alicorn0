@@ -831,6 +831,62 @@ add_comparer("value.enum_type", "value.enum_type", function(lctx, a, rctx, b)
 	typechecker_state:queue_constrain(lctx, a_desc, enum_desc_srel, rctx, b_desc, "enum type description")
 	return true
 end)
+add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx, b)
+	local a_desc = a:unwrap_enum_type()
+	local b_univ = b:unwrap_tuple_desc_type()
+	local construction_variants = string_value_map()
+	-- The empty variant has no arguments
+	construction_variants:set(
+		terms.DescCons.empty,
+		value.tuple_type(value.enum_value(terms.DescCons.empty, value.tuple_value(value_array())))
+	)
+	-- The cons variant takes a prefix description and a next element, represented as a function from the prefix tuple to a type in the specified universe
+	construction_variants:set(
+		terms.DescCons.cons,
+		value.tuple_type(
+			value.enum_value(
+				terms.DescCons.cons,
+				value.tuple_value(
+					value_array(
+						value.enum_value(
+							terms.DescCons.cons,
+							value.tuple_value(
+								value_array(
+									value.enum_value(terms.DescCons.empty, value.tuple_value(value_array())),
+									value.closure("#prefix", typed_term.literal(b), rctx.runtime_context)
+								)
+							)
+						),
+						value.closure(
+							"#prefix",
+							typed_term.tuple_elim(
+								string_array("prefix-desc"),
+								typed_term.bound_variable(#rctx + 2),
+								1,
+								typed_term.pi(
+									typed_term.tuple_type(typed_term.bound_variable(#rctx + 3)),
+									typed.literal(value.param_info(value.visibility(terms.visibility.explicit))),
+									typed_term.bound_variable(#rctx + 1),
+									typed.literal(value.result_info(terms.result_info(terms.purity.pure)))
+								)
+							),
+							rctx.runtime_context:append(b_univ)
+						)
+					)
+				)
+			)
+		)
+	)
+	typechecker_state:queue_constrain(
+		lctx,
+		a_desc,
+		enum_desc_srel,
+		rctx,
+		value.enum_desc_value(construction_variants),
+		"use enum construction as tuple desc"
+	)
+	return true
+end)
 add_comparer("value.pi", "value.pi", function(lctx, a, rctx, b)
 	if a == b then
 		return true
@@ -1759,10 +1815,15 @@ function infer(
 	elseif inferrable_term:is_tuple_type() then
 		local desc = inferrable_term:unwrap_tuple_type()
 		local desc_type, desc_usages, desc_term = infer(desc, typechecking_context)
-		if not desc_type:is_tuple_desc_type() then
-			error "argument to tuple_type is not a tuple_desc"
-		end
-		return terms.value.star(0, 0), desc_usages, terms.typed_term.tuple_type(desc_term)
+		local univ_var = typechecker_state:metavariable(typechecking_context, false):as_value()
+		typechecker_state:flow(
+			desc_type,
+			typechecking_context,
+			value.tuple_desc_type(univ_var),
+			typechecking_context,
+			"tuple type construction"
+		)
+		return value.union_type(terms.value.star(0, 0), univ_var), desc_usages, terms.typed_term.tuple_type(desc_term)
 	elseif inferrable_term:is_record_cons() then
 		local fields = inferrable_term:unwrap_record_cons()
 		-- type_data is either "empty", an empty tuple,
@@ -1855,8 +1916,11 @@ function infer(
 		add_arrays(result_usages, body_usages)
 		return body_type, result_usages, typed_term.record_elim(subject_term, field_names, body_term)
 	elseif inferrable_term:is_enum_cons() then
-		local enum_type, constructor, arg = inferrable_term:unwrap_enum_cons()
+		local constructor, arg = inferrable_term:unwrap_enum_cons()
 		local arg_type, arg_usages, arg_term = infer(arg, typechecking_context)
+		local variants = string_value_map()
+		variants:set(constructor, arg_type)
+		local enum_type = value.enum_type(value.enum_desc_value(variants))
 		-- TODO: check arg_type against enum_type desc
 		return enum_type, arg_usages, typed_term.enum_cons(constructor, arg_term)
 	elseif inferrable_term:is_enum_elim() then
@@ -1869,6 +1933,42 @@ function infer(
 		local mechanism_type, mechanism_usages, mechanism_term = infer(mechanism, typechecking_context)
 		-- TODO: check subject desc against mechanism desc
 		error("nyi")
+	elseif inferrable_term:is_enum_case() then
+		local subject, variants, default = inferrable_term:unwrap_enum_case()
+		local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
+		local constrain_variants = string_value_map()
+		for k, v in variants:pairs() do
+			constrain_variants[k] = typechecker_state:metavariable(typechecking_context, false):as_value()
+		end
+		typechecker_state:flow(
+			subject_type,
+			typechecking_context,
+			value.enum_type(value.enum_desc_value(constrain_variants)),
+			typechecking_context,
+			"enum case matching"
+		)
+		local term_variants = string_typed_map()
+		local result_types = {}
+		for k, v in variants:pairs() do
+			local variant_type, variant_usages, variant_term =
+				infer(v, typechecking_context:append("#variant", constrain_variants:get(k), nil, nil)) --TODO improve
+			term_variants:set(k, variant_term)
+			result_types[#result_types + 1] = variant_type
+		end
+		local result_type = result_types[1]
+		for i = 2, #result_types do
+			result_type = value.union_type(result_type, result_types[i])
+		end
+		return result_type,
+			subject_usages,
+			typed_term.enum_case(
+				subject_term,
+				term_variants,
+				typed_term.enum_absurd(
+					typed_term.bound_variable(typechecking_context:len() + 1),
+					"unacceptable enum variant"
+				)
+			)
 	elseif inferrable_term:is_object_cons() then
 		local methods = inferrable_term:unwrap_object_cons()
 		local type_data = terms.empty
