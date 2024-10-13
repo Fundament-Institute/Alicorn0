@@ -504,17 +504,9 @@ local tuplewrap_ascribed_name_inner = metalanguage.reducer(
 			return terms.inferrable_term.tuple_cons(inf_array(...))
 		end
 		local function cons(...)
-			return terms.inferrable_term.enum_cons(
-				terms.value.tuple_desc_type(terms.value.star(0, 0)),
-				terms.DescCons.cons,
-				tup_cons(...)
-			)
+			return terms.inferrable_term.enum_cons(terms.DescCons.cons, tup_cons(...))
 		end
-		local empty = terms.inferrable_term.enum_cons(
-			terms.value.tuple_desc_type(terms.value.star(0, 0)),
-			terms.DescCons.empty,
-			tup_cons()
-		)
+		local empty = terms.inferrable_term.enum_cons(terms.DescCons.empty, tup_cons())
 		local names = gen.declare_array(gen.builtin_string)()
 		local args = empty
 		local ok, name, type_val, type_env = syntax:match({

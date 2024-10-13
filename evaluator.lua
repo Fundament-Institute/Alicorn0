@@ -232,12 +232,12 @@ enum_desc_srel = setmetatable({
 				error "consumption is not an enum description"
 			end
 			local use_variants = use:unwrap_enum_desc_value()
-			for name, use_type in use_variants:pairs() do
+			for name, val_type in val_variants:pairs() do
 				typechecker_state:queue_subtype(
 					lctx,
-					val_variants:get(name) --[[@as value -- please find a better approach]],
+					val_type,
 					rctx,
-					use_type,
+					use_variants:get(name) --[[@as value -- please find a better approach]],
 					"enum variant"
 				)
 			end
@@ -866,7 +866,7 @@ add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx,
 								typed_term.pi(
 									typed_term.tuple_type(typed_term.bound_variable(#rctx + 3)),
 									typed.literal(value.param_info(value.visibility(terms.visibility.explicit))),
-									typed_term.bound_variable(#rctx + 1),
+									typed.lambda("#arg", typed_term.bound_variable(#rctx + 1)),
 									typed.literal(value.result_info(terms.result_info(terms.purity.pure)))
 								)
 							),
@@ -884,6 +884,62 @@ add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx,
 		rctx,
 		value.enum_desc_value(construction_variants),
 		"use enum construction as tuple desc"
+	)
+	return true
+end)
+add_comparer("value.tuple_desc_type", "value.enum_type", function(lctx, a, rctx, b)
+	local a_univ = a:unwrap_tuple_desc_type()
+	local b_desc = b:unwrap_enum_type()
+	local construction_variants = string_value_map()
+	-- The empty variant has no arguments
+	construction_variants:set(
+		terms.DescCons.empty,
+		value.tuple_type(value.enum_value(terms.DescCons.empty, value.tuple_value(value_array())))
+	)
+	-- The cons variant takes a prefix description and a next element, represented as a function from the prefix tuple to a type in the specified universe
+	construction_variants:set(
+		terms.DescCons.cons,
+		value.tuple_type(
+			value.enum_value(
+				terms.DescCons.cons,
+				value.tuple_value(
+					value_array(
+						value.enum_value(
+							terms.DescCons.cons,
+							value.tuple_value(
+								value_array(
+									value.enum_value(terms.DescCons.empty, value.tuple_value(value_array())),
+									value.closure("#prefix", typed_term.literal(a), rctx.runtime_context)
+								)
+							)
+						),
+						value.closure(
+							"#prefix",
+							typed_term.tuple_elim(
+								string_array("prefix-desc"),
+								typed_term.bound_variable(#rctx + 2),
+								1,
+								typed_term.pi(
+									typed_term.tuple_type(typed_term.bound_variable(#rctx + 3)),
+									typed.literal(value.param_info(value.visibility(terms.visibility.explicit))),
+									typed.lambda("#arg", typed_term.bound_variable(#rctx + 1)),
+									typed.literal(value.result_info(terms.result_info(terms.purity.pure)))
+								)
+							),
+							rctx.runtime_context:append(a_univ)
+						)
+					)
+				)
+			)
+		)
+	)
+	typechecker_state:queue_constrain(
+		lctx,
+		value.enum_desc_value(construction_variants),
+		enum_desc_srel,
+		rctx,
+		b_desc,
+		"use tuple description as enum"
 	)
 	return true
 end)
@@ -2148,10 +2204,14 @@ function infer(
 	elseif inferrable_term:is_host_tuple_type() then
 		local desc = inferrable_term:unwrap_host_tuple_type()
 		local desc_type, desc_usages, desc_term = infer(desc, typechecking_context)
-		if not desc_type:is_tuple_desc_type() then
-			error "must be a tuple desc"
-		end
-		return value.star(0, 0), desc_usages, typed_term.host_tuple_type(desc_term)
+		typechecker_state:flow(
+			desc_type,
+			typechecking_context,
+			value.tuple_desc_type(value.host_type_type),
+			typechecking_context,
+			"tuple type construction"
+		)
+		return terms.value.star(0, 0), desc_usages, terms.typed_term.tuple_type(desc_term)
 	elseif inferrable_term:is_program_sequence() then
 		local first, anchor, continue = inferrable_term:unwrap_program_sequence()
 		local first_type, first_usages, first_term = infer(first, typechecking_context)
