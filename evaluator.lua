@@ -2211,7 +2211,7 @@ function infer(
 			typechecking_context,
 			"tuple type construction"
 		)
-		return terms.value.star(0, 0), desc_usages, terms.typed_term.tuple_type(desc_term)
+		return terms.value.star(0, 0), desc_usages, terms.typed_term.host_tuple_type(desc_term)
 	elseif inferrable_term:is_program_sequence() then
 		local first, anchor, continue = inferrable_term:unwrap_program_sequence()
 		local first_type, first_usages, first_term = infer(first, typechecking_context)
