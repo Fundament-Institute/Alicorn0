@@ -71,7 +71,7 @@ function alc_process(code)
     nil
   )
   if not ok then
-    error("inference failed")
+    error("inference failed: " .. expr)
   end
 
   local env, bound_expr, purity = env:exit_block(expr, shadowed)
