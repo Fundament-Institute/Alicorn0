@@ -1424,6 +1424,19 @@ local function index_tuple_value(subject, index)
 	error("Should be unreachable???")
 end
 
+local host_tuple_make_prefix_mt = {
+	__call = function(self, i)
+		local prefix_elements = value_array()
+		for x = 1, i do
+			prefix_elements:append(value.neutral(neutral_value.tuple_element_access_stuck(self.subject_neutral, x)))
+		end
+		return value.tuple_value(prefix_elements)
+	end,
+}
+local function host_tuple_make_prefix(subject_neutral)
+	return setmetatable({ subject_neutral = subject_neutral }, host_tuple_make_prefix_mt)
+end
+
 ---@param subject_type value
 ---@param subject_value value
 ---@return value
@@ -1468,13 +1481,7 @@ local function make_tuple_prefix(subject_type, subject_value)
 		elseif subject_value:is_neutral() then
 			-- yes, literally a copy-paste of the neutral case above
 			local subject_neutral = subject_value:unwrap_neutral()
-			function make_prefix(i)
-				local prefix_elements = value_array()
-				for x = 1, i do
-					prefix_elements:append(value.neutral(neutral_value.tuple_element_access_stuck(subject_neutral, x)))
-				end
-				return value.tuple_value(prefix_elements)
-			end
+			make_prefix = host_tuple_make_prefix(subject_neutral) --[[@as fun(i: any) : value]]
 		else
 			error(
 				"make_tuple_prefix, is_host_tuple_type, subject_value: expected a host tuple, instead got "
