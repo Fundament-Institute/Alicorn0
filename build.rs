@@ -4,48 +4,35 @@ use mlua::prelude::*;
 
 const ALICORN_SOURCES: &[&str] = &[
     "libs/abstract-codegen.lua",
-    "types/binding.lua",
-    "types/block_purity.lua",
-    "types/checkable.lua",
-    "types/continuation.lua",
-    "types/effect_id.lua",
-    "types/expression_goal.lua",
-    "types/free.lua",
-    "types/inferrable.lua",
-    "types/neutral_value.lua",
-    "types/purity.lua",
-    "types/result_info.lua",
-    "types/typed.lua",
-    "types/value.lua",
-    "types/visibility.lua",
-    "alicorn-expressions.lua",
-    "alicorn-utils.lua",
-    "backend-builder.lua",
-    "base-env.lua",
-    "core-operatives.lua",
-    "cotuple.lua",
-    "derivers.lua",
-    "environment.lua",
-    "evaluator.lua",
-    "fibonacci-buffer.lua",
-    "format-adapter.lua",
-    "format.lua",
-    "internals-interface.lua",
-    "lazy-prefix-tree.lua",
-    "metalanguage.lua",
-    "modules.lua",
-    "operative-scratch.lua",
-    "pretty-printable-trait.lua",
-    "pretty-printer.lua",
-    "profile.lua",
-    "reducer-utils.lua",
-    "syntax-schema.lua",
-    "terms-gen-meta.lua",
-    "terms-generators.lua",
-    "terms-pretty.lua",
-    "terms.lua",
-    "traits.lua",
-    "typesystem.lua",
+    "./alicorn-expressions.lua",
+    "./alicorn-utils.lua",
+    "./backend-builder.lua",
+    "./base-env.lua",
+    "./core-operatives.lua",
+    "./cotuple.lua",
+    "./derivers.lua",
+    "./environment.lua",
+    "./evaluator-types.lua",
+    "./evaluator.lua",
+    "./fibonacci-buffer.lua",
+    "./format-adapter.lua",
+    "./format.lua",
+    "./internals-interface.lua",
+    "./lazy-prefix-tree.lua",
+    "./metalanguage.lua",
+    "./modules.lua",
+    "./operative-scratch.lua",
+    "./pretty-printable-trait.lua",
+    "./pretty-printer.lua",
+    "./profile.lua",
+    "./reducer-utils.lua",
+    "./syntax-schema.lua",
+    "./terms-gen-meta.lua",
+    "./terms-generators.lua",
+    "./terms-pretty.lua",
+    "./terms.lua",
+    "./traits.lua",
+    "./typesystem.lua",
 ];
 
 const DEST: &str = "alicorn.lua";
@@ -62,10 +49,21 @@ const LPEG_SOURCES: &[&str] = &[
 fn main() -> LuaResult<()> {
     let lua = Lua::new();
 
-    let sources = lua.create_table_with_capacity(ALICORN_SOURCES.len(), 0)?;
-    for i in 0..ALICORN_SOURCES.len() {
+    let sources = lua.create_table_with_capacity(ALICORN_SOURCES.len() + 20, 0)?;
+    let mut i = 0;
+    while i < ALICORN_SOURCES.len() {
         sources.set(i + 1, ALICORN_SOURCES[i])?;
         println!("cargo:rerun-if-changed={}", ALICORN_SOURCES[i]);
+        i += 1;
+    }
+
+    let paths = std::fs::read_dir("./types").unwrap();
+
+    for path in paths {
+        let s = str::replace(&path.unwrap().path().to_string_lossy(), '\\', "/");
+        println!("cargo:rerun-if-changed={}", s);
+        sources.set(i + 1, s)?;
+        i += 1;
     }
 
     lua.globals().set("sources", sources)?;
@@ -85,15 +83,16 @@ fn main() -> LuaResult<()> {
     lua.load(
         r#"
 local data = {}
- 
-for i, name in ipairs( sources ) do
-  local bc = string.dump( loadfile( package.searchpath( name, package.path ) ), true )
-  table.insert( data, ( "package.preload[%q] = load( %q )\n" ) : format( name, bc ) )
+
+for i, path in ipairs( sources ) do
+  local bc = string.dump( loadfile( path ), false )
+  local name = string.match( path, ".+/(.+).lua" )
+  table.insert( data, ( "package.preload[%q] = load( %q, %q )\n" ) : format( name, bc, path ) )
 end
     
 local code = table.concat( data )
 local file = io.open( dest, "wb" )
-local bytecode = string.dump(load(code), true)
+local bytecode = string.dump(load(code), false)
 file:write( bytecode )
 file:close()
     "#,

@@ -14,8 +14,8 @@ pub struct Alicorn {
 }
 
 impl Alicorn {
-    pub fn new() -> Result<Self, mlua::Error> {
-        let lua = unsafe { Lua::unsafe_new() };
+    pub fn new(unsafe_lua: Option<Lua>) -> Result<Self, mlua::Error> {
+        let lua = unsafe_lua.unwrap_or_else(|| unsafe { Lua::unsafe_new() });
 
         // Load C libraries we already linked
         unsafe {
@@ -25,6 +25,15 @@ impl Alicorn {
                 lua.load_from_function("lfs", lua.create_c_function(luaopen_lfs)?)?;
         }
 
+        lua.load(
+            r#"
+jit.opt.start("maxtrace=10000")
+jit.opt.start("maxmcode=4096")
+jit.opt.start("recunroll=5")
+jit.opt.start("loopunroll=60")
+        "#,
+        )
+        .exec()?;
         lua.load(ALICORN).exec()?;
         lua.load(
             r#" 
@@ -42,6 +51,10 @@ end
 
 function alc_parse_file(filename)
   local f = io.open(filename)
+  if not f then
+    error("Couldn't find " .. filename)
+  end
+
   local s = format.read(f:read("a"), filename)
   f:close()
   return s
@@ -84,6 +97,13 @@ function alc_evaluate(bound_expr)
 
   return evaluator.evaluate(term, terms.runtime_context())
 end
+
+function alc_execute(program)
+  local result_exec = evaluator.execute_program(program)
+  --print("result_exec: (value term follows)")
+  --print(result_exec)
+  return result_exec
+end
         "#,
         )
         .exec()?;
@@ -114,18 +134,30 @@ end
         alc_evaluate.call(terms)
     }
 
-    pub fn execute<'a>(&'a self, program: mlua::Value<'a>) -> Result<mlua::Value, mlua::Error> {
-        let execute_program: LuaFunction = self.lua.load("execute_program").eval()?;
+    pub fn execute<'a, R: FromLuaMulti<'a>>(
+        &'a self,
+        program: mlua::Value<'a>,
+    ) -> Result<R, mlua::Error> {
+        let execute_program: LuaFunction = self.lua.load("alc_execute").eval()?;
         execute_program.call(program)
     }
 }
 
 #[test]
 fn test_runtest_file() {
-    let alicorn = Alicorn::new().unwrap();
+    // set the working directory to some random temporary folder to sabotage loading any of the files from this crate, as a crate including this one wouldn't have access to those files
+    let old = std::env::current_dir().unwrap();
+    let temp_dir = std::env::temp_dir();
+    let root = std::path::Path::new(&temp_dir);
+    std::env::set_current_dir(&root).unwrap();
+
+    let alicorn = Alicorn::new(None).unwrap();
+
+    // Restore working dir so we can find testfile.alc
+    std::env::set_current_dir(&old).unwrap();
     let ast = alicorn.parse_file("testfile.alc").unwrap();
     let terms = alicorn.process(ast).unwrap();
     let program = alicorn.evaluate(terms).unwrap();
-    let result = alicorn.execute(program).unwrap();
+    let result: LuaValue<'_> = alicorn.execute(program).unwrap();
     println!("LUA RESULT: {:?}", result);
 }
