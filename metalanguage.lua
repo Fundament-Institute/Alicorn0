@@ -227,7 +227,7 @@ local function custom_traceback(err)
 	if type(err) == "table" then
 		return err
 	end
-	local s = type(err) == "string" and err or "must pass string or table to error handler"
+	local s = type(err) == "string" and err or ("must pass string or table to error handler, found: " .. tostring(err))
 	local i = 3
 	local info = debug.getinfo(i, "Sfln")
 	while info ~= nil do
