@@ -87,7 +87,7 @@ local data = {}
 for i, path in ipairs( sources ) do
   local bc = string.dump( loadfile( path ), false )
   local name = string.match( path, ".+/(.+).lua" )
-  table.insert( data, ( "package.preload[%q] = load( %q, %q )\n" ) : format( name, bc, path ) )
+  table.insert( data, ( "package.preload[%q] = load( %q, %q )\n" ) : format( name, bc, name ) )
 end
     
 local code = table.concat( data )
