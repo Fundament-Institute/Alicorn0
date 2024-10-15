@@ -103,7 +103,7 @@ function alc_execute(program)
   local result_exec = evaluator.execute_program(program)
   --print("result_exec: (value term follows)")
   --print(result_exec)
-  return result_exec
+  return result_exec:unwrap_host_tuple_value():unpack()
 end
         "#,
         )
