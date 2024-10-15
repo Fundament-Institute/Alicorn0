@@ -106,7 +106,7 @@ file:close()
             .define("NDEBUG", None)
             .std("c11")
             .include("vendor/luajit2/src") // TODO: get this from mlua somehow?
-            .flag("/GR-")
+            .flag_if_supported("/GR-")
             .warnings(false)
             .files(LPEG_SOURCES.iter().map(|x| format!("vendor/lpeg/{}", x)))
             .compile("lpeg");
@@ -116,9 +116,13 @@ file:close()
         cc::Build::new()
             .opt_level(2)
             .define("NDEBUG", None)
-            .std("c11")
+            .std(if cfg!(target_os = "windows") {
+                "c11"
+            } else {
+                "gnu11" // Fuck GCC
+            })
             .include("vendor/luajit2/src") // TODO: get this from mlua somehow?
-            .flag("/GR-")
+            .flag_if_supported("/GR-")
             .warnings(false)
             .file("vendor/luafilesystem/src/lfs.c")
             .compile("lfs");
