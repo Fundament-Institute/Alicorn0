@@ -1514,10 +1514,20 @@ let tuple-desc-impl = lambda (syn : host-syntax, env : host-environment, ud : ho
 
 #let (tuple-desc-op-type, tuple-desc) = new-operative(host-unit, host-nil, tuple-desc-impl)
 let tuple-desc = into-operative(host-unit, host-nil, tuple-desc-impl)
+# tuple-desc for single-element tuples currently require an extra pair of parens, like lambdas used to.
+# This should eventually be fixed the same way lambdas were fixed.
 
 let my-tuple-desc = tuple-desc(x : host-number, y : host-number)
 let my-tuple-type = tuple-type-explicit(type_(0, 0), my-tuple-desc)
-my-tuple-type
+the my-tuple-type tuple-of-implicit(3, 4)
+
+let symbol-exact =
+	intrinsic "return metalanguage.symbol_exact" :
+		reducer-type(tuple-desc((s : host-string)), tuple-desc())
+
+let inferrable-enum-cons =
+	intrinsic "return terms.inferrable_term.enum_cons" :
+		host-func-type (name : host-string, arg : host-inferrable-term) -> ((res : host-inferrable-term))
 
 let host-if-2-type = forall (
 		result     : host-type,
@@ -1612,17 +1622,6 @@ let (y) = get-mutable-number(my-mutable-number)
 y
 
 let terms-gen-map = new-host-type(new-host-unique-id("terms-gen-map"))
-
-let listtail-accepter-result = lambda (( result : tuple-desc-type(host-type) ))
-	tuple-desc-concat(host-type, result, tuple-desc-singleton(host-type, host-syntax))
-
-let listtail-reducer =
-	lambda_implicit ( userdata : host-type )
-		lambda_implicit ( result : tuple-desc-type(host-type) )
-			lambda (( matcher : host-matcher(userdata, result) ))
-				intrinsic "return metalanguage.listtail" :
-					reducer-type((tuple-desc-empty host-type), result)
-
 
 ####
 	#	---@alias URect userdata
@@ -1886,4 +1885,8 @@ sqr 6
 # FIXME: this super duper should be failing
 let sqr_overcomplicated = lambda_annotated (t, x : t) : host-string
 	x * x
-sqr_overcomplicated(host-number, 6)
+tuple-of-implicit
+	mk None
+	mk None()
+	mk inj1 6 sqr(6)
+	mk inj2(7, sqr(7))

@@ -88,6 +88,36 @@ local function let_bind(syntax, env)
 		env
 end
 
+local mk_inner = metalanguage.reducer(function(syntax, env)
+	local ok, name, tail = syntax:match({
+		metalanguage.listtail(metalanguage.accept_handler, metalanguage.issymbol(metalanguage.accept_handler)),
+	}, metalanguage.failure_handler, nil)
+	if not ok then
+		return ok, name
+	end
+	local tuple
+	ok, tuple, env = tail:match({
+		exprs.collect_tuple(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, env)),
+	}, metalanguage.failure_handler, nil)
+	if not ok then
+		return ok, tuple
+	end
+	return ok, { terms.inferrable_term.enum_cons(name, tuple), env }
+end, "mk_inner")
+
+---@type lua_operative
+local function mk(syntax, env)
+	local inner_matcher = mk_inner(metalanguage.accept_handler, env)
+	local ok, rest = syntax:match({
+		inner_matcher,
+		metalanguage.listtail(metalanguage.accept_handler, inner_matcher),
+	}, metalanguage.failure_handler, nil)
+	if not ok then
+		return ok, rest
+	end
+	return ok, table.unpack(rest)
+end
+
 ---@param _ any
 ---@param name string
 ---@param exprenv { val:inferrable, env:Environment }
@@ -1464,7 +1494,8 @@ local core_operations = {
 
 	--["do"] = evaluator.host_operative(do_block),
 	let = exprs.host_operative(let_bind, "let_bind"),
-	record = exprs.host_operative(record_build, "record_build"),
+	mk = exprs.host_operative(mk, "mk"),
+	--record = exprs.host_operative(record_build, "record_build"),
 	intrinsic = exprs.host_operative(intrinsic, "intrinsic"),
 	["host-number"] = lit_term(value.host_number_type, value.host_type_type),
 	["host-type"] = lit_term(value.host_type_type, value.star(1, 1)),
