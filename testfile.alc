@@ -974,6 +974,46 @@ let host-number-fold-indep = lambda_implicit (T : type_(9, 0))
 		let  (fold) = inner(n, wrap(f), wrap(acc))
 		unwrap(fold)
 
+let duplicate-tuple-desc = lambda_implicit (U : universe)
+	lambda (n : host-number, T : U)
+		host-number-fold-indep
+			n
+			lambda (i : host-number, acc : tuple-desc-type(U))
+				tuple-desc-concat
+					U
+					tuple-desc-singleton U T
+					acc
+			tuple-desc-empty U
+
+let host-array-from-tuple = lambda_implicit (T : host-type)
+	lambda (size : host-number, tuple : host-tuple-type(duplicate-tuple-desc(size, T)))
+		let inner = 
+			intrinsic
+				""""
+					return function(tuple)
+						return {tuple:unwrap_host_tuple_value(tuple):unpack()}
+					end
+				:
+				host-func-type ((tuple : wrapped(host-tuple-type(duplicate-tuple-desc(size, T))))) -> ((res : host-array-type(T)))
+		let (array) = inner(wrap(tuple))
+		array
+
+let make-host-array = lambda_implicit (T : host-type)
+	lambda (size : host-number)
+		let input-type = host-tuple-type(duplicate-tuple-desc(size, T))
+		let inner = 
+			intrinsic
+				""""
+					return function(tuple)
+						return {tuple:unwrap_host_tuple_value(tuple):unpack()}
+					end
+				:
+				host-func-type ((tuple : wrapped(input-type))) -> ((res : host-array-type(T)))
+		lambda_single (elems : input-type)
+			let (array) = inner(wrap(elems))
+			array
+
+
 let host-literal = new-host-type(new-host-unique-id("literal"))
 
 let host-expression-args = new-host-type(new-host-unique-id("expression-args"))
@@ -1409,6 +1449,8 @@ let do-impl = lambda (syn : host-syntax, env : host-environment, ud : host-unit,
 			host-array-new matcher-t
 			1
 			matcher
+
+	#let matchers = (make-host-array(1) matcher)
 
 	let (ok, term, inner_env) =
 		match-syntax
@@ -1908,3 +1950,7 @@ sqr 6
 let sqr_overcomplicated = lambda (t, x : t)
 	x * x
 sqr_overcomplicated(host-number, 6)
+
+
+#the tuple-type-explicit(host-type, duplicate-tuple-desc(1, host-number)) tuple-of-implicit(1)
+#host-array-from-tuple(2, host-tuple-of(host-type, duplicate-tuple-desc(2, host-number))(1, 2))
