@@ -411,10 +411,12 @@ local diff = {
 			end
 			local n = 0
 			local diff_params = {}
-			for _, param in ipairs(params) do
+			local diff_params_types = {}
+			for i, param in ipairs(params) do
 				if left[param] ~= right[param] then
 					n = n + 1
 					diff_params[n] = param
+					diff_params_types[n] = param_types[i]
 				end
 			end
 			if n == 0 then
@@ -423,8 +425,9 @@ local diff = {
 				return
 			elseif n == 1 then
 				local d = diff_params[1]
+				local dt = diff_params_types[1]
 				print("difference in param: " .. d)
-				local diff_impl = traits.diff:get(params_types[d])
+				local diff_impl = traits.diff:get(dt)
 				if diff_impl then
 					-- tail call
 					return diff_impl.diff(left[d], right[d])
@@ -462,10 +465,12 @@ local diff = {
 					local vparams_types = vinfo.params_types
 					local n = 0
 					local diff_params = {}
-					for _, param in ipairs(vparams) do
+					local diff_params_types = {}
+					for i, param in ipairs(vparams) do
 						if left[param] ~= right[param] then
 							n = n + 1
 							diff_params[n] = param
+							diff_params_types[n] = vparams_types[i]
 						end
 					end
 					if n == 0 then
@@ -474,8 +479,9 @@ local diff = {
 						return
 					elseif n == 1 then
 						local d = diff_params[1]
+						local dt = diff_params_types[1]
 						print("difference in param: " .. d)
-						local diff_impl = traits.diff:get(vparams_types[d])
+						local diff_impl = traits.diff:get(dt)
 						if diff_impl then
 							-- tail call
 							return diff_impl.diff(left[d], right[d])
