@@ -433,16 +433,16 @@ function ConstructedSyntax:match(matchers, unmatched, extra)
 			return self.accepters[matcher.kind](self, matcher, extra)
 		elseif matcher.kind == MatcherKind.Reducible then
 			--   print("trying syntax reduction on kind", matcher.kind)
-			local res = { matcher.reducible.reduce(self, matcher) }
-			if res[1] then
+			local res = { U.numerify(matcher.reducible.reduce(self, matcher)) }
+			if res[2] then
 				--print("accepted syntax reduction")
 				if not matcher.handler then
 					print("missing handler for ", matcher.kind, debug.traceback())
 				end
-				return matcher.handler(extra, table.unpack(res, 2))
+				return matcher.handler(extra, table.unpack(res, 3, res[1] + 1))
 			end
 			--print("rejected syntax reduction")
-			lasterr = res[2]
+			lasterr = res[3]
 		end
 		-- local name = getmetatable(matcher.reducible)
 		-- print("rejected syntax kind", matcher.kind, name)

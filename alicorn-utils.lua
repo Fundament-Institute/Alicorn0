@@ -1,5 +1,9 @@
 local M = {}
 
+function M.numerify(...)
+	return select("#", ...), ...
+end
+
 ---@param ... any
 ---@return table
 function M.concat(...)
