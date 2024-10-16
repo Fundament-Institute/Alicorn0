@@ -27,9 +27,20 @@ let implicit-unwrap = lambda_implicit (T : type_(10, 0))
 	lambda (x : wrapped(T))
 		unwrap T x
 
+let implicit-unstrict-wrap = lambda_curry ((T : type_(10, 0)))
+	lambda (x : T)
+		unstrict-wrap T x
+
+let implicit-unstrict-unwrap = lambda_implicit (T : type_(10, 0))
+	lambda (x : unstrict-wrapped(T))
+		unstrict-unwrap T x
+
 let explicit-unwrap = unwrap
 let wrap = implicit-wrap
 let unwrap = implicit-unwrap
+let explicit-unstrict-unwrap = unwrap
+let unstrict-wrap = implicit-unstrict-wrap
+let unstrict-unwrap = implicit-unstrict-unwrap
 
 let host-bool-wrap            = intrinsic "return terms.value.host_bool_type"      : wrapped(host-type)
 let host-string-wrap          = intrinsic "return terms.value.host_string_type"    : wrapped(host-type)
