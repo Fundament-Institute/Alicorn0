@@ -1,8 +1,9 @@
 ---@class PrettyPrint
+---@field opts PrettyPrintOpts
 local PrettyPrint = {}
 local PrettyPrint_mt = { __index = PrettyPrint }
 
-local pretty_printable = require "pretty-printable-trait"
+local traits = require "traits"
 
 local kind_field = "kind"
 local hidden_fields = {
@@ -23,9 +24,13 @@ local hidden_fields = {
 	end,
 }
 
+---@alias PrettyPrintOpts {default_print: boolean?}
+
 ---@return PrettyPrint
-function PrettyPrint.new()
-	return setmetatable({}, PrettyPrint_mt)
+---@param opts PrettyPrintOpts?
+function PrettyPrint:new(opts)
+	opts = opts or {}
+	return setmetatable({ opts = { default_print = opts.default_print } }, PrettyPrint_mt)
 end
 
 ---@param unknown any
@@ -42,9 +47,13 @@ function PrettyPrint:any(unknown, ...)
 			return
 		end
 		local mt = getmetatable(unknown)
-		local via_trait = mt and pretty_printable[mt]
-		if via_trait and via_trait.print then
-			via_trait.print(unknown, self, ...)
+		local via_trait = mt and traits.pretty_print:get(mt)
+		if via_trait then
+			if self.opts.default_print then
+				via_trait.default_print(unknown, self, ...)
+			else
+				via_trait.pretty_print(unknown, self, ...)
+			end
 		elseif mt and mt.__tostring then
 			self[#self + 1] = tostring(unknown)
 		elseif mt and mt.__call then
@@ -140,7 +149,7 @@ function PrettyPrint:table(fields, ...)
 	local count = 0
 	local num = 0
 	local nums = {}
-	for k, v in pairs(fields) do
+	for k in pairs(fields) do
 		if k == "kind" then
 			self[#self + 1] = " "
 			self[#self + 1] = fields.kind
@@ -287,12 +296,22 @@ function PrettyPrint_mt:__tostring()
 	return table.concat(self, "")
 end
 
+local function pretty_print(unknown, ...)
+	local pp = PrettyPrint:new()
+	pp:any(unknown, ...)
+	return tostring(pp)
+end
+
+local function default_print(unknown, ...)
+	local pp = PrettyPrint:new({ default_print = true })
+	pp:any(unknown, ...)
+	return tostring(pp)
+end
+
 local function s(...)
 	local res = {}
 	for i, v in ipairs { ... } do
-		local pp = PrettyPrint:new()
-		pp:any(v)
-		res[i] = tostring(pp)
+		res[i] = pretty_print(v)
 	end
 	return table.concat(res, "    ")
 end
@@ -305,7 +324,8 @@ _G["p"] = p
 
 return {
 	PrettyPrint = PrettyPrint,
-	pretty_printable = pretty_printable,
+	pretty_print = pretty_print,
+	default_print = default_print,
 	s = s,
 	p = p,
 }

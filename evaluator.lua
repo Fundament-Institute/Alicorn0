@@ -295,7 +295,7 @@ local TupleDescRelation = setmetatable({
 ---@param with ArrayValue
 local function add_arrays(onto, with)
 	local olen = onto:len()
-	for i, n in ipairs(with) do
+	for i, n in with:ipairs() do
 		local x
 		if i > olen then
 			x = 0
@@ -380,7 +380,7 @@ local function substitute_inner(val, mappings, context_len)
 	elseif val:is_tuple_value() then
 		local elems = val:unwrap_tuple_value()
 		local res = typed_array()
-		for _, v in ipairs(elems) do
+		for _, v in elems:ipairs() do
 			res:append(substitute_inner(v, mappings, context_len))
 		end
 		return typed_term.tuple_cons(res)
@@ -496,12 +496,12 @@ local function substitute_inner(val, mappings, context_len)
 			local leading, stuck, trailing = nval:unwrap_host_tuple_stuck()
 			local elems = typed_array()
 			-- leading is an array of unwrapped host_values and must already be unwrapped host values
-			for _, elem in ipairs(leading) do
+			for _, elem in leading:ipairs() do
 				local elem_value = typed_term.literal(value.host_value(elem))
 				elems:append(elem_value)
 			end
 			elems:append(substitute_inner(value.neutral(stuck), mappings, context_len))
-			for _, elem in ipairs(trailing) do
+			for _, elem in trailing:ipairs() do
 				elems:append(substitute_inner(elem, mappings, context_len))
 			end
 			-- print("host_tuple_stuck nval", nval)
@@ -551,7 +551,7 @@ local function substitute_inner(val, mappings, context_len)
 	elseif val:is_host_user_defined_type() then
 		local id, family_args = val:unwrap_host_user_defined_type()
 		local res = typed_array()
-		for _, v in ipairs(family_args) do
+		for _, v in family_args:ipairs() do
 			res:append(substitute_inner(v, mappings, context_len))
 		end
 		return typed_term.host_user_defined_type_cons(id, res)
@@ -567,11 +567,11 @@ local function substitute_inner(val, mappings, context_len)
 		local lower_bounds, upper_bounds, relation = val:unwrap_range()
 		local sub_lower_bounds = typed_array()
 		local sub_upper_bounds = typed_array()
-		for _, v in ipairs(lower_bounds) do
+		for _, v in lower_bounds:ipairs() do
 			local sub = substitute_inner(v, mappings, context_len)
 			sub_lower_bounds:append(sub)
 		end
-		for _, v in ipairs(upper_bounds) do
+		for _, v in upper_bounds:ipairs() do
 			local sub = substitute_inner(v, mappings, context_len)
 			sub_upper_bounds:append(sub)
 		end
@@ -1152,7 +1152,7 @@ end)
 ---@param val value
 ---@param use value
 ---@return boolean
----@return string?
+---@return (string|ConcreteFail)?
 function check_concrete(lctx, val, rctx, use)
 	assert(val and use, "nil value or usage passed into check_concrete!")
 
@@ -1277,7 +1277,7 @@ function check(
 		local new_elements = typed_array()
 		local desc = terms.empty
 
-		for _, v in ipairs(elements) do
+		for _, v in elements:ipairs() do
 			local el_type_metavar = typechecker_state:metavariable(typechecking_context)
 			local el_type = el_type_metavar:as_value()
 			local el_usages, el_term = check(v, typechecking_context, el_type)
@@ -1312,7 +1312,7 @@ function check(
 		local new_elements = typed_array()
 		local desc = terms.empty
 
-		for _, v in ipairs(elements) do
+		for _, v in elements:ipairs() do
 			local el_type_metavar = typechecker_state:metavariable(typechecking_context)
 			local el_type = el_type_metavar:as_value()
 			local el_usages, el_term = check(v, typechecking_context, el_type)
@@ -1459,7 +1459,7 @@ local function make_tuple_prefix(subject_type, subject_value)
 		if subject_value:is_host_tuple_value() then
 			local subject_elements = subject_value:unwrap_host_tuple_value()
 			local subject_value_elements = value_array()
-			for _, v in ipairs(subject_elements) do
+			for _, v in subject_elements:ipairs() do
 				subject_value_elements:append(value.host_value(v))
 			end
 			function make_prefix(i)
@@ -1603,19 +1603,6 @@ function infer_tuple_type_unwrapped2(subject_type_a, subject_type_b, subject_val
 	local desc_a, make_prefix_a = make_tuple_prefix(subject_type_a, subject_value)
 	local desc_b, make_prefix_b = make_tuple_prefix(subject_type_b, subject_value)
 	return make_inner_context2(desc_a, make_prefix_a, desc_b, make_prefix_b)
-end
-
----@param typ value
----@return integer
-local function nearest_star_level(typ)
-	if typ:is_host_type_type() then
-		return 0
-	elseif typ:is_star() then
-		return typ:unwrap_star()
-	else
-		print(typ.kind, typ)
-		error "unknown sort in nearest_star, please expand or build a proper least upper bound"
-	end
 end
 
 ---@param inferrable_term inferrable
@@ -1788,7 +1775,7 @@ function infer(
 		local type_data = terms.empty
 		local usages = usage_array()
 		local new_elements = typed_array()
-		for _, v in ipairs(elements) do
+		for _, v in elements:ipairs() do
 			local el_type, el_usages, el_term = infer(v, typechecking_context)
 			local el_val = evaluate(el_term, typechecking_context.runtime_context)
 			local el_singleton = value.singleton(el_type, el_val)
@@ -1812,7 +1799,7 @@ function infer(
 		local type_data = terms.empty
 		local usages = usage_array()
 		local new_elements = typed_array()
-		for _, v in ipairs(elements) do
+		for _, v in elements:ipairs() do
 			local el_type, el_usages, el_term = infer(v, typechecking_context)
 			--print "inferring element of tuple construction"
 			--print(el_type:pretty_print())
@@ -1831,7 +1818,7 @@ function infer(
 		local subject_value = evaluate(subject_term, typechecking_context:get_runtime_context())
 
 		local desc = terms.empty
-		for _ in ipairs(names) do
+		for _ in names:ipairs() do
 			local next_elem_type_mv = typechecker_state:metavariable(typechecking_context)
 			local next_elem_type = next_elem_type_mv:as_value()
 			desc = terms.cons(desc, next_elem_type)
@@ -1857,7 +1844,7 @@ function infer(
 
 		local inner_context = typechecking_context
 
-		for i, v in ipairs(tupletypes) do
+		for i, v in tupletypes:ipairs() do
 			inner_context = inner_context:append("#tuple_element_" .. i, v, index_tuple_value(subject_value, i))
 		end
 
@@ -1915,7 +1902,7 @@ function infer(
 			local subject_fields = subject_value:unwrap_record_value()
 			function make_prefix(field_names)
 				local prefix_fields = string_value_map()
-				for _, v in ipairs(field_names) do
+				for _, v in field_names:ipairs() do
 					prefix_fields[v] = subject_fields[v]
 				end
 				return value.record_value(prefix_fields)
@@ -1924,7 +1911,7 @@ function infer(
 			local subject_neutral = subject_value:unwrap_neutral()
 			function make_prefix(field_names)
 				local prefix_fields = string_value_map()
-				for _, v in ipairs(field_names) do
+				for _, v in field_names:ipairs() do
 					prefix_fields[v] = value.neutral(neutral_value.record_field_access_stuck(subject_neutral, v))
 				end
 				return value.record_value(prefix_fields)
@@ -1956,7 +1943,7 @@ function infer(
 
 		-- reorder the fields into the requested order
 		local inner_context = typechecking_context
-		for _, v in ipairs(field_names) do
+		for _, v in field_names:ipairs() do
 			local t = desc_field_types[v]
 			if t == nil then
 				error("infer: trying to access a nonexistent record field")
@@ -2094,7 +2081,7 @@ function infer(
 		local id, family_args = inferrable_term:unwrap_host_user_defined_type_cons()
 		local new_family_args = typed_array()
 		local result_usages = usage_array()
-		for _, v in ipairs(family_args) do
+		for _, v in family_args:ipairs() do
 			local e_type, e_usages, e_term = infer(v, typechecking_context)
 			-- FIXME: use e_type?
 			add_arrays(result_usages, e_usages)
@@ -2345,7 +2332,7 @@ function evaluate(typed_term, runtime_context)
 	elseif typed_term:is_tuple_cons() then
 		local elements = typed_term:unwrap_tuple_cons()
 		local new_elements = value_array()
-		for i, v in ipairs(elements) do
+		for i, v in elements:ipairs() do
 			new_elements:append(U.tag("evaluate", { ["element_" .. tostring(i)] = v }, evaluate, v, runtime_context))
 		end
 		return value.tuple_value(new_elements)
@@ -2355,7 +2342,7 @@ function evaluate(typed_term, runtime_context)
 		local stuck = false
 		local stuck_element
 		local trailing_values
-		for i, v in ipairs(elements) do
+		for i, v in elements:ipairs() do
 			local element_value = U.tag("evaluate", { ["element_" .. tostring(i)] = v }, evaluate, v, runtime_context)
 			if element_value == nil then
 				p("wtf", v.kind)
@@ -2454,12 +2441,12 @@ function evaluate(typed_term, runtime_context)
 		local inner_context = runtime_context
 		if subject_value:is_record_value() then
 			local subject_fields = subject_value:unwrap_record_value()
-			for _, v in ipairs(field_names) do
+			for _, v in field_names:ipairs() do
 				inner_context = inner_context:append(subject_fields[v])
 			end
 		elseif subject_value:is_neutral() then
 			local subject_neutral = subject_value:unwrap_neutral()
-			for _, v in ipairs(field_names) do
+			for _, v in field_names:ipairs() do
 				inner_context =
 					inner_context:append(value.neutral(neutral_value.record_field_access_stuck(subject_neutral, v)))
 			end
@@ -2577,7 +2564,7 @@ function evaluate(typed_term, runtime_context)
 	elseif typed_term:is_host_user_defined_type_cons() then
 		local id, family_args = typed_term:unwrap_host_user_defined_type_cons()
 		local new_family_args = value_array()
-		for _, v in ipairs(family_args) do
+		for _, v in family_args:ipairs() do
 			new_family_args:append(evaluate(v, runtime_context))
 		end
 		return value.host_user_defined_type(id, new_family_args)

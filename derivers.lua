@@ -1,10 +1,9 @@
+local traits = require "traits"
+local pretty_printer = require "pretty-printer"
+
 ---@class (exact) Deriver
 ---@field record fun(t: RecordType, info: RecordDeriveInfo, override_pretty: fun(RecordType, PrettyPrint, ...), ...)
 ---@field enum fun(t: EnumType, info: EnumDeriveInfo, override_pretty: { [string]: fun(EnumType, PrettyPrint, ...) }, ...)
----@field foreign fun(t: ForeignType, info: ForeignDeriveInfo, ...)
----@field map fun(t: MapType, info: MapDeriveInfo, ...)
----@field set fun(t: SetType, info: SetDeriveInfo, ...)
----@field array fun(t: ArrayType, info: ArrayDeriveInfo, ...)
 
 ---@class (exact) RecordDeriveInfo
 ---@field kind string
@@ -29,20 +28,6 @@ local EnumDeriveInfoVariantKind = --[[@enum EnumDeriveInfoVariantKind]]
 ---@field name string
 ---@field variants { [integer]: string, [string]: EnumDeriveInfoVariant }
 
----@class (exact) ForeignDeriveInfo
----@field value_check ValueCheckFn
----@field lsp_type string
-
----@class (exact) MapDeriveInfo
----@field key_type Type
----@field value_type Type
-
----@class (exact) SetDeriveInfo
----@field key_type Type
-
----@class (exact) ArrayDeriveInfo
----@field value_type Type
-
 local derive_print = function(...) end -- can make this call print(...) if you want to debug
 
 local memo_meta = { __mode = "k" }
@@ -63,29 +48,9 @@ function eq_memoizer:set(a, b)
 	self.memo[a][b] = true
 end
 
-local function array_eq_fn(left, right)
-	if getmetatable(left) ~= getmetatable(right) then
-		return false
-	end
-	if left:len() ~= right:len() then
-		return false
-	end
-	for i = 1, left:len() do
-		if left[i] ~= right[i] then
-			return false
-		end
-	end
-	return true
-end
-
 ---@type Deriver
 local eq = {
 	record = function(t, info)
-		if t.derived_eq then
-			-- already derived, don't derive again
-			return
-		end
-
 		local kind = info.kind
 		local params = info.params
 
@@ -121,15 +86,8 @@ end]]
 		assert(compiled, message)
 		local eq_fn = compiled(eq_memoizer)
 		t.__eq = eq_fn
-
-		t.derived_eq = true
 	end,
 	enum = function(t, info)
-		if t.derived_eq then
-			-- already derived, don't derive again
-			return
-		end
-
 		local name = info.name
 		local variants = info.variants
 
@@ -141,8 +99,9 @@ end]]
 			local vinfo = vdata.info
 			local all_checks
 			if vtype == EnumDeriveInfoVariantKind.Record then
+				local vparams = vinfo.params
 				local checks = {}
-				for i, param in ipairs(vinfo.params) do
+				for i, param in ipairs(vparams) do
 					checks[i] = string.format("left[%q] == right[%q]", param, param)
 				end
 				all_checks = table.concat(checks, " and ")
@@ -184,27 +143,6 @@ end]]
 		assert(compiled, message)
 		local eq_fn = compiled(eq_memoizer)
 		t.__eq = eq_fn
-
-		t.derived_eq = true
-	end,
-	foreign = function()
-		error("can't derive :eq() for a foreign type")
-	end,
-	map = function()
-		error("can't derive :eq() for a map type")
-	end,
-	set = function()
-		error("can't derive :eq() for a set type")
-	end,
-	array = function(t, info)
-		if t.derived_eq then
-			-- already derived, don't derive again
-			return
-		end
-
-		t.__eq = array_eq_fn
-
-		t.derived_eq = true
 	end,
 }
 
@@ -214,11 +152,6 @@ local is = {
 		error("can't derive :is() for a record type")
 	end,
 	enum = function(t, info)
-		if t.derived_is then
-			-- already derived, don't derive again
-			return
-		end
-
 		local idx = t.__index or {}
 		t.__index = idx
 		local name = info.name
@@ -237,31 +170,12 @@ local is = {
 			assert(compiled, message)
 			idx["is_" .. vname] = compiled()
 		end
-
-		t.derived_is = true
-	end,
-	foreign = function()
-		error("can't derive :is() for a foreign type")
-	end,
-	map = function()
-		error("can't derive :is() for a map type")
-	end,
-	set = function()
-		error("can't derive :is() for a set type")
-	end,
-	array = function()
-		error("can't derive :is() for an array type")
 	end,
 }
 
 ---@type Deriver
 local unwrap = {
 	record = function(t, info)
-		if t.derived_unwrap then
-			-- already derived, don't derive again
-			return
-		end
-
 		local idx = t.__index or {}
 		t.__index = idx
 		local kind = info.kind
@@ -283,14 +197,8 @@ local unwrap = {
 		local compiled, message = load(chunk, "derive-unwrap_record", "t")
 		assert(compiled, message)
 		idx["unwrap_" .. kind] = compiled()
-		t.derived_unwrap = true
 	end,
 	enum = function(t, info)
-		if t.derived_unwrap then
-			-- already derived, don't derive again
-			return
-		end
-
 		local idx = t.__index or {}
 		t.__index = idx
 		local name = info.name
@@ -303,8 +211,9 @@ local unwrap = {
 			local vinfo = vdata.info
 			local all_returns
 			if vtype == EnumDeriveInfoVariantKind.Record then
+				local vparams = vinfo.params
 				local returns = {}
-				for i, param in ipairs(vinfo.params) do
+				for i, param in ipairs(vparams) do
 					returns[i] = string.format("self[%q]", param)
 				end
 				all_returns = table.concat(returns, ", ")
@@ -333,20 +242,6 @@ end]]
 			assert(compiled, message)
 			idx["unwrap_" .. vname] = compiled()
 		end
-
-		t.derived_unwrap = true
-	end,
-	foreign = function()
-		error("can't derive :unwrap() for a foreign type")
-	end,
-	map = function()
-		error("can't derive :unwrap() for a map type")
-	end,
-	set = function()
-		error("can't derive :unwrap() for a set type")
-	end,
-	array = function()
-		error("can't derive :unwrap() for an array type")
 	end,
 }
 
@@ -356,11 +251,6 @@ local as = {
 		error("can't derive :as() for a record type")
 	end,
 	enum = function(t, info)
-		if t.derived_as then
-			-- already derived, don't derive again
-			return
-		end
-
 		local idx = t.__index or {}
 		t.__index = idx
 		local name = info.name
@@ -373,8 +263,9 @@ local as = {
 			local vinfo = vdata.info
 			local all_returns
 			if vtype == EnumDeriveInfoVariantKind.Record then
+				local vparams = vinfo.params
 				local returns = { "true" }
-				for i, param in ipairs(vinfo.params) do
+				for i, param in ipairs(vparams) do
 					returns[i + 1] = string.format("self[%q]", param)
 				end
 				all_returns = table.concat(returns, ", ")
@@ -403,20 +294,6 @@ end]]
 			assert(compiled, message)
 			idx["as_" .. vname] = compiled()
 		end
-
-		t.derived_as = true
-	end,
-	foreign = function()
-		error("can't derive :as() for a foreign type")
-	end,
-	map = function()
-		error("can't derive :as() for a map type")
-	end,
-	set = function()
-		error("can't derive :as() for a set type")
-	end,
-	array = function()
-		error("can't derive :as() for an array type")
 	end,
 }
 
@@ -453,75 +330,25 @@ end]]
 	return compiled()
 end
 
-local function map_pretty_printable_trait(self, pp, ...)
-	return pp:table(self._map, ...)
-end
-
-local function set_pretty_printable_trait(self, pp, ...)
-	return pp:table(self._set, ...)
-end
-
-local function array_pretty_printable_trait(self, pp, ...)
-	return pp:array(self.array, ...)
-end
-
-local pretty_printer = require "pretty-printer"
-local PrettyPrint = pretty_printer.PrettyPrint
-local pretty_printable = pretty_printer.pretty_printable
-
 ---@type Deriver
 local pretty_print = {
 	record = function(t, info, override_pretty)
-		if t.derived_pretty_print then
-			-- already derived, don't derive again
-			return
-		end
-
-		local idx = t.__index or {}
-		t.__index = idx
-
 		local pretty_printable_print = record_pretty_printable_trait(info)
-		local function pretty(self, pp, ...)
-			if override_pretty and not pp.force_default then
-				override_pretty(self, pp, ...)
-			else
-				pretty_printable_print(self, pp, ...)
-			end
-		end
+		local pretty_print = override_pretty or pretty_printable_print
+		local default_print = pretty_printable_print
 
-		pretty_printable:implement_on(t, { print = pretty })
+		traits.pretty_print:implement_on(t, { pretty_print = pretty_print, default_print = default_print })
 
-		local function pretty_print(self, ...)
-			local pp = PrettyPrint.new()
-			pretty(self, pp, ...)
-			return tostring(pp)
-		end
-		idx.pretty_print = pretty_print
-
-		local function default_print(self, ...)
-			local pp = PrettyPrint.new()
-			pp.force_default = true
-			pretty(self, pp, ...)
-			return tostring(pp)
-		end
-		idx.default_print = default_print
-
-		t.__tostring = pretty_print
-
-		t.derived_pretty_print = true
+		-- must be added here, instead of earlier in terms-gen, otherwise a type that doesn't derive
+		-- pretty_print will cause pretty_print to call __tostring and loop until stack overflow
+		t.__tostring = pretty_printer.pretty_print
 	end,
 	enum = function(t, info, override_pretty)
-		if t.derived_pretty_print then
-			-- already derived, don't derive again
-			return
-		end
-
-		local idx = t.__index or {}
-		t.__index = idx
 		local name = info.name
 		local variants = info.variants
 
-		local variant_printers = {}
+		local variant_pretty_printers = {}
+		local variant_default_printers = {}
 		for _, vname in ipairs(variants) do
 			local vkind = name .. "." .. vname
 			local vdata = variants[vname]
@@ -539,150 +366,30 @@ local pretty_print = {
 			else
 				error("unknown variant type: " .. vtype)
 			end
-			variant_printers[vkind] = function(self, pp, ...)
-				if override_pretty_v and not pp.force_default then
-					override_pretty_v(self, pp, ...)
-				else
-					variant_pretty_printable_print(self, pp, ...)
-				end
-			end
+			variant_pretty_printers[vkind] = override_pretty_v or variant_pretty_printable_print
+			variant_default_printers[vkind] = variant_pretty_printable_print
 		end
 
-		local function pretty_printable_print(self, prefix, ...)
-			return variant_printers[self.kind](self, prefix, ...)
+		local function pretty_print(self, pp, ...)
+			return variant_pretty_printers[self.kind](self, pp, ...)
+		end
+		local function default_print(self, pp, ...)
+			return variant_default_printers[self.kind](self, pp, ...)
 		end
 
-		pretty_printable:implement_on(t, { print = pretty_printable_print })
+		traits.pretty_print:implement_on(t, { pretty_print = pretty_print, default_print = default_print })
 
-		local function pretty_print(self, ...)
-			local pp = PrettyPrint.new()
-			pretty_printable_print(self, pp, ...)
-			return tostring(pp)
-		end
-		idx.pretty_print = pretty_print
-
-		local function default_print(self, ...)
-			local pp = PrettyPrint.new()
-			pp.force_default = true
-			pretty_printable_print(self, pp, ...)
-			return tostring(pp)
-		end
-		idx.default_print = default_print
-
-		t.__tostring = pretty_print
-
-		t.derived_pretty_print = true
-	end,
-	foreign = function()
-		error("can't derive :pretty_print() for a foreign type")
-	end,
-	map = function(t, info)
-		if t.derived_pretty_print then
-			-- already derived, don't derive again
-			return
-		end
-
-		local idx = t.__index
-
-		pretty_printable:implement_on(t, {
-			print = map_pretty_printable_trait,
-		})
-
-		local function pretty_print(self, ...)
-			local pp = PrettyPrint.new()
-			map_pretty_printable_trait(self, pp, ...)
-			return tostring(pp)
-		end
-		idx.pretty_print = pretty_print
-
-		local function default_print(self, ...)
-			local pp = PrettyPrint.new()
-			pp.force_default = true
-			map_pretty_printable_trait(self, pp, ...)
-			return tostring(pp)
-		end
-		idx.default_print = default_print
-
-		t.__tostring = pretty_print
-
-		t.derived_pretty_print = true
-	end,
-	set = function(t, info)
-		if t.derived_pretty_print then
-			-- already derived, don't derive again
-			return
-		end
-
-		local idx = t.__index
-
-		pretty_printable:implement_on(t, {
-			print = set_pretty_printable_trait,
-		})
-
-		local function pretty_print(self, ...)
-			local pp = PrettyPrint.new()
-			set_pretty_printable_trait(self, pp, ...)
-			return tostring(pp)
-		end
-		idx.pretty_print = pretty_print
-
-		local function default_print(self, ...)
-			local pp = PrettyPrint.new()
-			pp.force_default = true
-			set_pretty_printable_trait(self, pp, ...)
-			return tostring(pp)
-		end
-		idx.default_print = default_print
-
-		t.__tostring = pretty_print
-
-		t.derived_pretty_print = true
-	end,
-	array = function(t, info)
-		if t.derived_pretty_print then
-			-- already derived, don't derive again
-			return
-		end
-
-		local methods = t.methods
-
-		pretty_printable:implement_on(t, {
-			print = array_pretty_printable_trait,
-		})
-
-		local function pretty_print(self, ...)
-			local pp = PrettyPrint.new()
-			array_pretty_printable_trait(self, pp, ...)
-			return tostring(pp)
-		end
-		methods.pretty_print = pretty_print
-
-		local function default_print(self, ...)
-			local pp = PrettyPrint.new()
-			pp.force_default = true
-			array_pretty_printable_trait(self, pp, ...)
-			return tostring(pp)
-		end
-		methods.default_print = default_print
-
-		t.__tostring = pretty_print
-
-		t.derived_pretty_print = true
+		-- must be added here, instead of earlier in terms-gen, otherwise a type that
+		-- doesn't derive pretty_print will cause pretty_print to loop __tostring forever
+		t.__tostring = pretty_printer.pretty_print
 	end,
 }
 
 ---@type Deriver
 local diff = {
 	record = function(t, info)
-		if t.derived_diff then
-			-- already derived, don't derive again
-			return
-		end
-
-		local idx = t.__index or {}
-		t.__index = idx
-		local kind = info.kind
 		local params = info.params
+		local params_types = info.params_types
 
 		local function diff_fn(left, right)
 			print("diffing...")
@@ -717,11 +424,12 @@ local diff = {
 			elseif n == 1 then
 				local d = diff_params[1]
 				print("difference in param: " .. d)
-				if left[d].diff then
+				local diff_impl = traits.diff:get(params_types[d])
+				if diff_impl then
 					-- tail call
-					return left[d]:diff(right[d])
+					return diff_impl.diff(left[d], right[d])
 				else
-					print("stopping diff (missing diff method)")
+					print("stopping diff (missing diff impl)")
 					return
 				end
 			else
@@ -734,17 +442,9 @@ local diff = {
 			end
 		end
 
-		idx.diff = diff_fn
-		t.derived_diff = true
+		traits.diff:implement_on(t, { diff = diff_fn })
 	end,
 	enum = function(t, info)
-		if t.derived_diff then
-			-- already derived, don't derive again
-			return
-		end
-
-		local idx = t.__index or {}
-		t.__index = idx
 		local name = info.name
 		local variants = info.variants
 
@@ -754,38 +454,53 @@ local diff = {
 			local vdata = variants[vname]
 			local vtype = vdata.type
 			local vinfo = vdata.info
-			variants_checks[vkind] = function(left, right)
-				local n = 0
-				local diff_params = {}
-				for _, param in ipairs(vinfo.params) do
-					if left[param] ~= right[param] then
-						n = n + 1
-						diff_params[n] = param
+			local vcheck
+			if vtype == EnumDeriveInfoVariantKind.Record then
+				---@cast vinfo RecordDeriveInfo
+				function vcheck(left, right)
+					local vparams = vinfo.params
+					local vparams_types = vinfo.params_types
+					local n = 0
+					local diff_params = {}
+					for _, param in ipairs(vparams) do
+						if left[param] ~= right[param] then
+							n = n + 1
+							diff_params[n] = param
+						end
 					end
-				end
-				if n == 0 then
-					print("no difference")
-					print("stopping diff")
-					return
-				elseif n == 1 then
-					local d = diff_params[1]
-					print("difference in param: " .. d)
-					if left[d].diff then
-						-- tail call
-						return left[d]:diff(right[d])
+					if n == 0 then
+						print("no difference")
+						print("stopping diff")
+						return
+					elseif n == 1 then
+						local d = diff_params[1]
+						print("difference in param: " .. d)
+						local diff_impl = traits.diff:get(vparams_types[d])
+						if diff_impl then
+							-- tail call
+							return diff_impl.diff(left[d], right[d])
+						else
+							print("stopping diff (missing diff impl)")
+							return
+						end
 					else
-						print("stopping diff (missing diff method)")
+						print("difference in multiple params:")
+						for i = 1, n do
+							print(diff_params[i])
+						end
+						print("stopping diff")
 						return
 					end
-				else
-					print("difference in multiple params:")
-					for i = 1, n do
-						print(diff_params[i])
-					end
-					print("stopping diff")
-					return
 				end
+			elseif vtype == EnumDeriveInfoVariantKind.Unit then
+				function vcheck()
+					print("no difference")
+					print("stopping diff")
+				end
+			else
+				error("unknown variant type: " .. vtype)
 			end
+			variants_checks[vkind] = vcheck
 		end
 
 		local function diff_fn(left, right)
@@ -809,146 +524,7 @@ local diff = {
 			variants_checks[left.kind](left, right)
 		end
 
-		idx.diff = diff_fn
-		t.derived_diff = true
-	end,
-	foreign = function()
-		error("can't derive :diff() for a foreign type")
-	end,
-	map = function()
-		error("can't derive :diff() for a map type")
-	end,
-	set = function()
-		error("can't derive :diff() for a set type")
-	end,
-	array = function(t, info)
-		if t.derived_diff then
-			-- already derived, don't derive again
-			return
-		end
-
-		local methods = t.methods
-
-		local function diff_fn(left, right)
-			print("diffing array...")
-			print("value_type: " .. tostring(info.value_type))
-			local rt = getmetatable(right)
-			if t ~= rt then
-				print("unequal types!")
-				print(t)
-				print(rt)
-				print("stopping diff")
-				return
-			end
-			if left:len() ~= right:len() then
-				print("unequal lengths!")
-				print(left:len())
-				print(right:len())
-				print("stopping diff")
-				return
-			end
-			local n = 0
-			local diff_elems = {}
-			for i = 1, left:len() do
-				if left[i] ~= right[i] then
-					n = n + 1
-					diff_elems[n] = i
-				end
-			end
-			if n == 0 then
-				print("no difference")
-				print("stopping diff")
-				return
-			elseif n == 1 then
-				local d = diff_elems[1]
-				print("difference in element: " .. tostring(d))
-				if left[d].diff then
-					-- tail call
-					return left[d]:diff(right[d])
-				else
-					print("stopping diff (missing diff method)")
-					return
-				end
-			else
-				print("difference in multiple elements:")
-				for i = 1, n do
-					print(diff_elems[i])
-				end
-				print("stopping diff")
-				return
-			end
-		end
-
-		methods.diff = diff_fn
-		t.derived_diff = true
-	end,
-}
-
----@type Deriver
-local value_name = {
-	record = function(t, info)
-		if t.derived_value_name then
-			-- already derived, don't derive again
-			return
-		end
-		t.value_name = function()
-			return info.kind
-		end
-		t.derived_value_name = true
-	end,
-	enum = function(t, info)
-		if t.derived_value_name then
-			-- already derived, don't derive again
-			return
-		end
-		local name = info.name
-		t.value_name = function()
-			return name
-		end
-		t.derived_value_name = true
-	end,
-	foreign = function(t, info)
-		if t.derived_value_name then
-			-- already derived, don't derive again
-			return
-		end
-		local lsp_type = info.lsp_type
-		t.value_name = function()
-			return lsp_type
-		end
-		t.derived_value_name = true
-	end,
-	-- TODO: augment all these with generics
-	map = function(t, info)
-		if t.derived_value_name then
-			-- already derived, don't derive again
-			return
-		end
-		t.value_name = function()
-			return "MapValue"
-			-- e.g. "MapValue<" .. info.key_type.value_name() .. ", " .. info.value_type.value_name() .. ">""
-		end
-		t.derived_value_name = true
-	end,
-	set = function(t, info)
-		if t.derived_value_name then
-			-- already derived, don't derive again
-			return
-		end
-		t.value_name = function()
-			return "SetValue"
-		end
-		t.derived_value_name = true
-	end,
-	array = function(t, info)
-		if t.derived_value_name then
-			-- already derived, don't derive again
-			return
-		end
-		t.value_name = function()
-			return "ArrayValue"
-		end
-		t.derived_value_name = true
+		traits.diff:implement_on(t, { diff = diff_fn })
 	end,
 }
 
@@ -1018,6 +594,5 @@ return {
 	as = as,
 	pretty_print = pretty_print,
 	diff = diff,
-	value_name = value_name,
 	trait_method = trait_method,
 }

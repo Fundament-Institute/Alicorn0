@@ -1,4 +1,6 @@
 local derivers = require "derivers"
+local pretty_printer = require "pretty-printer"
+local traits = require "traits"
 
 -- record and enum are nominative types.
 -- this means that two record types, given the same arguments, are distinct.
@@ -18,8 +20,6 @@ local derivers = require "derivers"
 ---@class Type
 ---@field value_check ValueCheckFn
 ---@field derive fun(Type, Deriver, ...)
----@field derived_value_name boolean?
----@field value_name fun(): string
 
 ---@class Value
 ---@field kind string
@@ -103,18 +103,13 @@ end
 ---@class RecordType: Type
 ---@field derive fun(self: RecordType, deriver: Deriver, ...)
 ---@field _kind string
----@field derived_eq boolean?
 ---@field __eq fun(left: RecordValue, right: RecordValue): boolean
----@field derived_unwrap boolean?
 ---@field __index table
----@field derived_pretty_print boolean?
 ---@field __tostring function(RecordValue): string
----@field derived_diff boolean?
 
 ---@class RecordValue: Value
 ---@field pretty_print fun(RecordValue, ...)
 ---@field default_print fun(RecordValue, ...)
----@field diff fun(RecordValue)
 
 ---@param self table
 ---@param cons table
@@ -175,10 +170,18 @@ local function define_record(self, kind, params_with_types)
 		return deriver.record(self, derive_info, ...)
 	end
 	self._kind = kind
+	self.__index = {
+		pretty_print = pretty_printer.pretty_print,
+		default_print = pretty_printer.default_print,
+	}
+	traits.value_name:implement_on(self, {
+		value_name = function()
+			return kind
+		end,
+	})
 	self:derive(derivers.eq)
 	self:derive(derivers.unwrap)
 	self:derive(derivers.diff)
-	self:derive(derivers.value_name)
 	return self
 end
 
@@ -201,20 +204,13 @@ end
 ---@class EnumType: Type
 ---@field derive fun(self: EnumType, deriver: Deriver, ...)
 ---@field _name string
----@field derived_eq boolean?
 ---@field __eq fun(left: EnumValue, right: EnumValue): boolean
----@field derived_is boolean?
 ---@field __index table
----@field derived_unwrap boolean?
----@field derived_as boolean?
----@field derived_pretty_print boolean?
 ---@field __tostring function(EnumValue): string
----@field derived_diff boolean?
 
 ---@class EnumValue: Value
 ---@field pretty_print fun(EnumValue, ...)
 ---@field default_print fun(EnumValue, ...)
----@field diff fun(EnumValue)
 
 local enum_type_mt = {
 	__tostring = function(self)
@@ -267,17 +263,24 @@ local function define_enum(self, name, variants)
 		return deriver.enum(self, derive_info, ...)
 	end
 	self._name = name
+	self.__index = {
+		pretty_print = pretty_printer.pretty_print,
+		default_print = pretty_printer.default_print,
+	}
+	traits.value_name:implement_on(self, {
+		value_name = function()
+			return name
+		end,
+	})
 	self:derive(derivers.eq)
 	self:derive(derivers.is)
 	self:derive(derivers.unwrap)
 	self:derive(derivers.as)
 	self:derive(derivers.diff)
-	self:derive(derivers.value_name)
 	return self
 end
 
 ---@class ForeignType: Type
----@field derive fun(self: ForeignType, deriver: Deriver, ...)
 ---@field lsp_type string
 
 local foreign_type_mt = {
@@ -294,27 +297,21 @@ local function define_foreign(self, value_check, lsp_type)
 	setmetatable(self, foreign_type_mt)
 	---@cast self ForeignType
 	self.value_check = value_check
-	---@type ForeignDeriveInfo
-	local derive_info = {
-		value_check = value_check,
-		lsp_type = lsp_type or "unknown",
-	}
-	function self:derive(deriver, ...)
-		return deriver.foreign(self, derive_info, ...)
-	end
 	self.lsp_type = lsp_type
-	self:derive(derivers.value_name)
+	traits.value_name:implement_on(self, {
+		value_name = function()
+			return lsp_type
+		end,
+	})
 	return self
 end
 
 ---@class MapType: Type
----@field derive fun(self: MapType, deriver: Deriver, ...)
 ---@field key_type Type
 ---@field value_type Type
 ---@field __index table
 ---@field __newindex function
 ---@field __pairs function(MapValue): function, MapValue, Value?
----@field derived_pretty_print boolean?
 ---@field __tostring function(MapValue): string
 
 ---@class MapValue: Value
@@ -407,11 +404,17 @@ local function gen_map_methods(self, key_type, value_type)
 			right:copy(new, conflict)
 			return new
 		end,
+		pretty_print = pretty_printer.pretty_print,
+		default_print = pretty_printer.default_print,
 	}
 end
 
 local function map_newindex()
 	error("index-assignment of maps is no longer allowed. use :set()")
+end
+
+local function map_pretty_print(self, pp, ...)
+	return pp:table(self._map, ...)
 end
 
 local map_memo = {}
@@ -443,30 +446,29 @@ local function define_map(self, key_type, value_type)
 	---@cast self MapType
 	-- NOTE: this isn't primitive equality; this type has a __eq metamethod!
 	self.value_check = metatable_equality(self)
-	---@type MapDeriveInfo
-	local derive_info = {
-		key_type = key_type,
-		value_type = value_type,
-	}
-	function self:derive(deriver, ...)
-		return deriver.map(self, derive_info, ...)
-	end
 	self.key_type = key_type
 	self.value_type = value_type
 	self.__index = gen_map_methods(self, key_type, value_type)
 	self.__newindex = map_newindex
 	self.__pairs = self.__index.pairs
-	self:derive(derivers.pretty_print)
-	self:derive(derivers.value_name)
+	self.__tostring = self.__index.pretty_print
+	traits.pretty_print:implement_on(self, {
+		pretty_print = map_pretty_print,
+		default_print = map_pretty_print,
+	})
+	traits.value_name:implement_on(self, {
+		value_name = function()
+			-- TODO: augment this with generics
+			return "MapValue"
+		end,
+	})
 	return self
 end
 
 ---@class SetType: Type
----@field derive fun(self: SetType, deriver: Deriver, ...)
 ---@field key_type Type
 ---@field __index table
 ---@field __pairs function(SetValue): function, SetValue, Value?
----@field derived_pretty_print boolean?
 ---@field __tostring function(SetValue): string
 
 ---@class SetValue: Value
@@ -573,7 +575,13 @@ local function gen_set_methods(self, key_type)
 			end
 			return true
 		end,
+		pretty_print = pretty_printer.pretty_print,
+		default_print = pretty_printer.default_print,
 	}
+end
+
+local function set_pretty_print(self, pp, ...)
+	return pp:table(self._set, ...)
 end
 
 local set_memo = {}
@@ -596,34 +604,32 @@ local function define_set(self, key_type)
 	---@cast self SetType
 	-- NOTE: this isn't primitive equality; this type has a __eq metamethod!
 	self.value_check = metatable_equality(self)
-	---@type SetDeriveInfo
-	local derive_info = {
-		key_type = key_type,
-	}
-	function self:derive(deriver, ...)
-		return deriver.set(self, derive_info, ...)
-	end
 	self.key_type = key_type
 	self.__index = gen_set_methods(self, key_type)
 	self.__pairs = self.__index.pairs
-	self:derive(derivers.pretty_print)
-	self:derive(derivers.value_name)
+	self.__tostring = self.__index.pretty_print
+	traits.pretty_print:implement_on(self, {
+		pretty_print = set_pretty_print,
+		default_print = set_pretty_print,
+	})
+	traits.value_name:implement_on(self, {
+		value_name = function()
+			-- TODO: augment this with generics
+			return "SetValue"
+		end,
+	})
 	return self
 end
 
 ---@class ArrayType: Type
----@field derive fun(self: ArrayType, deriver: Deriver, ...)
 ---@field value_type Type
 ---@field methods table
+---@field __eq function(ArrayValue, ArrayValue): boolean
 ---@field __index function
 ---@field __newindex function
 ---@field __ipairs function(ArrayValue): function, ArrayValue, integer
 ---@field __len function(ArrayValue): integer
----@field derived_eq boolean?
----@field __eq function(ArrayValue, ArrayValue): boolean
----@field derived_pretty_print boolean?
 ---@field __tostring function(ArrayValue): string
----@field derived_diff boolean?
 
 ---@class ArrayValue: Value
 ---@field n integer
@@ -635,7 +641,6 @@ end
 ---@field unpack fun(ArrayValue): ...
 ---@field pretty_print fun(ArrayValue, ...)
 ---@field default_print fun(ArrayValue, ...)
----@field diff fun(ArrayValue)
 
 local array_type_mt = {
 	__call = function(self, ...)
@@ -698,7 +703,24 @@ local function gen_array_methods(self, value_type)
 		unpack = function(val)
 			return array_unpack(val.array, val.n)
 		end,
+		pretty_print = pretty_printer.pretty_print,
+		default_print = pretty_printer.default_print,
 	}
+end
+
+local function array_eq_fn(left, right)
+	if getmetatable(left) ~= getmetatable(right) then
+		return false
+	end
+	if left:len() ~= right:len() then
+		return false
+	end
+	for i = 1, left:len() do
+		if left[i] ~= right[i] then
+			return false
+		end
+	end
+	return true
 end
 
 local function gen_array_index_fns(t, value_type)
@@ -714,19 +736,21 @@ local function gen_array_index_fns(t, value_type)
 		end
 		-- check if integer
 		-- there are many nice ways to do this in lua >=5.3
-		-- unfortunately, this is not us
+		-- unfortunately, this is not part of luajit/luvit
 		if math.floor(key) ~= key then
 			p(key)
 			error("key passed to array indexing is not an integer")
 		end
 		-- puc-rio lua 5.3 ipairs() always produces an iterator that looks for the first nil
 		-- instead of deferring to __ipairs metamethod like in 5.2
-		if key == self.n + 1 then
-			return nil
-		end
+		--if key == self.n + 1 then
+		--	return nil
+		--end
+		-- above is commented out because it turns out we want nil-resistant iterators
+		-- so we should make sure to use the :ipairs() method instead
 		if key < 1 or key > self.n then
 			p(key, self.n)
-			error("key passed to array indexing is out of bounds")
+			error("key passed to array indexing is out of bounds (read code comment above)")
 		end
 		return self.array[key]
 	end
@@ -758,6 +782,64 @@ local function gen_array_index_fns(t, value_type)
 	return index, newindex
 end
 
+local function array_pretty_print(self, pp, ...)
+	return pp:array(self.array, ...)
+end
+
+local function gen_array_diff_fn(self, value_type)
+	local function diff_fn(left, right)
+		print("diffing array...")
+		print("value_type: " .. tostring(value_type))
+		local rt = getmetatable(right)
+		if self ~= rt then
+			print("unequal types!")
+			print(self)
+			print(rt)
+			print("stopping diff")
+			return
+		end
+		if left:len() ~= right:len() then
+			print("unequal lengths!")
+			print(left:len())
+			print(right:len())
+			print("stopping diff")
+			return
+		end
+		local n = 0
+		local diff_elems = {}
+		for i = 1, left:len() do
+			if left[i] ~= right[i] then
+				n = n + 1
+				diff_elems[n] = i
+			end
+		end
+		if n == 0 then
+			print("no difference")
+			print("stopping diff")
+			return
+		elseif n == 1 then
+			local d = diff_elems[1]
+			print("difference in element: " .. tostring(d))
+			local diff_impl = traits.diff:get(value_type)
+			if diff_impl then
+				-- tail call
+				return diff_impl.diff(left[d], right[d])
+			else
+				print("stopping diff (missing diff impl)")
+				return
+			end
+		else
+			print("difference in multiple elements:")
+			for i = 1, n do
+				print(diff_elems[i])
+			end
+			print("stopping diff")
+			return
+		end
+	end
+	return diff_fn
+end
+
 local array_memo = {}
 
 ---@param self table
@@ -778,22 +860,26 @@ local function define_array(self, value_type)
 	---@cast self ArrayType
 	-- NOTE: this isn't primitive equality; this type has a __eq metamethod!
 	self.value_check = metatable_equality(self)
-	---@type ArrayDeriveInfo
-	local derive_info = {
-		value_type = value_type,
-	}
-	function self:derive(deriver, ...)
-		return deriver.array(self, derive_info, ...)
-	end
 	self.value_type = value_type
 	self.methods = gen_array_methods(self, value_type)
+	self.__eq = array_eq_fn
 	self.__index, self.__newindex = gen_array_index_fns(self, value_type)
 	self.__ipairs = self.methods.ipairs
 	self.__len = self.methods.len
-	self:derive(derivers.eq)
-	self:derive(derivers.pretty_print)
-	self:derive(derivers.diff)
-	self:derive(derivers.value_name)
+	self.__tostring = self.methods.pretty_print
+	traits.pretty_print:implement_on(self, {
+		pretty_print = array_pretty_print,
+		default_print = array_pretty_print,
+	})
+	traits.diff:implement_on(self, {
+		diff = gen_array_diff_fn(self, value_type),
+	})
+	traits.value_name:implement_on(self, {
+		value_name = function()
+			-- TODO: augment this with generics
+			return "ArrayValue"
+		end,
+	})
 	return self
 end
 
