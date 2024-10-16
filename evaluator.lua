@@ -20,6 +20,8 @@ local host_typed_term_type = terms.host_typed_term_type
 local host_goal_type = terms.host_goal_type
 local host_inferrable_term_type = terms.host_inferrable_term_type
 
+local diff = require "traits".diff
+
 local gen = require "terms-generators"
 local map = gen.declare_map
 local string_typed_map = map(gen.builtin_string, typed_term)
@@ -1174,7 +1176,13 @@ function check_concrete(lctx, val, rctx, use)
 		--TODO: downcast and test
 
 		if val:is_neutral() then
-			return false, "both values are neutral, but they aren't equal: " .. tostring(val) .. " ~= " .. tostring(use)
+			diff:get(value).diff(val, use)
+			return false,
+				"both values are neutral, but they aren't equal: "
+					.. tostring(val)
+					.. " ~= "
+					.. tostring(use)
+					.. " (printed diff)"
 		end
 	end
 
