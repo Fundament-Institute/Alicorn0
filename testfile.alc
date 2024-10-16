@@ -952,6 +952,28 @@ let host-tuple-concat = lambda (
 	let (cat) = inner(wrap(hd), wrap(tl))
 	unwrap(cat)
 
+let host-number-fold-indep = lambda_implicit (T : type_(9, 0))
+	let inner =
+		intrinsic
+			""""
+				local value_array = terms_gen.declare_array(terms.value)
+				return function(n, f, acc)
+					for i = n, 1, -1 do
+						acc = evaluator.apply_value(f, terms.value.tuple_value(value_array(terms.value.host_value(i), acc)))
+					end
+					return acc
+				end
+			:
+			host-func-type  (
+					n : host-number,
+					f : (wrapped (forall (i : host-number, acc : T) -> (resacc : T)) ),
+					acc : wrapped(T))
+				->
+				((fold  : wrapped(T)))
+	lambda (n : host-number, f : (forall (i  : host-number, acc  : T) -> (resacc  : T)), acc  : T)
+		let  (fold) = inner(n, wrap(f), wrap(acc))
+		unwrap(fold)
+
 let host-literal = new-host-type(new-host-unique-id("literal"))
 
 let host-expression-args = new-host-type(new-host-unique-id("expression-args"))
