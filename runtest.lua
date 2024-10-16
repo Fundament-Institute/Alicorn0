@@ -63,57 +63,67 @@ if opts then
 	end
 end
 
-local filename = "testfile.alc"
-local src_file, err = io.open(filename)
-if not src_file then
-	error(err)
-end
-local src = src_file:read("a")
-
-checkpointTime = os.clock()
-print("Read code")
-checkpointTime2 = checkpointTime
-if print_src then
-	print(src)
-end
-
-print("Parsing code")
-local code = format.read(src, filename)
-
-checkpointTime = os.clock()
-print(("Parsed! in %.3f seconds"):format(checkpointTime - checkpointTime2))
-checkpointTime2 = checkpointTime
-if print_ast then
-	print("Printing raw AST")
-	print(format.lispy_print(code))
-	print("End printing raw AST")
-end
+local prelude = "testfile.alc"
 
 local env = base_env.create()
 
 local shadowed, env = env:enter_block(terms.block_purity.effectful)
 
-print("Expression -> terms")
-if profile_run and profile_what == "match" then
-	profile.start()
-end
-local ok, expr, env = code:match(
-	{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, env)) },
-	metalanguage.failure_handler,
-	nil
-)
-if profile_run and profile_what == "match" then
-	profile.stop()
-	if profile_flame then
-		profile.dump_flame(profile_file)
-	else
-		profile.dump(profile_file)
+local function load_alc_file(name, env)
+	local src_file, err = io.open(name)
+	if not src_file then
+		error(err)
 	end
-end
-if not ok then
+	local src = src_file:read("a")
+
 	checkpointTime = os.clock()
-	print(("Evaluating failed in %.3f seconds"):format(checkpointTime - checkpointTime2))
-	print(expr)
+	print("Read code")
+	checkpointTime2 = checkpointTime
+	if print_src then
+		print(src)
+	end
+
+	print("Parsing code")
+	local code = format.read(src, name)
+
+	checkpointTime = os.clock()
+	print(("Parsed! in %.3f seconds"):format(checkpointTime - checkpointTime2))
+	checkpointTime2 = checkpointTime
+	if print_ast then
+		print("Printing raw AST")
+		print(format.lispy_print(code))
+		print("End printing raw AST")
+	end
+
+	print("Expression -> terms")
+	if profile_run and profile_what == "match" then
+		profile.start()
+	end
+	local ok, expr, env = code:match({
+		exprs.top_level_block(
+			metalanguage.accept_handler,
+			{ exprargs = exprs.ExpressionArgs.new(terms.expression_goal.infer, env), name = name }
+		),
+	}, metalanguage.failure_handler, nil)
+	if profile_run and profile_what == "match" then
+		profile.stop()
+		if profile_flame then
+			profile.dump_flame(profile_file)
+		else
+			profile.dump(profile_file)
+		end
+	end
+	if not ok then
+		checkpointTime = os.clock()
+		print(("Evaluating failed in %.3f seconds"):format(checkpointTime - checkpointTime2))
+		print(expr)
+		return
+	end
+	return expr, env
+end
+
+local expr, env = load_alc_file(prelude, env)
+if not expr or not env then
 	return
 end
 
