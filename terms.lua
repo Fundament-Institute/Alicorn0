@@ -63,15 +63,30 @@ local anchor_type = gen.declare_foreign(gen.metatable_equality(format.anchor_mt)
 ---@class RuntimeContext
 ---@field bindings FibonacciBuffer
 local RuntimeContext = {}
+
+---@param index integer
+---@return value
 function RuntimeContext:get(index)
-	return self.bindings:get(index)
+	return self.bindings:get(index).val
 end
 
+-- without this, some value.closure comparisons fail erroneously
+local RuntimeContextBinding = {
+	__eq = function(l, r)
+		return l.name == r.name and l.val == r.val
+	end,
+}
+
 ---@param v value
+---@param name string?
 ---@return RuntimeContext
-function RuntimeContext:append(v)
-	-- TODO: typecheck
-	local copy = { bindings = self.bindings:append(v) }
+function RuntimeContext:append(v, name)
+	if value.value_check(v) ~= true then
+		error("RuntimeContext:append v must be a value")
+	end
+	-- TODO: add caller line number to this fake name?
+	name = name or ("#rctx%d"):format(self.bindings:len() + 1)
+	local copy = { bindings = self.bindings:append(setmetatable({ name = name, val = v }, RuntimeContextBinding)) }
 	return setmetatable(copy, runtime_context_mt)
 end
 
@@ -79,7 +94,12 @@ end
 ---@param v value
 ---@return RuntimeContext
 function RuntimeContext:set(index, v)
-	local copy = { bindings = self.bindings:set(index, v) }
+	if value.value_check(v) ~= true then
+		error("RuntimeContext:set v must be a value")
+	end
+	local old = self.bindings:get(index)
+	local new = setmetatable({ name = old.name, val = v }, RuntimeContextBinding)
+	local copy = { bindings = self.bindings:set(index, new) }
 	return setmetatable(copy, runtime_context_mt)
 end
 
@@ -172,11 +192,10 @@ function TypecheckingContext:append(name, type, val, anchor)
 	if (val and anchor) or (not val and not anchor) then
 		error("TypecheckingContext:append expected either val or anchor")
 	end
+	val = val or value.neutral(neutral_value.free(free.placeholder(self:len() + 1, placeholder_debug(name, anchor))))
 	local copy = {
 		bindings = self.bindings:append({ name = name, type = type }),
-		runtime_context = self.runtime_context:append(
-			val or value.neutral(neutral_value.free(free.placeholder(self:len() + 1, placeholder_debug(name, anchor))))
-		),
+		runtime_context = self.runtime_context:append(val, name),
 	}
 	return setmetatable(copy, typechecking_context_mt)
 end

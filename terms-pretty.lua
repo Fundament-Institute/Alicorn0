@@ -31,11 +31,7 @@ end
 ---@return PrettyPrintingContext
 function PrettyprintingContext.from_runtime_context(context)
 	local self = {}
-	local bindings = fibbuf()
-	for i = 1, context.bindings:len() do
-		bindings = bindings:append({ name = string.format("#rctx%d", i) })
-	end
-	self.bindings = bindings
+	self.bindings = context.bindings
 	return setmetatable(self, prettyprinting_context_mt)
 end
 
