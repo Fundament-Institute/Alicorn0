@@ -24,7 +24,12 @@ local anchor_mt = {
 		return (snd.line == fst.line and snd.char == fst.char)
 	end,
 	__tostring = function(self)
-		return "in file " .. self.sourceid .. ", line " .. self.line .. " character " .. self.char
+		return "in file "
+			.. tostring(self.sourceid)
+			.. ", line "
+			.. tostring(self.line)
+			.. " character "
+			.. tostring(self.char)
 	end,
 	__index = Anchor,
 }
@@ -196,11 +201,9 @@ local grammar = P {
 	eof = P(-1),
 
 	newline = (P "\r" ^ 0 * P "\n") * Cmt(lpeg.Carg(1), function(_, position, line_ctx)
-		if not (line_ctx.positions[#line_ctx.positions].pos == position) then
-			if line_ctx.positions[#line_ctx.positions].pos < position then
-				line_ctx.positions[#line_ctx.positions + 1] =
-					{ pos = position, line = line_ctx.positions[#line_ctx.positions].line + 1 }
-			end
+		if line_ctx.positions[#line_ctx.positions].pos < position then
+			line_ctx.positions[#line_ctx.positions + 1] =
+				{ pos = position, line = table.positions[#table.positions].line + 1 }
 		end
 
 		return true
@@ -208,10 +211,10 @@ local grammar = P {
 	empty_line = V "newline" * S "\t " ^ 0 * #(V "newline" + V "eof"),
 
 	textpos = Cmt(lpeg.Carg(1), function(_, position, line_ctx)
-		-- assert(position > table.positions[#table.positions].pos)
+		-- assert(table.positions[#table.positions].pos < position)
 		local line_index = #line_ctx.positions
 
-		while (position < line_ctx.positions[line_index].pos) and (line_index > 0) do
+		while (position < line_ctx.positions[line_index].pos) and (0 < line_index) do
 			line_index = line_index - 1
 		end
 		local simple_anchor = create_anchor(
