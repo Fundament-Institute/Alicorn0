@@ -7,6 +7,14 @@ local P, C, Cg, Cc, Cmt, Ct, Cb, Cp, Cf, Cs, S, V, R =
 -- documentation for the SLN: https://scopes.readthedocs.io/en/latest/dataformat/
 -- a python SLN parser: https://github.com/salotz/python-sln/blob/master/src/sln/parser.py
 
+local function DebugPrint(s, patt)
+	patt = P(function()
+		print(s)
+		return true
+	end) * patt
+	return patt
+end
+
 ---@class Anchor
 ---@field line integer
 ---@field char integer
