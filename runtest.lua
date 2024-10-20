@@ -169,7 +169,7 @@ evaluator.typechecker_state:flow(
 	type,
 	nil,
 	terms.value.program_type(
-		terms.value.effect_row(set(unique_id)(terms.TCState), terms.value.effect_empty),
+		terms.value.effect_row(set(unique_id)(terms.TCState, terms.lua_prog), terms.value.effect_empty),
 		evaluator.typechecker_state:metavariable(terms.typechecking_context()):as_value()
 	),
 	nil,
