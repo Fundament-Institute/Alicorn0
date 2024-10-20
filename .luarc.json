@@ -1,0 +1,56 @@
+{
+    "$schema": "https://raw.githubusercontent.com/sumneko/vscode-lua/master/setting/schema.json",
+    "diagnostics": {
+        "disable": [
+        ],
+        "groupFileStatus": {
+            "ambiguity": "Any",
+            "await": "Any",
+            "duplicate": "Any",
+            "global": "Any",
+            "luadoc": "Any",
+            "redefined": "Any",
+            "strict": "Any",
+            "strong": "Any",
+            "type-check": "Any",
+            "unbalanced": "Any",
+            "unused": "Any"
+        },
+        "ignoredFiles": "Opened",
+        "libraryFiles": "Opened",
+        "unusedLocalExclude": [ "_*" ]
+    },
+    "runtime": {
+        "version": "LuaJIT",
+        "path": [
+            "?.lua",
+            "?/init.lua"
+        ],
+        "pathStrict": true
+    },
+    "workspace": {
+        "maxPreload": 1600,
+        "preloadFileSize": 1000,
+        "ignoreDir": [
+            "/vendor/"
+        ],
+        "checkThirdParty": false,
+        "library": [
+            "${addons}/lpeg/module/library",
+            "${addons}/luafilesystem/module/library"
+        ]
+    },
+    "typeFormat": {
+        "config": {
+            "format_line": "false"
+        }
+    },
+    "type": {
+        "castNumberToInteger": false
+    },
+    "doc": {
+        "privateName": [
+            "_*"
+        ]
+    }
+}
