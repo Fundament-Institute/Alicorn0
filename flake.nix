@@ -100,10 +100,10 @@
               (pkgs.lua-language-server.overrideAttrs {
                 version = "unstable";
                 src = pkgs.fetchFromGitHub {
-                  owner = "luals";
+                  owner = "LuaLS";
                   repo = "lua-language-server";
-                  rev = "7d06e5573c8188e61516e987b0d796a40f718b05";
-                  hash = "sha256-mNG/IqRkXHVwUU06e1oD/3WBa5k09ddYUsiQN4MFaOU";
+                  rev = "db667f6db7ea6852d38460a1ed046eb85bb9e5ff";
+                  hash = "sha256-ZYaiSBSnO9lPb/5pYa0OiL0KParuMb4/jIBtE3S/Ruo=";
                   fetchSubmodules = true;
                 };
 
