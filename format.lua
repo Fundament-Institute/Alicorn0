@@ -114,23 +114,23 @@ local function update_ffp(name, patt)
 
 	return patt
 		+ (
-			Cmt(lpeg.Carg(2) * V "textpos", function(_, _, ctx, position)
-				if ctx.position then
-					if ctx.position == position then
+			Cmt(lpeg.Carg(2) * V "textpos", function(_, _, furthest_forward_ctx, position)
+				if furthest_forward_ctx.position then
+					if furthest_forward_ctx.position == position then
 						local acc = true
-						for i, v in ipairs(ctx.expected) do
+						for i, v in ipairs(furthest_forward_ctx.expected) do
 							acc = acc and not (v == name)
 						end
 						if acc then
-							table.insert(ctx.expected, name)
+							table.insert(furthest_forward_ctx.expected, name)
 						end
-					elseif ctx.position < position then
-						ctx.position = position
-						ctx.expected = { name }
+					elseif furthest_forward_ctx.position < position then
+						furthest_forward_ctx.position = position
+						furthest_forward_ctx.expected = { name }
 					end
 				else
-					ctx.position = position
-					ctx.expected = { name }
+					furthest_forward_ctx.position = position
+					furthest_forward_ctx.expected = { name }
 				end
 
 				return false
@@ -139,10 +139,11 @@ local function update_ffp(name, patt)
 end
 
 local function clear_ffp()
-	return lpeg.Carg(2) / function(ctx)
-		ctx.position = nil
-		ctx.expected = nil
-	end
+	return lpeg.Carg(2)
+		/ function(furthest_forward_ctx)
+			furthest_forward_ctx.position = nil
+			furthest_forward_ctx.expected = nil
+		end
 end
 
 local function create_literal(anchor, elements, endpos)
@@ -170,13 +171,13 @@ end
 ---@param sourceid string
 ---@return Anchor
 local function create_anchor(line, char, sourceid)
-	local newanchor = {
+	local new_anchor = {
 		line = line,
 		char = char,
 		sourceid = sourceid,
 	}
-	setmetatable(newanchor, anchor_mt)
-	return newanchor
+	setmetatable(new_anchor, anchor_mt)
+	return new_anchor
 end
 
 local grammar = P {
@@ -194,11 +195,11 @@ local grammar = P {
 	end),
 	eof = P(-1),
 
-	newline = (P "\r" ^ 0 * P "\n") * Cmt(lpeg.Carg(1), function(_, position, table)
-		if not (table.positions[#table.positions].pos == position) then
-			if table.positions[#table.positions].pos < position then
-				table.positions[#table.positions + 1] =
-					{ pos = position, line = table.positions[#table.positions].line + 1 }
+	newline = (P "\r" ^ 0 * P "\n") * Cmt(lpeg.Carg(1), function(_, position, line_ctx)
+		if not (line_ctx.positions[#line_ctx.positions].pos == position) then
+			if line_ctx.positions[#line_ctx.positions].pos < position then
+				line_ctx.positions[#line_ctx.positions + 1] =
+					{ pos = position, line = line_ctx.positions[#line_ctx.positions].line + 1 }
 			end
 		end
 
@@ -206,19 +207,19 @@ local grammar = P {
 	end),
 	empty_line = V "newline" * S "\t " ^ 0 * #(V "newline" + V "eof"),
 
-	textpos = Cmt(lpeg.Carg(1), function(_, position, linectx)
+	textpos = Cmt(lpeg.Carg(1), function(_, position, line_ctx)
 		-- assert(position > table.positions[#table.positions].pos)
-		local line_index = #linectx.positions
+		local line_index = #line_ctx.positions
 
-		while (position < linectx.positions[line_index].pos) and (line_index > 0) do
+		while (position < line_ctx.positions[line_index].pos) and (line_index > 0) do
 			line_index = line_index - 1
 		end
-		local simple = create_anchor(
-			linectx.positions[line_index].line,
-			position - linectx.positions[line_index].pos + 1,
-			linectx.sourceid
+		local simple_anchor = create_anchor(
+			line_ctx.positions[line_index].line,
+			position - line_ctx.positions[line_index].pos + 1,
+			line_ctx.sourceid
 		)
-		return true, simple
+		return true, simple_anchor
 	end),
 
 	count_tabs = update_ffp(
@@ -528,24 +529,24 @@ local function parse(input, filename)
 		return nil
 	end
 
-	local newlinetable = {
+	local line_ctx = {
 		sourceid = filename,
 		positions = { {
 			pos = 1,
 			line = 1,
 		} },
 	}
-	local furthest_forward = { position = nil }
-	local ast = lpeg.match(grammar, input, 1, newlinetable, furthest_forward)
+	local furthest_forward_ctx = { position = nil }
+	local ast = lpeg.match(grammar, input, 1, line_ctx, furthest_forward_ctx)
 
-	if furthest_forward.position then
+	if furthest_forward_ctx.position then
 		local expected = "{"
-		for i, v in ipairs(furthest_forward.expected) do
+		for i, v in ipairs(furthest_forward_ctx.expected) do
 			expected = expected .. v .. ", "
 		end
 		expected = expected .. "}"
 
-		assert(false, span_error(furthest_forward.position, input, "expected " .. expected))
+		assert(false, span_error(furthest_forward_ctx.position, input, "expected " .. expected))
 	end
 
 	return ast
