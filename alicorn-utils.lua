@@ -269,7 +269,7 @@ end
 ---@return string
 ---@return integer
 function M.strip_ansi(s)
-	return s:gsub("\x1b[^m]*m", "")
+	return s:gsub("\x1b%[[^m]*m", "")
 end
 
 function M.here()
