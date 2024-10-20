@@ -37,7 +37,7 @@ local anchor_mt = {
 lpeg.locale(lpeg)
 
 local function element(kind, pattern)
-	return Ct(Cg(V "textpos", "anchor") * Cg(Cc(kind), "kind") * pattern)
+	return Ct(Cg(V "anchor", "anchor") * Cg(Cc(kind), "kind") * pattern)
 end
 
 local function symbol(value)
@@ -90,7 +90,7 @@ local function IFRmt(pattern, numtimes)
 end
 
 local function list(pattern)
-	return (V "textpos" * Ct(pattern) * V "textpos")
+	return (V "anchor" * Ct(pattern) * V "anchor")
 		/ function(anchor, elements, endpos)
 			return {
 				anchor = anchor,
@@ -119,7 +119,7 @@ local function update_ffp(name, patt)
 
 	return patt
 		+ (
-			Cmt(lpeg.Carg(2) * V "textpos", function(_, _, furthest_forward_ctx, position)
+			Cmt(lpeg.Carg(2) * V "anchor", function(_, _, furthest_forward_ctx, position)
 				if furthest_forward_ctx.position then
 					if furthest_forward_ctx.position == position then
 						local acc = true
@@ -227,9 +227,9 @@ local grammar = P {
 	end),
 	empty_line = V "newline" * S "\t " ^ 0 * #(V "newline" + V "eof"),
 
-	textpos = Cmt(lpeg.Carg(1), function(_, position, line_ctx)
+	anchor = Cmt(lpeg.Carg(1), function(_, position, line_ctx)
 		local line_index = #line_ctx.positions
-		-- assert(line_ctx.positions[line_index].pos <= position, "assertion failed! textpos at " .. tostring(position) .. " means backtracking to before " .. tostring(line_ctx.positions[line_index]))
+		-- assert(line_ctx.positions[line_index].pos <= position, "assertion failed! anchor at " .. tostring(position) .. " means backtracking to before " .. tostring(line_ctx.positions[line_index]))
 
 		while (position < line_ctx.positions[line_index].pos) and (0 < line_index) do
 			line_index = line_index - 1
@@ -244,7 +244,7 @@ local grammar = P {
 
 	count_tabs = update_ffp(
 		"spaces should not be interspersed in indentation",
-		Cmt(V "textpos" * C(S "\t " ^ 0), function(_, _, anchor, indentstring)
+		Cmt(V "anchor" * C(S "\t " ^ 0), function(_, _, anchor, indentstring)
 			if string.find(indentstring, " ") then
 				return false
 			end
@@ -299,33 +299,33 @@ local grammar = P {
 	escape_chars = Cs(P [[\\]] / [[\]] + P [[\"]] / [["]] + P [[\n]] / "\n" + P [[\r]] / "\r" + P [[\t]] / "\t"),
 	unicode_escape = P "\\u" * (V "hex_digit") ^ -4,
 
-	string_literal = V "textpos" * Cs(
+	string_literal = V "anchor" * Cs(
 		(V "escape_chars" + V "unicode_escape" + C(1 - (S [["\]] + V "newline" + V "splice"))) ^ 1
-	) * V "textpos" / create_literal,
+	) * V "anchor" / create_literal,
 	string = element(
 		"string",
 		P '"'
 			* Cg(Ct((V "string_literal" + V "splice") ^ 0), "elements")
 			* update_ffp('"', P '"')
-			* Cg(V "textpos", "endpos")
+			* Cg(V "anchor", "endpos")
 	),
 
-	longstring_literal = V "textpos" * Cs(
+	longstring_literal = V "anchor" * Cs(
 		((V "subordinate_indent" + V "empty_line") + C((V "unicode_escape" + (1 - (V "newline" + V "splice"))))) ^ 1
-	) * V "textpos" / create_literal,
+	) * V "anchor" / create_literal,
 	longstring = element(
 		"string",
 		P '""""'
 			* V "indent"
 			* Cg(Ct((V "longstring_literal" + V "splice") ^ 0), "elements")
-			* Cg(V "textpos", "endpos")
+			* Cg(V "anchor", "endpos")
 			* V "dedent"
 	),
 
 	comment_body = C((1 - V "newline") ^ 1),
 	comment = update_ffp(
 		"line comment",
-		element("comment", (P "#" * Cg(V "comment_body" ^ -1, "val") * Cg(V "textpos", "endpos")))
+		element("comment", (P "#" * Cg(V "comment_body" ^ -1, "val") * Cg(V "anchor", "endpos")))
 	),
 	block_comment = update_ffp(
 		"block comment",
@@ -335,7 +335,7 @@ local grammar = P {
 				P "####"
 				* V "indent"
 				* Cg(Cs((V "subordinate_indent" + V "comment_body" + V "empty_line") ^ 0), "val")
-				* Cg(V "textpos", "endpos")
+				* Cg(V "anchor", "endpos")
 				* V "dedent"
 			)
 		)
