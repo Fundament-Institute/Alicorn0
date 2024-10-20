@@ -231,7 +231,8 @@ end
 ---@param yard { n: integer, [integer]: TaggedOperator }
 ---@param output { n: integer, [integer]: ConstructedSyntax }
 ---@param start_anchor Anchor
-local function shunting_yard_pop(yard, output, start_anchor)
+---@param end_anchor Anchor
+local function shunting_yard_pop(yard, output, start_anchor, end_anchor)
 	local yard_height = yard.n
 	local output_length = output.n
 	local operator = yard[yard_height]
@@ -239,14 +240,25 @@ local function shunting_yard_pop(yard, output, start_anchor)
 	local operator_symbol = operator.symbol
 	if operator_type == OperatorType.Prefix then
 		local arg = output[output_length]
-		local tree = metalanguage.list(start_anchor, metalanguage.symbol(start_anchor, operator_symbol), arg)
+		local tree = metalanguage.list(
+			start_anchor,
+			end_anchor,
+			metalanguage.symbol(start_anchor, end_anchor, operator_symbol),
+			arg
+		)
 		yard[yard_height] = nil
 		yard.n = yard_height - 1
 		output[output_length] = tree
 	elseif operator_type == OperatorType.Infix then
 		local right = output[output_length]
 		local left = output[output_length - 1]
-		local tree = metalanguage.list(start_anchor, left, metalanguage.symbol(start_anchor, operator_symbol), right)
+		local tree = metalanguage.list(
+			start_anchor,
+			end_anchor,
+			left,
+			metalanguage.symbol(start_anchor, end_anchor, operator_symbol),
+			right
+		)
 		yard[yard_height] = nil
 		yard.n = yard_height - 1
 		output[output_length] = nil
@@ -302,9 +314,10 @@ end
 ---@param yard { n: integer, [integer]: TaggedOperator }
 ---@param output { n: integer, [integer]: ConstructedSyntax }
 ---@param start_anchor Anchor
+---@param end_anchor Anchor
 ---@return boolean
 ---@return ConstructedSyntax|string
-local function shunting_yard(a, b, yard, output, start_anchor)
+local function shunting_yard(a, b, yard, output, start_anchor, end_anchor)
 	-- first, collect all prefix operators
 	local is_prefix, prefix_symbol =
 		a:match({ metalanguage.issymbol(shunting_yard_prefix_handler) }, metalanguage.failure_handler, nil)
@@ -322,7 +335,7 @@ local function shunting_yard(a, b, yard, output, start_anchor)
 			type = OperatorType.Prefix,
 			symbol = prefix_symbol,
 		}
-		return shunting_yard(next_a, next_b, yard, output, start_anchor)
+		return shunting_yard(next_a, next_b, yard, output, start_anchor, end_anchor)
 	end
 	-- no more prefix operators, now handle infix
 	output.n = output.n + 1
@@ -340,19 +353,19 @@ local function shunting_yard(a, b, yard, output, start_anchor)
 	end
 	if not more then
 		while yard.n > 0 do
-			shunting_yard_pop(yard, output, start_anchor)
+			shunting_yard_pop(yard, output, start_anchor, end_anchor)
 		end
 		return true, output[1]
 	end
 	while yard.n > 0 and shunting_yard_should_pop(infix_symbol, yard[yard.n]) do
-		shunting_yard_pop(yard, output, start_anchor)
+		shunting_yard_pop(yard, output, start_anchor, end_anchor)
 	end
 	yard.n = yard.n + 1
 	yard[yard.n] = {
 		type = OperatorType.Infix,
 		symbol = infix_symbol,
 	}
-	return shunting_yard(next_a, next_b, yard, output, start_anchor)
+	return shunting_yard(next_a, next_b, yard, output, start_anchor, end_anchor)
 end
 
 ---@param symbol string
@@ -470,7 +483,7 @@ local function expression_pairhandler(args, a, b)
 
 	-- if the expression is a list containing prefix and infix expressions,
 	-- parse it into a tree of simple prefix/infix expressions with shunting yard
-	local ok, syntax = shunting_yard(a, b, { n = 0 }, { n = 0 }, a.start_anchor)
+	local ok, syntax = shunting_yard(a, b, { n = 0 }, { n = 0 }, a.start_anchor, a.end_anchor)
 	if ok then
 		---@cast syntax ConstructedSyntax
 		is_operator, operator_type, operator, left, right = syntax:match({
@@ -494,13 +507,13 @@ local function expression_pairhandler(args, a, b)
 		if not ok then
 			return false, combiner
 		end
-		sargs = metalanguage.list(a.start_anchor, left)
+		sargs = metalanguage.list(a.start_anchor, a.end_anchor, left)
 	elseif is_operator and operator_type == OperatorType.Infix then
 		ok, combiner = env:get("_" .. operator .. "_")
 		if not ok then
 			return false, combiner
 		end
-		sargs = metalanguage.list(a.start_anchor, left, right)
+		sargs = metalanguage.list(a.start_anchor, a.end_anchor, left, right)
 	else
 		ok, combiner, env = a:match(
 			{ expression(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.infer, env)) },
@@ -867,11 +880,13 @@ local external_error_mt = {
 
 ---@param cause any
 ---@param start_anchor Anchor
+---@param end_anchor Anchor
 ---@param operative_name any
 ---@return OperativeError
-function OperativeError.new(cause, start_anchor, operative_name)
+function OperativeError.new(cause, start_anchor, end_anchor, operative_name)
 	return setmetatable({
 		start_anchor = start_anchor,
+		end_anchor = end_anchor,
 		cause = cause,
 		operative_name = operative_name,
 	}, external_error_mt)
@@ -894,7 +909,7 @@ local function host_operative(fn, name)
 		-- userdata isn't passed in as it's always empty for host operatives
 		local ok, res, env = fn(syn, env, goal)
 		if not ok then
-			error(OperativeError.new(res, syn.start_anchor, debugstring))
+			error(OperativeError.new(res, syn.start_anchor, syn.end_anchor, debugstring))
 		end
 		if
 			(goal:is_infer() and inferrable_term.value_check(res))

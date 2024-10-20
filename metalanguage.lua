@@ -386,12 +386,14 @@ local syntax_error_mt = {
 
 ---@param matchers Matcher[]
 ---@param start_anchor Anchor
+---@param end_anchor Anchor
 ---@param cause any
 ---@return SyntaxError
-local function syntax_error(matchers, start_anchor, cause)
+local function syntax_error(matchers, start_anchor, end_anchor, cause)
 	return setmetatable({
 		matchers = matchers,
 		start_anchor = start_anchor,
+		end_anchor = end_anchor,
 		cause = cause,
 	}, syntax_error_mt)
 end
@@ -447,7 +449,7 @@ function ConstructedSyntax:match(matchers, unmatched, extra)
 		-- local name = getmetatable(matcher.reducible)
 		-- print("rejected syntax kind", matcher.kind, name)
 	end
-	return unmatched(extra, syntax_error(matchers, self.start_anchor, lasterr))
+	return unmatched(extra, syntax_error(matchers, self.start_anchor, self.end_anchor, lasterr))
 end
 
 local constructed_syntax_mt = {
@@ -456,10 +458,14 @@ local constructed_syntax_mt = {
 
 ---@param accepters AccepterSet
 ---@param start_anchor Anchor?
+---@param end_anchor Anchor?
 ---@param ... any
 ---@return ConstructedSyntax
-local function cons_syntax(accepters, start_anchor, ...)
-	return setmetatable({ accepters = accepters, start_anchor = start_anchor, ... }, constructed_syntax_mt)
+local function cons_syntax(accepters, start_anchor, end_anchor, ...)
+	return setmetatable(
+		{ accepters = accepters, start_anchor = start_anchor, end_anchor = end_anchor, ... },
+		constructed_syntax_mt
+	)
 end
 
 local pair_accepters = {
@@ -469,11 +475,12 @@ local pair_accepters = {
 }
 
 ---@param start_anchor Anchor
+---@param end_anchor Anchor
 ---@param a ConstructedSyntax
 ---@param b ConstructedSyntax
 ---@return ConstructedSyntax
-local function pair(start_anchor, a, b)
-	return cons_syntax(pair_accepters, start_anchor, a, b)
+local function pair(start_anchor, end_anchor, a, b)
+	return cons_syntax(pair_accepters, start_anchor, end_anchor, a, b)
 end
 
 local symbol_accepters = {
@@ -483,10 +490,11 @@ local symbol_accepters = {
 }
 
 ---@param start_anchor Anchor
+---@param end_anchor Anchor
 ---@param name string
 ---@return ConstructedSyntax
-local function symbol(start_anchor, name)
-	return cons_syntax(symbol_accepters, start_anchor, name)
+local function symbol(start_anchor, end_anchor, name)
+	return cons_syntax(symbol_accepters, start_anchor, end_anchor, name)
 end
 
 local value_accepters = {
@@ -500,10 +508,11 @@ local value_accepters = {
 ---@field val any
 
 ---@param start_anchor Anchor
+---@param end_anchor Anchor
 ---@param val SyntaxValue
 ---@return ConstructedSyntax
-local function value(start_anchor, val)
-	return cons_syntax(value_accepters, start_anchor, val)
+local function value(start_anchor, end_anchor, val)
+	return cons_syntax(value_accepters, start_anchor, end_anchor, val)
 end
 
 local nil_accepters = {
@@ -512,17 +521,24 @@ local nil_accepters = {
 	end,
 }
 
-local nilval = cons_syntax(nil_accepters)
+---@param start_anchor Anchor
+---@param end_anchor Anchor
+---@return ConstructedSyntax
+local function new_nilval(start_anchor, end_anchor)
+	return cons_syntax(nil_accepters, start_anchor, end_anchor)
+end
+local nilval = new_nilval()
 
 ---@param start_anchor Anchor
+---@param end_anchor Anchor
 ---@param a ConstructedSyntax
 ---@param ... ConstructedSyntax
 ---@return ConstructedSyntax
-local function list(start_anchor, a, ...)
+local function list(start_anchor, end_anchor, a, ...)
 	if a == nil then
-		return nilval
+		return new_nilval(start_anchor, end_anchor)
 	end
-	return pair(start_anchor, a, list(start_anchor, ...))
+	return pair(start_anchor, end_anchor, a, list(start_anchor, end_anchor, ...))
 end
 
 local any = reducer(
@@ -760,6 +776,7 @@ local metalanguage = {
 	list_tail_ends = list_tail_ends,
 	reducer = reducer,
 	isnil = isnil,
+	new_nilval = new_nilval,
 	nilval = nilval,
 	symbol_exact = symbol_exact,
 	pair = pair,

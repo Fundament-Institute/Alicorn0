@@ -32,7 +32,7 @@ local anchor_mt = {
 		return (snd.line == fst.line and snd.char == fst.char)
 	end,
 	__tostring = function(self)
-		return "in file "
+		return "file "
 			.. tostring(self.sourceid)
 			.. ", line "
 			.. tostring(self.line)
@@ -49,7 +49,7 @@ local function element(kind, pattern)
 end
 
 local function symbol(value)
-	return element("symbol", Cg(value, "str"))
+	return element("symbol", Cg(value, "str") * Cg(V "anchor", "end_anchor"))
 end
 
 local function space_tokens(pattern)
@@ -577,4 +577,4 @@ local function parse(input, filename)
 	return ast
 end
 
-return { parse = parse, anchor_mt = anchor_mt }
+return { parse = parse, anchor_mt = anchor_mt, create_anchor = create_anchor }

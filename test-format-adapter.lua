@@ -5,15 +5,15 @@ local function syntax_convert(tree)
 	if tree.kind == "list" then
 		local res = metalanguage.nilval
 		for i = #tree.elements, 1, -1 do
-			res = metalanguage.pair(syntax_convert(tree.elements[i]), res)
+			res = metalanguage.pair(nil, nil, syntax_convert(tree.elements[i]), res)
 		end
 		return res
 	elseif tree.kind == "symbol" then
-		return metalanguage.symbol(tree.str)
+		return metalanguage.symbol(nil, nil, tree.str)
 	elseif tree.kind == "literal" then
 		if tree.literaltype == "f64" then
 			-- metalanguage.value use here is only correct for smoketest language and will need changed in future
-			return metalanguage.value(tree.val)
+			return metalanguage.value(nil, nil, tree.val)
 		else
 			error "syntax contains a literal of a type other than the basic number"
 		end

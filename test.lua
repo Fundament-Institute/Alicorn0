@@ -37,31 +37,11 @@ local function simplify_list(list)
 	end
 end
 
-local anchor_mt = {
-	__lt = function(fst, snd)
-		return snd.line > fst.line or (snd.line == fst.line and snd.char > fst.char)
-	end,
-	__le = function(fst, snd)
-		return fst < snd or fst == snd
-	end,
-	__eq = function(fst, snd)
-		return (snd.line == fst.line and snd.char == fst.char)
-	end,
-
-	__tostring = function(self)
-		return "in file " .. self.sourceid .. ", line " .. self.line .. " character " .. self.char
-	end,
-}
-
-local function create_anchor(line, char)
-	local anchor = {
-		char = char,
-		line = line,
-		sourceid = "inline",
-	}
-
-	setmetatable(anchor, anchor_mt)
-	return anchor
+local function create_anchor(line, char, sourceid)
+	if sourceid == nil then
+		sourceid = "inline"
+	end
+	return format.create_anchor(line, char, sourceid)
 end
 
 local function create_list(start_anchor, end_anchor, elements)
