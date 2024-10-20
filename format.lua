@@ -185,6 +185,22 @@ local function create_anchor(line, char, sourceid)
 	return new_anchor
 end
 
+---@class LinePosition
+---@field line integer
+---@field pos integer
+local LinePosition = {}
+
+local line_position_mt = {
+	__tostring = function(self)
+		return "line " .. tostring(self.line) .. " starting at position " .. tostring(self.pos)
+	end,
+	__index = LinePosition,
+}
+
+local function create_line_position(pos, line)
+	return setmetatable({ pos = pos, line = line }, line_position_mt)
+end
+
 local grammar = P {
 	"ast",
 	-- initializes empty capture groups at the start, remember to update when tracking new things!
@@ -202,8 +218,9 @@ local grammar = P {
 
 	newline = (P "\r" ^ 0 * P "\n") * Cmt(lpeg.Carg(1), function(_, position, line_ctx)
 		if line_ctx.positions[#line_ctx.positions].pos < position then
+			-- print("new line! last line_ctx position:", tostring(line_ctx.positions[#line_ctx.positions]))
 			line_ctx.positions[#line_ctx.positions + 1] =
-				{ pos = position, line = table.positions[#table.positions].line + 1 }
+				create_line_position(position, line_ctx.positions[#line_ctx.positions].line + 1)
 		end
 
 		return true
@@ -211,8 +228,8 @@ local grammar = P {
 	empty_line = V "newline" * S "\t " ^ 0 * #(V "newline" + V "eof"),
 
 	textpos = Cmt(lpeg.Carg(1), function(_, position, line_ctx)
-		-- assert(table.positions[#table.positions].pos < position)
 		local line_index = #line_ctx.positions
+		-- assert(line_ctx.positions[line_index].pos <= position, "assertion failed! textpos at " .. tostring(position) .. " means backtracking to before " .. tostring(line_ctx.positions[line_index]))
 
 		while (position < line_ctx.positions[line_index].pos) and (0 < line_index) do
 			line_index = line_index - 1
@@ -534,10 +551,7 @@ local function parse(input, filename)
 
 	local line_ctx = {
 		sourceid = filename,
-		positions = { {
-			pos = 1,
-			line = 1,
-		} },
+		positions = { create_line_position(1, 1) },
 	}
 	local furthest_forward_ctx = { position = nil }
 	local ast = lpeg.match(grammar, input, 1, line_ctx, furthest_forward_ctx)
