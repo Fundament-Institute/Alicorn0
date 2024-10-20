@@ -7,7 +7,7 @@ local indentation_char = "\t"
 local function unformat_list(ast, prev_line, indentation)
 	local acc = ""
 
-	while ast.anchor.line > prev_line do
+	while ast.start_anchor.line > prev_line do
 		acc = acc .. "\n" .. string.rep(indentation_char, indentation)
 		prev_line = prev_line + 1
 	end
@@ -33,7 +33,7 @@ local function unformat_list(ast, prev_line, indentation)
 		acc = acc .. ast.str
 	elseif ast.kind == "comment" then
 		indentation = indentation + 1
-		local multiline_comment = not (ast.anchor.line == ast.endpos.line)
+		local multiline_comment = not (ast.start_anchor.line == ast.end_anchor.line)
 
 		if multiline_comment then
 			acc = acc .. "####"
@@ -51,7 +51,7 @@ local function unformat_list(ast, prev_line, indentation)
 
 		acc = acc .. "\n"
 
-		prev_line = ast.endpos.line
+		prev_line = ast.end_anchor.line
 	elseif ast.kind == "string" then
 		indentation = indentation + 1
 
@@ -63,7 +63,7 @@ local function unformat_list(ast, prev_line, indentation)
 			["\t"] = [[\t]],
 		}
 
-		local multiline_string = not (ast.anchor.line == ast.endpos.line)
+		local multiline_string = not (ast.start_anchor.line == ast.end_anchor.line)
 
 		if multiline_string then
 			acc = acc .. [[""""]]
@@ -88,7 +88,7 @@ local function unformat_list(ast, prev_line, indentation)
 			acc = acc .. [["]]
 		end
 
-		prev_line = ast.endpos.line
+		prev_line = ast.end_anchor.line
 	end
 
 	return acc, prev_line
@@ -98,7 +98,7 @@ local function unformat(ast)
 	local acc = ""
 
 	for _, v in ipairs(ast.elements) do
-		acc = acc .. "\n" .. unformat_list(v, v.anchor.line, 0) .. ""
+		acc = acc .. "\n" .. unformat_list(v, v.start_anchor.line, 0) .. ""
 	end
 
 	return acc

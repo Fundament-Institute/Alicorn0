@@ -37,7 +37,7 @@ local anchor_mt = {
 lpeg.locale(lpeg)
 
 local function element(kind, pattern)
-	return Ct(Cg(V "anchor", "anchor") * Cg(Cc(kind), "kind") * pattern)
+	return Ct(Cg(V "anchor", "start_anchor") * Cg(Cc(kind), "kind") * pattern)
 end
 
 local function symbol(value)
@@ -93,16 +93,16 @@ local function list(pattern)
 	return (V "anchor" * Ct(pattern) * V "anchor")
 		/ function(start_anchor, elements, end_anchor)
 			return {
-				anchor = start_anchor,
+				start_anchor = start_anchor,
 				elements = elements,
-				endpos = end_anchor,
+				end_anchor = end_anchor,
 				kind = "list",
 			}
 		end
 end
 
 ---@class Literal
----@field anchor Anchor
+---@field start_anchor Anchor
 ---@field kind LiteralKind
 ---@field literaltype LiteralType?
 ---@field val number | table | nil
@@ -120,8 +120,8 @@ local function update_ffp(name, patt)
 	return patt
 		+ (
 			Cmt(lpeg.Carg(2) * V "anchor", function(_, _, furthest_forward_ctx, start_anchor)
-				if furthest_forward_ctx.position then
-					if furthest_forward_ctx.position == start_anchor then
+				if furthest_forward_ctx.start_anchor then
+					if furthest_forward_ctx.start_anchor == start_anchor then
 						local acc = true
 						for i, v in ipairs(furthest_forward_ctx.expected) do
 							acc = acc and not (v == name)
@@ -129,12 +129,12 @@ local function update_ffp(name, patt)
 						if acc then
 							table.insert(furthest_forward_ctx.expected, name)
 						end
-					elseif furthest_forward_ctx.position < start_anchor then
-						furthest_forward_ctx.position = start_anchor
+					elseif furthest_forward_ctx.start_anchor < start_anchor then
+						furthest_forward_ctx.start_anchor = start_anchor
 						furthest_forward_ctx.expected = { name }
 					end
 				else
-					furthest_forward_ctx.position = start_anchor
+					furthest_forward_ctx.start_anchor = start_anchor
 					furthest_forward_ctx.expected = { name }
 				end
 
@@ -146,15 +146,15 @@ end
 local function clear_ffp()
 	return lpeg.Carg(2)
 		/ function(furthest_forward_ctx)
-			furthest_forward_ctx.position = nil
+			furthest_forward_ctx.start_anchor = nil
 			furthest_forward_ctx.expected = nil
 		end
 end
 
 local function create_literal(start_anchor, elements, end_anchor)
 	local val = {
-		anchor = start_anchor,
-		endpos = end_anchor,
+		start_anchor = start_anchor,
+		end_anchor = end_anchor,
 		kind = "literal",
 		literaltype = "bytes",
 		val = {},
@@ -307,7 +307,7 @@ local grammar = P {
 		P '"'
 			* Cg(Ct((V "string_literal" + V "splice") ^ 0), "elements")
 			* update_ffp('"', P '"')
-			* Cg(V "anchor", "endpos")
+			* Cg(V "anchor", "end_anchor")
 	),
 
 	longstring_literal = V "anchor" * Cs(
@@ -318,14 +318,14 @@ local grammar = P {
 		P '""""'
 			* V "indent"
 			* Cg(Ct((V "longstring_literal" + V "splice") ^ 0), "elements")
-			* Cg(V "anchor", "endpos")
+			* Cg(V "anchor", "end_anchor")
 			* V "dedent"
 	),
 
 	comment_body = C((1 - V "newline") ^ 1),
 	comment = update_ffp(
 		"line comment",
-		element("comment", (P "#" * Cg(V "comment_body" ^ -1, "val") * Cg(V "anchor", "endpos")))
+		element("comment", (P "#" * Cg(V "comment_body" ^ -1, "val") * Cg(V "anchor", "end_anchor")))
 	),
 	block_comment = update_ffp(
 		"block comment",
@@ -335,7 +335,7 @@ local grammar = P {
 				P "####"
 				* V "indent"
 				* Cg(Cs((V "subordinate_indent" + V "comment_body" + V "empty_line") ^ 0), "val")
-				* Cg(V "anchor", "endpos")
+				* Cg(V "anchor", "end_anchor")
 				* V "dedent"
 			)
 		)
@@ -403,7 +403,7 @@ local grammar = P {
 		table.insert(list.elements, 1, {
 			kind = "symbol",
 			str = list.elements["braceacc"],
-			anchor = list.anchor,
+			start_anchor = list.start_anchor,
 		})
 
 		list.elements["braceacc"] = nil
@@ -461,20 +461,20 @@ local grammar = P {
 
 		acc = table.remove(argcalls, 1)
 		table.insert(acc.elements, 1, symbol)
-		acc.anchor = symbol.anchor
+		acc.start_anchor = symbol.start_anchor
 		if acc.elements["brace"] then
 			table.insert(acc.elements, 1, acc.elements["brace"])
-			acc.elements[1].anchor = acc.anchor
+			acc.elements[1].start_anchor = acc.start_anchor
 		end
 
 		for _, v in ipairs(argcalls) do
 			table.insert(v.elements, 1, acc)
-			v.anchor = acc.anchor
+			v.start_anchor = acc.start_anchor
 			acc = v
 
 			if acc.elements["brace"] then
 				table.insert(acc.elements, 1, acc.elements["brace"])
-				acc.elements[1].anchor = acc.anchor
+				acc.elements[1].start_anchor = acc.start_anchor
 			end
 		end
 
@@ -533,8 +533,8 @@ error: %s
 end
 
 ---@class FormatList
----@field anchor Anchor
----@field endpos Anchor
+---@field start_anchor Anchor
+---@field end_anchor Anchor
 ---@field kind LiteralKind
 ---@field elements table[]
 
@@ -553,17 +553,17 @@ local function parse(input, filename)
 		sourceid = filename,
 		positions = { create_line_position(1, 1) },
 	}
-	local furthest_forward_ctx = { position = nil }
+	local furthest_forward_ctx = { start_anchor = nil }
 	local ast = lpeg.match(grammar, input, 1, line_ctx, furthest_forward_ctx)
 
-	if furthest_forward_ctx.position then
+	if furthest_forward_ctx.start_anchor then
 		local expected = "{"
 		for i, v in ipairs(furthest_forward_ctx.expected) do
 			expected = expected .. v .. ", "
 		end
 		expected = expected .. "}"
 
-		assert(false, span_error(furthest_forward_ctx.position, input, "expected " .. expected))
+		assert(false, span_error(furthest_forward_ctx.start_anchor, input, "expected " .. expected))
 	end
 
 	return ast

@@ -230,8 +230,8 @@ end
 
 ---@param yard { n: integer, [integer]: TaggedOperator }
 ---@param output { n: integer, [integer]: ConstructedSyntax }
----@param anchor Anchor
-local function shunting_yard_pop(yard, output, anchor)
+---@param start_anchor Anchor
+local function shunting_yard_pop(yard, output, start_anchor)
 	local yard_height = yard.n
 	local output_length = output.n
 	local operator = yard[yard_height]
@@ -239,14 +239,14 @@ local function shunting_yard_pop(yard, output, anchor)
 	local operator_symbol = operator.symbol
 	if operator_type == OperatorType.Prefix then
 		local arg = output[output_length]
-		local tree = metalanguage.list(anchor, metalanguage.symbol(anchor, operator_symbol), arg)
+		local tree = metalanguage.list(start_anchor, metalanguage.symbol(start_anchor, operator_symbol), arg)
 		yard[yard_height] = nil
 		yard.n = yard_height - 1
 		output[output_length] = tree
 	elseif operator_type == OperatorType.Infix then
 		local right = output[output_length]
 		local left = output[output_length - 1]
-		local tree = metalanguage.list(anchor, left, metalanguage.symbol(anchor, operator_symbol), right)
+		local tree = metalanguage.list(start_anchor, left, metalanguage.symbol(start_anchor, operator_symbol), right)
 		yard[yard_height] = nil
 		yard.n = yard_height - 1
 		output[output_length] = nil
@@ -301,10 +301,10 @@ end
 ---@param b ConstructedSyntax
 ---@param yard { n: integer, [integer]: TaggedOperator }
 ---@param output { n: integer, [integer]: ConstructedSyntax }
----@param anchor Anchor
+---@param start_anchor Anchor
 ---@return boolean
 ---@return ConstructedSyntax|string
-local function shunting_yard(a, b, yard, output, anchor)
+local function shunting_yard(a, b, yard, output, start_anchor)
 	-- first, collect all prefix operators
 	local is_prefix, prefix_symbol =
 		a:match({ metalanguage.issymbol(shunting_yard_prefix_handler) }, metalanguage.failure_handler, nil)
@@ -322,7 +322,7 @@ local function shunting_yard(a, b, yard, output, anchor)
 			type = OperatorType.Prefix,
 			symbol = prefix_symbol,
 		}
-		return shunting_yard(next_a, next_b, yard, output, anchor)
+		return shunting_yard(next_a, next_b, yard, output, start_anchor)
 	end
 	-- no more prefix operators, now handle infix
 	output.n = output.n + 1
@@ -340,19 +340,19 @@ local function shunting_yard(a, b, yard, output, anchor)
 	end
 	if not more then
 		while yard.n > 0 do
-			shunting_yard_pop(yard, output, anchor)
+			shunting_yard_pop(yard, output, start_anchor)
 		end
 		return true, output[1]
 	end
 	while yard.n > 0 and shunting_yard_should_pop(infix_symbol, yard[yard.n]) do
-		shunting_yard_pop(yard, output, anchor)
+		shunting_yard_pop(yard, output, start_anchor)
 	end
 	yard.n = yard.n + 1
 	yard[yard.n] = {
 		type = OperatorType.Infix,
 		symbol = infix_symbol,
 	}
-	return shunting_yard(next_a, next_b, yard, output, anchor)
+	return shunting_yard(next_a, next_b, yard, output, start_anchor)
 end
 
 ---@param symbol string
@@ -470,7 +470,7 @@ local function expression_pairhandler(args, a, b)
 
 	-- if the expression is a list containing prefix and infix expressions,
 	-- parse it into a tree of simple prefix/infix expressions with shunting yard
-	local ok, syntax = shunting_yard(a, b, { n = 0 }, { n = 0 }, a.anchor)
+	local ok, syntax = shunting_yard(a, b, { n = 0 }, { n = 0 }, a.start_anchor)
 	if ok then
 		---@cast syntax ConstructedSyntax
 		is_operator, operator_type, operator, left, right = syntax:match({
@@ -494,13 +494,13 @@ local function expression_pairhandler(args, a, b)
 		if not ok then
 			return false, combiner
 		end
-		sargs = metalanguage.list(a.anchor, left)
+		sargs = metalanguage.list(a.start_anchor, left)
 	elseif is_operator and operator_type == OperatorType.Infix then
 		ok, combiner = env:get("_" .. operator .. "_")
 		if not ok then
 			return false, combiner
 		end
-		sargs = metalanguage.list(a.anchor, left, right)
+		sargs = metalanguage.list(a.start_anchor, left, right)
 	else
 		ok, combiner, env = a:match(
 			{ expression(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.infer, env)) },
@@ -557,11 +557,11 @@ local function expression_pairhandler(args, a, b)
 		-- if not operative_result_val:is_enum_value() then
 		-- 	p(operative_result_val.kind)
 		-- 	print(operative_result_val:pretty_print())
-		-- 	return false, "applying operative did not result in value term with kind enum_value, typechecker or lua operative mistake when applying " .. tostring(a.anchor) .. " to the args " .. tostring(b.anchor)
+		-- 	return false, "applying operative did not result in value term with kind enum_value, typechecker or lua operative mistake when applying " .. tostring(a.start_anchor) .. " to the args " .. tostring(b.start_anchor)
 		-- end
 		-- variants: ok, error
 		--if operative_result_val.variant == "error" then
-		--	return false, semantic_error.operative_apply_failed(operative_result_val.data, { a.anchor, b.anchor })
+		--	return false, semantic_error.operative_apply_failed(operative_result_val.data, { a.start_anchor, b.start_anchor })
 		--end
 
 		-- temporary, while it isn't a Maybe
@@ -638,7 +638,7 @@ local function expression_pairhandler(args, a, b)
 		---@cast res inferrable
 
 		if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
-			local bind = terms.binding.program_sequence(res, a.anchor)
+			local bind = terms.binding.program_sequence(res, a.start_anchor)
 			env = env:bind_local(bind)
 			ok, res = env:get("#program-sequence") --TODO refactor
 			if not ok then
@@ -668,7 +668,7 @@ local function expression_pairhandler(args, a, b)
 		}, metalanguage.failure_handler, nil)
 
 		if not ok then
-			error(semantic_error.host_function_argument_collect_failed(tuple, { a.anchor, b.anchor }, {
+			error(semantic_error.host_function_argument_collect_failed(tuple, { a.start_anchor, b.start_anchor }, {
 				host_function_type = type_of_term,
 				host_function_value = term,
 			}, orig_env))
@@ -693,7 +693,7 @@ local function expression_pairhandler(args, a, b)
 				)
 			)
 			---@type Environment
-			env = env:bind_local(terms.binding.program_sequence(app, a.anchor))
+			env = env:bind_local(terms.binding.program_sequence(app, a.start_anchor))
 			ok, res = env:get("#program-sequence")
 			if not ok then
 				error(res)
@@ -849,7 +849,7 @@ expression = metalanguage.reducer(
 
 ---@class OperativeError
 ---@field cause any
----@field anchor Anchor
+---@field start_anchor Anchor
 ---@field operative_name string
 local OperativeError = {}
 local external_error_mt = {
@@ -857,7 +857,7 @@ local external_error_mt = {
 		local message = "Lua error occured inside host operative "
 			.. self.operative_name
 			.. " "
-			.. (self.anchor and tostring(self.anchor) or " at unknown position")
+			.. (self.start_anchor and tostring(self.start_anchor) or " at unknown position")
 			.. ":\n"
 			.. tostring(self.cause)
 		return message
@@ -866,12 +866,12 @@ local external_error_mt = {
 }
 
 ---@param cause any
----@param anchor Anchor
+---@param start_anchor Anchor
 ---@param operative_name any
 ---@return OperativeError
-function OperativeError.new(cause, anchor, operative_name)
+function OperativeError.new(cause, start_anchor, operative_name)
 	return setmetatable({
-		anchor = anchor,
+		start_anchor = start_anchor,
 		cause = cause,
 		operative_name = operative_name,
 	}, external_error_mt)
@@ -894,7 +894,7 @@ local function host_operative(fn, name)
 		-- userdata isn't passed in as it's always empty for host operatives
 		local ok, res, env = fn(syn, env, goal)
 		if not ok then
-			error(OperativeError.new(res, syn.anchor, debugstring))
+			error(OperativeError.new(res, syn.start_anchor, debugstring))
 		end
 		if
 			(goal:is_infer() and inferrable_term.value_check(res))

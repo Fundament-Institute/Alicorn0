@@ -7,17 +7,17 @@ local function syntax_convert(tree)
 		for i = #tree.elements, 1, -1 do
 			local elem = syntax_convert(tree.elements[i])
 			if elem then -- special handling for comments...
-				res = metalanguage.pair(tree.anchor, elem, res)
+				res = metalanguage.pair(tree.start_anchor, elem, res)
 			end
 		end
 		return res
 	elseif tree.kind == "symbol" then
-		return metalanguage.symbol(tree.anchor, tree.str)
+		return metalanguage.symbol(tree.start_anchor, tree.str)
 	elseif tree.kind == "literal" then
-		return metalanguage.value(tree.anchor, { type = tree.literaltype, val = tree.val })
+		return metalanguage.value(tree.start_anchor, { type = tree.literaltype, val = tree.val })
 	elseif tree.kind == "string" then
 		if type(tree.elements) == "string" then
-			return metalanguage.value(tree.anchor, { type = "string", val = tree.elements })
+			return metalanguage.value(tree.start_anchor, { type = "string", val = tree.elements })
 		end
 		if #tree.elements ~= 1 or tree.elements[1].literaltype ~= "bytes" then
 			error "NYI: strings with splices / not exactly one literal"
@@ -29,7 +29,7 @@ local function syntax_convert(tree)
 			chars[i] = string.char(byte)
 		end
 		local val = table.concat(chars)
-		return metalanguage.value(tree.anchor, { type = "string", val = val })
+		return metalanguage.value(tree.start_anchor, { type = "string", val = val })
 	elseif tree.kind == "comment" then
 		--do nothing
 	else
