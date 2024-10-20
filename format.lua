@@ -91,11 +91,11 @@ end
 
 local function list(pattern)
 	return (V "anchor" * Ct(pattern) * V "anchor")
-		/ function(anchor, elements, endpos)
+		/ function(start_anchor, elements, end_anchor)
 			return {
-				anchor = anchor,
+				anchor = start_anchor,
 				elements = elements,
-				endpos = endpos,
+				endpos = end_anchor,
 				kind = "list",
 			}
 		end
@@ -119,9 +119,9 @@ local function update_ffp(name, patt)
 
 	return patt
 		+ (
-			Cmt(lpeg.Carg(2) * V "anchor", function(_, _, furthest_forward_ctx, position)
+			Cmt(lpeg.Carg(2) * V "anchor", function(_, _, furthest_forward_ctx, start_anchor)
 				if furthest_forward_ctx.position then
-					if furthest_forward_ctx.position == position then
+					if furthest_forward_ctx.position == start_anchor then
 						local acc = true
 						for i, v in ipairs(furthest_forward_ctx.expected) do
 							acc = acc and not (v == name)
@@ -129,12 +129,12 @@ local function update_ffp(name, patt)
 						if acc then
 							table.insert(furthest_forward_ctx.expected, name)
 						end
-					elseif furthest_forward_ctx.position < position then
-						furthest_forward_ctx.position = position
+					elseif furthest_forward_ctx.position < start_anchor then
+						furthest_forward_ctx.position = start_anchor
 						furthest_forward_ctx.expected = { name }
 					end
 				else
-					furthest_forward_ctx.position = position
+					furthest_forward_ctx.position = start_anchor
 					furthest_forward_ctx.expected = { name }
 				end
 
@@ -151,10 +151,10 @@ local function clear_ffp()
 		end
 end
 
-local function create_literal(anchor, elements, endpos)
+local function create_literal(start_anchor, elements, end_anchor)
 	local val = {
-		anchor = anchor,
-		endpos = endpos,
+		anchor = start_anchor,
+		endpos = end_anchor,
 		kind = "literal",
 		literaltype = "bytes",
 		val = {},
@@ -244,7 +244,7 @@ local grammar = P {
 
 	count_tabs = update_ffp(
 		"spaces should not be interspersed in indentation",
-		Cmt(V "anchor" * C(S "\t " ^ 0), function(_, _, anchor, indentstring)
+		Cmt(V "anchor" * C(S "\t " ^ 0), function(_, _, start_anchor, indentstring)
 			if string.find(indentstring, " ") then
 				return false
 			end
@@ -499,16 +499,16 @@ local grammar = P {
 	symbol = symbol(V "symbol_chars"),
 }
 
-local function span_error(position, subject, msg)
+local function span_error(start_anchor, subject, msg)
 	local lines = {}
 	for line in subject:gmatch("([^\n\r]*)\r*\n") do
 		table.insert(lines, line)
 	end
-	local line = lines[position.line] or ""
+	local line = lines[start_anchor.line] or ""
 
 	local _, tabnum = line:gsub("\t", "")
-	local caret_wsp = ("\t"):rep(tabnum) .. (" "):rep(position.char - (1 + tabnum))
-	local linenum_wsp = (" "):rep(string.len(position.line))
+	local caret_wsp = ("\t"):rep(tabnum) .. (" "):rep(start_anchor.char - (1 + tabnum))
+	local linenum_wsp = (" "):rep(string.len(start_anchor.line))
 
 	local span = string.format(
 		[[
@@ -519,11 +519,11 @@ error: %s
 %s |%s^
 	]],
 		msg,
-		position.sourceid,
-		position.line,
-		position.char,
+		start_anchor.sourceid,
+		start_anchor.line,
+		start_anchor.char,
 		linenum_wsp,
-		position.line,
+		start_anchor.line,
 		line,
 		linenum_wsp,
 		caret_wsp
