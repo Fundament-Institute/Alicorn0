@@ -136,6 +136,7 @@ local TypecheckingContext = {}
 function TypecheckingContext:get_name(index)
 	return self.bindings:get(index).name
 end
+
 function TypecheckingContext:dump_names()
 	for i = 1, self:len() do
 		print(i, self:get_name(i))
@@ -152,7 +153,7 @@ function TypecheckingContext:format_names()
 end
 
 ---@param index integer
----@return any
+---@return value
 function TypecheckingContext:get_type(index)
 	return self.bindings:get(index).type
 end
@@ -163,7 +164,7 @@ function TypecheckingContext:get_runtime_context()
 end
 
 ---@param name string
----@param type any
+---@param type value
 ---@param val value?
 ---@param anchor Anchor?
 ---@return TypecheckingContext
