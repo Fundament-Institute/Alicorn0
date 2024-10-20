@@ -21,7 +21,7 @@ local string_mt = getmetatable("")
 string_mt.__index.chars = chars
 
 local function default_unknown(c)
-	error(("Option -%s requires an argument"):format(c))
+	error(("Unrecognized option: '-%s'"):format(c))
 end
 
 ---@param argv string[]
