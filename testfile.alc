@@ -1883,6 +1883,7 @@ let _*_ = mul
 let sqr = lambda (x)
 	x * x
 sqr 6
-let sqr_overcomplicated = lambda (t, x : t)
+# FIXME: this super duper should be failing
+let sqr_overcomplicated = lambda_annotated (t, x : t) : host-string
 	x * x
 sqr_overcomplicated(host-number, 6)
