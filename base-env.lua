@@ -102,12 +102,12 @@ local mk_inner = metalanguage.reducer(function(syntax, env)
 	if not ok then
 		return ok, tuple
 	end
-	return ok, { terms.inferrable_term.enum_cons(name, tuple), env }
+	return ok, terms.inferrable_term.enum_cons(name, tuple), env
 end, "mk_inner")
 
 ---@type lua_operative
 local function mk(syntax, env)
-	local inner_matcher = mk_inner(metalanguage.accept_handler, env)
+	local inner_matcher = mk_inner(utils.accept_bundled, env)
 	local ok, rest = syntax:match({
 		inner_matcher,
 		metalanguage.listtail(metalanguage.accept_handler, inner_matcher),
