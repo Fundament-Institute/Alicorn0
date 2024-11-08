@@ -118,6 +118,72 @@ local function mk(syntax, env)
 	return ok, table.unpack(rest)
 end
 
+---@param env Environment
+local switch_case = metalanguage.reducer(function(syntax, env)
+	local ok, tag
+	ok, tag, syntax = syntax:match({
+		metalanguage.listtail(
+			metalanguage.accept_handler,
+			metalanguage.oneof(
+				metalanguage.accept_handler,
+				metalanguage.issymbol(utils.accept_bundled),
+				metalanguage.list_many(metalanguage.accept_handler, metalanguage.issymbol(metalanguage.accept_handler))
+			),
+			metalanguage.symbol_exact(metalanguage.accept_handler, "->")
+		),
+	}, metalanguage.failure_handler, nil)
+	if not ok then
+		return ok, tag
+	end
+	local names = gen.declare_array(gen.builtin_string)(table.unpack(tag, 2))
+	tag = tag[1]
+	local singleton_contents
+	ok, singleton_contents = syntax:match({
+		metalanguage.listmatch(metalanguage.accept_handler, metalanguage.any(metalanguage.accept_handler)),
+	}, metalanguage.failure_handler, nil)
+	if ok then
+		syntax = singleton_contents
+	end
+	local shadowed, term
+	shadowed, env = env:enter_block(terms.block_purity.inherit)
+	env = env:bind_local(
+		terms.binding.tuple_elim(names, terms.inferrable_term.bound_variable(env.typechecking_context:len() + 1))
+	)
+	ok, term, env = syntax:match({
+		exprs.inferred_expression(metalanguage.accept_handler, env),
+	}, metalanguage.failure_handler, nil)
+	if not ok then
+		return ok, term
+	end
+	env, term = env:exit_block(term, shadowed)
+	return ok, tag, term, env
+end, "switch_case")
+
+---@type lua_operative
+local function switch(syntax, env)
+	local ok, subj
+	ok, subj, syntax = syntax:match({
+		metalanguage.listtail(metalanguage.accept_handler, exprs.inferred_expression(utils.accept_bundled, env)),
+	}, metalanguage.failure_handler, nil)
+	if not ok then
+		return ok, subj
+	end
+	subj, env = table.unpack(subj)
+	local variants = gen.declare_map(gen.builtin_string, terms.inferrable_term)()
+	while not syntax:match({ metalanguage.isnil(metalanguage.accept_handler) }, metalanguage.failure_handler, nil) do
+		local tag, term
+		ok, tag = syntax:match({
+			metalanguage.listtail(metalanguage.accept_handler, switch_case(utils.accept_bundled, env)),
+		}, metalanguage.failure_handler, nil)
+		if not ok then
+			return ok, tag
+		end
+		tag, term, env = table.unpack(tag)
+		variants:set(tag, term)
+	end
+	return true, terms.inferrable_term.enum_case(subj, variants), env
+end
+
 ---@param _ any
 ---@param name string
 ---@param exprenv { val:inferrable, env:Environment }
@@ -1495,6 +1561,7 @@ local core_operations = {
 	--["do"] = evaluator.host_operative(do_block),
 	let = exprs.host_operative(let_bind, "let_bind"),
 	mk = exprs.host_operative(mk, "mk"),
+	switch = exprs.host_operative(switch, "switch"),
 	--record = exprs.host_operative(record_build, "record_build"),
 	intrinsic = exprs.host_operative(intrinsic, "intrinsic"),
 	["host-number"] = lit_term(value.host_number_type, value.host_type_type),

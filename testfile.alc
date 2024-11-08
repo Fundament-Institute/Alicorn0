@@ -1885,8 +1885,15 @@ sqr 6
 # FIXME: this super duper should be failing
 let sqr_overcomplicated = lambda_annotated (t, x : t) : host-string
 	x * x
+sqr_overcomplicated(host-number, 6)
+
+let switchtest = lambda (x)
+	switch x
+		none -> 2
+		inj1(a) -> sqr(a)
+		inj2(a, b) -> sqr(a) + b
+
 tuple-of-implicit
-	mk None
-	mk None()
-	mk inj1 6 sqr(6)
-	mk inj2(7, sqr(7))
+	switchtest(mk none)
+	switchtest(mk inj1 5)
+	switchtest(mk inj2 6 4)
