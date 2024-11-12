@@ -1983,7 +1983,7 @@ function infer(
 		local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
 		local constrain_variants = string_value_map()
 		for k, v in variants:pairs() do
-			constrain_variants[k] = typechecker_state:metavariable(typechecking_context, false):as_value()
+			constrain_variants:set(k, typechecker_state:metavariable(typechecking_context, false):as_value())
 		end
 		typechecker_state:flow(
 			subject_type,
