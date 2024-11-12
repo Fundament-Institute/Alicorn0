@@ -118,38 +118,50 @@ local function mk(syntax, env)
 	return ok, table.unpack(rest)
 end
 
+---@type Matcher
+local switch_case_header_matcher = metalanguage.listtail(
+	metalanguage.accept_handler,
+	metalanguage.oneof(
+		metalanguage.accept_handler,
+		metalanguage.issymbol(utils.accept_bundled),
+		metalanguage.list_many(metalanguage.accept_handler, metalanguage.issymbol(metalanguage.accept_handler))
+	),
+	metalanguage.symbol_exact(metalanguage.accept_handler, "->")
+)
+
 ---@param env Environment
 local switch_case = metalanguage.reducer(function(syntax, env)
-	local ok, tag
-	ok, tag, syntax = syntax:match({
-		metalanguage.listtail(
-			metalanguage.accept_handler,
-			metalanguage.oneof(
-				metalanguage.accept_handler,
-				metalanguage.issymbol(utils.accept_bundled),
-				metalanguage.list_many(metalanguage.accept_handler, metalanguage.issymbol(metalanguage.accept_handler))
-			),
-			metalanguage.symbol_exact(metalanguage.accept_handler, "->")
-		),
-	}, metalanguage.failure_handler, nil)
+	local ok, tag, tail = syntax:match({ switch_case_header_matcher }, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, tag
 	end
 	local names = gen.declare_array(gen.builtin_string)(table.unpack(tag, 2))
 	tag = tag[1]
+	if not tag then
+		return false, "missing case tag"
+	end
 	local singleton_contents
-	ok, singleton_contents = syntax:match({
+	ok, singleton_contents = tail:match({
 		metalanguage.listmatch(metalanguage.accept_handler, metalanguage.any(metalanguage.accept_handler)),
 	}, metalanguage.failure_handler, nil)
 	if ok then
-		syntax = singleton_contents
+		tail = singleton_contents
 	end
+	-- This should eventually be rewritten to use an environment-splitting operation:
+	env = environment.new_env(env, {
+		typechecking_context = env.typechecking_context:append(
+			"#switch-subj",
+			evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
+			nil,
+			syntax.anchor
+		),
+	})
 	local shadowed, term
 	shadowed, env = env:enter_block(terms.block_purity.inherit)
 	env = env:bind_local(
-		terms.binding.tuple_elim(names, terms.inferrable_term.bound_variable(env.typechecking_context:len() + 1))
+		terms.binding.tuple_elim(names, terms.inferrable_term.bound_variable(env.typechecking_context:len()))
 	)
-	ok, term, env = syntax:match({
+	ok, term, env = tail:match({
 		exprs.inferred_expression(metalanguage.accept_handler, env),
 	}, metalanguage.failure_handler, nil)
 	if not ok then
@@ -178,7 +190,8 @@ local function switch(syntax, env)
 		if not ok then
 			return ok, tag
 		end
-		tag, term, env = table.unpack(tag)
+		-- This should eventually be rewritten to collect the branch envs and join them back together:
+		tag, term = table.unpack(tag)
 		variants:set(tag, term)
 	end
 	return true, terms.inferrable_term.enum_case(subj, variants), env
