@@ -184,7 +184,7 @@ local function switch(syntax, env)
 	local variants = gen.declare_map(gen.builtin_string, terms.inferrable_term)()
 	while not syntax:match({ metalanguage.isnil(metalanguage.accept_handler) }, metalanguage.failure_handler, nil) do
 		local tag, term
-		ok, tag = syntax:match({
+		ok, tag, syntax = syntax:match({
 			metalanguage.listtail(metalanguage.accept_handler, switch_case(utils.accept_bundled, env)),
 		}, metalanguage.failure_handler, nil)
 		if not ok then
