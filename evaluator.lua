@@ -1995,8 +1995,9 @@ function infer(
 		local term_variants = string_typed_map()
 		local result_types = {}
 		for k, v in variants:pairs() do
+			--TODO figure out where to store/retrieve the anchors correctly
 			local variant_type, variant_usages, variant_term =
-				infer(v, typechecking_context:append("#variant", constrain_variants:get(k), nil, nil)) --TODO improve
+				infer(v, typechecking_context:append("#variant", constrain_variants:get(k), nil, v.anchor)) --TODO improve
 			term_variants:set(k, variant_term)
 			result_types[#result_types + 1] = variant_type
 		end

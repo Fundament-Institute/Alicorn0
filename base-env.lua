@@ -147,7 +147,7 @@ local switch_case = metalanguage.reducer(function(syntax, env)
 	if ok then
 		tail = singleton_contents
 	end
-	-- This should eventually be rewritten to use an environment-splitting operation:
+	--TODO rewrite this to use an environment-splitting operation
 	env = environment.new_env(env, {
 		typechecking_context = env.typechecking_context:append(
 			"#switch-subj",
@@ -168,6 +168,7 @@ local switch_case = metalanguage.reducer(function(syntax, env)
 		return ok, term
 	end
 	env, term = env:exit_block(term, shadowed)
+	term.anchor = syntax.anchor --TODO figure out where to store/retrieve the anchors correctly
 	return ok, tag, term, env
 end, "switch_case")
 
@@ -190,7 +191,7 @@ local function switch(syntax, env)
 		if not ok then
 			return ok, tag
 		end
-		-- This should eventually be rewritten to collect the branch envs and join them back together:
+		--TODO rewrite this to collect the branch envs and join them back together:
 		tag, term = table.unpack(tag)
 		variants:set(tag, term)
 	end
