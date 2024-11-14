@@ -2510,8 +2510,8 @@ function evaluate(typed_term, runtime_context)
 		local target_val = evaluate(target, runtime_context)
 		if target_val:is_enum_value() then
 			local variant, arg = target_val:unwrap_enum_value()
-			if variants[variant] then
-				return evaluate(variants[variant], runtime_context:append(arg))
+			if variants:get(variant) then
+				return evaluate(variants:get(variant), runtime_context:append(arg))
 			else
 				return evaluate(default, runtime_context:append(target_val))
 			end
