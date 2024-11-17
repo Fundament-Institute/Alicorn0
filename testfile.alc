@@ -1896,3 +1896,5 @@ tuple-of-implicit
 	switchtest(mk none)
 	switchtest(mk inj1 5)
 	switchtest(mk inj2 3 5)
+	switchtest(mk inj2(3, 5))
+	switchtest(mk inj2 sqr(2) 5)

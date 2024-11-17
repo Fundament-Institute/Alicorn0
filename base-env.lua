@@ -88,13 +88,19 @@ local function let_bind(syntax, env)
 		env
 end
 
-local mk_inner = metalanguage.reducer(function(syntax, env)
-	local ok, name, tail = syntax:match({
-		metalanguage.listtail(metalanguage.accept_handler, metalanguage.issymbol(metalanguage.accept_handler)),
+---@type lua_operative
+local function mk(syntax, env)
+	local ok, bun = syntax:match({
+		metalanguage.listmatch(
+			metalanguage.accept_handler,
+			metalanguage.listtail(utils.accept_bundled, metalanguage.issymbol(metalanguage.accept_handler))
+		),
+		metalanguage.listtail(utils.accept_bundled, metalanguage.issymbol(metalanguage.accept_handler)),
 	}, metalanguage.failure_handler, nil)
 	if not ok then
-		return ok, name
+		return ok, bun
 	end
+	local name, tail = utils.unpack_bundle(bun)
 	local tuple
 	ok, tuple, env = tail:match({
 		exprs.collect_tuple(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, env)),
@@ -103,19 +109,6 @@ local mk_inner = metalanguage.reducer(function(syntax, env)
 		return ok, tuple
 	end
 	return ok, terms.inferrable_term.enum_cons(name, tuple), env
-end, "mk_inner")
-
----@type lua_operative
-local function mk(syntax, env)
-	local inner_matcher = mk_inner(utils.accept_bundled, env)
-	local ok, rest = syntax:match({
-		inner_matcher,
-		metalanguage.listtail(metalanguage.accept_handler, inner_matcher),
-	}, metalanguage.failure_handler, nil)
-	if not ok then
-		return ok, rest
-	end
-	return ok, table.unpack(rest)
 end
 
 ---@type Matcher
