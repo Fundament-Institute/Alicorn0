@@ -1011,7 +1011,7 @@ local function lambda_single_impl(syntax, env)
 		return ok, thread
 	end
 
-	local name, arg, env = table.unpack(thread)
+	local name, arg, env = utils.unpack_bundle(thread)
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
 	inner_env = inner_env:bind_local(
@@ -1038,7 +1038,7 @@ local function lambda_implicit_impl(syntax, env)
 		return ok, thread
 	end
 
-	local name, arg, env = table.unpack(thread)
+	local name, arg, env = utils.unpack_bundle(thread)
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
 	inner_env = inner_env:bind_local(

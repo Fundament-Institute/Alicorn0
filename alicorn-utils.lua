@@ -1,9 +1,5 @@
 local M = {}
 
-function M.numerify(...)
-	return select("#", ...), ...
-end
-
 ---@param ... any
 ---@return table
 function M.concat(...)
@@ -245,10 +241,9 @@ local memo_end_tag = {}
 function M.memoize(fn)
 	local memotab = setmetatable({}, memo_mt)
 	local function wrapfn(...)
-		local args = { ... }
-		local nargs = select("#", ...)
+		local args = table.pack(...)
 		local thismemo = memotab
-		for i = 1, nargs do
+		for i = 1, args.n do
 			local nextmemo = thismemo[args[i]]
 			if not nextmemo then
 				nextmemo = setmetatable({}, memo_mt)
