@@ -649,8 +649,8 @@ local array_type_mt = {
 			array = {},
 		}
 		setmetatable(val, self)
-		local args = { ... }
-		for i = 1, select("#", ...) do
+		local args = table.pack(...)
+		for i = 1, args.n do
 			val:append(args[i])
 		end
 		return val
