@@ -30,7 +30,7 @@ end
 
 ---handle a let binding
 ---@type lua_operative
-local function let_bind(syntax, env)
+local function let_impl(syntax, env)
 	local ok, name, tail = syntax:match({
 		metalanguage.listtail(
 			metalanguage.accept_handler,
@@ -67,7 +67,7 @@ local function let_bind(syntax, env)
 
 	if not env or not env.get then
 		p(env)
-		error("env in let_bind isn't an env")
+		error("env in let_impl isn't an env")
 	end
 
 	if type(name) == "table" then
@@ -89,7 +89,7 @@ local function let_bind(syntax, env)
 end
 
 ---@type lua_operative
-local function mk(syntax, env)
+local function mk_impl(syntax, env)
 	local ok, bun = syntax:match({
 		metalanguage.listmatch(
 			metalanguage.accept_handler,
@@ -166,7 +166,7 @@ local switch_case = metalanguage.reducer(function(syntax, env)
 end, "switch_case")
 
 ---@type lua_operative
-local function switch(syntax, env)
+local function switch_impl(syntax, env)
 	local ok, subj
 	ok, subj, syntax = syntax:match({
 		metalanguage.listtail(metalanguage.accept_handler, exprs.inferred_expression(utils.accept_bundled, env)),
@@ -229,7 +229,7 @@ local function record_build(syntax, env)
 end
 
 ---@type lua_operative
-local function intrinsic(syntax, env)
+local function intrinsic_impl(syntax, env)
 	local ok, str_env, syntax = syntax:match({
 		metalanguage.listtail(
 			metalanguage.accept_handler,
@@ -1566,11 +1566,11 @@ local core_operations = {
 	--end, types.tuple {types.number, types.number}, types.cotuple({types.unit, types.unit})),
 
 	--["do"] = evaluator.host_operative(do_block),
-	let = exprs.host_operative(let_bind, "let_bind"),
-	mk = exprs.host_operative(mk, "mk"),
-	switch = exprs.host_operative(switch, "switch"),
+	let = exprs.host_operative(let_impl, "let_impl"),
+	mk = exprs.host_operative(mk_impl, "mk_impl"),
+	switch = exprs.host_operative(switch_impl, "switch_impl"),
 	--record = exprs.host_operative(record_build, "record_build"),
-	intrinsic = exprs.host_operative(intrinsic, "intrinsic"),
+	intrinsic = exprs.host_operative(intrinsic_impl, "intrinsic_impl"),
 	["host-number"] = lit_term(value.host_number_type, value.host_type_type),
 	["host-type"] = lit_term(value.host_type_type, value.star(1, 1)),
 	["host-func-type"] = exprs.host_operative(make_host_func_syntax(false), "host_func_type_impl"),
