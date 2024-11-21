@@ -310,8 +310,9 @@ end
 
 local function s(...)
 	local res = {}
-	for i, v in ipairs { ... } do
-		res[i] = pretty_print(v)
+	local args = table.pack(...)
+	for i = 1, args.n do
+		res[i] = pretty_print(args[i])
 	end
 	return table.concat(res, "    ")
 end

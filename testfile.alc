@@ -679,10 +679,9 @@ let func-to-host-func =
 		""""
 			return function(_type, _valid, afn)
 				return function(...)
-					local args = {...}
-					local nargs = select("#", ...)
+					local args = table.pack(...)
 					local conv_args = terms_gen.declare_array(terms.value)()
-					for i = 1, nargs do
+					for i = 1, args.n do
 						conv_args:append(terms.value.host_value(args[i]))
 					end
 					local res = evaluator.apply_value(afn, terms.value.tuple_value(conv_args))
