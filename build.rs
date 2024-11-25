@@ -22,7 +22,6 @@ const ALICORN_SOURCES: &[&str] = &[
     "./metalanguage.lua",
     "./modules.lua",
     "./operative-scratch.lua",
-    "./pretty-printable-trait.lua",
     "./pretty-printer.lua",
     "./profile.lua",
     "./reducer-utils.lua",
@@ -85,7 +84,11 @@ fn main() -> LuaResult<()> {
 local data = {}
 
 for i, path in ipairs( sources ) do
-  local bc = string.dump( loadfile( path ), false )
+  local content, err = loadfile( path )
+  if content == nil then
+    error(err)
+  end
+  local bc = string.dump( content, false )
   local name = string.match( path, ".+/(.+).lua" )
   table.insert( data, ( "package.preload[%q] = load( %q, %q )\n" ) : format( name, bc, name ) )
 end

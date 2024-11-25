@@ -1017,7 +1017,7 @@ local function lambda_single_impl(syntax, env)
 		return ok, thread
 	end
 
-	local name, arg, env = table.unpack(thread)
+	local name, arg, env = utils.unpack_bundle(thread)
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
 	inner_env = inner_env:bind_local(
@@ -1044,7 +1044,7 @@ local function lambda_implicit_impl(syntax, env)
 		return ok, thread
 	end
 
-	local name, arg, env = table.unpack(thread)
+	local name, arg, env = utils.unpack_bundle(thread)
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
 	inner_env = inner_env:bind_local(
@@ -1058,6 +1058,55 @@ local function lambda_implicit_impl(syntax, env)
 	if not ok then
 		return ok, expr
 	end
+	local resenv, term, purity = env:exit_block(expr, shadow)
+	return true, term, resenv
+end
+
+---@type lua_operative
+local function lambda_annotated_impl(syntax, env)
+	local ok, thread, tail = syntax:match({
+		metalanguage.listtail(metalanguage.accept_handler, ascribed_segment_2(metalanguage.accept_handler, env)),
+	}, metalanguage.failure_handler, nil)
+	if not ok then
+		return ok, thread
+	end
+
+	local args, names, env = thread.args, thread.names, thread.env
+
+	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
+	inner_env = inner_env:bind_local(
+		terms.binding.annotated_lambda(
+			"#lambda-arguments",
+			args,
+			syntax.anchor,
+			terms.visibility.explicit,
+			literal_purity_pure
+		)
+	)
+	local _, arg = inner_env:get("#lambda-arguments")
+	inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
+
+	local ok, ann_expr_env, tail = tail:match({
+		metalanguage.listtail(
+			metalanguage.accept_handler,
+			metalanguage.symbol_exact(metalanguage.accept_handler, ":"),
+			exprs.inferred_expression(utils.accept_with_env, inner_env)
+		),
+	}, metalanguage.failure_handler, nil)
+	if not ok then
+		return ok, ann_expr_env
+	end
+	local ann_expr, inner_env = utils.unpack_val_env(ann_expr_env)
+
+	local ok, expr, env = tail:match(
+		{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env)) },
+		metalanguage.failure_handler,
+		nil
+	)
+	if not ok then
+		return ok, expr
+	end
+	expr = terms.inferrable_term.annotated(terms.checkable_term.inferrable(expr), ann_expr)
 	local resenv, term, purity = env:exit_block(expr, shadow)
 	return true, term, resenv
 end
@@ -1435,6 +1484,7 @@ local core_operations = {
 	["lambda-prog"] = exprs.host_operative(lambda_prog_impl, "lambda_prog_impl"),
 	lambda_implicit = exprs.host_operative(lambda_implicit_impl, "lambda_implicit_impl"),
 	lambda_curry = exprs.host_operative(lambda_curry_impl, "lambda_curry_impl"),
+	lambda_annotated = exprs.host_operative(lambda_annotated_impl, "lambda_annotated_impl"),
 	the = exprs.host_operative(the_operative_impl, "the"),
 	apply = exprs.host_operative(apply_operative_impl, "apply"),
 	wrap = build_wrap(typed.host_wrap, typed.host_wrapped_type),

@@ -1085,11 +1085,14 @@ add_comparer("value.variance_type", "value.variance_type", function(lctx, a, rct
 	return true
 end)
 
-for _, type_of_type in ipairs({
-	value.host_type_type,
-}) do
-	add_comparer(type_of_type.kind, value.star(0, 0).kind, always_fits_comparer)
-end
+add_comparer("value.host_type_type", "value.star", function(lctx, a, rctx, b)
+	local level, depth = b:unwrap_star()
+	if depth == 0 then
+		return true
+	else
+		return false, "host_type_type does not contain types (i.e. does not fit in stars deeper than 0)"
+	end
+end)
 
 add_comparer(value.star(0, 0).kind, value.star(0, 0).kind, function(lctx, a, rctx, b)
 	local alevel, adepth = a:unwrap_star()

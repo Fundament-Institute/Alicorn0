@@ -265,6 +265,7 @@ function environment:bind_local(binding)
 			error("program sequence must infer to a program type")
 		end
 		local first_effect_sig, first_base_type = first_type:unwrap_program_type()
+		--print("FOUND EFFECTFUL BINDING", first_base_type, "produced by ", first_type)
 		local n = self.typechecking_context:len()
 		local term = inferrable_term.bound_variable(n + 1)
 		local locals = self.locals:put("#program-sequence", term)
