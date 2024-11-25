@@ -27,9 +27,20 @@ let implicit-unwrap = lambda_implicit (T : type_(10, 0))
 	lambda (x : wrapped(T))
 		unwrap T x
 
+let implicit-unstrict-wrap = lambda_curry ((T : type_(10, 0)))
+	lambda (x : T)
+		unstrict-wrap T x
+
+let implicit-unstrict-unwrap = lambda_implicit (T : type_(10, 0))
+	lambda (x : unstrict-wrapped(T))
+		unstrict-unwrap T x
+
 let explicit-unwrap = unwrap
 let wrap = implicit-wrap
 let unwrap = implicit-unwrap
+let explicit-unstrict-unwrap = unwrap
+let unstrict-wrap = implicit-unstrict-wrap
+let unstrict-unwrap = implicit-unstrict-unwrap
 
 let host-bool-wrap            = intrinsic "return terms.value.host_bool_type"      : wrapped(host-type)
 let host-string-wrap          = intrinsic "return terms.value.host_string_type"    : wrapped(host-type)
@@ -1152,6 +1163,68 @@ let host-tuple-concat = lambda (
 	let (cat) = inner(wrap(hd), wrap(tl))
 	unwrap(cat)
 
+let host-number-fold-indep = lambda_implicit (T : type_(9, 0))
+	let inner =
+		intrinsic
+			""""
+				local value_array = terms_gen.declare_array(terms.value)
+				return function(n, f, acc)
+					for i = n, 1, -1 do
+						acc = evaluator.apply_value(f, terms.value.tuple_value(value_array(terms.value.host_value(i), acc)))
+					end
+					return acc
+				end
+			:
+			host-func-type  (
+					n : host-number,
+					f : (wrapped (forall (i : host-number, acc : T) -> (resacc : T)) ),
+					acc : wrapped(T))
+				->
+				((fold  : wrapped(T)))
+	lambda (n : host-number, f : (forall (i  : host-number, acc  : T) -> (resacc  : T)), acc  : T)
+		let  (fold) = inner(n, wrap(f), wrap(acc))
+		unwrap(fold)
+
+let duplicate-tuple-desc = lambda_implicit (U : universe)
+	lambda (n : host-number, T : U)
+		host-number-fold-indep
+			n
+			lambda (i : host-number, acc : tuple-desc-type(U))
+				tuple-desc-concat
+					U
+					tuple-desc-singleton U T
+					acc
+			tuple-desc-empty U
+
+let host-array-from-tuple = lambda_implicit (T : host-type)
+	lambda (size : host-number, tuple : host-tuple-type(duplicate-tuple-desc(size, T)))
+		let inner = 
+			intrinsic
+				""""
+					return function(tuple)
+						return {tuple:unwrap_host_tuple_value(tuple):unpack()}
+					end
+				:
+				host-func-type ((tuple : wrapped(host-tuple-type(duplicate-tuple-desc(size, T))))) -> ((res : host-array-type(T)))
+		let (array) = inner(wrap(tuple))
+		array
+
+let make-host-array = lambda_implicit (T : host-type)
+	lambda (size : host-number)
+		let input-type = host-tuple-type(duplicate-tuple-desc(size, T))
+		let inner = 
+			intrinsic
+				""""
+					return function(tuple)
+						return {tuple:unwrap_host_tuple_value(tuple):unpack()}
+					end
+				:
+				host-func-type ((tuple : wrapped(input-type))) -> ((res : host-array-type(T)))
+		lambda_single (elems : input-type)
+			let (array) = inner(wrap(elems))
+			array
+
+
 let host-literal = new-host-type(new-host-unique-id("literal"))
 
 let host-expression-args = new-host-type(new-host-unique-id("expression-args"))
@@ -1588,6 +1661,8 @@ let do-impl = lambda (syn : host-syntax, env : host-environment, ud : host-unit,
 			host-array-new matcher-t
 			1
 			matcher
+
+	#let matchers = (make-host-array(1) matcher)
 
 	let (ok, term, inner_env) =
 		match-syntax
@@ -2103,4 +2178,9 @@ let sqr_overcomplicated = lambda_annotated (t, x : t) : host-string
 sqr_overcomplicated(host-number, 6)
 
 
+
+#the tuple-type-explicit(host-type, duplicate-tuple-desc(1, host-number)) tuple-of-implicit(1)
+#host-array-from-tuple(2, host-tuple-of(host-type, duplicate-tuple-desc(2, host-number))(1, 2))
+
 #main()
+
