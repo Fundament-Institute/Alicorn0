@@ -3,11 +3,13 @@
 
 require "pretty-printer" -- has side-effect of loading global p()
 
---jit.off()
-jit.opt.start("maxtrace=10000")
-jit.opt.start("maxmcode=4096")
-jit.opt.start("recunroll=5")
-jit.opt.start("loopunroll=60")
+if jit then
+	--jit.off()
+	jit.opt.start("maxtrace=10000")
+	jit.opt.start("maxmcode=4096")
+	jit.opt.start("recunroll=5")
+	jit.opt.start("loopunroll=60")
+end
 
 local startTime = os.clock()
 local checkpointTime = startTime
