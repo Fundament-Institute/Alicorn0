@@ -1078,7 +1078,7 @@ local function lambda_annotated_impl(syntax, env)
 		terms.binding.annotated_lambda(
 			"#lambda-arguments",
 			args,
-			syntax.anchor,
+			syntax.start_anchor,
 			terms.visibility.explicit,
 			literal_purity_pure
 		)
