@@ -1,6 +1,7 @@
 local derivers = require "derivers"
 local pretty_printer = require "pretty-printer"
 local traits = require "traits"
+local U = require "alicorn-utils"
 
 -- record and enum are nominative types.
 -- this means that two record types, given the same arguments, are distinct.
@@ -417,8 +418,6 @@ local function map_pretty_print(self, pp, ...)
 	return pp:table(self._map, ...)
 end
 
-local map_memo = {}
-
 ---@param self table
 ---@param key_type Type
 ---@param value_type Type
@@ -431,15 +430,6 @@ local function define_map(self, key_type, value_type)
 		or type(value_type.value_check) ~= "function"
 	then
 		error("trying to set the key or value type to something that isn't a type (possible typo?)")
-	end
-
-	if not map_memo[key_type] then
-		map_memo[key_type] = {}
-	end
-	if map_memo[key_type][value_type] then
-		return map_memo[key_type][value_type]
-	else
-		map_memo[key_type][value_type] = self
 	end
 
 	setmetatable(self, map_type_mt)
@@ -464,6 +454,7 @@ local function define_map(self, key_type, value_type)
 	})
 	return self
 end
+define_map = U.memoize(define_map)
 
 ---@class SetType: Type
 ---@field key_type Type
@@ -584,20 +575,12 @@ local function set_pretty_print(self, pp, ...)
 	return pp:table(self._set, ...)
 end
 
-local set_memo = {}
-
 ---@param self table
 ---@param key_type Type
 ---@return SetType self
 local function define_set(self, key_type)
 	if type(key_type) ~= "table" or type(key_type.value_check) ~= "function" then
 		error("trying to set the key or value type to something that isn't a type (possible typo?)")
-	end
-
-	if set_memo[key_type] then
-		return set_memo[key_type]
-	else
-		set_memo[key_type] = self
 	end
 
 	setmetatable(self, set_type_mt)
@@ -620,6 +603,7 @@ local function define_set(self, key_type)
 	})
 	return self
 end
+define_set = U.memoize(define_set)
 
 ---@class ArrayType: Type
 ---@field value_type Type
@@ -855,20 +839,12 @@ local function gen_array_diff_fn(self, value_type)
 	return diff_fn
 end
 
-local array_memo = {}
-
 ---@param self table
 ---@param value_type Type
 ---@return ArrayType
 local function define_array(self, value_type)
 	if type(value_type) ~= "table" or type(value_type.value_check) ~= "function" then
 		error("trying to set the value type to something that isn't a type (possible typo?)")
-	end
-
-	if array_memo[value_type] then
-		return array_memo[value_type]
-	else
-		array_memo[value_type] = self
 	end
 
 	setmetatable(self, array_type_mt)
@@ -897,6 +873,7 @@ local function define_array(self, value_type)
 	})
 	return self
 end
+define_array = U.memoize(define_array)
 
 ---@class UndefinedType: Type
 ---@field define_record fun(self: table, kind: string, params_with_types: ParamsWithTypes): RecordType
