@@ -407,6 +407,7 @@ end
 ---@class ConstructedSyntax
 ---@field accepters AccepterSet
 ---@field start_anchor Anchor
+---@field end_anchor Anchor
 local ConstructedSyntax = {}
 
 --[[

@@ -2012,7 +2012,7 @@ function infer(
 		for k, v in variants:pairs() do
 			--TODO figure out where to store/retrieve the anchors correctly
 			local variant_type, variant_usages, variant_term =
-				infer(v, typechecking_context:append("#variant", constrain_variants:get(k), nil, v.anchor)) --TODO improve
+				infer(v, typechecking_context:append("#variant", constrain_variants:get(k), nil, v.start_anchor)) --TODO improve
 			term_variants:set(k, variant_term)
 			result_types[#result_types + 1] = variant_type
 		end

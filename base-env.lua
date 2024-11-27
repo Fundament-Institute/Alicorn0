@@ -146,7 +146,7 @@ local switch_case = metalanguage.reducer(function(syntax, env)
 			"#switch-subj",
 			evaluator.typechecker_state:metavariable(env.typechecking_context):as_value(),
 			nil,
-			syntax.anchor
+			syntax.start_anchor
 		),
 	})
 	local shadowed, term
@@ -161,7 +161,8 @@ local switch_case = metalanguage.reducer(function(syntax, env)
 		return ok, term
 	end
 	env, term = env:exit_block(term, shadowed)
-	term.anchor = syntax.anchor --TODO figure out where to store/retrieve the anchors correctly
+	term.start_anchor = syntax.start_anchor --TODO figure out where to store/retrieve the anchors correctly
+	term.end_anchor = syntax.end_anchor
 	return ok, tag, term, env
 end, "switch_case")
 
@@ -1181,7 +1182,7 @@ local function lambda_annotated_impl(syntax, env)
 		terms.binding.annotated_lambda(
 			"#lambda-arguments",
 			args,
-			syntax.anchor,
+			syntax.start_anchor,
 			terms.visibility.explicit,
 			literal_purity_pure
 		)
