@@ -258,7 +258,7 @@ local function intrinsic_impl(syntax, env)
 		error "env nil in base-env.intrinsic"
 	end
 	return true,
-		terms.inferrable_term.host_intrinsic(str, type--[[terms.checkable_term.inferrable(type)]], syntax.anchor),
+		terms.inferrable_term.host_intrinsic(str, type--[[terms.checkable_term.inferrable(type)]], syntax.start_anchor),
 		env
 end
 
@@ -340,7 +340,13 @@ local ascribed_name = metalanguage.reducer(
 		local shadowed
 		shadowed, env = env:enter_block(terms.block_purity.pure)
 		env = env:bind_local(
-			terms.binding.annotated_lambda("#prev", prev, syntax.anchor, terms.visibility.explicit, literal_purity_pure)
+			terms.binding.annotated_lambda(
+				"#prev",
+				prev,
+				syntax.start_anchor,
+				terms.visibility.explicit,
+				literal_purity_pure
+			)
 		)
 		local ok, prev_binding = env:get("#prev")
 		if not ok then
@@ -381,7 +387,7 @@ local curry_segment = metalanguage.reducer(
 						terms.binding.annotated_lambda(
 							name,
 							type_val,
-							syntax.anchor,
+							syntax.start_anchor,
 							terms.visibility.implicit,
 							literal_purity_pure
 						)
@@ -757,13 +763,13 @@ local function make_host_func_syntax(effectful)
 
 		local shadowed
 		shadowed, env = env:enter_block(terms.block_purity.pure)
-		-- tail.anchor can be nil so we fall back to the anchor for the start of this host func type if needed
+		-- tail.start_anchor can be nil so we fall back to the start_anchor for this host func type if needed
 		-- TODO: use correct name in lambda parameter instead of adding an extra let
 		env = env:bind_local(
 			terms.binding.annotated_lambda(
 				"#host-func-arguments",
 				params_args,
-				tail.anchor or syntax.anchor,
+				tail.start_anchor or syntax.start_anchor,
 				terms.visibility.explicit,
 				literal_purity_pure
 			)
@@ -852,13 +858,13 @@ local function forall_type_impl(syntax, env)
 
 	local shadowed
 	shadowed, env = env:enter_block(terms.block_purity.pure)
-	-- tail.anchor can be nil so we fall back to the anchor for the start of this forall type if needed
+	-- tail.start_anchor can be nil so we fall back to the start_anchor for this forall type if needed
 	-- TODO: use correct name in lambda parameter instead of adding an extra let
 	env = env:bind_local(
 		terms.binding.annotated_lambda(
 			"#forall-arguments",
 			params_args,
-			tail.anchor or syntax.anchor,
+			tail.start_anchor or syntax.start_anchor,
 			terms.visibility.explicit,
 			literal_purity_pure
 		)
@@ -1051,7 +1057,7 @@ local function lambda_impl(syntax, env)
 		terms.binding.annotated_lambda(
 			"#lambda-arguments",
 			args,
-			syntax.anchor,
+			syntax.start_anchor,
 			terms.visibility.explicit,
 			literal_purity_pure
 		)
@@ -1086,7 +1092,7 @@ local function lambda_prog_impl(syntax, env)
 		terms.binding.annotated_lambda(
 			"#lambda-arguments",
 			args,
-			syntax.anchor,
+			syntax.start_anchor,
 			terms.visibility.explicit,
 			literal_purity_effectful
 		)
@@ -1118,7 +1124,7 @@ local function lambda_single_impl(syntax, env)
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
 	inner_env = inner_env:bind_local(
-		terms.binding.annotated_lambda(name, arg, syntax.anchor, terms.visibility.explicit, literal_purity_pure)
+		terms.binding.annotated_lambda(name, arg, syntax.start_anchor, terms.visibility.explicit, literal_purity_pure)
 	)
 	local ok, expr, env = tail:match(
 		{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env)) },
@@ -1145,7 +1151,7 @@ local function lambda_implicit_impl(syntax, env)
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
 	inner_env = inner_env:bind_local(
-		terms.binding.annotated_lambda(name, arg, syntax.anchor, terms.visibility.implicit, literal_purity_pure)
+		terms.binding.annotated_lambda(name, arg, syntax.start_anchor, terms.visibility.implicit, literal_purity_pure)
 	)
 	local ok, expr, env = tail:match(
 		{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env)) },

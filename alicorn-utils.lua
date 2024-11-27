@@ -264,12 +264,43 @@ end
 ---@return string
 ---@return integer
 function M.strip_ansi(s)
-	return s:gsub("\x1b[^m]*m", "")
+	return s:gsub("\x1b%[[^m]*m", "")
 end
 
 function M.here()
 	local info = debug.getinfo(2, "Sl")
 	return " @ " .. info.source .. ":" .. info.currentline
+end
+
+function M.file_is_terminal(input_file)
+	-- TODO
+	return false
+end
+
+function M.get_cursor_position(input_file, output_file)
+	if input_file == nil then
+		input_file = io.input()
+	end
+	if output_file == nil then
+		output_file = io.output()
+	end
+	output_file:write("\x1b[6n")
+	local terminal_data = input_file:read(1)
+	if terminal_data ~= "\x9b" then
+		terminal_data = terminal_data .. input_file:read(1)
+		assert(terminal_data == "\x1b[")
+	end
+	terminal_data = input_file:read("*n")
+	assert(terminal_data ~= nil)
+	local cursor_line = terminal_data
+	terminal_data = input_file:read(1)
+	assert(terminal_data == ";")
+	terminal_data = input_file:read("*n")
+	assert(terminal_data ~= nil)
+	local cursor_column = terminal_data
+	terminal_data = input_file:read(1)
+	assert(terminal_data == "R")
+	return cursor_line, cursor_column
 end
 
 return M

@@ -160,7 +160,7 @@ local reducer_mt = { __call = create_reducible }
 
 ---@class ExternalError
 ---@field cause any
----@field anchor Anchor
+---@field start_anchor Anchor
 ---@field reducer_name string
 local ExternalError = {}
 
@@ -169,7 +169,7 @@ local external_error_mt = {
 		local message = "Lua error raised inside reducer "
 			.. self.reducer_name
 			.. " "
-			.. (self.anchor and tostring(self.anchor) or "at unknown position")
+			.. (self.start_anchor and tostring(self.start_anchor) or "at unknown position")
 			.. ":\n"
 		local cause = tostring(self.cause)
 		if cause:find("table", 1, true) == 1 then
@@ -188,12 +188,12 @@ local external_error_mt = {
 }
 
 ---@param cause any
----@param anchor Anchor
+---@param start_anchor Anchor
 ---@param reducer_name string
 ---@return ExternalError
-function ExternalError.new(cause, anchor, reducer_name)
+function ExternalError.new(cause, start_anchor, reducer_name)
 	return setmetatable({
-		anchor = anchor,
+		start_anchor = start_anchor,
 		cause = cause,
 		reducer_name = reducer_name,
 	}, external_error_mt)
@@ -208,7 +208,7 @@ end
 ---@return ExternalError | any
 local function augment_error(syntax, reducer_name, ok, err_msg, ...)
 	if not ok then
-		return false, ExternalError.new(err_msg, syntax.anchor, reducer_name)
+		return false, ExternalError.new(err_msg, syntax.start_anchor, reducer_name)
 	end
 	-- err_msg is the first result arg otherwise
 	return err_msg, ...
@@ -356,13 +356,13 @@ local symbol_exact = reducer(SymbolExact, "symbol exact")
 
 ---@class SyntaxError
 ---@field matchers Matcher[]
----@field anchor Anchor
+---@field start_anchor Anchor
 ---@field cause any
 local SyntaxError = {}
 
 function SyntaxError:__tostring()
 	local message = "Syntax error at anchor "
-		.. (self.anchor and tostring(self.anchor) or "<unknown position>")
+		.. (self.start_anchor and tostring(self.start_anchor) or "<unknown position>")
 		.. " must be acceptable for one of:\n"
 	local options = {}
 	for k, v in ipairs(self.matchers) do
@@ -385,13 +385,15 @@ local syntax_error_mt = {
 }
 
 ---@param matchers Matcher[]
----@param anchor Anchor
+---@param start_anchor Anchor
+---@param end_anchor Anchor
 ---@param cause any
 ---@return SyntaxError
-local function syntax_error(matchers, anchor, cause)
+local function syntax_error(matchers, start_anchor, end_anchor, cause)
 	return setmetatable({
 		matchers = matchers,
-		anchor = anchor,
+		start_anchor = start_anchor,
+		end_anchor = end_anchor,
 		cause = cause,
 	}, syntax_error_mt)
 end
@@ -404,7 +406,7 @@ end
 
 ---@class ConstructedSyntax
 ---@field accepters AccepterSet
----@field anchor Anchor
+---@field start_anchor Anchor
 local ConstructedSyntax = {}
 
 --[[
@@ -447,7 +449,7 @@ function ConstructedSyntax:match(matchers, unmatched, extra)
 		-- local name = getmetatable(matcher.reducible)
 		-- print("rejected syntax kind", matcher.kind, name)
 	end
-	return unmatched(extra, syntax_error(matchers, self.anchor, lasterr))
+	return unmatched(extra, syntax_error(matchers, self.start_anchor, self.end_anchor, lasterr))
 end
 
 local constructed_syntax_mt = {
@@ -455,11 +457,15 @@ local constructed_syntax_mt = {
 }
 
 ---@param accepters AccepterSet
----@param anchor Anchor?
+---@param start_anchor Anchor?
+---@param end_anchor Anchor?
 ---@param ... any
 ---@return ConstructedSyntax
-local function cons_syntax(accepters, anchor, ...)
-	return setmetatable({ accepters = accepters, anchor = anchor, ... }, constructed_syntax_mt)
+local function cons_syntax(accepters, start_anchor, end_anchor, ...)
+	return setmetatable(
+		{ accepters = accepters, start_anchor = start_anchor, end_anchor = end_anchor, ... },
+		constructed_syntax_mt
+	)
 end
 
 local pair_accepters = {
@@ -468,12 +474,13 @@ local pair_accepters = {
 	end,
 }
 
----@param anchor Anchor
+---@param start_anchor Anchor
+---@param end_anchor Anchor
 ---@param a ConstructedSyntax
 ---@param b ConstructedSyntax
 ---@return ConstructedSyntax
-local function pair(anchor, a, b)
-	return cons_syntax(pair_accepters, anchor, a, b)
+local function pair(start_anchor, end_anchor, a, b)
+	return cons_syntax(pair_accepters, start_anchor, end_anchor, a, b)
 end
 
 local symbol_accepters = {
@@ -482,11 +489,12 @@ local symbol_accepters = {
 	end,
 }
 
----@param anchor Anchor
+---@param start_anchor Anchor
+---@param end_anchor Anchor
 ---@param name string
 ---@return ConstructedSyntax
-local function symbol(anchor, name)
-	return cons_syntax(symbol_accepters, anchor, name)
+local function symbol(start_anchor, end_anchor, name)
+	return cons_syntax(symbol_accepters, start_anchor, end_anchor, name)
 end
 
 local value_accepters = {
@@ -499,11 +507,12 @@ local value_accepters = {
 ---@field type string
 ---@field val any
 
----@param anchor Anchor
+---@param start_anchor Anchor
+---@param end_anchor Anchor
 ---@param val SyntaxValue
 ---@return ConstructedSyntax
-local function value(anchor, val)
-	return cons_syntax(value_accepters, anchor, val)
+local function value(start_anchor, end_anchor, val)
+	return cons_syntax(value_accepters, start_anchor, end_anchor, val)
 end
 
 local nil_accepters = {
@@ -512,17 +521,24 @@ local nil_accepters = {
 	end,
 }
 
-local nilval = cons_syntax(nil_accepters)
+---@param start_anchor Anchor
+---@param end_anchor Anchor
+---@return ConstructedSyntax
+local function new_nilval(start_anchor, end_anchor)
+	return cons_syntax(nil_accepters, start_anchor, end_anchor)
+end
+local nilval = new_nilval()
 
----@param anchor Anchor
+---@param start_anchor Anchor
+---@param end_anchor Anchor
 ---@param a ConstructedSyntax
 ---@param ... ConstructedSyntax
 ---@return ConstructedSyntax
-local function list(anchor, a, ...)
+local function list(start_anchor, end_anchor, a, ...)
 	if a == nil then
-		return nilval
+		return new_nilval(start_anchor, end_anchor)
 	end
-	return pair(anchor, a, list(anchor, ...))
+	return pair(start_anchor, end_anchor, a, list(start_anchor, end_anchor, ...))
 end
 
 local any = reducer(
@@ -760,6 +776,7 @@ local metalanguage = {
 	list_tail_ends = list_tail_ends,
 	reducer = reducer,
 	isnil = isnil,
+	new_nilval = new_nilval,
 	nilval = nilval,
 	symbol_exact = symbol_exact,
 	pair = pair,
