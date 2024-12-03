@@ -140,9 +140,27 @@ local function gen_record(self, cons, kind, params_with_types)
 		return val
 	end
 	build_record = U.memoize(build_record)
+	-- freeze args before entering memoized function
+	-- because freeze may produce a hash-consed instance of the given arg
+	-- which allows hash-consing to work with arrays etc
+	local function build_record_freeze_wrapper(...)
+		local args = table.pack(...)
+		for i, v in ipairs(params) do
+			local argi = args[i]
+			local freeze_impl = traits.freeze:get(params_types[i])
+			if freeze_impl then
+				argi = freeze_impl.freeze(argi)
+			else
+				--print("WARNING: while constructing " .. kind .. ", can't freeze param " .. v .. " given argument " .. tostring(argi))
+				--print("this may lead to suboptimal hash-consing")
+			end
+			args[i] = argi
+		end
+		return build_record(table.unpack(args, 1, args.n))
+	end
 	setmetatable(cons, {
 		__call = function(_, ...)
-			return build_record(...)
+			return build_record_freeze_wrapper(...)
 		end,
 	})
 	---@type RecordDeriveInfo
@@ -183,6 +201,7 @@ local function define_record(self, kind, params_with_types)
 	self:derive(derivers.eq)
 	self:derive(derivers.unwrap)
 	self:derive(derivers.diff)
+	self:derive(derivers.freeze)
 	return self
 end
 
@@ -278,6 +297,7 @@ local function define_enum(self, name, variants)
 	self:derive(derivers.unwrap)
 	self:derive(derivers.as)
 	self:derive(derivers.diff)
+	self:derive(derivers.freeze)
 	return self
 end
 

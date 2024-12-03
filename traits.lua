@@ -51,9 +51,13 @@ diff:declare_method("diff")
 local value_name = declare_trait("value_name")
 value_name:declare_method("value_name")
 
+local freeze = declare_trait("freeze")
+freeze:declare_method("freeze")
+
 return {
 	declare_trait = declare_trait,
 	pretty_print = pretty_print,
 	diff = diff,
 	value_name = value_name,
+	freeze = freeze,
 }
