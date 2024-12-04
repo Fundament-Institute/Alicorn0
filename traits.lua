@@ -51,6 +51,9 @@ diff:declare_method("diff")
 local value_name = declare_trait("value_name")
 value_name:declare_method("value_name")
 
+-- this method not only represents freezing from subsequent mutation, but also
+-- returns an existing instance of the argument (if necessary, and structure
+-- permitting) to enable efficient hash-consing
 local freeze = declare_trait("freeze")
 freeze:declare_method("freeze")
 

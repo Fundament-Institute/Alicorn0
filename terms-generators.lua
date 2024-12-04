@@ -151,8 +151,16 @@ local function gen_record(self, cons, kind, params_with_types)
 			if freeze_impl then
 				argi = freeze_impl.freeze(argi)
 			else
-				--print("WARNING: while constructing " .. kind .. ", can't freeze param " .. v .. " given argument " .. tostring(argi))
-				--print("this may lead to suboptimal hash-consing")
+				print(
+					"WARNING: while constructing "
+						.. kind
+						.. ", can't freeze param "
+						.. v
+						.. " (type "
+						.. tostring(params_types[i])
+						.. ")"
+				)
+				print("this may lead to suboptimal hash-consing")
 			end
 			args[i] = argi
 		end
@@ -438,6 +446,10 @@ local function map_pretty_print(self, pp, ...)
 	return pp:table(self._map, ...)
 end
 
+local function map_freeze(self)
+	return self
+end
+
 ---@param self table
 ---@param key_type Type
 ---@param value_type Type
@@ -472,6 +484,7 @@ local function define_map(self, key_type, value_type)
 			return "MapValue"
 		end,
 	})
+	traits.freeze:implement_on(self, { freeze = map_freeze })
 	return self
 end
 define_map = U.memoize(define_map)
@@ -595,6 +608,10 @@ local function set_pretty_print(self, pp, ...)
 	return pp:table(self._set, ...)
 end
 
+local function set_freeze(self)
+	return self
+end
+
 ---@param self table
 ---@param key_type Type
 ---@return SetType self
@@ -621,6 +638,7 @@ local function define_set(self, key_type)
 			return "SetValue"
 		end,
 	})
+	traits.freeze:implement_on(self, { freeze = set_freeze })
 	return self
 end
 define_set = U.memoize(define_set)
@@ -844,6 +862,10 @@ local function gen_array_diff_fn(self, value_type)
 	return diff_fn
 end
 
+local function array_freeze(self)
+	return self
+end
+
 ---@param self table
 ---@param value_type Type
 ---@return ArrayType self
@@ -876,6 +898,7 @@ local function define_array(self, value_type)
 			return "ArrayValue"
 		end,
 	})
+	traits.freeze:implement_on(self, { freeze = array_freeze })
 	return self
 end
 define_array = U.memoize(define_array)
@@ -946,6 +969,16 @@ local terms_gen = {
 		return true
 	end, "any"),
 }
+
+-- lua numbers and strings are immutable
+-- additionally, strings are already interned by the interpreter
+local function freeze_stub(val)
+	return val
+end
+for _, t in ipairs { terms_gen.builtin_number, terms_gen.builtin_string } do
+	traits.freeze:implement_on(t, { freeze = freeze_stub })
+end
+
 local internals_interface = require "internals-interface"
 internals_interface.terms_gen = terms_gen
 return terms_gen
