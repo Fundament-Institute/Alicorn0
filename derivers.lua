@@ -542,14 +542,14 @@ local freeze = {
 	-- actually preventing modification of existing fields
 	-- (this is fixable)
 	record = function(t, info)
-		local function freeze_fn(val)
+		local function freeze_fn(t, val)
 			return val
 		end
 
 		traits.freeze:implement_on(t, { freeze = freeze_fn })
 	end,
 	enum = function(t, info)
-		local function freeze_fn(val)
+		local function freeze_fn(t, val)
 			return val
 		end
 

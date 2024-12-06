@@ -144,12 +144,12 @@ local function gen_record(self, cons, kind, params_with_types)
 	-- because freeze may produce a hash-consed instance of the given arg
 	-- which allows hash-consing to work with arrays etc
 	local function build_record_freeze_wrapper(...)
-		local args = table.pack(...)
+		local args = { ... }
 		for i, v in ipairs(params) do
 			local argi = args[i]
 			local freeze_impl = traits.freeze:get(params_types[i])
 			if freeze_impl then
-				argi = freeze_impl.freeze(argi)
+				argi = freeze_impl.freeze(params_types[i], argi)
 			else
 				print(
 					"WARNING: while constructing "
@@ -164,7 +164,9 @@ local function gen_record(self, cons, kind, params_with_types)
 			end
 			args[i] = argi
 		end
-		return build_record(table.unpack(args, 1, args.n))
+		-- adjust args to correct number so memoize works even given too many args
+		-- (build_record won't error with too many args)
+		return build_record(table.unpack(args, 1, #params))
 	end
 	setmetatable(cons, {
 		__call = function(_, ...)
@@ -345,6 +347,7 @@ end
 
 ---@class MapValue: Value
 ---@field _map { [Value]: Value }
+---@field is_frozen boolean
 ---@field set fun(MapValue, Value, Value)
 ---@field reset fun(MapValue, Value)
 ---@field get fun(MapValue, Value): Value?
@@ -355,11 +358,16 @@ end
 ---@field default_print fun(MapValue, ...)
 
 local map_type_mt = {
-	__call = function(self)
+	__call = function(self, ...)
 		local val = {
 			_map = {},
+			is_frozen = false, -- bypass __newindex when setting is_frozen = true
 		}
 		setmetatable(val, self)
+		local args = table.pack(...)
+		for i = 1, args.n, 2 do
+			val:set(args[i], args[i + 1])
+		end
 		return val
 	end,
 	__eq = function(left, right)
@@ -373,6 +381,9 @@ local map_type_mt = {
 local function gen_map_methods(self, key_type, value_type)
 	return {
 		set = function(val, key, value)
+			if val.is_frozen then
+				error("trying to modify a frozen map")
+			end
 			if key_type.value_check(key) ~= true then
 				p("map-set", key_type, value_type)
 				p(key)
@@ -383,9 +394,25 @@ local function gen_map_methods(self, key_type, value_type)
 				p(value)
 				error("wrong value type passed to map:set")
 			end
+			local freeze_impl = traits.freeze:get(value_type)
+			if freeze_impl then
+				value = freeze_impl.freeze(value_type, value)
+			else
+				print(
+					"WARNING: while setting "
+						.. tostring(self)
+						.. ", can't freeze value (type "
+						.. tostring(value_type)
+						.. ")"
+				)
+				print("this may lead to suboptimal hash-consing")
+			end
 			val._map[key] = value
 		end,
 		reset = function(val, key)
+			if val.is_frozen then
+				error("trying to modify a frozen map")
+			end
 			if key_type.value_check(key) ~= true then
 				p("map-reset", key_type, value_type)
 				p(key)
@@ -446,8 +473,39 @@ local function map_pretty_print(self, pp, ...)
 	return pp:table(self._map, ...)
 end
 
-local function map_freeze(self)
-	return self
+local function map_freeze_helper_2(t, ...)
+	local frozenval = t(...)
+	frozenval.is_frozen = true
+	return frozenval
+end
+map_freeze_helper_2 = U.memoize(map_freeze_helper_2)
+
+local function map_freeze_helper(t, keys, map, ...)
+	if #keys > 0 then
+		local key = table.remove(keys)
+		local val = map[key]
+		return map_freeze_helper(t, keys, map, key, val, ...)
+	else
+		return map_freeze_helper_2(t, ...)
+	end
+end
+
+local function map_freeze(t, val)
+	if val.is_frozen then
+		return val
+	end
+	local order_impl = traits.order:get(t.key_type)
+	if not order_impl then
+		print("WARNING: can't freeze " .. tostring(t))
+		return val
+	end
+	local keys = {}
+	for k in pairs(val._map) do
+		keys[#keys + 1] = k
+	end
+	table.sort(keys, order_impl.compare)
+	local frozen = map_freeze_helper(t, keys, val._map)
+	return frozen
 end
 
 ---@param self table
@@ -608,8 +666,8 @@ local function set_pretty_print(self, pp, ...)
 	return pp:table(self._set, ...)
 end
 
-local function set_freeze(self)
-	return self
+local function set_freeze(t, val)
+	return val
 end
 
 ---@param self table
@@ -862,8 +920,8 @@ local function gen_array_diff_fn(self, value_type)
 	return diff_fn
 end
 
-local function array_freeze(self)
-	return self
+local function array_freeze(t, val)
+	return val
 end
 
 ---@param self table
@@ -972,11 +1030,18 @@ local terms_gen = {
 
 -- lua numbers and strings are immutable
 -- additionally, strings are already interned by the interpreter
-local function freeze_stub(val)
+local function freeze_stub(t, val)
 	return val
+end
+-- lua numbers and strings are always comparable
+-- NOTE: strings are compared by locale collation
+--       so don't change locale during runtime
+local function compare_stub(left, right)
+	return left < right
 end
 for _, t in ipairs { terms_gen.builtin_number, terms_gen.builtin_string } do
 	traits.freeze:implement_on(t, { freeze = freeze_stub })
+	traits.order:implement_on(t, { compare = compare_stub })
 end
 
 local internals_interface = require "internals-interface"
