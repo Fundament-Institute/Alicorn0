@@ -394,9 +394,22 @@ local function gen_map_methods(self, key_type, value_type)
 				p(value)
 				error("wrong value type passed to map:set")
 			end
-			local freeze_impl = traits.freeze:get(value_type)
-			if freeze_impl then
-				value = freeze_impl.freeze(value_type, value)
+			local freeze_impl_key = traits.freeze:get(key_type)
+			if freeze_impl_key then
+				key = freeze_impl_key.freeze(key_type, key)
+			else
+				print(
+					"WARNING: while setting "
+						.. tostring(self)
+						.. ", can't freeze key (type "
+						.. tostring(key_type)
+						.. ")"
+				)
+				print("this may lead to suboptimal hash-consing")
+			end
+			local freeze_impl_value = traits.freeze:get(value_type)
+			if freeze_impl_value then
+				value = freeze_impl_value.freeze(value_type, value)
 			else
 				print(
 					"WARNING: while setting "
@@ -555,6 +568,7 @@ define_map = U.memoize(define_map)
 
 ---@class SetValue: Value
 ---@field _set { [Value]: boolean }
+---@field is_frozen boolean
 ---@field put fun(SetValue, Value)
 ---@field remove fun(SetValue, Value)
 ---@field test fun(SetValue, Value): boolean?
@@ -567,9 +581,11 @@ define_map = U.memoize(define_map)
 ---@field default_print fun(SetValue, ...)
 
 local set_type_mt = {
+	-- FIXME: move put loop from freeze helper 2 to here after alicorn is fixed
 	__call = function(self)
 		local val = {
 			_set = {},
+			is_frozen = false,
 		}
 		setmetatable(val, self)
 		return val
@@ -585,14 +601,33 @@ local set_type_mt = {
 local function gen_set_methods(self, key_type)
 	return {
 		put = function(val, key)
+			if val.is_frozen then
+				error("trying to modify a frozen set")
+			end
 			if key_type.value_check(key) ~= true then
 				p("set-put", key_type)
 				p(key)
 				error("wrong key type passed to set:put")
 			end
+			local freeze_impl_key = traits.freeze:get(key_type)
+			if freeze_impl_key then
+				key = freeze_impl_key.freeze(key_type, key)
+			else
+				print(
+					"WARNING: while putting "
+						.. tostring(self)
+						.. ", can't freeze key (type "
+						.. tostring(key_type)
+						.. ")"
+				)
+				print("this may lead to suboptimal hash-consing")
+			end
 			val._set[key] = true
 		end,
 		remove = function(val, key)
+			if val.is_frozen then
+				error("trying to modify a frozen set")
+			end
 			if key_type.value_check(key) ~= true then
 				p("set-remove", key_type)
 				p(key)
@@ -666,8 +701,42 @@ local function set_pretty_print(self, pp, ...)
 	return pp:table(self._set, ...)
 end
 
+local function set_freeze_helper_2(t, ...)
+	local frozenval = t()
+	local args = table.pack(...)
+	for i = 1, args.n do
+		frozenval:put(args[i])
+	end
+	frozenval.is_frozen = true
+	return frozenval
+end
+set_freeze_helper_2 = U.memoize(set_freeze_helper_2)
+
+local function set_freeze_helper(t, keys, ...)
+	if #keys > 0 then
+		local key = table.remove(keys)
+		return set_freeze_helper(t, keys, key, ...)
+	else
+		return set_freeze_helper_2(t, ...)
+	end
+end
+
 local function set_freeze(t, val)
-	return val
+	if val.is_frozen then
+		return val
+	end
+	local order_impl = traits.order:get(t.key_type)
+	if not order_impl then
+		print("WARNING: can't freeze " .. tostring(t))
+		return val
+	end
+	local keys = {}
+	for k in pairs(val._set) do
+		keys[#keys + 1] = k
+	end
+	table.sort(keys, order_impl.compare)
+	local frozen = set_freeze_helper(t, keys)
+	return frozen
 end
 
 ---@param self table
@@ -1030,18 +1099,18 @@ local terms_gen = {
 
 -- lua numbers and strings are immutable
 -- additionally, strings are already interned by the interpreter
-local function freeze_stub(t, val)
+local function freeze_trivial(t, val)
 	return val
 end
 -- lua numbers and strings are always comparable
 -- NOTE: strings are compared by locale collation
 --       so don't change locale during runtime
-local function compare_stub(left, right)
+local function compare_trivial(left, right)
 	return left < right
 end
 for _, t in ipairs { terms_gen.builtin_number, terms_gen.builtin_string } do
-	traits.freeze:implement_on(t, { freeze = freeze_stub })
-	traits.order:implement_on(t, { compare = compare_stub })
+	traits.freeze:implement_on(t, { freeze = freeze_trivial })
+	traits.order:implement_on(t, { compare = compare_trivial })
 end
 
 local internals_interface = require "internals-interface"
