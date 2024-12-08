@@ -1136,6 +1136,10 @@ for _, t in ipairs { terms_gen.builtin_number, terms_gen.builtin_string } do
 	traits.freeze:implement_on(t, { freeze = freeze_trivial })
 	traits.order:implement_on(t, { compare = compare_trivial })
 end
+-- lua tables are often used as unique ids
+for _, t in ipairs { terms_gen.builtin_table, terms_gen.any_lua_type } do
+	traits.freeze:implement_on(t, { freeze = freeze_trivial })
+end
 
 local internals_interface = require "internals-interface"
 internals_interface.terms_gen = terms_gen
