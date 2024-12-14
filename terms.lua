@@ -193,11 +193,15 @@ function TypecheckingContext:append(name, type, val, start_anchor)
 	if (val and start_anchor) or (not val and not start_anchor) then
 		error("TypecheckingContext:append expected either val or start_anchor")
 	end
-	val = val or value.neutral(neutral_value.free(free.placeholder(self:len() + 1, placeholder_debug(name, anchor))))
+	val = val
+		or value.neutral(neutral_value.free(free.placeholder(self:len() + 1, placeholder_debug(name, start_anchor))))
 	local copy = {
 		bindings = self.bindings:append({ name = name, type = type }),
 		runtime_context = self.runtime_context:append(
-			val or value.neutral(neutral_value.free(free.placeholder(self:len() + 1, placeholder_debug(name, anchor))))
+			val
+				or value.neutral(
+					neutral_value.free(free.placeholder(self:len() + 1, placeholder_debug(name, start_anchor)))
+				)
 		),
 	}
 	return setmetatable(copy, typechecking_context_mt)
