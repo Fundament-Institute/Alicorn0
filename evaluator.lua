@@ -4100,36 +4100,6 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 		end
 	end
 
-	-- for _, v in ipairs(self.graph.leftcall_edges:all()) do
-	-- 	if self.values[v.left][1] == value.host_string_type or self.values[v.right][1] == value.host_string_type then
-	-- 		print("LEFTCALL LEFT: " .. tostring(self.values[v.left][1]))
-	-- 		print("LEFTCALL RIGHT: " .. tostring(self.values[v.right][1]))
-	-- 		print("LEFTCALL ARG: " .. tostring(v.arg))
-
-	-- 		for _, c in ipairs(self.graph.constrain_edges:all()) do
-	-- 			if c.left == v.left or c.right == v.left then
-	-- 				print("CONSTRAIN MV LEFT: " .. tostring(c.left))
-	-- 				print("CONSTRAIN MV RIGHT: " .. tostring(c.right))
-	-- 			end
-	-- 		end
-
-	-- 		for _, c in ipairs(self.graph.rightcall_edges:all()) do
-	-- 			if c.left == v.left or c.right == v.left then
-	-- 				print("RIGHTCALL MV LEFT: " .. tostring(self.values[c.left][1]))
-	-- 				print("RIGHTCALL MV RIGHT: " .. tostring(self.values[c.right][1]))
-	-- 				print("RIGHTCALL ARG: " .. tostring(v.arg))
-	-- 			end
-	-- 		end
-	-- 	end
-	-- end
-
-	-- for _, v in ipairs(self.graph.rightcall_edges:all()) do
-	-- 	if self.values[v.left][1] == value.host_string_type or self.values[v.right][1] == value.host_string_type then
-	-- 		print("RIGHTCALL LEFT: " .. tostring(self.values[v.left][1]))
-	-- 		print("RIGHTCALL RIGHT: " .. tostring(self.values[v.right][1]))
-	-- 	end
-	-- end
-
 	--assert(self:DEBUG_VERIFY(), "VERIFICATION FAILED")
 	assert(#self.pending == 0, "pending was not drained!")
 	return true
@@ -4152,7 +4122,6 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len)
 
 	local constraints = array(terms.constraintelem)()
 
-	---comment
 	---@param id integer
 	---@return value
 	local function getnode(id)
