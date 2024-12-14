@@ -441,101 +441,76 @@ local SubtypeRelation = gen.declare_foreign(gen.metatable_equality(subtype_relat
 ---@module 'types.constraintcause'
 local constraintcause = gen.declare_type()
 
+-- stylua: ignore
 constraintcause:define_enum("constraintcause", {
 	{ "primitive", {
-		"description",
-		gen.builtin_string,
-		"position",
-		anchor_type,
+		"description", gen.builtin_string,
+		"position",    anchor_type,
 	} },
-	{
-		"composition",
-		{
-			"left",
-			constraintcause,
-			"right",
-			constraintcause,
-			"position",
-			anchor_type,
-		},
-	},
-	{
-		"leftcall_discharge",
-		{
-			"call",
-			constraintcause,
-			"constraint",
-			constraintcause,
-			"position",
-			anchor_type,
-		},
-	},
-	{
-		"rightcall_discharge",
-		{
-			"constraint",
-			constraintcause,
-			"call",
-			constraintcause,
-			"position",
-			anchor_type,
-		},
-	},
-	{
-		"lost",
-		{ --Information has been lost, please generate any information you can to help someone debug the lost information in the future
-			"unique_string",
-			gen.builtin_string,
-			"stacktrace",
-			gen.builtin_string,
-			"auxiliary",
-			gen.any_lua_type,
-		},
-	},
+	{ "composition", {
+		"left",     constraintcause,
+		"right",    constraintcause,
+		"position", anchor_type,
+	} },
+	{ "leftcall_discharge", {
+		"call",       constraintcause,
+		"constraint", constraintcause,
+		"position",   anchor_type,
+	} },
+	{ "rightcall_discharge", {
+		"constraint", constraintcause,
+		"call",       constraintcause,
+		"position",   anchor_type,
+	} },
+	{ "lost", { --Information has been lost, please generate any information you can to help someone debug the lost information in the future
+		"unique_string", gen.builtin_string,
+		"stacktrace",    gen.builtin_string,
+		"auxiliary",     gen.any_lua_type,
+	} },
 })
 
 ---@module 'types.constraintelem'
 -- stylua: ignore
 local constraintelem = gen.declare_enum("constraintelem", {
 	{ "sliced_constrain", {
-		"rel",   SubtypeRelation,
-		"right", typed_term,
+		"rel",      SubtypeRelation,
+		"right",    typed_term,
 		"rightctx", typechecking_context_type,
-		"cause", gen.any_lua_type,
+		"cause",    gen.any_lua_type,
 	} },
 	{ "constrain_sliced", {
-		"left",  typed_term,
+		"left",    typed_term,
 		"leftctx", typechecking_context_type,
-		"rel",   SubtypeRelation,
-		"cause", gen.any_lua_type,
+		"rel",     SubtypeRelation,
+		"cause",   gen.any_lua_type,
 	} },
 	{ "sliced_leftcall", {
-		"arg",   typed_term,
-		"rel",   SubtypeRelation,
-		"right", typed_term,
+		"arg",      typed_term,
+		"rel",      SubtypeRelation,
+		"right",    typed_term,
 		"rightctx", typechecking_context_type,
-		"cause", gen.any_lua_type,
+		"cause",    gen.any_lua_type,
 	} },
 	{ "leftcall_sliced", {
-		"left",  typed_term,
+		"left",    typed_term,
 		"leftctx", typechecking_context_type,
-		"arg",   typed_term,
-		"rel",   SubtypeRelation,
-		"cause", gen.any_lua_type,
+		"arg",     typed_term,
+		"rel",     SubtypeRelation,
+		"cause",   gen.any_lua_type,
 	} },
 	{ "sliced_rightcall", {
-		"rel",   SubtypeRelation,
-		"right", typed_term,
+		"rel",      SubtypeRelation,
+		"right",    typed_term,
 		"rightctx", typechecking_context_type,
-		"arg",   typed_term,
-		"cause", gen.any_lua_type,
+		"arg",      typed_term,
+		"cause",    gen.any_lua_type,
 	} },
 	{ "rightcall_sliced", {
-		"left",  typed_term,
+		"left",    typed_term,
 		"leftctx", typechecking_context_type,
-		"rel",   SubtypeRelation,
-		"arg",   typed_term,
-		"cause", gen.any_lua_type,
+		"rel",     SubtypeRelation,
+		"arg",     typed_term,
+		"cause",   gen.any_lua_type,
 	} },
 })
 
