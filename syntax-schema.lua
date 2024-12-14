@@ -15,18 +15,18 @@ S:struct "anchor" "The source position information attached to a node" {
 local element = S:addstruct("element")
 
 element:define {
-	S.export.anchor "anchor"(0) "the source location of the element",
+	S.export.anchor "start_anchor"(0) "the source location of the element",
 	schema.union "kind"(1) "What syntactic element this represents" {
 		schema.variant "list"(2) {
 			schema.list(element) "elements"(3),
-			S.export.anchor "endpos"(4),
+			S.export.anchor "end_anchor"(4),
 		},
 		schema.variant "symbol"(5) {
 			schema.text "str"(6),
 		},
 		schema.variant "string"(7) {
 			schema.list(element) "elements"(8) "A string contains a list of elements corresponding to parts of the literal. Every splice becomes a separate element, and the region between them is a literal byte buffer element",
-			S.export.anchor "endpos"(9),
+			S.export.anchor "end_anchor"(9),
 		},
 		schema.variant "literal"(10) {
 			schema.union "literaltype"(11) {

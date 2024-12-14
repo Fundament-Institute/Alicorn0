@@ -99,7 +99,7 @@ local primitive_applicative_mt = {
 				evalargs(metalanguage.accept_handler, env),
 			}, metalanguage.failure_handler, nil)
 			local res = self.fn(table.unpack(args))
-			return true, metalanguage.value(res), env
+			return true, metalanguage.value(nil, nil, res), env
 		end,
 	},
 }

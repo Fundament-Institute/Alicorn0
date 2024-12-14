@@ -7,6 +7,14 @@ local P, C, Cg, Cc, Cmt, Ct, Cb, Cp, Cf, Cs, S, V, R =
 -- documentation for the SLN: https://scopes.readthedocs.io/en/latest/dataformat/
 -- a python SLN parser: https://github.com/salotz/python-sln/blob/master/src/sln/parser.py
 
+local function DebugPrint(s, patt)
+	patt = P(function()
+		print(s)
+		return true
+	end) * patt
+	return patt
+end
+
 ---@class Anchor
 ---@field line integer
 ---@field char integer
@@ -24,7 +32,12 @@ local anchor_mt = {
 		return (snd.line == fst.line and snd.char == fst.char)
 	end,
 	__tostring = function(self)
-		return "in file " .. self.sourceid .. ", line " .. self.line .. " character " .. self.char
+		return "file "
+			.. tostring(self.sourceid)
+			.. ", line "
+			.. tostring(self.line)
+			.. " character "
+			.. tostring(self.char)
 	end,
 	__index = Anchor,
 }
@@ -32,11 +45,11 @@ local anchor_mt = {
 lpeg.locale(lpeg)
 
 local function element(kind, pattern)
-	return Ct(Cg(V "textpos", "anchor") * Cg(Cc(kind), "kind") * pattern)
+	return Ct(Cg(V "anchor", "start_anchor") * Cg(Cc(kind), "kind") * pattern)
 end
 
 local function symbol(value)
-	return element("symbol", Cg(value, "str"))
+	return element("symbol", Cg(value, "str") * Cg(V "anchor", "end_anchor"))
 end
 
 local function space_tokens(pattern)
@@ -85,19 +98,19 @@ local function IFRmt(pattern, numtimes)
 end
 
 local function list(pattern)
-	return (V "textpos" * Ct(pattern) * V "textpos")
-		/ function(anchor, elements, endpos)
+	return (V "anchor" * Ct(pattern) * V "anchor")
+		/ function(start_anchor, elements, end_anchor)
 			return {
-				anchor = anchor,
+				start_anchor = start_anchor,
 				elements = elements,
-				endpos = endpos,
+				end_anchor = end_anchor,
 				kind = "list",
 			}
 		end
 end
 
 ---@class Literal
----@field anchor Anchor
+---@field start_anchor Anchor
 ---@field kind LiteralKind
 ---@field literaltype LiteralType?
 ---@field val number | table | nil
@@ -114,23 +127,23 @@ local function update_ffp(name, patt)
 
 	return patt
 		+ (
-			Cmt(lpeg.Carg(2) * V "textpos", function(_, _, ctx, position)
-				if ctx.position then
-					if ctx.position == position then
+			Cmt(lpeg.Carg(2) * V "anchor", function(_, _, furthest_forward_ctx, start_anchor)
+				if furthest_forward_ctx.start_anchor then
+					if furthest_forward_ctx.start_anchor == start_anchor then
 						local acc = true
-						for i, v in ipairs(ctx.expected) do
+						for i, v in ipairs(furthest_forward_ctx.expected) do
 							acc = acc and not (v == name)
 						end
 						if acc then
-							table.insert(ctx.expected, name)
+							table.insert(furthest_forward_ctx.expected, name)
 						end
-					elseif ctx.position < position then
-						ctx.position = position
-						ctx.expected = { name }
+					elseif furthest_forward_ctx.start_anchor < start_anchor then
+						furthest_forward_ctx.start_anchor = start_anchor
+						furthest_forward_ctx.expected = { name }
 					end
 				else
-					ctx.position = position
-					ctx.expected = { name }
+					furthest_forward_ctx.start_anchor = start_anchor
+					furthest_forward_ctx.expected = { name }
 				end
 
 				return false
@@ -139,16 +152,17 @@ local function update_ffp(name, patt)
 end
 
 local function clear_ffp()
-	return lpeg.Carg(2) / function(ctx)
-		ctx.position = nil
-		ctx.expected = nil
-	end
+	return lpeg.Carg(2)
+		/ function(furthest_forward_ctx)
+			furthest_forward_ctx.start_anchor = nil
+			furthest_forward_ctx.expected = nil
+		end
 end
 
-local function create_literal(anchor, elements, endpos)
+local function create_literal(start_anchor, elements, end_anchor)
 	local val = {
-		anchor = anchor,
-		endpos = endpos,
+		start_anchor = start_anchor,
+		end_anchor = end_anchor,
 		kind = "literal",
 		literaltype = "bytes",
 		val = {},
@@ -170,13 +184,29 @@ end
 ---@param sourceid string
 ---@return Anchor
 local function create_anchor(line, char, sourceid)
-	local newanchor = {
+	local new_anchor = {
 		line = line,
 		char = char,
 		sourceid = sourceid,
 	}
-	setmetatable(newanchor, anchor_mt)
-	return newanchor
+	setmetatable(new_anchor, anchor_mt)
+	return new_anchor
+end
+
+---@class LinePosition
+---@field line integer
+---@field pos integer
+local LinePosition = {}
+
+local line_position_mt = {
+	__tostring = function(self)
+		return "line " .. tostring(self.line) .. " starting at position " .. tostring(self.pos)
+	end,
+	__index = LinePosition,
+}
+
+local function create_line_position(pos, line)
+	return setmetatable({ pos = pos, line = line }, line_position_mt)
 end
 
 local grammar = P {
@@ -194,36 +224,35 @@ local grammar = P {
 	end),
 	eof = P(-1),
 
-	newline = (P "\r" ^ 0 * P "\n") * Cmt(lpeg.Carg(1), function(_, position, table)
-		if not (table.positions[#table.positions].pos == position) then
-			if table.positions[#table.positions].pos < position then
-				table.positions[#table.positions + 1] =
-					{ pos = position, line = table.positions[#table.positions].line + 1 }
-			end
+	newline = (P "\r" ^ 0 * P "\n") * Cmt(lpeg.Carg(1), function(_, position, line_ctx)
+		if line_ctx.positions[#line_ctx.positions].pos < position then
+			-- print("new line! last line_ctx position:", tostring(line_ctx.positions[#line_ctx.positions]))
+			line_ctx.positions[#line_ctx.positions + 1] =
+				create_line_position(position, line_ctx.positions[#line_ctx.positions].line + 1)
 		end
 
 		return true
 	end),
 	empty_line = V "newline" * S "\t " ^ 0 * #(V "newline" + V "eof"),
 
-	textpos = Cmt(lpeg.Carg(1), function(_, position, linectx)
-		-- assert(position > table.positions[#table.positions].pos)
-		local line_index = #linectx.positions
+	anchor = Cmt(lpeg.Carg(1), function(_, position, line_ctx)
+		local line_index = #line_ctx.positions
+		-- assert(line_ctx.positions[line_index].pos <= position, "assertion failed! anchor at " .. tostring(position) .. " means backtracking to before " .. tostring(line_ctx.positions[line_index]))
 
-		while (position < linectx.positions[line_index].pos) and (line_index > 0) do
+		while (position < line_ctx.positions[line_index].pos) and (0 < line_index) do
 			line_index = line_index - 1
 		end
-		local simple = create_anchor(
-			linectx.positions[line_index].line,
-			position - linectx.positions[line_index].pos + 1,
-			linectx.sourceid
+		local simple_anchor = create_anchor(
+			line_ctx.positions[line_index].line,
+			position - line_ctx.positions[line_index].pos + 1,
+			line_ctx.sourceid
 		)
-		return true, simple
+		return true, simple_anchor
 	end),
 
 	count_tabs = update_ffp(
 		"spaces should not be interspersed in indentation",
-		Cmt(V "textpos" * C(S "\t " ^ 0), function(_, _, anchor, indentstring)
+		Cmt(V "anchor" * C(S "\t " ^ 0), function(_, _, start_anchor, indentstring)
 			if string.find(indentstring, " ") then
 				return false
 			end
@@ -278,33 +307,33 @@ local grammar = P {
 	escape_chars = Cs(P [[\\]] / [[\]] + P [[\"]] / [["]] + P [[\n]] / "\n" + P [[\r]] / "\r" + P [[\t]] / "\t"),
 	unicode_escape = P "\\u" * (V "hex_digit") ^ -4,
 
-	string_literal = V "textpos" * Cs(
+	string_literal = V "anchor" * Cs(
 		(V "escape_chars" + V "unicode_escape" + C(1 - (S [["\]] + V "newline" + V "splice"))) ^ 1
-	) * V "textpos" / create_literal,
+	) * V "anchor" / create_literal,
 	string = element(
 		"string",
 		P '"'
 			* Cg(Ct((V "string_literal" + V "splice") ^ 0), "elements")
 			* update_ffp('"', P '"')
-			* Cg(V "textpos", "endpos")
+			* Cg(V "anchor", "end_anchor")
 	),
 
-	longstring_literal = V "textpos" * Cs(
+	longstring_literal = V "anchor" * Cs(
 		((V "subordinate_indent" + V "empty_line") + C((V "unicode_escape" + (1 - (V "newline" + V "splice"))))) ^ 1
-	) * V "textpos" / create_literal,
+	) * V "anchor" / create_literal,
 	longstring = element(
 		"string",
 		P '""""'
 			* V "indent"
 			* Cg(Ct((V "longstring_literal" + V "splice") ^ 0), "elements")
-			* Cg(V "textpos", "endpos")
+			* Cg(V "anchor", "end_anchor")
 			* V "dedent"
 	),
 
 	comment_body = C((1 - V "newline") ^ 1),
 	comment = update_ffp(
 		"line comment",
-		element("comment", (P "#" * Cg(V "comment_body" ^ -1, "val") * Cg(V "textpos", "endpos")))
+		element("comment", (P "#" * Cg(V "comment_body" ^ -1, "val") * Cg(V "anchor", "end_anchor")))
 	),
 	block_comment = update_ffp(
 		"block comment",
@@ -314,7 +343,7 @@ local grammar = P {
 				P "####"
 				* V "indent"
 				* Cg(Cs((V "subordinate_indent" + V "comment_body" + V "empty_line") ^ 0), "val")
-				* Cg(V "textpos", "endpos")
+				* Cg(V "anchor", "end_anchor")
 				* V "dedent"
 			)
 		)
@@ -382,7 +411,7 @@ local grammar = P {
 		table.insert(list.elements, 1, {
 			kind = "symbol",
 			str = list.elements["braceacc"],
-			anchor = list.anchor,
+			start_anchor = list.start_anchor,
 		})
 
 		list.elements["braceacc"] = nil
@@ -440,20 +469,20 @@ local grammar = P {
 
 		acc = table.remove(argcalls, 1)
 		table.insert(acc.elements, 1, symbol)
-		acc.anchor = symbol.anchor
+		acc.start_anchor = symbol.start_anchor
 		if acc.elements["brace"] then
 			table.insert(acc.elements, 1, acc.elements["brace"])
-			acc.elements[1].anchor = acc.anchor
+			acc.elements[1].start_anchor = acc.start_anchor
 		end
 
 		for _, v in ipairs(argcalls) do
 			table.insert(v.elements, 1, acc)
-			v.anchor = acc.anchor
+			v.start_anchor = acc.start_anchor
 			acc = v
 
 			if acc.elements["brace"] then
 				table.insert(acc.elements, 1, acc.elements["brace"])
-				acc.elements[1].anchor = acc.anchor
+				acc.elements[1].start_anchor = acc.start_anchor
 			end
 		end
 
@@ -478,16 +507,16 @@ local grammar = P {
 	symbol = symbol(V "symbol_chars"),
 }
 
-local function span_error(position, subject, msg)
+local function span_error(start_anchor, subject, msg)
 	local lines = {}
 	for line in subject:gmatch("([^\n\r]*)\r*\n") do
 		table.insert(lines, line)
 	end
-	local line = lines[position.line] or ""
+	local line = lines[start_anchor.line] or ""
 
 	local _, tabnum = line:gsub("\t", "")
-	local caret_wsp = ("\t"):rep(tabnum) .. (" "):rep(position.char - (1 + tabnum))
-	local linenum_wsp = (" "):rep(string.len(position.line))
+	local caret_wsp = ("\t"):rep(tabnum) .. (" "):rep(start_anchor.char - (1 + tabnum))
+	local linenum_wsp = (" "):rep(string.len(start_anchor.line))
 
 	local span = string.format(
 		[[
@@ -498,11 +527,11 @@ error: %s
 %s |%s^
 	]],
 		msg,
-		position.sourceid,
-		position.line,
-		position.char,
+		start_anchor.sourceid,
+		start_anchor.line,
+		start_anchor.char,
 		linenum_wsp,
-		position.line,
+		start_anchor.line,
 		line,
 		linenum_wsp,
 		caret_wsp
@@ -512,8 +541,8 @@ error: %s
 end
 
 ---@class FormatList
----@field anchor Anchor
----@field endpos Anchor
+---@field start_anchor Anchor
+---@field end_anchor Anchor
 ---@field kind LiteralKind
 ---@field elements table[]
 
@@ -528,27 +557,24 @@ local function parse(input, filename)
 		return nil
 	end
 
-	local newlinetable = {
+	local line_ctx = {
 		sourceid = filename,
-		positions = { {
-			pos = 1,
-			line = 1,
-		} },
+		positions = { create_line_position(1, 1) },
 	}
-	local furthest_forward = { position = nil }
-	local ast = lpeg.match(grammar, input, 1, newlinetable, furthest_forward)
+	local furthest_forward_ctx = { start_anchor = nil }
+	local ast = lpeg.match(grammar, input, 1, line_ctx, furthest_forward_ctx)
 
-	if furthest_forward.position then
+	if furthest_forward_ctx.start_anchor then
 		local expected = "{"
-		for i, v in ipairs(furthest_forward.expected) do
+		for i, v in ipairs(furthest_forward_ctx.expected) do
 			expected = expected .. v .. ", "
 		end
 		expected = expected .. "}"
 
-		assert(false, span_error(furthest_forward.position, input, "expected " .. expected))
+		assert(false, span_error(furthest_forward_ctx.start_anchor, input, "expected " .. expected))
 	end
 
 	return ast
 end
 
-return { parse = parse, anchor_mt = anchor_mt }
+return { parse = parse, anchor_mt = anchor_mt, create_anchor = create_anchor }

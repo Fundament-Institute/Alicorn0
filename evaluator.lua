@@ -20,6 +20,8 @@ local host_typed_term_type = terms.host_typed_term_type
 local host_goal_type = terms.host_goal_type
 local host_inferrable_term_type = terms.host_inferrable_term_type
 
+local diff = require "traits".diff
+
 local gen = require "terms-generators"
 local map = gen.declare_map
 local string_typed_map = map(gen.builtin_string, typed_term)
@@ -1083,11 +1085,14 @@ add_comparer("value.variance_type", "value.variance_type", function(lctx, a, rct
 	return true
 end)
 
-for _, type_of_type in ipairs({
-	value.host_type_type,
-}) do
-	add_comparer(type_of_type.kind, value.star(0, 0).kind, always_fits_comparer)
-end
+add_comparer("value.host_type_type", "value.star", function(lctx, a, rctx, b)
+	local level, depth = b:unwrap_star()
+	if depth == 0 then
+		return true
+	else
+		return false, "host_type_type does not contain types (i.e. does not fit in stars deeper than 0)"
+	end
+end)
 
 add_comparer(value.star(0, 0).kind, value.star(0, 0).kind, function(lctx, a, rctx, b)
 	local alevel, adepth = a:unwrap_star()
@@ -1174,7 +1179,13 @@ function check_concrete(lctx, val, rctx, use)
 		--TODO: downcast and test
 
 		if val:is_neutral() then
-			return false, "both values are neutral, but they aren't equal: " .. tostring(val) .. " ~= " .. tostring(use)
+			diff:get(value).diff(val, use)
+			return false,
+				"both values are neutral, but they aren't equal: "
+					.. tostring(val)
+					.. " ~= "
+					.. tostring(use)
+					.. " (printed diff)"
 		end
 	end
 
@@ -1424,6 +1435,19 @@ local function index_tuple_value(subject, index)
 	error("Should be unreachable???")
 end
 
+local host_tuple_make_prefix_mt = {
+	__call = function(self, i)
+		local prefix_elements = value_array()
+		for x = 1, i do
+			prefix_elements:append(value.neutral(neutral_value.tuple_element_access_stuck(self.subject_neutral, x)))
+		end
+		return value.tuple_value(prefix_elements)
+	end,
+}
+local function host_tuple_make_prefix(subject_neutral)
+	return setmetatable({ subject_neutral = subject_neutral }, host_tuple_make_prefix_mt)
+end
+
 ---@param subject_type value
 ---@param subject_value value
 ---@return value
@@ -1468,13 +1492,7 @@ local function make_tuple_prefix(subject_type, subject_value)
 		elseif subject_value:is_neutral() then
 			-- yes, literally a copy-paste of the neutral case above
 			local subject_neutral = subject_value:unwrap_neutral()
-			function make_prefix(i)
-				local prefix_elements = value_array()
-				for x = 1, i do
-					prefix_elements:append(value.neutral(neutral_value.tuple_element_access_stuck(subject_neutral, x)))
-				end
-				return value.tuple_value(prefix_elements)
-			end
+			make_prefix = host_tuple_make_prefix(subject_neutral) --[[@as fun(i: any) : value]]
 		else
 			error(
 				"make_tuple_prefix, is_host_tuple_type, subject_value: expected a host tuple, instead got "
@@ -1639,11 +1657,11 @@ function infer(
 	elseif inferrable_term:is_typed() then
 		return inferrable_term:unwrap_typed()
 	elseif inferrable_term:is_annotated_lambda() then
-		local param_name, param_annotation, body, anchor, param_visibility, purity =
+		local param_name, param_annotation, body, start_anchor, param_visibility, purity =
 			inferrable_term:unwrap_annotated_lambda()
 		local _, _, param_term = infer(param_annotation, typechecking_context)
 		local param_type = evaluate(param_term, typechecking_context:get_runtime_context())
-		local inner_context = typechecking_context:append(param_name, param_type, nil, anchor)
+		local inner_context = typechecking_context:append(param_name, param_type, nil, start_anchor)
 		local _, purity_term = check(purity, inner_context, terms.host_purity_type)
 		local body_type, body_usages, body_term = infer(body, inner_context)
 
@@ -2154,7 +2172,7 @@ function infer(
 		add_arrays(result_usages, bodyusages)
 		return bodytype, result_usages, terms.typed_term.let(name, exprterm, bodyterm)
 	elseif inferrable_term:is_host_intrinsic() then
-		local source, type, anchor = inferrable_term:unwrap_host_intrinsic()
+		local source, type, start_anchor = inferrable_term:unwrap_host_intrinsic()
 		local source_usages, source_term = check(source, typechecking_context, value.host_string_type)
 		local type_type, type_usages, type_term = infer(type, typechecking_context) --check(type, typechecking_context, value.qtype_type(0))
 
@@ -2165,7 +2183,7 @@ function infer(
 		--error "weird type"
 		-- FIXME: type_type, source_type are ignored, need checked?
 		local type_val = evaluate(type_term, typechecking_context.runtime_context)
-		return type_val, source_usages, typed_term.host_intrinsic(source_term, anchor)
+		return type_val, source_usages, typed_term.host_intrinsic(source_term, start_anchor)
 	elseif inferrable_term:is_level_max() then
 		local level_a, level_b = inferrable_term:unwrap_level_max()
 		local arg_type_a, arg_usages_a, arg_term_a = infer(level_a, typechecking_context)
@@ -2199,13 +2217,13 @@ function infer(
 		)
 		return terms.value.star(0, 0), desc_usages, terms.typed_term.host_tuple_type(desc_term)
 	elseif inferrable_term:is_program_sequence() then
-		local first, anchor, continue = inferrable_term:unwrap_program_sequence()
+		local first, start_anchor, continue = inferrable_term:unwrap_program_sequence()
 		local first_type, first_usages, first_term = infer(first, typechecking_context)
 		if not first_type:is_program_type() then
 			error("program sequence must infer to a program type")
 		end
 		local first_effect_sig, first_base_type = first_type:unwrap_program_type()
-		local inner_context = typechecking_context:append("#program-sequence", first_base_type, nil, anchor)
+		local inner_context = typechecking_context:append("#program-sequence", first_base_type, nil, start_anchor)
 		local continue_type, continue_usages, continue_term = infer(continue, inner_context)
 		if not continue_type:is_program_type() then
 			error(
@@ -2656,7 +2674,7 @@ function evaluate(typed_term, runtime_context)
 		local expr_value = evaluate(expr, runtime_context)
 		return evaluate(body, runtime_context:append(expr_value))
 	elseif typed_term:is_host_intrinsic() then
-		local source, anchor = typed_term:unwrap_host_intrinsic()
+		local source, start_anchor = typed_term:unwrap_host_intrinsic()
 		local source_val = evaluate(source, runtime_context)
 		if source_val:is_host_value() then
 			local source_str = source_val:unwrap_host_value()
@@ -2670,15 +2688,16 @@ function evaluate(typed_term, runtime_context)
 			for k, v in pairs(internals_interface) do
 				load_env[k] = v
 			end
-			--TODO figure out how to make this modular
-			--local require_generator = require "require"
-			--load_env.require = require_generator(anchor.sourceid)
-			local res = assert(load(source_str, "host_intrinsic<" .. tostring(anchor) .. ">", "t", load_env))()
+			local has_luvit_require, require_generator = pcall(require, "require")
+			if has_luvit_require then
+				load_env.require = require_generator(start_anchor.sourceid)
+			end
+			local res = assert(load(source_str, "host_intrinsic<" .. tostring(start_anchor) .. ">", "t", load_env))()
 			intrinsic_memo[source_str] = res
 			return value.host_value(res)
 		elseif source_val:is_neutral() then
 			local source_neutral = source_val:unwrap_neutral()
-			return value.neutral(neutral_value.host_intrinsic_stuck(source_neutral, anchor))
+			return value.neutral(neutral_value.host_intrinsic_stuck(source_neutral, start_anchor))
 		else
 			error "Tried to load an intrinsic with something that isn't a string"
 		end

@@ -37,45 +37,25 @@ local function simplify_list(list)
 	end
 end
 
-local anchor_mt = {
-	__lt = function(fst, snd)
-		return snd.line > fst.line or (snd.line == fst.line and snd.char > fst.char)
-	end,
-	__le = function(fst, snd)
-		return fst < snd or fst == snd
-	end,
-	__eq = function(fst, snd)
-		return (snd.line == fst.line and snd.char == fst.char)
-	end,
-
-	__tostring = function(self)
-		return "in file " .. self.sourceid .. ", line " .. self.line .. " character " .. self.char
-	end,
-}
-
-local function create_anchor(line, char)
-	local anchor = {
-		char = char,
-		line = line,
-		sourceid = "inline",
-	}
-
-	setmetatable(anchor, anchor_mt)
-	return anchor
+local function create_anchor(line, char, sourceid)
+	if sourceid == nil then
+		sourceid = "inline"
+	end
+	return format.create_anchor(line, char, sourceid)
 end
 
-local function create_list(anchor, endpos, elements)
+local function create_list(start_anchor, end_anchor, elements)
 	return {
-		anchor = anchor,
-		endpos = endpos,
+		start_anchor = start_anchor,
+		end_anchor = end_anchor,
 		kind = "list",
 		elements = elements,
 	}
 end
 
-local function create_symbol(anchor, symbol)
+local function create_symbol(start_anchor, symbol)
 	return {
-		anchor = anchor,
+		start_anchor = start_anchor,
 		kind = "symbol",
 		str = symbol,
 	}
@@ -87,10 +67,10 @@ local function forward_moving_cursor(element, cursor)
 
 	if element.kind == "list" then
 		if not cursor then
-			cursor = element.anchor
+			cursor = element.start_anchor
 		else
-			if not (element.anchor >= cursor) then
-				-- print("failed, ", element.anchor, " >= ", cursor)
+			if not (element.start_anchor >= cursor) then
+				-- print("failed, ", element.start_anchor, " >= ", cursor)
 				return false
 			end
 		end
@@ -110,16 +90,16 @@ local function forward_moving_cursor(element, cursor)
 			cursor = newcursor
 		end
 
-		if not (element.endpos >= cursor) then
-			-- print("failed, ", element.endpos, " >= ", cursor)
+		if not (element.end_anchor >= cursor) then
+			-- print("failed, ", element.end_anchor, " >= ", cursor)
 			return false
 		end
-		cursor = element.endpos
+		cursor = element.end_anchor
 
 		return true, cursor
 	elseif element.kind == "literal" or element.kind == "symbol" or element.kind == "comment" then
-		-- print(element.anchor, " >= ", cursor, ", ", element.anchor >= cursor)
-		return element.anchor >= cursor, element.anchor
+		-- print(element.start_anchor, " >= ", cursor, ", ", element.start_anchor >= cursor)
+		return element.start_anchor >= cursor, element.start_anchor
 	end
 
 	return true, cursor
@@ -128,23 +108,37 @@ end
 local function samelength_testfile_list(text, ast)
 	local _, num_newlines = text:gsub("\n", "\n")
 
-	if not ((ast.endpos.line == num_newlines) or (ast.endpos.line == (num_newlines + 1))) then
-		print("ast: ", ast.endpos.line, "num_newlines:", num_newlines)
+	if not ((ast.end_anchor.line == num_newlines) or (ast.end_anchor.line == (num_newlines + 1))) then
+		print("ast: ", ast.end_anchor.line, "num_newlines:", num_newlines)
 	end
 	-- print(inspect(ast))
 
 	-- why is this even necessary??
-	return (ast.endpos.line == num_newlines) or (ast.endpos.line == (num_newlines + 1))
+	return (ast.end_anchor.line == num_newlines) or (ast.end_anchor.line == (num_newlines + 1))
 end
 
 local function compare_list_anchors(actual, expected)
 	if
-		(expected.anchor.line == actual.anchor.line and expected.anchor.char == actual.anchor.char)
-		and (expected.kind == actual.kind)
+		(
+			expected.start_anchor.line == actual.start_anchor.line
+			and expected.start_anchor.char == actual.start_anchor.char
+		) and (expected.kind == actual.kind)
 	then
 		if expected.kind == "list" then
-			if not (expected.endpos.line == actual.endpos.line and expected.endpos.char == actual.endpos.char) then
-				print("expected endpos: ", expected.endpos, expected.kind, " actual: ", actual.endpos, actual.kind)
+			if
+				not (
+					expected.end_anchor.line == actual.end_anchor.line
+					and expected.end_anchor.char == actual.end_anchor.char
+				)
+			then
+				print(
+					"expected end_anchor: ",
+					expected.end_anchor,
+					expected.kind,
+					" actual: ",
+					actual.end_anchor,
+					actual.kind
+				)
 				return false
 			end
 
@@ -156,7 +150,14 @@ local function compare_list_anchors(actual, expected)
 		end
 		return true
 	else
-		print("expected anchor: ", expected.anchor, expected.kind, " actual: ", actual.anchor, actual.kind)
+		print(
+			"expected start_anchor: ",
+			expected.start_anchor,
+			expected.kind,
+			" actual: ",
+			actual.start_anchor,
+			actual.kind
+		)
 		return false
 	end
 end

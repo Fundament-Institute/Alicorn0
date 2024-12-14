@@ -166,9 +166,9 @@ end
 ---@param name string
 ---@param type value
 ---@param val value?
----@param anchor Anchor?
+---@param start_anchor Anchor?
 ---@return TypecheckingContext
-function TypecheckingContext:append(name, type, val, anchor)
+function TypecheckingContext:append(name, type, val, start_anchor)
 	if gen.builtin_string.value_check(name) ~= true then
 		error("TypecheckingContext:append parameter 'name' must be a string")
 	end
@@ -185,18 +185,20 @@ function TypecheckingContext:append(name, type, val, anchor)
 		error "BUG!!!"
 	end
 	if val ~= nil and value.value_check(val) ~= true then
-		error("TypecheckingContext:append parameter 'val' must be a value (or nil if given anchor)")
+		error("TypecheckingContext:append parameter 'val' must be a value (or nil if given start_anchor)")
 	end
-	if anchor ~= nil and anchor_type.value_check(anchor) ~= true then
-		error("TypecheckingContext:append parameter 'anchor' must be an anchor (or nil if given val)")
+	if start_anchor ~= nil and anchor_type.value_check(start_anchor) ~= true then
+		error("TypecheckingContext:append parameter 'start_anchor' must be an start_anchor (or nil if given val)")
 	end
-	if (val and anchor) or (not val and not anchor) then
-		error("TypecheckingContext:append expected either val or anchor")
+	if (val and start_anchor) or (not val and not start_anchor) then
+		error("TypecheckingContext:append expected either val or start_anchor")
 	end
 	val = val or value.neutral(neutral_value.free(free.placeholder(self:len() + 1, placeholder_debug(name, anchor))))
 	local copy = {
 		bindings = self.bindings:append({ name = name, type = type }),
-		runtime_context = self.runtime_context:append(val, name),
+		runtime_context = self.runtime_context:append(
+			val or value.neutral(neutral_value.free(free.placeholder(self:len() + 1, placeholder_debug(name, anchor))))
+		),
 	}
 	return setmetatable(copy, typechecking_context_mt)
 end
@@ -276,13 +278,13 @@ binding:define_enum("binding", {
 	{ "annotated_lambda", {
 		"param_name",       gen.builtin_string,
 		"param_annotation", inferrable_term,
-		"anchor",           anchor_type,
+		"start_anchor",     anchor_type,
 		"visible",          visibility,
 		"pure",             checkable_term,
 	} },
 	{ "program_sequence", {
-		"first",  inferrable_term,
-		"anchor", anchor_type,
+		"first",        inferrable_term,
+		"start_anchor", anchor_type,
 	} },
 })
 
@@ -310,7 +312,7 @@ inferrable_term:define_enum("inferrable", {
 		"param_name",       gen.builtin_string,
 		"param_annotation", inferrable_term,
 		"body",             inferrable_term,
-		"anchor",           anchor_type,
+		"start_anchor",     anchor_type,
 		"visible",          visibility,
 		"pure",             checkable_term,
 	} },
@@ -411,14 +413,14 @@ inferrable_term:define_enum("inferrable", {
 		"alternate",  inferrable_term,
 	} },
 	{ "host_intrinsic", {
-		"source", checkable_term,
-		"type",   inferrable_term, --checkable_term,
-		"anchor", anchor_type,
+		"source",       checkable_term,
+		"type",         inferrable_term, --checkable_term,
+		"start_anchor", anchor_type,
 	} },
 	{ "program_sequence", {
-		"first",    inferrable_term,
-		"anchor",   anchor_type,
-		"continue", inferrable_term,
+		"first",        inferrable_term,
+		"start_anchor", anchor_type,
+		"continue",     inferrable_term,
 	} },
 	{ "program_end", { "result", inferrable_term } },
 	{ "program_type", {
@@ -447,14 +449,17 @@ constraintcause:define_enum("constraintcause", {
 		"position",
 		anchor_type,
 	} },
-	{ "composition", {
-		"left",
-		constraintcause,
-		"right",
-		constraintcause,
-		"position",
-		anchor_type,
-	} },
+	{
+		"composition",
+		{
+			"left",
+			constraintcause,
+			"right",
+			constraintcause,
+			"position",
+			anchor_type,
+		},
+	},
 	{
 		"leftcall_discharge",
 		{
@@ -659,8 +664,8 @@ typed_term:define_enum("typed", {
 		"alternate",  typed_term,
 	} },
 	{ "host_intrinsic", {
-		"source", typed_term,
-		"anchor", anchor_type,
+		"source",       typed_term,
+		"start_anchor", anchor_type,
 	} },
 
 	-- a list of upper and lower bounds, and a relation being bound with respect to
@@ -719,8 +724,8 @@ typed_term:define_enum("typed", {
 
 -- stylua: ignore
 placeholder_debug:define_record("placeholder_debug", {
-	"name",   gen.builtin_string,
-	"anchor", anchor_type,
+	"name",         gen.builtin_string,
+	"start_anchor", anchor_type,
 })
 
 -- stylua: ignore
@@ -1004,8 +1009,8 @@ neutral_value:define_enum("neutral_value", {
 		"alternate",  value,
 	} },
 	{ "host_intrinsic_stuck", {
-		"source", neutral_value,
-		"anchor", anchor_type,
+		"source",       neutral_value,
+		"start_anchor", anchor_type,
 	} },
 	{ "host_wrap_stuck", { "content", neutral_value } },
 	{ "host_unwrap_stuck", { "container", neutral_value } },
