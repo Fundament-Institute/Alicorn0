@@ -1271,7 +1271,7 @@ local top_level_block = metalanguage.reducer(
 				.. tostring(tail and tail.start_anchor or (syntax and syntax.start_anchor) or "")
 				.. " … "
 				.. tostring(tail and tail.end_anchor or (syntax and syntax.end_anchor) or "")
-				.. "\n"
+				.. ""
 		)
 		local progress = 0
 		while ok and continue do
@@ -1290,7 +1290,7 @@ local top_level_block = metalanguage.reducer(
 			end
 			io.write(
 				line_setup_sequence
-					.. "processing "
+					.. "\rprocessing "
 					.. tostring(args.name)
 					.. " --- "
 					.. tostring(progress)
@@ -1300,9 +1300,11 @@ local top_level_block = metalanguage.reducer(
 					.. tostring(newval and newval.start_anchor or (syntax and syntax.start_anchor) or "") --FIXME wrong anchors
 					.. " … "
 					.. tostring(newval and newval.end_anchor or (syntax and syntax.end_anchor) or "")
-					.. "\n"
+					.. ""
 			)
+			io.flush()
 		end
+		io.write("\n")
 		if not ok then
 			io.write("\nFailed!\n")
 			return false, continue
