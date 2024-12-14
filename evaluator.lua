@@ -1274,13 +1274,14 @@ function check(
 	if checkable_term:is_inferrable() then
 		local inferrable_term = checkable_term:unwrap_inferrable()
 		local inferred_type, inferred_usages, typed_term = infer(inferrable_term, typechecking_context)
-		-- TODO: unify!!!!
+		-- TODO: unify!!!! (instead of the below equality check)
 		if inferred_type ~= goal_type then
 			-- FIXME: needs context to avoid bugs where inferred and goal are the same neutral structurally
 			-- but come from different context thus are different
 			-- but erroneously compare equal
-			typechecker_state:flow(inferred_type, typechecking_context, goal_type, typechecking_context)
+			typechecker_state:flow(inferred_type, typechecking_context, goal_type, typechecking_context, "inferrable")
 		end
+
 		return inferred_usages, typed_term
 	elseif checkable_term:is_tuple_cons() then
 		local elements = checkable_term:unwrap_tuple_cons()
@@ -1673,9 +1674,6 @@ function infer(
 			inner_context:len(),
 			param_name
 		)
-		--print("INFER ANNOTATED LAMBDA")
-		--print("result_type")
-		--print(result_type:pretty_print(typechecking_context))
 		local result_info = value.result_info(
 			result_info(evaluate(purity_term, typechecking_context:get_runtime_context()):unwrap_host_value())
 		) --TODO make more flexible
@@ -1845,13 +1843,25 @@ function infer(
 		local host_spec_type = terms.value.host_tuple_type(desc)
 
 		local ok, tupletypes, n_elements = typechecker_state:speculate(function()
-			typechecker_state:flow(subject_type, typechecking_context, spec_type, typechecking_context)
+			typechecker_state:flow(
+				subject_type,
+				typechecking_context,
+				spec_type,
+				typechecking_context,
+				"tuple elimination"
+			)
 			return infer_tuple_type(spec_type, subject_value)
 		end)
 		--local tupletypes, n_elements = infer_tuple_type(subject_type, subject_value)
 		if not ok then
 			ok, tupletypes, n_elements = typechecker_state:speculate(function()
-				typechecker_state:flow(subject_type, typechecking_context, host_spec_type, typechecking_context)
+				typechecker_state:flow(
+					subject_type,
+					typechecking_context,
+					host_spec_type,
+					typechecking_context,
+					"host tuple elimination"
+				)
 				return infer_tuple_type(host_spec_type, subject_value)
 			end)
 		end
@@ -2054,7 +2064,13 @@ function infer(
 			error("infer, is_operative_cons, operative_type_value: expected a term with an operative type")
 		end
 		if userdata_type ~= op_userdata_type then
-			typechecker_state:flow(userdata_type, typechecking_context, op_userdata_type, typechecking_context)
+			typechecker_state:flow(
+				userdata_type,
+				typechecking_context,
+				op_userdata_type,
+				typechecking_context,
+				"operative userdata"
+			)
 		end
 		local operative_usages = usage_array()
 		add_arrays(operative_usages, operative_type_usages)
@@ -3271,10 +3287,10 @@ CEdge:define_enum("edge", {
 )
 
 ---@class ConstrainEdge
----@field left NodeID
+---@field left NodeID -- value
 ---@field rel SubtypeRelation
 ---@field shallowest_block integer
----@field right NodeID
+---@field right NodeID -- use
 
 ---@class LeftCallEdge
 ---@field left NodeID
@@ -3352,7 +3368,114 @@ function Reachability:revert()
 	self.rightcall_edges:revert()
 end
 
+---@enum TypeCheckerTag
+local TypeCheckerTag = {
+	VALUE = { VALUE = "VALUE" },
+	USAGE = { USAGE = "USAGE" },
+	METAVAR = { METAVAR = "METAVAR" },
+	RANGE = { RANGE = "RANGE" },
+}
+
 ---@alias ReachabilityQueue edgenotif[]
+
+function TypeCheckerState:DEBUG_VERIFY()
+	-- all nodes must be unique (no two nodes can have the same value, using the basic equality comparison on that value via ==)
+	local unique = {}
+	local transitive = {}
+
+	for _, v in ipairs(self.graph.constrain_edges:all()) do
+		if v.left == v.right then
+			debug.traceback("INVALID CONSTRAINT!")
+			os.exit(-1, true)
+		end
+		transitive[v.left + bit.lshift(v.right, 24)] = v -- bitshift by 24 via multiplication
+	end
+
+	for _, v in ipairs(self.pending) do
+		if v:is_Constrain() then
+			local left, rel, right, shallowest_block, item_cause = v:unwrap_Constrain()
+			transitive[left + bit.lshift(right, 24)] = v
+		end
+	end
+
+	for i, v in ipairs(self.values) do
+		if v[2] == TypeCheckerTag.METAVAR then
+			if
+				v[1]:is_neutral()
+				and v[1]:unwrap_neutral():is_free()
+				and v[1]:unwrap_neutral():unwrap_free():is_metavariable()
+			then
+				if unique[v[1]] then
+					print(
+						debug.traceback(
+							tostring(i)
+								.. ": "
+								.. tostring(self.values[i][1])
+								.. " is a duplicate of "
+								.. tostring(unique[v[1]])
+								.. ": "
+								.. tostring(v[1])
+						)
+					)
+					os.exit(-1, true)
+					return false
+				end
+
+				-- transitivity across metavariables (for every node that is a metavariable, there must exist some ConstraintEdge where .left is equal to the constraint to mv.value and .right is equal to the constraint for mv.usage)
+				--    At all times, this must true across the graph, or constraints that would satisfy it must exist in the pending queue.
+				local mv = v[1]:unwrap_neutral():unwrap_free():unwrap_metavariable()
+
+				local from = self.graph.constrain_edges:to(mv.value) -- This looks at all constrains going "to" mv.value, but we begin our search here, so for us it is "from"
+				local to = self.graph.constrain_edges:from(mv.usage) -- and vice-versa for here
+
+				for _, f in ipairs(from) do
+					for _, t in ipairs(to) do
+						-- Find a constraint from f.left to t.right
+						local l = f.left
+						local r = t.right
+
+						if transitive[l + bit.lshift(r, 24)] == nil then
+							print(
+								debug.traceback(
+									tostring(i)
+										.. " IS NOT TRANSITIVE! No constraint edge has left "
+										.. tostring(l)
+										.. " and right "
+										.. tostring(r)
+										.. " while looking at "
+										.. tostring(f.left)
+										.. ", "
+										.. tostring(f.right)
+										.. ", "
+										.. tostring(t.left)
+										.. ", "
+										.. tostring(t.right)
+										.. ", "
+								)
+							)
+							os.exit(-1, true)
+							return false
+						end
+					end
+				end
+
+				unique[v[1]] = i
+			else
+				print(
+					debug.traceback(tostring(i) .. " is marked as a metavariable, but instead found " .. tostring(v[1]))
+				)
+				os.exit(-1, true)
+				return false
+			end
+		end
+	end
+
+	if #self.pending == 0 then
+		-- once the graph is settled, if a concrete_head to concrete_head path exists, then after completing flow(), it must have been discharged (this requires adding a "discharged" tracker that is set to true if the edge is passed to check_concrete or has the "constrain transitivity rule" applied to it. If at any time the graph has 0 pending operations, ALL edges must have a discharged value of true.)
+	end
+
+	return true
+end
 
 ---check for combinations of constrain edges that induce new constraints in response to a constrain edges
 ---@param edge ConstrainEdge
@@ -3573,13 +3696,6 @@ local function reachability()
 	}, reachability_mt)
 end
 
----@enum TypeCheckerTag
-local TypeCheckerTag = {
-	VALUE = { VALUE = "VALUE" },
-	USAGE = { USAGE = "USAGE" },
-	METAVAR = { METAVAR = "METAVAR" },
-	RANGE = { RANGE = "RANGE" },
-}
 ---@param lctx TypecheckingContext
 ---@param val value
 ---@param use value
@@ -3787,7 +3903,56 @@ function TypeCheckerState:constrain_leftcall_compose_1(edge)
 					r2.arg,
 					r2.rel,
 					r2.right,
-					math.min(edge.shallowest_block, r2.shallowest_block) "constrain leftcall composition induced by constrain"
+					math.min(edge.shallowest_block, r2.shallowest_block),
+					"constrain leftcall composition induced by constrain"
+				)
+			)
+		end
+	end
+end
+
+--- Check for a meet between a left call and a right call - if they have the same argument, induce a constraint between them
+---@param edge LeftCallEdge
+function TypeCheckerState:constrain_on_left_meet(edge)
+	for _, r in ipairs(self.graph.rightcall_edges:to(edge.left)) do
+		if r.arg == edge.arg then
+			-- Add constraint
+			if r.rel ~= edge.rel then
+				error("Relations do not match! " .. tostring(r.rel.Rel) .. " is not " .. tostring(edge.rel.Rel))
+			end
+
+			U.append(
+				self.pending,
+				EdgeNotif.Constrain(
+					r.left,
+					edge.rel,
+					edge.right,
+					math.min(edge.shallowest_block, r.shallowest_block),
+					"Constrain left call meeting a right call"
+				)
+			)
+		end
+	end
+end
+
+--- Check for a meet between a right call and a left call - if they have the same argument, induce a constraint between them
+---@param edge RightCallEdge
+function TypeCheckerState:constrain_on_right_meet(edge)
+	for _, l in ipairs(self.graph.leftcall_edges:from(edge.right)) do
+		if l.arg == edge.arg then
+			-- Add constraint
+			if l.rel ~= edge.rel then
+				error("Relations do not match! " .. tostring(l.rel.Rel) .. " is not " .. tostring(edge.rel.Rel))
+			end
+
+			U.append(
+				self.pending,
+				EdgeNotif.Constrain(
+					edge.left,
+					edge.rel,
+					l.right,
+					math.min(edge.shallowest_block, l.shallowest_block),
+					"Constrain right call meeting a left call"
 				)
 			)
 		end
@@ -3885,18 +4050,20 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 	assert(#self.pending == 0, "pending not empty at start of constrain!")
 	--TODO: add contexts to queue_work if appropriate
 	--self:queue_work(val, val_context, use, use_context, cause)
+
 	self:queue_constrain(val_context, val, rel, use_context, use, cause)
 
 	while #self.pending > 0 do
+		--assert(self:DEBUG_VERIFY(), "VERIFICATION FAILED")
 		local item = U.pop(self.pending)
 
 		if item:is_Constrain() then
-			local left, rel, right, shallowest_block, cause = item:unwrap_Constrain()
+			local left, rel, right, shallowest_block, item_cause = item:unwrap_Constrain()
 
 			if self.graph:add_constrain_edge(left, right, rel, self.block_level) then
 				---@type ConstrainEdge
 				local edge = { left = left, rel = rel, right = right, shallowest_block = self.block_level }
-				self.graph:constrain_transitivity(edge, self.pending, cause)
+				self.graph:constrain_transitivity(edge, self.pending, item_cause)
 				U.tag(
 					"check_heads",
 					{ left = left, right = right, rel = rel.debug_name },
@@ -3911,26 +4078,59 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 				self:rightcall_constrain_compose_2(edge)
 			end
 		elseif item:is_CallLeft() then
-			local left, arg, rel, right, shallowest_block, cause = item:unwrap_CallLeft()
+			local left, arg, rel, right, shallowest_block, item_cause = item:unwrap_CallLeft()
 
 			if self.graph:add_call_left_edge(left, arg, rel, right, self.block_level) then
 				---@type LeftCallEdge
 				local edge = { left = left, arg = arg, rel = rel, right = right, shallowest_block = self.block_level }
 				self:constrain_leftcall_compose_2(edge)
+				self:constrain_on_left_meet(edge)
 			end
 		elseif item:is_CallRight() then
-			local left, rel, right, arg, shallowest_block, cause = item:unwrap_CallRight()
+			local left, rel, right, arg, shallowest_block, item_cause = item:unwrap_CallRight()
 
 			if self.graph:add_call_right_edge(left, rel, right, arg, self.block_level) then
 				---@type RightCallEdge
 				local edge = { left = left, rel = rel, right = right, arg = arg, shallowest_block = self.block_level }
 				self:rightcall_constrain_compose_1(edge)
+				self:constrain_on_right_meet(edge) -- This just duplicates constrain_on_left_meet
 			end
 		else
 			error("Unknown edge kind!")
 		end
 	end
 
+	-- for _, v in ipairs(self.graph.leftcall_edges:all()) do
+	-- 	if self.values[v.left][1] == value.host_string_type or self.values[v.right][1] == value.host_string_type then
+	-- 		print("LEFTCALL LEFT: " .. tostring(self.values[v.left][1]))
+	-- 		print("LEFTCALL RIGHT: " .. tostring(self.values[v.right][1]))
+	-- 		print("LEFTCALL ARG: " .. tostring(v.arg))
+
+	-- 		for _, c in ipairs(self.graph.constrain_edges:all()) do
+	-- 			if c.left == v.left or c.right == v.left then
+	-- 				print("CONSTRAIN MV LEFT: " .. tostring(c.left))
+	-- 				print("CONSTRAIN MV RIGHT: " .. tostring(c.right))
+	-- 			end
+	-- 		end
+
+	-- 		for _, c in ipairs(self.graph.rightcall_edges:all()) do
+	-- 			if c.left == v.left or c.right == v.left then
+	-- 				print("RIGHTCALL MV LEFT: " .. tostring(self.values[c.left][1]))
+	-- 				print("RIGHTCALL MV RIGHT: " .. tostring(self.values[c.right][1]))
+	-- 				print("RIGHTCALL ARG: " .. tostring(v.arg))
+	-- 			end
+	-- 		end
+	-- 	end
+	-- end
+
+	-- for _, v in ipairs(self.graph.rightcall_edges:all()) do
+	-- 	if self.values[v.left][1] == value.host_string_type or self.values[v.right][1] == value.host_string_type then
+	-- 		print("RIGHTCALL LEFT: " .. tostring(self.values[v.left][1]))
+	-- 		print("RIGHTCALL RIGHT: " .. tostring(self.values[v.right][1]))
+	-- 	end
+	-- end
+
+	--assert(self:DEBUG_VERIFY(), "VERIFICATION FAILED")
 	assert(#self.pending == 0, "pending was not drained!")
 	return true
 end
@@ -3952,12 +4152,22 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len)
 
 	local constraints = array(terms.constraintelem)()
 
+	---comment
+	---@param id integer
+	---@return value
 	local function getnode(id)
 		return self.values[id][1]
 	end
+	---@param id integer
+	---@return TypecheckingContext
 	local function getctx(id)
 		return self.values[id][3] or terms.typechecking_context() --FIXME
 	end
+
+	---@generic T
+	---@param edgeset T[]
+	---@param extractor fun(edge: T) : integer
+	---@param callback fun(edge: T)
 	local function slice_edgeset(edgeset, extractor, callback)
 		for _, edge in ipairs(edgeset) do
 			if self.values[extractor(edge)][2] == TypeCheckerTag.METAVAR then
