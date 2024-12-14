@@ -197,12 +197,7 @@ function TypecheckingContext:append(name, type, val, start_anchor)
 		or value.neutral(neutral_value.free(free.placeholder(self:len() + 1, placeholder_debug(name, start_anchor))))
 	local copy = {
 		bindings = self.bindings:append({ name = name, type = type }),
-		runtime_context = self.runtime_context:append(
-			val
-				or value.neutral(
-					neutral_value.free(free.placeholder(self:len() + 1, placeholder_debug(name, start_anchor)))
-				)
-		),
+		runtime_context = self.runtime_context:append(val, name),
 	}
 	return setmetatable(copy, typechecking_context_mt)
 end
