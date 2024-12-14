@@ -2056,7 +2056,7 @@ let HTTPHandler = host-prog-type (req : HTTPRequest, res : HTTPResponse) -> ()
 
 let string = host-string
 
-let create-http-server =
+####let create-http-server =
 	lambda-prog (callback : host-funcprog-type-to-funcprog-type(HTTPHandler, host-nil))
 		let inner =
 			intrinsic
@@ -2076,19 +2076,19 @@ let create-http-server =
 		let (res) = inner(host-cb)
 		res
 
-let http-server-listen =
+####let http-server-listen =
 	intrinsic
 		"return function(server, host, port) server:listen(port, host) end"
 		:
 		host-prog-type (server : HTTPServer, host : string, port : host-number) -> ()
 
-let response-set-header =
+####let response-set-header =
 	intrinsic
 		"return function(res, name, val) res:setHeader(name, val) end"
 		:
 		host-prog-type (res : HTTPResponse, name : string, value : string) -> ()
 
-let response-send-body =
+####let response-send-body =
 	intrinsic
 		"return function(res, body) res:finish(body) end"
 		:
@@ -2117,7 +2117,7 @@ let print =
 let runloop =
 	intrinsic "return require 'uv'.run" : (host-prog-type () -> ())
 
-let my-request-handler = lambda-prog (req : HTTPRequest, res : HTTPResponse)
+####let my-request-handler = lambda-prog (req : HTTPRequest, res : HTTPResponse)
 	print "got a request!"
 	let body = "Hello World!\n"
 	response-set-header res "Content-Type" "text/plain"
@@ -2125,7 +2125,7 @@ let my-request-handler = lambda-prog (req : HTTPRequest, res : HTTPResponse)
 	response-send-body res body
 	tuple-of-implicit()
 
-let main = lambda-prog ()
+####let main = lambda-prog ()
 	let server = create-http-server(my-request-handler)
 	http-server-listen server "0.0.0.0" 8080
 	print "server started on localhost:8080"
