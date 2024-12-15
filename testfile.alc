@@ -939,10 +939,10 @@ let host-if =
 		unwrap(inner)
 
 let tuple-desc-type-inner = intrinsic "return terms.value.tuple_desc_type" :
-	host-func-type ((U : wrapped(universe))) -> ((T : wrapped(host-type)))
+	host-func-type ((U : unstrict-wrapped(universe))) -> ((T : unstrict-wrapped(host-type)))
 let tuple-desc-type = lambda (U : universe)
-	let (T) = tuple-desc-type-inner(wrap(U))
-	unwrap(T)
+	let (T) = tuple-desc-type-inner(unstrict-wrap(U))
+	unstrict-unwrap(T)
 let tuple-type-explicit = lambda (U : universe, desc : tuple-desc-type(U))
 	let inner = intrinsic "return terms.value.tuple_type" :
 		host-func-type ((desc : wrapped(tuple-desc-type(U)))) -> ((T : wrapped(U)))
@@ -1295,7 +1295,7 @@ let host-matcher-is-value = lambda (userdata : host-type, result : tuple-desc-ty
 
 let reducer-type = new-host-type-family new-host-unique-id("host-reducer")
 	forall (storage : tuple-desc-type(host-type), result2 : tuple-desc-type(host-type)) -> (T : host-type)
-	tuple-of-implicit covariant(tuple-desc-relation) contravariant(tuple-desc-relation)
+	tuple-of-implicit contravariant(tuple-desc-relation) covariant(tuple-desc-relation)
 
 let reducible-handler-type = lambda (userdata : host-type, result2 : tuple-desc-type(host-type), result : tuple-desc-type(host-type))
 	# prepend userdata to result2
