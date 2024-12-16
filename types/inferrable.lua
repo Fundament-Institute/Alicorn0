@@ -249,7 +249,7 @@ function inferrable:as_program_type() end
 ---@field define_enum fun(self: inferrableType, name: string, variants: Variants): inferrableType
 ---@field bound_variable fun(index: number): inferrable
 ---@field typed fun(type: value, usage_counts: ArrayValue, typed_term: typed): inferrable
----@field annotated_lambda fun(param_name: string, param_annotation: inferrable, body: inferrable, anchor: Anchor, visible: visibility, pure: checkable): inferrable
+---@field annotated_lambda fun(param_name: string, param_annotation: inferrable, body: inferrable, start_anchor: Anchor, visible: visibility, pure: checkable): inferrable
 ---@field pi fun(param_type: inferrable, param_info: checkable, result_type: inferrable, result_info: checkable): inferrable
 ---@field application fun(f: inferrable, arg: checkable): inferrable
 ---@field tuple_cons fun(elements: ArrayValue): inferrable
@@ -283,8 +283,8 @@ function inferrable:as_program_type() end
 ---@field host_unwrap fun(container: inferrable): inferrable
 ---@field host_unstrict_unwrap fun(container: inferrable): inferrable
 ---@field host_if fun(subject: checkable, consequent: inferrable, alternate: inferrable): inferrable
----@field host_intrinsic fun(source: checkable, type: inferrable, anchor: Anchor): inferrable
----@field program_sequence fun(first: inferrable, anchor: Anchor, continue: inferrable): inferrable
+---@field host_intrinsic fun(source: checkable, type: inferrable, start_anchor: Anchor): inferrable
+---@field program_sequence fun(first: inferrable, start_anchor: Anchor, continue: inferrable): inferrable
 ---@field program_end fun(result: inferrable): inferrable
 ---@field program_type fun(effect_type: inferrable, result_type: inferrable): inferrable
 return {}

@@ -391,7 +391,9 @@ local function substitute_inner(val, mappings, context_len)
 		local desc = substitute_inner(desc, mappings, context_len)
 		return typed_term.tuple_type(desc)
 	elseif val:is_tuple_desc_type() then
-		return typed_term.literal(val)
+		local universe = val:unwrap_tuple_desc_type()
+		local typed_universe = substitute_inner(universe, mappings, context_len)
+		return typed_term.tuple_desc_type(typed_universe)
 	elseif val:is_enum_value() then
 		local constructor, arg = val:unwrap_enum_value()
 		local arg = substitute_inner(arg, mappings, context_len)
@@ -2462,6 +2464,10 @@ function evaluate(typed_term, runtime_context)
 		local desc_term = typed_term:unwrap_tuple_type()
 		local desc = U.tag("evaluate", { desc_term = desc_term }, evaluate, desc_term, runtime_context)
 		return terms.value.tuple_type(desc)
+	elseif typed_term:is_tuple_desc_type() then
+		local universe_term = typed_term:unwrap_tuple_desc_type()
+		local universe = evaluate(universe_term, runtime_context)
+		return terms.value.tuple_desc_type(universe)
 	elseif typed_term:is_record_cons() then
 		local fields = typed_term:unwrap_record_cons()
 		local new_fields = string_value_map()

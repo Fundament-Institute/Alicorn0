@@ -562,6 +562,7 @@ typed_term:define_enum("typed", {
 		"index",   gen.builtin_number,
 	} },
 	{ "tuple_type", { "desc", typed_term } },
+	{ "tuple_desc_type", { "universe", typed_term } },
 	{ "record_cons", { "fields", map(gen.builtin_string, typed_term) } },
 	{ "record_extend", {
 		"base",   typed_term,
