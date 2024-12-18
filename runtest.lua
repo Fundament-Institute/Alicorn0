@@ -129,7 +129,7 @@ if profile_run then
 	print("Profile what:", profile_what)
 end
 
-local prelude = "testfile.alc"
+local prelude = "prelude.alc"
 
 local env = base_env.create()
 

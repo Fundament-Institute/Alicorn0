@@ -1,0 +1,495 @@
+let only-accept-host-tuples-inner-host =
+	intrinsic
+		""""
+			local function check_host_tuple(subject, consequent, alternate)
+				if subject:is_host_tuple_type() then
+					return consequent
+				else
+					return alternate
+				end
+			end
+			return check_host_tuple
+		:
+		host-func-type (subject : wrapped(type), consequent : wrapped(host-type), alternate : wrapped(host-type)) -> ((result : wrapped(host-type)))
+
+let only-accept-host-tuples-inner =
+	lambda (subject : wrapped(type), consequent : host-type, alternate : host-type)
+		let (res) =
+			only-accept-host-tuples-inner-host
+				subject
+				wrap consequent
+				wrap alternate
+		unwrap res
+let only-accept-host-tuples =
+	lambda (subject : wrapped(type))
+		only-accept-host-tuples-inner
+			subject
+			host-unit
+			wrapped void
+
+let only-accept-prog-host-tuples-inner-host =
+	intrinsic
+		""""
+			local function check_prog_host_tuple(subject, consequent, alternate)
+				if not subject:is_program_type() then
+					return alternate
+				end
+				local effects, base = subject:unwrap_program_type()
+				if base:is_host_tuple_type() then
+					return consequent
+				else
+					return alternate
+				end
+			end
+			return check_prog_host_tuple
+		:
+		host-func-type (subject : wrapped(type), consequent : wrapped(host-type), alternate : wrapped(host-type)) -> ((result : wrapped(host-type)))
+
+let only-accept-prog-host-tuples-inner =
+	lambda (subject : wrapped(type), consequent : host-type, alternate : host-type)
+		let (res) =
+			only-accept-prog-host-tuples-inner-host
+				subject
+				wrap consequent
+				wrap alternate
+		unwrap res
+let only-accept-prog-host-tuples =
+	lambda (subject : wrapped(type))
+		only-accept-host-tuples-inner
+			subject
+			host-unit
+			wrapped void
+
+let host-tuple-type-to-tuple-type-inner =
+	intrinsic
+		""""
+			local function host_tuple_to_tuple(host_tuple_type)
+				local desc = host_tuple_type:unwrap_host_tuple_type()
+				-- this conversion happens to work since the eliminator for host tuples and tuples is the same term
+				local newbasetype = terms.value.tuple_type(desc)
+				return newbasetype
+			end
+			return host_tuple_to_tuple
+		:
+		host-func-type (t : wrapped(type), valid : only-accept-host-tuples(t)) -> ((res : wrapped(type)))
+
+let host-tuple-type-to-tuple-type =
+	lambda (t : wrapped(type), valid : only-accept-host-tuples(t))
+		let (res) = host-tuple-type-to-tuple-type-inner(t, valid)
+		res
+
+let extract-prog-host-tuple-type-inner =
+	intrinsic
+		""""
+			return function(prog_type)
+				local effect, base = prog_type:unwrap_program_type()
+				return base
+			end
+		:
+		host-func-type (t : wrapped(type), valid : only-accept-prog-host-tuples(t)) -> (res : wrapped(type), valid : only-accept-host-tuples(res))
+
+let rebuild-prog-type =
+	intrinsic
+		""""
+			return function(prog_type, valid, new_base)
+				local effect, base = prog_type:unwrap_program_type()
+				return terms.value.program_type(effect, new_base)
+			end
+		:
+		host-func-type (t : wrapped(type), valid : only-accept-prog-host-tuples(t), b : wrapped(type)) -> ((res : wrapped(type)))
+
+let host-tuple-to-tuple-inner =
+	intrinsic
+		""""
+			return function(_type, _valid, val)
+				local elems = val:unwrap_host_tuple_value()
+				local vals = terms_gen.delcare_array(terms.value)()
+				for _, v in ipairs(elems) do
+					vals:append(terms.value.host_value(v))
+				end
+				return terms.value.tuple_value(vals)
+			end
+		:
+		host-func-type (
+				t     : wrapped(type),
+				valid : only-accept-host-tuples(t),
+				val   : wrapped(unwrap(t)))
+			->
+			((res : wrapped(unwrap(host-tuple-type-to-tuple-type(t, valid)))))
+
+let host-tuple-to-tuple =
+	lambda (t : wrapped(type), valid : only-accept-host-tuples(t), val : unwrap(t))
+		let (res) = host-tuple-to-tuple-inner(t, valid, wrap(val))
+		unwrap(res)
+
+let tuple-to-host-tuple-inner =
+	intrinsic
+		""""
+			return function(_type, _valid, val)
+				local elems = val:unwrap_tuple_value()
+				local leading = terms_gen.declare_array(terms_gen.any_lua_type)()
+				local stuck = false
+				local stuck_elem = nil
+				local trailing = terms_gen.declare_array(terms.value)()
+				for _, v in ipairs(elems) do
+					if stuck then
+						trailing:append(v)
+					elseif v:is_host_value() then
+						leading:append(v:unwrap_host_value())
+					elseif v:is_neutral() then
+						stuck, stuck_elem = true, v:unwrap_neutral()
+					else
+						error "found an element in a tuple being converted to host-tuple that was neither host nor neutral"
+					end
+				end
+				if not stuck then
+					return terms.value.host_tuple_value(leading)
+				else
+					return terms.value.neutral(terms.neutral_value.host_tuple_stuck(leading, stuck_elem, trailing))
+				end
+			end
+		:
+		host-func-type (
+				t     : wrapped(type),
+				valid : only-accept-host-tuples(t),
+				val   : wrapped(unwrap(host-tuple-type-to-tuple-type(t, valid))))
+			->
+			((res : wrapped(unwrap(t))))
+
+let tuple-to-host-tuple =
+	lambda (t : wrapped(type), valid : only-accept-host-tuples(t), val : unwrap(host-tuple-type-to-tuple-type(t, valid)))
+		let (res) = tuple-to-host-tuple-inner(t, valid, wrap(val))
+		unwrap(res)
+
+let only-accept-host-funcs-inner-host =
+	intrinsic
+		""""
+			local function check_host_func(subject, consequent, alternate)
+				if subject:is_host_function_type() then
+					local param, result, info = subject:unwrap_host_function_type()
+					if not info:is_result_info() then
+						error "stuck result info? broken function type?"
+					end
+					local info_inner = info:unwrap_result_info()
+					if info_inner.purity:is_pure() then
+						return consequent
+					else
+						return alternate
+					end
+				else
+					return alternate
+				end
+			end
+			return check_host_func
+		:
+		host-func-type (subject : wrapped(type), consequent : wrapped(host-type), alternate : wrapped(host-type)) -> ((result : wrapped(host-type)))
+
+let only-accept-host-funcs-inner =
+	lambda (subject : wrapped(type), consequent : host-type, alternate : host-type)
+		let (res) =
+			only-accept-host-funcs-inner-host
+				subject
+				wrap consequent
+				wrap alternate
+		unwrap res
+let only-accept-host-funcs =
+	lambda (subject : wrapped(type))
+		only-accept-host-funcs-inner
+			subject
+			host-unit
+			wrapped void
+
+let only-accept-host-funcprogs-inner-host =
+	intrinsic
+		""""
+			local function check_host_func(subject, consequent, alternate)
+				if subject:is_host_function_type() then
+					local param, result, info = subject:unwrap_host_function_type()
+					if not info:is_result_info() then
+						error "stuck result info? broken function type?"
+					end
+					local info_inner = info:unwrap_result_info()
+					if info_inner.purity:is_effectful() then
+						return consequent
+					else
+						return alternate
+					end
+				else
+					return alternate
+				end
+			end
+			return check_host_func
+		:
+		host-func-type (subject : wrapped(type), consequent : wrapped(host-type), alternate : wrapped(host-type)) -> ((result : wrapped(host-type)))
+
+let only-accept-host-funcprogs-inner =
+	lambda (subject : wrapped(type), consequent : host-type, alternate : host-type)
+		let (res) =
+			only-accept-host-funcprogs-inner-host
+				subject
+				wrap consequent
+				wrap alternate
+		unwrap res
+let only-accept-host-funcprogs =
+	lambda (subject : wrapped(type))
+		only-accept-host-funcprogs-inner
+			subject
+			host-unit
+			wrapped void
+
+let only-accept-funcs-inner-host =
+	intrinsic
+		""""
+			local function check_host_func(subject, consequent, alternate)
+				if subject:is_pi() then
+					return consequent
+				else
+					return alternate
+				end
+			end
+			return check_host_func
+		:
+		host-func-type (subject : wrapped(type), consequent : wrapped(host-type), alternate : wrapped(host-type)) -> ((result : wrapped(host-type)))
+
+let only-accept-funcs-inner =
+	lambda (subject : wrapped(type), consequent : host-type, alternate : host-type)
+		let (res) =
+			only-accept-funcs-inner-host
+				subject
+				wrap consequent
+				wrap alternate
+		unwrap res
+let only-accept-funcs =
+	lambda ((subject : wrapped(type)))
+		only-accept-funcs-inner
+			subject
+			host-unit
+			wrapped void
+
+let get-host-func-arg-inner =
+	intrinsic
+		""""
+			local function get_host_func_arg(subject, valid)
+				local param_type, result_type, result_info = subject:unwrap_host_function_type()
+				return param_type, nil
+			end
+			return get_host_func_arg
+		:
+		host-func-type (subject : wrapped(type), valid : only-accept-host-funcs(subject)) -> (result : wrapped(type), valid : only-accept-host-tuples(result))
+
+let get-host-funcprog-arg-inner =
+	intrinsic
+		""""
+			local function get_host_func_arg(subject, valid)
+				local param_type, result_type, result_info = subject:unwrap_host_function_type()
+				return param_type, nil
+			end
+			return get_host_func_arg
+		:
+		host-func-type (subject : wrapped(type), valid : only-accept-host-funcprogs(subject)) -> (result : wrapped(type), valid : only-accept-host-tuples(result))
+
+let just-args =
+	lambda (subject : wrapped(type), valid : only-accept-host-funcs(subject))
+		let (result, valid) = get-host-func-arg-inner(subject, valid)
+		result
+
+let func-result-info = new-host-type(new-host-unique-id("func-result-info"))
+
+let get-host-func-result-info-inner =
+	intrinsic
+		""""
+			local function get_host_func_arg(subject, valid)
+				local param_type, result_type, result_info = subject:unwrap_host_function_type()
+				return result_info
+			end
+			return get_host_func_arg
+		:
+		host-func-type (subject : wrapped(type), valid : only-accept-host-funcs(subject)) -> ((result : wrapped(func-result-info)))
+
+let set-func-result-info-inner =
+	intrinsic
+		""""
+			local function get_host_func_arg(subject, valid, new_result_info)
+				local param_type, param_info, result_type, result_info = subject:unwrap_pi()
+				return terms.value.pi(param_type, param_info, result_type, new_result_info)
+			end
+			return get_host_func_arg
+		:
+		host-func-type (subject : wrapped(type), valid : only-accept-funcs(subject), resinf : wrapped(func-result-info)) -> ((result : wrapped(type)))
+
+let func-conv-res-type = 
+	lambda (argtype : wrapped(type))
+		forall (arg : unwrap(argtype)) -> (res : wrapped(type), valid : only-accept-host-tuples(res))
+let funcprog-conv-res-type = 
+	lambda (argtype : wrapped(type))
+		forall (arg : unwrap(argtype)) -> (res : wrapped(type), valid : only-accept-prog-host-tuples(res))
+
+let get-host-func-res-inner =
+	intrinsic
+		""""
+			local function get_host_func_res(subject, valid)
+				local param_type, result_type, result_info = subject:unwrap_host_function_type()
+				local typed_array = terms_gen.declare_array(terms.typed_term)
+				local tuple_build = terms.typed_term.tuple_cons(
+					typed_array(
+						terms.typed_term.host_wrap(
+							terms.typed_term.application(
+								terms.typed_term.bound_variable(1),
+								terms.typed_term.bound_variable(2)
+							)
+						),
+						terms.typed_term.literal(terms.value.host_value(nil))
+					)
+				)
+				local ctx = terms.runtime_context():append(result_type)
+				return terms.value.closure("#TEST-1", tuple_build, ctx)
+			end
+			return get_host_func_res
+		:
+		host-func-type (subject : wrapped(type), valid : only-accept-host-funcs(subject)) -> ((results : wrapped(func-conv-res-type(just-args(subject, valid)))))
+						
+let get-host-funcprog-res-inner =
+	intrinsic
+		""""
+			local function get_host_func_res(subject, valid)
+				local param_type, result_type, result_info = subject:unwrap_host_function_type()
+				local typed_array = terms_gen.declare_array(terms.typed_term)
+				local tuple_build = terms.typed_term.tuple_cons(
+					typed_array(
+						terms.typed_term.host_wrap(
+							terms.typed_term.application(
+								terms.typed_term.bound_variable(1),
+								terms.typed_term.bound_variable(2)
+							)
+						),
+						terms.typed_term.literal(terms.value.host_value(nil))
+					)
+				)
+				local ctx = terms.runtime_context():append(result_type)
+				return terms.value.closure("#TEST-1", tuple_build, ctx)
+			end
+			return get_host_func_res
+		:
+		host-func-type (subject : wrapped(type), valid : only-accept-host-funcprogs(subject)) -> ((results : wrapped(funcprog-conv-res-type(just-args(subject, valid)))))
+
+let foo =
+	host-func-type (x : host-number, y : host-number) -> ((res : host-number))
+
+foo
+
+let (oldargs oldargs-valid) = get-host-func-arg-inner(wrap(foo), host-nil)
+let (newargs) = host-tuple-type-to-tuple-type-inner(oldargs, oldargs-valid)
+newargs
+
+let (orig-results) = get-host-func-res-inner(wrap(foo), host-nil)
+let orig-results = unwrap(orig-results)
+let new-results =
+	lambda (args : unwrap(newargs))
+		let ptuple = tuple-to-host-tuple(oldargs, oldargs-valid, args)
+		let orig-results-res = apply(orig-results, ptuple)
+		let (newres valid) = orig-results-res
+		newres
+
+let host-func-type-to-func-type =
+	lambda (T : type, valid : only-accept-host-funcs(wrap(T)))
+		let (oldargs oldargs-valid) = get-host-func-arg-inner(wrap(T), valid)
+		let (newargs) = host-tuple-type-to-tuple-type-inner(oldargs, oldargs-valid)
+		let (orig-results-wrapped) = get-host-func-res-inner(wrap(T), valid)
+		let orig-results = unwrap(orig-results-wrapped)
+		let (orig-result-info-wrapped) = get-host-func-result-info-inner(wrap(T), valid)
+		
+		let new-results =
+			lambda (args : unwrap(newargs))
+				let ptuple = tuple-to-host-tuple(oldargs, oldargs-valid, args)
+				let (oldres oldres-valid) = apply(orig-results, ptuple)
+				let (newres) = host-tuple-type-to-tuple-type-inner(oldres, oldres-valid)
+				newres
+
+		let new-func-type = forall (x : unwrap(newargs)) -> (y : unwrap(new-results(x)))
+		let (final-func-type-wrapped) = set-func-result-info-inner(wrap(new-func-type), host-nil, orig-result-info-wrapped)
+		unwrap(final-func-type-wrapped)
+
+let host-funcprog-type-to-funcprog-type =
+	lambda (T : type, valid : only-accept-host-funcprogs(wrap(T)))
+		let (oldargs oldargs-valid) = get-host-funcprog-arg-inner(wrap(T), valid)
+		let (newargs) = host-tuple-type-to-tuple-type-inner(oldargs, oldargs-valid)
+		let (orig-results-wrapped) = get-host-funcprog-res-inner(wrap(T), valid)
+		let orig-results = unwrap(orig-results-wrapped)
+		let (orig-result-info-wrapped) = get-host-func-result-info-inner(wrap(T), valid)
+		
+		let new-results =
+			lambda (args : unwrap(newargs))
+				let ptuple = tuple-to-host-tuple(oldargs, oldargs-valid, args)
+				let (oldres oldres-valid) = apply(orig-results, ptuple)
+				let (extractres extractres-valid) = extract-prog-host-tuple-type-inner(oldres, oldres-valid)
+				let (newres) = host-tuple-type-to-tuple-type-inner(extractres, extractres-valid)
+				let (rebuilt) = rebuild-prog-type(oldres, oldres-valid, newres)
+				rebuilt
+
+		let new-func-type = forall (x : unwrap(newargs)) -> (y : unwrap(new-results(x)))
+		let (final-func-type-wrapped) = set-func-result-info-inner(wrap(new-func-type), host-nil, orig-result-info-wrapped)
+		unwrap(final-func-type-wrapped)
+
+host-func-type-to-func-type foo host-nil
+
+let func-to-host-func-inner =
+	intrinsic
+		""""
+			local tunpack = unpack or table.unpack
+			return function(_type, _valid, afn)
+				return function(...)
+					local args = table.pack(...)
+					local conv_args = terms_gen.declare_array(terms.value)()
+					for i = 1, args.n do
+						conv_args:append(terms.value.host_value(args[i]))
+					end
+					local res = evaluator.apply_value(afn, terms.value.tuple_value(conv_args))
+					if not res:is_tuple_value() then
+						error "alicorn function converted to native function has failed to create a real value"
+					end
+					local elems = {}
+					for i, v in res:unwrap_tuple_value():ipairs() do
+						elems[i] = v:unwrap_host_value()
+					end
+					return tunpack(elems)
+				end
+			end
+		:
+		host-func-type (T : wrapped(host-type), valid : only-accept-host-funcs(T), fn : wrapped(host-func-type-to-func-type(unwrap(T), valid))) -> ((res-fn : unwrap(T)))
+
+let func-to-host-func =
+	lambda (T : host-type, valid : only-accept-host-funcs(wrap(T)), fn : host-func-type-to-func-type(T, valid))
+		let (res) = func-to-host-func-inner(wrap(T), valid, wrap(fn))
+		res #TODO figure out why `unwrap(res) here doesn't make a nice type error but fails
+
+let funcprog-to-host-funcprog-inner =
+	intrinsic
+		""""
+			local tunpack = unpack or table.unpack
+			return function(_type, _valid, afn)
+				return function(...)
+					local args = {...}
+					local nargs = select("#", ...)
+					local conv_args = terms_gen.declare_array(terms.value)()
+					for i = 1, nargs do
+						conv_args:append(terms.value.host_value(args[i]))
+					end
+					local res = evaluator.execute_program(evaluator.apply_value(afn, terms.value.tuple_value(conv_args)))
+					if not res:is_tuple_value() then
+						print(res)
+						error  "alicorn function converted to native function has failed to create a real value"
+					end
+					local elems = {}
+					for i, v in res:unwrap_tuple_value():ipairs() do
+						elems[i] = v:unwrap_host_value()
+					end
+					return tunpack(elems)
+				end
+			end
+		:
+		host-func-type (T : wrapped(host-type), valid : only-accept-host-funcprogs(T), fn : wrapped(host-funcprog-type-to-funcprog-type(unwrap(T), valid))) -> ((res-fn : unwrap(T)))
+
+let funcprog-to-host-funcprog =
+	lambda (T : host-type, valid : only-accept-host-funcprogs(wrap(T)), fn : host-funcprog-type-to-funcprog-type(T, valid))
+		let (res) = funcprog-to-host-funcprog-inner(wrap(T), valid, wrap(fn))
+		res #TODO figure out why `unwrap(res) here doesn't make a nice type error but fails
