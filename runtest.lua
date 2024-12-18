@@ -20,7 +20,7 @@ local terms = require "terms"
 local exprs = require "alicorn-expressions"
 local profile = require "profile"
 local getopt = require "getopt"
-local json = require "json"
+local json = require "libs.dkjson"
 
 local interpreter_argv, argv
 if arg then -- puc-rio lua, luajit
