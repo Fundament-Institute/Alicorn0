@@ -89,7 +89,7 @@ local function open_mod_op_impl(syntax, env)
 end
 
 local function get_op_impl(syntax, env)
-	local ok, modval, env, name = syntax:match({
+	local ok, modval, env, symbol = syntax:match({
 		metalanguage.listmatch(metalanguage.accept_handler, {
 			evaluator.evaluates(metalanguage.accept_handler, env),
 			metalanguage.issymbol(metalanguage.accept_handler),
@@ -98,7 +98,7 @@ local function get_op_impl(syntax, env)
 	if not ok then
 		return ok, modval
 	end
-	print("module get", ok, modval, env, name)
+	print("module get", ok, modval, env, symbol.str)
 	if not modval.type == module_type then
 		return false, "first argument of module get must be a module"
 	end

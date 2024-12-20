@@ -12,7 +12,8 @@ local function syntax_convert(tree)
 		end
 		return res
 	elseif tree.kind == "symbol" then
-		return metalanguage.symbol(tree.start_anchor, tree.end_anchor, tree.str)
+		assert(tree["kind"])
+		return metalanguage.symbol(tree.start_anchor, tree.end_anchor, tree)
 	elseif tree.kind == "literal" then
 		return metalanguage.value(tree.start_anchor, tree.end_anchor, { type = tree.literaltype, val = tree.val })
 	elseif tree.kind == "string" then

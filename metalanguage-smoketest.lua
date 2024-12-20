@@ -107,7 +107,7 @@ local function do_block(syntax, env)
 end
 
 local function val_bind(syntax, env)
-	local ok, name, val = syntax:match({
+	local ok, symbol, val = syntax:match({
 		metalanguage.listmatch(
 			metalanguage.accept_handler,
 			metalanguage.issymbol(metalanguage.accept_handler),
@@ -117,9 +117,9 @@ local function val_bind(syntax, env)
 	}, metalanguage.failure_handler, nil)
 	--print("val bind", ok, name, _, val)
 	if not ok then
-		return false, name
+		return false, symbol.str
 	end
-	return true, value(nil), env + newenv { [name] = val }
+	return true, value(nil), env + newenv { [symbol.str] = val }
 end
 
 local env = newenv {

@@ -70,13 +70,20 @@ local function let_bind(syntax, env)
 		error("env in let_bind isn't an env")
 	end
 
-	if type(name) == "table" then
+	if not name["kind"] then
 		--print("binding destructuring with let")
 		--p(name)
 		local tupletype = gen.declare_array(gen.builtin_string)
-		env = env:bind_local(terms.binding.tuple_elim(tupletype(table.unpack(name)), expr))
+		local names = {}
+		for _, v in ipairs(name) do
+			table.insert(names, v.str)
+			assert(v.kind)
+		end
+
+		env = env:bind_local(terms.binding.tuple_elim(tupletype(table.unpack(names)), expr))
 	else
-		env = env:bind_local(terms.binding.let(name, expr))
+		assert(name["kind"])
+		env = env:bind_local(terms.binding.let(name.str, expr))
 	end
 
 	return true,
@@ -89,14 +96,14 @@ local function let_bind(syntax, env)
 end
 
 ---@param _ any
----@param name string
+---@param symbol SyntaxSymbol
 ---@param exprenv { val:inferrable, env:Environment }
 ---@return boolean
 ---@return { name:string, expr:inferrable }
 ---@return Environment
-local function record_threaded_element_acceptor(_, name, exprenv)
+local function record_threaded_element_acceptor(_, symbol, exprenv)
 	local expr, env = utils.unpack_val_env(exprenv)
-	return true, { name = name, expr = expr }, env
+	return true, { name = symbol.str, expr = expr }, env
 end
 
 ---@param env Environment
@@ -213,7 +220,7 @@ local pure_ascribed_name = metalanguage.reducer(
 				typed.literal(type_mv:as_value())
 			)
 		end
-		return true, name, type, env
+		return true, name.str, type, env
 	end,
 	"pure_ascribed_name"
 )

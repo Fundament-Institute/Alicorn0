@@ -36,11 +36,16 @@ local MatcherKind = --[[@enum MatcherKind]]
 ---@field handler SymbolFunc | PairFunc | NilFunc | ValueFunc | ReducibleFunc
 ---@field reducible any?
 
+---@class SyntaxSymbol
+---@field start_anchor Anchor
+---@field end_anchor Anchor
+---@field str string
+
 --[[
 issymbol : forall
 	implicit userdata : type
 	implicit results : tuple-desc
-	handler : (forall (u : userdata, s : string) -> res : tuple-type(results)))
+	handler : (forall (u : userdata, s : SyntaxSymbol) -> res : tuple-type(results)))
 	->
 	Matcher(userdata, results)
 --]]
@@ -316,14 +321,14 @@ local function reducer(func, name)
 end
 
 ---@param expected string
----@param name string
+---@param symbol SyntaxSymbol
 ---@return boolean
 ---@return string?
-local function symbolexacthandler(expected, name)
-	if name == expected then
+local function symbolexacthandler(expected, symbol)
+	if symbol.str == expected then
 		return true
 	else
-		return false, "symbol is expected to be exactly " .. expected .. " but was instead " .. name
+		return false, "symbol is expected to be exactly " .. expected .. " but was instead " .. symbol.str
 	end
 end
 
@@ -343,13 +348,13 @@ local function failure_handler(data, exception)
 end
 
 ---@param syntax ConstructedSyntax
----@param symbol string
+---@param name string
 ---@return boolean
 ---@return string?
-local function SymbolExact(syntax, symbol)
+local function SymbolExact(syntax, name)
 	return syntax:match({
 		issymbol(symbolexacthandler),
-	}, failure_handler, symbol)
+	}, failure_handler, name)
 end
 
 local symbol_exact = reducer(SymbolExact, "symbol exact")
@@ -491,10 +496,10 @@ local symbol_accepters = {
 
 ---@param start_anchor Anchor
 ---@param end_anchor Anchor
----@param name string
+---@param syntaxsymbol SyntaxSymbol
 ---@return ConstructedSyntax
-local function symbol(start_anchor, end_anchor, name)
-	return cons_syntax(symbol_accepters, start_anchor, end_anchor, name)
+local function symbol(start_anchor, end_anchor, syntaxsymbol)
+	return cons_syntax(symbol_accepters, start_anchor, end_anchor, syntaxsymbol)
 end
 
 local value_accepters = {

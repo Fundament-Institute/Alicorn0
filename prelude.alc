@@ -919,6 +919,8 @@ let tuple-desc-elem-explicit = lambda (
 			wrap(desc)
 			wrap(elem)
 	unwrap(T)
+
+
 let tuple-desc-elem-implicit = lambda_curry ((U : universe))
 	lambda (desc : tuple-desc-type(U), elem : (forall (rest : tuple-type(desc)) -> (next : U)))
 		let inner = intrinsic "return terms.cons" :
