@@ -392,8 +392,7 @@ local diff = {
 		local params_types = info.params_types
 
 		local function diff_fn(left, right)
-			print("diffing...")
-			print("kind: " .. left.kind)
+			print("diffing param kind: " .. left.kind)
 			local rt = getmetatable(right)
 			if t ~= rt then
 				print("unequal types!")
@@ -433,6 +432,7 @@ local diff = {
 					return diff_impl.diff(left[d], right[d])
 				else
 					print("stopping diff (missing diff impl)")
+					print("type:", dt)
 					return
 				end
 			else
@@ -487,6 +487,7 @@ local diff = {
 							return diff_impl.diff(left[d], right[d])
 						else
 							print("stopping diff (missing diff impl)")
+							print("type:", dt)
 							return
 						end
 					else
@@ -510,8 +511,7 @@ local diff = {
 		end
 
 		local function diff_fn(left, right)
-			print("diffing...")
-			print("kind: " .. left.kind)
+			print("diffing enum kind: " .. left.kind)
 			local rt = getmetatable(right)
 			if t ~= rt then
 				print("unequal types!")

@@ -1272,7 +1272,11 @@ let host-matcher-reducible = lambda (
 		red            : reducer-type(storage, result2),
 		s              : host-tuple-type(storage),
 		accept-handler : reducible-handler-type(userdata, result2, result))
-	let c = get-reducible-constructor(userdata, storage, result2, result, red)
+	# FIXME: this function resolution breaks alicorn, which is extremely very super bad
+	# let c = get-reducible-constructor(userdata, storage, result2, result, red)
+	let inner = intrinsic "return function(r) return r end" :
+		host-func-type ((r : reducer-type(storage, result2))) -> ((c : reducible-constructor-type(userdata, storage, result2, result)))
+	let (c) = inner(red)
 
 	let accept-handler-type = reducible-handler-type(userdata, result2, result)
 	let accept-handler-desc = tuple-desc-singleton(host-type, accept-handler-type)

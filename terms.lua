@@ -12,6 +12,7 @@ local fibbuf = require "fibonacci-buffer"
 
 local gen = require "terms-generators"
 local derivers = require "derivers"
+local traits = require "traits"
 
 local format = require "format"
 
@@ -123,6 +124,52 @@ local function runtime_context()
 	return setmetatable({ bindings = fibbuf() }, runtime_context_mt)
 end
 
+local function runtime_context_diff_fn(left, right)
+	print("diffing runtime context...")
+	local rt = getmetatable(right)
+	if runtime_context_mt ~= rt then
+		print("unequal types!")
+		print(runtime_context_mt)
+		print(rt)
+		print("stopping diff")
+		return
+	end
+	if left.bindings:len() ~= right.bindings:len() then
+		print("unequal lengths!")
+		print(left.bindings:len())
+		print(right.bindings:len())
+		print("stopping diff")
+		return
+	end
+	local n = 0
+	local diff_elems = {}
+	for i = 1, left.bindings:len() do
+		if left:get(i) ~= right:get(i) then
+			n = n + 1
+			diff_elems[n] = i
+		end
+	end
+	if n == 0 then
+		print("no difference")
+		print("stopping diff")
+		return
+	elseif n == 1 then
+		local d = diff_elems[1]
+		print("difference in element: " .. tostring(d))
+		local diff_impl = traits.diff:get(value)
+		-- tail call
+		return diff_impl.diff(left:get(d), right:get(d))
+	else
+		print("difference in multiple elements:")
+		for i = 1, n do
+			print("left " .. tostring(diff_elems[i]) .. ": " .. tostring(left:get(diff_elems[i])))
+			print("right " .. tostring(diff_elems[i]) .. ": " .. tostring(right:get(diff_elems[i])))
+		end
+		print("stopping diff")
+		return
+	end
+end
+
 local typechecking_context_mt
 
 ---@class TypecheckingContext
@@ -226,6 +273,8 @@ local typechecking_context_type =
 local host_user_defined_id = gen.declare_foreign(function(val)
 	return type(val) == "table" and type(val.name) == "string"
 end, "{ name: string }")
+
+traits.diff:implement_on(runtime_context_type, { diff = runtime_context_diff_fn })
 
 -- implicit arguments are filled in through unification
 -- e.g. fn append(t : star(0), n : nat, xs : Array(t, n), val : t) -> Array(t, n+1)

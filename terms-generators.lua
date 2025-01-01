@@ -788,8 +788,7 @@ end
 
 local function gen_array_diff_fn(self, value_type)
 	local function diff_fn(left, right)
-		print("diffing array...")
-		print("value_type: " .. tostring(value_type))
+		print("diffing array with value_type: " .. tostring(value_type))
 		local rt = getmetatable(right)
 		if self ~= rt then
 			print("unequal types!")
@@ -826,6 +825,7 @@ local function gen_array_diff_fn(self, value_type)
 				return diff_impl.diff(left[d], right[d])
 			else
 				print("stopping diff (missing diff impl)")
+				print("value_type:", value_type)
 				return
 			end
 		else
@@ -949,6 +949,159 @@ local terms_gen = {
 		return true
 	end, "any"),
 }
+
+local function any_lua_type_diff_fn(left, right)
+	if type(left) ~= type(right) then
+		print("different primitive lua types!")
+		print(type(left))
+		print(type(right))
+		print("stopping diff")
+		return
+	end
+	local dispatch = {
+		["nil"] = function()
+			print("diffing lua nils")
+			print("no difference")
+			print("stopping diff")
+			return
+		end,
+		["number"] = function()
+			print("diffing lua numbers")
+			if left ~= right then
+				print("different numbers")
+				print(left)
+				print(right)
+				print("stopping diff")
+				return
+			end
+			print("no difference")
+			print("stopping diff")
+			return
+		end,
+		["string"] = function()
+			print("diffing lua strings")
+			if left ~= right then
+				print("different strings")
+				print(left)
+				print(right)
+				print("stopping diff")
+				return
+			end
+			print("no difference")
+			print("stopping diff")
+			return
+		end,
+		["boolean"] = function()
+			print("diffing lua booleans")
+			if left ~= right then
+				print("different booleans")
+				print(left)
+				print(right)
+				print("stopping diff")
+				return
+			end
+			print("no difference")
+			print("stopping diff")
+			return
+		end,
+		["table"] = function()
+			print("diffing lua tables")
+			if left == right then
+				print("physically equal")
+				print("stopping diff")
+				return
+			end
+			local n = 0
+			local diff_elems = {}
+			for k, lval in pairs(left) do
+				rval = right[k]
+				if lval ~= rval then
+					n = n + 1
+					diff_elems[n] = k
+				end
+			end
+			for k, rval in pairs(right) do
+				lval = left[k]
+				if not lval then
+					n = n + 1
+					diff_elems[n] = k
+				end
+			end
+			if n == 0 then
+				print("no elements different")
+				print("stopping diff")
+				return
+			elseif n == 1 then
+				local d = diff_elems[1]
+				print("difference in element: " .. tostring(d))
+				local mtl = getmetatable(left[d])
+				local mtr = getmetatable(right[d])
+				if mtl ~= mtr then
+					print("stopping diff (different metatables)")
+					return
+				end
+				local diff_impl = traits.diff:get(mtl)
+				if diff_impl then
+					-- tail call
+					return diff_impl.diff(left[d], right[d])
+				else
+					print("stopping diff (missing diff impl)")
+					print("mt:", mtl)
+					return
+				end
+			else
+				print("difference in multiple elements:")
+				for i = 1, n do
+					print(diff_elems[i])
+				end
+				print("stopping diff")
+				return
+			end
+		end,
+		["function"] = function()
+			print("diffing lua functions")
+			if left ~= right then
+				print("different functions")
+				print(left)
+				print(right)
+				print("stopping diff")
+				return
+			end
+			print("no difference")
+			print("stopping diff")
+			return
+		end,
+		["thread"] = function()
+			print("diffing lua threads")
+			if left ~= right then
+				print("different threads")
+				print(left)
+				print(right)
+				print("stopping diff")
+				return
+			end
+			print("no difference")
+			print("stopping diff")
+			return
+		end,
+		["userdata"] = function()
+			print("diffing lua userdatas")
+			if left ~= right then
+				print("different userdata")
+				print(left)
+				print(right)
+				print("stopping diff")
+				return
+			end
+			print("no difference")
+			print("stopping diff")
+			return
+		end,
+	}
+	dispatch[type(left)]()
+end
+traits.diff:implement_on(terms_gen.any_lua_type, { diff = any_lua_type_diff_fn })
+
 local internals_interface = require "internals-interface"
 internals_interface.terms_gen = terms_gen
 return terms_gen
