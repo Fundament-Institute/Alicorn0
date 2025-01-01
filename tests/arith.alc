@@ -5,3 +5,13 @@ let host-sub = (intrinsic "return function(a, b) return a - b end" : host-arith-
 
 #let foo = (record (bar = 5) (baz = 6))
 #let subbed = host-sub foo.bar y
+
+let host-mul = (intrinsic "return function(a, b) return a * b end" : host-arith-binop)
+let mul = lambda (a : host-number, b : host-number)
+	let (c) = host-mul(a, b)
+	c
+let _*_ = mul
+
+let sqr = lambda (x)
+	x * x
+sqr 6
