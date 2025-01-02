@@ -1,0 +1,51 @@
+let host-if-2-type = forall (
+		result     : host-type,
+		c2         : host-type,
+		a1         : host-type,
+		subject    : host-bool,
+		consequent : host-if(subject, result, c2),
+		alternate  : host-if(subject, a1, result))
+	->
+	(r : result)
+
+let host-if-2-wrap = intrinsic
+	""""
+		local typed = terms.typed_term
+		local string_array = terms_gen.declare_array(terms_gen.builtin_string)
+		return terms.value.closure(
+			"#host-if-param",
+			typed.tuple_elim(
+				string_array(
+					"#host-if-result",
+					"#host-if-c2",
+					"#host-if-a1",
+					"#host-if-subject",
+					"#host-if-consequent",
+					"#host-if-alternate"
+				),
+				typed.bound_variable(1),
+				6,
+				typed.host_if(
+					typed.bound_variable(5),
+					typed.bound_variable(6),
+					typed.bound_variable(7)
+				)
+			),
+			terms.runtime_context()
+		)
+	:
+	wrapped(host-if-2-type)
+let host-if-2 = explicit-unwrap(host-if-2-type, host-if-2-wrap)
+
+let host-true = intrinsic "return true" : host-bool
+let host-false = intrinsic "return false" : host-bool
+
+let host-if-test = lambda (
+		b : host-bool,
+		x : host-if(b, host-string, host-unit))
+	let default = intrinsic "return 'default'" : host-if(b, host-string, host-string)
+	let foo = host-if-2(host-string, host-unit, host-string, b, x, default)
+	the host-string foo
+
+host-if-test(host-true, "foobar")
+host-if-test(host-false, host-nil)

@@ -1,3 +1,16 @@
 {
-    "test1.alc": "success"
+    "tests/test-success.alc": "success",
+    "tests/test-failure.alc": "termgen",
+    "tests/arith.alc": "success",
+    "tests/bad-types.alc": "termgen",
+    "tests/basic-annotated.alc": "success",
+    "tests/functypes.alc": "success",
+    "tests/host-if.alc": "success",
+    "tests/host-prog.alc": "success",
+    "tests/host-to-func.alc": "success",
+    "tests/http-server.alc": "success",
+    "tests/implicit.alc": "success",
+    "tests/operative-do.alc": "success",
+    "tests/operative-tuple-desc.alc": "success",
+    "tests/tuples.alc": "success"
 }

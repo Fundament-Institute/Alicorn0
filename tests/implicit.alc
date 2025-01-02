@@ -1,0 +1,20 @@
+let id = lambda_implicit (T : type_(10, 0))
+	lambda (x : T)
+		x
+
+# TODO: test this when tuple-desc-op can do more than just star-0
+#let point = lambda_implicit (U : type_(10))
+#	lambda (T : U)
+#		tuple-type(tuple-desc-op(x : T, y : T))
+#
+#let mkpoint = lambda_implicit (U : type_(10), T : U)
+#	lambda (x : T, y : T)
+#		the point(T) tuple-of(x, y)
+#
+#let mul = intrinsic "return function(a, b) return a * b end" : host-arith-binop
+#let add = intrinsic "return function(a, b) return a "+" b end" : host-arith-binop
+#let sqmag = lambda (r : tuple-type(tuple-desc(x : host-number, y : host-number)))
+#	let (x y) = r
+#	add (mul x x) (mul y y)
+
+#let test = sqmag(mkpoint(id(3), id(4)))

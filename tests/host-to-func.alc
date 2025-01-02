@@ -1,0 +1,19 @@
+let foo =
+	host-func-type (x : host-number, y : host-number) -> ((res : host-number))
+
+foo
+
+let (oldargs oldargs-valid) = get-host-func-arg-inner(wrap(foo), host-nil)
+let (newargs) = host-tuple-type-to-tuple-type-inner(oldargs, oldargs-valid)
+newargs
+
+let (orig-results) = get-host-func-res-inner(wrap(foo), host-nil)
+let orig-results = unwrap(orig-results)
+let new-results =
+	lambda (args : unwrap(newargs))
+		let ptuple = tuple-to-host-tuple(oldargs, oldargs-valid, args)
+		let orig-results-res = apply(orig-results, ptuple)
+		let (newres valid) = orig-results-res
+		newres
+
+host-func-type-to-func-type foo host-nil

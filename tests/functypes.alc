@@ -1,0 +1,17 @@
+let host-arith-binop = (host-func-type (a : host-number, b : host-number) -> ((c : host-number)))
+let host-sub = (intrinsic "return function(a, b) return a - b end" : host-arith-binop)
+
+let id_type = forall (name : host-number) -> (name : host-number)
+
+let id_num = lambda_single (T : host-number)
+	T
+
+(the id_type id_num)
+
+let sub = lambda (x : host-number, y : host-number)
+	let (res) = host-sub(x, y)
+	res
+
+let sub_type = forall (x : host-number, y : host-number) -> (res : host-number)
+
+(the sub_type sub)

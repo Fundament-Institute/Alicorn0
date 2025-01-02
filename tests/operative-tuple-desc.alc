@@ -1,0 +1,3 @@
+let my-tuple-desc = tuple-desc-op(x : host-number, y : host-number)
+let my-tuple-type = tuple-type-explicit(type_(0, 0), my-tuple-desc)
+my-tuple-type

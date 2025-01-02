@@ -3,11 +3,13 @@
 
 require "pretty-printer" -- has side-effect of loading global p()
 
---jit.off()
-jit.opt.start("maxtrace=10000")
-jit.opt.start("maxmcode=4096")
-jit.opt.start("recunroll=5")
-jit.opt.start("loopunroll=60")
+if jit then
+	--jit.off()
+	jit.opt.start("maxtrace=10000")
+	jit.opt.start("maxmcode=4096")
+	jit.opt.start("recunroll=5")
+	jit.opt.start("loopunroll=60")
+end
 
 local startTime = os.clock()
 local checkpointTime = startTime
@@ -20,7 +22,10 @@ local terms = require "terms"
 local exprs = require "alicorn-expressions"
 local profile = require "profile"
 local getopt = require "getopt"
-local json = require "json"
+local json = require "libs.dkjson"
+local U = require "alicorn-utils"
+
+json.use_lpeg()
 
 local interpreter_argv, argv
 if arg then -- puc-rio lua, luajit
@@ -35,7 +40,7 @@ elseif process.argv then -- luvit
 	interpreter_argv = table.move(process.argv, 0, file_n - 1, 0, {})
 	argv = table.move(process.argv, file_n, #process.argv, 0, {})
 else
-	print("Missing or unknown arg table! Using stub")
+	io.write("Missing or unknown arg table! Using stub\n")
 	interpreter_argv = { [0] = "lua" }
 	argv = { [0] = "runtest.lua" }
 end
@@ -113,21 +118,21 @@ local opttab = {
 local first_operand = getopt(argv, opttab)
 
 if print_usage then
-	print(("Usage: %s [-TSfstv] [-p file[,what] | -P file[,what]]"):format(argv[0]))
+	io.write(("Usage: %s [-TSfstv] [-p file[,what] | -P file[,what]]"):format(argv[0]))
 	os.exit()
 end
 
-print("Interpreter:", table.concat(interpreter_argv, " ", 0))
-print("File:", argv[0])
-print("Options:", table.concat(argv, " ", 1, first_operand - 1))
-print("Operands:", table.concat(argv, " ", first_operand))
+io.write("\nInterpreter:", table.concat(interpreter_argv, " ", 0))
+io.write("\nFile:", argv[0])
+io.write("\nOptions:", table.concat(argv, " ", 1, first_operand - 1))
+io.write("\nOperands:", table.concat(argv, " ", first_operand))
 if profile_run then
-	print("Profile flame?", profile_flame)
-	print("Profile file:", profile_file)
-	print("Profile what:", profile_what)
+	io.write("\nProfile flame?", tostring(profile_flame))
+	io.write("\nProfile file:", tostring(profile_file))
+	io.write("\nProfile what:", tostring(profile_what))
 end
 
-local prelude = "testfile.alc"
+local prelude = "prelude.alc"
 
 local env = base_env.create()
 
@@ -327,13 +332,21 @@ if test_harness then
 	if not test_list_file then
 		error(err)
 	end
-	---@type { [string]: string }
-	local test_list = json.parse(test_list_file:read("a"))
+	local test_list, pos, err = json.decode(test_list_file:read("a"), 1, nil)
+	---@cast test_list table
+
+	if err ~= nil then
+		print("Couldn't decode JSON describing tests! " .. tostring(err))
+		return
+	end
 
 	---@type { [string]: string }
 	local logs = {}
+	local total = 0
+	local failures = {}
 
 	for file, completion in pairs(test_list) do
+		total = total + 1
 		logs[file] = ""
 
 		local printrepl = function(...)
@@ -349,9 +362,10 @@ if test_harness then
 		local ok, test_expr, test_env = load_alc_file(file, env, printrepl)
 		if not ok then
 			if completion == test_expr then
-				print("success: " .. file .. ", stopped at " .. test_expr)
+				io.write("success: " .. file .. ", stopped at " .. test_expr)
 			else
-				print("\n\nfailure, test " .. file .. " stopped at " .. test_expr .. " \n" .. logs[file] .. "\n\n")
+				U.append(failures, file)
+				io.write("\n\nfailure, test " .. file .. " stopped at " .. test_expr .. " \n" .. logs[file] .. "\n\n")
 			end
 		else
 			---@cast test_expr inferrable
@@ -361,10 +375,20 @@ if test_harness then
 			local ok = execute_alc_file(test_expr, printrepl)
 
 			if completion == ok then
-				print("success: " .. file .. ", stopped at " .. ok)
+				io.write("success: " .. file .. ", stopped at " .. ok)
 			else
-				print("\n\nfailure, test " .. file .. " stopped at " .. ok .. "\n" .. logs[file] .. "\n\n")
+				U.append(failures, file)
+				io.write("\n\nfailure, test " .. file .. " stopped at " .. ok .. "\n" .. logs[file] .. "\n\n")
 			end
+		end
+	end
+
+	if #failures == 0 then
+		io.write("\n\nAll " .. tostring(total) .. " tests passed!")
+	else
+		io.write("\n\n" .. tostring(total - #failures) .. " out of " .. tostring(total) .. " tests passed. Failures: ")
+		for _, v in ipairs(failures) do
+			io.write("\n- " .. v)
 		end
 	end
 else
