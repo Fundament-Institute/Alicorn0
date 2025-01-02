@@ -127,9 +127,9 @@ io.write("\nFile:", argv[0])
 io.write("\nOptions:", table.concat(argv, " ", 1, first_operand - 1))
 io.write("\nOperands:", table.concat(argv, " ", first_operand))
 if profile_run then
-	io.write("\nProfile flame?", profile_flame)
-	io.write("\nProfile file:", profile_file)
-	io.write("\nProfile what:", profile_what)
+	io.write("\nProfile flame?", tostring(profile_flame))
+	io.write("\nProfile file:", tostring(profile_file))
+	io.write("\nProfile what:", tostring(profile_what))
 end
 
 local prelude = "prelude.alc"
@@ -384,7 +384,7 @@ if test_harness then
 	end
 
 	if #failures == 0 then
-		io.write("\n\nAll " .. tostring(success) .. " tests passed!")
+		io.write("\n\nAll " .. tostring(total) .. " tests passed!")
 	else
 		io.write("\n\n" .. tostring(total - #failures) .. " out of " .. tostring(total) .. " tests passed. Failures: ")
 		for _, v in ipairs(failures) do

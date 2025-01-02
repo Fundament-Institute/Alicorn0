@@ -1,17 +1,5 @@
 let host-arith-binop = (host-func-type (a : host-number, b : host-number) -> ((c : host-number)))
 
-let omega = 9
-# FIXME: apparently variables aren't allowed here
-#let universe = type_(omega, 1)
-let universe = type_(9, 1)
-
-let implicit-unwrap = lambda_implicit (T : type_(10, 0))
-	lambda (x : wrapped(T))
-		unwrap T x
-
-
-let unwrap = implicit-unwrap
-
 let host-string-wrap          = intrinsic "return terms.value.host_string_type"    : wrapped(host-type)
 
 let host-string          = unwrap(host-string-wrap)
@@ -21,9 +9,3 @@ let mul = lambda (a : host-number, b : host-number)
 	let (c) = host-mul(a, b)
 	c
 let _*_ = mul
-
-# FIXME: this super duper should be failing
-let sqr_overcomplicated = lambda_annotated (t, x : t) : host-string
-	x * x
-
-sqr_overcomplicated(host-number, 6)
