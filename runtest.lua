@@ -42,7 +42,7 @@ else
 	interpreter_argv = { [0] = "lua" }
 	argv = { [0] = "runtest.lua" }
 end
-local test_harness = false
+local test_harness = true
 local print_src = false
 local print_ast = false
 local print_inferrable = false
@@ -71,9 +71,6 @@ local function split_commas(s)
 	return subs
 end
 local opttab = {
-	["T"] = function(_)
-		test_harness = true
-	end,
 	["S"] = function(_)
 		print_src = true
 	end,
@@ -109,6 +106,9 @@ local opttab = {
 		profile_file = subargs[1]
 		profile_what = subargs[2] or "match"
 	end,
+	["T:"] = function(_)
+		error("NYI")
+	end,
 	["?"] = function(c)
 		print_usage = true
 	end,
@@ -116,7 +116,7 @@ local opttab = {
 local first_operand = getopt(argv, opttab)
 
 if print_usage then
-	io.stderr:write(("Usage: %s [-STfstv] [-p file[,what] | -P file[,what]]\n"):format(argv[0]))
+	io.stderr:write(("Usage: %s [-Sfstv] [-p file[,what] | -P file[,what]] [-T test]\n"):format(argv[0]))
 	io.stderr:write("  -S  Print the Alicorn source code about to be tested.\n")
 	io.stderr:write("      (mnemonic: Source)\n")
 	io.stderr:write("  -f  Show the AST generated from the source code.\n")
@@ -133,12 +133,12 @@ if print_usage then
 	io.stderr:write("      (mnemonic: profile)\n")
 	io.stderr:write("      what = match: Profile syntax:match.    [default]\n")
 	io.stderr:write("      what = infer: Profile evaluator.infer.\n")
-	io.stderr:write("      NOTE: this won't work well with -T.\n")
+	io.stderr:write("      Works best in conjunction with -T.\n")
 	io.stderr:write("  -P  Like -p, but output a flamegraph-compatible trace.\n")
 	io.stderr:write("      (mnemonic: Phlame! :P)\n")
-	io.stderr:write("  -T  Enable the test harness, and run tests in testlist.json.\n")
+	io.stderr:write("  -T  Choose a specific test to run.\n")
 	io.stderr:write("      (mnemonic: Test)\n")
-	io.stderr:write("      Without -T, only the prelude is tested.\n")
+	io.stderr:write("      Without -T, all tests in testlist.json are run.\n")
 	os.exit()
 end
 
