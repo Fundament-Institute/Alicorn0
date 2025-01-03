@@ -511,6 +511,8 @@ local value_accepters = {
 ---@class SyntaxValue
 ---@field type string
 ---@field val any
+---@field start_anchor Anchor
+---@field end_anchor Anchor
 
 ---@param start_anchor Anchor
 ---@param end_anchor Anchor
