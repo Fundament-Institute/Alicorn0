@@ -1779,15 +1779,9 @@ let listtail-reducer =
 # 	aa
 #     a
 
-let switchtest = lambda (x)
-	switch x
-		none -> 2
-		inj1(a) -> sqr(a)
-		inj2(a, b) -> sqr(a) * b
-
-tuple-of-implicit
-	switchtest(mk none)
-	switchtest(mk inj1 5)
-	switchtest(mk inj2 3 5)
-	switchtest(mk inj2(3, 5))
-	switchtest(mk inj2 sqr(2) 5)
+let host-arith-binop = (host-func-type (a : host-number, b : host-number) -> ((c : host-number)))
+let host-mul = (intrinsic "return function(a, b) return a * b end" : host-arith-binop)
+let mul = lambda (a : host-number, b : host-number)
+	let (c) = host-mul(a, b)
+	c
+let _*_ = mul

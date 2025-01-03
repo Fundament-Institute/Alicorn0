@@ -6,6 +6,7 @@ local exprs = require "alicorn-expressions"
 local terms = require "terms"
 local gen = require "terms-generators"
 local evaluator = require "evaluator"
+local U = require "alicorn-utils"
 
 local value = terms.value
 local typed = terms.typed_term
@@ -115,7 +116,7 @@ local function mk_impl(syntax, env)
 	if not ok then
 		return ok, tuple
 	end
-	return ok, terms.inferrable_term.enum_cons(name, tuple), env
+	return ok, terms.inferrable_term.enum_cons(name.str, tuple), env
 end
 
 ---@type Matcher
@@ -129,14 +130,26 @@ local switch_case_header_matcher = metalanguage.listtail(
 	metalanguage.symbol_exact(metalanguage.accept_handler, "->")
 )
 
+---@param ... SyntaxSymbol
+---@return ...
+local function unwrap_into_string(...)
+	local args = { ... }
+	for i, v in ipairs(args) do
+		args[i] = v.str
+	end
+	return unpack(args)
+end
+
 ---@param env Environment
 local switch_case = metalanguage.reducer(function(syntax, env)
 	local ok, tag, tail = syntax:match({ switch_case_header_matcher }, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, tag
 	end
-	local names = gen.declare_array(gen.builtin_string)(table.unpack(tag, 2))
+
+	local names = gen.declare_array(gen.builtin_string)(unwrap_into_string(table.unpack(tag, 2)))
 	tag = tag[1]
+
 	if not tag then
 		return false, "missing case tag"
 	end
@@ -194,7 +207,7 @@ local function switch_impl(syntax, env)
 		end
 		--TODO rewrite this to collect the branch envs and join them back together:
 		tag, term = table.unpack(tag)
-		variants:set(tag, term)
+		variants:set(tag.str, term)
 	end
 	return true, terms.inferrable_term.enum_case(subj, variants), env
 end
