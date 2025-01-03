@@ -196,29 +196,34 @@ local infix_data = {
 	-- # is the comment character and is forbidden here
 }
 
----@param symbol string
+---@param symbol SyntaxSymbol
 ---@return boolean
----@return string
+---@return SyntaxSymbol
 local function shunting_yard_prefix_handler(_, symbol)
-	if not prefix_data[symbol:sub(1, 1)] or symbol:find("_") then
+	assert(symbol and symbol["kind"])
+
+	if not prefix_data[(symbol.str):sub(1, 1)] or (symbol.str):find("_") then
 		return false,
-			"symbol was provided in a prefix operator place, but the symbol isn't a valid prefix operator: " .. symbol
+			"symbol was provided in a prefix operator place, but the symbol isn't a valid prefix operator: "
+				.. symbol.str
 	end
 	return true, symbol
 end
 
----@param symbol string
+---@param symbol SyntaxSymbol
 ---@param a ConstructedSyntax
 ---@param b ConstructedSyntax
 ---@return boolean
 ---@return boolean|string
----@return string?
+---@return SyntaxSymbol?
 ---@return ConstructedSyntax?
 ---@return ConstructedSyntax?
 local function shunting_yard_infix_handler(_, symbol, a, b)
-	if not infix_data[symbol:sub(1, 1)] or symbol:find("_") then
+	assert(symbol and symbol["kind"])
+	if not infix_data[(symbol.str):sub(1, 1)] or (symbol.str):find("_") then
 		return false,
-			"symbol was provided in an infix operator place, but the symbol isn't a valid infix operator: " .. symbol
+			"symbol was provided in an infix operator place, but the symbol isn't a valid infix operator: "
+				.. symbol.str
 	end
 	return true, true, symbol, a, b
 end
@@ -231,7 +236,7 @@ end
 
 ---@class (exact) TaggedOperator
 ---@field type OperatorType
----@field symbol string
+---@field symbol SyntaxSymbol
 
 ---@param yard { n: integer, [integer]: TaggedOperator }
 ---@param output { n: integer, [integer]: ConstructedSyntax }
@@ -274,9 +279,11 @@ local function shunting_yard_pop(yard, output, start_anchor, end_anchor)
 	end
 end
 
----@param new_symbol string
+---@param new_symbol SyntaxSymbol
 ---@param yard_operator TaggedOperator
 local function shunting_yard_should_pop(new_symbol, yard_operator)
+	assert(new_symbol and new_symbol["kind"])
+
 	-- new_symbol is always infix, as we never pop while adding a prefix operator
 	-- prefix operators always have higher precedence than infix operators
 	local yard_type = yard_operator.type
@@ -287,8 +294,8 @@ local function shunting_yard_should_pop(new_symbol, yard_operator)
 		error("unknown operator type")
 	end
 	local yard_symbol = yard_operator.symbol
-	local new_data = infix_data[new_symbol:sub(1, 1)]
-	local yard_data = infix_data[yard_symbol:sub(1, 1)]
+	local new_data = infix_data[(new_symbol.str):sub(1, 1)]
+	local yard_data = infix_data[(yard_symbol.str):sub(1, 1)]
 	local new_precedence = new_data.precedence
 	local yard_precedence = yard_data.precedence
 	if new_precedence < yard_precedence then
@@ -326,6 +333,7 @@ local function shunting_yard(a, b, yard, output, start_anchor, end_anchor)
 	-- first, collect all prefix operators
 	local is_prefix, prefix_symbol =
 		a:match({ metalanguage.issymbol(shunting_yard_prefix_handler) }, metalanguage.failure_handler, nil)
+	---@cast prefix_symbol SyntaxSymbol
 	if is_prefix then
 		local ok, next_a, next_b =
 			b:match({ metalanguage.ispair(metalanguage.accept_handler) }, metalanguage.failure_handler, nil)
@@ -356,6 +364,9 @@ local function shunting_yard(a, b, yard, output, start_anchor, end_anchor)
 	if not ok then
 		return ok, more
 	end
+	if infix_symbol then
+		assert(infix_symbol["kind"])
+	end
 	if not more then
 		while yard.n > 0 do
 			shunting_yard_pop(yard, output, start_anchor, end_anchor)
@@ -373,22 +384,22 @@ local function shunting_yard(a, b, yard, output, start_anchor, end_anchor)
 	return shunting_yard(next_a, next_b, yard, output, start_anchor, end_anchor)
 end
 
----@param symbol string
+---@param symbol SyntaxSymbol
 ---@param arg ConstructedSyntax
 ---@return boolean
 ---@return OperatorType|string
 ---@return string?
 ---@return ConstructedSyntax?
 local function expression_prefix_handler(_, symbol, arg)
-	if not prefix_data[symbol:sub(1, 1)] or symbol:find("_") then
+	if not prefix_data[(symbol.str):sub(1, 1)] or (symbol.str):find("_") then
 		return false,
 			"symbol was provided in a prefix operator place, but the symbol isn't a valid prefix operator: " .. symbol
 	end
-	return true, OperatorType.Prefix, symbol, arg
+	return true, OperatorType.Prefix, symbol.str, arg
 end
 
 ---@param left ConstructedSyntax
----@param symbol string
+---@param symbol SyntaxSymbol
 ---@param right ConstructedSyntax
 ---@return boolean
 ---@return OperatorType|string
@@ -396,11 +407,13 @@ end
 ---@return ConstructedSyntax?
 ---@return ConstructedSyntax?
 local function expression_infix_handler(_, left, symbol, right)
-	if not infix_data[symbol:sub(1, 1)] or symbol:find("_") then
+	assert(symbol and symbol["kind"])
+
+	if not infix_data[(symbol.str):sub(1, 1)] or (symbol.str):find("_") then
 		return false,
 			"symbol was provided in an infix operator place, but the symbol isn't a valid infix operator: " .. symbol
 	end
-	return true, OperatorType.Infix, symbol, left, right
+	return true, OperatorType.Infix, symbol.str, left, right
 end
 
 ---@param env Environment
@@ -742,14 +755,51 @@ local function expression_pairhandler(args, a, b)
 	return false, "unknown type for pairhandler " .. type_of_term.kind, env
 end
 
----@param str string
----@return string
-local function split_dot_accessors(str)
-	return str:match("([^.]+)%.(.+)")
+---@param symbol SyntaxSymbol
+---@return SyntaxSymbol
+---@return SyntaxSymbol?
+local function split_dot_accessors(symbol)
+	assert(symbol["kind"])
+	if symbol then
+		local split_dot_pos = (symbol.str):find("%.")
+
+		if split_dot_pos then
+			local first, second = (symbol.str):match("([^.]+)%.(.+)")
+			assert(first)
+			assert(type(first) == "string")
+			assert(second)
+
+			local first_end_anchor = symbol.end_anchor
+			first_end_anchor.char = symbol.start_anchor.char + split_dot_pos
+
+			local firstsymbol = {
+				kind = "symbol",
+				str = first,
+				start_anchor = symbol.start_anchor,
+				end_anchor = first_end_anchor,
+			}
+
+			-- we can assume it is on the same line.
+			local second_start_anchor = symbol.start_anchor
+			second_start_anchor.char = second_start_anchor.char + split_dot_pos
+
+			local secondsymbol = {
+				kind = "symbol",
+				str = second,
+				start_anchor = second_start_anchor,
+				end_anchor = symbol.end_anchor,
+			}
+
+			assert(firstsymbol["kind"])
+			assert(secondsymbol["kind"])
+
+			return firstsymbol, secondsymbol
+		end
+	end
 end
 
 ---@param args ExpressionArgs
----@param name string
+---@param name SyntaxSymbol
 ---@return boolean
 ---@return inferrable | checkable | string
 ---@return Environment?
@@ -759,8 +809,15 @@ local function expression_symbolhandler(args, name)
 	--p(env)
 	--print(name, split_dot_accessors(name))
 	local front, rest = split_dot_accessors(name)
+
+	assert(name["kind"])
+
+	if front then
+		assert(front["kind"])
+	end
+
 	if not front then
-		local ok, val = env:get(name)
+		local ok, val = env:get(name.str)
 		if not ok then
 			---@cast val string
 			return ok, val, env
@@ -771,7 +828,7 @@ local function expression_symbolhandler(args, name)
 		end
 		return ok, val, env
 	else
-		local ok, part = env:get(front)
+		local ok, part = env:get(front.str)
 		if not ok then
 			---@cast part string
 			return false, part, env
@@ -780,9 +837,23 @@ local function expression_symbolhandler(args, name)
 		while front do
 			name = rest
 			front, rest = split_dot_accessors(name)
+			assert(front.str)
+			local namearray
+			if front then
+				assert(front["kind"])
+			end
+
+			if front and front.str then
+				namearray = front.str
+			else
+				assert(name)
+				assert(name.str)
+				namearray = name.str
+			end
+
 			part = inferrable_term.record_elim(
 				part,
-				name_array(front or name),
+				name_array(namearray),
 				inferrable_term.bound_variable(env.typechecking_context:len() + 1)
 			)
 		end
@@ -837,7 +908,7 @@ expression = metalanguage.reducer(
 	---@return inferrable|checkable|string
 	---@return Environment?
 	function(syntax, args)
-		-- print('trying to expression', syntax)
+		-- p(syntax)
 		return syntax:match({
 			metalanguage.ispair(expression_pairhandler),
 			metalanguage.issymbol(expression_symbolhandler),
@@ -1282,7 +1353,6 @@ local top_level_block = metalanguage.reducer(
 			if ok and continue then
 				lastval = newval
 			end
-			-- print("newval", tostring(newval))
 			progress = progress + 1
 			local line_setup_sequence = ""
 			if U.file_is_terminal() then
