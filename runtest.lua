@@ -3,11 +3,13 @@
 
 require "pretty-printer" -- has side-effect of loading global p()
 
---jit.off()
-jit.opt.start("maxtrace=10000")
-jit.opt.start("maxmcode=4096")
-jit.opt.start("recunroll=5")
-jit.opt.start("loopunroll=60")
+if jit then
+	--jit.off()
+	jit.opt.start("maxtrace=10000")
+	jit.opt.start("maxmcode=4096")
+	jit.opt.start("recunroll=5")
+	jit.opt.start("loopunroll=60")
+end
 
 local startTime = os.clock()
 local checkpointTime = startTime
@@ -20,6 +22,10 @@ local terms = require "terms"
 local exprs = require "alicorn-expressions"
 local profile = require "profile"
 local getopt = require "getopt"
+local json = require "libs.dkjson"
+local U = require "alicorn-utils"
+
+json.use_lpeg()
 
 local interpreter_argv, argv
 if arg then -- puc-rio lua, luajit
@@ -34,10 +40,11 @@ elseif process.argv then -- luvit
 	interpreter_argv = table.move(process.argv, 0, file_n - 1, 0, {})
 	argv = table.move(process.argv, file_n, #process.argv, 0, {})
 else
-	print("Missing or unknown arg table! Using stub")
+	io.write("Missing or unknown arg table! Using stub\n")
 	interpreter_argv = { [0] = "lua" }
 	argv = { [0] = "runtest.lua" }
 end
+local test_harness = false
 local print_src = false
 local print_ast = false
 local print_inferrable = false
@@ -66,6 +73,9 @@ local function split_commas(s)
 	return subs
 end
 local opttab = {
+	["T"] = function(_)
+		test_harness = true
+	end,
 	["S"] = function(_)
 		print_src = true
 	end,
@@ -108,27 +118,43 @@ local opttab = {
 local first_operand = getopt(argv, opttab)
 
 if print_usage then
-	print(("Usage: %s [-Sfstv] [-p file[,what] | -P file[,what]]"):format(argv[0]))
+	io.write(("Usage: %s [-TSfstv] [-p file[,what] | -P file[,what]]"):format(argv[0]))
 	os.exit()
 end
 
-print("Interpreter:", table.concat(interpreter_argv, " ", 0))
-print("File:", argv[0])
-print("Options:", table.concat(argv, " ", 1, first_operand - 1))
-print("Operands:", table.concat(argv, " ", first_operand))
+io.write("\nInterpreter:", table.concat(interpreter_argv, " ", 0))
+io.write("\nFile:", argv[0])
+io.write("\nOptions:", table.concat(argv, " ", 1, first_operand - 1))
+io.write("\nOperands:", table.concat(argv, " ", first_operand))
 if profile_run then
-	print("Profile flame?", profile_flame)
-	print("Profile file:", profile_file)
-	print("Profile what:", profile_what)
+	io.write("\nProfile flame?", tostring(profile_flame))
+	io.write("\nProfile file:", tostring(profile_file))
+	io.write("\nProfile what:", tostring(profile_what))
 end
 
-local prelude = "testfile.alc"
+local prelude = "prelude.alc"
 
 local env = base_env.create()
 
 local shadowed, env = env:enter_block(terms.block_purity.effectful)
 
-local function load_alc_file(name, env)
+---@enum failurepoint
+local failurepoint = {
+	parsing = "parsing",
+	termgen = "termgen",
+	typechecking = "typechecking",
+	evaluating = "evaluating",
+	executing = "executing",
+	success = "success",
+}
+
+---@param name string
+---@param env Environment
+---@param log function
+---@return boolean
+---@return failurepoint |  inferrable
+---@return nil | Environment
+local function load_alc_file(name, env, log)
 	local src_file, err = io.open(name)
 	if not src_file then
 		error(err)
@@ -136,25 +162,32 @@ local function load_alc_file(name, env)
 	local src = src_file:read("a")
 
 	checkpointTime = os.clock()
-	print("Read code")
+	log("Read code")
 	checkpointTime2 = checkpointTime
 	if print_src then
-		print(src)
+		log(src)
 	end
 
-	print("Parsing code")
-	local code = format.read(src, name)
+	log("Parsing code")
+	local ok, code = pcall(function()
+		return format.read(src, name)
+	end)
+
+	if not ok then
+		log(code) -- error
+		return false, failurepoint.parsing
+	end
 
 	checkpointTime = os.clock()
-	print(("Parsed! in %.3f seconds"):format(checkpointTime - checkpointTime2))
+	log(("Parsed! in %.3f seconds"):format(checkpointTime - checkpointTime2))
 	checkpointTime2 = checkpointTime
 	if print_ast then
-		print("Printing raw AST")
-		print(format.lispy_print(code))
-		print("End printing raw AST")
+		log("Printing raw AST")
+		log(format.lispy_print(code))
+		log("End printing raw AST")
 	end
 
-	print("Expression -> terms")
+	log("Expression -> terms")
 	if profile_run and profile_what == "match" then
 		profile.start()
 	end
@@ -174,85 +207,192 @@ local function load_alc_file(name, env)
 	end
 	if not ok then
 		checkpointTime = os.clock()
-		print(("Evaluating failed in %.3f seconds"):format(checkpointTime - checkpointTime2))
-		print(expr)
-		return
+		log(("Evaluating failed in %.3f seconds"):format(checkpointTime - checkpointTime2))
+		log(expr)
+		return false, failurepoint.termgen
 	end
-	return expr, env
+	return true, expr, env
 end
 
-local expr, env = load_alc_file(prelude, env)
-if not expr or not env then
+---@param bound_expr inferrable
+---@param log function
+---@return failurepoint
+local function execute_alc_file(bound_expr, log)
+	checkpointTime = os.clock()
+	log(("Got a term! in %.3f seconds"):format(checkpointTime - checkpointTime2))
+	checkpointTime2 = checkpointTime
+	if print_inferrable then
+		log("bound_expr: (inferrable term follows)")
+		log(bound_expr:pretty_print(terms.typechecking_context()))
+	end
+
+	log("Inferring")
+	if profile_run and profile_what == "infer" then
+		profile.start()
+	end
+	local ok, type, usages, term = pcall(function()
+		return evaluator.infer(bound_expr, terms.typechecking_context())
+	end)
+
+	if not ok then
+		log(type) -- error
+		return failurepoint.typechecking
+	end
+
+	if profile_run and profile_what == "infer" then
+		profile.stop()
+		if profile_flame then
+			profile.dump_flame(profile_file)
+		else
+			profile.dump(profile_file)
+		end
+	end
+
+	checkpointTime = os.clock()
+	log(("Inferred! in %.3f seconds"):format(checkpointTime - checkpointTime2))
+	checkpointTime2 = checkpointTime
+	if print_typed then
+		log("type: (value term follows)")
+		log(type)
+		log("usages:", usages)
+		log("term: (typed term follows)")
+		log(term:pretty_print(terms.runtime_context()))
+	end
+
+	local gen = require "terms-generators"
+	local set = gen.declare_set
+	local unique_id = gen.builtin_table
+
+	local ok, err = pcall(function()
+		evaluator.typechecker_state:flow(
+			type,
+			nil,
+			terms.value.program_type(
+				terms.value.effect_row(set(unique_id)(terms.TCState, terms.lua_prog), terms.value.effect_empty),
+				evaluator.typechecker_state:metavariable(terms.typechecking_context()):as_value()
+			),
+			nil,
+			"final flow check"
+		)
+	end)
+
+	if not ok then
+		log(err)
+		return failurepoint.typechecking
+	end
+
+	log("Evaluating")
+	local ok, result = pcall(function()
+		return evaluator.evaluate(term, terms.runtime_context())
+	end)
+
+	if not ok then
+		log(result)
+		return failurepoint.evaluating
+	end
+
+	checkpointTime = os.clock()
+	log(("Evaluated! in %.3f seconds"):format(checkpointTime - checkpointTime2))
+	checkpointTime2 = checkpointTime
+	if print_evaluated then
+		log("result: (value term follows)")
+		log(result)
+	end
+
+	log("Executing")
+	local ok, result_exec = pcall(function()
+		return evaluator.execute_program(result)
+	end)
+
+	if not ok then
+		log(result_exec) -- error
+		return failurepoint.executing
+	end
+
+	checkpointTime = os.clock()
+	log(("Executed! in %.3f seconds"):format(checkpointTime - checkpointTime2))
+	checkpointTime2 = checkpointTime
+	log("result_exec: (value term follows)")
+	log(result_exec)
+
+	log(("Runtest succeeded in %.3f seconds"):format(checkpointTime - startTime))
+
+	return failurepoint.success
+end
+
+local ok, expr, env = load_alc_file(prelude, env, print)
+if not ok then
 	return
 end
+---@cast expr inferrable
+---@cast env Environment
 
-local env, bound_expr, purity = env:exit_block(expr, shadowed)
-
-checkpointTime = os.clock()
-print(("Got a term! in %.3f seconds"):format(checkpointTime - checkpointTime2))
-checkpointTime2 = checkpointTime
-if print_inferrable then
-	print("bound_expr: (inferrable term follows)")
-	print(bound_expr:pretty_print(terms.typechecking_context()))
-end
-
-print("Inferring")
-if profile_run and profile_what == "infer" then
-	profile.start()
-end
-local type, usages, term = evaluator.infer(bound_expr, terms.typechecking_context())
-if profile_run and profile_what == "infer" then
-	profile.stop()
-	if profile_flame then
-		profile.dump_flame(profile_file)
-	else
-		profile.dump(profile_file)
+if test_harness then
+	local test_list_file, err = io.open("testlist.json")
+	if not test_list_file then
+		error(err)
 	end
+	local test_list, pos, err = json.decode(test_list_file:read("a"), 1, nil)
+	---@cast test_list table
+
+	if err ~= nil then
+		print("Couldn't decode JSON describing tests! " .. tostring(err))
+		return
+	end
+
+	---@type { [string]: string }
+	local logs = {}
+	local total = 0
+	local failures = {}
+
+	for file, completion in pairs(test_list) do
+		total = total + 1
+		logs[file] = ""
+
+		local printrepl = function(...)
+			local args = table.pack(...)
+
+			for i = 1, #args do
+				args[i] = tostring(args[i])
+			end
+
+			logs[file] = logs[file] .. table.concat(args, " ") .. "\n"
+		end
+
+		local ok, test_expr, test_env = load_alc_file(file, env, printrepl)
+		if not ok then
+			if completion == test_expr then
+				io.write("success: " .. file .. ", stopped at " .. test_expr)
+			else
+				U.append(failures, file)
+				io.write("\n\nfailure, test " .. file .. " stopped at " .. test_expr .. " \n" .. logs[file] .. "\n\n")
+			end
+		else
+			---@cast test_expr inferrable
+			---@cast test_env Environment
+			local _, test_expr, _ = test_env:exit_block(test_expr, shadowed)
+
+			local ok = execute_alc_file(test_expr, printrepl)
+
+			if completion == ok then
+				io.write("success: " .. file .. ", stopped at " .. ok)
+			else
+				U.append(failures, file)
+				io.write("\n\nfailure, test " .. file .. " stopped at " .. ok .. "\n" .. logs[file] .. "\n\n")
+			end
+		end
+	end
+
+	if #failures == 0 then
+		io.write("\n\nAll " .. tostring(total) .. " tests passed!")
+	else
+		io.write("\n\n" .. tostring(total - #failures) .. " out of " .. tostring(total) .. " tests passed. Failures: ")
+		for _, v in ipairs(failures) do
+			io.write("\n- " .. v)
+		end
+	end
+else
+	local env, bound_expr, purity = env:exit_block(expr, shadowed)
+
+	execute_alc_file(bound_expr, print)
 end
-
-checkpointTime = os.clock()
-print(("Inferred! in %.3f seconds"):format(checkpointTime - checkpointTime2))
-checkpointTime2 = checkpointTime
-if print_typed then
-	print("type: (value term follows)")
-	print(type)
-	print("usages:", usages)
-	print("term: (typed term follows)")
-	print(term:pretty_print(terms.runtime_context()))
-end
-
-local gen = require "terms-generators"
-local set = gen.declare_set
-local unique_id = gen.builtin_table
-evaluator.typechecker_state:flow(
-	type,
-	nil,
-	terms.value.program_type(
-		terms.value.effect_row(set(unique_id)(terms.TCState, terms.lua_prog), terms.value.effect_empty),
-		evaluator.typechecker_state:metavariable(terms.typechecking_context()):as_value()
-	),
-	nil,
-	"final flow check"
-)
-
-print("Evaluating")
-local result = evaluator.evaluate(term, terms.runtime_context())
-
-checkpointTime = os.clock()
-print(("Evaluated! in %.3f seconds"):format(checkpointTime - checkpointTime2))
-checkpointTime2 = checkpointTime
-if print_evaluated then
-	print("result: (value term follows)")
-	print(result)
-end
-
-print("Executing")
-local result_exec = evaluator.execute_program(result)
-
-checkpointTime = os.clock()
-print(("Executed! in %.3f seconds"):format(checkpointTime - checkpointTime2))
-checkpointTime2 = checkpointTime
-print("result_exec: (value term follows)")
-print(result_exec)
-
-print(("Runtest succeeded in %.3f seconds"):format(checkpointTime - startTime))

@@ -1,0 +1,11 @@
+let host-arith-binop = (host-func-type (a : host-number, b : host-number) -> ((c : host-number)))
+
+let host-string-wrap          = intrinsic "return terms.value.host_string_type"    : wrapped(host-type)
+
+let host-string          = unwrap(host-string-wrap)
+
+let host-mul = (intrinsic "return function(a, b) return a * b end" : host-arith-binop)
+let mul = lambda (a : host-number, b : host-number)
+	let (c) = host-mul(a, b)
+	c
+let _*_ = mul

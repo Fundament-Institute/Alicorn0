@@ -101,6 +101,12 @@ function typed:unwrap_tuple_type() end
 ---@return boolean, typed
 function typed:as_tuple_type() end
 ---@return boolean
+function typed:is_tuple_desc_type() end
+---@return typed
+function typed:unwrap_tuple_desc_type() end
+---@return boolean, typed
+function typed:as_tuple_desc_type() end
+---@return boolean
 function typed:is_record_cons() end
 ---@return MapValue
 function typed:unwrap_record_cons() end
@@ -377,6 +383,7 @@ function typed:as_constrained_type() end
 ---@field tuple_elim fun(names: ArrayValue, subject: typed, length: number, body: typed): typed
 ---@field tuple_element_access fun(subject: typed, index: number): typed
 ---@field tuple_type fun(desc: typed): typed
+---@field tuple_desc_type fun(universe: typed): typed
 ---@field record_cons fun(fields: MapValue): typed
 ---@field record_extend fun(base: typed, fields: MapValue): typed
 ---@field record_elim fun(subject: typed, field_names: ArrayValue, body: typed): typed
@@ -404,7 +411,7 @@ function typed:as_constrained_type() end
 ---@field host_unstrict_unwrap fun(container: typed): typed
 ---@field host_user_defined_type fun(id: { name: string }, family_args: ArrayValue): typed
 ---@field host_if fun(subject: typed, consequent: typed, alternate: typed): typed
----@field host_intrinsic fun(source: typed, anchor: Anchor): typed
+---@field host_intrinsic fun(source: typed, start_anchor: Anchor): typed
 ---@field range fun(lower_bounds: ArrayValue, upper_bounds: ArrayValue, relation: typed): typed
 ---@field singleton fun(supertype: typed, value: value): typed
 ---@field program_sequence fun(first: typed, continue: typed): typed

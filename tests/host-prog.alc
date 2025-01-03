@@ -1,0 +1,14 @@
+let mutable-number = new-host-type(new-host-unique-id("mutable-number"))
+let new-mutable-number = intrinsic "return function(x) return { x = x } end" :
+	host-prog-type ((num : host-number)) -> ((res : mutable-number))
+let get-mutable-number = intrinsic "return function(num) return num.x end" :
+	host-prog-type ((num : mutable-number)) -> ((x : host-number))
+let mutate-number = intrinsic "return function(num, m, c) num.x = num.x * m + c end" :
+	host-prog-type (num : mutable-number, m : host-number, c : host-number) -> ()
+
+let (my-mutable-number) = new-mutable-number(0)
+let (x) = get-mutable-number(my-mutable-number)
+let () = mutate-number(my-mutable-number, 3, 1)
+mutate-number(my-mutable-number, 3, 1)
+let (y) = get-mutable-number(my-mutable-number)
+y

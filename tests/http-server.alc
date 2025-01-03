@@ -1,0 +1,232 @@
+####
+	#	---@alias URect userdata
+	let URect = new-host-type(new-host-unique-id("URect"))
+
+	#	---@alias Component userdata
+	let Component = new-host-type(new-host-unique-id("Component"))
+
+	#	---@alias EventHandler userdata
+	let EventHandler = new-host-type(new-host-unique-id("EventHandler"))
+
+	####
+		---@param left number
+		---@param top number
+		---@param right number
+		---@param bottom number
+		---@param rel_left number
+		---@param rel_top number
+		---@param rel_right number
+		---@param rel_bottom number
+		---@return URect
+		function create_urect(left, top, right, bottom, rel_left, rel_top, rel_right, rel_bottom)
+		end
+	let create-urect-bind =
+		intrinsic
+			"return create_urect"
+			:
+			host-func-type
+				(
+					left : host-number,
+					top : host-number,
+					right : host-number,
+					bottom : host-number,
+					rel_left : host-number,
+					rel_top : host-number,
+					rel_right : host-number,
+					rel_bottom : host-number
+				)
+				->
+				((res : URect))
+	let create-urect =
+		lambda
+			(
+				left : host-number,
+				top : host-number,
+				right : host-number,
+				bottom : host-number,
+				rel_left : host-number,
+				rel_top : host-number,
+				rel_right : host-number,
+				rel_bottom : host-number
+			)
+			let (res) = create-urect-bind(left, top, right, bottom, rel_left, rel_top, rel_right, rel_bottom)
+			res
+	####
+		---@param name string
+		---@param child Component
+		---@return Component
+		function create_window(name, child) end
+	let create-window-bind =
+		intrinsic
+			"return create_window"
+			:
+			host-func-type (name : string, child : Component) -> (res : Component)
+	let create-window =
+		lambda (name : string, child : Component)
+			let (res) = create-window-bind(name, child)
+			res
+	####
+		---@param area URect
+		---@param ... Component
+		---@return Component
+		function create_region(area, ...) end
+	let create-region-bind =
+		intrinsic
+			"return function(area, components) return create_region(area, table.unpack(components)) end"
+			:
+			host-func-type (area : URect, components : host-array-type(Component)) -> (res : Component)
+
+	let create-region =
+		lambda (area : URect, components : host-array-type(Component))
+			let (res) = create-region-bind(area, components)
+			res
+
+	####
+		---@param area URect
+		---@param text string
+		---@param onclick EventHandler
+		---@param background Component
+		---@return Component
+		function create_button(area, text, onclick, background) end
+	let create-button-bind =
+		intrinsic
+			"return create_button"
+			:
+			host-func-type (area : URect, text : string, onclick : EventHandler, background : Component) -> (res : Component)
+	let create-button =
+		lambda (area : URect, text : string, onclick : EventHandler, background : Component)
+			let (res) = create-button-bind(area, text, onclick, background)
+			res
+	####
+		---@param area URect
+		---@param text string
+		---@return Component
+		function create_label(area, text) end
+	let create-label-bind =
+		intrinsic "return create_label" : host-func-type (area : URect, text : string) -> (res : Component)
+
+	let create-label =
+		lambda (area : URect, text : string)
+			let (res) = create-label-bind(area, text)
+			res
+
+	####
+		---Colors here are 32-bit RGBA integers (for now): 0xFF00FFFF
+		---@param area URect
+		---@param color integer
+		---@param radius number
+		---@param border number
+		---@param bordercolor integer
+		---@return Component
+		function create_round_rect(area, color, radius, border, bordercolor) end
+	let create-round-rect-bind =
+		intrinsic
+			"return create_round_rect"
+			:
+			host-func-type (area : URect, color : host-number, radius : host-number, border : host-number, bordercolor : host-number) -> (res : Component)
+	let create-round-rect =
+		lambda (area : URect, color : host-number, radius : host-number, border : host-number, bordercolor : host-number)
+			let (res) = create-round-rect-bind(area, color, radius, border, bordercolor)
+			res
+
+	####
+		---@param f fun(userdata, userdata, any): typed
+		---@return EventHandler
+		function create_event_handler(f) end
+	let create-event-handler =
+		lambda_implicit (AppData : host-type)
+			let cb-type = host-func-type (userdata : UserData, userdata : UserData, appdata : AppData) -> (res : EventHandler)
+			let inner =
+				intrinsic
+					"return function(f) return create_event_handler(f) end"
+					:
+					host-func-type (f : cb-type) -> (res : EventHandler)
+			lambda (f : host-func-type-to-func-type(cb-type, host-nil))
+				let (cb) = func-to-host-func(cb-type, host-nil, wrap(f))
+				let (res) = inner(f)
+				res
+
+let HTTPServer = new-host-type(new-host-unique-id("HTTPServer"))
+let HTTPRequest = new-host-type(new-host-unique-id("HTTPRequest"))
+let HTTPResponse = new-host-type(new-host-unique-id("HTTPResponse"))
+
+let HTTPHandler = host-prog-type (req : HTTPRequest, res : HTTPResponse) -> ()
+
+let string = host-string
+
+####let create-http-server =
+	lambda-prog (callback : host-funcprog-type-to-funcprog-type(HTTPHandler, host-nil))
+		let inner =
+			intrinsic
+				""""
+					local http = require "http"
+					local function createServer(handler)
+						local function wrapper(req, res)
+							evaluator.register_effect_handler(terms.lua_prog, evaluator.host_effect_handler)
+							return handler(req, res)
+						end
+						return http.createServer(wrapper)
+					end
+					return createServer
+				:
+				host-prog-type ((handler : HTTPHandler)) -> ((res : HTTPServer))
+		let host-cb = funcprog-to-host-funcprog(HTTPHandler, host-nil, callback)
+		let (res) = inner(host-cb)
+		res
+
+####let http-server-listen =
+	intrinsic
+		"return function(server, host, port) server:listen(port, host) end"
+		:
+		host-prog-type (server : HTTPServer, host : string, port : host-number) -> ()
+
+####let response-set-header =
+	intrinsic
+		"return function(res, name, val) res:setHeader(name, val) end"
+		:
+		host-prog-type (res : HTTPResponse, name : string, value : string) -> ()
+
+####let response-send-body =
+	intrinsic
+		"return function(res, body) res:finish(body) end"
+		:
+		host-prog-type (res : HTTPResponse, body : string) -> ()
+
+let strlen =
+	do
+		let inner = intrinsic "return function(str) return #str end" : (host-func-type ((str : string)) -> ((len : host-number)))
+		lambda ((str : string))
+			let (res) = inner(str)
+			res
+
+let num-to-str =
+	do
+		let inner = intrinsic "return tostring" : (host-func-type ((num : host-number)) -> ((str : string)))
+		lambda ((num : host-number))
+			let (res) = inner(num)
+			res
+
+let print =
+	do
+		let inner = intrinsic "return print" : (host-prog-type ((str : string)) -> ())
+		lambda-prog ((str : string))
+			let () = inner(str)
+
+let runloop =
+	intrinsic "return require 'uv'.run" : (host-prog-type () -> ())
+
+####let my-request-handler = lambda-prog (req : HTTPRequest, res : HTTPResponse)
+	print "got a request!"
+	let body = "Hello World!\n"
+	response-set-header res "Content-Type" "text/plain"
+	response-set-header res "Content-Length" num-to-str(strlen(body))
+	response-send-body res body
+	tuple-of-implicit()
+
+####let main = lambda-prog ()
+	let server = create-http-server(my-request-handler)
+	http-server-listen server "0.0.0.0" 8080
+	print "server started on localhost:8080"
+	runloop()
+
+#main()

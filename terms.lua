@@ -12,6 +12,7 @@ local fibbuf = require "fibonacci-buffer"
 
 local gen = require "terms-generators"
 local derivers = require "derivers"
+local traits = require "traits"
 
 local format = require "format"
 
@@ -63,15 +64,30 @@ local anchor_type = gen.declare_foreign(gen.metatable_equality(format.anchor_mt)
 ---@class RuntimeContext
 ---@field bindings FibonacciBuffer
 local RuntimeContext = {}
+
+---@param index integer
+---@return value
 function RuntimeContext:get(index)
-	return self.bindings:get(index)
+	return self.bindings:get(index).val
 end
 
+-- without this, some value.closure comparisons fail erroneously
+local RuntimeContextBinding = {
+	__eq = function(l, r)
+		return l.name == r.name and l.val == r.val
+	end,
+}
+
 ---@param v value
+---@param name string?
 ---@return RuntimeContext
-function RuntimeContext:append(v)
-	-- TODO: typecheck
-	local copy = { bindings = self.bindings:append(v) }
+function RuntimeContext:append(v, name)
+	if value.value_check(v) ~= true then
+		error("RuntimeContext:append v must be a value")
+	end
+	-- TODO: add caller line number to this fake name?
+	name = name or ("#rctx%d"):format(self.bindings:len() + 1)
+	local copy = { bindings = self.bindings:append(setmetatable({ name = name, val = v }, RuntimeContextBinding)) }
 	return setmetatable(copy, runtime_context_mt)
 end
 
@@ -79,7 +95,12 @@ end
 ---@param v value
 ---@return RuntimeContext
 function RuntimeContext:set(index, v)
-	local copy = { bindings = self.bindings:set(index, v) }
+	if value.value_check(v) ~= true then
+		error("RuntimeContext:set v must be a value")
+	end
+	local old = self.bindings:get(index)
+	local new = setmetatable({ name = old.name, val = v }, RuntimeContextBinding)
+	local copy = { bindings = self.bindings:set(index, new) }
 	return setmetatable(copy, runtime_context_mt)
 end
 
@@ -103,6 +124,52 @@ local function runtime_context()
 	return setmetatable({ bindings = fibbuf() }, runtime_context_mt)
 end
 
+local function runtime_context_diff_fn(left, right)
+	print("diffing runtime context...")
+	local rt = getmetatable(right)
+	if runtime_context_mt ~= rt then
+		print("unequal types!")
+		print(runtime_context_mt)
+		print(rt)
+		print("stopping diff")
+		return
+	end
+	if left.bindings:len() ~= right.bindings:len() then
+		print("unequal lengths!")
+		print(left.bindings:len())
+		print(right.bindings:len())
+		print("stopping diff")
+		return
+	end
+	local n = 0
+	local diff_elems = {}
+	for i = 1, left.bindings:len() do
+		if left:get(i) ~= right:get(i) then
+			n = n + 1
+			diff_elems[n] = i
+		end
+	end
+	if n == 0 then
+		print("no difference")
+		print("stopping diff")
+		return
+	elseif n == 1 then
+		local d = diff_elems[1]
+		print("difference in element: " .. tostring(d))
+		local diff_impl = traits.diff:get(value)
+		-- tail call
+		return diff_impl.diff(left:get(d), right:get(d))
+	else
+		print("difference in multiple elements:")
+		for i = 1, n do
+			print("left " .. tostring(diff_elems[i]) .. ": " .. tostring(left:get(diff_elems[i])))
+			print("right " .. tostring(diff_elems[i]) .. ": " .. tostring(right:get(diff_elems[i])))
+		end
+		print("stopping diff")
+		return
+	end
+end
+
 local typechecking_context_mt
 
 ---@class TypecheckingContext
@@ -116,6 +183,7 @@ local TypecheckingContext = {}
 function TypecheckingContext:get_name(index)
 	return self.bindings:get(index).name
 end
+
 function TypecheckingContext:dump_names()
 	for i = 1, self:len() do
 		print(i, self:get_name(i))
@@ -132,7 +200,7 @@ function TypecheckingContext:format_names()
 end
 
 ---@param index integer
----@return any
+---@return value
 function TypecheckingContext:get_type(index)
 	return self.bindings:get(index).type
 end
@@ -172,14 +240,11 @@ function TypecheckingContext:append(name, type, val, start_anchor)
 	if (val and start_anchor) or (not val and not start_anchor) then
 		error("TypecheckingContext:append expected either val or start_anchor")
 	end
+	val = val
+		or value.neutral(neutral_value.free(free.placeholder(self:len() + 1, placeholder_debug(name, start_anchor))))
 	local copy = {
 		bindings = self.bindings:append({ name = name, type = type }),
-		runtime_context = self.runtime_context:append(
-			val
-				or value.neutral(
-					neutral_value.free(free.placeholder(self:len() + 1, placeholder_debug(name, start_anchor)))
-				)
-		),
+		runtime_context = self.runtime_context:append(val, name),
 	}
 	return setmetatable(copy, typechecking_context_mt)
 end
@@ -208,6 +273,8 @@ local typechecking_context_type =
 local host_user_defined_id = gen.declare_foreign(function(val)
 	return type(val) == "table" and type(val.name) == "string"
 end, "{ name: string }")
+
+traits.diff:implement_on(runtime_context_type, { diff = runtime_context_diff_fn })
 
 -- implicit arguments are filled in through unification
 -- e.g. fn append(t : star(0), n : nat, xs : Array(t, n), val : t) -> Array(t, n+1)
@@ -423,98 +490,76 @@ local SubtypeRelation = gen.declare_foreign(gen.metatable_equality(subtype_relat
 ---@module 'types.constraintcause'
 local constraintcause = gen.declare_type()
 
+-- stylua: ignore
 constraintcause:define_enum("constraintcause", {
 	{ "primitive", {
-		"description",
-		gen.builtin_string,
-		"position",
-		anchor_type,
+		"description", gen.builtin_string,
+		"position",    anchor_type,
 	} },
 	{ "composition", {
-		"left",
-		constraintcause,
-		"right",
-		constraintcause,
-		"position",
-		anchor_type,
+		"left",     constraintcause,
+		"right",    constraintcause,
+		"position", anchor_type,
 	} },
-	{
-		"leftcall_discharge",
-		{
-			"call",
-			constraintcause,
-			"constraint",
-			constraintcause,
-			"position",
-			anchor_type,
-		},
-	},
-	{
-		"rightcall_discharge",
-		{
-			"constraint",
-			constraintcause,
-			"call",
-			constraintcause,
-			"position",
-			anchor_type,
-		},
-	},
-	{
-		"lost",
-		{ --Information has been lost, please generate any information you can to help someone debug the lost information in the future
-			"unique_string",
-			gen.builtin_string,
-			"stacktrace",
-			gen.builtin_string,
-			"auxiliary",
-			gen.any_lua_type,
-		},
-	},
+	{ "leftcall_discharge", {
+		"call",       constraintcause,
+		"constraint", constraintcause,
+		"position",   anchor_type,
+	} },
+	{ "rightcall_discharge", {
+		"constraint", constraintcause,
+		"call",       constraintcause,
+		"position",   anchor_type,
+	} },
+	{ "lost", { --Information has been lost, please generate any information you can to help someone debug the lost information in the future
+		"unique_string", gen.builtin_string,
+		"stacktrace",    gen.builtin_string,
+		"auxiliary",     gen.any_lua_type,
+	} },
 })
 
 ---@module 'types.constraintelem'
 -- stylua: ignore
 local constraintelem = gen.declare_enum("constraintelem", {
 	{ "sliced_constrain", {
-		"rel",   SubtypeRelation,
-		"right", typed_term,
+		"rel",      SubtypeRelation,
+		"right",    typed_term,
 		"rightctx", typechecking_context_type,
-		"cause", gen.any_lua_type,
+		"cause",    gen.any_lua_type,
 	} },
 	{ "constrain_sliced", {
-		"left",  typed_term,
+		"left",    typed_term,
 		"leftctx", typechecking_context_type,
-		"rel",   SubtypeRelation,
-		"cause", gen.any_lua_type,
+		"rel",     SubtypeRelation,
+		"cause",   gen.any_lua_type,
 	} },
 	{ "sliced_leftcall", {
-		"arg",   typed_term,
-		"rel",   SubtypeRelation,
-		"right", typed_term,
+		"arg",      typed_term,
+		"rel",      SubtypeRelation,
+		"right",    typed_term,
 		"rightctx", typechecking_context_type,
-		"cause", gen.any_lua_type,
+		"cause",    gen.any_lua_type,
 	} },
 	{ "leftcall_sliced", {
-		"left",  typed_term,
+		"left",    typed_term,
 		"leftctx", typechecking_context_type,
-		"arg",   typed_term,
-		"rel",   SubtypeRelation,
-		"cause", gen.any_lua_type,
+		"arg",     typed_term,
+		"rel",     SubtypeRelation,
+		"cause",   gen.any_lua_type,
 	} },
 	{ "sliced_rightcall", {
-		"rel",   SubtypeRelation,
-		"right", typed_term,
+		"rel",      SubtypeRelation,
+		"right",    typed_term,
 		"rightctx", typechecking_context_type,
-		"arg",   typed_term,
-		"cause", gen.any_lua_type,
+		"arg",      typed_term,
+		"cause",    gen.any_lua_type,
 	} },
 	{ "rightcall_sliced", {
-		"left",  typed_term,
+		"left",    typed_term,
 		"leftctx", typechecking_context_type,
-		"rel",   SubtypeRelation,
-		"arg",   typed_term,
-		"cause", gen.any_lua_type,
+		"rel",     SubtypeRelation,
+		"arg",     typed_term,
+		"cause",   gen.any_lua_type,
 	} },
 })
 
@@ -566,6 +611,7 @@ typed_term:define_enum("typed", {
 		"index",   gen.builtin_number,
 	} },
 	{ "tuple_type", { "desc", typed_term } },
+	{ "tuple_desc_type", { "universe", typed_term } },
 	{ "record_cons", { "fields", map(gen.builtin_string, typed_term) } },
 	{ "record_extend", {
 		"base",   typed_term,

@@ -19,7 +19,7 @@ local val = metalanguage.primitive_operative(function(syntax, env)
 		return false, name
 	end
 	local binder, envres
-	if type(name) == "table" then
+	if not name["kind"] then
 		binder = conexpr.bindtuple(name)
 	elseif type(name) == "string" then
 		binder = conexpr.bindval(name)

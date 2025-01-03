@@ -233,8 +233,8 @@ function environment:bind_local(binding)
 		if ok then
 			return res2
 		end
-		-- error(res1)
-		error(res2)
+		--error(res1)
+		--error(res2)
 		error("tuple elim speculation failed! debugging this is left as an exercise to the maintainer")
 	elseif binding:is_annotated_lambda() then
 		local param_name, param_annotation, start_anchor, visible = binding:unwrap_annotated_lambda()

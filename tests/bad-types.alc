@@ -1,0 +1,10 @@
+let host-mul = (intrinsic "return function(a, b) return a * b end" : host-arith-binop)
+let mul = lambda (a : host-number, b : host-number)
+	let (c) = host-mul(a, b)
+	c
+let _*_ = mul
+
+# FIXME: this super duper should be failing
+let sqr_overcomplicated = lambda_annotated (t, x : t) : host-string
+	x * x
+sqr_overcomplicated(host-number, 6)
