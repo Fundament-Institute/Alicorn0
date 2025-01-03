@@ -25,8 +25,6 @@ local getopt = require "getopt"
 local json = require "libs.dkjson"
 local U = require "alicorn-utils"
 
-json.use_lpeg()
-
 local interpreter_argv, argv
 if arg then -- puc-rio lua, luajit
 	local n = -1
@@ -40,7 +38,7 @@ elseif process.argv then -- luvit
 	interpreter_argv = table.move(process.argv, 0, file_n - 1, 0, {})
 	argv = table.move(process.argv, file_n, #process.argv, 0, {})
 else
-	io.write("Missing or unknown arg table! Using stub\n")
+	io.stderr:write("Missing or unknown arg table! Using stub\n")
 	interpreter_argv = { [0] = "lua" }
 	argv = { [0] = "runtest.lua" }
 end
@@ -118,18 +116,40 @@ local opttab = {
 local first_operand = getopt(argv, opttab)
 
 if print_usage then
-	io.write(("Usage: %s [-TSfstv] [-p file[,what] | -P file[,what]]"):format(argv[0]))
+	io.stderr:write(("Usage: %s [-STfstv] [-p file[,what] | -P file[,what]]\n"):format(argv[0]))
+	io.stderr:write("  -S  Print the Alicorn source code about to be tested.\n")
+	io.stderr:write("      (mnemonic: Source)\n")
+	io.stderr:write("  -f  Show the AST generated from the source code.\n")
+	io.stderr:write("      (mnemonic: format.read)\n")
+	io.stderr:write("  -s  Show the unchecked term. *\n")
+	io.stderr:write("      (mnemonic: syntax:match)\n")
+	io.stderr:write("  -t  Show the type-checked term. *\n")
+	io.stderr:write("      (mnemonic: typed)\n")
+	io.stderr:write("  -v  Show the evaluated term. *\n")
+	io.stderr:write("      (mnemonic: value)\n")
+	io.stderr:write("      * Some type-checking and evaluation may happen during the course of\n")
+	io.stderr:write("        producing a top-level term, due to the dependent nature of Alicorn.\n")
+	io.stderr:write("  -p  Run a profile over the test and output the trace to a file.\n")
+	io.stderr:write("      (mnemonic: profile)\n")
+	io.stderr:write("      what = match: Profile syntax:match.    [default]\n")
+	io.stderr:write("      what = infer: Profile evaluator.infer.\n")
+	io.stderr:write("      NOTE: this won't work well with -T.\n")
+	io.stderr:write("  -P  Like -p, but output a flamegraph-compatible trace.\n")
+	io.stderr:write("      (mnemonic: Phlame! :P)\n")
+	io.stderr:write("  -T  Enable the test harness, and run tests in testlist.json.\n")
+	io.stderr:write("      (mnemonic: Test)\n")
+	io.stderr:write("      Without -T, only the prelude is tested.\n")
 	os.exit()
 end
 
-io.write("\nInterpreter:", table.concat(interpreter_argv, " ", 0))
-io.write("\nFile:", argv[0])
-io.write("\nOptions:", table.concat(argv, " ", 1, first_operand - 1))
-io.write("\nOperands:", table.concat(argv, " ", first_operand))
+io.write("Interpreter  : ", table.concat(interpreter_argv, " ", 0), "\n")
+io.write("File         : ", argv[0], "\n")
+io.write("Options      : ", table.concat(argv, " ", 1, first_operand - 1), "\n")
+io.write("Operands     : ", table.concat(argv, " ", first_operand), "\n")
 if profile_run then
-	io.write("\nProfile flame?", tostring(profile_flame))
-	io.write("\nProfile file:", tostring(profile_file))
-	io.write("\nProfile what:", tostring(profile_what))
+	io.write("Profile flame? ", tostring(profile_flame), "\n")
+	io.write("Profile file : ", profile_file, "\n")
+	io.write("Profile what : ", profile_what, "\n")
 end
 
 local prelude = "prelude.alc"
@@ -362,10 +382,18 @@ if test_harness then
 		local ok, test_expr, test_env = load_alc_file(file, env, printrepl)
 		if not ok then
 			if completion == test_expr then
-				io.write("success: " .. file .. ", stopped at " .. test_expr)
+				io.write(U.outputGreen("success: " .. file .. " stopped at " .. test_expr), "\n")
 			else
 				U.append(failures, file)
-				io.write("\n\nfailure, test " .. file .. " stopped at " .. test_expr .. " \n" .. logs[file] .. "\n\n")
+				io.write(
+					"\n\n",
+					U.outputRed(
+						"failure: " .. file .. " stopped at " .. test_expr .. " (expected " .. completion .. ")"
+					),
+					"\n",
+					logs[file],
+					"\n\n"
+				)
 			end
 		else
 			---@cast test_expr inferrable
@@ -375,20 +403,26 @@ if test_harness then
 			local ok = execute_alc_file(test_expr, printrepl)
 
 			if completion == ok then
-				io.write("success: " .. file .. ", stopped at " .. ok)
+				io.write(U.outputGreen("success: " .. file .. " stopped at " .. ok), "\n")
 			else
 				U.append(failures, file)
-				io.write("\n\nfailure, test " .. file .. " stopped at " .. ok .. "\n" .. logs[file] .. "\n\n")
+				io.write(
+					"\n\n",
+					U.outputRed("failure: " .. file .. " stopped at " .. ok .. " (expected " .. completion .. ")"),
+					"\n",
+					logs[file],
+					"\n\n"
+				)
 			end
 		end
 	end
 
 	if #failures == 0 then
-		io.write("\n\nAll " .. tostring(total) .. " tests passed!")
+		io.write("All " .. tostring(total) .. " tests passed!\n")
 	else
-		io.write("\n\n" .. tostring(total - #failures) .. " out of " .. tostring(total) .. " tests passed. Failures: ")
+		io.write(tostring(total - #failures) .. " out of " .. tostring(total) .. " tests passed. Failures:\n")
 		for _, v in ipairs(failures) do
-			io.write("\n- " .. v)
+			io.write("- " .. v .. "\n")
 		end
 	end
 else

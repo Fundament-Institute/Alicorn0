@@ -277,6 +277,16 @@ function M.file_is_terminal(input_file)
 	return false
 end
 
+-- TODO: check if output is terminal before adding color sequences
+---@param s string
+---@return string
+function M.outputGreen(s)
+	return "\27[32m" .. s .. "\27[0m"
+end
+function M.outputRed(s)
+	return "\27[31m" .. s .. "\27[0m"
+end
+
 function M.get_cursor_position(input_file, output_file)
 	if input_file == nil then
 		input_file = io.input()
