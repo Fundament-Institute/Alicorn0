@@ -2042,6 +2042,21 @@ function infer(
 					"unacceptable enum variant"
 				)
 			)
+	elseif inferrable_term:is_enum_desc_cons() then
+		local variants, rest = inferrable_term:unwrap_enum_desc_cons()
+		local result_types = {}
+		local term_variants = string_typed_map()
+		for k, v in variants:pairs() do
+			local variant_type, _, variant_term = infer(v, typechecking_context) --TODO improve
+			term_variants:set(k, variant_term)
+			result_types[#result_types + 1] = variant_type
+		end
+		local result_type = result_types[1]
+		for i = 2, #result_types do
+			result_type = value.union_type(result_type, result_types[i])
+		end
+		local _, _, rest_term = infer(rest, typechecking_context) --TODO improve
+		return value.enum_desc_type(result_type), usage_array(), typed_term.enum_desc_cons(term_variants, rest_term)
 	elseif inferrable_term:is_object_cons() then
 		local methods = inferrable_term:unwrap_object_cons()
 		local type_data = terms.empty

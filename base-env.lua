@@ -1565,6 +1565,56 @@ local function build_wrapped(body_fn)
 	)
 end
 
+---@param env Environment
+local enum_variant = metalanguage.reducer(function(syntax, env)
+	local ok, tag, tail = syntax:match({
+		metalanguage.listtail(
+			metalanguage.accept_handler,
+			metalanguage.issymbol(metalanguage.accept_handler),
+			tupleof_ascribed_names_inner(metalanguage.accept_handler, env)
+		),
+	}, metalanguage.failure_handler, nil)
+
+	if not ok then
+		return ok, tag
+	end
+
+	if not tag then
+		return false, "missing enum variant name"
+	end
+
+	return true, tag.str, terms.inferrable_term.tuple_type(tail.args), env
+end, "enum_variant")
+
+---@type lua_operative
+local function enum_impl(syntax, env)
+	local variants = gen.declare_map(gen.builtin_string, terms.inferrable_term)()
+	while not syntax:match({ metalanguage.isnil(metalanguage.accept_handler) }, metalanguage.failure_handler, nil) do
+		local tag, term
+
+		ok, tag, syntax = syntax:match({
+			metalanguage.listtail(metalanguage.accept_handler, enum_variant(utils.accept_bundled, env)),
+		}, metalanguage.failure_handler, nil)
+		if not ok then
+			return ok, tag
+		end
+
+		tag, term = table.unpack(tag)
+		variants:set(tag, term)
+	end
+
+	return true,
+		terms.inferrable_term.enum_desc_cons(
+			variants,
+			terms.inferrable_term.typed(
+				value.enum_desc_type(value.star(0, 0)),
+				usage_array(),
+				typed.literal(value.enum_desc_value(gen.declare_map(gen.builtin_string, terms.value)()))
+			)
+		),
+		env
+end
+
 local core_operations = {
 	["+"] = exprs.host_applicative(function(a, b)
 		return a + b
@@ -1596,6 +1646,7 @@ local core_operations = {
 	let = exprs.host_operative(let_impl, "let_impl"),
 	mk = exprs.host_operative(mk_impl, "mk_impl"),
 	switch = exprs.host_operative(switch_impl, "switch_impl"),
+	enum = exprs.host_operative(enum_impl, "enum_impl"),
 	--record = exprs.host_operative(record_build, "record_build"),
 	intrinsic = exprs.host_operative(intrinsic_impl, "intrinsic_impl"),
 	["host-number"] = lit_term(value.host_number_type, value.host_type_type),

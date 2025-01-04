@@ -13,3 +13,8 @@ tuple-of-implicit
 	switchtest(mk inj2 3 5)
 	switchtest(mk inj2(3, 5))
 	switchtest(mk inj2 sqr(2) 5)
+
+let Result = lambda (T, E)
+	enum
+		Ok(x : T)
+		Err(e : E)
