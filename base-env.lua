@@ -457,7 +457,7 @@ local function lambda_curry_impl(syntax, env)
 	return true, term, resenv
 end
 
-local tupleof_ascribed_names_inner = metalanguage.reducer(
+local tuple_desc_of_ascribed_names = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
@@ -499,17 +499,17 @@ local tupleof_ascribed_names_inner = metalanguage.reducer(
 
 		return ok, thread
 	end,
-	"tupleof_ascribed_names_inner"
+	"tuple_desc_of_ascribed_names"
 )
 
-local tupleof_ascribed_names = metalanguage.reducer(
+local tuple_of_ascribed_names = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
 	---@return {names: string[], args: inferrable, env: Environment}|string
 	function(syntax, env)
 		local ok, thread = syntax:match({
-			tupleof_ascribed_names_inner(metalanguage.accept_handler, env),
+			tuple_desc_of_ascribed_names(metalanguage.accept_handler, env),
 		}, metalanguage.failure_handler, nil)
 		if not ok then
 			return ok, thread
@@ -517,17 +517,17 @@ local tupleof_ascribed_names = metalanguage.reducer(
 		thread.args = terms.inferrable_term.tuple_type(thread.args)
 		return ok, thread
 	end,
-	"tupleof_ascribed_names"
+	"tuple_of_ascribed_names"
 )
 
-local host_tupleof_ascribed_names = metalanguage.reducer(
+local host_tuple_of_ascribed_names = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
 	---@return {names: string[], args: inferrable, env: Environment}|string
 	function(syntax, env)
 		local ok, thread = syntax:match({
-			tupleof_ascribed_names_inner(metalanguage.accept_handler, env),
+			tuple_desc_of_ascribed_names(metalanguage.accept_handler, env),
 		}, metalanguage.failure_handler, nil)
 		if not ok then
 			return ok, thread
@@ -535,7 +535,7 @@ local host_tupleof_ascribed_names = metalanguage.reducer(
 		thread.args = terms.inferrable_term.host_tuple_type(thread.args)
 		return ok, thread
 	end,
-	"host_tupleof_ascribed_names"
+	"host_tuple_of_ascribed_names"
 )
 
 local ascribed_segment = metalanguage.reducer(
@@ -566,7 +566,7 @@ local ascribed_segment = metalanguage.reducer(
 			thread = { names = name, args = type_val, env = type_env }
 		else
 			ok, thread = syntax:match({
-				tupleof_ascribed_names(metalanguage.accept_handler, env),
+				tuple_of_ascribed_names(metalanguage.accept_handler, env),
 			}, metalanguage.failure_handler, nil)
 			if not ok then
 				return ok, thread
@@ -607,7 +607,7 @@ local host_ascribed_segment = metalanguage.reducer(
 			thread = { names = name, args = type_val, env = type_env }
 		else
 			ok, thread = syntax:match({
-				host_tupleof_ascribed_names(metalanguage.accept_handler, env),
+				host_tuple_of_ascribed_names(metalanguage.accept_handler, env),
 			}, metalanguage.failure_handler, nil)
 			if not ok then
 				return ok, thread
@@ -620,7 +620,7 @@ local host_ascribed_segment = metalanguage.reducer(
 	"host_ascribed_segment"
 )
 
-local tuplewrap_ascribed_name_inner = metalanguage.reducer(
+local tuple_desc_wrap_ascribed_name = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
@@ -652,46 +652,10 @@ local tuplewrap_ascribed_name_inner = metalanguage.reducer(
 		env = type_env
 		return ok, { names = names, args = args, env = env }
 	end,
-	"tuplewrap_ascribed_name_inner"
+	"tuple_desc_wrap_ascribed_name"
 )
 
-local tuplewrap_ascribed_name = metalanguage.reducer(
-	---@param syntax ConstructedSyntax
-	---@param env Environment
-	---@return boolean
-	---@return {names: string[], args: inferrable, env: Environment}|string
-	function(syntax, env)
-		local ok, thread = syntax:match({
-			tuplewrap_ascribed_name_inner(metalanguage.accept_handler, env),
-		}, metalanguage.failure_handler, nil)
-		if not ok then
-			return ok, thread
-		end
-		thread.args = terms.inferrable_term.tuple_type(thread.args)
-		return ok, thread
-	end,
-	"tuplewrap_ascribed_name"
-)
-
-local host_tuplewrap_ascribed_name = metalanguage.reducer(
-	---@param syntax ConstructedSyntax
-	---@param env Environment
-	---@return boolean
-	---@return {names: string[], args: inferrable, env: Environment}|string
-	function(syntax, env)
-		local ok, thread = syntax:match({
-			tuplewrap_ascribed_name_inner(metalanguage.accept_handler, env),
-		}, metalanguage.failure_handler, nil)
-		if not ok then
-			return ok, thread
-		end
-		thread.args = terms.inferrable_term.host_tuple_type(thread.args)
-		return ok, thread
-	end,
-	"host_tuplewrap_ascribed_name"
-)
-
-local ascribed_segment_2 = metalanguage.reducer(
+local ascribed_segment_tuple_desc = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
@@ -711,51 +675,40 @@ local ascribed_segment_2 = metalanguage.reducer(
 
 		if single then
 			ok, thread = syntax:match({
-				tuplewrap_ascribed_name(metalanguage.accept_handler, env),
+				tuple_desc_wrap_ascribed_name(metalanguage.accept_handler, env),
 			}, metalanguage.failure_handler, nil)
 		else
 			ok, thread = syntax:match({
-				tupleof_ascribed_names(metalanguage.accept_handler, env),
+				tuple_desc_of_ascribed_names(metalanguage.accept_handler, env),
 			}, metalanguage.failure_handler, nil)
 		end
 
 		return ok, thread
 	end,
-	"ascribed_segment_2"
+	"ascribed_segment_tuple_desc"
 )
 
-local host_ascribed_segment_2 = metalanguage.reducer(
-	---@param syntax ConstructedSyntax
-	---@param env Environment
-	---@return boolean
-	---@return {names: string[], args: inferrable, env: Environment}|string
-	function(syntax, env)
-		-- check whether syntax looks like a single annotated param
-		local single, _, _, _ = syntax:match({
-			metalanguage.listmatch(
-				metalanguage.accept_handler,
-				metalanguage.any(metalanguage.accept_handler),
-				metalanguage.symbol_exact(metalanguage.accept_handler, ":"),
-				metalanguage.any(metalanguage.accept_handler)
-			),
-		}, metalanguage.failure_handler, nil)
-
-		local ok, thread
-
-		if single then
-			ok, thread = syntax:match({
-				host_tuplewrap_ascribed_name(metalanguage.accept_handler, env),
-			}, metalanguage.failure_handler, nil)
-		else
-			ok, thread = syntax:match({
-				host_tupleof_ascribed_names(metalanguage.accept_handler, env),
-			}, metalanguage.failure_handler, nil)
-		end
-
+local ascribed_segment_tuple = metalanguage.reducer(function(syntax, env)
+	local ok, thread = syntax:match({
+		ascribed_segment_tuple_desc(metalanguage.accept_handler, env),
+	}, metalanguage.failure_handler, nil)
+	if not ok then
 		return ok, thread
-	end,
-	"host_ascribed_segment_2"
-)
+	end
+	thread.args = terms.inferrable_term.tuple_type(thread.args)
+	return ok, thread
+end, "ascribed_segment_tuple")
+
+local host_ascribed_segment_tuple = metalanguage.reducer(function(syntax, env)
+	local ok, thread = syntax:match({
+		ascribed_segment_tuple_desc(metalanguage.accept_handler, env),
+	}, metalanguage.failure_handler, nil)
+	if not ok then
+		return ok, thread
+	end
+	thread.args = terms.inferrable_term.host_tuple_type(thread.args)
+	return ok, thread
+end, "host_ascribed_segment_tuple")
 
 -- TODO: abstract so can reuse for func type and host func type
 local function make_host_func_syntax(effectful)
@@ -1065,7 +1018,7 @@ end
 ---@type lua_operative
 local function lambda_impl(syntax, env)
 	local ok, thread, tail = syntax:match({
-		metalanguage.listtail(metalanguage.accept_handler, ascribed_segment_2(metalanguage.accept_handler, env)),
+		metalanguage.listtail(metalanguage.accept_handler, ascribed_segment_tuple(metalanguage.accept_handler, env)),
 	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, thread
@@ -1100,7 +1053,7 @@ end
 ---@type lua_operative
 local function lambda_prog_impl(syntax, env)
 	local ok, thread, tail = syntax:match({
-		metalanguage.listtail(metalanguage.accept_handler, ascribed_segment_2(metalanguage.accept_handler, env)),
+		metalanguage.listtail(metalanguage.accept_handler, ascribed_segment_tuple(metalanguage.accept_handler, env)),
 	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, thread
@@ -1189,7 +1142,7 @@ end
 ---@type lua_operative
 local function lambda_annotated_impl(syntax, env)
 	local ok, thread, tail = syntax:match({
-		metalanguage.listtail(metalanguage.accept_handler, ascribed_segment_2(metalanguage.accept_handler, env)),
+		metalanguage.listtail(metalanguage.accept_handler, ascribed_segment_tuple(metalanguage.accept_handler, env)),
 	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, thread
@@ -1571,7 +1524,7 @@ local enum_variant = metalanguage.reducer(function(syntax, env)
 		metalanguage.listtail(
 			metalanguage.accept_handler,
 			metalanguage.issymbol(metalanguage.accept_handler),
-			tupleof_ascribed_names_inner(metalanguage.accept_handler, env)
+			tuple_desc_of_ascribed_names(metalanguage.accept_handler, env)
 		),
 	}, metalanguage.failure_handler, nil)
 
@@ -1702,7 +1655,7 @@ local function create()
 end
 
 local base_env = {
-	tupleof_ascribed_names_inner = tupleof_ascribed_names_inner,
+	tupleof_ascribed_names_inner = tuple_desc_of_ascribed_names,
 	create = create,
 }
 local internals_interface = require "internals-interface"
