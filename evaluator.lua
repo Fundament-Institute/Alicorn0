@@ -400,8 +400,20 @@ local function substitute_inner(val, mappings, context_len)
 		return typed_term.enum_cons(constructor, arg)
 	elseif val:is_enum_type() then
 		local desc = val:unwrap_enum_type()
-		-- TODO: Handle desc properly, because it's a value.
-		return typed_term.literal(val)
+		local desc_sub = substitute_inner(desc, mappings, context_len)
+		return typed_term.enum_type(desc_sub)
+	elseif val:is_enum_desc_type() then
+		local univ = val:unwrap_enum_desc_type()
+		local univ_sub = substitute_inner(univ, mappings, context_len)
+		return typed_term.enum_desc_type(univ_sub)
+	elseif val:is_enum_desc_value() then
+		local variants = val:unwrap_enum_desc_value()
+		---@type MapValue
+		local variants_sub = string_typed_map()
+		for k, v in variants:pairs() do
+			variants_sub:set(k, substitute_inner(v, mappings, context_len))
+		end
+		return typed_term.enum_desc_cons(variants_sub, typed_term.literal(value.enum_desc_value(string_value_map())))
 	elseif val:is_record_value() then
 		-- TODO: How to deal with a map?
 		error("Records not yet implemented")
