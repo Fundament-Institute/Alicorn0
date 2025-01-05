@@ -400,10 +400,6 @@ inferrable_term:define_enum("inferrable", {
 		"mechanism", inferrable_term,
 	} },
 	{ "enum_type", { "desc", inferrable_term } },
-	{ "enum_desc_cons", {
-		"variants", map(gen.builtin_string, inferrable_term),
-		"rest",     inferrable_term,
-	} },
 	{ "enum_case", {
 		"target",   inferrable_term,
 		"variants", map(gen.builtin_string, inferrable_term),

@@ -2569,6 +2569,10 @@ function evaluate(typed_term, runtime_context)
 		local desc = typed_term:unwrap_enum_type()
 		local desc_val = evaluate(desc, runtime_context)
 		return value.enum_type(desc_val)
+	elseif typed_term:is_enum_desc_type() then
+		local universe_term = typed_term:unwrap_enum_desc_type()
+		local universe = evaluate(universe_term, runtime_context)
+		return terms.value.enum_desc_type(universe)
 	elseif typed_term:is_enum_case() then
 		local target, variants, default = typed_term:unwrap_enum_case()
 		local target_val = evaluate(target, runtime_context)

@@ -55,6 +55,25 @@ let host-inferrable-term = unwrap(host-inferrable-term-wrap)
 let host-checkable-term  = unwrap(host-checkable-term-wrap)
 let host-lua-error       = unwrap(host-lua-error-wrap)
 
+# TEMPORARY TEST: MOVE TO TEST FILE BEFORE FINALIZING PR
+
+let Result = lambda (T, E)
+	enum
+		Ok(x : T)
+		Err(e : E)
+		
+let sqr = lambda (x)
+	x
+
+let switchtest = lambda (x : Result(host-number, host-number))
+	switch x
+		Ok(x) -> x
+		Err(a) -> -1
+
+switchtest(mk Ok(5))
+switchtest(mk Err(3))
+	
+
 let host-srel-type =
 	lambda_implicit (U : type_(10, 0))
 		unwrap
@@ -1785,3 +1804,4 @@ let mul = lambda (a : host-number, b : host-number)
 	let (c) = host-mul(a, b)
 	c
 let _*_ = mul
+
