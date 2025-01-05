@@ -5,7 +5,7 @@ the my-tuple-type tuple-of-implicit(3, 4)
 
 let symbol-exact =
 	intrinsic "return metalanguage.symbol_exact" :
-		reducer-type(tuple-desc((s : host-string)), tuple-desc())
+		reducer-type(tuple-desc(s : host-string), tuple-desc())
 
 let inferrable-enum-cons =
 	intrinsic "return terms.inferrable_term.enum_cons" :

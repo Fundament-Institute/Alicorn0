@@ -1524,7 +1524,7 @@ local enum_variant = metalanguage.reducer(function(syntax, env)
 		metalanguage.listtail(
 			metalanguage.accept_handler,
 			metalanguage.issymbol(metalanguage.accept_handler),
-			tuple_desc_of_ascribed_names(metalanguage.accept_handler, env)
+			ascribed_segment_tuple_desc(metalanguage.accept_handler, env)
 		),
 	}, metalanguage.failure_handler, nil)
 
@@ -1655,7 +1655,7 @@ local function create()
 end
 
 local base_env = {
-	tupleof_ascribed_names_inner = tuple_desc_of_ascribed_names,
+	ascribed_segment_tuple_desc = ascribed_segment_tuple_desc,
 	create = create,
 }
 local internals_interface = require "internals-interface"
