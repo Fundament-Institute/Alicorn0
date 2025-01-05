@@ -237,7 +237,15 @@ enum_desc_srel = setmetatable({
 			for name, val_type in val_variants:pairs() do
 				local use_variant = use_variants:get(name)
 				if use_variant == nil then
-					error(name .. " is not a valid enum variant! Is this a typo?")
+					local smallest = 99999999999
+					local suggest = "[enum has no variants!]"
+					for n, _ in use_variants:pairs() do
+						local d = U.levenshtein(name, n)
+						if d < smallest then
+							smallest, suggest = d, n
+						end
+					end
+					error(name .. " is not a valid enum variant! Did you mean " .. suggest .. "?")
 				end
 				typechecker_state:queue_subtype(
 					lctx,
