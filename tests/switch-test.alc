@@ -18,3 +18,12 @@ let Result = lambda (T, E)
 	enum
 		Ok(x : T)
 		Err(e : E)
+
+let switchtest_ascribed = lambda (x : Result(host-number, host-number))
+	switch x
+		Ok(x) -> x * x
+		Err(a) -> a
+
+switchtest_ascribed(mk Ok(5))
+switchtest_ascribed(mk Err(3))
+	

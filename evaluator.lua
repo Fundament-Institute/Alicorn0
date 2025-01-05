@@ -235,11 +235,15 @@ enum_desc_srel = setmetatable({
 			end
 			local use_variants = use:unwrap_enum_desc_value()
 			for name, val_type in val_variants:pairs() do
+				local use_variant = use_variants:get(name)
+				if use_variant == nil then
+					error(name .. " is not a valid enum variant! Is this a typo?")
+				end
 				typechecker_state:queue_subtype(
 					lctx,
 					val_type,
 					rctx,
-					use_variants:get(name) --[[@as value -- please find a better approach]],
+					use_variant --[[@as value -- please find a better approach]],
 					"enum variant"
 				)
 			end
