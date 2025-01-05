@@ -1604,12 +1604,14 @@ local function enum_impl(syntax, env)
 	end
 
 	return true,
-		terms.inferrable_term.enum_desc_cons(
-			variants,
-			terms.inferrable_term.typed(
-				value.enum_desc_type(value.star(0, 0)),
-				usage_array(),
-				typed.literal(value.enum_desc_value(gen.declare_map(gen.builtin_string, terms.value)()))
+		terms.inferrable_term.enum_type(
+			terms.inferrable_term.enum_desc_cons(
+				variants,
+				terms.inferrable_term.typed(
+					value.enum_desc_type(value.star(0, 0)),
+					usage_array(),
+					typed.literal(value.enum_desc_value(gen.declare_map(gen.builtin_string, terms.value)()))
+				)
 			)
 		),
 		env

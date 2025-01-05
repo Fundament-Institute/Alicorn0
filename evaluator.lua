@@ -2059,7 +2059,7 @@ function infer(
 		local result_types = {}
 		local term_variants = string_typed_map()
 		for k, v in variants:pairs() do
-			local variant_type, _, variant_term = infer(v, typechecking_context) --TODO improve
+			local variant_type, variant_usages, variant_term = infer(v, typechecking_context) --TODO improve
 			term_variants:set(k, variant_term)
 			result_types[#result_types + 1] = variant_type
 		end
@@ -2067,8 +2067,20 @@ function infer(
 		for i = 2, #result_types do
 			result_type = value.union_type(result_type, result_types[i])
 		end
-		local _, _, rest_term = infer(rest, typechecking_context) --TODO improve
-		return value.enum_desc_type(result_type), usage_array(), typed_term.enum_desc_cons(term_variants, rest_term)
+		local _, rest_usages, rest_term = infer(rest, typechecking_context) --TODO improve
+		return value.enum_desc_type(result_type), rest_usages, typed_term.enum_desc_cons(term_variants, rest_term)
+	elseif inferrable_term:is_enum_type() then
+		local desc = inferrable_term:unwrap_enum_type()
+		local desc_type, desc_usages, desc_term = infer(desc, typechecking_context)
+		local univ_var = typechecker_state:metavariable(typechecking_context, false):as_value()
+		typechecker_state:flow(
+			desc_type,
+			typechecking_context,
+			value.enum_desc_type(univ_var),
+			typechecking_context,
+			"tuple type construction"
+		)
+		return value.union_type(terms.value.star(0, 0), univ_var), desc_usages, terms.typed_term.enum_type(desc_term)
 	elseif inferrable_term:is_object_cons() then
 		local methods = inferrable_term:unwrap_object_cons()
 		local type_data = terms.empty
