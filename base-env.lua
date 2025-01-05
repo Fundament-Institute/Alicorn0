@@ -137,7 +137,7 @@ local function unwrap_into_string(...)
 	for i, v in ipairs(args) do
 		args[i] = v.str
 	end
-	return unpack(args)
+	return table.unpack(args)
 end
 
 ---@param env Environment
