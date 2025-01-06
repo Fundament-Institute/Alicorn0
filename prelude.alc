@@ -934,20 +934,21 @@ let tuple-desc-elem-implicit = lambda_curry ((U : universe))
 				wrap(desc)
 				wrap(elem)
 		unwrap(T)
+
 # FIXME: we're comparing metavariables against placeholders AGAIN AAAA
-# let tuple-desc-elem-implicit2 = lambda_curry (U : universe, desc : tuple-desc-type(U))
-# 	lambda (elem : (forall (rest : tuple-type(desc)) -> (next : U)))
-# 		let inner = intrinsic "return terms.cons" :
-# 			host-func-type (
-# 				desc_ : wrapped(tuple-desc-type(U)), # aaaa shadowing
-# 				elem  : (wrapped (forall (rest : tuple-type(desc)) -> (next : U))))
-# 				->
-# 				((T : wrapped(tuple-desc-type(U))))
-# 		let (T) =
-# 			inner
-# 				wrap(desc)
-# 				wrap(elem)
-# 		unwrap(T)
+let tuple-desc-elem-implicit2 = lambda_curry (U : universe, desc : tuple-desc-type(U))
+	lambda (elem : (forall (rest : tuple-type(desc)) -> (next : U)))
+		let inner = intrinsic "return terms.cons" :
+			host-func-type (
+				desc_ : wrapped(tuple-desc-type(U)), # aaaa shadowing
+				elem  : (wrapped (forall (rest : tuple-type(desc)) -> (next : U))))
+				->
+				((T : wrapped(tuple-desc-type(U))))
+		let (T) =
+			inner
+				wrap(desc)
+				wrap(elem)
+		unwrap(T)
 let tuple-of = lambda (U : universe, desc : tuple-desc-type(U))
 	lambda_single (t : tuple-type(desc))
 		t
@@ -1673,11 +1674,7 @@ let ascribed-segment-tuple-desc-match-result-desc =
 	# - ok == false: `...` is host-lua-error
 	# technically this should have a third element in the ok == true case, containing host-syntax
 	# but the syntax will always be nil, and the errors are annoying
-	tuple-desc-elem-implicit
-		tuple-desc-elem-explicit host-type
-			tuple-desc-empty host-type
-			lambda ()
-				host-bool
+	tuple-desc-elem-implicit2
 		lambda (ok : host-bool)
 			host-if(ok, ascribed-segment-tuple-desc-reducer-thread-type, host-lua-error)
 
