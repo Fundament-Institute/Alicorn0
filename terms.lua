@@ -391,6 +391,10 @@ inferrable_term:define_enum("inferrable", {
 		"constructor", gen.builtin_string,
 		"arg",         inferrable_term,
 	} },
+	{ "enum_desc_cons", {
+		"variants", map(gen.builtin_string, inferrable_term),
+		"rest",     inferrable_term,
+} },
 	{ "enum_elim", {
 		"subject",   inferrable_term,
 		"mechanism", inferrable_term,
@@ -405,6 +409,7 @@ inferrable_term:define_enum("inferrable", {
 		"target", inferrable_term,
 		"debug",  gen.builtin_string,
 	} },
+	
 	{ "object_cons", { "methods", map(gen.builtin_string, inferrable_term) } },
 	{ "object_elim", {
 		"subject",   inferrable_term,
@@ -638,6 +643,9 @@ typed_term:define_enum("typed", {
 	{ "enum_desc_cons", {
 		"variants", map(gen.builtin_string, typed_term),
 		"rest",     typed_term,
+	} },
+	{ "enum_desc_type", {
+		"univ", typed_term
 	} },
 	{ "enum_type", { "desc", typed_term } },
 	{ "enum_case", {

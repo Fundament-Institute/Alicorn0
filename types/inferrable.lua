@@ -71,6 +71,12 @@ function inferrable:unwrap_enum_cons() end
 ---@return boolean, string, inferrable
 function inferrable:as_enum_cons() end
 ---@return boolean
+function inferrable:is_enum_desc_cons() end
+---@return MapValue, inferrable
+function inferrable:unwrap_enum_desc_cons() end
+---@return boolean, MapValue, inferrable
+function inferrable:as_enum_desc_cons() end
+---@return boolean
 function inferrable:is_enum_elim() end
 ---@return inferrable, inferrable
 function inferrable:unwrap_enum_elim() end
@@ -82,6 +88,12 @@ function inferrable:is_enum_type() end
 function inferrable:unwrap_enum_type() end
 ---@return boolean, inferrable
 function inferrable:as_enum_type() end
+---@return boolean
+function inferrable:is_enum_desc_cons() end
+---@return MapValue, inferrable
+function inferrable:unwrap_enum_desc_cons() end
+---@return boolean, MapValue, inferrable
+function inferrable:as_enum_desc_cons() end
 ---@return boolean
 function inferrable:is_enum_case() end
 ---@return inferrable, MapValue
@@ -258,8 +270,10 @@ function inferrable:as_program_type() end
 ---@field record_cons fun(fields: MapValue): inferrable
 ---@field record_elim fun(subject: inferrable, field_names: ArrayValue, body: inferrable): inferrable
 ---@field enum_cons fun(constructor: string, arg: inferrable): inferrable
+---@field enum_desc_cons fun(variants: MapValue, rest: inferrable): inferrable
 ---@field enum_elim fun(subject: inferrable, mechanism: inferrable): inferrable
 ---@field enum_type fun(desc: inferrable): inferrable
+---@field enum_desc_cons fun(variants: MapValue, rest: inferrable): inferrable
 ---@field enum_case fun(target: inferrable, variants: MapValue): inferrable
 ---@field enum_absurd fun(target: inferrable, debug: string): inferrable
 ---@field object_cons fun(methods: MapValue): inferrable

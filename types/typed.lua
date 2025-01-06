@@ -149,6 +149,12 @@ function typed:unwrap_enum_desc_cons() end
 ---@return boolean, MapValue, typed
 function typed:as_enum_desc_cons() end
 ---@return boolean
+function typed:is_enum_desc_type() end
+---@return typed
+function typed:unwrap_enum_desc_type() end
+---@return boolean, typed
+function typed:as_enum_desc_type() end
+---@return boolean
 function typed:is_enum_type() end
 ---@return typed
 function typed:unwrap_enum_type() end
@@ -391,6 +397,7 @@ function typed:as_constrained_type() end
 ---@field enum_elim fun(subject: typed, mechanism: typed): typed
 ---@field enum_rec_elim fun(subject: typed, mechanism: typed): typed
 ---@field enum_desc_cons fun(variants: MapValue, rest: typed): typed
+---@field enum_desc_type fun(univ: typed): typed
 ---@field enum_type fun(desc: typed): typed
 ---@field enum_case fun(target: typed, variants: MapValue, default: typed): typed
 ---@field enum_absurd fun(target: typed, debug: string): typed

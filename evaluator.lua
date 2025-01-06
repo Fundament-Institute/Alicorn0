@@ -235,11 +235,23 @@ enum_desc_srel = setmetatable({
 			end
 			local use_variants = use:unwrap_enum_desc_value()
 			for name, val_type in val_variants:pairs() do
+				local use_variant = use_variants:get(name)
+				if use_variant == nil then
+					local smallest = 99999999999
+					local suggest = "[enum has no variants!]"
+					for n, _ in use_variants:pairs() do
+						local d = U.levenshtein(name, n)
+						if d < smallest then
+							smallest, suggest = d, n
+						end
+					end
+					error(name .. " is not a valid enum variant! Did you mean " .. suggest .. "?")
+				end
 				typechecker_state:queue_subtype(
 					lctx,
 					val_type,
 					rctx,
-					use_variants:get(name) --[[@as value -- please find a better approach]],
+					use_variant --[[@as value -- please find a better approach]],
 					"enum variant"
 				)
 			end
@@ -400,8 +412,20 @@ local function substitute_inner(val, mappings, context_len)
 		return typed_term.enum_cons(constructor, arg)
 	elseif val:is_enum_type() then
 		local desc = val:unwrap_enum_type()
-		-- TODO: Handle desc properly, because it's a value.
-		return typed_term.literal(val)
+		local desc_sub = substitute_inner(desc, mappings, context_len)
+		return typed_term.enum_type(desc_sub)
+	elseif val:is_enum_desc_type() then
+		local univ = val:unwrap_enum_desc_type()
+		local univ_sub = substitute_inner(univ, mappings, context_len)
+		return typed_term.enum_desc_type(univ_sub)
+	elseif val:is_enum_desc_value() then
+		local variants = val:unwrap_enum_desc_value()
+		---@type MapValue
+		local variants_sub = string_typed_map()
+		for k, v in variants:pairs() do
+			variants_sub:set(k, substitute_inner(v, mappings, context_len))
+		end
+		return typed_term.enum_desc_cons(variants_sub, typed_term.literal(value.enum_desc_value(string_value_map())))
 	elseif val:is_record_value() then
 		-- TODO: How to deal with a map?
 		error("Records not yet implemented")
@@ -2010,7 +2034,7 @@ function infer(
 		local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
 		local constrain_variants = string_value_map()
 		for k, v in variants:pairs() do
-			constrain_variants[k] = typechecker_state:metavariable(typechecking_context, false):as_value()
+			constrain_variants:set(k, typechecker_state:metavariable(typechecking_context, false):as_value())
 		end
 		typechecker_state:flow(
 			subject_type,
@@ -2022,8 +2046,9 @@ function infer(
 		local term_variants = string_typed_map()
 		local result_types = {}
 		for k, v in variants:pairs() do
+			--TODO figure out where to store/retrieve the anchors correctly
 			local variant_type, variant_usages, variant_term =
-				infer(v, typechecking_context:append("#variant", constrain_variants:get(k), nil, nil)) --TODO improve
+				infer(v, typechecking_context:append("#variant", constrain_variants:get(k), nil, v.start_anchor)) --TODO improve
 			term_variants:set(k, variant_term)
 			result_types[#result_types + 1] = variant_type
 		end
@@ -2041,6 +2066,33 @@ function infer(
 					"unacceptable enum variant"
 				)
 			)
+	elseif inferrable_term:is_enum_desc_cons() then
+		local variants, rest = inferrable_term:unwrap_enum_desc_cons()
+		local result_types = {}
+		local term_variants = string_typed_map()
+		for k, v in variants:pairs() do
+			local variant_type, variant_usages, variant_term = infer(v, typechecking_context) --TODO improve
+			term_variants:set(k, variant_term)
+			result_types[#result_types + 1] = variant_type
+		end
+		local result_type = result_types[1]
+		for i = 2, #result_types do
+			result_type = value.union_type(result_type, result_types[i])
+		end
+		local _, rest_usages, rest_term = infer(rest, typechecking_context) --TODO improve
+		return value.enum_desc_type(result_type), rest_usages, typed_term.enum_desc_cons(term_variants, rest_term)
+	elseif inferrable_term:is_enum_type() then
+		local desc = inferrable_term:unwrap_enum_type()
+		local desc_type, desc_usages, desc_term = infer(desc, typechecking_context)
+		local univ_var = typechecker_state:metavariable(typechecking_context, false):as_value()
+		typechecker_state:flow(
+			desc_type,
+			typechecking_context,
+			value.enum_desc_type(univ_var),
+			typechecking_context,
+			"tuple type construction"
+		)
+		return value.union_type(terms.value.star(0, 0), univ_var), desc_usages, terms.typed_term.enum_type(desc_term)
 	elseif inferrable_term:is_object_cons() then
 		local methods = inferrable_term:unwrap_object_cons()
 		local type_data = terms.empty
@@ -2541,13 +2593,17 @@ function evaluate(typed_term, runtime_context)
 		local desc = typed_term:unwrap_enum_type()
 		local desc_val = evaluate(desc, runtime_context)
 		return value.enum_type(desc_val)
+	elseif typed_term:is_enum_desc_type() then
+		local universe_term = typed_term:unwrap_enum_desc_type()
+		local universe = evaluate(universe_term, runtime_context)
+		return terms.value.enum_desc_type(universe)
 	elseif typed_term:is_enum_case() then
 		local target, variants, default = typed_term:unwrap_enum_case()
 		local target_val = evaluate(target, runtime_context)
 		if target_val:is_enum_value() then
 			local variant, arg = target_val:unwrap_enum_value()
-			if variants[variant] then
-				return evaluate(variants[variant], runtime_context:append(arg))
+			if variants:get(variant) then
+				return evaluate(variants:get(variant), runtime_context:append(arg))
 			else
 				return evaluate(default, runtime_context:append(target_val))
 			end

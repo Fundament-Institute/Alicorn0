@@ -1,0 +1,29 @@
+let sqr = lambda (x)
+	x * x
+
+let switchtest = lambda (x)
+	switch x
+		none -> 2
+		inj1(a) -> sqr(a)
+		inj2(a, b) -> sqr(a) * b
+
+tuple-of-implicit
+	switchtest(mk none)
+	switchtest(mk inj1 5)
+	switchtest(mk inj2 3 5)
+	switchtest(mk inj2(3, 5))
+	switchtest(mk inj2 sqr(2) 5)
+
+let Result = lambda (T, E)
+	enum
+		Ok(x : T)
+		Err(e : E)
+
+let switchtest_ascribed = lambda (x : Result(host-number, host-number))
+	switch x
+		Ok(x) -> x * x
+		Err(a) -> a
+
+switchtest_ascribed(mk Ok(5))
+switchtest_ascribed(mk Err(3))
+	
