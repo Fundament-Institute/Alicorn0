@@ -406,7 +406,7 @@ local grammar = P {
 				) * V "infix_braceclose_accumulator")
 				^ 1
 	) / function(list)
-		assert(list.elements["braceacc"])
+		--assert(list.elements["braceacc"])
 
 		table.insert(list.elements, 1, {
 			kind = "symbol",

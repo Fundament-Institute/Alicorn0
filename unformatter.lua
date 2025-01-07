@@ -4,6 +4,11 @@
 
 local indentation_char = "\t"
 
+---@param ast FormatList
+---@param prev_line integer
+---@param indentation integer
+---@return string
+---@return integer
 local function unformat_list(ast, prev_line, indentation)
 	local acc = ""
 
@@ -94,6 +99,8 @@ local function unformat_list(ast, prev_line, indentation)
 	return acc, prev_line
 end
 
+---@param ast FormatList
+---@return string
 local function unformat(ast)
 	local acc = ""
 

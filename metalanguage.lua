@@ -31,10 +31,13 @@ local MatcherKind = --[[@enum MatcherKind]]
 ---@generic T
 ---@alias ReducibleFunc fun(u : T, ...) : ...
 
+---@class Reducible
+---@field reduce fun(syntax: ConstructedSyntax, matcher: Matcher) : ...
+
 ---@class Matcher
 ---@field kind MatcherKind
 ---@field handler SymbolFunc | PairFunc | NilFunc | ValueFunc | ReducibleFunc
----@field reducible any?
+---@field reducible Reducible?
 
 ---@class SyntaxSymbol
 ---@field start_anchor Anchor
@@ -170,6 +173,8 @@ local reducer_mt = { __call = create_reducible }
 local ExternalError = {}
 
 local external_error_mt = {
+	---@param self ExternalError
+	---@return string
 	__tostring = function(self)
 		local message = "Lua error raised inside reducer "
 			.. self.reducer_name
@@ -178,8 +183,10 @@ local external_error_mt = {
 			.. ":\n"
 		local cause = tostring(self.cause)
 		if cause:find("table", 1, true) == 1 then
-			for k, v in pairs(self.cause) do
-				message = message .. tostring(k)
+			for k, v in
+				pairs(self.cause --[[@as { [any]: any }]])
+			do
+				message = message .. tostring(k) --[[@as string]]
 				message = message .. " = "
 				message = message .. tostring(v)
 				message = message .. "\n"
@@ -204,13 +211,12 @@ function ExternalError.new(cause, start_anchor, reducer_name)
 	}, external_error_mt)
 end
 
----@param syntax any
+---@param syntax ConstructedSyntax
 ---@param reducer_name string
 ---@param ok boolean
 ---@param err_msg any
 ---@param ... any
----@return boolean | any
----@return ExternalError | any
+---@return boolean | any, ExternalError | any, ...
 local function augment_error(syntax, reducer_name, ok, err_msg, ...)
 	if not ok then
 		return false, ExternalError.new(err_msg, syntax.start_anchor, reducer_name)
@@ -339,6 +345,7 @@ end
 local function accept_handler(data, ...)
 	return true, ...
 end
+
 ---@param data any
 ---@param exception string
 ---@return boolean
@@ -369,6 +376,7 @@ function SyntaxError:__tostring()
 	local message = "Syntax error at anchor "
 		.. (self.start_anchor and tostring(self.start_anchor) or "<unknown position>")
 		.. " must be acceptable for one of:\n"
+	---@type string[]
 	local options = {}
 	for k, v in ipairs(self.matchers) do
 		if v.kind == MatcherKind.Reducible then
@@ -426,10 +434,10 @@ match : forall
 	->
 	res : tuple-type(results)
 ]]
----@generic T
+---@generic U
 ---@param matchers Matcher[]
----@param unmatched fun(u : T, ...) : ...
----@param extra T
+---@param unmatched fun(u : U, err: SyntaxError) : ...
+---@param extra U
 ---@return ...
 function ConstructedSyntax:match(matchers, unmatched, extra)
 	assert(matchers["kind"] == nil, "Unexpected matchers parameter")
@@ -450,7 +458,7 @@ function ConstructedSyntax:match(matchers, unmatched, extra)
 				return matcher.handler(extra, table.unpack(res, 2, res.n))
 			end
 			--print("rejected syntax reduction")
-			lasterr = res[2]
+			lasterr = res[2] --[[@as any]]
 		end
 		-- local name = getmetatable(matcher.reducible)
 		-- print("rejected syntax kind", matcher.kind, name)
@@ -529,8 +537,8 @@ local nil_accepters = {
 	end,
 }
 
----@param start_anchor Anchor
----@param end_anchor Anchor
+---@param start_anchor Anchor?
+---@param end_anchor Anchor?
 ---@return ConstructedSyntax
 local function new_nilval(start_anchor, end_anchor)
 	return cons_syntax(nil_accepters, start_anchor, end_anchor)
@@ -560,7 +568,7 @@ local any = reducer(
 )
 
 ---@generic T
----@param rule any
+---@param rule Matcher
 ---@param a ConstructedSyntax
 ---@param b T
 ---@return boolean
@@ -731,6 +739,7 @@ local list_many = reducer(
 local oneof = reducer(
 	---@param syntax ConstructedSyntax
 	---@param ... Matcher
+	---@return ...
 	function(syntax, ...)
 		return syntax:match({ ... }, failure_handler, nil)
 	end,
@@ -740,6 +749,7 @@ local oneof = reducer(
 local list_tail_ends = reducer(
 	---@param syntax ConstructedSyntax
 	---@param rule Matcher
+	---@return boolean, ...
 	function(syntax, rule)
 		local res = { syntax:match({ rule }, failure_handler, nil) }
 		local ok, err, tail = res[1], res[2], res[#res]

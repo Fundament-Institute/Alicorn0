@@ -623,13 +623,13 @@ end
 
 ---@class ArrayType: Type
 ---@field value_type Type
----@field methods table
----@field __eq function(ArrayValue, ArrayValue): boolean
----@field __index function
----@field __newindex function
----@field __ipairs function(ArrayValue): function, ArrayValue, integer
----@field __len function(ArrayValue): integer
----@field __tostring function(ArrayValue): string
+---@field methods { [string]: function }
+---@field __eq fun(ArrayValue, ArrayValue): boolean
+---@field __index fun(self: ArrayType, key: number | string) : Type | function
+---@field __newindex fun(self: ArrayType, key: number | string, value: Type)
+---@field __ipairs fun(ArrayValue): function, ArrayValue, integer
+---@field __len fun(ArrayValue): integer
+---@field __tostring fun(ArrayValue): string
 
 ---@class ArrayValue: Value
 ---@field n integer
@@ -663,6 +663,10 @@ local array_type_mt = {
 	end,
 }
 
+---@param state ArrayValue
+---@param control integer
+---@return integer?
+---@return Value?
 local function array_next(state, control)
 	local i = control + 1
 	if i > state:len() then
@@ -723,7 +727,15 @@ local function array_eq_fn(left, right)
 	return true
 end
 
+---@generic V : Type
+---@param t ArrayType
+---@param value_type `V`
+---@return fun(self: ArrayType, key: number | string) : V | function
+---@return fun(self: ArrayType, key: number | string, value: V)
 local function gen_array_index_fns(t, value_type)
+	---@param self ArrayType
+	---@param key number | string
+	---@return Type | function
 	local function index(self, key)
 		local method = t.methods[key]
 		if method then
@@ -754,6 +766,9 @@ local function gen_array_index_fns(t, value_type)
 		end
 		return self.array[key]
 	end
+	---@param self ArrayType
+	---@param key number | string
+	---@param value Type
 	local function newindex(self, key, value)
 		if type(key) ~= "number" then
 			p("array-index", value_type)
@@ -844,7 +859,7 @@ local array_memo = {}
 
 ---@param self table
 ---@param value_type Type
----@return ArrayType self
+---@return ArrayType
 local function define_array(self, value_type)
 	if type(value_type) ~= "table" or type(value_type.value_check) ~= "function" then
 		error("trying to set the value type to something that isn't a type (possible typo?)")

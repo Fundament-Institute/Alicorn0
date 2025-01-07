@@ -1185,7 +1185,9 @@ end)
 ---@return boolean
 ---@return (string|ConcreteFail)?
 function check_concrete(lctx, val, rctx, use)
-	assert(val and use, "nil value or usage passed into check_concrete!")
+	if val == nil or use == nil then
+		error("nil value or usage passed into check_concrete!")
+	end
 
 	if val:is_neutral() then
 		if use:is_neutral() then
@@ -3106,7 +3108,9 @@ local function IndexedCollection(indices)
 				)
 			end
 			local args = { ... }
-			assert(#args == #v, "Must have one argument per key extractor")
+			if #args ~= #v then
+				error("Must have one argument per key extractor")
+			end
 
 			local store = self._index_store[k]
 			for i = 1, #v do

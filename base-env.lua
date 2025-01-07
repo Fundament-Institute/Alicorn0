@@ -78,12 +78,16 @@ local function let_impl(syntax, env)
 		local names = {}
 		for _, v in ipairs(name) do
 			table.insert(names, v.str)
-			assert(v.kind)
+			if v.kind == nil then
+				error("v.kind is nil")
+			end
 		end
 
 		env = env:bind_local(terms.binding.tuple_elim(tupletype(table.unpack(names)), expr))
 	else
-		assert(name["kind"])
+		if name["kind"] == nil then
+			error("name['kind'] is nil")
+		end
 		env = env:bind_local(terms.binding.let(name.str, expr))
 	end
 

@@ -37,13 +37,22 @@ local infer = evaluator.infer
 
 local U = require "alicorn-utils"
 
+---@class SemanticErrorData
+---@field text string
+---@field cause any
+---@field anchors Anchor[]?
+---@field terms { [string]: table }?
+---@field env Environment?
+
 local semantic_error_mt = {
+	---@param self SemanticErrorData
+	---@return unknown
 	__tostring = function(self)
 		local message = self.text
 		if self.anchors then
 			message = message .. " at anchors"
 			for _, anchor in ipairs(self.anchors) do
-				message = " " .. message .. " " .. tostring(anchor)
+				message = " " .. message .. " " .. tostring(anchor) --[[@as string]]
 			end
 		end
 		if self.terms then
@@ -51,7 +60,7 @@ local semantic_error_mt = {
 			for k, term in pairs(self.terms) do
 				local s = nil
 				if term.pretty_print and self.env then
-					s = term:pretty_print(self.env.typechecking_context)
+					s = term:pretty_print(self.env.typechecking_context) --[[@as string]]
 				else
 					s = tostring(term)
 				end
@@ -71,6 +80,7 @@ local semantic_error_mt = {
 
 local semantic_error = {
 	---@param cause any
+	---@return SemanticErrorData
 	function_args_mismatch = function(cause)
 		return {
 			text = "function args mismatch",
@@ -85,6 +95,7 @@ local semantic_error = {
 	-- end,
 	---@param cause any
 	---@param anchors Anchor[]
+	---@return SemanticErrorData
 	operative_apply_failed = function(cause, anchors)
 		return {
 			text = "operative apply failed",
@@ -92,11 +103,12 @@ local semantic_error = {
 			anchors = anchors,
 		}
 	end,
+
 	---@param cause any
 	---@param anchors Anchor[]
-	---@param terms any
-	---@param env any
-	---@return table
+	---@param terms { [string]: table }
+	---@param env Environment
+	---@return SemanticErrorData
 	host_function_argument_collect_failed = function(cause, anchors, terms, env)
 		return {
 			text = "host_function_argument_collect_failed",
@@ -198,7 +210,7 @@ local infix_data = {
 
 ---@param symbol SyntaxSymbol
 ---@return boolean
----@return SyntaxSymbol
+---@return SyntaxSymbol | string
 local function shunting_yard_prefix_handler(_, symbol)
 	assert(symbol and symbol["kind"])
 
@@ -281,6 +293,7 @@ end
 
 ---@param new_symbol SyntaxSymbol
 ---@param yard_operator TaggedOperator
+---@return boolean
 local function shunting_yard_should_pop(new_symbol, yard_operator)
 	assert(new_symbol and new_symbol["kind"])
 
@@ -453,7 +466,7 @@ end
 ---HORRIBLE HACK MAKE THIS BETTER
 ---@param env Environment
 ---@param metaval value
----@return boolean, value
+---@return boolean, value?
 local function operative_test_hack(env, metaval)
 	local edges = evaluator.typechecker_state.graph.constrain_edges:to(
 		metaval:unwrap_neutral():unwrap_free():unwrap_metavariable().usage
@@ -574,6 +587,7 @@ local function expression_pairhandler(args, a, b)
 		if not ok then
 			error("speculate DID NOT work for pi!: " .. tostring(pi))
 		end
+		---@cast updated_type -nil
 		type_of_term = updated_type
 	end
 
@@ -759,15 +773,11 @@ end
 ---@return SyntaxSymbol
 ---@return SyntaxSymbol?
 local function split_dot_accessors(symbol)
-	assert(symbol["kind"])
 	if symbol then
 		local split_dot_pos = (symbol.str):find("%.")
 
 		if split_dot_pos then
 			local first, second = (symbol.str):match("([^.]+)%.(.+)")
-			assert(first)
-			assert(type(first) == "string")
-			assert(second)
 
 			local first_end_anchor = symbol.end_anchor
 			first_end_anchor.char = symbol.start_anchor.char + split_dot_pos
@@ -789,9 +799,6 @@ local function split_dot_accessors(symbol)
 				start_anchor = second_start_anchor,
 				end_anchor = symbol.end_anchor,
 			}
-
-			assert(firstsymbol["kind"])
-			assert(secondsymbol["kind"])
 
 			return firstsymbol, secondsymbol
 		end
@@ -957,7 +964,7 @@ local external_error_mt = {
 ---@param cause any
 ---@param start_anchor Anchor
 ---@param end_anchor Anchor
----@param operative_name any
+---@param operative_name string
 ---@return OperativeError
 function OperativeError.new(cause, start_anchor, end_anchor, operative_name)
 	return setmetatable({
@@ -1282,7 +1289,9 @@ local block = metalanguage.reducer(
 	---@return Environment?
 	function(syntax, args)
 		local goal, env = args:unwrap()
-		assert(goal:is_infer(), "NYI non-infer cases for block")
+		if not goal:is_infer() then
+			error("NYI non-infer cases for block")
+		end
 		local lastval = inferrable_term.tuple_cons(inferrable_array())
 		local newval
 		local ok, continue = true, true
@@ -1311,7 +1320,9 @@ local top_level_block = metalanguage.reducer(
 	---@return Environment?
 	function(syntax, args)
 		local goal, env = args.exprargs:unwrap()
-		assert(goal:is_infer(), "NYI non-infer cases for block")
+		if not goal:is_infer() then
+			error("NYI non-infer cases for block")
+		end
 		local lastval = inferrable_term.tuple_cons(inferrable_array())
 		local newval
 		local ok, continue = true, true
@@ -1441,8 +1452,12 @@ end
 ---@param env Environment
 ---@return any
 local function inferred_expression(handler, env)
-	assert(handler, "no handler")
-	assert(env and env.get, "no env")
+	if handler == nil then
+		error("no handler")
+	end
+	if env == nil or env.get == nil then
+		error("no env")
+	end
 	return expression(handler, ExpressionArgs.new(expression_goal.infer, env))
 end
 
