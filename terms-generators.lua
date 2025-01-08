@@ -625,8 +625,8 @@ end
 ---@field value_type Type
 ---@field methods { [string]: function }
 ---@field __eq fun(ArrayValue, ArrayValue): boolean
----@field __index fun(self: ArrayType, key: number | string) : Type | function
----@field __newindex fun(self: ArrayType, key: number | string, value: Type)
+---@field __index fun(self: ArrayValue, key: integer | string) : Value | function
+---@field __newindex fun(self: ArrayValue, key: integer, value: Value)
 ---@field __ipairs fun(ArrayValue): function, ArrayValue, integer
 ---@field __len fun(ArrayValue): integer
 ---@field __tostring fun(ArrayValue): string
@@ -730,12 +730,12 @@ end
 ---@generic V : Type
 ---@param t ArrayType
 ---@param value_type `V`
----@return fun(self: ArrayType, key: number | string) : V | function
----@return fun(self: ArrayType, key: number | string, value: V)
+---@return fun(self: ArrayValue, key: integer | string) : V | function
+---@return fun(self: ArrayValue, key: integer, value: V)
 local function gen_array_index_fns(t, value_type)
-	---@param self ArrayType
-	---@param key number | string
-	---@return Type | function
+	---@param self ArrayValue
+	---@param key integer | string
+	---@return Value | function
 	local function index(self, key)
 		local method = t.methods[key]
 		if method then
@@ -766,9 +766,9 @@ local function gen_array_index_fns(t, value_type)
 		end
 		return self.array[key]
 	end
-	---@param self ArrayType
-	---@param key number | string
-	---@param value Type
+	---@param self ArrayValue
+	---@param key integer
+	---@param value Value
 	local function newindex(self, key, value)
 		if type(key) ~= "number" then
 			p("array-index", value_type)
