@@ -667,14 +667,6 @@ local function array_next(state, control)
 	end
 end
 
-local function array_unpack(array, i, ...)
-	if i > 0 then
-		return array_unpack(array, i - 1, array[i], ...)
-	else
-		return ...
-	end
-end
-
 local function gen_array_methods(self, value_type)
 	return {
 		ipairs = function(val)
@@ -696,7 +688,7 @@ local function gen_array_methods(self, value_type)
 			return new
 		end,
 		unpack = function(val)
-			return array_unpack(val.array, val.n)
+			return table.unpack(val.array, 1, val.n)
 		end,
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
@@ -719,16 +711,16 @@ local function array_eq_fn(left, right)
 end
 
 ---@generic V : Type
----@param t ArrayType
+---@param self ArrayType
 ---@param value_type `V`
 ---@return fun(self: ArrayValue, key: integer | string) : V | function
 ---@return fun(self: ArrayValue, key: integer, value: V)
-local function gen_array_index_fns(t, value_type)
-	---@param self ArrayValue
+local function gen_array_index_fns(self, value_type)
+	---@param val ArrayValue
 	---@param key integer | string
 	---@return Value | function
-	local function index(self, key)
-		local method = t.methods[key]
+	local function index(val, key)
+		local method = self.methods[key]
 		if method then
 			return method
 		end
@@ -746,21 +738,21 @@ local function gen_array_index_fns(t, value_type)
 		end
 		-- puc-rio lua 5.3 ipairs() always produces an iterator that looks for the first nil
 		-- instead of deferring to __ipairs metamethod like in 5.2
-		--if key == self.n + 1 then
+		--if key == val.n + 1 then
 		--	return nil
 		--end
 		-- above is commented out because it turns out we want nil-resistant iterators
 		-- so we should make sure to use the :ipairs() method instead
-		if key < 1 or key > self.n then
-			p(key, self.n)
+		if key < 1 or key > val.n then
+			p(key, val.n)
 			error("key passed to array indexing is out of bounds (read code comment above)")
 		end
-		return self.array[key]
+		return val.array[key]
 	end
-	---@param self ArrayValue
+	---@param val ArrayValue
 	---@param key integer
 	---@param value Value
-	local function newindex(self, key, value)
+	local function newindex(val, key, value)
 		if type(key) ~= "number" then
 			p("array-index", value_type)
 			p(key)
@@ -771,8 +763,8 @@ local function gen_array_index_fns(t, value_type)
 			error("key passed to array index-assignment is not an integer")
 		end
 		-- n+1 can be used to append
-		if key < 1 or key > self.n + 1 then
-			p(key, self.n)
+		if key < 1 or key > val.n + 1 then
+			p(key, val.n)
 			error("key passed to array index-assignment is out of bounds")
 		end
 		if value_type.value_check(value) ~= true then
@@ -780,9 +772,9 @@ local function gen_array_index_fns(t, value_type)
 			p(value)
 			error("wrong value type passed to array index-assignment")
 		end
-		self.array[key] = value
-		if key > self.n then
-			self.n = key
+		val.array[key] = value
+		if key > val.n then
+			val.n = key
 		end
 	end
 	return index, newindex
