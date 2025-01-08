@@ -120,29 +120,28 @@ end
 local function gen_record(self, cons, kind, params_with_types)
 	local params, params_types = parse_params_with_types(params_with_types)
 	validate_params_types(kind, params, params_types)
+	local function build_record(...)
+		local args = { ... }
+		local val = {
+			kind = kind,
+		}
+		for i, v in ipairs(params) do
+			local argi = args[i]
+			-- type-check constructor arguments
+			if params_types[i].value_check(argi) ~= true then
+				print("value of parameter " .. v .. ": (follows)")
+				p(argi)
+				print("expected type of parameter " .. v .. " is :", params_types[i])
+				error("wrong argument type passed to constructor " .. kind .. ", parameter '" .. v .. "'")
+			end
+			val[v] = argi
+		end
+		setmetatable(val, self)
+		return val
+	end
 	setmetatable(cons, {
 		__call = function(_, ...)
-			local args = { ... }
-			local val = {
-				kind = kind,
-			}
-			for i, v in ipairs(params) do
-				local argi = args[i]
-				-- type-check constructor arguments
-				if params_types[i].value_check(argi) ~= true then
-					print("value of parameter " .. v .. ": (follows)")
-					p(argi)
-					print("expected type of parameter " .. v .. " is :", params_types[i])
-					--for i = 2, 25 do
-					--	local d = debug.getinfo(i, "Sln")
-					--	print(string.format("%s %s %s: %s:%d", d.what, d.namewhat, d.name, d.source, d.currentline))
-					--end
-					error("wrong argument type passed to constructor " .. kind .. ", parameter '" .. v .. "'")
-				end
-				val[v] = argi
-			end
-			setmetatable(val, self)
-			return val
+			return build_record(...)
 		end,
 	})
 	---@type RecordDeriveInfo
