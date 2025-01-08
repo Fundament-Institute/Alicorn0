@@ -326,11 +326,15 @@ end
 ---@field default_print fun(MapValue, ...)
 
 local map_type_mt = {
-	__call = function(self)
+	__call = function(self, ...)
 		local val = {
 			_map = {},
 		}
 		setmetatable(val, self)
+		local args = table.pack(...)
+		for i = 1, args.n, 2 do
+			val:set(args[i], args[i + 1])
+		end
 		return val
 	end,
 	__eq = function(left, right)
@@ -475,11 +479,15 @@ define_map = U.memoize(define_map)
 ---@field default_print fun(SetValue, ...)
 
 local set_type_mt = {
-	__call = function(self)
+	__call = function(self, ...)
 		local val = {
 			_set = {},
 		}
 		setmetatable(val, self)
+		local args = table.pack(...)
+		for i = 1, args.n do
+			val:put(args[i])
+		end
 		return val
 	end,
 	__eq = function(left, right)
