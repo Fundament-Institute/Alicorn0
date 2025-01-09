@@ -21,97 +21,118 @@ function M.notail(...)
 end
 
 --- name and info aren't used here because they're inspected by the stacktrace using the debug API if an error occurs
+---@generic T1, T2, T3, T4, T5, T6, T7, T8
 ---@param name string
 ---@param info any
----@param fn fun(...) : ...
+---@param fn fun(...) : T1?, T2?, T3?, T4?, T5?, T6?, T7?, T8?
 ---@param ... any
----@return ...
+---@return T1?, T2?, T3?, T4?, T5?, T6?, T7?, T8?
 function M.tag(name, info, fn, ...)
 	return M.notail(fn(...))
 end
 
---[[
---- len that starts counting from something other than 1 using binary search
----@param list any[]
-local function dynlen(list, start)
-	if list[start] == nil then
+---@param t table
+---@param userdata any?
+function M.lock_table(t, userdata)
+	local mt = getmetatable(t)
+	local rawlen = #t
+
+	-- We nest metatables here so that the lock metatable pretends to have all the elements of whatever it's locking.
+	setmetatable(
+		t,
+		setmetatable({
+			__newindex = function()
+				error("LOCKED TABLE!")
+			end,
+			__len = function(t)
+				return getmetatable(t).__length or rawlen
+			end,
+			__lock = true,
+			-- DEBUG: Comment this out for a significant perf boost if you aren't debugging anything
+			__locktrace = debug.traceback("lock created here " .. (userdata or "")),
+			__prev = mt,
+		}, { __index = mt })
+	)
+end
+
+---@param t table
+function M.unlock_table(t)
+	local mt = getmetatable(t)
+
+	if mt and mt.__lock then
+		setmetatable(t, mt.__prev)
+	else
+		error("Tried to unlock a table that was already unlocked! (is this a spurious error???)")
+	end
+end
+
+---@param t table
+---@return boolean
+function M.is_locked(t)
+	local mt = getmetatable(t)
+	return mt and (mt.__lock ~= nil)
+end
+
+---@param t table
+function M.check_locked(t)
+	local mt = getmetatable(t)
+	if mt and mt.__lock ~= nil then
+		error("Trying to shadow an already shadowed object! This should never happen!" .. (mt.__locktrace or ""))
+	end
+end
+
+---@param t table
+---@return integer
+function M.getshadowdepth(t)
+	local mt = getmetatable(t)
+	if mt == nil or mt.__depth == nil then
 		return 0
 	end
-	local front = start
-	local back = start + 1
-	while rawget(list, back) ~= nil do
-		back = back * 2
-	end
-	local mid = (front + back) / 2
-	while mid ~= front do
-		if rawget(list, mid) ~= nil then
-			front = mid + 1
-		else
-			back = mid
-		end
-
-		mid = (front + back) / 2
-	end
-	if rawget(list, front) == nil then
-		return front - start
-	end
-	return front - start + 1
-end]]
+	return mt.__depth
+end
 
 ---Insert an element into a list, respecting whether it was a shadowed array or not
 ---@generic T
 ---@param list T[]
 ---@param value T
 function M.append(list, value)
-	if rawget(list, "__lock") then
-		error("Modifying a shadowed object! This should never happen!")
-	end
-
 	-- If this is a shadowed array it'll trigger the __newindex overload that increments length
 	list[#list + 1] = value
-
-	--[[for i = 1, #list do
-		if list[i] == nil then
-			print("found hole:" .. M.dumptable(list))
-			os.exit(-1)
-		end
-	end]]
 end
 
 ---Removes an element from a list, respecting whether it was a shadowed array or not
 ---@generic T
----@param list T[] | { [integer]: T, __length : integer }
+---@param list T[] | { [integer]: T }
 ---@return T
 function M.pop(list)
-	if rawget(list, "__lock") then
-		error("Modifying a shadowed object! This should never happen!")
-	end
+	M.check_locked(list)
 
 	local value = list[#list]
 	rawset(list, #list, nil)
-	if rawget(list, "__length") then
-		rawset(list, "__length", rawget(list, "__length") - 1)
+	local mt = getmetatable(list)
+	if mt and mt.__length then
+		mt.__length = mt.__length - 1
 	end
 	return value
 end
 
--- This is a metatable that shadows an array, but only if you use shadowinsert
+-- This is a metatable that shadows an array
 local shadowarray_mt = {
 	__index = function(t, k)
 		-- Our length can go below the length of the array we're shadowing, so handle that case
 		if k > #t then
 			return nil
 		end
-		return rawget(t, "__shadow")[k]
+		return getmetatable(t).__shadow[k]
 	end,
 	__newindex = function(t, k, v)
 		if k == #t + 1 then
-			t.__length = t.__length + 1
+			getmetatable(t).__length = getmetatable(t).__length + 1
 		end
 		rawset(t, k, v)
 	end,
 	__len = function(t)
-		return t.__length
+		return getmetatable(t).__length
 	end,
 	__ipairs = function(tbl)
 		return function(t, i)
@@ -128,28 +149,37 @@ local shadowarray_mt = {
 -- We do not attempt to make pairs iterate over all the shadowed elements because this is extremely nontrivial.
 local shadowtable_mt = {
 	__index = function(t, k)
-		return rawget(t, "__shadow")[k]
+		return getmetatable(t).__shadow[k]
 	end,
 }
 
 ---@generic T : table
 ---@param t T
+---@param userdata any
 ---@return T
-function M.shadowtable(t)
-	rawset(t, "__lock", true)
-	return setmetatable({ __shadow = t, __depth = rawget(t, "__depth") or 1 }, shadowtable_mt)
+function M.shadowtable(t, userdata)
+	M.check_locked(t)
+	M.lock_table(t, userdata)
+	return setmetatable({}, { __shadow = t, __depth = M.getshadowdepth(t) + 1, __index = shadowtable_mt.__index })
 end
 
 ---@generic T
----@param t T[] | { [integer]: T, __length: integer }
----@return { [integer]: T, __length: integer }
-function M.shadowarray(t)
-	rawset(t, "__lock", true)
-	return setmetatable({ __shadow = t, __length = #t, __depth = rawget(t, "__depth") or 1 }, shadowarray_mt)
-end
+---@param t T[]
+---@param userdata any
+---@return { [integer]: T}
+function M.shadowarray(t, userdata)
+	M.check_locked(t)
+	M.lock_table(t, userdata)
 
-function M.getshadowdepth(t)
-	return rawget(t, "__depth") or 0
+	return setmetatable({}, {
+		__shadow = t,
+		__length = #t,
+		__depth = M.getshadowdepth(t) + 1,
+		__index = shadowarray_mt.__index,
+		__newindex = shadowarray_mt.__newindex,
+		__len = shadowarray_mt.__len,
+		__ipairs = shadowarray_mt.__ipairs,
+	})
 end
 
 ---Given a shadowed table, flattens its values on to the shadowed table below and returns it
@@ -157,14 +187,13 @@ end
 ---@param t T
 ---@return T
 function M.commit(t)
+	local mt = getmetatable(t)
+	local original = mt.__shadow
+	local length = mt.__length
 	setmetatable(t, nil)
-	local original = t.__shadow
-	local length = t.__length
-	t.__shadow = nil
-	t.__length = nil
 
 	if original then
-		rawset(original, "__lock", nil)
+		M.unlock_table(original)
 	end
 
 	for k, v in pairs(t) do
@@ -177,11 +206,13 @@ function M.commit(t)
 			rawset(original, i, nil)
 		end
 
-		if original.__length then
-			original.__length = length
+		local orig_mt = getmetatable(original)
+		if orig_mt and orig_mt.__length then
+			orig_mt.__length = length
 		end
 	end
 
+	M.invalidate(t)
 	return original
 end
 
@@ -190,16 +221,15 @@ end
 ---@param t T
 ---@return T
 function M.revert(t)
+	local mt = getmetatable(t)
+	local original = mt.__shadow
 	setmetatable(t, nil)
-	local original = t.__shadow
-	local length = t.__length
-	t.__shadow = nil
-	t.__length = nil
 
 	if original then
-		rawset(original, "__lock", nil)
+		M.unlock_table(original)
 	end
 
+	M.invalidate(t)
 	return original
 end
 
@@ -220,16 +250,59 @@ function M.dumptable(t, spaces)
 	spaces = spaces or 0
 	local s = tostring(t) .. ": "
 	for k, v in pairs(t) do
-		s = s .. "\n" .. string.rep(" ", spaces)
+		s = s .. "\n" .. string.rep(" ", spaces) .. "  " .. tostring(k) .. ": " .. tostring(v)
+	end
 
-		if k == "__shadow" then
-			s = s .. "  " .. tostring(k) .. ": " .. tostring(M.dumptable(v, spaces + 2))
-		else
-			s = s .. "  " .. tostring(k) .. ": " .. tostring(v)
-		end
+	local mt = getmetatable(t)
+	if mt and mt.__shadow then
+		s = s .. "\n" .. string.rep(" ", spaces) .. "  [shadows]: " .. tostring(M.dumptable(mt.__shadow, spaces + 2))
 	end
 
 	return s
+end
+
+function M.rawdump(t, spaces)
+	local mt = getmetatable(t)
+	setmetatable(t, nil)
+	spaces = spaces or 0
+	local s = tostring(t) .. ": " .. tostring(mt)
+	for k, v in pairs(t) do
+		s = s .. "\n" .. string.rep(" ", spaces)
+		s = s .. "  " .. tostring(k) .. ": " .. tostring(v)
+	end
+
+	setmetatable(t, mt)
+	return s
+end
+
+local invalidate_mt = {
+	__index = function()
+		error("INVALID TABLE")
+	end,
+	__newindex = function()
+		error("INVALID TABLE")
+	end,
+	__len = function()
+		error("INVALID TABLE")
+	end,
+	__ipairs = function()
+		error("INVALID TABLE")
+	end,
+	__pairs = function()
+		error("INVALID TABLE")
+	end,
+	__call = function()
+		error("INVALID TABLE")
+	end,
+}
+
+---@param t table
+function M.invalidate(t)
+	setmetatable(t, invalidate_mt)
+end
+
+function M.is_invalid(t)
+	return getmetatable(t) == invalidate_mt
 end
 
 local memo_mt = { __mode = "k" }

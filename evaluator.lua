@@ -3094,19 +3094,7 @@ local function IndexedCollection(indices)
 	for k, v in pairs(indices) do
 		res._index_store[k] = {}
 		res[k] = function(self, ...)
-			if rawget(self, "__lock") then
-				error(
-					"Modifying a shadowed object! This should never happen!\n"
-						.. "@@@@@@@@@@@@@@@\n"
-						.. "@@@ STACK 1 @@@\n"
-						.. "@@@@@@@@@@@@@@@\n"
-						.. rawget(self, "__locktrace")
-						.. "\n@@@@@@@@@@@@@@@\n"
-						.. "@@@ STACK 2 @@@\n"
-						.. "@@@@@@@@@@@@@@@\n"
-						.. "modify attempted here"
-				)
-			end
+			U.check_locked(self)
 			local args = { ... }
 			if #args ~= #v then
 				error("Must have one argument per key extractor")
@@ -3129,6 +3117,8 @@ local function IndexedCollection(indices)
 		end
 	end
 
+	local UNIQUE_COUNTER = 0
+
 	---This function is made easier because we know we're ALWAYS inserting a new item, so we ALWAYS shadow any tables we
 	---encounter that aren't shadowed yet (and also aren't new insertions on this layer).
 	---@generic T
@@ -3138,16 +3128,20 @@ local function IndexedCollection(indices)
 	---@param extractors any[]
 	---@param level integer
 	---@return T
-	local function insert_tree(obj, store, i, extractors, level)
+	local function insert_tree_node(obj, store, i, extractors, level)
+		UNIQUE_COUNTER = UNIQUE_COUNTER + 1
 		if store == nil then
 			store = {}
-			level = -1
+			--level = -1
 		end
+
+		U.check_locked(store)
+
 		local curlevel = U.getshadowdepth(store)
 		if i > #extractors then
 			if level > 0 then
 				for j = curlevel + 1, level do
-					store = U.shadowarray(store)
+					store = U.shadowarray(store, UNIQUE_COUNTER)
 				end
 				assert(U.getshadowdepth(store) == level, "Improper shadowing happened!")
 			end
@@ -3159,7 +3153,7 @@ local function IndexedCollection(indices)
 		if level > 0 then
 			-- shadow the node enough times so that the levels match
 			for j = curlevel + 1, level do
-				store = U.shadowtable(store)
+				store = U.shadowtable(store, UNIQUE_COUNTER)
 			end
 			assert(U.getshadowdepth(store) == level, "Improper shadowing happened!")
 		end
@@ -3169,15 +3163,15 @@ local function IndexedCollection(indices)
 		if store[key] then
 			oldlevel = U.getshadowdepth(store[key])
 		end
-		store[key] = insert_tree(obj, store[key], i + 1, extractors, level)
+		store[key] = insert_tree_node(obj, store[key], i + 1, extractors, level)
 
 		-- Any time we shadow something more than once, we have some "skipped" levels in-between that must be assigned
 		local parent = store
 		local child = store[key]
 		local newlevel = U.getshadowdepth(child)
 		for j = oldlevel + 1, newlevel - 1 do
-			parent = rawget(parent, "__shadow")
-			child = rawget(child, "__shadow")
+			parent = getmetatable(parent).__shadow
+			child = getmetatable(child).__shadow
 			rawset(parent, key, child)
 		end
 
@@ -3185,13 +3179,11 @@ local function IndexedCollection(indices)
 	end
 
 	function res:add(obj)
-		if rawget(self, "__lock") then
-			error("Modifying a shadowed object! This should never happen!")
-		end
+		U.check_locked(self)
 		U.append(self._collection, obj)
 		for name, extractors in pairs(indices) do
 			self._index_store[name] =
-				insert_tree(obj, self._index_store[name], 1, extractors, U.getshadowdepth(self._index_store))
+				insert_tree_node(obj, self._index_store[name], 1, extractors, U.getshadowdepth(self._index_store))
 		end
 	end
 
@@ -3223,67 +3215,75 @@ local function IndexedCollection(indices)
 		local n = U.shallow_copy(self) -- Copy all the functions into a new table
 		n._collection = U.shadowarray(self._collection) -- Shadow collection
 		n._index_store = U.shadowtable(self._index_store)
-		rawset(self, "__lock", true) --  This has to be down here or we'll accidentally copy it
-		rawset(self, "__locktrace", metalanguage.stack_trace("shadow occurred here"))
-		rawset(n, "__shadow", self)
+		U.lock_table(self) --  This has to be down here or we'll accidentally copy it
+		if getmetatable(n) == nil then
+			error("no metatable expected")
+		end
+
+		setmetatable(n, { __shadow = self })
 		return n
 	end
 
-	---To commit all the tree nodes, we only copy keys that do not exist at all in the shadowed table
-	---@param n table
-	local function commit_tree_node(n)
-		setmetatable(n, nil)
-		assert(type(n) == "table")
-		local base = rawget(n, "__shadow")
-		if base then
-			for k, v in pairs(n) do
-				-- skip internal keys
-				if type(k) == "string" and string.sub(k, 1, 2) == "__" then
-					goto continue
-				end
-				if base[k] == nil then
-					rawset(base, k, v)
-				end
-				-- The base of the tree is actually an array, so we don't recurse into it
-				if type(k) ~= "integer" then
-					commit_tree_node(v)
-				end
-				::continue::
-			end
-			rawset(n, "__shadow", nil)
-			rawset(base, "__lock", nil)
+	---@param node table
+	---@param depth integer
+	---@return table
+	local function commit_tree_node(node, depth)
+		if U.getshadowdepth(node) < depth then
+			return node
 		end
+		local mt = getmetatable(node)
+		local base = mt.__shadow
+		local isleaf = mt.__length ~= nil
+		setmetatable(node, nil)
+
+		if base then
+			for k, v in pairs(node) do
+				-- If this is an array, we only copy keys that do not exist at all in the shadowed table
+				if (not isleaf) or base[k] == nil then
+					rawset(base, k, commit_tree_node(v, depth))
+				end
+			end
+			U.unlock_table(base)
+			U.invalidate(node)
+			return base
+		end
+		return node
 	end
 
-	local function revert_tree_node(n)
-		setmetatable(n, nil)
-		assert(type(n) == "table")
-		local base = rawget(n, "__shadow")
+	local function revert_tree_node(node, depth)
+		if U.getshadowdepth(node) < depth then
+			return node
+		end
+		local mt = getmetatable(node)
+		local base = mt.__shadow
+		setmetatable(node, nil)
 		if base then
-			rawset(n, "__shadow", nil)
-			rawset(base, "__lock", nil)
-			rawset(base, "__locktrace", nil)
+			for k, v in pairs(node) do
+				revert_tree_node(v, depth)
+			end
+			U.unlock_table(base)
+			U.invalidate(node)
 		end
 	end
 
 	function res:commit()
 		U.commit(self._collection)
 
-		commit_tree_node(self._index_store)
-		local orig = rawget(self, "__shadow")
-		rawset(orig, "__lock", nil)
-		rawset(orig, "__locktrace", nil)
-		rawset(self, "__shadow", nil)
+		commit_tree_node(self._index_store, U.getshadowdepth(self._index_store))
+		local orig = getmetatable(self).__shadow
+		U.unlock_table(orig)
+		setmetatable(self, nil)
+		U.invalidate(self)
 	end
 
 	function res:revert()
 		U.revert(self._collection)
 
-		revert_tree_node(self._index_store)
-		local orig = rawget(self, "__shadow")
-		rawset(orig, "__lock", nil)
-		rawset(orig, "__locktrace", nil)
-		rawset(self, "__shadow", nil)
+		revert_tree_node(self._index_store, U.getshadowdepth(self._index_store))
+		local orig = getmetatable(self).__shadow
+		U.unlock_table(orig)
+		setmetatable(self, nil)
+		U.invalidate(self)
 	end
 
 	return res
@@ -3300,10 +3300,12 @@ end
 
 function TraitRegistry:commit()
 	U.commit(self.traits)
+	U.invalidate(self)
 end
 
 function TraitRegistry:revert()
 	U.revert(self.traits)
+	U.invalidate(self)
 end
 
 trait_registry_mt = { __index = TraitRegistry }
@@ -3426,12 +3428,14 @@ function Reachability:commit()
 	self.constrain_edges:commit()
 	self.leftcall_edges:commit()
 	self.rightcall_edges:commit()
+	U.invalidate(self)
 end
 
 function Reachability:revert()
 	self.constrain_edges:revert()
 	self.leftcall_edges:revert()
 	self.rightcall_edges:revert()
+	U.invalidate(self)
 end
 
 ---@enum TypeCheckerTag
@@ -3444,7 +3448,43 @@ local TypeCheckerTag = {
 
 ---@alias ReachabilityQueue edgenotif[]
 
+local function verify_tree(store, k)
+	if type(store) == "table" then
+		if U.is_invalid(store) then
+			print("INVALID KEY: " .. tostring(k))
+			os.exit(-1, true)
+			return false
+		end
+
+		if U.is_locked(store) then
+			print("LOCKED KEY: " .. tostring(k))
+			os.exit(-1, true)
+			return false
+		end
+
+		if getmetatable(store) and getmetatable(store).__length then
+			if store[1] == nil then
+				print("ARRAY DOESNT START AT 1: " .. tostring(k))
+				os.exit(-1, true)
+			end
+		end
+		for k, v in pairs(store) do
+			if not verify_tree(v, k) then
+				return false
+			end
+		end
+	end
+
+	return true
+end
+
+function TypeCheckerState:DEBUG_VERIFY_TREE()
+	return verify_tree(self.graph.constrain_edges._index_store)
+end
+
 function TypeCheckerState:DEBUG_VERIFY()
+	self:DEBUG_VERIFY_TREE()
+
 	-- all nodes must be unique (no two nodes can have the same value, using the basic equality comparison on that value via ==)
 	local unique = {}
 	local transitive = {}
@@ -4120,7 +4160,7 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 	self:queue_constrain(val_context, val, rel, use_context, use, cause)
 
 	while #self.pending > 0 do
-		--assert(self:DEBUG_VERIFY(), "VERIFICATION FAILED")
+		assert(self:DEBUG_VERIFY(), "VERIFICATION FAILED")
 		local item = U.pop(self.pending)
 
 		if item:is_Constrain() then
@@ -4320,19 +4360,18 @@ function TypeCheckerState:shadow()
 		valcheck = U.shadowtable(self.valcheck),
 		usecheck = U.shadowtable(self.usecheck),
 		trait_registry = self.trait_registry:shadow(),
-		__shadow = self,
-	}, typechecker_state_mt)
+	}, { __index = TypeCheckerState, __shadow = self })
 end
 
 function TypeCheckerState:commit()
 	U.commit(self.pending)
 	self.graph:commit()
-	self.__shadow.block_level = self.block_level
+	getmetatable(self).__shadow.block_level = self.block_level
 	U.commit(self.values)
 	U.commit(self.valcheck)
 	U.commit(self.usecheck)
 	self.trait_registry:commit()
-	rawset(self, "__shadow", nil)
+	U.invalidate(self)
 end
 
 function TypeCheckerState:revert()
@@ -4342,7 +4381,7 @@ function TypeCheckerState:revert()
 	U.revert(self.valcheck)
 	U.revert(self.usecheck)
 	self.trait_registry:revert()
-	rawset(self, "__shadow", nil)
+	U.invalidate(self)
 end
 
 function TypeCheckerState:enter_block()
@@ -4401,6 +4440,7 @@ function TypeCheckerState:speculate(fn)
 			-- flattens all our changes back on to self
 			typechecker_state:commit()
 		else
+			print("REVERTING DUE TO: ", ...)
 			typechecker_state:revert()
 		end
 		typechecker_state = self
