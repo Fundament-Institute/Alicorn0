@@ -53,6 +53,8 @@ local profile_flame = false
 local profile_file = ""
 -- "match", "infer" are currently implemented
 local profile_what = ""
+local test_single = false
+local test_name = ""
 local print_usage = false
 local opttab = {
 	["S"] = function(_)
@@ -90,8 +92,12 @@ local opttab = {
 		profile_file = subargs[1]
 		profile_what = subargs[2] or "match"
 	end,
-	["T:"] = function(_)
-		error("NYI")
+	["T:"] = function(_, arg)
+		if not arg then
+			error("-T requires a test argument")
+		end
+		test_single = true
+		test_name = arg
 	end,
 	["?"] = function(c)
 		print_usage = true
@@ -331,6 +337,63 @@ end
 ---@cast expr inferrable
 ---@cast env Environment
 
+---@param file string
+---@param completion string
+---@param shadowed ShadowEnvironment
+---@param env Environment
+---@return boolean
+---@return string
+local function perform_test(file, completion, shadowed, env)
+	local log = ""
+
+	local printrepl = function(...)
+		local args = table.pack(...)
+
+		for i = 1, #args do
+			args[i] = tostring(args[i])
+		end
+
+		log = log .. table.concat(args, " ") .. "\n"
+	end
+
+	local ok, test_expr, test_env = load_alc_file(file, env, printrepl)
+	if not ok then
+		if completion == test_expr then
+			io.write(U.outputGreen("success: " .. file .. " stopped at " .. test_expr), "\n")
+			return true, log
+		else
+			io.write(
+				"\n\n",
+				U.outputRed("failure: " .. file .. " stopped at " .. test_expr .. " (expected " .. completion .. ")"),
+				"\n",
+				log,
+				"\n\n"
+			)
+			return false, log
+		end
+	else
+		---@cast test_expr inferrable
+		---@cast test_env Environment
+		local _, test_expr, _ = test_env:exit_block(test_expr, shadowed)
+
+		local ok = execute_alc_file(test_expr, printrepl)
+
+		if completion == ok then
+			io.write(U.outputGreen("success: " .. file .. " stopped at " .. ok), "\n")
+			return true, log
+		else
+			io.write(
+				"\n\n",
+				U.outputRed("failure: " .. file .. " stopped at " .. ok .. " (expected " .. completion .. ")"),
+				"\n",
+				log,
+				"\n\n"
+			)
+			return false, log
+		end
+	end
+end
+
 if test_harness then
 	local test_list_file, err = io.open("testlist.json")
 	if not test_list_file then
@@ -350,53 +413,12 @@ if test_harness then
 	local failures = {}
 
 	for file, completion in pairs(test_list) do
-		total = total + 1
-		logs[file] = ""
-
-		local printrepl = function(...)
-			local args = table.pack(...)
-
-			for i = 1, #args do
-				args[i] = tostring(args[i])
-			end
-
-			logs[file] = logs[file] .. table.concat(args, " ") .. "\n"
-		end
-
-		local ok, test_expr, test_env = load_alc_file(file, env, printrepl)
-		if not ok then
-			if completion == test_expr then
-				io.write(U.outputGreen("success: " .. file .. " stopped at " .. test_expr), "\n")
-			else
+		if (not test_single) or (test_single and file == test_name) then
+			total = total + 1
+			local ok, log = perform_test(file, completion, shadowed, env)
+			logs[file] = log
+			if not ok then
 				U.append(failures, file)
-				io.write(
-					"\n\n",
-					U.outputRed(
-						"failure: " .. file .. " stopped at " .. test_expr .. " (expected " .. completion .. ")"
-					),
-					"\n",
-					logs[file],
-					"\n\n"
-				)
-			end
-		else
-			---@cast test_expr inferrable
-			---@cast test_env Environment
-			local _, test_expr, _ = test_env:exit_block(test_expr, shadowed)
-
-			local ok = execute_alc_file(test_expr, printrepl)
-
-			if completion == ok then
-				io.write(U.outputGreen("success: " .. file .. " stopped at " .. ok), "\n")
-			else
-				U.append(failures, file)
-				io.write(
-					"\n\n",
-					U.outputRed("failure: " .. file .. " stopped at " .. ok .. " (expected " .. completion .. ")"),
-					"\n",
-					logs[file],
-					"\n\n"
-				)
 			end
 		end
 	end
