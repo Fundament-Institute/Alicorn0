@@ -54,22 +54,6 @@ local profile_file = ""
 -- "match", "infer" are currently implemented
 local profile_what = ""
 local print_usage = false
----@param s string
----@return string[]
-local function split_commas(s)
-	local subs = {}
-	-- "[^,]*" doesn't work due to a bug up until lua 5.3.3 that caused an
-	-- extra empty match at the end of the input if the pattern accepts an
-	-- empty match. luajit inherits this bug.
-	-- so instead we append a comma and use it as a terminator, ensuring
-	-- the pattern doesn't accept an empty match, but still allowing us to
-	-- have an empty capture given consecutive commas.
-	s = s .. ","
-	for sub in s:gmatch("(.-),") do
-		table.insert(subs, sub)
-	end
-	return subs
-end
 local opttab = {
 	["S"] = function(_)
 		print_src = true
@@ -92,7 +76,7 @@ local opttab = {
 		end
 		profile_run = true
 		profile_flame = false
-		local subargs = split_commas(arg)
+		local subargs = U.split_commas(arg)
 		profile_file = subargs[1]
 		profile_what = subargs[2] or "match"
 	end,
@@ -102,7 +86,7 @@ local opttab = {
 		end
 		profile_run = true
 		profile_flame = true
-		local subargs = split_commas(arg)
+		local subargs = U.split_commas(arg)
 		profile_file = subargs[1]
 		profile_what = subargs[2] or "match"
 	end,
