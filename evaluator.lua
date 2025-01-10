@@ -1243,8 +1243,9 @@ function check_concrete(lctx, val, rctx, use)
 
 	local comparer = (concrete_comparers[val.kind] or {})[use.kind]
 	if not comparer then
+		--print("kind:", val.kind, " use:", use.kind)
 		return false,
-			"no valid concerete comparer between value " .. val.kind .. " and usage " .. use.kind .. ": " .. tostring(
+			"no valid concrete comparer between value " .. val.kind .. " and usage " .. use.kind .. ": " .. tostring(
 				val
 			) .. " compared against " .. tostring(use)
 	end
@@ -3117,73 +3118,12 @@ local function IndexedCollection(indices)
 		end
 	end
 
-	local UNIQUE_COUNTER = 0
-
-	---This function is made easier because we know we're ALWAYS inserting a new item, so we ALWAYS shadow any tables we
-	---encounter that aren't shadowed yet (and also aren't new insertions on this layer).
-	---@generic T
-	---@param obj any
-	---@param store T
-	---@param i integer
-	---@param extractors any[]
-	---@param level integer
-	---@return T
-	local function insert_tree_node(obj, store, i, extractors, level)
-		UNIQUE_COUNTER = UNIQUE_COUNTER + 1
-		if store == nil then
-			store = {}
-			--level = -1
-		end
-
-		U.check_locked(store)
-
-		local curlevel = U.getshadowdepth(store)
-		if i > #extractors then
-			if level > 0 then
-				for j = curlevel + 1, level do
-					store = U.shadowarray(store, UNIQUE_COUNTER)
-				end
-				assert(U.getshadowdepth(store) == level, "Improper shadowing happened!")
-			end
-			U.append(store, obj)
-			return store
-		end
-		local kx = extractors[i]
-		local key = kx(obj)
-		if level > 0 then
-			-- shadow the node enough times so that the levels match
-			for j = curlevel + 1, level do
-				store = U.shadowtable(store, UNIQUE_COUNTER)
-			end
-			assert(U.getshadowdepth(store) == level, "Improper shadowing happened!")
-		end
-		-- Note: it might be *slightly* more efficient to only reassign if the returned table is different, but the commit
-		-- only copies completely new keys anyway so it doesn't really matter.
-		local oldlevel = 0
-		if store[key] then
-			oldlevel = U.getshadowdepth(store[key])
-		end
-		store[key] = insert_tree_node(obj, store[key], i + 1, extractors, level)
-
-		-- Any time we shadow something more than once, we have some "skipped" levels in-between that must be assigned
-		local parent = store
-		local child = store[key]
-		local newlevel = U.getshadowdepth(child)
-		for j = oldlevel + 1, newlevel - 1 do
-			parent = getmetatable(parent).__shadow
-			child = getmetatable(child).__shadow
-			rawset(parent, key, child)
-		end
-
-		return store
-	end
-
 	function res:add(obj)
 		U.check_locked(self)
 		U.append(self._collection, obj)
 		for name, extractors in pairs(indices) do
 			self._index_store[name] =
-				insert_tree_node(obj, self._index_store[name], 1, extractors, U.getshadowdepth(self._index_store))
+				U.insert_tree_node(obj, self._index_store[name], 1, extractors, U.getshadowdepth(self._index_store))
 		end
 	end
 
@@ -3216,60 +3156,15 @@ local function IndexedCollection(indices)
 		n._collection = U.shadowarray(self._collection) -- Shadow collection
 		n._index_store = U.shadowtable(self._index_store)
 		U.lock_table(self) --  This has to be down here or we'll accidentally copy it
-		if getmetatable(n) == nil then
-			error("no metatable expected")
-		end
 
 		setmetatable(n, { __shadow = self })
 		return n
 	end
 
-	---@param node table
-	---@param depth integer
-	---@return table
-	local function commit_tree_node(node, depth)
-		if U.getshadowdepth(node) < depth then
-			return node
-		end
-		local mt = getmetatable(node)
-		local base = mt.__shadow
-		local isleaf = mt.__length ~= nil
-		setmetatable(node, nil)
-
-		if base then
-			for k, v in pairs(node) do
-				-- If this is an array, we only copy keys that do not exist at all in the shadowed table
-				if (not isleaf) or base[k] == nil then
-					rawset(base, k, commit_tree_node(v, depth))
-				end
-			end
-			U.unlock_table(base)
-			U.invalidate(node)
-			return base
-		end
-		return node
-	end
-
-	local function revert_tree_node(node, depth)
-		if U.getshadowdepth(node) < depth then
-			return node
-		end
-		local mt = getmetatable(node)
-		local base = mt.__shadow
-		setmetatable(node, nil)
-		if base then
-			for k, v in pairs(node) do
-				revert_tree_node(v, depth)
-			end
-			U.unlock_table(base)
-			U.invalidate(node)
-		end
-	end
-
 	function res:commit()
 		U.commit(self._collection)
 
-		commit_tree_node(self._index_store, U.getshadowdepth(self._index_store))
+		self._index_store = U.commit_tree_node(self._index_store, U.getshadowdepth(self._index_store))
 		local orig = getmetatable(self).__shadow
 		U.unlock_table(orig)
 		setmetatable(self, nil)
@@ -3279,7 +3174,7 @@ local function IndexedCollection(indices)
 	function res:revert()
 		U.revert(self._collection)
 
-		revert_tree_node(self._index_store, U.getshadowdepth(self._index_store))
+		self._index_store = U.revert_tree_node(self._index_store, U.getshadowdepth(self._index_store))
 		local orig = getmetatable(self).__shadow
 		U.unlock_table(orig)
 		setmetatable(self, nil)
@@ -4160,7 +4055,7 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 	self:queue_constrain(val_context, val, rel, use_context, use, cause)
 
 	while #self.pending > 0 do
-		assert(self:DEBUG_VERIFY(), "VERIFICATION FAILED")
+		--assert(self:DEBUG_VERIFY(), "VERIFICATION FAILED")
 		local item = U.pop(self.pending)
 
 		if item:is_Constrain() then
@@ -4440,7 +4335,7 @@ function TypeCheckerState:speculate(fn)
 			-- flattens all our changes back on to self
 			typechecker_state:commit()
 		else
-			print("REVERTING DUE TO: ", ...)
+			--print("REVERTING DUE TO: ", ...)
 			typechecker_state:revert()
 		end
 		typechecker_state = self

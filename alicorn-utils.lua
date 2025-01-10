@@ -35,24 +35,26 @@ end
 ---@param userdata any?
 function M.lock_table(t, userdata)
 	local mt = getmetatable(t)
-	local rawlen = #t
 
-	-- We nest metatables here so that the lock metatable pretends to have all the elements of whatever it's locking.
-	setmetatable(
-		t,
-		setmetatable({
-			__newindex = function()
-				error("LOCKED TABLE!")
-			end,
-			__len = function(t)
-				return getmetatable(t).__length or rawlen
-			end,
-			__lock = true,
-			-- DEBUG: Comment this out for a significant perf boost if you aren't debugging anything
-			__locktrace = debug.traceback("lock created here " .. (userdata or "")),
-			__prev = mt,
-		}, { __index = mt })
-	)
+	if mt == nil then
+		mt = {}
+		mt.__newindex = function(n, k, v)
+			if mt.__lock then
+				error("LOCKED TABLE! " .. (mt.__locktrace or ""))
+			end
+			rawset(n, k, v)
+		end
+		setmetatable(t, mt)
+	end
+
+	mt = getmetatable(t)
+	if mt.__lock then
+		error("Tried to lock a table that was already locked! " .. (mt.__locktrace or ""))
+	end
+
+	mt.__lock = true
+	-- DEBUG: comment this out if you don't need it to make things go faster
+	mt.__locktrace = debug.traceback("lock created here " .. (userdata or ""))
 end
 
 ---@param t table
@@ -60,9 +62,10 @@ function M.unlock_table(t)
 	local mt = getmetatable(t)
 
 	if mt and mt.__lock then
-		setmetatable(t, mt.__prev)
+		mt.__lock = false
+		mt.__locktrace = nil
 	else
-		error("Tried to unlock a table that was already unlocked! (is this a spurious error???)")
+		error("Tried to unlock a table that was already unlocked!")
 	end
 end
 
@@ -70,14 +73,19 @@ end
 ---@return boolean
 function M.is_locked(t)
 	local mt = getmetatable(t)
-	return mt and (mt.__lock ~= nil)
+	return mt and mt.__lock
 end
 
 ---@param t table
-function M.check_locked(t)
+---@param shadow boolean?
+function M.check_locked(t, shadow)
 	local mt = getmetatable(t)
-	if mt and mt.__lock ~= nil then
-		error("Trying to shadow an already shadowed object! This should never happen!" .. (mt.__locktrace or ""))
+	if mt and mt.__lock then
+		if shadow then
+			error("Trying to shadow an already shadowed object! This should never happen!" .. (mt.__locktrace or ""))
+		else
+			error("Trying to modify a shadowed object! This should never happen!" .. (mt.__locktrace or ""))
+		end
 	end
 end
 
@@ -117,24 +125,68 @@ function M.pop(list)
 end
 
 -- This is a metatable that shadows an array
-local shadowarray_mt = {
-	__index = function(t, k)
+local shadowarray_mt = {}
+
+-- This is a metatable that shadows a dictionary, pretending to have all of it's elements without actually affecting it
+-- We do not attempt to make pairs iterate over all the shadowed elements because this is extremely nontrivial.
+---@generic T : table
+---@param obj T
+---@param userdata any
+---@return T
+function M.shadowtable(obj, userdata)
+	M.check_locked(obj, true)
+	M.lock_table(obj, userdata)
+	local mt = {
+		__shadow = obj,
+		__depth = M.getshadowdepth(obj) + 1,
+	}
+
+	mt.__index = function(t, k)
+		return mt.__shadow[k]
+	end
+	mt.__newindex = function(t, k, v)
+		if mt.__lock then
+			error("LOCKED TABLE! " .. (mt.__locktrace or ""))
+		end
+		rawset(t, k, v)
+	end
+
+	return setmetatable({}, mt)
+end
+
+---@generic T
+---@param obj T[]
+---@param userdata any
+---@return { [integer]: T}
+function M.shadowarray(obj, userdata)
+	M.check_locked(obj, true)
+	M.lock_table(obj, userdata)
+
+	local mt = {
+		__shadow = obj,
+		__length = #obj,
+		__depth = M.getshadowdepth(obj) + 1,
+	}
+	mt.__index = function(t, k)
 		-- Our length can go below the length of the array we're shadowing, so handle that case
 		if k > #t then
 			return nil
 		end
-		return getmetatable(t).__shadow[k]
-	end,
-	__newindex = function(t, k, v)
+		return mt.__shadow[k]
+	end
+	mt.__newindex = function(t, k, v)
+		if mt.__lock then
+			error("LOCKED TABLE! " .. (mt.__locktrace or ""))
+		end
 		if k == #t + 1 then
-			getmetatable(t).__length = getmetatable(t).__length + 1
+			mt.__length = mt.__length + 1
 		end
 		rawset(t, k, v)
-	end,
-	__len = function(t)
-		return getmetatable(t).__length
-	end,
-	__ipairs = function(tbl)
+	end
+	mt.__len = function(t)
+		return mt.__length
+	end
+	mt.__ipairs = function(tbl)
 		return function(t, i)
 			i = i + 1
 			local v = t[i]
@@ -142,44 +194,9 @@ local shadowarray_mt = {
 				return i, v
 			end
 		end, tbl, 0
-	end,
-}
+	end
 
--- This is a metatable that shadows a dictionary, pretending to have all of it's elements without actually affecting it
--- We do not attempt to make pairs iterate over all the shadowed elements because this is extremely nontrivial.
-local shadowtable_mt = {
-	__index = function(t, k)
-		return getmetatable(t).__shadow[k]
-	end,
-}
-
----@generic T : table
----@param t T
----@param userdata any
----@return T
-function M.shadowtable(t, userdata)
-	M.check_locked(t)
-	M.lock_table(t, userdata)
-	return setmetatable({}, { __shadow = t, __depth = M.getshadowdepth(t) + 1, __index = shadowtable_mt.__index })
-end
-
----@generic T
----@param t T[]
----@param userdata any
----@return { [integer]: T}
-function M.shadowarray(t, userdata)
-	M.check_locked(t)
-	M.lock_table(t, userdata)
-
-	return setmetatable({}, {
-		__shadow = t,
-		__length = #t,
-		__depth = M.getshadowdepth(t) + 1,
-		__index = shadowarray_mt.__index,
-		__newindex = shadowarray_mt.__newindex,
-		__len = shadowarray_mt.__len,
-		__ipairs = shadowarray_mt.__ipairs,
-	})
+	return setmetatable({}, mt)
 end
 
 ---Given a shadowed table, flattens its values on to the shadowed table below and returns it
@@ -251,6 +268,28 @@ function M.dumptable(t, spaces)
 	local s = tostring(t) .. ": "
 	for k, v in pairs(t) do
 		s = s .. "\n" .. string.rep(" ", spaces) .. "  " .. tostring(k) .. ": " .. tostring(v)
+	end
+
+	local mt = getmetatable(t)
+	if mt and mt.__shadow then
+		s = s .. "\n" .. string.rep(" ", spaces) .. "  [shadows]: " .. tostring(M.dumptable(mt.__shadow, spaces + 2))
+	end
+
+	return s
+end
+
+---@param t table
+---@return string
+function M.dumptree(t, spaces)
+	spaces = spaces or 0
+	local s = tostring(t) .. ": "
+	for k, v in pairs(t) do
+		s = s .. "\n" .. string.rep(" ", spaces) .. "  " .. tostring(k) .. ": "
+		if type(v) == "table" then
+			s = s .. M.dumptable(v, spaces + 2)
+		else
+			s = s .. tostring(v)
+		end
 	end
 
 	local mt = getmetatable(t)
@@ -444,6 +483,113 @@ function M.levenshtein(str1, str2)
 
 	-- return the last value - this is the Levenshtein distance
 	return matrix[len1][len2]
+end
+
+---This function is made easier because we know we're ALWAYS inserting a new item, so we ALWAYS shadow any tables we
+---encounter that aren't shadowed yet (and also aren't new insertions on this layer).
+---@generic T, U
+---@param obj U
+---@param store { [integer]: { [integer]: T } }?
+---@param i integer
+---@param extractors (fun(obj: U):integer)[]
+---@param level integer
+---@return { [integer]: T }
+function M.insert_tree_node(obj, store, i, extractors, level)
+	if store == nil then
+		store = {}
+		--level = -1
+	end
+
+	M.check_locked(store)
+
+	local curlevel = M.getshadowdepth(store)
+	if i > #extractors then
+		if level > 0 then
+			for j = curlevel + 1, level do
+				store = M.shadowarray(store)
+			end
+			assert(M.getshadowdepth(store) == level, "Improper shadowing happened!")
+		end
+		M.append(store, obj)
+		return store
+	end
+	local kx = extractors[i]
+	local key = kx(obj)
+	if level > 0 then
+		-- shadow the node enough times so that the levels match
+		for j = curlevel + 1, level do
+			store = M.shadowtable(store)
+		end
+		assert(M.getshadowdepth(store) == level, "Improper shadowing happened!")
+	end
+	-- Note: it might be *slightly* more efficient to only reassign if the returned table is different, but the commit
+	-- only copies completely new keys anyway so it doesn't really matter.
+	local oldlevel = 0
+	if store[key] then
+		oldlevel = M.getshadowdepth(store[key])
+	end
+	store[key] = M.insert_tree_node(obj, store[key], i + 1, extractors, level)
+
+	-- Any time we shadow something more than once, we have some "skipped" levels in-between that must be assigned
+	--[[local parent = store
+	local child = store[key]
+	local newlevel = M.getshadowdepth(child)
+	for j = oldlevel + 1, newlevel - 1 do
+		parent = getmetatable(parent).__shadow
+		child = getmetatable(child).__shadow
+		rawset(parent, key, child)
+	end
+]]
+	return store
+end
+
+---@generic T
+---@param node { [integer]: T }
+---@param depth integer
+---@return { [integer]: T }
+function M.commit_tree_node(node, depth)
+	if M.getshadowdepth(node) < depth then
+		return node
+	end
+	local mt = getmetatable(node)
+	local base = mt.__shadow
+	local isleaf = mt.__length ~= nil
+	setmetatable(node, nil)
+	M.unlock_table(base)
+
+	if base then
+		for k, v in pairs(node) do
+			-- If this is an array, we only copy keys that do not exist at all in the shadowed table
+			if (not isleaf) or base[k] == nil then
+				rawset(base, k, M.commit_tree_node(v, depth))
+			end
+		end
+		M.invalidate(node)
+		return base
+	end
+	return node
+end
+
+---@generic T
+---@param node { [integer]: { [integer]: T } }
+---@param depth integer
+---@return { [integer]: T }
+function M.revert_tree_node(node, depth)
+	if M.getshadowdepth(node) < depth then
+		return node
+	end
+	local mt = getmetatable(node)
+	local base = mt.__shadow
+	setmetatable(node, nil)
+	if base then
+		for k, v in pairs(node) do
+			node[k] = M.revert_tree_node(v, depth)
+		end
+		M.unlock_table(base)
+		M.invalidate(node)
+		return base
+	end
+	return node
 end
 
 return M
