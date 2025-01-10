@@ -25,8 +25,6 @@ local getopt = require "getopt"
 local json = require "libs.dkjson"
 local U = require "alicorn-utils"
 
-json.use_lpeg()
-
 local interpreter_argv, argv
 if arg then -- puc-rio lua, luajit
 	local n = -1
@@ -40,11 +38,11 @@ elseif process.argv then -- luvit
 	interpreter_argv = table.move(process.argv, 0, file_n - 1, 0, {})
 	argv = table.move(process.argv, file_n, #process.argv, 0, {})
 else
-	io.write("Missing or unknown arg table! Using stub\n")
+	io.stderr:write("Missing or unknown arg table! Using stub\n")
 	interpreter_argv = { [0] = "lua" }
 	argv = { [0] = "runtest.lua" }
 end
-local test_harness = false
+local test_harness = true
 local print_src = false
 local print_ast = false
 local print_inferrable = false
@@ -55,27 +53,10 @@ local profile_flame = false
 local profile_file = ""
 -- "match", "infer" are currently implemented
 local profile_what = ""
+local test_single = false
+local test_name = ""
 local print_usage = false
----@param s string
----@return string[]
-local function split_commas(s)
-	local subs = {}
-	-- "[^,]*" doesn't work due to a bug up until lua 5.3.3 that caused an
-	-- extra empty match at the end of the input if the pattern accepts an
-	-- empty match. luajit inherits this bug.
-	-- so instead we append a comma and use it as a terminator, ensuring
-	-- the pattern doesn't accept an empty match, but still allowing us to
-	-- have an empty capture given consecutive commas.
-	s = s .. ","
-	for sub in s:gmatch("(.-),") do
-		table.insert(subs, sub)
-	end
-	return subs
-end
 local opttab = {
-	["T"] = function(_)
-		test_harness = true
-	end,
 	["S"] = function(_)
 		print_src = true
 	end,
@@ -97,7 +78,7 @@ local opttab = {
 		end
 		profile_run = true
 		profile_flame = false
-		local subargs = split_commas(arg)
+		local subargs = U.split_commas(arg)
 		profile_file = subargs[1]
 		profile_what = subargs[2] or "match"
 	end,
@@ -107,9 +88,16 @@ local opttab = {
 		end
 		profile_run = true
 		profile_flame = true
-		local subargs = split_commas(arg)
+		local subargs = U.split_commas(arg)
 		profile_file = subargs[1]
 		profile_what = subargs[2] or "match"
+	end,
+	["T:"] = function(_, arg)
+		if not arg then
+			error("-T requires a test argument")
+		end
+		test_single = true
+		test_name = arg
 	end,
 	["?"] = function(c)
 		print_usage = true
@@ -118,18 +106,40 @@ local opttab = {
 local first_operand = getopt(argv, opttab)
 
 if print_usage then
-	io.write(("Usage: %s [-TSfstv] [-p file[,what] | -P file[,what]]"):format(argv[0]))
+	io.stderr:write(("Usage: %s [-Sfstv] [-p file[,what] | -P file[,what]] [-T test]\n"):format(argv[0]))
+	io.stderr:write("  -S  Print the Alicorn source code about to be tested.\n")
+	io.stderr:write("      (mnemonic: Source)\n")
+	io.stderr:write("  -f  Show the AST generated from the source code.\n")
+	io.stderr:write("      (mnemonic: format.read)\n")
+	io.stderr:write("  -s  Show the unchecked term. *\n")
+	io.stderr:write("      (mnemonic: syntax:match)\n")
+	io.stderr:write("  -t  Show the type-checked term. *\n")
+	io.stderr:write("      (mnemonic: typed)\n")
+	io.stderr:write("  -v  Show the evaluated term. *\n")
+	io.stderr:write("      (mnemonic: value)\n")
+	io.stderr:write("      * Some type-checking and evaluation may happen during the course of\n")
+	io.stderr:write("        producing a top-level term, due to the dependent nature of Alicorn.\n")
+	io.stderr:write("  -p  Run a profile over the test and output the trace to a file.\n")
+	io.stderr:write("      (mnemonic: profile)\n")
+	io.stderr:write("      what = match: Profile syntax:match.    [default]\n")
+	io.stderr:write("      what = infer: Profile evaluator.infer.\n")
+	io.stderr:write("      Works best in conjunction with -T.\n")
+	io.stderr:write("  -P  Like -p, but output a flamegraph-compatible trace.\n")
+	io.stderr:write("      (mnemonic: Phlame! :P)\n")
+	io.stderr:write("  -T  Choose a specific test to run.\n")
+	io.stderr:write("      (mnemonic: Test)\n")
+	io.stderr:write("      Without -T, all tests in testlist.json are run.\n")
 	os.exit()
 end
 
-io.write("\nInterpreter:", table.concat(interpreter_argv, " ", 0))
-io.write("\nFile:", argv[0])
-io.write("\nOptions:", table.concat(argv, " ", 1, first_operand - 1))
-io.write("\nOperands:", table.concat(argv, " ", first_operand))
+io.write("Interpreter  : ", table.concat(interpreter_argv, " ", 0), "\n")
+io.write("File         : ", argv[0], "\n")
+io.write("Options      : ", table.concat(argv, " ", 1, first_operand - 1), "\n")
+io.write("Operands     : ", table.concat(argv, " ", first_operand), "\n")
 if profile_run then
-	io.write("\nProfile flame?", tostring(profile_flame))
-	io.write("\nProfile file:", tostring(profile_file))
-	io.write("\nProfile what:", tostring(profile_what))
+	io.write("Profile flame? ", tostring(profile_flame), "\n")
+	io.write("Profile file : ", profile_file, "\n")
+	io.write("Profile what : ", profile_what, "\n")
 end
 
 local prelude = "prelude.alc"
@@ -327,6 +337,63 @@ end
 ---@cast expr inferrable
 ---@cast env Environment
 
+---@param file string
+---@param completion string
+---@param shadowed ShadowEnvironment
+---@param env Environment
+---@return boolean
+---@return string
+local function perform_test(file, completion, shadowed, env)
+	local log = ""
+
+	local printrepl = function(...)
+		local args = table.pack(...)
+
+		for i = 1, #args do
+			args[i] = tostring(args[i])
+		end
+
+		log = log .. table.concat(args, " ") .. "\n"
+	end
+
+	local ok, test_expr, test_env = load_alc_file(file, env, printrepl)
+	if not ok then
+		if completion == test_expr then
+			io.write(U.outputGreen("success: " .. file .. " stopped at " .. test_expr), "\n")
+			return true, log
+		else
+			io.write(
+				"\n\n",
+				U.outputRed("failure: " .. file .. " stopped at " .. test_expr .. " (expected " .. completion .. ")"),
+				"\n",
+				log,
+				"\n\n"
+			)
+			return false, log
+		end
+	else
+		---@cast test_expr inferrable
+		---@cast test_env Environment
+		local _, test_expr, _ = test_env:exit_block(test_expr, shadowed)
+
+		local ok = execute_alc_file(test_expr, printrepl)
+
+		if completion == ok then
+			io.write(U.outputGreen("success: " .. file .. " stopped at " .. ok), "\n")
+			return true, log
+		else
+			io.write(
+				"\n\n",
+				U.outputRed("failure: " .. file .. " stopped at " .. ok .. " (expected " .. completion .. ")"),
+				"\n",
+				log,
+				"\n\n"
+			)
+			return false, log
+		end
+	end
+end
+
 if test_harness then
 	local test_list_file, err = io.open("testlist.json")
 	if not test_list_file then
@@ -346,49 +413,22 @@ if test_harness then
 	local failures = {}
 
 	for file, completion in pairs(test_list) do
-		total = total + 1
-		logs[file] = ""
-
-		local printrepl = function(...)
-			local args = table.pack(...)
-
-			for i = 1, #args do
-				args[i] = tostring(args[i])
-			end
-
-			logs[file] = logs[file] .. table.concat(args, " ") .. "\n"
-		end
-
-		local ok, test_expr, test_env = load_alc_file(file, env, printrepl)
-		if not ok then
-			if completion == test_expr then
-				io.write("success: " .. file .. ", stopped at " .. test_expr)
-			else
+		if (not test_single) or (test_single and file == test_name) then
+			total = total + 1
+			local ok, log = perform_test(file, completion, shadowed, env)
+			logs[file] = log
+			if not ok then
 				U.append(failures, file)
-				io.write("\n\nfailure, test " .. file .. " stopped at " .. test_expr .. " \n" .. logs[file] .. "\n\n")
-			end
-		else
-			---@cast test_expr inferrable
-			---@cast test_env Environment
-			local _, test_expr, _ = test_env:exit_block(test_expr, shadowed)
-
-			local ok = execute_alc_file(test_expr, printrepl)
-
-			if completion == ok then
-				io.write("success: " .. file .. ", stopped at " .. ok)
-			else
-				U.append(failures, file)
-				io.write("\n\nfailure, test " .. file .. " stopped at " .. ok .. "\n" .. logs[file] .. "\n\n")
 			end
 		end
 	end
 
 	if #failures == 0 then
-		io.write("\n\nAll " .. tostring(total) .. " tests passed!")
+		io.write("All " .. tostring(total) .. " tests passed!\n")
 	else
-		io.write("\n\n" .. tostring(total - #failures) .. " out of " .. tostring(total) .. " tests passed. Failures: ")
+		io.write(tostring(total - #failures) .. " out of " .. tostring(total) .. " tests passed. Failures:\n")
 		for _, v in ipairs(failures) do
-			io.write("\n- " .. v)
+			io.write("- " .. v .. "\n")
 		end
 	end
 else

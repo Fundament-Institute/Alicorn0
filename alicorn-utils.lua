@@ -259,6 +259,23 @@ function M.memoize(fn)
 	return wrapfn
 end
 
+---@param s string
+---@return string[]
+function M.split_commas(s)
+	local subs = {}
+	-- "[^,]*" doesn't work due to a bug up until lua 5.3.3 that caused an
+	-- extra empty match at the end of the input if the pattern accepts an
+	-- empty match. luajit inherits this bug.
+	-- so instead we append a comma and use it as a terminator, ensuring
+	-- the pattern doesn't accept an empty match, but still allowing us to
+	-- have an empty capture given consecutive commas.
+	s = s .. ","
+	for sub in s:gmatch("(.-),") do
+		table.insert(subs, sub)
+	end
+	return subs
+end
+
 ---strips ansi character attributes (e.g. colors) from a string
 ---@param s string
 ---@return string
@@ -275,6 +292,16 @@ end
 function M.file_is_terminal(input_file)
 	-- TODO
 	return false
+end
+
+-- TODO: check if output is terminal before adding color sequences
+---@param s string
+---@return string
+function M.outputGreen(s)
+	return "\27[32m" .. s .. "\27[0m"
+end
+function M.outputRed(s)
+	return "\27[31m" .. s .. "\27[0m"
 end
 
 function M.get_cursor_position(input_file, output_file)

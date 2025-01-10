@@ -1345,7 +1345,7 @@ local top_level_block = metalanguage.reducer(
 		end
 		continue = true
 		io.write(
-			"\nprocessing "
+			"processing "
 				.. tostring(args.name)
 				.. " --- 0 / "
 				.. tostring(length)
@@ -1387,10 +1387,10 @@ local top_level_block = metalanguage.reducer(
 		end
 		io.write("\n")
 		if not ok then
-			io.write("\nFailed!\n")
+			io.write("Failed!\n")
 			return false, continue
 		end
-		io.write("\nFinished!\n")
+		io.write("Finished!\n")
 		return true, lastval, env
 	end,
 	"block"
