@@ -499,21 +499,21 @@ local constraintcause = gen.declare_type()
 constraintcause:define_enum("constraintcause", {
 	{ "primitive", {
 		"description", gen.builtin_string,
-		"position",    anchor_type,
+		"position",    gen.any_lua_type, -- TODO: turn this back into an anchor_type once we actually have anchors
 	} },
 	{ "composition", {
-		"left",     constraintcause,
-		"right",    constraintcause,
+		"left",     gen.builtin_number,
+		"right",    gen.builtin_number,
 		"position", anchor_type,
 	} },
 	{ "leftcall_discharge", {
-		"call",       constraintcause,
-		"constraint", constraintcause,
+		"call",       gen.builtin_number,
+		"constraint", gen.builtin_number,
 		"position",   anchor_type,
 	} },
 	{ "rightcall_discharge", {
-		"constraint", constraintcause,
-		"call",       constraintcause,
+		"constraint", gen.builtin_number,
+		"call",       gen.builtin_number,
 		"position",   anchor_type,
 	} },
 	{ "lost", { --Information has been lost, please generate any information you can to help someone debug the lost information in the future
@@ -530,41 +530,41 @@ local constraintelem = gen.declare_enum("constraintelem", {
 		"rel",      SubtypeRelation,
 		"right",    typed_term,
 		"rightctx", typechecking_context_type,
-		"cause",    gen.any_lua_type,
+		"cause",    constraintcause,
 	} },
 	{ "constrain_sliced", {
 		"left",    typed_term,
 		"leftctx", typechecking_context_type,
 		"rel",     SubtypeRelation,
-		"cause",   gen.any_lua_type,
+		"cause",   constraintcause,
 	} },
 	{ "sliced_leftcall", {
 		"arg",      typed_term,
 		"rel",      SubtypeRelation,
 		"right",    typed_term,
 		"rightctx", typechecking_context_type,
-		"cause",    gen.any_lua_type,
+		"cause",    constraintcause,
 	} },
 	{ "leftcall_sliced", {
 		"left",    typed_term,
 		"leftctx", typechecking_context_type,
 		"arg",     typed_term,
 		"rel",     SubtypeRelation,
-		"cause",   gen.any_lua_type,
+		"cause",   constraintcause,
 	} },
 	{ "sliced_rightcall", {
 		"rel",      SubtypeRelation,
 		"right",    typed_term,
 		"rightctx", typechecking_context_type,
 		"arg",      typed_term,
-		"cause",    gen.any_lua_type,
+		"cause",    constraintcause,
 	} },
 	{ "rightcall_sliced", {
 		"left",    typed_term,
 		"leftctx", typechecking_context_type,
 		"rel",     SubtypeRelation,
 		"arg",     typed_term,
-		"cause",   gen.any_lua_type,
+		"cause",   constraintcause,
 	} },
 })
 

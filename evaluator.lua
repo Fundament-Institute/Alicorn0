@@ -96,7 +96,14 @@ local function FunctionRelation(srel)
 			local applied_val = U.tag("apply_value", { val = val, use = use }, apply_value, val, u)
 			local applied_use = U.tag("apply_value", { val = val, use = use }, apply_value, use, u)
 
-			typechecker_state:queue_constrain(lctx, applied_val, srel, rctx, applied_use, "FunctionRelation inner")
+			typechecker_state:queue_constrain(
+				lctx,
+				applied_val,
+				srel,
+				rctx,
+				applied_use,
+				terms.constraintcause.lost("FunctionRelation inner", debug.traceback())
+			)
 		end),
 	}, subtype_relation_mt)
 end
@@ -139,7 +146,7 @@ local function IndepTupleRelation(...)
 							args[i].srel,
 							rctx,
 							use_elems[i],
-							"tuple element constraint"
+							terms.constraintcause.lost("tuple element constraint", debug.traceback())
 						)
 					else
 						typechecker_state:queue_constrain(
@@ -148,7 +155,7 @@ local function IndepTupleRelation(...)
 							args[i].srel,
 							lctx,
 							val_elems[i],
-							"tuple element constraint"
+							terms.constraintcause.lost("tuple element constraint", debug.traceback())
 						)
 					end
 				end
@@ -252,7 +259,7 @@ enum_desc_srel = setmetatable({
 					val_type,
 					rctx,
 					use_variant --[[@as value -- please find a better approach]],
-					"enum variant"
+					terms.constraintcause.lost("enum variant", debug.traceback())
 				)
 			end
 		end
@@ -298,7 +305,7 @@ local TupleDescRelation = setmetatable({
 					tuple_types_val[i],
 					rctx,
 					tuple_types_use[i],
-					"TupleDescRelation.constrain"
+					terms.constraintcause.lost("TupleDescRelation.constrain", debug.traceback())
 				)
 			end
 		end
@@ -838,25 +845,52 @@ add_comparer(value.host_type_type.kind, value.host_type_type.kind, always_fits_c
 add_comparer("value.tuple_type", "value.tuple_type", function(lctx, a, rctx, b)
 	local desc_a = a:unwrap_tuple_type()
 	local desc_b = b:unwrap_tuple_type()
-	typechecker_state:queue_constrain(lctx, desc_a, TupleDescRelation, rctx, desc_b, "tuple type")
+	typechecker_state:queue_constrain(
+		lctx,
+		desc_a,
+		TupleDescRelation,
+		rctx,
+		desc_b,
+		terms.constraintcause.lost("tuple type", debug.traceback())
+	)
 	return true
 end)
 add_comparer("value.host_tuple_type", "value.host_tuple_type", function(lctx, a, rctx, b)
 	local desc_a = a:unwrap_host_tuple_type()
 	local desc_b = b:unwrap_host_tuple_type()
-	typechecker_state:queue_constrain(lctx, desc_a, TupleDescRelation, rctx, desc_b, "host tuple type")
+	typechecker_state:queue_constrain(
+		lctx,
+		desc_a,
+		TupleDescRelation,
+		rctx,
+		desc_b,
+		terms.constraintcause.lost("host tuple type", debug.traceback())
+	)
 	return true
 end)
 add_comparer("value.enum_desc_type", "value.enum_desc_type", function(lctx, a, rctx, b)
 	local a_univ = a:unwrap_enum_desc_type()
 	local b_univ = b:unwrap_enum_desc_type()
-	typechecker_state:queue_subtype(lctx, a_univ, rctx, b_univ, "enum desc universe covariance")
+	typechecker_state:queue_subtype(
+		lctx,
+		a_univ,
+		rctx,
+		b_univ,
+		terms.constraintcause.lost("enum desc universe covariance", debug.traceback())
+	)
 	return true
 end)
 add_comparer("value.enum_type", "value.enum_type", function(lctx, a, rctx, b)
 	local a_desc = a:unwrap_enum_type()
 	local b_desc = b:unwrap_enum_type()
-	typechecker_state:queue_constrain(lctx, a_desc, enum_desc_srel, rctx, b_desc, "enum type description")
+	typechecker_state:queue_constrain(
+		lctx,
+		a_desc,
+		enum_desc_srel,
+		rctx,
+		b_desc,
+		terms.constraintcause.lost("enum type description", debug.traceback())
+	)
 	return true
 end)
 add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx, b)
@@ -911,7 +945,7 @@ add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx,
 		enum_desc_srel,
 		rctx,
 		value.enum_desc_value(construction_variants),
-		"use enum construction as tuple desc"
+		terms.constraintcause.lost("use enum construction as tuple desc", debug.traceback())
 	)
 	return true
 end)
@@ -967,7 +1001,7 @@ add_comparer("value.tuple_desc_type", "value.enum_type", function(lctx, a, rctx,
 		enum_desc_srel,
 		rctx,
 		b_desc,
-		"use tuple description as enum"
+		terms.constraintcause.lost("use tuple description as enum", debug.traceback())
 	)
 	return true
 end)
@@ -991,7 +1025,13 @@ add_comparer("value.pi", "value.pi", function(lctx, a, rctx, b)
 		return false, concrete_fail("pi result_info")
 	end
 
-	typechecker_state:queue_subtype(rctx, b_param_type, lctx, a_param_type, "pi function parameters")
+	typechecker_state:queue_subtype(
+		rctx,
+		b_param_type,
+		lctx,
+		a_param_type,
+		terms.constraintcause.lost("pi function parameters", debug.traceback())
+	)
 	--local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
 	--local a_res = apply_value(a_result_type, unique_placeholder)
 	--local b_res = apply_value(b_result_type, unique_placeholder)
@@ -1004,7 +1044,7 @@ add_comparer("value.pi", "value.pi", function(lctx, a, rctx, b)
 		FunctionRelation(UniverseOmegaRelation),
 		rctx,
 		b_result_type,
-		"pi function results"
+		terms.constraintcause.lost("pi function results", debug.traceback())
 	)
 
 	return true
@@ -1023,7 +1063,13 @@ add_comparer("value.host_function_type", "value.host_function_type", function(lc
 		return false, concrete_fail("host function result_info")
 	end
 
-	typechecker_state:queue_subtype(rctx, b_param_type, lctx, a_param_type, "host function parameters")
+	typechecker_state:queue_subtype(
+		rctx,
+		b_param_type,
+		lctx,
+		a_param_type,
+		terms.constraintcause.lost("host function parameters", debug.traceback())
+	)
 	--local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
 	--local a_res = apply_value(a_result_type, unique_placeholder)
 	--local b_res = apply_value(b_result_type, unique_placeholder)
@@ -1036,7 +1082,7 @@ add_comparer("value.host_function_type", "value.host_function_type", function(lc
 		FunctionRelation(UniverseOmegaRelation),
 		rctx,
 		b_result_type,
-		"host function results"
+		terms.constraintcause.lost("host function results", debug.traceback())
 	)
 	return true
 end)
@@ -1100,14 +1146,26 @@ end
 add_comparer("value.srel_type", "value.srel_type", function(lctx, a, rctx, b)
 	local a_target = a:unwrap_srel_type()
 	local b_target = b:unwrap_srel_type()
-	typechecker_state:queue_subtype(lctx, a_target, rctx, b_target, "srel target")
+	typechecker_state:queue_subtype(
+		lctx,
+		a_target,
+		rctx,
+		b_target,
+		terms.constraintcause.lost("srel target", debug.traceback())
+	)
 	return true
 end)
 
 add_comparer("value.variance_type", "value.variance_type", function(lctx, a, rctx, b)
 	local a_target = a:unwrap_variance_type()
 	local b_target = b:unwrap_variance_type()
-	typechecker_state:queue_subtype(lctx, a_target, rctx, b_target, "variance target")
+	typechecker_state:queue_subtype(
+		lctx,
+		a_target,
+		rctx,
+		b_target,
+		terms.constraintcause.lost("variance target", debug.traceback())
+	)
 	return true
 end)
 
@@ -1140,7 +1198,13 @@ end)
 
 add_comparer("value.host_wrapped_type", "value.host_wrapped_type", function(lctx, a, rctx, b)
 	local ua, ub = a:unwrap_host_wrapped_type(), b:unwrap_host_wrapped_type()
-	typechecker_state:queue_subtype(lctx, ua, rctx, ub, "wrapped type target")
+	typechecker_state:queue_subtype(
+		lctx,
+		ua,
+		rctx,
+		ub,
+		terms.constraintcause.lost("wrapped type target", debug.traceback())
+	)
 	--U.tag("check_concrete", { ua, ub }, check_concrete, ua, ub)
 	return true
 end)
@@ -1148,7 +1212,13 @@ end)
 add_comparer("value.singleton", "value.singleton", function(lctx, a, rctx, b)
 	local a_supertype, a_value = a:unwrap_singleton()
 	local b_supertype, b_value = b:unwrap_singleton()
-	typechecker_state:queue_subtype(lctx, a_supertype, rctx, b_supertype, "singleton supertypes")
+	typechecker_state:queue_subtype(
+		lctx,
+		a_supertype,
+		rctx,
+		b_supertype,
+		terms.constraintcause.lost("singleton supertypes", debug.traceback())
+	)
 
 	if a_value == b_value then
 		return true
@@ -1160,7 +1230,13 @@ end)
 add_comparer("value.tuple_desc_type", "value.tuple_desc_type", function(lctx, a, rctx, b)
 	local a_universe = a:unwrap_tuple_desc_type()
 	local b_universe = b:unwrap_tuple_desc_type()
-	typechecker_state:queue_subtype(lctx, a_universe, rctx, b_universe, "tuple_desc_type universes")
+	typechecker_state:queue_subtype(
+		lctx,
+		a_universe,
+		rctx,
+		b_universe,
+		terms.constraintcause.lost("tuple_desc_type universes", debug.traceback())
+	)
 	return true
 end)
 
@@ -1168,7 +1244,14 @@ add_comparer("value.program_type", "value.program_type", function(lctx, a, rctx,
 	local a_eff, a_base = a:unwrap_program_type()
 	local b_eff, b_base = b:unwrap_program_type()
 	typechecker_state:queue_subtype(lctx, a_base, rctx, b_base, "program result")
-	typechecker_state:queue_constrain(lctx, a_eff, effect_row_srel, rctx, b_eff, "program effects")
+	typechecker_state:queue_constrain(
+		lctx,
+		a_eff,
+		effect_row_srel,
+		rctx,
+		b_eff,
+		terms.constraintcause.lost("program effects", debug.traceback())
+	)
 	return true
 end)
 
@@ -1180,7 +1263,9 @@ add_comparer("value.effect_type", "value.effect_type", function(lctx, a, rctx, b
 end)
 
 -- Compares any non-metavariables, or defers any metavariable comparisons to the work queue
+---@param lctx TypecheckingContext
 ---@param val value
+---@param rctx TypecheckingContext
 ---@param use value
 ---@return boolean
 ---@return (string|ConcreteFail)?
@@ -1198,7 +1283,13 @@ function check_concrete(lctx, val, rctx, use)
 		local vnv = val:unwrap_neutral()
 		if vnv:is_tuple_element_access_stuck() then
 			local innerctx, bound = upcast(lctx, val)
-			typechecker_state:queue_subtype(innerctx, bound, rctx, use)
+			typechecker_state:queue_subtype(
+				innerctx,
+				bound,
+				rctx,
+				use,
+				terms.constraintcause.lost("upcast", debug.traceback())
+			)
 			return true
 		end
 	end
@@ -1219,21 +1310,51 @@ function check_concrete(lctx, val, rctx, use)
 
 	if val:is_singleton() and not use:is_singleton() then
 		local val_supertype, _ = val:unwrap_singleton()
-		typechecker_state:queue_subtype(lctx, val_supertype, rctx, use, "singleton subtype")
+		typechecker_state:queue_subtype(
+			lctx,
+			val_supertype,
+			rctx,
+			use,
+			terms.constraintcause.lost("singleton subtype", debug.traceback())
+		)
 		return true
 	end
 
 	if val:is_union_type() then
 		local vala, valb = val:unwrap_union_type()
-		typechecker_state:queue_subtype(lctx, vala, rctx, use, "union dissasembly")
-		typechecker_state:queue_subtype(lctx, valb, rctx, use, "union dissasembly")
+		typechecker_state:queue_subtype(
+			lctx,
+			vala,
+			rctx,
+			use,
+			terms.constraintcause.lost("union dissasembly", debug.traceback())
+		)
+		typechecker_state:queue_subtype(
+			lctx,
+			valb,
+			rctx,
+			use,
+			terms.constraintcause.lost("union dissasembly", debug.traceback())
+		)
 		return true
 	end
 
 	if use:is_intersection_type() then
 		local usea, useb = use:unwrap_intersection_type()
-		typechecker_state:queue_subtype(lctx, val, rctx, usea, "intersection dissasembly")
-		typechecker_state:queue_subtype(lctx, val, rctx, useb, "intersection dissasembly")
+		typechecker_state:queue_subtype(
+			lctx,
+			val,
+			rctx,
+			usea,
+			terms.constraintcause.lost("intersection dissasembly", debug.traceback())
+		)
+		typechecker_state:queue_subtype(
+			lctx,
+			val,
+			rctx,
+			useb,
+			terms.constraintcause.lost("intersection dissasembly", debug.traceback())
+		)
 		return true
 	end
 
@@ -1308,7 +1429,13 @@ function check(
 			-- FIXME: needs context to avoid bugs where inferred and goal are the same neutral structurally
 			-- but come from different context thus are different
 			-- but erroneously compare equal
-			typechecker_state:flow(inferred_type, typechecking_context, goal_type, typechecking_context, "inferrable")
+			typechecker_state:flow(
+				inferred_type,
+				typechecking_context,
+				goal_type,
+				typechecking_context,
+				terms.constraintcause.primitive("inferrable", nil)
+			)
 		end
 
 		return inferred_usages, typed_term
@@ -1343,7 +1470,7 @@ function check(
 			typechecking_context,
 			goal_type,
 			typechecking_context,
-			"checkable_term:is_tuple_cons"
+			terms.constraintcause.primitive("checkable_term:is_tuple_cons", nil)
 		)
 
 		return usages, typed_term.tuple_cons(new_elements)
@@ -1378,7 +1505,7 @@ function check(
 			typechecking_context,
 			goal_type,
 			typechecking_context,
-			"checkable_term:is_host_tuple_cons"
+			terms.constraintcause.primitive("checkable_term:is_host_tuple_cons", nil)
 		)
 
 		return usages, typed_term.host_tuple_cons(new_elements)
@@ -1734,7 +1861,7 @@ function infer(
 			typechecking_context,
 			result_type_param_type,
 			typechecking_context,
-			"inferrable pi term"
+			terms.constraintcause.primitive("inferrable pi term", nil)
 		)
 		local result_type_result_type_result =
 			apply_value(result_type_result_type, evaluate(param_type_term, typechecking_context.runtime_context))
@@ -1877,7 +2004,7 @@ function infer(
 				typechecking_context,
 				spec_type,
 				typechecking_context,
-				"tuple elimination"
+				terms.constraintcause.primitive("tuple elimination", nil)
 			)
 			return infer_tuple_type(spec_type, subject_value)
 		end)
@@ -1889,7 +2016,7 @@ function infer(
 					typechecking_context,
 					host_spec_type,
 					typechecking_context,
-					"host tuple elimination"
+					terms.constraintcause.primitive("host tuple elimination", nil)
 				)
 				return infer_tuple_type(host_spec_type, subject_value)
 			end)
@@ -1921,7 +2048,7 @@ function infer(
 			typechecking_context,
 			value.tuple_desc_type(univ_var),
 			typechecking_context,
-			"tuple type construction"
+			terms.constraintcause.primitive("tuple type construction", nil)
 		)
 		return value.union_type(terms.value.star(0, 0), univ_var), desc_usages, terms.typed_term.tuple_type(desc_term)
 	elseif inferrable_term:is_record_cons() then
@@ -2044,7 +2171,7 @@ function infer(
 			typechecking_context,
 			value.enum_type(value.enum_desc_value(constrain_variants)),
 			typechecking_context,
-			"enum case matching"
+			terms.constraintcause.primitive("enum case matching", nil)
 		)
 		local term_variants = string_typed_map()
 		local result_types = {}
@@ -2093,7 +2220,7 @@ function infer(
 			typechecking_context,
 			value.enum_desc_type(univ_var),
 			typechecking_context,
-			"tuple type construction"
+			terms.constraintcause.primitive("tuple type construction", nil)
 		)
 		return value.union_type(terms.value.star(0, 0), univ_var), desc_usages, terms.typed_term.enum_type(desc_term)
 	elseif inferrable_term:is_object_cons() then
@@ -2126,7 +2253,7 @@ function infer(
 				typechecking_context,
 				op_userdata_type,
 				typechecking_context,
-				"operative userdata"
+				terms.constraintcause.primitive("operative userdata", nil)
 			)
 		end
 		local operative_usages = usage_array()
@@ -2221,9 +2348,15 @@ function infer(
 			typechecking_context,
 			restype,
 			typechecking_context,
-			"inferred host if consequent"
+			terms.constraintcause.primitive("inferred host if consequent", nil)
 		)
-		typechecker_state:flow(atype, typechecking_context, restype, typechecking_context, "inferred host if alternate")
+		typechecker_state:flow(
+			atype,
+			typechecking_context,
+			restype,
+			typechecking_context,
+			terms.constraintcause.primitive("inferred host if alternate", nil)
+		)
 
 		local result_usages = usage_array()
 		add_arrays(result_usages, susages)
@@ -2286,7 +2419,7 @@ function infer(
 			typechecking_context,
 			value.tuple_desc_type(value.host_type_type),
 			typechecking_context,
-			"tuple type construction"
+			terms.constraintcause.primitive("tuple type construction", nil)
 		)
 		return terms.value.star(0, 0), desc_usages, terms.typed_term.host_tuple_type(desc_term)
 	elseif inferrable_term:is_program_sequence() then
@@ -3774,11 +3907,25 @@ function TypeCheckerState:check_value(v, tag, context)
 		local lower_bounds, upper_bounds, relation = v:unwrap_range()
 
 		for _, bound in ipairs(lower_bounds) do
-			self:queue_constrain(context, bound, relation:unwrap_host_value(), context, v, "range unpacking")
+			self:queue_constrain(
+				context,
+				bound,
+				relation:unwrap_host_value(),
+				context,
+				v,
+				terms.constraintcause.lost("range unpacking", debug.traceback())
+			)
 		end
 
 		for _, bound in ipairs(upper_bounds) do
-			self:queue_constrain(context, v, relation:unwrap_host_value(), context, bound, "range_unpacking")
+			self:queue_constrain(
+				context,
+				v,
+				relation:unwrap_host_value(),
+				context,
+				bound,
+				terms.constraintcause.lost("range_unpacking", debug.traceback())
+			)
 		end
 
 		return v_id
@@ -3804,8 +3951,10 @@ function TypeCheckerState:metavariable(context, trait)
 end
 
 ---@param val value
+---@param val_context TypecheckingContext
 ---@param use value
----@param cause any
+---@param use_context TypecheckingContext
+---@param cause constraintcause
 ---@return boolean
 ---@return ...
 function TypeCheckerState:flow(val, val_context, use, use_context, cause)
@@ -3833,7 +3982,6 @@ function TypeCheckerState:check_heads(left, right, rel)
 			value.host_value(rctx),
 			value.host_value(rvalue)
 		)
-		-- TODO: how do we pass in the type contexts???
 		U.tag(
 			"apply_value",
 			{ lvalue = lvalue, rvalue = rvalue, block_level = typechecker_state.block_level, rel = rel.debug_name },
@@ -3841,16 +3989,6 @@ function TypeCheckerState:check_heads(left, right, rel)
 			rel.constrain,
 			value.tuple_value(tuple_params)
 		)
-		-- local ok, err = U.tag(
-		-- 	"check_concrete",
-		-- 	{ lvalue, rvalue },
-		-- 	check_concrete,
-		-- 	lvalue --[[@as value]],
-		-- 	rvalue --[[@as value]]
-		-- )
-		-- if not ok then
-		-- 	error(err)
-		-- end
 	end
 end
 
@@ -4043,7 +4181,7 @@ end
 ---@param use value
 ---@param use_context TypecheckingContext
 ---@param rel SubtypeRelation
----@param cause any
+---@param cause constraintcause
 ---@return boolean
 ---@return ...
 function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cause)

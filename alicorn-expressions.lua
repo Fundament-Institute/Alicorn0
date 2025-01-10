@@ -1247,7 +1247,7 @@ collect_host_tuple = metalanguage.reducer(
 				env.typechecking_context,
 				goal_type,
 				env.typechecking_context,
-				"host tuple type in collect_host_tuple"
+				terms.constraintcause.primitive("host tuple type in collect_host_tuple", nil)
 			)
 			return true, checkable_term.host_tuple_cons(collected_terms), env
 		else

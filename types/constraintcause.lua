@@ -6,27 +6,27 @@ constraintcause = {}
 
 ---@return boolean
 function constraintcause:is_primitive() end
----@return string, Anchor
+---@return string, any
 function constraintcause:unwrap_primitive() end
----@return boolean, string, Anchor
+---@return boolean, string, any
 function constraintcause:as_primitive() end
 ---@return boolean
 function constraintcause:is_composition() end
----@return constraintcause, constraintcause, Anchor
+---@return number, number, Anchor
 function constraintcause:unwrap_composition() end
----@return boolean, constraintcause, constraintcause, Anchor
+---@return boolean, number, number, Anchor
 function constraintcause:as_composition() end
 ---@return boolean
 function constraintcause:is_leftcall_discharge() end
----@return constraintcause, constraintcause, Anchor
+---@return number, number, Anchor
 function constraintcause:unwrap_leftcall_discharge() end
----@return boolean, constraintcause, constraintcause, Anchor
+---@return boolean, number, number, Anchor
 function constraintcause:as_leftcall_discharge() end
 ---@return boolean
 function constraintcause:is_rightcall_discharge() end
----@return constraintcause, constraintcause, Anchor
+---@return number, number, Anchor
 function constraintcause:unwrap_rightcall_discharge() end
----@return boolean, constraintcause, constraintcause, Anchor
+---@return boolean, number, number, Anchor
 function constraintcause:as_rightcall_discharge() end
 ---@return boolean
 function constraintcause:is_lost() end
@@ -37,9 +37,9 @@ function constraintcause:as_lost() end
 
 ---@class (exact) constraintcauseType: EnumType
 ---@field define_enum fun(self: constraintcauseType, name: string, variants: Variants): constraintcauseType
----@field primitive fun(description: string, position: Anchor): constraintcause
----@field composition fun(left: constraintcause, right: constraintcause, position: Anchor): constraintcause
----@field leftcall_discharge fun(call: constraintcause, constraint: constraintcause, position: Anchor): constraintcause
----@field rightcall_discharge fun(constraint: constraintcause, call: constraintcause, position: Anchor): constraintcause
+---@field primitive fun(description: string, position: any): constraintcause
+---@field composition fun(left: number, right: number, position: Anchor): constraintcause
+---@field leftcall_discharge fun(call: number, constraint: number, position: Anchor): constraintcause
+---@field rightcall_discharge fun(constraint: number, call: number, position: Anchor): constraintcause
 ---@field lost fun(unique_string: string, stacktrace: string, auxiliary: any): constraintcause
 return {}

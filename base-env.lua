@@ -976,7 +976,7 @@ local function apply_operative_impl(syntax, env)
 			env.typechecking_context,
 			spec_type,
 			env.typechecking_context,
-			"apply"
+			terms.constraintcause.primitive("apply", nil)
 		)
 
 		local ok, args_inferrable_term = tail:match({

@@ -137,7 +137,7 @@ function environment:bind_local(binding)
 			-- 	self.typechecking_context,
 			-- 	spec_type,
 			-- 	self.typechecking_context,
-			-- 	"environment tuple-elim"
+			-- 	terms.constraintcause.primitive("environment tuple-elim", nil)
 			-- )
 			U.tag(
 				"flow",
@@ -148,7 +148,7 @@ function environment:bind_local(binding)
 				self.typechecking_context,
 				spec_type,
 				self.typechecking_context,
-				"environment tuple-elim"
+				terms.constraintcause.primitive("environment tuple-elim", nil)
 			)
 
 			-- evaluating the subject is necessary for inferring the type of the body
