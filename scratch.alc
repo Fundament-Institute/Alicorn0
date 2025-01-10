@@ -1,0 +1,123 @@
+
+
+defrecord counter-state
+	count : integer
+
+defun counter-increment(st)
+	extend st with
+		count = st.count + 1
+
+defun counter-decrement(st)
+	extend st with
+		count = st.count - 1
+
+defui counter-ui(app : counter-state)
+	window(title = "simple counter")
+		button(text = "-", onclick = (lambda() counter-decrement(app)))
+		label(text = tostring(app.count))
+		button(text = "+", onclick = (lambda() counter-increment(app)))
+
+
+#PRETEND LOWERED THING
+
+defun update-counter-ui(app : counter-state, state)
+	over state
+		button
+
+
+
+
+# We are using a categories with families approach to this.
+# That means that objects are Contexts in the type theory sense, and morphisms are "substitutions" that take one context to another
+# There is a three way isomorphism between a morphism that takes a context to an extended context, a term in the prior context, and a function that takes the elements of the context as arguments and returns the new element.
+
+# new-recursive-registry : forall ('U, content : (forall (reg) -> T : U), deps-ex : (forall (reg) -> ex : (forall (val : content(set)) -> deps : set))) -> [Registry] U
+
+let RS = Registration-Set
+
+let Semantics-Reg = new-recursive-registry
+	lambda (reg)
+		struct
+			deps : Registration-Set(reg)
+			context-formers(subset : RS(reg)) : type
+			type-formers : type
+			structural-coeffect-formers : type
+			term-formers : type
+	lambda (reg)
+		lambda (component)
+			component.deps
+
+let Semantics = Registration-Set(Semantics-Reg)
+
+let Base =
+	Register
+		Semantics-Reg
+		lambda (set)
+			module
+				let deps = empty-set()
+				def-enum context-formers(elems)
+					Empty
+					Extend(pfx : )
+				def-enum
+
+
+
+let Value : (forall (sem : Semantics) -> T : type)
+
+let Context : (forall (sem : Semantics) -> T : type)
+
+let Type : (forall (sem : Semantics, ctx : Context(sem)) -> T : type)
+
+let TypedTerm : (forall (sem : Semantics, ctx : Context(sem), typ : Type(sem, ctx)) -> T : type)
+
+let UntypedTerm : (forall )
+
+
+mutual
+	defenum Value
+		function(capture : Value, code : Term)
+
+	defenum Term(ctx : Context)
+		bound-variable(idx : CtxRef(ctx))
+
+let Semantics-Reg = new-registry(Categorical-Component)
+
+let Semantic-Type = Registered-Enum(Semantics-Reg, (lambda (x) x.type-formers))
+
+let Semantic-Term = Registered-Enum(Semantics-Reg, (lambda (x) x.term-formers))
+
+struct Categorical-Component
+	name : string
+	term-formers : type
+	type-formers : type
+	context-formers : type
+
+
+let Category =
+	Register
+		Semantics-Reg
+		module
+			let name = "Category"
+			def-enum term-formers
+			def-enum type-formers
+			def-enum context-formers
+
+
+
+defenum Position
+	here
+	there(implicit T, e : T)
+
+newtype MemoryBuffer(implicit U :+ Universe, readT :+ U, writeT :- U, size :- Nat64) : U || type
+
+trait Executor(implicit U :+ Universe, e :+ U)
+	RemoteMemoryBuffer(implicit StorageU :+ Universe, readT :+ StorageU, writeT :- StorageU, size :- Nat64) : U || StorageU
+	map(ex : e, implicit U, implicit A : U, implicit B : U, f : (forall (x : A) -> res : B(x)), implicit size : Nat64, buf : RemoteMemoryBuffer(A, Void, size)) : RemoteMemoryBuffer(B, )
+
+
+
+
+newtype MemoryBuffer(implicit U, hostReadT :+ U, hostWriteT :- U, devReadT :+ U, devWriteT :- U, size : Nat64)
+
+impl MemoryBuffer(implicit U, hostReadT : U, hostWriteT : U, devReadT  : U, devWriteT  : U, size  : Nat64)
+	def read(implicit size, buffer  : MemoryBuffer('hostReadT, 'hostWriteT, 'devReadT, 'devWriteT, size), index : Fin64(size)) : hostReadT
