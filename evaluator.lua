@@ -86,7 +86,7 @@ local function FunctionRelation(srel)
 		antisym = luatovalue(function(a, b, r1, r2)
 			error("nyi")
 		end),
-		constrain = luatovalue(function(lctx, val, rctx, use)
+		constrain = luatovalue(function(lctx, val, rctx, use, cause)
 			local u = value.neutral(
 				neutral_value.free(
 					free.unique({ debug = "FunctionRelation(" .. srel.debug_name .. ").constrain " .. utils.here() })
@@ -135,7 +135,8 @@ local function IndepTupleRelation(...)
 			---@param val value
 			---@param rctx TypecheckingContext
 			---@param use value
-			function(lctx, val, rctx, use)
+			---@param cause constraintcause
+			function(lctx, val, rctx, use, cause)
 				local val_elems = val:unwrap_tuple_value()
 				local use_elems = use:unwrap_tuple_value()
 				for i = 1, val_elems:len() do
@@ -184,7 +185,8 @@ effect_row_srel = setmetatable({
 		---@param val value
 		---@param rctx TypecheckingContext
 		---@param use value
-		function(lctx, val, rctx, use)
+		---@param cause constraintcause
+		function(lctx, val, rctx, use, cause)
 			if val:is_effect_empty() then
 				return true
 			end
@@ -232,7 +234,8 @@ enum_desc_srel = setmetatable({
 		---@param val value
 		---@param rctx TypecheckingContext
 		---@param use value
-		function(lctx, val, rctx, use)
+		---@param cause constraintcause
+		function(lctx, val, rctx, use, cause)
 			if not val:is_enum_desc_value() then
 				error "production is not an enum description"
 			end
@@ -284,7 +287,8 @@ local TupleDescRelation = setmetatable({
 		---@param val value
 		---@param rctx TypecheckingContext
 		---@param use value
-		function(lctx, val, rctx, use)
+		---@param cause constraintcause
+		function(lctx, val, rctx, use, cause)
 			-- FIXME: this should probably be handled elsewhere
 			if val:is_neutral() and val == use then
 				return
@@ -788,7 +792,7 @@ local function upcast(ctx, typ)
 	error "NYI upcast something or other"
 end
 
----@alias value_comparer fun(lctx: TypecheckingContext, a: value, rctx: TypecheckingContext, b: value): boolean, (string|ConcreteFail)?
+---@alias value_comparer fun(lctx: TypecheckingContext, a: value, rctx: TypecheckingContext, b: value, cause: constraintcause): boolean, (string|ConcreteFail)?
 
 ---@param ka string
 ---@param kb string
@@ -826,7 +830,7 @@ local function concrete_fail(message, cause)
 end
 
 ---@type value_comparer
-local function always_fits_comparer(lctx, a, rctx, b)
+local function always_fits_comparer(lctx, a, rctx, b, cause)
 	return true
 end
 
@@ -842,7 +846,7 @@ end
 
 -- types of types
 add_comparer(value.host_type_type.kind, value.host_type_type.kind, always_fits_comparer)
-add_comparer("value.tuple_type", "value.tuple_type", function(lctx, a, rctx, b)
+add_comparer("value.tuple_type", "value.tuple_type", function(lctx, a, rctx, b, cause)
 	local desc_a = a:unwrap_tuple_type()
 	local desc_b = b:unwrap_tuple_type()
 	typechecker_state:queue_constrain(
@@ -855,7 +859,7 @@ add_comparer("value.tuple_type", "value.tuple_type", function(lctx, a, rctx, b)
 	)
 	return true
 end)
-add_comparer("value.host_tuple_type", "value.host_tuple_type", function(lctx, a, rctx, b)
+add_comparer("value.host_tuple_type", "value.host_tuple_type", function(lctx, a, rctx, b, cause)
 	local desc_a = a:unwrap_host_tuple_type()
 	local desc_b = b:unwrap_host_tuple_type()
 	typechecker_state:queue_constrain(
@@ -868,7 +872,7 @@ add_comparer("value.host_tuple_type", "value.host_tuple_type", function(lctx, a,
 	)
 	return true
 end)
-add_comparer("value.enum_desc_type", "value.enum_desc_type", function(lctx, a, rctx, b)
+add_comparer("value.enum_desc_type", "value.enum_desc_type", function(lctx, a, rctx, b, cause)
 	local a_univ = a:unwrap_enum_desc_type()
 	local b_univ = b:unwrap_enum_desc_type()
 	typechecker_state:queue_subtype(
@@ -880,7 +884,7 @@ add_comparer("value.enum_desc_type", "value.enum_desc_type", function(lctx, a, r
 	)
 	return true
 end)
-add_comparer("value.enum_type", "value.enum_type", function(lctx, a, rctx, b)
+add_comparer("value.enum_type", "value.enum_type", function(lctx, a, rctx, b, cause)
 	local a_desc = a:unwrap_enum_type()
 	local b_desc = b:unwrap_enum_type()
 	typechecker_state:queue_constrain(
@@ -893,7 +897,7 @@ add_comparer("value.enum_type", "value.enum_type", function(lctx, a, rctx, b)
 	)
 	return true
 end)
-add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx, b)
+add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx, b, cause)
 	local a_desc = a:unwrap_enum_type()
 	local b_univ = b:unwrap_tuple_desc_type()
 	local construction_variants = string_value_map()
@@ -949,7 +953,7 @@ add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx,
 	)
 	return true
 end)
-add_comparer("value.tuple_desc_type", "value.enum_type", function(lctx, a, rctx, b)
+add_comparer("value.tuple_desc_type", "value.enum_type", function(lctx, a, rctx, b, cause)
 	local a_univ = a:unwrap_tuple_desc_type()
 	local b_desc = b:unwrap_enum_type()
 	local construction_variants = string_value_map()
@@ -1005,7 +1009,7 @@ add_comparer("value.tuple_desc_type", "value.enum_type", function(lctx, a, rctx,
 	)
 	return true
 end)
-add_comparer("value.pi", "value.pi", function(lctx, a, rctx, b)
+add_comparer("value.pi", "value.pi", function(lctx, a, rctx, b, cause)
 	if a == b then
 		return true
 	end
@@ -1049,7 +1053,7 @@ add_comparer("value.pi", "value.pi", function(lctx, a, rctx, b)
 
 	return true
 end)
-add_comparer("value.host_function_type", "value.host_function_type", function(lctx, a, rctx, b)
+add_comparer("value.host_function_type", "value.host_function_type", function(lctx, a, rctx, b, cause)
 	if a == b then
 		return true
 	end
@@ -1089,7 +1093,7 @@ end)
 
 ---@type {[table] : SubtypeRelation}
 local host_srel_map = {}
-add_comparer("value.host_user_defined_type", "value.host_user_defined_type", function(lctx, a, rctx, b)
+add_comparer("value.host_user_defined_type", "value.host_user_defined_type", function(lctx, a, rctx, b, cause)
 	local a_id, a_args = a:unwrap_host_user_defined_type()
 	local b_id, b_args = b:unwrap_host_user_defined_type()
 
@@ -1116,7 +1120,13 @@ add_comparer("value.host_user_defined_type", "value.host_user_defined_type", fun
 				value.host_value(lctx),
 				value.host_value(value.tuple_value(a_args)),
 				value.host_value(rctx),
-				value.host_value(value.tuple_value(b_args))
+				value.host_value(value.tuple_value(b_args)),
+				value.host_value(
+					terms.constraintcause.lost(
+						"host_user_defined_type compared against host_user_defined_type",
+						debug.traceback()
+					)
+				)
 			)
 		)
 	)
@@ -1143,7 +1153,7 @@ for i, host_type in ipairs {
 	register_host_srel(id, IndepTupleRelation())
 end
 
-add_comparer("value.srel_type", "value.srel_type", function(lctx, a, rctx, b)
+add_comparer("value.srel_type", "value.srel_type", function(lctx, a, rctx, b, cause)
 	local a_target = a:unwrap_srel_type()
 	local b_target = b:unwrap_srel_type()
 	typechecker_state:queue_subtype(
@@ -1156,7 +1166,7 @@ add_comparer("value.srel_type", "value.srel_type", function(lctx, a, rctx, b)
 	return true
 end)
 
-add_comparer("value.variance_type", "value.variance_type", function(lctx, a, rctx, b)
+add_comparer("value.variance_type", "value.variance_type", function(lctx, a, rctx, b, cause)
 	local a_target = a:unwrap_variance_type()
 	local b_target = b:unwrap_variance_type()
 	typechecker_state:queue_subtype(
@@ -1169,7 +1179,7 @@ add_comparer("value.variance_type", "value.variance_type", function(lctx, a, rct
 	return true
 end)
 
-add_comparer("value.host_type_type", "value.star", function(lctx, a, rctx, b)
+add_comparer("value.host_type_type", "value.star", function(lctx, a, rctx, b, cause)
 	local level, depth = b:unwrap_star()
 	if depth == 0 then
 		return true
@@ -1178,7 +1188,7 @@ add_comparer("value.host_type_type", "value.star", function(lctx, a, rctx, b)
 	end
 end)
 
-add_comparer(value.star(0, 0).kind, value.star(0, 0).kind, function(lctx, a, rctx, b)
+add_comparer(value.star(0, 0).kind, value.star(0, 0).kind, function(lctx, a, rctx, b, cause)
 	local alevel, adepth = a:unwrap_star()
 	local blevel, bdepth = b:unwrap_star()
 	if alevel > blevel then
@@ -1196,7 +1206,7 @@ add_comparer(value.star(0, 0).kind, value.star(0, 0).kind, function(lctx, a, rct
 	return true
 end)
 
-add_comparer("value.host_wrapped_type", "value.host_wrapped_type", function(lctx, a, rctx, b)
+add_comparer("value.host_wrapped_type", "value.host_wrapped_type", function(lctx, a, rctx, b, cause)
 	local ua, ub = a:unwrap_host_wrapped_type(), b:unwrap_host_wrapped_type()
 	typechecker_state:queue_subtype(
 		lctx,
@@ -1209,7 +1219,7 @@ add_comparer("value.host_wrapped_type", "value.host_wrapped_type", function(lctx
 	return true
 end)
 
-add_comparer("value.singleton", "value.singleton", function(lctx, a, rctx, b)
+add_comparer("value.singleton", "value.singleton", function(lctx, a, rctx, b, cause)
 	local a_supertype, a_value = a:unwrap_singleton()
 	local b_supertype, b_value = b:unwrap_singleton()
 	typechecker_state:queue_subtype(
@@ -1227,7 +1237,7 @@ add_comparer("value.singleton", "value.singleton", function(lctx, a, rctx, b)
 	end
 end)
 
-add_comparer("value.tuple_desc_type", "value.tuple_desc_type", function(lctx, a, rctx, b)
+add_comparer("value.tuple_desc_type", "value.tuple_desc_type", function(lctx, a, rctx, b, cause)
 	local a_universe = a:unwrap_tuple_desc_type()
 	local b_universe = b:unwrap_tuple_desc_type()
 	typechecker_state:queue_subtype(
@@ -1240,7 +1250,7 @@ add_comparer("value.tuple_desc_type", "value.tuple_desc_type", function(lctx, a,
 	return true
 end)
 
-add_comparer("value.program_type", "value.program_type", function(lctx, a, rctx, b)
+add_comparer("value.program_type", "value.program_type", function(lctx, a, rctx, b, cause)
 	local a_eff, a_base = a:unwrap_program_type()
 	local b_eff, b_base = b:unwrap_program_type()
 	typechecker_state:queue_subtype(lctx, a_base, rctx, b_base, "program result")
@@ -1255,10 +1265,10 @@ add_comparer("value.program_type", "value.program_type", function(lctx, a, rctx,
 	return true
 end)
 
-add_comparer("value.effect_row_type", "value.effect_row_type", function(lctx, a, rctx, b)
+add_comparer("value.effect_row_type", "value.effect_row_type", function(lctx, a, rctx, b, cause)
 	return true
 end)
-add_comparer("value.effect_type", "value.effect_type", function(lctx, a, rctx, b)
+add_comparer("value.effect_type", "value.effect_type", function(lctx, a, rctx, b, cause)
 	return true
 end)
 
@@ -1267,9 +1277,10 @@ end)
 ---@param val value
 ---@param rctx TypecheckingContext
 ---@param use value
+---@param cause constraintcause
 ---@return boolean
 ---@return (string|ConcreteFail)?
-function check_concrete(lctx, val, rctx, use)
+function check_concrete(lctx, val, rctx, use, cause)
 	if val == nil or use == nil then
 		error("nil value or usage passed into check_concrete!")
 	end
@@ -1305,6 +1316,8 @@ function check_concrete(lctx, val, rctx, use)
 					.. " ~= "
 					.. tostring(use)
 					.. " (printed diff)"
+					.. " caused by "
+					.. tostring(cause)
 		end
 	end
 
@@ -1359,7 +1372,14 @@ function check_concrete(lctx, val, rctx, use)
 	end
 
 	if not concrete_comparers[val.kind] then
-		error("No valid concrete type comparer found for value " .. val.kind .. ": " .. tostring(val))
+		error(
+			"No valid concrete type comparer found for value "
+				.. val.kind
+				.. ": "
+				.. tostring(val)
+				.. " caused by "
+				.. tostring(cause)
+		)
 	end
 
 	local comparer = (concrete_comparers[val.kind] or {})[use.kind]
@@ -1368,10 +1388,10 @@ function check_concrete(lctx, val, rctx, use)
 		return false,
 			"no valid concrete comparer between value " .. val.kind .. " and usage " .. use.kind .. ": " .. tostring(
 				val
-			) .. " compared against " .. tostring(use)
+			) .. " compared against " .. tostring(use) .. " caused by " .. tostring(cause)
 	end
 
-	return comparer(lctx, val, rctx, use)
+	return comparer(lctx, val, rctx, use, cause)
 end
 
 ---@param enum_val value
@@ -3164,7 +3184,7 @@ UniverseOmegaRelation = setmetatable({
 	antisym = luatovalue(function(a, b, r1, r2)
 		error("nyi")
 	end),
-	constrain = luatovalue(function(lctx, val, rctx, use)
+	constrain = luatovalue(function(lctx, val, rctx, use, cause)
 		local ok, err = U.tag(
 			"check_concrete",
 			{ val = val, use = use, block_level = typechecker_state.block_level },
@@ -3172,7 +3192,8 @@ UniverseOmegaRelation = setmetatable({
 			lctx,
 			val,
 			rctx,
-			use
+			use,
+			cause
 		)
 		if not ok then
 			error(err)
@@ -3387,6 +3408,7 @@ CEdge:define_enum("edge", {
 ---@field rel SubtypeRelation
 ---@field shallowest_block integer
 ---@field right NodeID -- use
+---@field cause constraintcause
 
 ---@class LeftCallEdge
 ---@field left NodeID
@@ -3394,6 +3416,7 @@ CEdge:define_enum("edge", {
 ---@field rel SubtypeRelation
 ---@field shallowest_block integer
 ---@field right NodeID
+---@field cause constraintcause
 
 ---@class RightCallEdge
 ---@field left NodeID
@@ -3401,6 +3424,7 @@ CEdge:define_enum("edge", {
 ---@field shallowest_block integer
 ---@field right NodeID
 ---@field arg value
+---@field cause constraintcause
 
 -- I wish I had generics in LuaCATS
 
@@ -3614,7 +3638,7 @@ end
 ---check for combinations of constrain edges that induce new constraints in response to a constrain edges
 ---@param edge ConstrainEdge
 ---@param queue ReachabilityQueue
----@param cause any
+---@param cause constraintcause
 function Reachability:constrain_transitivity(edge, queue, cause)
 	for _, l2 in ipairs(self.constrain_edges:to(edge.left)) do
 		---@cast l2 ConstrainEdge
@@ -3654,8 +3678,9 @@ end
 ---@param right integer
 ---@param rel SubtypeRelation
 ---@param shallowest_block integer
+---@param cause constraintcause
 ---@return boolean
-function Reachability:add_constrain_edge(left, right, rel, shallowest_block)
+function Reachability:add_constrain_edge(left, right, rel, shallowest_block, cause)
 	assert(type(left) == "number", "left isn't an integer!")
 	assert(type(right) == "number", "right isn't an integer!")
 
@@ -3673,7 +3698,7 @@ function Reachability:add_constrain_edge(left, right, rel, shallowest_block)
 	end
 
 	---@type ConstrainEdge
-	local edge = { left = left, right = right, rel = rel, shallowest_block = shallowest_block }
+	local edge = { left = left, right = right, rel = rel, shallowest_block = shallowest_block, cause = cause }
 
 	self.constrain_edges:add(edge)
 
@@ -3685,8 +3710,9 @@ end
 ---@param rel SubtypeRelation
 ---@param right integer
 ---@param shallowest_block integer
+---@param cause constraintcause
 ---@return boolean
-function Reachability:add_call_left_edge(left, arg, rel, right, shallowest_block)
+function Reachability:add_call_left_edge(left, arg, rel, right, shallowest_block, cause)
 	assert(type(left) == "number", "left isn't an integer!")
 	assert(type(right) == "number", "right isn't an integer!")
 
@@ -3702,6 +3728,7 @@ function Reachability:add_call_left_edge(left, arg, rel, right, shallowest_block
 		rel = rel,
 		right = right,
 		shallowest_block = shallowest_block,
+		cause = cause,
 	}
 
 	self.leftcall_edges:add(edge)
@@ -3714,8 +3741,9 @@ end
 ---@param right integer
 ---@param arg value
 ---@param shallowest_block integer
+---@param cause constraintcause
 ---@return boolean
-function Reachability:add_call_right_edge(left, rel, right, arg, shallowest_block)
+function Reachability:add_call_right_edge(left, rel, right, arg, shallowest_block, cause)
 	assert(type(left) == "number", "left isn't an integer!")
 	assert(type(right) == "number", "right isn't an integer!")
 
@@ -3731,6 +3759,7 @@ function Reachability:add_call_right_edge(left, rel, right, arg, shallowest_bloc
 		rel = rel,
 		right = right,
 		shallowest_block = shallowest_block,
+		cause = cause,
 	}
 
 	self.rightcall_edges:add(edge)
@@ -3964,7 +3993,8 @@ end
 ---@param left integer
 ---@param right integer
 ---@param rel SubtypeRelation
-function TypeCheckerState:check_heads(left, right, rel)
+---@param cause constraintcause
+function TypeCheckerState:check_heads(left, right, rel, cause)
 	local lvalue, ltag, lctx = table.unpack(self.values[left])
 	local rvalue, rtag, rctx = table.unpack(self.values[right])
 
@@ -3980,15 +4010,16 @@ function TypeCheckerState:check_heads(left, right, rel)
 			value.host_value(lctx),
 			value.host_value(lvalue),
 			value.host_value(rctx),
-			value.host_value(rvalue)
+			value.host_value(rvalue),
+			value.host_value(cause)
 		)
-		U.tag(
-			"apply_value",
-			{ lvalue = lvalue, rvalue = rvalue, block_level = typechecker_state.block_level, rel = rel.debug_name },
-			apply_value,
-			rel.constrain,
-			value.tuple_value(tuple_params)
-		)
+		U.tag("apply_value", {
+			lvalue = lvalue,
+			rvalue = rvalue,
+			block_level = typechecker_state.block_level,
+			rel = rel.debug_name,
+			cause = cause,
+		}, apply_value, rel.constrain, value.tuple_value(tuple_params))
 	end
 end
 
@@ -4008,7 +4039,14 @@ function TypeCheckerState:constrain_induce_call(left, right, rel)
 		local l = self:check_value(value.neutral(f), TypeCheckerTag.VALUE, nil)
 		U.append(
 			self.pending,
-			EdgeNotif.CallLeft(l, arg, rel, right, self.block_level, "Inside constrain_induce_call ltag")
+			EdgeNotif.CallLeft(
+				l,
+				arg,
+				rel,
+				right,
+				self.block_level,
+				terms.constraintcause.lost("Inside constrain_induce_call ltag", debug.traceback())
+			)
 		)
 	end
 
@@ -4019,7 +4057,14 @@ function TypeCheckerState:constrain_induce_call(left, right, rel)
 		local r = self:check_value(value.neutral(f), TypeCheckerTag.USAGE, nil)
 		U.append(
 			self.pending,
-			EdgeNotif.CallRight(left, rel, r, arg, self.block_level, "Inside constrain_induce_call rtag")
+			EdgeNotif.CallRight(
+				left,
+				rel,
+				r,
+				arg,
+				self.block_level,
+				terms.constraintcause.lost("Inside constrain_induce_call rtag", debug.traceback())
+			)
 		)
 	end
 end
@@ -4043,7 +4088,7 @@ function TypeCheckerState:constrain_leftcall_compose_1(edge)
 					r2.rel,
 					r2.right,
 					math.min(edge.shallowest_block, r2.shallowest_block),
-					"constrain leftcall composition induced by constrain"
+					terms.constraintcause.lost("constrain leftcall composition induced by constrain", debug.traceback())
 				)
 			)
 		end
@@ -4067,7 +4112,7 @@ function TypeCheckerState:constrain_on_left_meet(edge)
 					edge.rel,
 					edge.right,
 					math.min(edge.shallowest_block, r.shallowest_block),
-					"Constrain left call meeting a right call"
+					terms.constraintcause.lost("Constrain left call meeting a right call", debug.traceback())
 				)
 			)
 		end
@@ -4091,7 +4136,7 @@ function TypeCheckerState:constrain_on_right_meet(edge)
 					edge.rel,
 					l.right,
 					math.min(edge.shallowest_block, l.shallowest_block),
-					"Constrain right call meeting a left call"
+					terms.constraintcause.lost("Constrain right call meeting a left call", debug.traceback())
 				)
 			)
 		end
@@ -4117,7 +4162,7 @@ function TypeCheckerState:constrain_leftcall_compose_2(edge)
 					edge.rel,
 					l2.right,
 					math.min(edge.shallowest_block, l2.shallowest_block),
-					"constrain leftcall composition induced by leftcall"
+					terms.constraintcause.lost("constrain leftcall composition induced by leftcall", debug.traceback())
 				)
 			)
 		end
@@ -4143,7 +4188,10 @@ function TypeCheckerState:rightcall_constrain_compose_2(edge)
 					l2.right,
 					l2.arg,
 					math.min(edge.shallowest_block, l2.shallowest_block),
-					"rightcall constrain composition induced by constrain"
+					terms.constraintcause.lost(
+						"rightcall constrain composition induced by constrain",
+						debug.traceback()
+					)
 				)
 			)
 		end
@@ -4169,7 +4217,7 @@ function TypeCheckerState:rightcall_constrain_compose_1(edge)
 					r2.right,
 					edge.arg,
 					math.min(edge.shallowest_block, r2.shallowest_block),
-					"constrain leftcall composition induced by leftcall"
+					terms.constraintcause.lost("constrain leftcall composition induced by leftcall", debug.traceback())
 				)
 			)
 		end
@@ -4199,7 +4247,7 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 		if item:is_Constrain() then
 			local left, rel, right, shallowest_block, item_cause = item:unwrap_Constrain()
 
-			if self.graph:add_constrain_edge(left, right, rel, self.block_level) then
+			if self.graph:add_constrain_edge(left, right, rel, self.block_level, item_cause) then
 				---@type ConstrainEdge
 				local edge = { left = left, rel = rel, right = right, shallowest_block = self.block_level }
 				self.graph:constrain_transitivity(edge, self.pending, item_cause)
@@ -4210,7 +4258,8 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 					self,
 					left,
 					right,
-					rel
+					rel,
+					item_cause
 				)
 				self:constrain_induce_call(left, right, rel)
 				self:constrain_leftcall_compose_1(edge)
@@ -4219,7 +4268,7 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 		elseif item:is_CallLeft() then
 			local left, arg, rel, right, shallowest_block, item_cause = item:unwrap_CallLeft()
 
-			if self.graph:add_call_left_edge(left, arg, rel, right, self.block_level) then
+			if self.graph:add_call_left_edge(left, arg, rel, right, self.block_level, item_cause) then
 				---@type LeftCallEdge
 				local edge = { left = left, arg = arg, rel = rel, right = right, shallowest_block = self.block_level }
 				self:constrain_leftcall_compose_2(edge)
@@ -4228,7 +4277,7 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 		elseif item:is_CallRight() then
 			local left, rel, right, arg, shallowest_block, item_cause = item:unwrap_CallRight()
 
-			if self.graph:add_call_right_edge(left, rel, right, arg, self.block_level) then
+			if self.graph:add_call_right_edge(left, rel, right, arg, self.block_level, item_cause) then
 				---@type RightCallEdge
 				local edge = { left = left, rel = rel, right = right, arg = arg, shallowest_block = self.block_level }
 				self:rightcall_constrain_compose_1(edge)

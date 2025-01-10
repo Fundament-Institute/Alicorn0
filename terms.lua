@@ -1176,6 +1176,7 @@ expression_goal:derive(derivers.pretty_print)
 placeholder_debug:derive(derivers.pretty_print)
 purity:derive(derivers.pretty_print)
 result_info:derive(derivers.pretty_print)
+constraintcause:derive(derivers.pretty_print)
 
 local internals_interface = require "internals-interface"
 internals_interface.terms = terms

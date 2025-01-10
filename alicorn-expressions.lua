@@ -456,7 +456,7 @@ local function speculate_pi_type(env, metaval)
 			env.typechecking_context,
 			pi,
 			env.typechecking_context,
-			"Speculating on pi type"
+			terms.constraintcause.primitive("Speculating on pi type", nil)
 		)
 
 		return pi
@@ -1166,7 +1166,7 @@ collect_tuple = metalanguage.reducer(
 				env.typechecking_context,
 				goal_type,
 				env.typechecking_context,
-				"tuple type in collect_tuple"
+				terms.constraintcause.primitive("tuple type in collect_tuple", nil)
 			)
 			return true, checkable_term.tuple_cons(collected_terms), env
 		else
