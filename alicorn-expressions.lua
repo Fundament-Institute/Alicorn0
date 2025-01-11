@@ -1057,14 +1057,13 @@ local function host_operative(fn, name)
 	)
 end
 
----@generic T
----@param args any
+---@param args ExpressionArgs
 ---@param a ConstructedSyntax
----@param b T
+---@param b ConstructedSyntax
 ---@return boolean
----@return checkable|boolean
+---@return string|boolean
 ---@return checkable?
----@return T?
+---@return ConstructedSyntax?
 ---@return Environment?
 local function collect_tuple_pair_handler(args, a, b)
 	local goal, env = args:unwrap()
@@ -1080,7 +1079,7 @@ local function collect_tuple_pair_handler(args, a, b)
 	return true, true, val, b, env
 end
 
----@param args any
+---@param args ExpressionArgs
 ---@return boolean
 ---@return boolean
 ---@return nil
@@ -1312,6 +1311,41 @@ local block = metalanguage.reducer(
 	"block"
 )
 
+---@param args ExpressionArgs
+---@param a ConstructedSyntax
+---@param b ConstructedSyntax
+---@return boolean
+---@return string|boolean
+---@return ConstructedSyntax?
+---@return checkable?
+---@return ConstructedSyntax?
+---@return Environment?
+local function top_level_block_pair_handler(args, a, b)
+	local goal, env = args:unwrap()
+	local ok, val
+	ok, val, env = a:match(
+		{ expression(metalanguage.accept_handler, ExpressionArgs.new(goal, env)) },
+		metalanguage.failure_handler,
+		nil
+	)
+	if not ok then
+		return false, val
+	end
+	return true, true, a, val, b, env
+end
+
+---@param args ExpressionArgs
+---@return boolean
+---@return boolean
+---@return nil
+---@return nil
+---@return nil
+---@return Environment
+local function top_level_block_nil_handler(args)
+	local goal, env = args:unwrap()
+	return true, false, nil, nil, nil, env
+end
+
 local top_level_block = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param args TopLevelBlockArgs
@@ -1357,9 +1391,10 @@ local top_level_block = metalanguage.reducer(
 		)
 		local progress = 0
 		while ok and continue do
-			ok, continue, newval, syntax, env = syntax:match({
-				metalanguage.ispair(collect_tuple_pair_handler),
-				metalanguage.isnil(collect_tuple_nil_handler),
+			local aval
+			ok, continue, aval, newval, syntax, env = syntax:match({
+				metalanguage.ispair(top_level_block_pair_handler),
+				metalanguage.isnil(top_level_block_nil_handler),
 			}, metalanguage.failure_handler, ExpressionArgs.new(goal, env))
 			if ok and continue then
 				lastval = newval
@@ -1378,9 +1413,9 @@ local top_level_block = metalanguage.reducer(
 					.. " / "
 					.. tostring(length)
 					.. " @ "
-					.. tostring(newval and newval.start_anchor or (syntax and syntax.start_anchor) or "") --FIXME wrong anchors
+					.. tostring(aval and aval.start_anchor or (syntax and syntax.start_anchor) or "")
 					.. " … "
-					.. tostring(newval and newval.end_anchor or (syntax and syntax.end_anchor) or "")
+					.. tostring(aval and aval.end_anchor or (syntax and syntax.end_anchor) or "")
 					.. ""
 			)
 			io.flush()
