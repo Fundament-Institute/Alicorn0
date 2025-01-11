@@ -1,6 +1,7 @@
 local derivers = require "derivers"
 local pretty_printer = require "pretty-printer"
 local traits = require "traits"
+local U = require "alicorn-utils"
 
 -- record and enum are nominative types.
 -- this means that two record types, given the same arguments, are distinct.
@@ -119,29 +120,28 @@ end
 local function gen_record(self, cons, kind, params_with_types)
 	local params, params_types = parse_params_with_types(params_with_types)
 	validate_params_types(kind, params, params_types)
+	local function build_record(...)
+		local args = { ... }
+		local val = {
+			kind = kind,
+		}
+		for i, v in ipairs(params) do
+			local argi = args[i]
+			-- type-check constructor arguments
+			if params_types[i].value_check(argi) ~= true then
+				print("value of parameter " .. v .. ": (follows)")
+				p(argi)
+				print("expected type of parameter " .. v .. " is :", params_types[i])
+				error("wrong argument type passed to constructor " .. kind .. ", parameter '" .. v .. "'")
+			end
+			val[v] = argi
+		end
+		setmetatable(val, self)
+		return val
+	end
 	setmetatable(cons, {
 		__call = function(_, ...)
-			local args = { ... }
-			local val = {
-				kind = kind,
-			}
-			for i, v in ipairs(params) do
-				local argi = args[i]
-				-- type-check constructor arguments
-				if params_types[i].value_check(argi) ~= true then
-					print("value of parameter " .. v .. ": (follows)")
-					p(argi)
-					print("expected type of parameter " .. v .. " is :", params_types[i])
-					--for i = 2, 25 do
-					--	local d = debug.getinfo(i, "Sln")
-					--	print(string.format("%s %s %s: %s:%d", d.what, d.namewhat, d.name, d.source, d.currentline))
-					--end
-					error("wrong argument type passed to constructor " .. kind .. ", parameter '" .. v .. "'")
-				end
-				val[v] = argi
-			end
-			setmetatable(val, self)
-			return val
+			return build_record(...)
 		end,
 	})
 	---@type RecordDeriveInfo
@@ -326,11 +326,15 @@ end
 ---@field default_print fun(MapValue, ...)
 
 local map_type_mt = {
-	__call = function(self)
+	__call = function(self, ...)
 		local val = {
 			_map = {},
 		}
 		setmetatable(val, self)
+		local args = table.pack(...)
+		for i = 1, args.n, 2 do
+			val:set(args[i], args[i + 1])
+		end
 		return val
 	end,
 	__eq = function(left, right)
@@ -417,8 +421,6 @@ local function map_pretty_print(self, pp, ...)
 	return pp:table(self._map, ...)
 end
 
-local map_memo = {}
-
 ---@param self table
 ---@param key_type Type
 ---@param value_type Type
@@ -431,15 +433,6 @@ local function define_map(self, key_type, value_type)
 		or type(value_type.value_check) ~= "function"
 	then
 		error("trying to set the key or value type to something that isn't a type (possible typo?)")
-	end
-
-	if not map_memo[key_type] then
-		map_memo[key_type] = {}
-	end
-	if map_memo[key_type][value_type] then
-		return map_memo[key_type][value_type]
-	else
-		map_memo[key_type][value_type] = self
 	end
 
 	setmetatable(self, map_type_mt)
@@ -464,6 +457,7 @@ local function define_map(self, key_type, value_type)
 	})
 	return self
 end
+define_map = U.memoize(define_map)
 
 ---@class SetType: Type
 ---@field key_type Type
@@ -485,11 +479,15 @@ end
 ---@field default_print fun(SetValue, ...)
 
 local set_type_mt = {
-	__call = function(self)
+	__call = function(self, ...)
 		local val = {
 			_set = {},
 		}
 		setmetatable(val, self)
+		local args = table.pack(...)
+		for i = 1, args.n do
+			val:put(args[i])
+		end
 		return val
 	end,
 	__eq = function(left, right)
@@ -584,20 +582,12 @@ local function set_pretty_print(self, pp, ...)
 	return pp:table(self._set, ...)
 end
 
-local set_memo = {}
-
 ---@param self table
 ---@param key_type Type
 ---@return SetType self
 local function define_set(self, key_type)
 	if type(key_type) ~= "table" or type(key_type.value_check) ~= "function" then
 		error("trying to set the key or value type to something that isn't a type (possible typo?)")
-	end
-
-	if set_memo[key_type] then
-		return set_memo[key_type]
-	else
-		set_memo[key_type] = self
 	end
 
 	setmetatable(self, set_type_mt)
@@ -620,13 +610,14 @@ local function define_set(self, key_type)
 	})
 	return self
 end
+define_set = U.memoize(define_set)
 
 ---@class ArrayType: Type
 ---@field value_type Type
 ---@field methods { [string]: function }
 ---@field __eq fun(ArrayValue, ArrayValue): boolean
----@field __index fun(self: ArrayType, key: number | string) : Type | function
----@field __newindex fun(self: ArrayType, key: number | string, value: Type)
+---@field __index fun(self: ArrayValue, key: integer | string) : Value | function
+---@field __newindex fun(self: ArrayValue, key: integer, value: Value)
 ---@field __ipairs fun(ArrayValue): function, ArrayValue, integer
 ---@field __len fun(ArrayValue): integer
 ---@field __tostring fun(ArrayValue): string
@@ -676,14 +667,6 @@ local function array_next(state, control)
 	end
 end
 
-local function array_unpack(array, i, ...)
-	if i > 0 then
-		return array_unpack(array, i - 1, array[i], ...)
-	else
-		return ...
-	end
-end
-
 local function gen_array_methods(self, value_type)
 	return {
 		ipairs = function(val)
@@ -705,7 +688,7 @@ local function gen_array_methods(self, value_type)
 			return new
 		end,
 		unpack = function(val)
-			return array_unpack(val.array, val.n)
+			return table.unpack(val.array, 1, val.n)
 		end,
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
@@ -728,16 +711,16 @@ local function array_eq_fn(left, right)
 end
 
 ---@generic V : Type
----@param t ArrayType
+---@param self ArrayType
 ---@param value_type `V`
----@return fun(self: ArrayType, key: number | string) : V | function
----@return fun(self: ArrayType, key: number | string, value: V)
-local function gen_array_index_fns(t, value_type)
-	---@param self ArrayType
-	---@param key number | string
-	---@return Type | function
-	local function index(self, key)
-		local method = t.methods[key]
+---@return fun(self: ArrayValue, key: integer | string) : V | function
+---@return fun(self: ArrayValue, key: integer, value: V)
+local function gen_array_index_fns(self, value_type)
+	---@param val ArrayValue
+	---@param key integer | string
+	---@return Value | function
+	local function index(val, key)
+		local method = self.methods[key]
 		if method then
 			return method
 		end
@@ -755,21 +738,21 @@ local function gen_array_index_fns(t, value_type)
 		end
 		-- puc-rio lua 5.3 ipairs() always produces an iterator that looks for the first nil
 		-- instead of deferring to __ipairs metamethod like in 5.2
-		--if key == self.n + 1 then
+		--if key == val.n + 1 then
 		--	return nil
 		--end
 		-- above is commented out because it turns out we want nil-resistant iterators
 		-- so we should make sure to use the :ipairs() method instead
-		if key < 1 or key > self.n then
-			p(key, self.n)
+		if key < 1 or key > val.n then
+			p(key, val.n)
 			error("key passed to array indexing is out of bounds (read code comment above)")
 		end
-		return self.array[key]
+		return val.array[key]
 	end
-	---@param self ArrayType
-	---@param key number | string
-	---@param value Type
-	local function newindex(self, key, value)
+	---@param val ArrayValue
+	---@param key integer
+	---@param value Value
+	local function newindex(val, key, value)
 		if type(key) ~= "number" then
 			p("array-index", value_type)
 			p(key)
@@ -780,8 +763,8 @@ local function gen_array_index_fns(t, value_type)
 			error("key passed to array index-assignment is not an integer")
 		end
 		-- n+1 can be used to append
-		if key < 1 or key > self.n + 1 then
-			p(key, self.n)
+		if key < 1 or key > val.n + 1 then
+			p(key, val.n)
 			error("key passed to array index-assignment is out of bounds")
 		end
 		if value_type.value_check(value) ~= true then
@@ -789,9 +772,9 @@ local function gen_array_index_fns(t, value_type)
 			p(value)
 			error("wrong value type passed to array index-assignment")
 		end
-		self.array[key] = value
-		if key > self.n then
-			self.n = key
+		val.array[key] = value
+		if key > val.n then
+			val.n = key
 		end
 	end
 	return index, newindex
@@ -855,20 +838,12 @@ local function gen_array_diff_fn(self, value_type)
 	return diff_fn
 end
 
-local array_memo = {}
-
 ---@param self table
 ---@param value_type Type
 ---@return ArrayType
 local function define_array(self, value_type)
 	if type(value_type) ~= "table" or type(value_type.value_check) ~= "function" then
 		error("trying to set the value type to something that isn't a type (possible typo?)")
-	end
-
-	if array_memo[value_type] then
-		return array_memo[value_type]
-	else
-		array_memo[value_type] = self
 	end
 
 	setmetatable(self, array_type_mt)
@@ -897,6 +872,7 @@ local function define_array(self, value_type)
 	})
 	return self
 end
+define_array = U.memoize(define_array)
 
 ---@class UndefinedType: Type
 ---@field define_record fun(self: table, kind: string, params_with_types: ParamsWithTypes): RecordType
