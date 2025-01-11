@@ -55,7 +55,7 @@ let host-inferrable-term = unwrap(host-inferrable-term-wrap)
 let host-checkable-term  = unwrap(host-checkable-term-wrap)
 let host-lua-error       = unwrap(host-lua-error-wrap)
 
-let host-srel-type =
+let srel =
 	lambda_implicit (U : type_(10, 0))
 		unwrap
 			intrinsic
@@ -76,9 +76,30 @@ let host-srel-type =
 				:
 				wrapped (forall ((x : U)) -> (res : U))
 
-let subtyping = intrinsic "return evaluator.UniverseOmegaRelation" : host-srel-type(type_(9, 0))
+let variance =
+	lambda_implicit (U : type_(10, 0))
+		unwrap
+			intrinsic
+				""""
+					local string_array = terms_gen.declare_array(terms_gen.builtin_string)
+					return terms.value.closure(
+						"#srel-arg",
+						terms.typed_term.tuple_elim(
+							string_array("target"),
+							terms.typed_term.bound_variable(1),
+							1,
+							terms.typed_term.variance_type(
+								terms.typed_term.bound_variable(2)
+							)
+						),
+						terms.runtime_context()
+					)
+				:
+				wrapped (forall ((x : U)) -> (res : U))
 
-let tuple-desc-relation = intrinsic "return evaluator.TupleDescRelation" : host-srel-type(type_(9, 0))
+let subtyping = intrinsic "return evaluator.UniverseOmegaRelation" : srel(type_(9, 0))
+
+let tuple-desc-relation = intrinsic "return evaluator.TupleDescRelation" : srel(type_(9, 0))
 
 let _|_ =
 	lambda_implicit (U : type_(10, 0))
@@ -125,7 +146,7 @@ let _&_ =
 				wrapped (forall (a : U, b : U) -> (res : U))
 
 let covariant = 
-	lambda_implicit (U : type_(10, 0))
+	lambda_curry (U : type_(9, 1), a : U)
 		unwrap
 			intrinsic
 				""""
@@ -146,10 +167,10 @@ let covariant =
 						terms.runtime_context()
 					)
 				:
-				wrapped (forall ((a : U)) -> (res : U))
+				wrapped (forall ((rel : srel(a))) -> (res : variance(a)))
 
 let contravariant = 
-	lambda_implicit (U : type_(10, 0))
+	lambda_curry (U : type_(9, 1), a : U)
 		unwrap
 			intrinsic
 				""""
@@ -170,7 +191,7 @@ let contravariant =
 						terms.runtime_context()
 					)
 				:
-				wrapped (forall ((a : U)) -> (res : U))
+				wrapped (forall ((rel : srel(a))) -> (res : variance(a)))
 
 let host-family-sig-srels = lambda (signature : type_(1, 0))
 	let inner = intrinsic
