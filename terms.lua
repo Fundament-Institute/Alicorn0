@@ -506,6 +506,10 @@ constraintcause:define_enum("constraintcause", {
 		"right",    gen.builtin_number,
 		"position", anchor_type,
 	} },
+	{ "nested", {
+		"description", gen.builtin_string,
+		"inner",     constraintcause,
+	} },
 	{ "leftcall_discharge", {
 		"call",       gen.builtin_number,
 		"constraint", gen.builtin_number,

@@ -102,7 +102,7 @@ local function FunctionRelation(srel)
 				srel,
 				rctx,
 				applied_use,
-				terms.constraintcause.lost("FunctionRelation inner", debug.traceback())
+				terms.constraintcause.nested("FunctionRelation inner", cause)
 			)
 		end),
 	}, subtype_relation_mt)
@@ -147,7 +147,7 @@ local function IndepTupleRelation(...)
 							args[i].srel,
 							rctx,
 							use_elems[i],
-							terms.constraintcause.lost("tuple element constraint", debug.traceback())
+							terms.constraintcause.nested("positive tuple element constraint", cause)
 						)
 					else
 						typechecker_state:queue_constrain(
@@ -156,7 +156,7 @@ local function IndepTupleRelation(...)
 							args[i].srel,
 							lctx,
 							val_elems[i],
-							terms.constraintcause.lost("tuple element constraint", debug.traceback())
+							terms.constraintcause.nested("negative tuple element constraint", cause)
 						)
 					end
 				end
@@ -262,7 +262,7 @@ enum_desc_srel = setmetatable({
 					val_type,
 					rctx,
 					use_variant --[[@as value -- please find a better approach]],
-					terms.constraintcause.lost("enum variant", debug.traceback())
+					terms.constraintcause.nested("enum variant", cause)
 				)
 			end
 		end
@@ -309,7 +309,7 @@ local TupleDescRelation = setmetatable({
 					tuple_types_val[i],
 					rctx,
 					tuple_types_use[i],
-					terms.constraintcause.lost("TupleDescRelation.constrain", debug.traceback())
+					terms.constraintcause.nested("TupleDescRelation.constrain " .. tostring(i), cause)
 				)
 			end
 		end
@@ -855,7 +855,7 @@ add_comparer("value.tuple_type", "value.tuple_type", function(lctx, a, rctx, b, 
 		TupleDescRelation,
 		rctx,
 		desc_b,
-		terms.constraintcause.lost("tuple type", debug.traceback())
+		terms.constraintcause.nested("tuple type", cause)
 	)
 	return true
 end)
@@ -868,7 +868,7 @@ add_comparer("value.host_tuple_type", "value.host_tuple_type", function(lctx, a,
 		TupleDescRelation,
 		rctx,
 		desc_b,
-		terms.constraintcause.lost("host tuple type", debug.traceback())
+		terms.constraintcause.nested("host tuple type", cause)
 	)
 	return true
 end)
@@ -880,7 +880,7 @@ add_comparer("value.enum_desc_type", "value.enum_desc_type", function(lctx, a, r
 		a_univ,
 		rctx,
 		b_univ,
-		terms.constraintcause.lost("enum desc universe covariance", debug.traceback())
+		terms.constraintcause.nested("enum desc universe covariance", cause)
 	)
 	return true
 end)
@@ -893,7 +893,7 @@ add_comparer("value.enum_type", "value.enum_type", function(lctx, a, rctx, b, ca
 		enum_desc_srel,
 		rctx,
 		b_desc,
-		terms.constraintcause.lost("enum type description", debug.traceback())
+		terms.constraintcause.nested("enum type description", cause)
 	)
 	return true
 end)
@@ -949,7 +949,7 @@ add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx,
 		enum_desc_srel,
 		rctx,
 		value.enum_desc_value(construction_variants),
-		terms.constraintcause.lost("use enum construction as tuple desc", debug.traceback())
+		terms.constraintcause.nested("use enum construction as tuple desc", cause)
 	)
 	return true
 end)
@@ -1005,7 +1005,7 @@ add_comparer("value.tuple_desc_type", "value.enum_type", function(lctx, a, rctx,
 		enum_desc_srel,
 		rctx,
 		b_desc,
-		terms.constraintcause.lost("use tuple description as enum", debug.traceback())
+		terms.constraintcause.nested("use tuple description as enum", nested)
 	)
 	return true
 end)
@@ -1034,7 +1034,7 @@ add_comparer("value.pi", "value.pi", function(lctx, a, rctx, b, cause)
 		b_param_type,
 		lctx,
 		a_param_type,
-		terms.constraintcause.lost("pi function parameters", debug.traceback())
+		terms.constraintcause.nested("pi function parameters", cause)
 	)
 	--local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
 	--local a_res = apply_value(a_result_type, unique_placeholder)
@@ -1048,7 +1048,7 @@ add_comparer("value.pi", "value.pi", function(lctx, a, rctx, b, cause)
 		FunctionRelation(UniverseOmegaRelation),
 		rctx,
 		b_result_type,
-		terms.constraintcause.lost("pi function results", debug.traceback())
+		terms.constraintcause.nested("pi function results", cause)
 	)
 
 	return true
@@ -1072,7 +1072,7 @@ add_comparer("value.host_function_type", "value.host_function_type", function(lc
 		b_param_type,
 		lctx,
 		a_param_type,
-		terms.constraintcause.lost("host function parameters", debug.traceback())
+		terms.constraintcause.nested("host function parameters", cause)
 	)
 	--local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
 	--local a_res = apply_value(a_result_type, unique_placeholder)
@@ -1086,7 +1086,7 @@ add_comparer("value.host_function_type", "value.host_function_type", function(lc
 		FunctionRelation(UniverseOmegaRelation),
 		rctx,
 		b_result_type,
-		terms.constraintcause.lost("host function results", debug.traceback())
+		terms.constraintcause.nested("host function results", cause)
 	)
 	return true
 end)
@@ -1122,9 +1122,9 @@ add_comparer("value.host_user_defined_type", "value.host_user_defined_type", fun
 				value.host_value(rctx),
 				value.host_value(value.tuple_value(b_args)),
 				value.host_value(
-					terms.constraintcause.lost(
+					terms.constraintcause.nested(
 						"host_user_defined_type compared against host_user_defined_type",
-						debug.traceback()
+						cause
 					)
 				)
 			)
@@ -1156,13 +1156,7 @@ end
 add_comparer("value.srel_type", "value.srel_type", function(lctx, a, rctx, b, cause)
 	local a_target = a:unwrap_srel_type()
 	local b_target = b:unwrap_srel_type()
-	typechecker_state:queue_subtype(
-		lctx,
-		a_target,
-		rctx,
-		b_target,
-		terms.constraintcause.lost("srel target", debug.traceback())
-	)
+	typechecker_state:queue_subtype(lctx, a_target, rctx, b_target, terms.constraintcause.nested("srel target", cause))
 	return true
 end)
 
@@ -1174,7 +1168,7 @@ add_comparer("value.variance_type", "value.variance_type", function(lctx, a, rct
 		a_target,
 		rctx,
 		b_target,
-		terms.constraintcause.lost("variance target", debug.traceback())
+		terms.constraintcause.nested("variance target", cause)
 	)
 	return true
 end)
@@ -1208,13 +1202,7 @@ end)
 
 add_comparer("value.host_wrapped_type", "value.host_wrapped_type", function(lctx, a, rctx, b, cause)
 	local ua, ub = a:unwrap_host_wrapped_type(), b:unwrap_host_wrapped_type()
-	typechecker_state:queue_subtype(
-		lctx,
-		ua,
-		rctx,
-		ub,
-		terms.constraintcause.lost("wrapped type target", debug.traceback())
-	)
+	typechecker_state:queue_subtype(lctx, ua, rctx, ub, terms.constraintcause.nested("wrapped type target", cause))
 	--U.tag("check_concrete", { ua, ub }, check_concrete, ua, ub)
 	return true
 end)
@@ -1227,7 +1215,7 @@ add_comparer("value.singleton", "value.singleton", function(lctx, a, rctx, b, ca
 		a_supertype,
 		rctx,
 		b_supertype,
-		terms.constraintcause.lost("singleton supertypes", debug.traceback())
+		terms.constraintcause.nested("singleton supertypes", cause)
 	)
 
 	if a_value == b_value then
@@ -1245,7 +1233,7 @@ add_comparer("value.tuple_desc_type", "value.tuple_desc_type", function(lctx, a,
 		a_universe,
 		rctx,
 		b_universe,
-		terms.constraintcause.lost("tuple_desc_type universes", debug.traceback())
+		terms.constraintcause.nested("tuple_desc_type universes", cause)
 	)
 	return true
 end)
@@ -1260,7 +1248,7 @@ add_comparer("value.program_type", "value.program_type", function(lctx, a, rctx,
 		effect_row_srel,
 		rctx,
 		b_eff,
-		terms.constraintcause.lost("program effects", debug.traceback())
+		terms.constraintcause.nested("program effects", cause)
 	)
 	return true
 end)
@@ -1294,13 +1282,7 @@ function check_concrete(lctx, val, rctx, use, cause)
 		local vnv = val:unwrap_neutral()
 		if vnv:is_tuple_element_access_stuck() then
 			local innerctx, bound = upcast(lctx, val)
-			typechecker_state:queue_subtype(
-				innerctx,
-				bound,
-				rctx,
-				use,
-				terms.constraintcause.lost("upcast", debug.traceback())
-			)
+			typechecker_state:queue_subtype(innerctx, bound, rctx, use, terms.constraintcause.nested("upcast", cause))
 			return true
 		end
 	end
@@ -1328,27 +1310,15 @@ function check_concrete(lctx, val, rctx, use, cause)
 			val_supertype,
 			rctx,
 			use,
-			terms.constraintcause.lost("singleton subtype", debug.traceback())
+			terms.constraintcause.nested("singleton subtype", cause)
 		)
 		return true
 	end
 
 	if val:is_union_type() then
 		local vala, valb = val:unwrap_union_type()
-		typechecker_state:queue_subtype(
-			lctx,
-			vala,
-			rctx,
-			use,
-			terms.constraintcause.lost("union dissasembly", debug.traceback())
-		)
-		typechecker_state:queue_subtype(
-			lctx,
-			valb,
-			rctx,
-			use,
-			terms.constraintcause.lost("union dissasembly", debug.traceback())
-		)
+		typechecker_state:queue_subtype(lctx, vala, rctx, use, terms.constraintcause.nested("union dissasembly", cause))
+		typechecker_state:queue_subtype(lctx, valb, rctx, use, terms.constraintcause.nested("union dissasembly", cause))
 		return true
 	end
 
@@ -1359,14 +1329,14 @@ function check_concrete(lctx, val, rctx, use, cause)
 			val,
 			rctx,
 			usea,
-			terms.constraintcause.lost("intersection dissasembly", debug.traceback())
+			terms.constraintcause.nested("intersection dissasembly", cause)
 		)
 		typechecker_state:queue_subtype(
 			lctx,
 			val,
 			rctx,
 			useb,
-			terms.constraintcause.lost("intersection dissasembly", debug.traceback())
+			terms.constraintcause.nested("intersection dissasembly", cause)
 		)
 		return true
 	end

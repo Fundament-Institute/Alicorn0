@@ -17,6 +17,12 @@ function constraintcause:unwrap_composition() end
 ---@return boolean, number, number, Anchor
 function constraintcause:as_composition() end
 ---@return boolean
+function constraintcause:is_nested() end
+---@return string, constraintcause
+function constraintcause:unwrap_nested() end
+---@return boolean, string, constraintcause
+function constraintcause:as_nested() end
+---@return boolean
 function constraintcause:is_leftcall_discharge() end
 ---@return number, number, Anchor
 function constraintcause:unwrap_leftcall_discharge() end
@@ -39,6 +45,7 @@ function constraintcause:as_lost() end
 ---@field define_enum fun(self: constraintcauseType, name: string, variants: Variants): constraintcauseType
 ---@field primitive fun(description: string, position: any): constraintcause
 ---@field composition fun(left: number, right: number, position: Anchor): constraintcause
+---@field nested fun(description: string, inner: constraintcause): constraintcause
 ---@field leftcall_discharge fun(call: number, constraint: number, position: Anchor): constraintcause
 ---@field rightcall_discharge fun(constraint: number, call: number, position: Anchor): constraintcause
 ---@field lost fun(unique_string: string, stacktrace: string, auxiliary: any): constraintcause
