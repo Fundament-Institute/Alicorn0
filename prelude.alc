@@ -154,7 +154,7 @@ let covariant =
 					return terms.value.closure(
 						"#covariant-args",
 						terms.typed_term.tuple_elim(
-							string_array("left", "right"),
+							string_array("base"),
 							terms.typed_term.bound_variable(1),
 							1,
 							terms.typed_term.variance_cons(
@@ -178,7 +178,7 @@ let contravariant =
 					return terms.value.closure(
 						"#contravariant-args",
 						terms.typed_term.tuple_elim(
-							string_array("left", "right"),
+							string_array("base"),
 							terms.typed_term.bound_variable(1),
 							1,
 							terms.typed_term.variance_cons(
@@ -193,7 +193,7 @@ let contravariant =
 				:
 				wrapped (forall ((rel : srel(a))) -> (res : variance(a)))
 
-let host-family-sig-srels = lambda (signature : type_(1, 0))
+let host-family-sig-variances = lambda (signature : type_(1, 0))
 	let inner = intrinsic
 		""""
 			local typed_array = terms_gen.declare_array(terms.typed_term)
@@ -208,7 +208,7 @@ let host-family-sig-srels = lambda (signature : type_(1, 0))
 					local next_desc, type_fun = elements[1], elements[2]
 					local convert_next = convert_desc(next_desc)
 					local convert_type =
-						terms.value.srel_type(
+						terms.value.variance_type(
 							evaluator.apply_value(
 								type_fun,
 								terms.value.neutral(
@@ -262,7 +262,7 @@ let new-host-unique-id = lambda (name : host-string)
 	let (source2) = host-string-concat(source1, "\" }")
 	intrinsic source2 : host-unique-id
 
-let new-host-type-family = lambda (unique-id : host-unique-id, signature : type_(1, 0), variance : host-family-sig-srels(signature))
+let new-host-type-family = lambda (unique-id : host-unique-id, signature : type_(1, 0), variance : host-family-sig-variances(signature))
 	let inner = intrinsic
 		""""
 			local typed_array = terms_gen.declare_array(terms.typed_term)
@@ -317,7 +317,7 @@ let new-host-type-family = lambda (unique-id : host-unique-id, signature : type_
 		host-func-type (
 				unique-id  : host-unique-id,
 				signature_ : wrapped(type_(1, 0)),
-				variance_  : wrapped(host-family-sig-srels(unwrap(signature_))))
+				variance_  : wrapped(host-family-sig-variances(unwrap(signature_))))
 			->
 			((family : wrapped(signature)))
 	let (family) = inner(unique-id, wrap(signature), wrap(variance))
