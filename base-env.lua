@@ -7,6 +7,7 @@ local terms = require "terms"
 local gen = require "terms-generators"
 local evaluator = require "evaluator"
 local U = require "alicorn-utils"
+local format = require "format"
 
 local value = terms.value
 local typed = terms.typed_term
@@ -812,9 +813,9 @@ end
 
 -- TODO: abstract so can reuse for func type and host func type
 ---@type lua_operative
-local function forall_type_impl(syntax, env)
+local function forall_impl(syntax, env)
 	if not env or not env.enter_block then
-		error "env isn't an environment in forall_type_impl"
+		error "env isn't an environment in forall_impl"
 	end
 
 	local ok, params_thread, tail = syntax:match({
@@ -869,6 +870,7 @@ local function forall_type_impl(syntax, env)
 	env = results_thread.env
 
 	local env, fn_res_term, purity = env:exit_block(results_args, shadowed)
+
 	local usage_array = gen.declare_array(gen.builtin_number)
 	local fn_type_term = terms.inferrable_term.pi(
 		params_args,
@@ -891,7 +893,7 @@ local function forall_type_impl(syntax, env)
 
 	--print("reached end of function type construction")
 	if not env.enter_block then
-		error "env isn't an environment at end in forall_type_impl"
+		error "env isn't an environment at end in forall_impl"
 	end
 	return true, fn_type_term, env
 end
@@ -976,7 +978,7 @@ local function apply_operative_impl(syntax, env)
 			env.typechecking_context,
 			spec_type,
 			env.typechecking_context,
-			terms.constraintcause.primitive("apply", nil)
+			terms.constraintcause.primitive("apply", format.create_anchor(0, 0, "<NIL>"))
 		)
 
 		local ok, args_inferrable_term = tail:match({
@@ -1614,7 +1616,7 @@ local core_operations = {
 	["host-prog-type"] = exprs.host_operative(make_host_func_syntax(true), "host_prog_type_impl"),
 	type = lit_term(value.star(0, 0), value.star(1, 1)),
 	type_ = exprs.host_operative(startype_impl, "startype_impl"),
-	["forall"] = exprs.host_operative(forall_type_impl, "forall_type_impl"),
+	["forall"] = exprs.host_operative(forall_impl, "forall_impl"),
 	lambda = exprs.host_operative(lambda_impl, "lambda_impl"),
 	lambda_single = exprs.host_operative(lambda_single_impl, "lambda_single_impl"),
 	["lambda-prog"] = exprs.host_operative(lambda_prog_impl, "lambda_prog_impl"),

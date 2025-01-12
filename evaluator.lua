@@ -2,6 +2,7 @@ local terms = require "terms"
 local metalanguage = require "metalanguage"
 local U = require "alicorn-utils"
 local utils = require "alicorn-utils"
+local format = require "format"
 local runtime_context = terms.runtime_context
 local s = require "pretty-printer".s
 --local new_typechecking_context = terms.typechecking_context
@@ -47,6 +48,8 @@ local typechecker_state
 local evaluate, infer, check, apply_value
 local name_array = string_array
 local typed = terms.typed_term
+
+local NIL_ANCHOR = format.create_anchor(0, 0, "<NIL>")
 
 ---@param luafunc function
 ---@return value
@@ -313,9 +316,9 @@ local TupleDescRelation = setmetatable({
 						"TupleDescRelation.constrain "
 							.. tostring(i)
 							.. "\n<VAL>:"
-							.. tostring(U.strip_ansi(tostring(tuple_types_val[i])))
+							.. U.strip_ansi(tuple_types_val[i]:pretty_print(lctx))
 							.. "\n<USE>: "
-							.. U.strip_ansi(tostring(tuple_types_use[i])),
+							.. U.strip_ansi(tuple_types_use[i]:pretty_print(rctx)),
 						cause
 					)
 				)
@@ -819,12 +822,12 @@ local concrete_fail_mt = {
 			message = table.concat(message, "")
 		end
 		if self.cause then
-			return message .. " because:\n" .. tostring(self.cause)
+			return message .. " because:\n" .. self.cause:pretty_print(self.ctx)
 		end
 		return message
 	end,
 }
-local function concrete_fail(message, cause)
+local function concrete_fail(message, cause, ctx)
 	if not cause and type(message) == "string" then
 		if not message then
 			error "missing error message for concrete_fail"
@@ -834,6 +837,7 @@ local function concrete_fail(message, cause)
 	return setmetatable({
 		message = message,
 		cause = cause,
+		ctx = ctx,
 	}, concrete_fail_mt)
 end
 
@@ -864,7 +868,10 @@ add_comparer("value.tuple_type", "value.tuple_type", function(lctx, a, rctx, b, 
 		rctx,
 		desc_b,
 		terms.constraintcause.nested(
-			"tuple type \n<VAL>:" .. U.strip_ansi(tostring(desc_a)) .. " \n<USE>: " .. U.strip_ansi(tostring(desc_b)),
+			"tuple type \n<VAL>:"
+				.. U.strip_ansi(desc_a:pretty_print(lctx))
+				.. " \n<USE>: "
+				.. U.strip_ansi(desc_b:pretty_print(lctx)),
 			cause
 		)
 	)
@@ -1031,13 +1038,13 @@ add_comparer("value.pi", "value.pi", function(lctx, a, rctx, b, cause)
 	local avis = a_param_info:unwrap_param_info():unwrap_visibility()
 	local bvis = b_param_info:unwrap_param_info():unwrap_visibility()
 	if avis ~= bvis and not avis:is_implicit() then
-		return false, concrete_fail("pi param_info")
+		return false, concrete_fail("pi param_info", lctx)
 	end
 
 	local apurity = a_result_info:unwrap_result_info():unwrap_result_info()
 	local bpurity = b_result_info:unwrap_result_info():unwrap_result_info()
 	if apurity ~= bpurity then
-		return false, concrete_fail("pi result_info")
+		return false, concrete_fail("pi result_info", lctx)
 	end
 
 	typechecker_state:queue_subtype(
@@ -1075,7 +1082,7 @@ add_comparer("value.host_function_type", "value.host_function_type", function(lc
 	local apurity = a_result_info:unwrap_result_info():unwrap_result_info()
 	local bpurity = b_result_info:unwrap_result_info():unwrap_result_info()
 	if apurity ~= bpurity then
-		return false, concrete_fail("host function result_info")
+		return false, concrete_fail("host function result_info", lctx)
 	end
 
 	typechecker_state:queue_subtype(
@@ -1113,11 +1120,11 @@ add_comparer("value.host_user_defined_type", "value.host_user_defined_type", fun
 			"ids do not match in host user defined types: "
 				.. a_id.name
 				.. "("
-				.. tostring(a_id)
+				.. a_id:pretty_print(lctx)
 				.. ") ~= "
 				.. b_id.name
 				.. "("
-				.. tostring(b_id)
+				.. b_id:pretty_print(rctx)
 				.. ")"
 		)
 	end
@@ -1174,9 +1181,9 @@ add_comparer("value.srel_type", "value.srel_type", function(lctx, a, rctx, b, ca
 		b_target,
 		terms.constraintcause.nested(
 			"srel target \n<VAL>:"
-				.. U.strip_ansi(tostring(a_target))
+				.. U.strip_ansi(a_target:pretty_print(lctx))
 				.. " \n<USE>:"
-				.. U.strip_ansi(tostring(b_target)),
+				.. U.strip_ansi(b_target:pretty_print(rctx)),
 			cause
 		)
 	)
@@ -1345,12 +1352,12 @@ function check_concrete(lctx, val, rctx, use, cause)
 			diff:get(value).diff(val, use)
 			return false,
 				"both values are neutral, but they aren't equal: "
-					.. tostring(val)
+					.. val:pretty_print(lctx)
 					.. " ~= "
-					.. tostring(use)
+					.. use:pretty_print(rctx)
 					.. " (printed diff)"
 					.. " caused by "
-					.. tostring(cause)
+					.. cause:pretty_print(lctx)
 		end
 	end
 
@@ -1362,7 +1369,12 @@ function check_concrete(lctx, val, rctx, use, cause)
 			rctx,
 			use,
 			terms.constraintcause.nested(
-				U.strip_ansi("singleton subtype \n<VAL>:" .. tostring(val_supertype) .. "\n<USE>:" .. tostring(use)),
+				U.strip_ansi(
+					"singleton subtype \n<VAL>:"
+						.. val_supertype:pretty_print(lctx)
+						.. "\n<USE>:"
+						.. use:pretty_print(rctx)
+				),
 				cause
 			)
 		)
@@ -1400,9 +1412,9 @@ function check_concrete(lctx, val, rctx, use, cause)
 			"No valid concrete type comparer found for value "
 				.. val.kind
 				.. ": "
-				.. tostring(val)
+				.. val:pretty_print(lctx)
 				.. " caused by "
-				.. tostring(cause)
+				.. cause:pretty_print(lctx)
 		)
 	end
 
@@ -1410,9 +1422,16 @@ function check_concrete(lctx, val, rctx, use, cause)
 	if not comparer then
 		--print("kind:", val.kind, " use:", use.kind)
 		return false,
-			"no valid concrete comparer between value " .. val.kind .. " and usage " .. use.kind .. ": " .. tostring(
-				val
-			) .. " compared against " .. tostring(use) .. " caused by " .. tostring(cause)
+			"no valid concrete comparer between value "
+				.. val.kind
+				.. " and usage "
+				.. use.kind
+				.. ": "
+				.. val:pretty_print(lctx)
+				.. " compared against "
+				.. use:pretty_print(rctx)
+				.. " caused by "
+				.. cause:pretty_print(lctx)
 	end
 
 	return comparer(lctx, val, rctx, use, cause)
@@ -1478,7 +1497,7 @@ function check(
 				typechecking_context,
 				goal_type,
 				typechecking_context,
-				terms.constraintcause.primitive("inferrable", nil)
+				terms.constraintcause.primitive("inferrable", NIL_ANCHOR)
 			)
 		end
 
@@ -1514,7 +1533,7 @@ function check(
 			typechecking_context,
 			goal_type,
 			typechecking_context,
-			terms.constraintcause.primitive("checkable_term:is_tuple_cons", nil)
+			terms.constraintcause.primitive("checkable_term:is_tuple_cons", NIL_ANCHOR)
 		)
 
 		return usages, typed_term.tuple_cons(new_elements)
@@ -1549,7 +1568,7 @@ function check(
 			typechecking_context,
 			goal_type,
 			typechecking_context,
-			terms.constraintcause.primitive("checkable_term:is_host_tuple_cons", nil)
+			terms.constraintcause.primitive("checkable_term:is_host_tuple_cons", NIL_ANCHOR)
 		)
 
 		return usages, typed_term.host_tuple_cons(new_elements)
@@ -1905,7 +1924,7 @@ function infer(
 			typechecking_context,
 			result_type_param_type,
 			typechecking_context,
-			terms.constraintcause.primitive("inferrable pi term", nil)
+			terms.constraintcause.primitive("inferrable pi term", NIL_ANCHOR)
 		)
 		local result_type_result_type_result =
 			apply_value(result_type_result_type, evaluate(param_type_term, typechecking_context.runtime_context))
@@ -2048,7 +2067,7 @@ function infer(
 				typechecking_context,
 				spec_type,
 				typechecking_context,
-				terms.constraintcause.primitive("tuple elimination", nil)
+				terms.constraintcause.primitive("tuple elimination", NIL_ANCHOR)
 			)
 			return infer_tuple_type(spec_type, subject_value)
 		end)
@@ -2060,7 +2079,7 @@ function infer(
 					typechecking_context,
 					host_spec_type,
 					typechecking_context,
-					terms.constraintcause.primitive("host tuple elimination", nil)
+					terms.constraintcause.primitive("host tuple elimination", NIL_ANCHOR)
 				)
 				return infer_tuple_type(host_spec_type, subject_value)
 			end)
@@ -2092,7 +2111,7 @@ function infer(
 			typechecking_context,
 			value.tuple_desc_type(univ_var),
 			typechecking_context,
-			terms.constraintcause.primitive("tuple type construction", nil)
+			terms.constraintcause.primitive("tuple type construction", NIL_ANCHOR)
 		)
 		return value.union_type(terms.value.star(0, 0), univ_var), desc_usages, terms.typed_term.tuple_type(desc_term)
 	elseif inferrable_term:is_record_cons() then
@@ -2215,7 +2234,7 @@ function infer(
 			typechecking_context,
 			value.enum_type(value.enum_desc_value(constrain_variants)),
 			typechecking_context,
-			terms.constraintcause.primitive("enum case matching", nil)
+			terms.constraintcause.primitive("enum case matching", NIL_ANCHOR)
 		)
 		local term_variants = string_typed_map()
 		local result_types = {}
@@ -2264,7 +2283,7 @@ function infer(
 			typechecking_context,
 			value.enum_desc_type(univ_var),
 			typechecking_context,
-			terms.constraintcause.primitive("tuple type construction", nil)
+			terms.constraintcause.primitive("tuple type construction", NIL_ANCHOR)
 		)
 		return value.union_type(terms.value.star(0, 0), univ_var), desc_usages, terms.typed_term.enum_type(desc_term)
 	elseif inferrable_term:is_object_cons() then
@@ -2297,7 +2316,7 @@ function infer(
 				typechecking_context,
 				op_userdata_type,
 				typechecking_context,
-				terms.constraintcause.primitive("operative userdata", nil)
+				terms.constraintcause.primitive("operative userdata", NIL_ANCHOR)
 			)
 		end
 		local operative_usages = usage_array()
@@ -2392,14 +2411,14 @@ function infer(
 			typechecking_context,
 			restype,
 			typechecking_context,
-			terms.constraintcause.primitive("inferred host if consequent", nil)
+			terms.constraintcause.primitive("inferred host if consequent", NIL_ANCHOR)
 		)
 		typechecker_state:flow(
 			atype,
 			typechecking_context,
 			restype,
 			typechecking_context,
-			terms.constraintcause.primitive("inferred host if alternate", nil)
+			terms.constraintcause.primitive("inferred host if alternate", NIL_ANCHOR)
 		)
 
 		local result_usages = usage_array()
@@ -2463,7 +2482,7 @@ function infer(
 			typechecking_context,
 			value.tuple_desc_type(value.host_type_type),
 			typechecking_context,
-			terms.constraintcause.primitive("tuple type construction", nil)
+			terms.constraintcause.primitive("tuple type construction", NIL_ANCHOR)
 		)
 		return terms.value.star(0, 0), desc_usages, terms.typed_term.host_tuple_type(desc_term)
 	elseif inferrable_term:is_program_sequence() then
@@ -3301,10 +3320,12 @@ local function IndexedCollection(indices)
 	function res:add(obj)
 		U.check_locked(self)
 		U.append(self._collection, obj)
+		local id = #self._collection
 		for name, extractors in pairs(indices) do
 			self._index_store[name] =
 				U.insert_tree_node(obj, self._index_store[name], 1, extractors, U.getshadowdepth(self._index_store))
 		end
+		return id
 	end
 
 	local function store_copy_inner(n, store)
@@ -3400,34 +3421,6 @@ local TypeCheckerState = {}
 --@field values { val: value, tag: TypeCheckerTag, context: TypecheckingContext|nil }
 
 ---@alias NodeID integer the ID of a node in the graph
-
----@module "evaluator.edge"
-local CEdge = gen.declare_type()
-
--- stylua: ignore
-CEdge:define_enum("edge", {
-	{ "ConstrainEdge", {
-		"left",  gen.builtin_number,
-		"rel",  SubtypeRelation,
-		"shallowest_block", gen.builtin_number,
-		"right", gen.builtin_number,
-	} },
-	{ "LeftCallEdge", {
-		"left",  gen.builtin_number,
-		"arg",  value,
-		"rel",  SubtypeRelation,
-		"shallowest_block", gen.builtin_number,
-		"right", gen.builtin_number,
-	} },
-	{ "RightCallEdge", {
-		"left",  gen.builtin_number,
-		"rel",  SubtypeRelation,
-		"shallowest_block", gen.builtin_number,
-		"right", gen.builtin_number,
-		"arg",  value,
-	} },
-}
-)
 
 ---@class ConstrainEdge
 ---@field left NodeID -- value
@@ -3663,9 +3656,10 @@ end
 
 ---check for combinations of constrain edges that induce new constraints in response to a constrain edges
 ---@param edge ConstrainEdge
+---@param edge_id integer
 ---@param queue ReachabilityQueue
-function Reachability:constrain_transitivity(edge, queue)
-	for _, l2 in ipairs(self.constrain_edges:to(edge.left)) do
+function Reachability:constrain_transitivity(edge, edge_id, queue)
+	for i, l2 in ipairs(self.constrain_edges:to(edge.left)) do
 		---@cast l2 ConstrainEdge
 		if l2.rel ~= edge.rel then
 			error("Relations do not match! " .. l2.rel.debug_name .. " is not " .. edge.rel.debug_name)
@@ -3677,11 +3671,11 @@ function Reachability:constrain_transitivity(edge, queue)
 				edge.rel,
 				edge.right,
 				math.min(edge.shallowest_block, l2.shallowest_block),
-				edge.cause
+				terms.constraintcause.composition(i, edge_id, NIL_ANCHOR)
 			)
 		)
 	end
-	for _, r2 in ipairs(self.constrain_edges:from(edge.right)) do
+	for i, r2 in ipairs(self.constrain_edges:from(edge.right)) do
 		---@cast r2 ConstrainEdge
 		if r2.rel ~= edge.rel then
 			error("Relations do not match! " .. r2.rel.debug_name .. " is not " .. edge.rel.debug_name)
@@ -3693,7 +3687,7 @@ function Reachability:constrain_transitivity(edge, queue)
 				edge.rel,
 				r2.right,
 				math.min(edge.shallowest_block, r2.shallowest_block),
-				edge.cause
+				terms.constraintcause.composition(edge_id, i, NIL_ANCHOR)
 			)
 		)
 	end
@@ -3704,7 +3698,7 @@ end
 ---@param rel SubtypeRelation
 ---@param shallowest_block integer
 ---@param cause constraintcause
----@return boolean
+---@return integer?
 function Reachability:add_constrain_edge(left, right, rel, shallowest_block, cause)
 	if type(left) ~= "number" then
 		error("left isn't an integer!")
@@ -3723,14 +3717,12 @@ function Reachability:add_constrain_edge(left, right, rel, shallowest_block, cau
 			)
 			--TODO: maybe allow between concrete heads
 		end
-		return false
+		return nil
 	end
 
 	---@type ConstrainEdge
 	local edge = { left = left, right = right, rel = rel, shallowest_block = shallowest_block, cause = cause }
-	self.constrain_edges:add(edge)
-
-	return true
+	return self.constrain_edges:add(edge)
 end
 
 ---@param left integer
@@ -3739,7 +3731,7 @@ end
 ---@param right integer
 ---@param shallowest_block integer
 ---@param cause constraintcause
----@return boolean
+---@return integer?
 function Reachability:add_call_left_edge(left, arg, rel, right, shallowest_block, cause)
 	if type(left) ~= "number" then
 		error("left isn't an integer!")
@@ -3750,7 +3742,7 @@ function Reachability:add_call_left_edge(left, arg, rel, right, shallowest_block
 
 	for _, edge in ipairs(self.leftcall_edges:between(left, right)) do
 		if rel == edge.rel and arg == edge.arg then
-			return false
+			return nil
 		end
 	end
 	---@type LeftCallEdge
@@ -3763,9 +3755,7 @@ function Reachability:add_call_left_edge(left, arg, rel, right, shallowest_block
 		cause = cause,
 	}
 
-	self.leftcall_edges:add(edge)
-
-	return true
+	return self.leftcall_edges:add(edge)
 end
 
 ---@param left integer
@@ -3774,7 +3764,7 @@ end
 ---@param arg value
 ---@param shallowest_block integer
 ---@param cause constraintcause
----@return boolean
+---@return integer?
 function Reachability:add_call_right_edge(left, rel, right, arg, shallowest_block, cause)
 	if type(left) ~= "number" then
 		error("left isn't an integer!")
@@ -3785,7 +3775,7 @@ function Reachability:add_call_right_edge(left, rel, right, arg, shallowest_bloc
 
 	for _, edge in ipairs(self.rightcall_edges:between(left, right)) do
 		if rel == edge.rel and arg == edge.arg then
-			return false
+			return nil
 		end
 	end
 	---@type RightCallEdge
@@ -3798,8 +3788,7 @@ function Reachability:add_call_right_edge(left, rel, right, arg, shallowest_bloc
 		cause = cause,
 	}
 
-	self.rightcall_edges:add(edge)
-	return true
+	return self.rightcall_edges:add(edge)
 end
 
 reachability_mt = { __index = Reachability }
@@ -4073,29 +4062,28 @@ function TypeCheckerState:check_heads(left, right, rel, cause)
 	end
 end
 
----@param left integer
----@param right integer
+---@param edge ConstrainEdge
 ---@param rel SubtypeRelation
-function TypeCheckerState:constrain_induce_call(left, right, rel)
+function TypeCheckerState:constrain_induce_call(edge, rel)
 	---@type value, TypeCheckerTag, TypecheckingContext
-	local lvalue, ltag, lctx = table.unpack(self.values[left])
+	local lvalue, ltag, lctx = table.unpack(self.values[edge.left])
 	---@type value, TypeCheckerTag, TypecheckingContext
-	local rvalue, rtag, rctx = table.unpack(self.values[right])
+	local rvalue, rtag, rctx = table.unpack(self.values[edge.right])
 
 	if --[[ltag == TypeCheckerTag.METAVAR and]]
 		lvalue:is_neutral() and lvalue:unwrap_neutral():is_application_stuck()
 	then
 		local f, arg = lvalue:unwrap_neutral():unwrap_application_stuck()
-		local l = self:check_value(value.neutral(f), TypeCheckerTag.VALUE, nil)
+		local l = self:check_value(value.neutral(f), TypeCheckerTag.VALUE, lctx)
 		U.append(
 			self.pending,
 			EdgeNotif.CallLeft(
 				l,
 				arg,
 				rel,
-				right,
+				edge.right,
 				self.block_level,
-				terms.constraintcause.lost("Inside constrain_induce_call ltag", U.strip_ansi(debug.traceback()))
+				terms.constraintcause.nested("Inside constrain_induce_call ltag", edge.cause)
 			)
 		)
 	end
@@ -4104,16 +4092,16 @@ function TypeCheckerState:constrain_induce_call(left, right, rel)
 		rvalue:is_neutral() and rvalue:unwrap_neutral():is_application_stuck()
 	then
 		local f, arg = rvalue:unwrap_neutral():unwrap_application_stuck()
-		local r = self:check_value(value.neutral(f), TypeCheckerTag.USAGE, nil)
+		local r = self:check_value(value.neutral(f), TypeCheckerTag.USAGE, rctx)
 		U.append(
 			self.pending,
 			EdgeNotif.CallRight(
-				left,
+				edge.left,
 				rel,
 				r,
 				arg,
 				self.block_level,
-				terms.constraintcause.lost("Inside constrain_induce_call rtag", U.strip_ansi(debug.traceback()))
+				terms.constraintcause.nested("Inside constrain_induce_call rtag", edge.cause)
 			)
 		)
 	end
@@ -4121,10 +4109,11 @@ end
 
 ---check for compositions of a constrain edge and a left call edge in response to a new constrain edge
 ---@param edge ConstrainEdge
-function TypeCheckerState:constrain_leftcall_compose_1(edge)
+---@param edge_id integer
+function TypeCheckerState:constrain_leftcall_compose_1(edge, edge_id)
 	local mvalue, mtag, mctx = table.unpack(self.values[edge.right])
 	if mtag == TypeCheckerTag.METAVAR then
-		for _, r2 in ipairs(self.graph.leftcall_edges:from(edge.right)) do
+		for i, r2 in ipairs(self.graph.leftcall_edges:from(edge.right)) do
 			if FunctionRelation(r2.rel) ~= edge.rel then
 				error(
 					"Relations do not match! " .. tostring(FunctionRelation(r2.rel)) .. " is not " .. tostring(edge.rel)
@@ -4138,10 +4127,7 @@ function TypeCheckerState:constrain_leftcall_compose_1(edge)
 					r2.rel,
 					r2.right,
 					math.min(edge.shallowest_block, r2.shallowest_block),
-					terms.constraintcause.lost(
-						"constrain leftcall composition induced by constrain",
-						U.strip_ansi(debug.traceback())
-					)
+					terms.constraintcause.leftcall_discharge(i, edge_id, NIL_ANCHOR)
 				)
 			)
 		end
@@ -4150,8 +4136,9 @@ end
 
 --- Check for a meet between a left call and a right call - if they have the same argument, induce a constraint between them
 ---@param edge LeftCallEdge
-function TypeCheckerState:constrain_on_left_meet(edge)
-	for _, r in ipairs(self.graph.rightcall_edges:to(edge.left)) do
+---@param edge_id integer
+function TypeCheckerState:constrain_on_left_meet(edge, edge_id)
+	for i, r in ipairs(self.graph.rightcall_edges:to(edge.left)) do
 		if r.arg == edge.arg then
 			-- Add constraint
 			if r.rel ~= edge.rel then
@@ -4165,10 +4152,7 @@ function TypeCheckerState:constrain_on_left_meet(edge)
 					edge.rel,
 					edge.right,
 					math.min(edge.shallowest_block, r.shallowest_block),
-					terms.constraintcause.lost(
-						"Constrain left call meeting a right call",
-						U.strip_ansi(debug.traceback())
-					)
+					terms.constraintcause.composition(i, edge_id, NIL_ANCHOR)
 				)
 			)
 		end
@@ -4177,8 +4161,9 @@ end
 
 --- Check for a meet between a right call and a left call - if they have the same argument, induce a constraint between them
 ---@param edge RightCallEdge
-function TypeCheckerState:constrain_on_right_meet(edge)
-	for _, l in ipairs(self.graph.leftcall_edges:from(edge.right)) do
+---@param edge_id integer
+function TypeCheckerState:constrain_on_right_meet(edge, edge_id)
+	for i, l in ipairs(self.graph.leftcall_edges:from(edge.right)) do
 		if l.arg == edge.arg then
 			-- Add constraint
 			if l.rel ~= edge.rel then
@@ -4192,7 +4177,7 @@ function TypeCheckerState:constrain_on_right_meet(edge)
 					edge.rel,
 					l.right,
 					math.min(edge.shallowest_block, l.shallowest_block),
-					terms.constraintcause.lost("Constrain right call meeting a left call", debug.traceback())
+					terms.constraintcause.composition(edge_id, i, NIL_ANCHOR)
 				)
 			)
 		end
@@ -4201,10 +4186,11 @@ end
 
 ---check for compositions of a constrain edge and a left call edge in response to a new left call edge
 ---@param edge LeftCallEdge
-function TypeCheckerState:constrain_leftcall_compose_2(edge)
+---@param edge_id integer
+function TypeCheckerState:constrain_leftcall_compose_2(edge, edge_id)
 	local mvalue, mtag, mctx = table.unpack(self.values[edge.left])
 	if mtag == TypeCheckerTag.METAVAR then
-		for _, l2 in ipairs(self.graph.constrain_edges:to(edge.left)) do
+		for i, l2 in ipairs(self.graph.constrain_edges:to(edge.left)) do
 			if l2.rel ~= FunctionRelation(edge.rel) then
 				error(
 					"Relations do not match! " .. tostring(l2.rel) .. " is not " .. tostring(FunctionRelation(edge.rel))
@@ -4218,10 +4204,7 @@ function TypeCheckerState:constrain_leftcall_compose_2(edge)
 					edge.rel,
 					l2.right,
 					math.min(edge.shallowest_block, l2.shallowest_block),
-					terms.constraintcause.lost(
-						"constrain leftcall composition induced by leftcall",
-						U.strip_ansi(debug.traceback())
-					)
+					terms.constraintcause.leftcall_discharge(edge_id, i, NIL_ANCHOR)
 				)
 			)
 		end
@@ -4230,10 +4213,11 @@ end
 
 ---check for compositions of a right call edge and a constrain edge in response to a new constrain edge
 ---@param edge ConstrainEdge
-function TypeCheckerState:rightcall_constrain_compose_2(edge)
+---@param edge_id integer
+function TypeCheckerState:rightcall_constrain_compose_2(edge, edge_id)
 	local mvalue, mtag, mctx = table.unpack(self.values[edge.left])
 	if mtag == TypeCheckerTag.METAVAR then
-		for _, l2 in ipairs(self.graph.rightcall_edges:to(edge.left)) do
+		for i, l2 in ipairs(self.graph.rightcall_edges:to(edge.left)) do
 			if FunctionRelation(l2.rel) ~= edge.rel then
 				error(
 					"Relations do not match! " .. tostring(FunctionRelation(l2.rel)) .. " is not " .. tostring(edge.rel)
@@ -4247,10 +4231,7 @@ function TypeCheckerState:rightcall_constrain_compose_2(edge)
 					l2.right,
 					l2.arg,
 					math.min(edge.shallowest_block, l2.shallowest_block),
-					terms.constraintcause.lost(
-						"rightcall constrain composition induced by constrain",
-						U.strip_ansi(debug.traceback())
-					)
+					terms.constraintcause.rightcall_discharge(edge_id, i, NIL_ANCHOR)
 				)
 			)
 		end
@@ -4259,10 +4240,11 @@ end
 
 ---check for compositions of a right call edge and a constrain edge in response to a new right call edge
 ---@param edge RightCallEdge
-function TypeCheckerState:rightcall_constrain_compose_1(edge)
+---@param edge_id integer
+function TypeCheckerState:rightcall_constrain_compose_1(edge, edge_id)
 	local mvalue, mtag, mctx = table.unpack(self.values[edge.right])
 	if mtag == TypeCheckerTag.METAVAR then
-		for _, r2 in ipairs(self.graph.constrain_edges:from(edge.right)) do
+		for i, r2 in ipairs(self.graph.constrain_edges:from(edge.right)) do
 			if r2.rel ~= FunctionRelation(edge.rel) then
 				error(
 					"Relations do not match! " .. tostring(r2.rel) .. " is not " .. tostring(FunctionRelation(edge.rel))
@@ -4276,10 +4258,7 @@ function TypeCheckerState:rightcall_constrain_compose_1(edge)
 					r2.right,
 					edge.arg,
 					math.min(edge.shallowest_block, r2.shallowest_block),
-					terms.constraintcause.lost(
-						"constrain leftcall composition induced by leftcall",
-						U.strip_ansi(debug.traceback())
-					)
+					terms.constraintcause.rightcall_discharge(i, edge_id, NIL_ANCHOR)
 				)
 			)
 		end
@@ -4316,11 +4295,12 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 		if item:is_Constrain() then
 			local left, rel, right, shallowest_block, item_cause = item:unwrap_Constrain()
 
-			if self.graph:add_constrain_edge(left, right, rel, self.block_level, item_cause) then
+			local edge_id = self.graph:add_constrain_edge(left, right, rel, self.block_level, item_cause)
+			if edge_id ~= nil then
 				---@type ConstrainEdge
 				local edge =
 					{ left = left, rel = rel, right = right, shallowest_block = self.block_level, cause = item_cause }
-				self.graph:constrain_transitivity(edge, self.pending)
+				self.graph:constrain_transitivity(edge, edge_id, self.pending)
 				U.tag(
 					"check_heads",
 					{ left = left, right = right, rel = rel.debug_name },
@@ -4331,14 +4311,15 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 					rel,
 					item_cause
 				)
-				self:constrain_induce_call(left, right, rel)
-				self:constrain_leftcall_compose_1(edge)
-				self:rightcall_constrain_compose_2(edge)
+				self:constrain_induce_call(edge, rel)
+				self:constrain_leftcall_compose_1(edge, edge_id)
+				self:rightcall_constrain_compose_2(edge, edge_id)
 			end
 		elseif item:is_CallLeft() then
 			local left, arg, rel, right, shallowest_block, item_cause = item:unwrap_CallLeft()
 
-			if self.graph:add_call_left_edge(left, arg, rel, right, self.block_level, item_cause) then
+			local edge_id = self.graph:add_call_left_edge(left, arg, rel, right, self.block_level, item_cause)
+			if edge_id ~= nil then
 				---@type LeftCallEdge
 				local edge = {
 					left = left,
@@ -4348,13 +4329,14 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 					shallowest_block = self.block_level,
 					cause = item_cause,
 				}
-				self:constrain_leftcall_compose_2(edge)
-				self:constrain_on_left_meet(edge)
+				self:constrain_leftcall_compose_2(edge, edge_id)
+				self:constrain_on_left_meet(edge, edge_id)
 			end
 		elseif item:is_CallRight() then
 			local left, rel, right, arg, shallowest_block, item_cause = item:unwrap_CallRight()
 
-			if self.graph:add_call_right_edge(left, rel, right, arg, self.block_level, item_cause) then
+			local edge_id = self.graph:add_call_right_edge(left, rel, right, arg, self.block_level, item_cause)
+			if edge_id ~= nil then
 				---@type RightCallEdge
 				local edge = {
 					left = left,
@@ -4364,8 +4346,8 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 					shallowest_block = self.block_level,
 					cause = item_cause,
 				}
-				self:rightcall_constrain_compose_1(edge)
-				self:constrain_on_right_meet(edge) -- This just duplicates constrain_on_left_meet
+				self:rightcall_constrain_compose_1(edge, edge_id)
+				self:constrain_on_right_meet(edge, edge_id) -- This just duplicates constrain_on_left_meet
 			end
 		else
 			error("Unknown edge kind!")

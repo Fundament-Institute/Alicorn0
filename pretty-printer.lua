@@ -1,9 +1,12 @@
----@class PrettyPrint
+---@class PrettyPrint : { [integer] : string }
 ---@field opts PrettyPrintOpts
+---@field depth integer
+---@field table_tracker { [table] : boolean }
 local PrettyPrint = {}
 local PrettyPrint_mt = { __index = PrettyPrint }
 
 local traits = require "traits"
+local U = require "alicorn-utils"
 
 local kind_field = "kind"
 local hidden_fields = {
@@ -112,6 +115,7 @@ function PrettyPrint:_resetcolor()
 end
 
 ---@param array any[]
+---@param ... any
 function PrettyPrint:array(array, ...)
 	self:_enter()
 	self[#self + 1] = self:_color()
@@ -130,6 +134,7 @@ function PrettyPrint:array(array, ...)
 end
 
 ---@param fields table
+---@param ... any
 function PrettyPrint:table(fields, ...)
 	-- i considered keeping track of a path of tables
 	-- but it turned really horrible
@@ -148,6 +153,7 @@ function PrettyPrint:table(fields, ...)
 
 	local count = 0
 	local num = 0
+	---@type { [number] : boolean }
 	local nums = {}
 	for k in pairs(fields) do
 		if k == "kind" then
@@ -227,6 +233,7 @@ end
 
 ---@param kind string
 ---@param fields table
+---@param ... any
 function PrettyPrint:record(kind, fields, ...)
 	local startLen = #self
 	self:_enter()
@@ -287,8 +294,10 @@ function PrettyPrint:unit(name)
 	self[#self + 1] = name
 end
 
+---@param f async fun(...):...
 function PrettyPrint:func(f)
 	local d = debug.getinfo(f, "Su")
+	---@type string[]
 	local params = {}
 	for i = 1, d.nparams do
 		params[#params + 1] = debug.getlocal(f, i)
@@ -304,18 +313,26 @@ function PrettyPrint_mt:__tostring()
 	return table.concat(self, "")
 end
 
+---@param unknown any
+---@param ... any
+---@return string
 local function pretty_print(unknown, ...)
 	local pp = PrettyPrint:new()
 	pp:any(unknown, ...)
 	return tostring(pp)
 end
 
+---@param unknown any
+---@param ... any
+---@return string
 local function default_print(unknown, ...)
 	local pp = PrettyPrint:new({ default_print = true })
 	pp:any(unknown, ...)
 	return tostring(pp)
 end
 
+---@param ... any
+---@return string
 local function s(...)
 	local res = {}
 	local args = table.pack(...)
@@ -325,6 +342,7 @@ local function s(...)
 	return table.concat(res, "    ")
 end
 
+---@param ... any
 local function p(...)
 	print(s(...))
 end

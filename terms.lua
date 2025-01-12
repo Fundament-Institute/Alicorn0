@@ -503,7 +503,7 @@ local constraintcause = gen.declare_type()
 constraintcause:define_enum("constraintcause", {
 	{ "primitive", {
 		"description", gen.builtin_string,
-		"position",    gen.any_lua_type, -- TODO: turn this back into an anchor_type once we actually have anchors
+		"position",    anchor_type,
 	} },
 	{ "composition", {
 		"left",     gen.builtin_number,

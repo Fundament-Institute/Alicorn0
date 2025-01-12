@@ -8,6 +8,7 @@ local typechecking_context = terms.typechecking_context
 local module_mt = {}
 
 local evaluator = require "evaluator"
+local format = require "format"
 local infer = evaluator.infer
 
 local environment_mt
@@ -137,7 +138,7 @@ function environment:bind_local(binding)
 			-- 	self.typechecking_context,
 			-- 	spec_type,
 			-- 	self.typechecking_context,
-			-- 	terms.constraintcause.primitive("environment tuple-elim", nil)
+			-- 	terms.constraintcause.primitive("environment tuple-elim", format.create_anchor(0, 0, "<NIL>"))
 			-- )
 			U.tag(
 				"flow",
@@ -148,7 +149,7 @@ function environment:bind_local(binding)
 				self.typechecking_context,
 				spec_type,
 				self.typechecking_context,
-				terms.constraintcause.primitive("environment tuple-elim", nil)
+				terms.constraintcause.primitive("environment tuple-elim", format.create_anchor(0, 0, "<NIL>"))
 			)
 
 			-- evaluating the subject is necessary for inferring the type of the body

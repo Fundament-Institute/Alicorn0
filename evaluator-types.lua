@@ -4,7 +4,7 @@ local terms = require "terms"
 
 local value = terms.value
 
----@module "evaluator.edgenotif"
+---@module "types.edgenotif"
 local EdgeNotif = gen.declare_type()
 
 local SubtypeRelation = terms.SubtypeRelation

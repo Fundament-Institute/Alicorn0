@@ -209,7 +209,7 @@ end
 ---@field __tostring function(EnumValue): string
 
 ---@class EnumValue: Value
----@field pretty_print fun(EnumValue, ...)
+---@field pretty_print fun(EnumValue, ...) : string
 ---@field default_print fun(EnumValue, ...)
 
 local enum_type_mt = {
