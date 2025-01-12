@@ -199,8 +199,16 @@ function PrettyPrint:table(fields, ...)
 		for k, v in pairs(fields) do
 			if not hidden_fields[k] then
 				self:_prefix()
-				self[#self + 1] = k
 				self[#self + 1] = self:_color()
+				if type(k) == "string" then
+					self[#self + 1] = k
+				else
+					self[#self + 1] = "["
+					self[#self + 1] = self:_resetcolor()
+					self[#self + 1] = tostring(k)
+					self[#self + 1] = self:_color()
+					self[#self + 1] = "]"
+				end
 				self[#self + 1] = " = "
 				self[#self + 1] = self:_resetcolor()
 				self:any(v, ...)
@@ -250,8 +258,8 @@ function PrettyPrint:record(kind, fields, ...)
 				v = hidden_fields[k](v)
 			end
 			self:_prefix()
-			self[#self + 1] = k
 			self[#self + 1] = self:_color()
+			self[#self + 1] = k
 			self[#self + 1] = " = "
 			self[#self + 1] = self:_resetcolor()
 			self:any(v, ...)

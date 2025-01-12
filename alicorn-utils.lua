@@ -349,6 +349,7 @@ end
 
 local memo_mt = { __mode = "k" }
 local memo_end_tag = {}
+local memo_nil_tag = {}
 
 ---cache a function's outputs to ensure purity with respect to identity
 ---@param fn function
@@ -359,10 +360,14 @@ function M.memoize(fn)
 		local args = table.pack(...)
 		local thismemo = memotab
 		for i = 1, args.n do
-			local nextmemo = thismemo[args[i]]
+			local this_arg = args[i]
+			if this_arg == nil then
+				this_arg = memo_nil_tag
+			end
+			local nextmemo = thismemo[this_arg]
 			if not nextmemo then
 				nextmemo = setmetatable({}, memo_mt)
-				thismemo[args[i]] = nextmemo
+				thismemo[this_arg] = nextmemo
 			end
 			thismemo = nextmemo
 		end

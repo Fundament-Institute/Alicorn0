@@ -1291,10 +1291,13 @@ end)
 ---@param cause constraintcause
 ---@return boolean
 ---@return (string|ConcreteFail)?
-function check_concrete(lctx, val, rctx, use, cause)
+function check_concrete(lctx, val, rctx, use)
 	-- Note: in general, val must be a more specific type than use
-	if val == nil or use == nil then
-		error("nil value or usage passed into check_concrete!")
+	if val == nil then
+		error("nil value passed into check_concrete!")
+	end
+	if use == nil then
+		error("nil usage passed into check_concrete!")
 	end
 
 	if val:is_neutral() then
@@ -3704,8 +3707,12 @@ end
 ---@param cause constraintcause
 ---@return boolean
 function Reachability:add_constrain_edge(left, right, rel, shallowest_block, cause)
-	assert(type(left) == "number", "left isn't an integer!")
-	assert(type(right) == "number", "right isn't an integer!")
+	if type(left) ~= "number" then
+		error("left isn't an integer!")
+	end
+	if type(right) ~= "number" then
+		error("right isn't an integer!")
+	end
 
 	for _, edge in ipairs(self.constrain_edges:between(left, right)) do
 		if edge.rel ~= rel then
@@ -3736,8 +3743,12 @@ end
 ---@param cause constraintcause
 ---@return boolean
 function Reachability:add_call_left_edge(left, arg, rel, right, shallowest_block, cause)
-	assert(type(left) == "number", "left isn't an integer!")
-	assert(type(right) == "number", "right isn't an integer!")
+	if type(left) ~= "number" then
+		error("left isn't an integer!")
+	end
+	if type(right) ~= "number" then
+		error("right isn't an integer!")
+	end
 
 	for _, edge in ipairs(self.leftcall_edges:between(left, right)) do
 		if rel == edge.rel and arg == edge.arg then
@@ -3767,8 +3778,12 @@ end
 ---@param cause constraintcause
 ---@return boolean
 function Reachability:add_call_right_edge(left, rel, right, arg, shallowest_block, cause)
-	assert(type(left) == "number", "left isn't an integer!")
-	assert(type(right) == "number", "right isn't an integer!")
+	if type(left) ~= "number" then
+		error("left isn't an integer!")
+	end
+	if type(right) ~= "number" then
+		error("right isn't an integer!")
+	end
 
 	for _, edge in ipairs(self.rightcall_edges:between(left, right)) do
 		if rel == edge.rel and arg == edge.arg then
@@ -3890,8 +3905,12 @@ end
 function TypeCheckerState:queue_subtype(lctx, val, rctx, use, cause)
 	local l = U.tag("check_value", { val = val, use = use }, self.check_value, self, val, TypeCheckerTag.VALUE, lctx)
 	local r = U.tag("check_value", { val = val, use = use }, self.check_value, self, use, TypeCheckerTag.USAGE, rctx)
-	assert(type(l) == "number", "l isn't number, instead found " .. tostring(l))
-	assert(type(r) == "number", "r isn't number, instead found " .. tostring(r))
+	if type(l) ~= "number" then
+		error("l isn't number, instead found " .. tostring(l))
+	end
+	if type(r) ~= "number" then
+		error("r isn't number, instead found " .. tostring(r))
+	end
 	U.append(self.pending, EdgeNotif.Constrain(l, UniverseOmegaRelation, r, self.block_level, cause))
 end
 
@@ -3904,8 +3923,12 @@ end
 function TypeCheckerState:queue_constrain(lctx, val, rel, rctx, use, cause)
 	local l = U.tag("check_value", { val = val, use = use }, self.check_value, self, val, TypeCheckerTag.VALUE, lctx)
 	local r = U.tag("check_value", { val = val, use = use }, self.check_value, self, use, TypeCheckerTag.USAGE, rctx)
-	assert(type(l) == "number", "l isn't number, instead found " .. tostring(l))
-	assert(type(r) == "number", "r isn't number, instead found " .. tostring(r))
+	if type(l) ~= "number" then
+		error("l isn't number, instead found " .. tostring(l))
+	end
+	if type(r) ~= "number" then
+		error("r isn't number, instead found " .. tostring(r))
+	end
 	U.append(self.pending, EdgeNotif.Constrain(l, rel, r, self.block_level, cause))
 end
 
@@ -3928,15 +3951,21 @@ end
 ---@param context TypecheckingContext
 ---@return NodeID
 function TypeCheckerState:check_value(v, tag, context)
-	assert(v, "nil passed into check_value!")
+	if not v then
+		error("nil passed into check_value!")
+	end
 
 	if v:is_neutral() and v:unwrap_neutral():is_free() and v:unwrap_neutral():unwrap_free():is_metavariable() then
 		local mv = v:unwrap_neutral():unwrap_free():unwrap_metavariable()
 		if tag == TypeCheckerTag.VALUE then
-			assert(mv.value ~= nil)
+			if mv.value == nil then
+				error("wtf")
+			end
 			return mv.value
 		else
-			assert(mv.usage ~= nil)
+			if mv.usage == nil then
+				error("wtf")
+			end
 			return mv.usage
 		end
 	end
@@ -4268,8 +4297,15 @@ end
 ---@return boolean
 ---@return ...
 function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cause)
-	assert(val and use, "empty val or use passed into constrain!")
-	assert(#self.pending == 0, "pending not empty at start of constrain!")
+	if not val then
+		error("empty val passed into constrain!")
+	end
+	if not use then
+		error("empty use passed into constrain!")
+	end
+	if #self.pending ~= 0 then
+		error("pending not empty at start of constrain!")
+	end
 	--TODO: add contexts to queue_work if appropriate
 	--self:queue_work(val, val_context, use, use_context, cause)
 
@@ -4324,7 +4360,9 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 	end
 
 	--assert(self:DEBUG_VERIFY(), "VERIFICATION FAILED")
-	assert(#self.pending == 0, "pending was not drained!")
+	if #self.pending ~= 0 then
+		error("pending was not drained!")
+	end
 	return true
 end
 

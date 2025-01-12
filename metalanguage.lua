@@ -440,7 +440,9 @@ match : forall
 ---@param extra U
 ---@return ...
 function ConstructedSyntax:match(matchers, unmatched, extra)
-	assert(matchers["kind"] == nil, "Unexpected matchers parameter")
+	if matchers.kind ~= nil then
+		error("matchers must be a list of matchers (not a matcher itself)")
+	end
 
 	local lasterr = nil
 	for _, matcher in ipairs(matchers) do
@@ -471,8 +473,8 @@ local constructed_syntax_mt = {
 }
 
 ---@param accepters AccepterSet
----@param start_anchor Anchor?
----@param end_anchor Anchor?
+---@param start_anchor Anchor
+---@param end_anchor Anchor
 ---@param ... any
 ---@return ConstructedSyntax
 local function cons_syntax(accepters, start_anchor, end_anchor, ...)
@@ -537,8 +539,8 @@ local nil_accepters = {
 	end,
 }
 
----@param start_anchor Anchor?
----@param end_anchor Anchor?
+---@param start_anchor Anchor
+---@param end_anchor Anchor
 ---@return ConstructedSyntax
 local function new_nilval(start_anchor, end_anchor)
 	return cons_syntax(nil_accepters, start_anchor, end_anchor)
