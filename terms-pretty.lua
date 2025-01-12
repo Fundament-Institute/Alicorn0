@@ -1925,6 +1925,30 @@ function value_override_pretty:host_tuple_type(pp)
 end
 
 ---@param pp PrettyPrint
+function value_override_pretty:neutral(pp)
+	local desc = self:unwrap_neutral()
+
+	pp:_enter()
+
+	if desc:is_free() and desc:unwrap_free():is_metavariable() then
+		local mt = desc:unwrap_free():unwrap_metavariable()
+		pp:unit(pp:_color())
+		pp:unit("\u{2A64} " .. mt.value .. ":" .. mt.usage .. "|" .. mt.block_level .. " \u{2A65}")
+		pp:unit(pp:_resetcolor())
+	else
+		pp:unit(pp:_color())
+		pp:unit("value.neutral[")
+		pp:unit(pp:_resetcolor())
+		pp:any(desc)
+		pp:unit(pp:_color())
+		pp:unit("]")
+		pp:unit(pp:_resetcolor())
+	end
+
+	pp:_exit()
+end
+
+---@param pp PrettyPrint
 ---@param context AnyContext
 function typed_term_override_pretty:tuple_element_access(pp, context)
 	local subject, index = self:unwrap_tuple_element_access()

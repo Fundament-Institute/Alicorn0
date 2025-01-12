@@ -40,7 +40,7 @@ function M.lock_table(t, userdata)
 		mt = {}
 		mt.__newindex = function(n, k, v)
 			if mt.__lock then
-				error("LOCKED TABLE! " .. (mt.__locktrace or ""))
+				error("LOCKED TABLE! " .. M.strip_ansi(mt.__locktrace or ""))
 			end
 			rawset(n, k, v)
 		end
@@ -49,7 +49,7 @@ function M.lock_table(t, userdata)
 
 	mt = getmetatable(t)
 	if mt.__lock then
-		error("Tried to lock a table that was already locked! " .. (mt.__locktrace or ""))
+		error("Tried to lock a table that was already locked! " .. M.strip_ansi(mt.__locktrace or ""))
 	end
 
 	mt.__lock = true
@@ -82,9 +82,12 @@ function M.check_locked(t, shadow)
 	local mt = getmetatable(t)
 	if mt and mt.__lock then
 		if shadow then
-			error("Trying to shadow an already shadowed object! This should never happen!" .. (mt.__locktrace or ""))
+			error(
+				"Trying to shadow an already shadowed object! This should never happen!"
+					.. M.strip_ansi(mt.__locktrace or "")
+			)
 		else
-			error("Trying to modify a shadowed object! This should never happen!" .. (mt.__locktrace or ""))
+			error("Trying to modify a shadowed object! This should never happen!" .. M.strip_ansi(mt.__locktrace or ""))
 		end
 	end
 end
@@ -146,7 +149,7 @@ function M.shadowtable(obj, userdata)
 	end
 	mt.__newindex = function(t, k, v)
 		if mt.__lock then
-			error("LOCKED TABLE! " .. (mt.__locktrace or ""))
+			error("LOCKED TABLE! " .. M.strip_ansi(mt.__locktrace or ""))
 		end
 		rawset(t, k, v)
 	end
@@ -176,7 +179,7 @@ function M.shadowarray(obj, userdata)
 	end
 	mt.__newindex = function(t, k, v)
 		if mt.__lock then
-			error("LOCKED TABLE! " .. (mt.__locktrace or ""))
+			error("LOCKED TABLE! " .. M.strip_ansi(mt.__locktrace or ""))
 		end
 		if k == #t + 1 then
 			mt.__length = mt.__length + 1

@@ -309,7 +309,15 @@ local TupleDescRelation = setmetatable({
 					tuple_types_val[i],
 					rctx,
 					tuple_types_use[i],
-					terms.constraintcause.nested("TupleDescRelation.constrain " .. tostring(i), cause)
+					terms.constraintcause.nested(
+						"TupleDescRelation.constrain "
+							.. tostring(i)
+							.. "\n<VAL>:"
+							.. tostring(U.strip_ansi(tostring(tuple_types_val[i])))
+							.. "\n<USE>: "
+							.. U.strip_ansi(tostring(tuple_types_use[i])),
+						cause
+					)
 				)
 			end
 		end
@@ -445,7 +453,7 @@ local function substitute_inner(val, mappings, context_len)
 		-- TODO: Handle desc properly, because it's a value.
 		error("Records not yet implemented")
 	elseif val:is_record_extend_stuck() then
-		-- Needs to handle the nuetral value and map of values
+		-- Needs to handle the neutral value and map of values
 		error("Records not yet implemented")
 	elseif val:is_srel_type() then
 		local target = val:unwrap_srel_type()
@@ -565,7 +573,7 @@ local function substitute_inner(val, mappings, context_len)
 			)
 		end
 
-		-- TODO: deconstruct nuetral value or something
+		-- TODO: deconstruct neutral value or something
 		error("substitute_inner not implemented yet val:is_neutral - " .. tostring(nval))
 	elseif val:is_host_value() then
 		return typed_term.literal(val)
@@ -855,7 +863,10 @@ add_comparer("value.tuple_type", "value.tuple_type", function(lctx, a, rctx, b, 
 		TupleDescRelation,
 		rctx,
 		desc_b,
-		terms.constraintcause.nested("tuple type", cause)
+		terms.constraintcause.nested(
+			"tuple type \n<VAL>:" .. U.strip_ansi(tostring(desc_a)) .. " \n<USE>: " .. U.strip_ansi(tostring(desc_b)),
+			cause
+		)
 	)
 	return true
 end)
@@ -1156,7 +1167,19 @@ end
 add_comparer("value.srel_type", "value.srel_type", function(lctx, a, rctx, b, cause)
 	local a_target = a:unwrap_srel_type()
 	local b_target = b:unwrap_srel_type()
-	typechecker_state:queue_subtype(lctx, a_target, rctx, b_target, terms.constraintcause.nested("srel target", cause))
+	typechecker_state:queue_subtype(
+		lctx,
+		a_target,
+		rctx,
+		b_target,
+		terms.constraintcause.nested(
+			"srel target \n<VAL>:"
+				.. U.strip_ansi(tostring(a_target))
+				.. " \n<USE>:"
+				.. U.strip_ansi(tostring(b_target)),
+			cause
+		)
+	)
 	return true
 end)
 
@@ -1269,6 +1292,7 @@ end)
 ---@return boolean
 ---@return (string|ConcreteFail)?
 function check_concrete(lctx, val, rctx, use, cause)
+	-- Note: in general, val must be a more specific type than use
 	if val == nil or use == nil then
 		error("nil value or usage passed into check_concrete!")
 	end
@@ -1282,8 +1306,32 @@ function check_concrete(lctx, val, rctx, use, cause)
 		local vnv = val:unwrap_neutral()
 		if vnv:is_tuple_element_access_stuck() then
 			local innerctx, bound = upcast(lctx, val)
-			typechecker_state:queue_subtype(innerctx, bound, rctx, use, terms.constraintcause.nested("upcast", cause))
+			typechecker_state:queue_subtype(
+				innerctx,
+				bound,
+				rctx,
+				use,
+				terms.constraintcause.nested("concrete upcast", cause)
+			)
 			return true
+		end
+		if vnv:is_free() then
+			local free = vnv:unwrap_free()
+			if free:is_placeholder() then
+				local idx, dbg = free:unwrap_placeholder()
+				local inner = lctx:get_type(idx)
+				--local inner_bound = value.tuple_type(typechecker_state:metavariable(ctx, false):as_value())
+				local innerctx, boundstype = revealing(lctx, inner)
+
+				typechecker_state:queue_subtype(
+					innerctx,
+					boundstype,
+					rctx,
+					use,
+					terms.constraintcause.nested("concrete reveal placeholder", cause)
+				)
+				return true
+			end
 		end
 	end
 
@@ -1310,7 +1358,10 @@ function check_concrete(lctx, val, rctx, use, cause)
 			val_supertype,
 			rctx,
 			use,
-			terms.constraintcause.nested("singleton subtype", cause)
+			terms.constraintcause.nested(
+				U.strip_ansi("singleton subtype \n<VAL>:" .. tostring(val_supertype) .. "\n<USE>:" .. tostring(use)),
+				cause
+			)
 		)
 		return true
 	end
@@ -2749,6 +2800,8 @@ function evaluate(typed_term, runtime_context)
 			srel = srel_value:unwrap_host_value(),
 		}
 		return value.host_value(variance)
+	elseif typed_term:is_variance_type() then
+		return value.variance_type(evaluate(typed_term:unwrap_variance_type(), runtime_context))
 	elseif typed_term:is_object_cons() then
 		return value.object_value(typed_term:unwrap_object_cons(), runtime_context)
 	elseif typed_term:is_object_elim() then
@@ -3912,7 +3965,7 @@ function TypeCheckerState:check_value(v, tag, context)
 				relation:unwrap_host_value(),
 				context,
 				v,
-				terms.constraintcause.lost("range unpacking", debug.traceback())
+				terms.constraintcause.lost("range unpacking", U.strip_ansi(debug.traceback()))
 			)
 		end
 
@@ -3923,7 +3976,7 @@ function TypeCheckerState:check_value(v, tag, context)
 				relation:unwrap_host_value(),
 				context,
 				bound,
-				terms.constraintcause.lost("range_unpacking", debug.traceback())
+				terms.constraintcause.lost("range_unpacking", U.strip_ansi(debug.traceback()))
 			)
 		end
 
@@ -4015,7 +4068,7 @@ function TypeCheckerState:constrain_induce_call(left, right, rel)
 				rel,
 				right,
 				self.block_level,
-				terms.constraintcause.lost("Inside constrain_induce_call ltag", debug.traceback())
+				terms.constraintcause.lost("Inside constrain_induce_call ltag", U.strip_ansi(debug.traceback()))
 			)
 		)
 	end
@@ -4033,7 +4086,7 @@ function TypeCheckerState:constrain_induce_call(left, right, rel)
 				r,
 				arg,
 				self.block_level,
-				terms.constraintcause.lost("Inside constrain_induce_call rtag", debug.traceback())
+				terms.constraintcause.lost("Inside constrain_induce_call rtag", U.strip_ansi(debug.traceback()))
 			)
 		)
 	end
@@ -4058,7 +4111,10 @@ function TypeCheckerState:constrain_leftcall_compose_1(edge)
 					r2.rel,
 					r2.right,
 					math.min(edge.shallowest_block, r2.shallowest_block),
-					terms.constraintcause.lost("constrain leftcall composition induced by constrain", debug.traceback())
+					terms.constraintcause.lost(
+						"constrain leftcall composition induced by constrain",
+						U.strip_ansi(debug.traceback())
+					)
 				)
 			)
 		end
@@ -4082,7 +4138,10 @@ function TypeCheckerState:constrain_on_left_meet(edge)
 					edge.rel,
 					edge.right,
 					math.min(edge.shallowest_block, r.shallowest_block),
-					terms.constraintcause.lost("Constrain left call meeting a right call", debug.traceback())
+					terms.constraintcause.lost(
+						"Constrain left call meeting a right call",
+						U.strip_ansi(debug.traceback())
+					)
 				)
 			)
 		end
@@ -4132,7 +4191,10 @@ function TypeCheckerState:constrain_leftcall_compose_2(edge)
 					edge.rel,
 					l2.right,
 					math.min(edge.shallowest_block, l2.shallowest_block),
-					terms.constraintcause.lost("constrain leftcall composition induced by leftcall", debug.traceback())
+					terms.constraintcause.lost(
+						"constrain leftcall composition induced by leftcall",
+						U.strip_ansi(debug.traceback())
+					)
 				)
 			)
 		end
@@ -4160,7 +4222,7 @@ function TypeCheckerState:rightcall_constrain_compose_2(edge)
 					math.min(edge.shallowest_block, l2.shallowest_block),
 					terms.constraintcause.lost(
 						"rightcall constrain composition induced by constrain",
-						debug.traceback()
+						U.strip_ansi(debug.traceback())
 					)
 				)
 			)
@@ -4187,7 +4249,10 @@ function TypeCheckerState:rightcall_constrain_compose_1(edge)
 					r2.right,
 					edge.arg,
 					math.min(edge.shallowest_block, r2.shallowest_block),
-					terms.constraintcause.lost("constrain leftcall composition induced by leftcall", debug.traceback())
+					terms.constraintcause.lost(
+						"constrain leftcall composition induced by leftcall",
+						U.strip_ansi(debug.traceback())
+					)
 				)
 			)
 		end

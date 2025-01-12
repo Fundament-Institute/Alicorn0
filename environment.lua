@@ -235,7 +235,9 @@ function environment:bind_local(binding)
 		end
 		--error(res1)
 		--error(res2)
-		error("tuple elim speculation failed! debugging this is left as an exercise to the maintainer")
+		error(
+			"tuple elim speculation failed! debugging this is left as an exercise to the maintainer: " .. tostring(res2)
+		)
 	elseif binding:is_annotated_lambda() then
 		local param_name, param_annotation, start_anchor, visible = binding:unwrap_annotated_lambda()
 		if not start_anchor or not start_anchor.sourceid then

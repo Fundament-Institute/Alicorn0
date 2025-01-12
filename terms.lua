@@ -492,6 +492,10 @@ local subtype_relation_mt = {}
 
 local SubtypeRelation = gen.declare_foreign(gen.metatable_equality(subtype_relation_mt), "SubtypeRelation")
 
+subtype_relation_mt.__tostring = function(self)
+	return "\u{ab}" .. self.debug_name .. "\u{bb}"
+end
+
 ---@module 'types.constraintcause'
 local constraintcause = gen.declare_type()
 
