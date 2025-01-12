@@ -1016,7 +1016,7 @@ add_comparer("value.tuple_desc_type", "value.enum_type", function(lctx, a, rctx,
 		enum_desc_srel,
 		rctx,
 		b_desc,
-		terms.constraintcause.nested("use tuple description as enum", nested)
+		terms.constraintcause.nested("use tuple description as enum", cause)
 	)
 	return true
 end)
@@ -1291,7 +1291,7 @@ end)
 ---@param cause constraintcause
 ---@return boolean
 ---@return (string|ConcreteFail)?
-function check_concrete(lctx, val, rctx, use)
+function check_concrete(lctx, val, rctx, use, cause)
 	-- Note: in general, val must be a more specific type than use
 	if val == nil then
 		error("nil value passed into check_concrete!")
@@ -3664,8 +3664,7 @@ end
 ---check for combinations of constrain edges that induce new constraints in response to a constrain edges
 ---@param edge ConstrainEdge
 ---@param queue ReachabilityQueue
----@param cause constraintcause
-function Reachability:constrain_transitivity(edge, queue, cause)
+function Reachability:constrain_transitivity(edge, queue)
 	for _, l2 in ipairs(self.constrain_edges:to(edge.left)) do
 		---@cast l2 ConstrainEdge
 		if l2.rel ~= edge.rel then
@@ -3678,7 +3677,7 @@ function Reachability:constrain_transitivity(edge, queue, cause)
 				edge.rel,
 				edge.right,
 				math.min(edge.shallowest_block, l2.shallowest_block),
-				cause
+				edge.cause
 			)
 		)
 	end
@@ -3694,7 +3693,7 @@ function Reachability:constrain_transitivity(edge, queue, cause)
 				edge.rel,
 				r2.right,
 				math.min(edge.shallowest_block, r2.shallowest_block),
-				cause
+				edge.cause
 			)
 		)
 	end
@@ -3729,7 +3728,6 @@ function Reachability:add_constrain_edge(left, right, rel, shallowest_block, cau
 
 	---@type ConstrainEdge
 	local edge = { left = left, right = right, rel = rel, shallowest_block = shallowest_block, cause = cause }
-
 	self.constrain_edges:add(edge)
 
 	return true
@@ -4320,8 +4318,9 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 
 			if self.graph:add_constrain_edge(left, right, rel, self.block_level, item_cause) then
 				---@type ConstrainEdge
-				local edge = { left = left, rel = rel, right = right, shallowest_block = self.block_level }
-				self.graph:constrain_transitivity(edge, self.pending, item_cause)
+				local edge =
+					{ left = left, rel = rel, right = right, shallowest_block = self.block_level, cause = item_cause }
+				self.graph:constrain_transitivity(edge, self.pending)
 				U.tag(
 					"check_heads",
 					{ left = left, right = right, rel = rel.debug_name },
@@ -4341,7 +4340,14 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 
 			if self.graph:add_call_left_edge(left, arg, rel, right, self.block_level, item_cause) then
 				---@type LeftCallEdge
-				local edge = { left = left, arg = arg, rel = rel, right = right, shallowest_block = self.block_level }
+				local edge = {
+					left = left,
+					arg = arg,
+					rel = rel,
+					right = right,
+					shallowest_block = self.block_level,
+					cause = item_cause,
+				}
 				self:constrain_leftcall_compose_2(edge)
 				self:constrain_on_left_meet(edge)
 			end
@@ -4350,7 +4356,14 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 
 			if self.graph:add_call_right_edge(left, rel, right, arg, self.block_level, item_cause) then
 				---@type RightCallEdge
-				local edge = { left = left, rel = rel, right = right, arg = arg, shallowest_block = self.block_level }
+				local edge = {
+					left = left,
+					rel = rel,
+					right = right,
+					arg = arg,
+					shallowest_block = self.block_level,
+					cause = item_cause,
+				}
 				self:rightcall_constrain_compose_1(edge)
 				self:constrain_on_right_meet(edge) -- This just duplicates constrain_on_left_meet
 			end
