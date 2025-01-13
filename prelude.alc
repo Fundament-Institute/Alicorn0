@@ -11,10 +11,11 @@ let universe = type_(9, 1)
 	lambda (x : T)
 		wrap T x
 
-let foo = lambda_implicit (a : type)
-	lambda_implicit (b : type)
-		lambda (c : a, d : b)
-			c
+let foo = debug-track
+	lambda_implicit (a : type)
+		lambda_implicit (b : type)
+			lambda (c : a, d : b)
+				c
 let test = foo(1, 2)
 
 let implicit-wrap = lambda_curry ((T : type_(10, 0)))

@@ -26,6 +26,7 @@ local value_array = array(value)
 local usage_array = array(gen.builtin_number)
 local name_array = array(gen.builtin_string)
 
+local param_info_implicit = value.param_info(value.visibility(visibility.implicit))
 local param_info_explicit = value.param_info(value.visibility(visibility.explicit))
 local result_info_pure = value.result_info(result_info(purity.pure))
 
@@ -436,6 +437,37 @@ end
 ---@param metaval value
 ---@return boolean, value
 local function speculate_pi_type(env, metaval)
+	local ok, res = evaluator.typechecker_state:speculate(function()
+		local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+		local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+		local pi = value.pi(
+			param_mv:as_value(),
+			param_info_implicit,
+			value.closure(
+				"#spec-pi",
+				typed_term.literal(result_mv:as_value()),
+				env.typechecking_context.runtime_context
+			),
+			result_info_pure
+		)
+
+		U.tag(
+			"flow",
+			{ val = metaval, use = pi },
+			evaluator.typechecker_state.flow,
+			evaluator.typechecker_state,
+			metaval,
+			env.typechecking_context,
+			pi,
+			env.typechecking_context,
+			terms.constraintcause.primitive("Speculating on pi type", NIL_ANCHOR)
+		)
+
+		return pi
+	end)
+	if ok then
+		return ok, res
+	end
 	return evaluator.typechecker_state:speculate(function()
 		local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 		local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
@@ -650,12 +682,13 @@ local function expression_pairhandler(args, a, b)
 		while param_info:unwrap_param_info():unwrap_visibility():is_implicit() do
 			print(param_info)
 			print("handling implicit pi argument at " .. tostring(a.start_anchor))
-			print(type_of_term:pretty_print(env.typechecking_context))
+			--print("original type of term: ", type_of_term:pretty_print(env.typechecking_context))
 			local metavar = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			local metavalue = metavar:as_value()
 			local metaresult = evaluator.apply_value(result_type, metavalue)
-
+			--print("metaresult: ", metaresult:pretty_print(env.typechecking_context))
 			local ok, pi = speculate_pi_type(env, metaresult)
+			--print("next pi: ", pi:pretty_print(env.typechecking_context))
 
 			if not ok then
 				error(
