@@ -102,13 +102,13 @@ end
 -- base16 colors: https://github.com/tinted-theming/home/blob/main/styling.md
 local colors = {
 	"\27[38;5;1m", -- base08
-	-- "\27[38;5;16m", -- base09
+	-- "\27[38;5;16m", -- base09 (out of stock ANSI range)
 	"\27[38;5;3m", -- base0A
 	"\27[38;5;2m", -- base0B
-	"\27[38;5;6m", -- base0C
+	-- "\27[38;5;6m", -- base0C (uncomfortably close to base0D)
 	"\27[38;5;4m", -- base0D
 	"\27[38;5;5m", -- base0E
-	-- "\27[38;5;17m", -- base0F
+	-- "\27[38;5;17m", -- base0F (out of stock ANSI range)
 }
 
 function PrettyPrint:_color()
