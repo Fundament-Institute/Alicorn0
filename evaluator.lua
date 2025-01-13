@@ -312,15 +312,7 @@ local TupleDescRelation = setmetatable({
 					tuple_types_val[i],
 					rctx,
 					tuple_types_use[i],
-					terms.constraintcause.nested(
-						"TupleDescRelation.constrain "
-							.. tostring(i)
-							.. "\n<VAL>:"
-							.. U.strip_ansi(tuple_types_val[i]:pretty_print(lctx))
-							.. "\n<USE>: "
-							.. U.strip_ansi(tuple_types_use[i]:pretty_print(rctx)),
-						cause
-					)
+					terms.constraintcause.nested("TupleDescRelation.constrain " .. tostring(i), cause)
 				)
 			end
 		end
@@ -357,13 +349,15 @@ local function get_level(t)
 	return 0
 end
 
+local substitute_inner
+
 ---@param val value an alicorn value
 ---@param mappings {[integer]: typed} the placeholder we are trying to get rid of by substituting
 ---@param context_len integer number of bindings in the runtime context already used - needed for closures
 ---@return typed a typed term
-local function substitute_inner(val, mappings, context_len)
+local function substitute_inner_impl(val, mappings, context_len)
 	if val:is_visibility_type() then
-		return typed_term.literal(val)
+		return mark_track(val.track, typed_term.literal(val))
 	elseif val:is_visibility() then
 		return typed_term.literal(val)
 	elseif val:is_param_info_type() then
@@ -659,6 +653,28 @@ local function substitute_inner(val, mappings, context_len)
 	end
 end
 
+local recurse_count = 0
+---@param val value an alicorn value
+---@param mappings {[integer]: typed} the placeholder we are trying to get rid of by substituting
+---@param context_len integer number of bindings in the runtime context already used - needed for closures
+---@return typed a typed term
+substitute_inner = function(val, mappings, context_len)
+	local tracked = val.track ~= nil
+	if tracked then
+		print(string.rep(" ", recurse_count) .. "SUB: " .. tostring(val))
+	end
+
+	recurse_count = recurse_count + 1
+	local r = substitute_inner_impl(val, mappings, context_len)
+	recurse_count = recurse_count - 1
+
+	if tracked then
+		print(string.rep(" ", recurse_count) .. " \u{2192} " .. tostring(r))
+		r.track = {}
+	end
+	return r
+end
+
 --for substituting a single var at index
 ---@param val value
 ---@param index integer
@@ -867,13 +883,7 @@ add_comparer("value.tuple_type", "value.tuple_type", function(lctx, a, rctx, b, 
 		TupleDescRelation,
 		rctx,
 		desc_b,
-		terms.constraintcause.nested(
-			"tuple type \n<VAL>:"
-				.. U.strip_ansi(desc_a:pretty_print(lctx))
-				.. " \n<USE>: "
-				.. U.strip_ansi(desc_b:pretty_print(lctx)),
-			cause
-		)
+		terms.constraintcause.nested("tuple type", cause)
 	)
 	return true
 end)
@@ -1174,19 +1184,7 @@ end
 add_comparer("value.srel_type", "value.srel_type", function(lctx, a, rctx, b, cause)
 	local a_target = a:unwrap_srel_type()
 	local b_target = b:unwrap_srel_type()
-	typechecker_state:queue_subtype(
-		lctx,
-		a_target,
-		rctx,
-		b_target,
-		terms.constraintcause.nested(
-			"srel target \n<VAL>:"
-				.. U.strip_ansi(a_target:pretty_print(lctx))
-				.. " \n<USE>:"
-				.. U.strip_ansi(b_target:pretty_print(rctx)),
-			cause
-		)
-	)
+	typechecker_state:queue_subtype(lctx, a_target, rctx, b_target, terms.constraintcause.nested("srel target", cause))
 	return true
 end)
 
@@ -1368,15 +1366,7 @@ function check_concrete(lctx, val, rctx, use, cause)
 			val_supertype,
 			rctx,
 			use,
-			terms.constraintcause.nested(
-				U.strip_ansi(
-					"singleton subtype \n<VAL>:"
-						.. val_supertype:pretty_print(lctx)
-						.. "\n<USE>:"
-						.. use:pretty_print(rctx)
-				),
-				cause
-			)
+			terms.constraintcause.nested(U.strip_ansi("singleton subtype"), cause)
 		)
 		return true
 	end
@@ -1846,7 +1836,7 @@ end
 ---@param inferrable_term inferrable
 ---@param typechecking_context TypecheckingContext
 ---@return value, ArrayValue, typed
-function infer(
+function infer_impl(
 	inferrable_term, -- constructed from inferrable
 	typechecking_context -- todo
 )
@@ -2555,6 +2545,27 @@ function infer(
 	error("unreachable!?")
 end
 
+---@param inferrable_term inferrable
+---@param typechecking_context TypecheckingContext
+---@return value, ArrayValue, typed
+infer = function(inferrable_term, typechecking_context)
+	local tracked = inferrable_term.track ~= nil
+	if tracked then
+		print("\n" .. string.rep(" ", recurse_count) .. "INFER: " .. inferrable_term:pretty_print(typechecking_context))
+	end
+
+	recurse_count = recurse_count + 1
+	local v, usages, term = infer_impl(inferrable_term, typechecking_context)
+	recurse_count = recurse_count - 1
+
+	if tracked then
+		print(string.rep(" ", recurse_count) .. " \u{2192} " .. term:pretty_print(typechecking_context))
+		--v.track = {}
+		term.track = {}
+	end
+	return v, usages, term
+end
+
 ---Replace stuck sections in a value with a more concrete form, possibly causing cascading evaluation
 ---@param base value
 ---@param original value
@@ -2574,7 +2585,7 @@ local intrinsic_memo = setmetatable({}, { __mode = "v" })
 ---@param typed_term typed
 ---@param runtime_context RuntimeContext
 ---@return value
-function evaluate(typed_term, runtime_context)
+function evaluate_impl(typed_term, runtime_context)
 	-- -> an alicorn value
 	-- TODO: typecheck typed_term and runtime_context?
 	if terms.typed_term.value_check(typed_term) ~= true then
@@ -3147,6 +3158,30 @@ function evaluate(typed_term, runtime_context)
 	end
 
 	error("unreachable!?")
+end
+
+local recurse_count = 0
+
+---evaluate a typed term in a contextual
+---@param typed_term typed
+---@param runtime_context RuntimeContext
+---@return value
+evaluate = function(typed_term, runtime_context)
+	local tracked = typed_term.track ~= nil
+	if tracked then
+		local input = typed_term:pretty_print(runtime_context)
+		print(string.rep(" ", recurse_count) .. "EVAL: " .. input)
+	end
+
+	recurse_count = recurse_count + 1
+	local r = evaluate_impl(typed_term, runtime_context)
+	recurse_count = recurse_count - 1
+
+	if tracked then
+		print(string.rep(" ", recurse_count) .. " \u{2192} " .. r:pretty_print(runtime_context))
+		r.track = {}
+	end
+	return r
 end
 
 ---@alias effect_handler fun(arg: value, cont: continuation): value
