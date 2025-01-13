@@ -832,7 +832,7 @@ local function forall_impl(syntax, env)
 	local params_args = params_thread.args
 	local params_names = params_thread.names
 	env = params_thread.env
-
+	---@cast env Environment
 	--print("moving on to return type")
 
 	local shadowed
@@ -868,6 +868,7 @@ local function forall_impl(syntax, env)
 
 	local results_args = results_thread.args
 	env = results_thread.env
+	---@cast env Environment
 
 	local env, fn_res_term, purity = env:exit_block(results_args, shadowed)
 
@@ -1576,6 +1577,19 @@ local function enum_impl(syntax, env)
 		env
 end
 
+---@type lua_operative
+local function debug_track_impl(syntax, env)
+	local ok, type_inferrable_term, tail = syntax:match({
+		metalanguage.listtail(metalanguage.accept_handler, exprs.inferred_expression(metalanguage.accept_handler, env)),
+	}, metalanguage.failure_handler, nil)
+	if not ok then
+		return ok, type_inferrable_term, tail
+	end
+
+	type_inferrable_term.track = true
+	return ok, type_inferrable_term, env
+end
+
 local core_operations = {
 	["+"] = exprs.host_applicative(function(a, b)
 		return a + b
@@ -1608,6 +1622,7 @@ local core_operations = {
 	mk = exprs.host_operative(mk_impl, "mk_impl"),
 	switch = exprs.host_operative(switch_impl, "switch_impl"),
 	enum = exprs.host_operative(enum_impl, "enum_impl"),
+	["debug-track"] = exprs.host_operative(debug_track_impl, "debug_track_impl"),
 	--record = exprs.host_operative(record_build, "record_build"),
 	intrinsic = exprs.host_operative(intrinsic_impl, "intrinsic_impl"),
 	["host-number"] = lit_term(value.host_number_type, value.host_type_type),
