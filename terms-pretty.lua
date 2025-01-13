@@ -726,7 +726,7 @@ function binding_override_pretty:annotated_lambda(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("binding.\u{03BB} ")
+	pp:unit("binding.λ ")
 	pp:unit(pp:_resetcolor())
 
 	pp:unit(param_name)
@@ -762,7 +762,7 @@ function inferrable_term_override_pretty:annotated_lambda(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("inferrable.\u{03BB} ")
+	pp:unit("inferrable.λ ")
 	pp:unit(pp:_resetcolor())
 
 	if is_tuple_type and is_destructure then
@@ -839,7 +839,7 @@ function typed_term_override_pretty:lambda(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("typed.\u{03BB} ")
+	pp:unit("typed.λ ")
 	pp:unit(pp:_resetcolor())
 
 	if is_destructure then
@@ -969,7 +969,7 @@ function inferrable_term_override_pretty:pi(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("inferrable.\u{03A0} ")
+	pp:unit("inferrable.Π ")
 	pp:unit(pp:_resetcolor())
 
 	if not result_is_readable then
@@ -1070,7 +1070,7 @@ function inferrable_term_override_pretty:host_function_type(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("inferrable.host-\u{03A0} ")
+	pp:unit("inferrable.host-Π ")
 	pp:unit(pp:_resetcolor())
 
 	if not result_is_readable then
@@ -1174,7 +1174,7 @@ function typed_term_override_pretty:pi(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("typed.\u{03A0} ")
+	pp:unit("typed.Π ")
 	pp:unit(pp:_resetcolor())
 
 	if not result_is_readable then
@@ -1275,7 +1275,7 @@ function typed_term_override_pretty:host_function_type(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("typed.host-\u{03A0} ")
+	pp:unit("typed.host-Π ")
 	pp:unit(pp:_resetcolor())
 
 	if not result_is_readable then
@@ -1374,7 +1374,7 @@ function value_override_pretty:pi(pp)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("value.\u{03A0} ")
+	pp:unit("value.Π ")
 	pp:unit(pp:_resetcolor())
 
 	if not result_is_readable then
@@ -1473,7 +1473,7 @@ function value_override_pretty:host_function_type(pp)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("value.host-\u{03A0} ")
+	pp:unit("value.host-Π ")
 	pp:unit(pp:_resetcolor())
 
 	if not result_is_readable then
