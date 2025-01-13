@@ -661,7 +661,7 @@ local recurse_count = 0
 substitute_inner = function(val, mappings, context_len)
 	local tracked = val.track ~= nil
 	if tracked then
-		print(string.rep("\u{b7}", recurse_count) .. "SUB: " .. tostring(val))
+		print(string.rep("·", recurse_count) .. "SUB: " .. tostring(val))
 	end
 
 	recurse_count = recurse_count + 1
@@ -669,7 +669,7 @@ substitute_inner = function(val, mappings, context_len)
 	recurse_count = recurse_count - 1
 
 	if tracked then
-		print(string.rep("\u{b7}", recurse_count) .. " \u{2192} " .. tostring(r))
+		print(string.rep("·", recurse_count) .. " → " .. tostring(r))
 		r.track = {}
 	end
 	return r
@@ -2553,7 +2553,7 @@ infer = function(inferrable_term, typechecking_context)
 	if tracked then
 		print(
 			"\n"
-				.. string.rep("\u{b7}", recurse_count)
+				.. string.rep("·", recurse_count)
 				.. "INFER: "
 				.. inferrable_term:pretty_print(typechecking_context)
 		)
@@ -2565,8 +2565,8 @@ infer = function(inferrable_term, typechecking_context)
 
 	if tracked then
 		print(
-			string.rep("\u{b7}", recurse_count)
-				.. " \u{2192} "
+			string.rep("·", recurse_count)
+				.. " → "
 				.. term:pretty_print(typechecking_context)
 				.. " : "
 				.. v:pretty_print(typechecking_context)
@@ -3181,7 +3181,7 @@ evaluate = function(typed_term, runtime_context)
 	local tracked = typed_term.track ~= nil
 	if tracked then
 		local input = typed_term:pretty_print(runtime_context)
-		print(string.rep("\u{b7}", recurse_count) .. "EVAL: " .. input)
+		print(string.rep("·", recurse_count) .. "EVAL: " .. input)
 	end
 
 	recurse_count = recurse_count + 1
@@ -3189,7 +3189,7 @@ evaluate = function(typed_term, runtime_context)
 	recurse_count = recurse_count - 1
 
 	if tracked then
-		print(string.rep("\u{b7}", recurse_count) .. " \u{2192} " .. r:pretty_print(runtime_context))
+		print(string.rep("·", recurse_count) .. " → " .. r:pretty_print(runtime_context))
 		r.track = {}
 	end
 	return r
@@ -4642,7 +4642,7 @@ end
 
 terms.constraintcause.__tostring = function(self)
 	local chain = assemble_causal_chain(self)
-	return table.concat(chain, " \u{2192} ")
+	return table.concat(chain, " → ")
 end
 
 local evaluator = {

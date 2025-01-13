@@ -726,7 +726,7 @@ function binding_override_pretty:annotated_lambda(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("binding.\u{03BB} <")
+	pp:unit("binding.λ <")
 	pp:any(visible)
 	pp:unit(", ")
 	pp:any(pure)
@@ -766,7 +766,7 @@ function inferrable_term_override_pretty:annotated_lambda(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("inferrable.\u{03BB} <")
+	pp:unit("inferrable.λ <")
 	pp:any(visible)
 	pp:unit(", ")
 	pp:any(pure)
@@ -847,7 +847,7 @@ function typed_term_override_pretty:lambda(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("typed.\u{03BB} ")
+	pp:unit("typed.λ ")
 	pp:unit(pp:_resetcolor())
 
 	if is_destructure then
@@ -977,7 +977,7 @@ function inferrable_term_override_pretty:pi(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("inferrable.\u{03A0} <")
+	pp:unit("inferrable.Π <")
 	pp:any(param_info)
 	pp:unit(", ")
 	pp:any(result_info)
@@ -1082,7 +1082,7 @@ function inferrable_term_override_pretty:host_function_type(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("inferrable.host-\u{03A0} ")
+	pp:unit("inferrable.host-Π ")
 	pp:unit(pp:_resetcolor())
 
 	if not result_is_readable then
@@ -1186,7 +1186,7 @@ function typed_term_override_pretty:pi(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("typed.\u{03A0} <")
+	pp:unit("typed.Π <")
 	pp:any(param_info)
 	pp:unit(", ")
 	pp:any(result_info)
@@ -1291,7 +1291,7 @@ function typed_term_override_pretty:host_function_type(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("typed.host-\u{03A0} ")
+	pp:unit("typed.host-Π ")
 	pp:unit(pp:_resetcolor())
 
 	if not result_is_readable then
@@ -1392,7 +1392,7 @@ function value_override_pretty:pi(pp)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("value.\u{03A0} <")
+	pp:unit("value.Π <")
 	pp:any(visible)
 	pp:unit(", ")
 	pp:any(pure)
@@ -1495,7 +1495,7 @@ function value_override_pretty:host_function_type(pp)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("value.host-\u{03A0} ")
+	pp:unit("value.host-Π ")
 	pp:unit(pp:_resetcolor())
 
 	if not result_is_readable then
@@ -1955,7 +1955,7 @@ function value_override_pretty:neutral(pp)
 	if desc:is_free() and desc:unwrap_free():is_metavariable() then
 		local mt = desc:unwrap_free():unwrap_metavariable()
 		pp:unit(pp:_color())
-		pp:unit("\u{2A64} " .. mt.value .. ":" .. mt.usage .. "|" .. mt.block_level .. " \u{2A65}")
+		pp:unit("⩤ " .. mt.value .. ":" .. mt.usage .. "|" .. mt.block_level .. " ⩥")
 		pp:unit(pp:_resetcolor())
 	else
 		pp:unit(pp:_color())
