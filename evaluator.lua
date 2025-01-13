@@ -822,7 +822,7 @@ local concrete_fail_mt = {
 			message = table.concat(message, "")
 		end
 		if self.cause then
-			return message .. " because:\n" .. self.cause:pretty_print(self.ctx)
+			return message .. " because:\n" .. tostring(self.cause)
 		end
 		return message
 	end,
@@ -1357,7 +1357,7 @@ function check_concrete(lctx, val, rctx, use, cause)
 					.. use:pretty_print(rctx)
 					.. " (printed diff)"
 					.. " caused by "
-					.. cause:pretty_print(lctx)
+					.. tostring(cause)
 		end
 	end
 
@@ -1414,7 +1414,7 @@ function check_concrete(lctx, val, rctx, use, cause)
 				.. ": "
 				.. val:pretty_print(lctx)
 				.. " caused by "
-				.. cause:pretty_print(lctx)
+				.. tostring(cause)
 		)
 	end
 
@@ -1431,7 +1431,7 @@ function check_concrete(lctx, val, rctx, use, cause)
 				.. " compared against "
 				.. use:pretty_print(rctx)
 				.. " caused by "
-				.. cause:pretty_print(lctx)
+				.. tostring(cause)
 	end
 
 	return comparer(lctx, val, rctx, use, cause)
@@ -4555,6 +4555,49 @@ local function new_typechecker_state()
 end
 
 typechecker_state = new_typechecker_state()
+
+---@param cause constraintcause
+---@return string[]
+local function assemble_causal_chain(cause)
+	---@param left constraintcause
+	---@param right constraintcause
+	---@return string[]
+	local function merge_causal_chain(left, right)
+		local chain = assemble_causal_chain(left)
+		for _, v in ipairs(assemble_causal_chain(right)) do
+			U.append(chain, v)
+		end
+		return chain
+	end
+
+	local g = typechecker_state.graph
+	if cause:is_composition() then
+		local left, right, pos = cause:unwrap_composition()
+		return merge_causal_chain(g.constrain_edges:all()[left].cause, g.constrain_edges:all()[right].cause)
+	elseif cause:is_leftcall_discharge() then
+		local call, constraint, pos = cause:unwrap_leftcall_discharge()
+		return merge_causal_chain(g.leftcall_edges:all()[call].cause, g.constrain_edges:all()[constraint].cause)
+	elseif cause:is_rightcall_discharge() then
+		local constraint, call, pos = cause:unwrap_rightcall_discharge()
+		return merge_causal_chain(g.constrain_edges:all()[constraint].cause, g.rightcall_edges:all()[call].cause)
+	elseif cause:is_nested() then
+		local desc, inner = cause:unwrap_nested()
+		local chain = assemble_causal_chain(inner)
+		U.append(chain, desc)
+		return chain
+	elseif cause:is_primitive() then
+		local desc, pos = cause:unwrap_primitive()
+		return { desc }
+	elseif cause:is_lost() then
+		local desc, stacktrace, pos = cause:unwrap_lost()
+		return { desc }
+	end
+end
+
+terms.constraintcause.__tostring = function(self)
+	local chain = assemble_causal_chain(self)
+	return table.concat(chain, " \u{2192} ")
+end
 
 local evaluator = {
 	typechecker_state = typechecker_state,
