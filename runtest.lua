@@ -1,15 +1,28 @@
+local jit_enabled = true
+local lldebugger_enabled = os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") == "1"
+if lldebugger_enabled then
+	jit_enabled = false
+end
+
+if jit then
+	if jit_enabled then
+		jit.opt.start("maxtrace=10000")
+		jit.opt.start("maxmcode=4096")
+		jit.opt.start("recunroll=5")
+		jit.opt.start("loopunroll=60")
+	else
+		jit.off()
+	end
+end
+
+if lldebugger_enabled then
+	require("lldebugger").start(true)
+end
+
 --local endTime = os.time() + 3
 --while os.time() < endTime do end
 
 require "pretty-printer" -- has side-effect of loading global p()
-
-if jit then
-	--jit.off()
-	jit.opt.start("maxtrace=10000")
-	jit.opt.start("maxmcode=4096")
-	jit.opt.start("recunroll=5")
-	jit.opt.start("loopunroll=60")
-end
 
 local startTime = os.clock()
 local checkpointTime = startTime
