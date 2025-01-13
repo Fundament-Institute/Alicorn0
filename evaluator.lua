@@ -2564,7 +2564,13 @@ infer = function(inferrable_term, typechecking_context)
 	recurse_count = recurse_count - 1
 
 	if tracked then
-		print(string.rep("\u{b7}", recurse_count) .. " \u{2192} " .. term:pretty_print(typechecking_context))
+		print(
+			string.rep("\u{b7}", recurse_count)
+				.. " \u{2192} "
+				.. term:pretty_print(typechecking_context)
+				.. " : "
+				.. v:pretty_print(typechecking_context)
+		)
 		--v.track = {}
 		term.track = {}
 	end

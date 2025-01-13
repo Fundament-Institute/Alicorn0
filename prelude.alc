@@ -11,6 +11,12 @@ let universe = type_(9, 1)
 	lambda (x : T)
 		wrap T x
 
+let foo = lambda_implicit (a : type)
+	lambda_implicit (b : type)
+		lambda (c : a, d : b)
+			c
+let test = foo(1, 2)
+
 let implicit-wrap = lambda_curry ((T : type_(10, 0)))
 	lambda (x : T)
 		wrap T x
@@ -146,28 +152,29 @@ let _&_ =
 				wrapped (forall (a : U, b : U) -> (res : U))
 
 let covariant = 
-	lambda_curry (U : type_(9, 1), a : U)
-		unwrap
-			intrinsic
-				""""
-					local string_array = terms_gen.declare_array(terms_gen.builtin_string)
-					return terms.value.closure(
-						"#covariant-args",
-						terms.typed_term.tuple_elim(
-							string_array("base"),
-							terms.typed_term.bound_variable(1),
-							1,
-							terms.typed_term.variance_cons(
-								terms.typed_term.literal(
-									terms.value.host_value(true)
-								),
-								terms.typed_term.bound_variable(2)
-							)
-						),
-						terms.runtime_context()
-					)
-				:
-				wrapped (forall ((rel : srel(a))) -> (res : variance(a)))
+	debug-track
+		lambda_curry (U : type_(9, 1), a : U)
+			unwrap
+				intrinsic
+					""""
+						local string_array = terms_gen.declare_array(terms_gen.builtin_string)
+						return terms.value.closure(
+							"#covariant-args",
+							terms.typed_term.tuple_elim(
+								string_array("base"),
+								terms.typed_term.bound_variable(1),
+								1,
+								terms.typed_term.variance_cons(
+									terms.typed_term.literal(
+										terms.value.host_value(true)
+									),
+									terms.typed_term.bound_variable(2)
+								)
+							),
+							terms.runtime_context()
+						)
+					:
+					wrapped (forall ((rel : srel(a))) -> (res : variance(a)))
 
 let contravariant = 
 	lambda_curry (U : type_(9, 1), a : U)
@@ -330,7 +337,7 @@ let new-host-type = lambda (unique-id : host-unique-id)
 
 let host-array-type = new-host-type-family new-host-unique-id("array")
 	forall ((T : host-type)) -> (T : host-type)
-	tuple-of-implicit covariant(subtyping)
+	tuple-of-implicit debug-track(covariant(subtyping))
 
 let host-array-new = lambda (T : host-type)
 	let inner = intrinsic

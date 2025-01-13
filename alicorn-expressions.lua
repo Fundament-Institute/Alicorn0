@@ -648,6 +648,9 @@ local function expression_pairhandler(args, a, b)
 		local param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
 
 		while param_info:unwrap_param_info():unwrap_visibility():is_implicit() do
+			print(param_info)
+			print("handling implicit pi argument at " .. tostring(a.start_anchor))
+			print(type_of_term:pretty_print(env.typechecking_context))
 			local metavar = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			local metavalue = metavar:as_value()
 			local metaresult = evaluator.apply_value(result_type, metavalue)
@@ -669,6 +672,7 @@ local function expression_pairhandler(args, a, b)
 			type_of_term = pi
 			param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
 		end
+		print(param_info)
 
 		-- multiple quantity of usages in tuple with usage in function arguments
 		---@type boolean, checkable|string, Environment
