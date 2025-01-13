@@ -99,11 +99,16 @@ function PrettyPrint:_dedent()
 	end
 end
 
+-- base16 colors: https://github.com/tinted-theming/home/blob/main/styling.md
 local colors = {
-	"\27[38;5;226m",
-	"\27[38;5;255m",
-	"\27[38;5;135m",
-	"\27[38;2;40;40;40m",
+	"\27[38;5;1m", -- base08
+	-- "\27[38;5;16m", -- base09
+	"\27[38;5;3m", -- base0A
+	"\27[38;5;2m", -- base0B
+	"\27[38;5;6m", -- base0C
+	"\27[38;5;4m", -- base0D
+	"\27[38;5;5m", -- base0E
+	-- "\27[38;5;17m", -- base0F
 }
 
 function PrettyPrint:_color()
