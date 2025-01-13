@@ -720,13 +720,17 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function binding_override_pretty:annotated_lambda(pp, context)
-	local param_name, param_annotation, _, _ = self:unwrap_annotated_lambda()
+	local param_name, param_annotation, _, visible, pure = self:unwrap_annotated_lambda()
 	context = ensure_context(context)
 
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("binding.\u{03BB} ")
+	pp:unit("binding.\u{03BB} <")
+	pp:any(visible)
+	pp:unit(", ")
+	pp:any(pure)
+	pp:unit("> ")
 	pp:unit(pp:_resetcolor())
 
 	pp:unit(param_name)
@@ -743,7 +747,7 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function inferrable_term_override_pretty:annotated_lambda(pp, context)
-	local param_name, param_annotation, body, _, _ = self:unwrap_annotated_lambda()
+	local param_name, param_annotation, body, _, visible, pure = self:unwrap_annotated_lambda()
 	context = ensure_context(context)
 	local inner_context = context:append(param_name)
 	local is_tuple_type, desc = as_any_tuple_type(param_annotation)
@@ -762,7 +766,11 @@ function inferrable_term_override_pretty:annotated_lambda(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("inferrable.\u{03BB} ")
+	pp:unit("inferrable.\u{03BB} <")
+	pp:any(visible)
+	pp:unit(", ")
+	pp:any(pure)
+	pp:unit("> ")
 	pp:unit(pp:_resetcolor())
 
 	if is_tuple_type and is_destructure then
@@ -938,7 +946,7 @@ function inferrable_term_override_pretty:pi(pp, context)
 	-- extracting parameter names from the destructure of the result
 	-- so that we get the name of the last parameter
 	-- name of the last result is still lost
-	local param_type, _, result_type, _ = self:unwrap_pi()
+	local param_type, param_info, result_type, result_info = self:unwrap_pi()
 	context = ensure_context(context)
 	local result_context = context
 	local param_is_tuple_type, param_desc = as_any_tuple_type(param_type)
@@ -969,7 +977,11 @@ function inferrable_term_override_pretty:pi(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("inferrable.\u{03A0} ")
+	pp:unit("inferrable.\u{03A0} <")
+	pp:any(param_info)
+	pp:unit(", ")
+	pp:any(result_info)
+	pp:unit("> ")
 	pp:unit(pp:_resetcolor())
 
 	if not result_is_readable then
@@ -1143,7 +1155,7 @@ function typed_term_override_pretty:pi(pp, context)
 	-- extracting parameter names from the destructure of the result
 	-- so that we get the name of the last parameter
 	-- name of the last result is still lost
-	local param_type, _, result_type, _ = self:unwrap_pi()
+	local param_type, param_info, result_type, result_info = self:unwrap_pi()
 	context = ensure_context(context)
 	local result_context = context
 	local param_is_tuple_type, param_desc = as_any_tuple_type(param_type)
@@ -1174,7 +1186,11 @@ function typed_term_override_pretty:pi(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("typed.\u{03A0} ")
+	pp:unit("typed.\u{03A0} <")
+	pp:any(param_info)
+	pp:unit(", ")
+	pp:any(result_info)
+	pp:unit("> ")
 	pp:unit(pp:_resetcolor())
 
 	if not result_is_readable then
@@ -1344,7 +1360,9 @@ end
 
 ---@param pp PrettyPrint
 function value_override_pretty:pi(pp)
-	local param_type, _, result_type, _ = self:unwrap_pi()
+	local param_type, param_info, result_type, result_info = self:unwrap_pi()
+	local visible = param_info:unwrap_param_info():unwrap_visibility()
+	local pure = result_info:unwrap_result_info():unwrap_result_info()
 	local param_is_tuple_type, param_desc = as_any_tuple_type(param_type)
 	local result_is_readable, param_name, result_code, result_capture = result_type:as_closure()
 	local result_context, result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_desc
@@ -1374,7 +1392,11 @@ function value_override_pretty:pi(pp)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("value.\u{03A0} ")
+	pp:unit("value.\u{03A0} <")
+	pp:any(visible)
+	pp:unit(", ")
+	pp:any(pure)
+	pp:unit("> ")
 	pp:unit(pp:_resetcolor())
 
 	if not result_is_readable then
