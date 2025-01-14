@@ -90,11 +90,12 @@ local function FunctionRelation(srel)
 			error("nyi")
 		end),
 		constrain = luatovalue(function(lctx, val, rctx, use, cause)
-			local u = value.neutral(
-				neutral_value.free(
-					free.unique({ debug = "FunctionRelation(" .. srel.debug_name .. ").constrain " .. utils.here() })
-				)
-			)
+			local inner_info = {
+				debug = "FunctionRelation(" .. srel.debug_name .. ").constrain " .. utils.here() .. " " .. tostring(
+					cause
+				),
+			}
+			local u = value.neutral(neutral_value.free(free.unique(inner_info)))
 
 			local applied_val = U.tag("apply_value", { val = val, use = use }, apply_value, val, u)
 			local applied_use = U.tag("apply_value", { val = val, use = use }, apply_value, use, u)
@@ -272,7 +273,12 @@ enum_desc_srel = setmetatable({
 	),
 }, subtype_relation_mt)
 
-local infer_tuple_type_unwrapped2, substitute_type_variables
+---@type fun(subject_type_a : value, subject_type_b : value, subject_value : value) : value[], value[], value[], integer
+local infer_tuple_type_unwrapped2
+
+---@type fun(val : value, index : integer, param_name : string?) : value
+local substitute_type_variables
+
 ---@type SubtypeRelation
 local TupleDescRelation = setmetatable({
 	debug_name = "TupleDescRelation",
@@ -393,7 +399,7 @@ local function substitute_inner_impl(val, mappings, context_len)
 		-- FIXME: this results in more captures every time we substitute a closure ->
 		--   can cause non-obvious memory leaks
 		--   since we don't yet remove unused captures from closure value
-		return typed_term.lambda(param_name, val_typed)
+		return typed_term.lambda(param_name .. "*", val_typed)
 	elseif val:is_name_type() then
 		return typed_term.literal(val)
 	elseif val:is_name() then
@@ -960,7 +966,7 @@ add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx,
 								typed_term.pi(
 									typed_term.tuple_type(typed_term.bound_variable(#rctx + 3)),
 									typed.literal(value.param_info(value.visibility(terms.visibility.explicit))),
-									typed.lambda("#arg", typed_term.bound_variable(#rctx + 1)),
+									typed.lambda("#arg" .. tostring(#rctx + 1), typed_term.bound_variable(#rctx + 1)),
 									typed.literal(value.result_info(terms.result_info(terms.purity.pure)))
 								)
 							),
@@ -1016,7 +1022,7 @@ add_comparer("value.tuple_desc_type", "value.enum_type", function(lctx, a, rctx,
 								typed_term.pi(
 									typed_term.tuple_type(typed_term.bound_variable(#rctx + 3)),
 									typed.literal(value.param_info(value.visibility(terms.visibility.explicit))),
-									typed.lambda("#arg", typed_term.bound_variable(#rctx + 1)),
+									typed.lambda("#arg" .. tostring(#rctx + 1), typed_term.bound_variable(#rctx + 1)),
 									typed.literal(value.result_info(terms.result_info(terms.purity.pure)))
 								)
 							),
@@ -1799,6 +1805,7 @@ function make_inner_context2(desc_a, make_prefix_a, desc_b, make_prefix_b)
 			local prefix = value.tuple_value(tuplevals)
 			element_type_a = apply_value(f_a, prefix)
 			element_type_b = apply_value(f_b, prefix)
+
 			if element_type_a:is_singleton() then
 				local _, val = element_type_a:unwrap_singleton()
 				tuplevals:append(val)
@@ -1890,7 +1897,7 @@ function infer_impl(
 		local lambda_usages = body_usages:copy(1, body_usages:len() - 1)
 		local lambda_type =
 			value.pi(param_type, value.param_info(value.visibility(param_visibility)), result_type, result_info)
-		local lambda_term = typed_term.lambda(param_name, body_term)
+		local lambda_term = typed_term.lambda(param_name .. "^", body_term)
 		return lambda_type, lambda_usages, lambda_term
 	elseif inferrable_term:is_pi() then
 		local param_type, param_info, result_type, result_info = inferrable_term:unwrap_pi()
@@ -2552,10 +2559,7 @@ infer = function(inferrable_term, typechecking_context)
 	local tracked = inferrable_term.track ~= nil
 	if tracked then
 		print(
-			"\n"
-				.. string.rep("·", recurse_count)
-				.. "INFER: "
-				.. inferrable_term:pretty_print(typechecking_context)
+			"\n" .. string.rep("·", recurse_count) .. "INFER: " .. inferrable_term:pretty_print(typechecking_context)
 		)
 	end
 
