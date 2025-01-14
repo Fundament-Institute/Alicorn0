@@ -365,16 +365,25 @@ local ascribed_name = metalanguage.reducer(
 		-- print(env.enter_block)
 		local shadowed
 		shadowed, env = env:enter_block(terms.block_purity.pure)
+		local prev_name = "#prev - "
+			.. syntax.start_anchor.sourceid
+			.. ":"
+			.. syntax.start_anchor.line
+			.. "["
+			.. syntax.start_anchor.char
+			.. "-"
+			.. syntax.end_anchor.char
+			.. "]"
 		env = env:bind_local(
 			terms.binding.annotated_lambda(
-				"#prev",
+				prev_name,
 				prev,
 				syntax.start_anchor,
 				terms.visibility.explicit,
 				literal_purity_pure
 			)
 		)
-		local ok, prev_binding = env:get("#prev")
+		local ok, prev_binding = env:get(prev_name)
 		if not ok then
 			error "#prev should always be bound, was just added"
 		end
