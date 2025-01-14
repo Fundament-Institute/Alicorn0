@@ -66,11 +66,13 @@ return {}]],
 function $typename:is_$variant() end]],
 
 	unwrap_method = [[
----@return $(, )parts
+---@return $(
+---@return )parts
 function $typename:unwrap_$variant() end]],
 
 	as_method = [[
----@return $(, )parts
+---@return $(
+---@return )parts
 function $typename:as_$variant() end]],
 
 	unit_constructor = [[---@field $variant $typename]],
@@ -139,8 +141,8 @@ local function build_meta_file_for_enum(info)
 				local param_type = vinfo.params_types[i]
 				local ptype = traits.value_name:get(param_type).value_name()
 				params_ascribed[#params_ascribed + 1] = param .. ": " .. ptype
-				unwraptypes[#unwraptypes + 1] = ptype
-				astypes[#astypes + 1] = ptype
+				unwraptypes[#unwraptypes + 1] = ptype .. " " .. param
+				astypes[#astypes + 1] = ptype .. " " .. param
 			end
 			constructors[#constructors + 1] = {
 				kind = "record_constructor",

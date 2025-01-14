@@ -6,33 +6,56 @@ constraintcause = {}
 
 ---@return boolean
 function constraintcause:is_primitive() end
----@return string, Anchor
+---@return string description
+---@return Anchor position
 function constraintcause:unwrap_primitive() end
----@return boolean, string, Anchor
+---@return boolean
+---@return string description
+---@return Anchor position
 function constraintcause:as_primitive() end
 ---@return boolean
 function constraintcause:is_composition() end
----@return constraintcause, constraintcause, Anchor
+---@return constraintcause left
+---@return constraintcause right
+---@return Anchor position
 function constraintcause:unwrap_composition() end
----@return boolean, constraintcause, constraintcause, Anchor
+---@return boolean
+---@return constraintcause left
+---@return constraintcause right
+---@return Anchor position
 function constraintcause:as_composition() end
 ---@return boolean
 function constraintcause:is_leftcall_discharge() end
----@return constraintcause, constraintcause, Anchor
+---@return constraintcause call
+---@return constraintcause constraint
+---@return Anchor position
 function constraintcause:unwrap_leftcall_discharge() end
----@return boolean, constraintcause, constraintcause, Anchor
+---@return boolean
+---@return constraintcause call
+---@return constraintcause constraint
+---@return Anchor position
 function constraintcause:as_leftcall_discharge() end
 ---@return boolean
 function constraintcause:is_rightcall_discharge() end
----@return constraintcause, constraintcause, Anchor
+---@return constraintcause constraint
+---@return constraintcause call
+---@return Anchor position
 function constraintcause:unwrap_rightcall_discharge() end
----@return boolean, constraintcause, constraintcause, Anchor
+---@return boolean
+---@return constraintcause constraint
+---@return constraintcause call
+---@return Anchor position
 function constraintcause:as_rightcall_discharge() end
 ---@return boolean
 function constraintcause:is_lost() end
----@return string, string, any
+---@return string unique_string
+---@return string stacktrace
+---@return any auxiliary
 function constraintcause:unwrap_lost() end
----@return boolean, string, string, any
+---@return boolean
+---@return string unique_string
+---@return string stacktrace
+---@return any auxiliary
 function constraintcause:as_lost() end
 
 ---@class (exact) constraintcauseType: EnumType

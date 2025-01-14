@@ -6,81 +6,118 @@ neutral_value = {}
 
 ---@return boolean
 function neutral_value:is_free() end
----@return free
+---@return free free
 function neutral_value:unwrap_free() end
----@return boolean, free
+---@return boolean
+---@return free free
 function neutral_value:as_free() end
 ---@return boolean
 function neutral_value:is_application_stuck() end
----@return neutral_value, value
+---@return neutral_value f
+---@return value arg
 function neutral_value:unwrap_application_stuck() end
----@return boolean, neutral_value, value
+---@return boolean
+---@return neutral_value f
+---@return value arg
 function neutral_value:as_application_stuck() end
 ---@return boolean
 function neutral_value:is_enum_elim_stuck() end
----@return value, neutral_value
+---@return value mechanism
+---@return neutral_value subject
 function neutral_value:unwrap_enum_elim_stuck() end
----@return boolean, value, neutral_value
+---@return boolean
+---@return value mechanism
+---@return neutral_value subject
 function neutral_value:as_enum_elim_stuck() end
 ---@return boolean
 function neutral_value:is_enum_rec_elim_stuck() end
----@return value, neutral_value
+---@return value handler
+---@return neutral_value subject
 function neutral_value:unwrap_enum_rec_elim_stuck() end
----@return boolean, value, neutral_value
+---@return boolean
+---@return value handler
+---@return neutral_value subject
 function neutral_value:as_enum_rec_elim_stuck() end
 ---@return boolean
 function neutral_value:is_object_elim_stuck() end
----@return value, neutral_value
+---@return value mechanism
+---@return neutral_value subject
 function neutral_value:unwrap_object_elim_stuck() end
----@return boolean, value, neutral_value
+---@return boolean
+---@return value mechanism
+---@return neutral_value subject
 function neutral_value:as_object_elim_stuck() end
 ---@return boolean
 function neutral_value:is_tuple_element_access_stuck() end
----@return neutral_value, number
+---@return neutral_value subject
+---@return number index
 function neutral_value:unwrap_tuple_element_access_stuck() end
----@return boolean, neutral_value, number
+---@return boolean
+---@return neutral_value subject
+---@return number index
 function neutral_value:as_tuple_element_access_stuck() end
 ---@return boolean
 function neutral_value:is_record_field_access_stuck() end
----@return neutral_value, string
+---@return neutral_value subject
+---@return string field_name
 function neutral_value:unwrap_record_field_access_stuck() end
----@return boolean, neutral_value, string
+---@return boolean
+---@return neutral_value subject
+---@return string field_name
 function neutral_value:as_record_field_access_stuck() end
 ---@return boolean
 function neutral_value:is_host_application_stuck() end
----@return any, neutral_value
+---@return any function
+---@return neutral_value arg
 function neutral_value:unwrap_host_application_stuck() end
----@return boolean, any, neutral_value
+---@return boolean
+---@return any function
+---@return neutral_value arg
 function neutral_value:as_host_application_stuck() end
 ---@return boolean
 function neutral_value:is_host_tuple_stuck() end
----@return ArrayValue, neutral_value, ArrayValue
+---@return ArrayValue leading
+---@return neutral_value stuck_element
+---@return ArrayValue trailing
 function neutral_value:unwrap_host_tuple_stuck() end
----@return boolean, ArrayValue, neutral_value, ArrayValue
+---@return boolean
+---@return ArrayValue leading
+---@return neutral_value stuck_element
+---@return ArrayValue trailing
 function neutral_value:as_host_tuple_stuck() end
 ---@return boolean
 function neutral_value:is_host_if_stuck() end
----@return neutral_value, value, value
+---@return neutral_value subject
+---@return value consequent
+---@return value alternate
 function neutral_value:unwrap_host_if_stuck() end
----@return boolean, neutral_value, value, value
+---@return boolean
+---@return neutral_value subject
+---@return value consequent
+---@return value alternate
 function neutral_value:as_host_if_stuck() end
 ---@return boolean
 function neutral_value:is_host_intrinsic_stuck() end
----@return neutral_value, Anchor
+---@return neutral_value source
+---@return Anchor start_anchor
 function neutral_value:unwrap_host_intrinsic_stuck() end
----@return boolean, neutral_value, Anchor
+---@return boolean
+---@return neutral_value source
+---@return Anchor start_anchor
 function neutral_value:as_host_intrinsic_stuck() end
 ---@return boolean
 function neutral_value:is_host_wrap_stuck() end
----@return neutral_value
+---@return neutral_value content
 function neutral_value:unwrap_host_wrap_stuck() end
----@return boolean, neutral_value
+---@return boolean
+---@return neutral_value content
 function neutral_value:as_host_wrap_stuck() end
 ---@return boolean
 function neutral_value:is_host_unwrap_stuck() end
----@return neutral_value
+---@return neutral_value container
 function neutral_value:unwrap_host_unwrap_stuck() end
----@return boolean, neutral_value
+---@return boolean
+---@return neutral_value container
 function neutral_value:as_host_unwrap_stuck() end
 
 ---@class (exact) neutral_valueType: EnumType

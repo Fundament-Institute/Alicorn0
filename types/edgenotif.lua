@@ -6,21 +6,52 @@ edgenotif = {}
 
 ---@return boolean
 function edgenotif:is_Constrain() end
----@return number, SubtypeRelation, number, number, any
+---@return number left
+---@return SubtypeRelation rel
+---@return number right
+---@return number shallowest_block
+---@return any cause
 function edgenotif:unwrap_Constrain() end
----@return boolean, number, SubtypeRelation, number, number, any
+---@return boolean
+---@return number left
+---@return SubtypeRelation rel
+---@return number right
+---@return number shallowest_block
+---@return any cause
 function edgenotif:as_Constrain() end
 ---@return boolean
 function edgenotif:is_CallLeft() end
----@return number, value, SubtypeRelation, number, number, any
+---@return number left
+---@return value arg
+---@return SubtypeRelation rel
+---@return number right
+---@return number shallowest_block
+---@return any cause
 function edgenotif:unwrap_CallLeft() end
----@return boolean, number, value, SubtypeRelation, number, number, any
+---@return boolean
+---@return number left
+---@return value arg
+---@return SubtypeRelation rel
+---@return number right
+---@return number shallowest_block
+---@return any cause
 function edgenotif:as_CallLeft() end
 ---@return boolean
 function edgenotif:is_CallRight() end
----@return number, SubtypeRelation, number, value, number, any
+---@return number left
+---@return SubtypeRelation rel
+---@return number right
+---@return value arg
+---@return number shallowest_block
+---@return any cause
 function edgenotif:unwrap_CallRight() end
----@return boolean, number, SubtypeRelation, number, value, number, any
+---@return boolean
+---@return number left
+---@return SubtypeRelation rel
+---@return number right
+---@return value arg
+---@return number shallowest_block
+---@return any cause
 function edgenotif:as_CallRight() end
 
 ---@class (exact) edgenotifType: EnumType
