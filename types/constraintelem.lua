@@ -6,39 +6,89 @@ constraintelem = {}
 
 ---@return boolean
 function constraintelem:is_sliced_constrain() end
----@return SubtypeRelation, typed, TypecheckingContext, constraintcause
+---@return SubtypeRelation rel
+---@return typed right
+---@return TypecheckingContext rightctx
+---@return constraintcause cause
 function constraintelem:unwrap_sliced_constrain() end
----@return boolean, SubtypeRelation, typed, TypecheckingContext, constraintcause
+---@return boolean
+---@return SubtypeRelation rel
+---@return typed right
+---@return TypecheckingContext rightctx
+---@return constraintcause cause
 function constraintelem:as_sliced_constrain() end
 ---@return boolean
 function constraintelem:is_constrain_sliced() end
----@return typed, TypecheckingContext, SubtypeRelation, constraintcause
+---@return typed left
+---@return TypecheckingContext leftctx
+---@return SubtypeRelation rel
+---@return constraintcause cause
 function constraintelem:unwrap_constrain_sliced() end
----@return boolean, typed, TypecheckingContext, SubtypeRelation, constraintcause
+---@return boolean
+---@return typed left
+---@return TypecheckingContext leftctx
+---@return SubtypeRelation rel
+---@return constraintcause cause
 function constraintelem:as_constrain_sliced() end
 ---@return boolean
 function constraintelem:is_sliced_leftcall() end
----@return typed, SubtypeRelation, typed, TypecheckingContext, constraintcause
+---@return typed arg
+---@return SubtypeRelation rel
+---@return typed right
+---@return TypecheckingContext rightctx
+---@return constraintcause cause
 function constraintelem:unwrap_sliced_leftcall() end
----@return boolean, typed, SubtypeRelation, typed, TypecheckingContext, constraintcause
+---@return boolean
+---@return typed arg
+---@return SubtypeRelation rel
+---@return typed right
+---@return TypecheckingContext rightctx
+---@return constraintcause cause
 function constraintelem:as_sliced_leftcall() end
 ---@return boolean
 function constraintelem:is_leftcall_sliced() end
----@return typed, TypecheckingContext, typed, SubtypeRelation, constraintcause
+---@return typed left
+---@return TypecheckingContext leftctx
+---@return typed arg
+---@return SubtypeRelation rel
+---@return constraintcause cause
 function constraintelem:unwrap_leftcall_sliced() end
----@return boolean, typed, TypecheckingContext, typed, SubtypeRelation, constraintcause
+---@return boolean
+---@return typed left
+---@return TypecheckingContext leftctx
+---@return typed arg
+---@return SubtypeRelation rel
+---@return constraintcause cause
 function constraintelem:as_leftcall_sliced() end
 ---@return boolean
 function constraintelem:is_sliced_rightcall() end
----@return SubtypeRelation, typed, TypecheckingContext, typed, constraintcause
+---@return SubtypeRelation rel
+---@return typed right
+---@return TypecheckingContext rightctx
+---@return typed arg
+---@return constraintcause cause
 function constraintelem:unwrap_sliced_rightcall() end
----@return boolean, SubtypeRelation, typed, TypecheckingContext, typed, constraintcause
+---@return boolean
+---@return SubtypeRelation rel
+---@return typed right
+---@return TypecheckingContext rightctx
+---@return typed arg
+---@return constraintcause cause
 function constraintelem:as_sliced_rightcall() end
 ---@return boolean
 function constraintelem:is_rightcall_sliced() end
----@return typed, TypecheckingContext, SubtypeRelation, typed, constraintcause
+---@return typed left
+---@return TypecheckingContext leftctx
+---@return SubtypeRelation rel
+---@return typed arg
+---@return constraintcause cause
 function constraintelem:unwrap_rightcall_sliced() end
----@return boolean, typed, TypecheckingContext, SubtypeRelation, typed, constraintcause
+---@return boolean
+---@return typed left
+---@return TypecheckingContext leftctx
+---@return SubtypeRelation rel
+---@return typed arg
+---@return constraintcause cause
 function constraintelem:as_rightcall_sliced() end
 
 ---@class (exact) constraintelemType: EnumType

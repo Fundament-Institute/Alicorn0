@@ -12,15 +12,17 @@ function expression_goal:unwrap_infer() end
 function expression_goal:as_infer() end
 ---@return boolean
 function expression_goal:is_check() end
----@return value
+---@return value goal_type
 function expression_goal:unwrap_check() end
----@return boolean, value
+---@return boolean
+---@return value goal_type
 function expression_goal:as_check() end
 ---@return boolean
 function expression_goal:is_mechanism() end
----@return value
+---@return value TODO
 function expression_goal:unwrap_mechanism() end
----@return boolean, value
+---@return boolean
+---@return value TODO
 function expression_goal:as_mechanism() end
 
 ---@class (exact) expression_goalType: EnumType

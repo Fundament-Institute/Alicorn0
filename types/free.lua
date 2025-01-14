@@ -6,21 +6,26 @@ free = {}
 
 ---@return boolean
 function free:is_metavariable() end
----@return Metavariable
+---@return Metavariable metavariable
 function free:unwrap_metavariable() end
----@return boolean, Metavariable
+---@return boolean
+---@return Metavariable metavariable
 function free:as_metavariable() end
 ---@return boolean
 function free:is_placeholder() end
----@return number, placeholder_debug
+---@return number index
+---@return placeholder_debug debug
 function free:unwrap_placeholder() end
----@return boolean, number, placeholder_debug
+---@return boolean
+---@return number index
+---@return placeholder_debug debug
 function free:as_placeholder() end
 ---@return boolean
 function free:is_unique() end
----@return table
+---@return table id
 function free:unwrap_unique() end
----@return boolean, table
+---@return boolean
+---@return table id
 function free:as_unique() end
 
 ---@class (exact) freeType: EnumType
