@@ -393,8 +393,9 @@ local function substitute_inner_impl(val, mappings, context_len)
 
 		-- Here we need to add the new arg placeholder to a map of things to substitute
 		-- otherwise it would be left as a free.unique in the result
-		mappings[unique] = typed_term.bound_variable(context_len + 1)
-		local val_typed = substitute_inner(val, mappings, context_len + 1)
+		local new_mappings = U.shallow_copy(mappings)
+		new_mappings[unique] = typed_term.bound_variable(context_len + 1)
+		local val_typed = substitute_inner(val, new_mappings, context_len + 1)
 
 		-- FIXME: this results in more captures every time we substitute a closure ->
 		--   can cause non-obvious memory leaks
