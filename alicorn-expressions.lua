@@ -440,16 +440,7 @@ local function speculate_pi_type(env, metaval)
 	local ok, res = evaluator.typechecker_state:speculate(function()
 		local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 		local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
-		local pi = value.pi(
-			param_mv:as_value(),
-			param_info_implicit,
-			value.closure(
-				"#spec-pi",
-				typed_term.literal(result_mv:as_value()),
-				env.typechecking_context.runtime_context
-			),
-			result_info_pure
-		)
+		local pi = value.pi(param_mv:as_value(), param_info_implicit, result_mv:as_value(), result_info_pure)
 
 		U.tag(
 			"flow",
@@ -475,16 +466,7 @@ local function speculate_pi_type(env, metaval)
 	return evaluator.typechecker_state:speculate(function()
 		local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 		local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
-		local pi = value.pi(
-			param_mv:as_value(),
-			param_info_explicit,
-			value.closure(
-				"#spec-pi",
-				typed_term.literal(result_mv:as_value()),
-				env.typechecking_context.runtime_context
-			),
-			result_info_pure
-		)
+		local pi = value.pi(param_mv:as_value(), param_info_explicit, result_mv:as_value(), result_info_pure)
 
 		U.tag(
 			"flow",

@@ -3750,16 +3750,21 @@ function TypeCheckerState:Visualize(diff)
 	end
 
 	for i, e in ipairs(self.graph.constrain_edges:all()) do
-		g = g .. "\n" .. e.left .. " -> " .. e.right .. " [arrowType=normal"
+		g = g .. "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=normal"
 
 		if diff and diff.constrain_edges[i] and diff.constrain_edges[i].left == e.left and diff.constrain_edges[i].right == e.right then
-			g = g .. ', color="#cccccc"'
+			g = g .. ', fontcolor=\"#cccccc\", color="#cccccc"'
 		end
+
+		if e.rel.debug_name then
+			g = g .. ', label="'.. e.rel.debug_name .. '"'
+		end
+
 		g = g .. "]"
 	end
 
 	for i, e in ipairs(self.graph.leftcall_edges:all()) do
-		g = g .. "\n" .. e.left .. " -> " .. e.right .. " [arrowType=empty"
+		g = g .. "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=empty"
 		
 		if diff and diff.leftcall_edges[i] and diff.leftcall_edges[i].left == e.left and diff.leftcall_edges[i].right == e.right then
 			g = g .. ', color="#cccccc"'
@@ -3768,7 +3773,7 @@ function TypeCheckerState:Visualize(diff)
 	end
 
 	for i, e in ipairs(self.graph.rightcall_edges:all()) do
-		g = g .. "\n" .. e.left .. " -> " .. e.right .. " [arrowType=invempty"
+		g = g .. "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=invempty"
 		
 		if diff and diff.rightcall_edges[i] and diff.rightcall_edges[i].left == e.left and diff.rightcall_edges[i].right == e.right then
 			g = g .. ', color="#cccccc"'
@@ -4468,15 +4473,16 @@ function TypeCheckerState:constrain_leftcall_compose_2(edge, edge_id)
 					"Relations do not match! " .. tostring(l2.rel) .. " is not " .. tostring(FunctionRelation(edge.rel))
 				)
 			end
+			local lvalue, _, lctx = table.unpack(self.values[l2.left])
+			local l = self:check_value(apply_value(lvalue, edge.arg), TypeCheckerTag.VALUE, lctx)
 			U.append(
 				self.pending,
-				EdgeNotif.CallLeft(
-					edge.left,
-					edge.arg,
+				EdgeNotif.Constrain(
+					l,
 					edge.rel,
-					l2.right,
+					edge.right,
 					math.min(edge.shallowest_block, l2.shallowest_block),
-					compositecause("leftcall_discharge", edge_id, edge, i, l2, NIL_ANCHOR)
+					compositecause("composition", i, l2, edge_id, edge, NIL_ANCHOR)
 				)
 			)
 		end

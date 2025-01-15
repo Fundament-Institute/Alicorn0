@@ -7,11 +7,11 @@ inferrable = {}
 ---@return boolean
 function inferrable:is_bound_variable() end
 ---@return number index
----@return string debug
+---@return any debug
 function inferrable:unwrap_bound_variable() end
 ---@return boolean
 ---@return number index
----@return string debug
+---@return any debug
 function inferrable:as_bound_variable() end
 ---@return boolean
 function inferrable:is_typed() end
@@ -368,7 +368,7 @@ function inferrable:as_program_type() end
 
 ---@class (exact) inferrableType: EnumType
 ---@field define_enum fun(self: inferrableType, name: string, variants: Variants): inferrableType
----@field bound_variable fun(index: number, debug: string): inferrable
+---@field bound_variable fun(index: number, debug: any): inferrable
 ---@field typed fun(type: value, usage_counts: ArrayValue, typed_term: typed): inferrable
 ---@field annotated_lambda fun(param_name: string, param_annotation: inferrable, body: inferrable, start_anchor: Anchor, visible: visibility, pure: checkable): inferrable
 ---@field pi fun(param_type: inferrable, param_info: checkable, result_type: inferrable, result_info: checkable): inferrable
