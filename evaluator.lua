@@ -3707,6 +3707,78 @@ local function verify_tree(store, k)
 	return true
 end
 
+function TypeCheckerState:Snapshot()
+	return { 
+		values = U.shallow_copy(self.values), 
+		constrain_edges = U.shallow_copy(self.graph.constrain_edges:all()),
+		leftcall_edges = U.shallow_copy(self.graph.leftcall_edges:all()),
+		rightcall_edges = U.shallow_copy(self.graph.rightcall_edges:all()),
+ 	}
+end
+
+function TypeCheckerState:Visualize(diff)
+	local g = "digraph State {"
+
+	for i, v in ipairs(self.values) do
+		local label = U.strip_ansi(v[1]:pretty_print(v[3])):gsub("\n", "\\n"):gsub('"', "'")
+		if #label > 400 then
+			label = label:sub(0, 400)
+		end
+		for i = 60, #label, 60 do
+			label = label:sub(0, i) .. "\\n" .. label:sub(i + 1)
+		end
+		g = g .. "\n" .. i .. ' ['
+		
+		if diff and diff.values[i] then
+			g = g .. "fontcolor=\"#cccccc\", color=\"#cccccc\", "
+		end
+
+		if v[1]:is_enum_value() and v[1]:unwrap_enum_value() == "empty" then
+			g = g .. "shape=doubleoctagon]"
+			goto continue
+		elseif v[1]:is_neutral() and v[1]:unwrap_neutral():is_free() and v[1]:unwrap_neutral():unwrap_free():is_metavariable() then
+			g = g .. "shape=doublecircle]"
+			goto continue
+		elseif v[1]:is_star() then
+			g = g .. "shape=egg, "
+		else 
+			g = g .. "shape=rect, "
+		end
+
+		g = g .. 'label = "#' .. i .. " " .. label .. '"]'
+  ::continue::
+	end
+
+	for i, e in ipairs(self.graph.constrain_edges:all()) do
+		g = g .. "\n" .. e.left .. " -> " .. e.right .. " [arrowType=normal"
+
+		if diff and diff.constrain_edges[i] and diff.constrain_edges[i].left == e.left and diff.constrain_edges[i].right == e.right then
+			g = g .. ', color="#cccccc"'
+		end
+		g = g .. "]"
+	end
+
+	for i, e in ipairs(self.graph.leftcall_edges:all()) do
+		g = g .. "\n" .. e.left .. " -> " .. e.right .. " [arrowType=empty"
+		
+		if diff and diff.leftcall_edges[i] and diff.leftcall_edges[i].left == e.left and diff.leftcall_edges[i].right == e.right then
+			g = g .. ', color="#cccccc"'
+		end
+		g = g .. "]"
+	end
+
+	for i, e in ipairs(self.graph.rightcall_edges:all()) do
+		g = g .. "\n" .. e.left .. " -> " .. e.right .. " [arrowType=invempty"
+		
+		if diff and diff.rightcall_edges[i] and diff.rightcall_edges[i].left == e.left and diff.rightcall_edges[i].right == e.right then
+			g = g .. ', color="#cccccc"'
+		end
+		g = g .. "]"
+	end
+
+	return g .. "}"
+end
+
 function TypeCheckerState:DEBUG_VERIFY_TREE()
 	return verify_tree(self.graph.constrain_edges._index_store)
 end
