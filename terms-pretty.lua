@@ -623,7 +623,10 @@ function inferrable_term_override_pretty:bound_variable(pp, context)
 		pp:unit(pp:_resetcolor())
 
 		pp:unit(tostring(index))
+
+		pp:unit(pp:_color())
 		pp:unit(", ")
+		pp:unit(pp:_resetcolor())
 
 		pp:unit(debug)
 
@@ -652,7 +655,11 @@ function typed_term_override_pretty:bound_variable(pp, context)
 		pp:unit(pp:_resetcolor())
 
 		pp:unit(tostring(index))
+
+		pp:unit(pp:_color())
 		pp:unit(", ")
+		pp:unit(pp:_resetcolor())
+
 		pp:unit(debug)
 
 		pp:unit(pp:_color())
@@ -853,7 +860,7 @@ function typed_term_override_pretty:lambda(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("typed.λ [" .. tostring(anchor) .. "]")
+	pp:unit("typed.λ [" .. tostring(anchor) .. "] ")
 	pp:unit(pp:_resetcolor())
 
 	if is_destructure then
@@ -889,78 +896,6 @@ function typed_term_override_pretty:lambda(pp, context)
 		pp:any(body, inner_context)
 	end
 
-	pp:_exit()
-end
-
----@param pp PrettyPrint
-function value_override_pretty:enum_value(pp)
-	local constructor, arg = self:unwrap_enum_value()
-
-	pp:_enter()
-
-	if constructor == "empty" then
-		pp:unit(pp:_color())
-		pp:unit("enum[<EMPTY>]")
-		pp:unit(pp:_resetcolor())
-	else
-		pp:unit(pp:_color())
-		pp:unit("enum[")
-		pp:unit(pp:_resetcolor())
-
-		pp:any(arg)
-
-		pp:unit(pp:_color())
-		pp:unit("]")
-		pp:unit(pp:_resetcolor())
-	end
-
-	pp:_exit()
-end
-
----@param pp PrettyPrint
-function value_override_pretty:star(pp)
-	local level, depth = self:unwrap_star()
-
-	pp:_enter()
-
-	pp:unit(pp:_color())
-	pp:unit("✪ " .. level .. "|" .. depth)
-	pp:unit(pp:_resetcolor())
-
-	pp:_exit()
-end
-
----@param pp PrettyPrint
-function value_override_pretty:visibility(pp)
-	local v = self:unwrap_visibility()
-	pp:_enter()
-
-	pp:unit(pp:_color())
-	if v:is_implicit() then
-		pp:unit("implicit")
-	elseif v:is_explicit() then
-		pp:unit("explicit")
-	else
-		pp:any(v)
-	end
-	pp:unit(pp:_resetcolor())
-
-	pp:_exit()
-end
-
-function value_override_pretty:param_info(pp)
-	local v = self:unwrap_param_info()
-
-	pp:_enter()
-	pp:any(v)
-	pp:_exit()
-end
-
-function value_override_pretty:result_info(pp)
-	local purity = self:unwrap_result_info():unwrap_result_info()
-
-	pp:_enter()
-	pp:any(purity)
 	pp:_exit()
 end
 
@@ -1055,15 +990,9 @@ function inferrable_term_override_pretty:pi(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("inferrable.Π <")
+	pp:unit("inferrable.Π [" .. tostring(anchor) .. "] <")
 	pp:unit(pp:_resetcolor())
-	if param_info:unwrap_param_info():is_explicit() then
-		pp:unit("explicit")
-	elseif param_info:unwrap_param_info():is_implicit() then
-		pp:unit("implicit")
-	else
-		pp:any(param_info)
-	end
+	pp:any(param_info)
 	pp:unit(pp:_color())
 	pp:unit(", ")
 	pp:unit(pp:_resetcolor())
@@ -1139,7 +1068,7 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function inferrable_term_override_pretty:host_function_type(pp, context)
-	local param_type, result_type, _ = self:unwrap_host_function_type()
+	local param_type, result_type, result_info = self:unwrap_host_function_type()
 	context = ensure_context(context)
 	local result_context = context
 	local param_is_tuple_type, param_desc = param_type:as_host_tuple_type()
@@ -1170,7 +1099,11 @@ function inferrable_term_override_pretty:host_function_type(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("inferrable.host-Π [" .. tostring(anchor) .. "]")
+	pp:unit("inferrable.host-Π [" .. tostring(anchor) .. "] <")
+	pp:unit(pp:_resetcolor())
+	pp:any(result_info)
+	pp:unit(pp:_color())
+	pp:unit("> ")
 	pp:unit(pp:_resetcolor())
 
 	if not result_is_readable then
@@ -1275,9 +1208,13 @@ function typed_term_override_pretty:pi(pp, context)
 
 	pp:unit(pp:_color())
 	pp:unit("typed.Π <")
+	pp:unit(pp:_resetcolor())
 	pp:any(param_info)
+	pp:unit(pp:_color())
 	pp:unit(", ")
+	pp:unit(pp:_resetcolor())
 	pp:any(result_info)
+	pp:unit(pp:_color())
 	pp:unit("> ")
 	pp:unit(pp:_resetcolor())
 
@@ -1348,7 +1285,7 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function typed_term_override_pretty:host_function_type(pp, context)
-	local param_type, result_type, _ = self:unwrap_host_function_type()
+	local param_type, result_type, result_info = self:unwrap_host_function_type()
 	context = ensure_context(context)
 	local result_context = context
 	local param_is_tuple_type, param_desc = param_type:as_host_tuple_type()
@@ -1379,7 +1316,11 @@ function typed_term_override_pretty:host_function_type(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("typed.host-Π ")
+	pp:unit("typed.host-Π <")
+	pp:unit(pp:_resetcolor())
+	pp:any(result_info)
+	pp:unit(pp:_color())
+	pp:unit("> ")
 	pp:unit(pp:_resetcolor())
 
 	if not result_is_readable then
@@ -1449,8 +1390,6 @@ end
 ---@param pp PrettyPrint
 function value_override_pretty:pi(pp)
 	local param_type, param_info, result_type, result_info = self:unwrap_pi()
-	local visible = param_info:unwrap_param_info():unwrap_visibility()
-	local pure = result_info:unwrap_result_info():unwrap_result_info()
 	local param_is_tuple_type, param_desc = as_any_tuple_type(param_type)
 	local result_is_readable, param_name, result_code, result_capture = result_type:as_closure()
 	local result_context, result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_desc
@@ -1481,9 +1420,13 @@ function value_override_pretty:pi(pp)
 
 	pp:unit(pp:_color())
 	pp:unit("value.Π <")
-	pp:any(visible)
+	pp:unit(pp:_resetcolor())
+	pp:any(param_info)
+	pp:unit(pp:_color())
 	pp:unit(", ")
-	pp:any(pure)
+	pp:unit(pp:_resetcolor())
+	pp:any(result_info)
+	pp:unit(pp:_color())
 	pp:unit("> ")
 	pp:unit(pp:_resetcolor())
 
@@ -1553,7 +1496,7 @@ end
 
 ---@param pp PrettyPrint
 function value_override_pretty:host_function_type(pp)
-	local param_type, result_type, _ = self:unwrap_host_function_type()
+	local param_type, result_type, result_info = self:unwrap_host_function_type()
 	local param_is_tuple_type, param_desc = param_type:as_host_tuple_type()
 	local result_is_readable, param_name, result_code, result_capture = result_type:as_closure()
 	local result_context, result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_desc
@@ -1583,7 +1526,11 @@ function value_override_pretty:host_function_type(pp)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("value.host-Π ")
+	pp:unit("value.host-Π <")
+	pp:unit(pp:_resetcolor())
+	pp:any(result_info)
+	pp:unit(pp:_color())
+	pp:unit("> ")
 	pp:unit(pp:_resetcolor())
 
 	if not result_is_readable then
@@ -1648,6 +1595,35 @@ function value_override_pretty:host_function_type(pp)
 	end
 
 	pp:_exit()
+end
+
+---@param pp PrettyPrint
+function value_override_pretty:visibility(pp)
+	local v = self:unwrap_visibility()
+
+	pp:_enter()
+
+	pp:unit(pp:_color())
+	if v:is_implicit() then
+		pp:unit("implicit")
+	elseif v:is_explicit() then
+		pp:unit("explicit")
+	else
+		pp:any(v)
+	end
+	pp:unit(pp:_resetcolor())
+
+	pp:_exit()
+end
+
+function value_override_pretty:param_info(pp)
+	local v = self:unwrap_param_info()
+	pp:any(v)
+end
+
+function value_override_pretty:result_info(pp)
+	local purity = self:unwrap_result_info():unwrap_result_info()
+	pp:any(purity)
 end
 
 ---@param pp PrettyPrint
@@ -2035,6 +2011,43 @@ function value_override_pretty:host_tuple_type(pp)
 end
 
 ---@param pp PrettyPrint
+function value_override_pretty:enum_value(pp)
+	local constructor, arg = self:unwrap_enum_value()
+
+	pp:_enter()
+
+	if constructor == DescCons.empty then
+		pp:unit(pp:_color())
+		pp:unit("enum[<EMPTY>]")
+		pp:unit(pp:_resetcolor())
+	elseif constructor == DescCons.cons then
+		pp:unit(pp:_color())
+		pp:unit("enum[")
+		pp:unit(pp:_resetcolor())
+
+		pp:any(arg)
+
+		pp:unit(pp:_color())
+		pp:unit("]")
+		pp:unit(pp:_resetcolor())
+	else
+		pp:unit(pp:_color())
+		pp:unit("enum<")
+		pp:unit(constructor)
+		pp:unit(">[")
+		pp:unit(pp:_resetcolor())
+
+		pp:any(arg)
+
+		pp:unit(pp:_color())
+		pp:unit("]")
+		pp:unit(pp:_resetcolor())
+	end
+
+	pp:_exit()
+end
+
+---@param pp PrettyPrint
 function value_override_pretty:neutral(pp)
 	local desc = self:unwrap_neutral()
 
@@ -2114,6 +2127,19 @@ function typed_term_override_pretty:host_intrinsic(pp, context)
 	else
 		pp:any(source, context)
 	end
+
+	pp:_exit()
+end
+
+---@param pp PrettyPrint
+function value_override_pretty:star(pp)
+	local level, depth = self:unwrap_star()
+
+	pp:_enter()
+
+	pp:unit(pp:_color())
+	pp:unit("✪ " .. level .. "|" .. depth)
+	pp:unit(pp:_resetcolor())
 
 	pp:_exit()
 end
