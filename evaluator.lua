@@ -2292,7 +2292,7 @@ function infer_impl(
 			typechecking_context,
 			value.enum_desc_type(univ_var),
 			typechecking_context,
-			terms.constraintcause.primitive("tuple type construction", NIL_ANCHOR)
+			terms.constraintcause.primitive("enum type construction", NIL_ANCHOR)
 		)
 		return value.union_type(terms.value.star(0, 0), univ_var), desc_usages, terms.typed_term.enum_type(desc_term)
 	elseif inferrable_term:is_object_cons() then
@@ -2491,7 +2491,7 @@ function infer_impl(
 			typechecking_context,
 			value.tuple_desc_type(value.host_type_type),
 			typechecking_context,
-			terms.constraintcause.primitive("tuple type construction", NIL_ANCHOR)
+			terms.constraintcause.primitive("host tuple type construction", NIL_ANCHOR)
 		)
 		return terms.value.star(0, 0), desc_usages, terms.typed_term.host_tuple_type(desc_term)
 	elseif inferrable_term:is_program_sequence() then
