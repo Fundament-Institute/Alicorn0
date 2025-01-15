@@ -745,7 +745,13 @@ local function gen_array_index_fns(self, value_type)
 		-- so we should make sure to use the :ipairs() method instead
 		if key < 1 or key > val.n then
 			p(key, val.n)
-			error("key passed to array indexing is out of bounds (read code comment above)")
+			error(
+				"key passed to array indexing is out of bounds (read code comment above): "
+					.. tostring(key)
+					.. "is not within [1,"
+					.. tostring(val.n)
+					.. "]"
+			)
 		end
 		return val.array[key]
 	end

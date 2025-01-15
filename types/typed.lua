@@ -7,9 +7,11 @@ typed = {}
 ---@return boolean
 function typed:is_bound_variable() end
 ---@return number index
+---@return string debug
 function typed:unwrap_bound_variable() end
 ---@return boolean
 ---@return number index
+---@return string debug
 function typed:as_bound_variable() end
 ---@return boolean
 function typed:is_literal() end
@@ -22,10 +24,12 @@ function typed:as_literal() end
 function typed:is_lambda() end
 ---@return string param_name
 ---@return typed body
+---@return Anchor start_anchor
 function typed:unwrap_lambda() end
 ---@return boolean
 ---@return string param_name
 ---@return typed body
+---@return Anchor start_anchor
 function typed:as_lambda() end
 ---@return boolean
 function typed:is_pi() end
@@ -520,9 +524,9 @@ function typed:as_constrained_type() end
 
 ---@class (exact) typedType: EnumType
 ---@field define_enum fun(self: typedType, name: string, variants: Variants): typedType
----@field bound_variable fun(index: number): typed
+---@field bound_variable fun(index: number, debug: string): typed
 ---@field literal fun(literal_value: value): typed
----@field lambda fun(param_name: string, body: typed): typed
+---@field lambda fun(param_name: string, body: typed, start_anchor: Anchor): typed
 ---@field pi fun(param_type: typed, param_info: typed, result_type: typed, result_info: typed): typed
 ---@field application fun(f: typed, arg: typed): typed
 ---@field let fun(name: string, expr: typed, body: typed): typed

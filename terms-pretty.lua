@@ -1,5 +1,6 @@
 local fibbuf = require "fibonacci-buffer"
 local gen = require "terms-generators"
+local U = require "alicorn-utils"
 local typechecking_context_type
 local runtime_context_type
 local DescCons
@@ -401,14 +402,14 @@ end
 local function inferrable_tuple_type_hydraulicpress(desc)
 	local ok, constructor, arg = desc:as_enum_cons()
 	if not ok then
-		return { "<UNHANDLED EDGE CASE>" }, 1
+		return { "<UNHANDLED EDGE CASE> " .. U.here() }, 1
 	end
 	if constructor == DescCons.empty then
 		return {}, 0
 	elseif constructor == DescCons.cons then
 		local elements = arg:unwrap_tuple_cons()
 		if elements:len() ~= 2 then
-			return { "<UNHANDLED EDGE CASE>" }, 1
+			return { "<UNHANDLED EDGE CASE> " .. U.here() }, 1
 		end
 		local desc = elements[1]
 		local f = elements[2]
@@ -417,7 +418,7 @@ local function inferrable_tuple_type_hydraulicpress(desc)
 		prev[n] = f
 		return prev, n
 	else
-		return { "<UNHANDLED EDGE CASE>" }, 1
+		return { "<UNHANDLED EDGE CASE> " .. U.here() }, 1
 	end
 end
 
@@ -466,14 +467,14 @@ end
 local function typed_tuple_type_hydraulicpress(desc)
 	local ok, constructor, arg = desc:as_enum_cons()
 	if not ok then
-		return { "<UNHANDLED EDGE CASE>" }, 1
+		return { "<UNHANDLED EDGE CASE> " .. U.here() }, 1
 	end
 	if constructor == DescCons.empty then
 		return {}, 0
 	elseif constructor == DescCons.cons then
 		local elements = arg:unwrap_tuple_cons()
 		if elements:len() ~= 2 then
-			return { "<UNHANDLED EDGE CASE>" }, 1
+			return { "<UNHANDLED EDGE CASE> " .. U.here() }, 1
 		end
 		local desc = elements[1]
 		local f = elements[2]
@@ -482,7 +483,7 @@ local function typed_tuple_type_hydraulicpress(desc)
 		prev[n] = f
 		return prev, n
 	else
-		return { "<UNHANDLED EDGE CASE>" }, 1
+		return { "<UNHANDLED EDGE CASE> " .. U.here() }, 1
 	end
 end
 
@@ -532,7 +533,7 @@ local function value_tuple_type_hydraulicpress(desc)
 	elseif constructor == DescCons.cons then
 		local elements = arg:unwrap_tuple_value()
 		if elements:len() ~= 2 then
-			return { "<UNHANDLED EDGE CASE>" }, 1
+			return { "<UNHANDLED EDGE CASE> " .. U.here() }, 1
 		end
 		local desc = elements[1]
 		local f = elements[2]
@@ -541,7 +542,7 @@ local function value_tuple_type_hydraulicpress(desc)
 		prev[n] = f
 		return prev, n
 	else
-		return { "<UNHANDLED EDGE CASE>" }, 1
+		return { "<UNHANDLED EDGE CASE> " .. U.here() }, 1
 	end
 end
 
@@ -608,7 +609,7 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function inferrable_term_override_pretty:bound_variable(pp, context)
-	local index = self:unwrap_bound_variable()
+	local index, debug = self:unwrap_bound_variable()
 	context = ensure_context(context)
 
 	pp:_enter()
@@ -622,6 +623,9 @@ function inferrable_term_override_pretty:bound_variable(pp, context)
 		pp:unit(pp:_resetcolor())
 
 		pp:unit(tostring(index))
+		pp:unit(", ")
+
+		pp:unit(debug)
 
 		pp:unit(pp:_color())
 		pp:unit(")")
@@ -634,7 +638,7 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function typed_term_override_pretty:bound_variable(pp, context)
-	local index = self:unwrap_bound_variable()
+	local index, debug = self:unwrap_bound_variable()
 	context = ensure_context(context)
 
 	pp:_enter()
@@ -648,6 +652,8 @@ function typed_term_override_pretty:bound_variable(pp, context)
 		pp:unit(pp:_resetcolor())
 
 		pp:unit(tostring(index))
+		pp:unit(", ")
+		pp:unit(debug)
 
 		pp:unit(pp:_color())
 		pp:unit(")")
@@ -720,13 +726,13 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function binding_override_pretty:annotated_lambda(pp, context)
-	local param_name, param_annotation, _, visible, pure = self:unwrap_annotated_lambda()
+	local param_name, param_annotation, anchor, visible, pure = self:unwrap_annotated_lambda()
 	context = ensure_context(context)
 
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("binding.λ <")
+	pp:unit("binding.λ [" .. tostring(anchor) .. "] <")
 	pp:any(visible)
 	pp:unit(", ")
 	pp:any(pure)
@@ -747,7 +753,7 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function inferrable_term_override_pretty:annotated_lambda(pp, context)
-	local param_name, param_annotation, body, _, visible, pure = self:unwrap_annotated_lambda()
+	local param_name, param_annotation, body, anchor, visible, pure = self:unwrap_annotated_lambda()
 	context = ensure_context(context)
 	local inner_context = context:append(param_name)
 	local is_tuple_type, desc = as_any_tuple_type(param_annotation)
@@ -766,7 +772,7 @@ function inferrable_term_override_pretty:annotated_lambda(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("inferrable.λ <")
+	pp:unit("inferrable.λ [" .. tostring(anchor) .. "] <")
 	pp:any(visible)
 	pp:unit(", ")
 	pp:any(pure)
@@ -834,7 +840,7 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function typed_term_override_pretty:lambda(pp, context)
-	local param_name, body = self:unwrap_lambda()
+	local param_name, body, anchor = self:unwrap_lambda()
 	context = ensure_context(context)
 	local inner_context = context:append(param_name)
 	local is_destructure, is_rename, names, body, inner_context = typed_destructure_helper(body, inner_context)
@@ -847,7 +853,7 @@ function typed_term_override_pretty:lambda(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("typed.λ ")
+	pp:unit("typed.λ [" .. tostring(anchor) .. "]")
 	pp:unit(pp:_resetcolor())
 
 	if is_destructure then
@@ -883,6 +889,78 @@ function typed_term_override_pretty:lambda(pp, context)
 		pp:any(body, inner_context)
 	end
 
+	pp:_exit()
+end
+
+---@param pp PrettyPrint
+function value_override_pretty:enum_value(pp)
+	local constructor, arg = self:unwrap_enum_value()
+
+	pp:_enter()
+
+	if constructor == "empty" then
+		pp:unit(pp:_color())
+		pp:unit("enum[<EMPTY>]")
+		pp:unit(pp:_resetcolor())
+	else
+		pp:unit(pp:_color())
+		pp:unit("enum[")
+		pp:unit(pp:_resetcolor())
+
+		pp:any(arg)
+
+		pp:unit(pp:_color())
+		pp:unit("]")
+		pp:unit(pp:_resetcolor())
+	end
+
+	pp:_exit()
+end
+
+---@param pp PrettyPrint
+function value_override_pretty:star(pp)
+	local level, depth = self:unwrap_star()
+
+	pp:_enter()
+
+	pp:unit(pp:_color())
+	pp:unit("✪ " .. level .. "|" .. depth)
+	pp:unit(pp:_resetcolor())
+
+	pp:_exit()
+end
+
+---@param pp PrettyPrint
+function value_override_pretty:visibility(pp)
+	local v = self:unwrap_visibility()
+	pp:_enter()
+
+	pp:unit(pp:_color())
+	if v:is_implicit() then
+		pp:unit("implicit")
+	elseif v:is_explicit() then
+		pp:unit("explicit")
+	else
+		pp:any(v)
+	end
+	pp:unit(pp:_resetcolor())
+
+	pp:_exit()
+end
+
+function value_override_pretty:param_info(pp)
+	local v = self:unwrap_param_info()
+
+	pp:_enter()
+	pp:any(v)
+	pp:_exit()
+end
+
+function value_override_pretty:result_info(pp)
+	local purity = self:unwrap_result_info():unwrap_result_info()
+
+	pp:_enter()
+	pp:any(purity)
 	pp:_exit()
 end
 
@@ -950,7 +1028,7 @@ function inferrable_term_override_pretty:pi(pp, context)
 	context = ensure_context(context)
 	local result_context = context
 	local param_is_tuple_type, param_desc = as_any_tuple_type(param_type)
-	local result_is_readable, param_name, _, result_body, _ = result_type:as_annotated_lambda()
+	local result_is_readable, param_name, _, result_body, anchor = result_type:as_annotated_lambda()
 	local result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_desc
 	if result_is_readable then
 		result_context = result_context:append(param_name)
@@ -978,9 +1056,19 @@ function inferrable_term_override_pretty:pi(pp, context)
 
 	pp:unit(pp:_color())
 	pp:unit("inferrable.Π <")
-	pp:any(param_info)
+	pp:unit(pp:_resetcolor())
+	if param_info:unwrap_param_info():is_explicit() then
+		pp:unit("explicit")
+	elseif param_info:unwrap_param_info():is_implicit() then
+		pp:unit("implicit")
+	else
+		pp:any(param_info)
+	end
+	pp:unit(pp:_color())
 	pp:unit(", ")
+	pp:unit(pp:_resetcolor())
 	pp:any(result_info)
+	pp:unit(pp:_color())
 	pp:unit("> ")
 	pp:unit(pp:_resetcolor())
 
@@ -1055,7 +1143,7 @@ function inferrable_term_override_pretty:host_function_type(pp, context)
 	context = ensure_context(context)
 	local result_context = context
 	local param_is_tuple_type, param_desc = param_type:as_host_tuple_type()
-	local result_is_readable, param_name, _, result_body, _ = result_type:as_annotated_lambda()
+	local result_is_readable, param_name, _, result_body, anchor = result_type:as_annotated_lambda()
 	local result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_desc
 	if result_is_readable then
 		result_context = result_context:append(param_name)
@@ -1082,7 +1170,7 @@ function inferrable_term_override_pretty:host_function_type(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:_color())
-	pp:unit("inferrable.host-Π ")
+	pp:unit("inferrable.host-Π [" .. tostring(anchor) .. "]")
 	pp:unit(pp:_resetcolor())
 
 	if not result_is_readable then

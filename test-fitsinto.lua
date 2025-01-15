@@ -2,6 +2,7 @@ local traits = require "traits"
 local terms = require "terms"
 local gen = require "terms-generators"
 local evaluator = require "evaluator"
+local U = require "alicorn-utils"
 
 local value = terms.value
 local typed = terms.typed_term
@@ -133,7 +134,7 @@ local passed, failed, total = (require "tap")(function(test)
 							val_desc_empty,
 							value.closure(
 								"#A",
-								typed.tuple_elim(names(), typed.bound_variable(1), 0, typed.star(1)),
+								typed.tuple_elim(names(), typed.bound_variable(1, U.here()), 0, typed.star(1)),
 								terms.runtime_context()
 							)
 						)
@@ -142,9 +143,9 @@ local passed, failed, total = (require "tap")(function(test)
 						"#B",
 						terms.typed_term.tuple_elim(
 							names("#FOO"),
-							terms.typed_term.bound_variable(1),
+							terms.typed_term.bound_variable(1, U.here()),
 							1,
-							typed.bound_variable(2)
+							typed.bound_variable(2, U.here())
 						),
 						terms.runtime_context()
 					)
@@ -159,7 +160,7 @@ local passed, failed, total = (require "tap")(function(test)
 							val_desc_empty,
 							value.closure(
 								"#C",
-								typed.tuple_elim(names(), typed.bound_variable(1), 0, typed.star(1)),
+								typed.tuple_elim(names(), typed.bound_variable(1, U.here()), 0, typed.star(1)),
 								terms.runtime_context()
 							)
 						)
@@ -168,9 +169,9 @@ local passed, failed, total = (require "tap")(function(test)
 						"#D",
 						terms.typed_term.tuple_elim(
 							names("#BAR"),
-							terms.typed_term.bound_variable(1),
+							terms.typed_term.bound_variable(1, U.here()),
 							1,
-							typed.bound_variable(2)
+							typed.bound_variable(2, U.here())
 						),
 						terms.runtime_context()
 					)

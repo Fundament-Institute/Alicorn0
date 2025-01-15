@@ -350,7 +350,7 @@ checkable_term:define_enum("checkable", {
 -- inferrable terms can have their type inferred / don't need a goal type
 -- stylua: ignore
 inferrable_term:define_enum("inferrable", {
-	{ "bound_variable", { "index", gen.builtin_number } },
+	{ "bound_variable", { "index", gen.builtin_number, "debug", gen.builtin_string } },
 	{ "typed", {
 		"type",         value,
 		"usage_counts", array(gen.builtin_number),
@@ -581,11 +581,12 @@ local unique_id = gen.builtin_table
 -- typed terms have been typechecked but do not store their type internally
 -- stylua: ignore
 typed_term:define_enum("typed", {
-	{ "bound_variable", { "index", gen.builtin_number } },
+	{ "bound_variable", { "index", gen.builtin_number, "debug", gen.builtin_string  } },
 	{ "literal", { "literal_value", value } },
 	{ "lambda", {
 		"param_name", gen.builtin_string,
 		"body",       typed_term,
+		"start_anchor",     anchor_type,
 	} },
 	{ "pi", {
 		"param_type",  typed_term,

@@ -468,6 +468,7 @@ local function speculate_pi_type(env, metaval)
 	if ok then
 		return ok, res
 	end
+
 	return evaluator.typechecker_state:speculate(function()
 		local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 		local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
@@ -680,8 +681,6 @@ local function expression_pairhandler(args, a, b)
 		local param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
 
 		while param_info:unwrap_param_info():unwrap_visibility():is_implicit() do
-			print(param_info)
-			print("handling implicit pi argument at " .. tostring(a.start_anchor))
 			--print("original type of term: ", type_of_term:pretty_print(env.typechecking_context))
 			local metavar = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			local metavalue = metavar:as_value()
@@ -705,7 +704,6 @@ local function expression_pairhandler(args, a, b)
 			type_of_term = pi
 			param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
 		end
-		print(param_info)
 
 		-- multiple quantity of usages in tuple with usage in function arguments
 		---@type boolean, checkable|string, Environment
@@ -901,7 +899,7 @@ local function expression_symbolhandler(args, name)
 			part = inferrable_term.record_elim(
 				part,
 				name_array(namearray),
-				inferrable_term.bound_variable(env.typechecking_context:len() + 1)
+				inferrable_term.bound_variable(env.typechecking_context:len() + 1, U.here())
 			)
 		end
 		if goal:is_check() then
@@ -1069,25 +1067,26 @@ local function host_operative(fn, name)
 	-- and a host tuple result to a normal tuple
 	-- this way it can take a normal tuple and return a normal tuple
 	local nparams = 4
-	local tuple_conv_elements = typed_array(typed_term.bound_variable(2), typed_term.bound_variable(3))
+	local tuple_conv_elements =
+		typed_array(typed_term.bound_variable(2, U.here()), typed_term.bound_variable(3, U.here()))
 	local host_tuple_conv_elements = typed_array()
 	for i = 1, nparams do
 		-- + 1 because variable 1 is the argument tuple
 		-- all variables that follow are the destructured tuple
-		local var = typed_term.bound_variable(i + 1)
+		local var = typed_term.bound_variable(i + 1, U.here())
 		host_tuple_conv_elements:append(var)
 	end
 	local tuple_conv = typed_term.tuple_cons(tuple_conv_elements)
 	local host_tuple_conv = typed_term.host_tuple_cons(host_tuple_conv_elements)
 	local param_names = name_array("#syntax", "#env", "#userdata", "#goal")
 	local tuple_to_host_tuple =
-		typed_term.tuple_elim(param_names, typed_term.bound_variable(1), nparams, host_tuple_conv)
+		typed_term.tuple_elim(param_names, typed_term.bound_variable(1, U.here()), nparams, host_tuple_conv)
 	local tuple_to_host_tuple_fn = typed_term.application(typed_host_fn, tuple_to_host_tuple)
 	local result_names = name_array("#term", "#env")
 	local tuple_to_tuple_fn = typed_term.tuple_elim(result_names, tuple_to_host_tuple_fn, 2, tuple_conv)
 	-- 3: wrap it in a closure with an empty capture, not a typed lambda
 	-- this ensures variable 1 is the argument tuple
-	local value_fn = value.closure("#OPERATIVE_PARAM", tuple_to_tuple_fn, runtime_context())
+	local value_fn = value.closure("#" .. name .. "_PARAM", tuple_to_tuple_fn, runtime_context())
 
 	local userdata_type = value.tuple_type(terms.empty)
 	return inferrable_term.typed(

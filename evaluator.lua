@@ -1,7 +1,6 @@
 local terms = require "terms"
 local metalanguage = require "metalanguage"
 local U = require "alicorn-utils"
-local utils = require "alicorn-utils"
 local format = require "format"
 local runtime_context = terms.runtime_context
 local s = require "pretty-printer".s
@@ -61,14 +60,14 @@ local function luatovalue(luafunc)
 
 	for i = 1, len do
 		parameters:append(debug.getlocal(luafunc, i))
-		new_body:append(typed.bound_variable(i + 1))
+		new_body:append(typed.bound_variable(i + 1, U.here()))
 	end
 
 	return value.closure(
 		"#luatovalue-args",
 		typed.application(
 			typed.literal(value.host_value(luafunc)),
-			typed.tuple_elim(parameters, typed.bound_variable(1), len, typed.host_tuple_cons(new_body))
+			typed.tuple_elim(parameters, typed.bound_variable(1, U.here()), len, typed.host_tuple_cons(new_body))
 		),
 		runtime_context()
 	)
@@ -91,9 +90,12 @@ local function FunctionRelation(srel)
 		end),
 		constrain = luatovalue(function(lctx, val, rctx, use, cause)
 			local inner_info = {
-				debug = "FunctionRelation(" .. srel.debug_name .. ").constrain " .. utils.here() .. " " .. tostring(
-					cause
-				),
+				debug = "FunctionRelation("
+					.. srel.debug_name
+					.. ").constrain "
+					.. U.here()
+					.. " caused by: "
+					.. U.strip_ansi(tostring(cause)),
 			}
 			local u = value.neutral(neutral_value.free(free.unique(inner_info)))
 
@@ -308,10 +310,11 @@ local TupleDescRelation = setmetatable({
 			-- i have considered exploiting the linked-list structure of tuple desc for recursive
 			-- checking, but doing it naively won't work because the unique (representing the tuple
 			-- value) should be the same across the whole desc
-			local unique = { debug = "TupleDescRelation.constrain" .. utils.here() }
+			local unique = { debug = "TupleDescRelation.constrain" .. U.here() }
 			local placeholder = value.neutral(neutral_value.free(free.unique(unique)))
 			local tuple_types_val, tuple_types_use, tuple_vals, n =
 				infer_tuple_type_unwrapped2(value.tuple_type(val), value.tuple_type(use), placeholder)
+
 			for i = 1, n do
 				typechecker_state:queue_subtype(
 					lctx,
@@ -344,7 +347,7 @@ end
 ---@param v value
 ---@return value
 local function const_combinator(v)
-	return value.closure("#CONST_PARAM", typed_term.bound_variable(1), runtime_context():append(v))
+	return value.closure("#CONST_PARAM", typed_term.bound_variable(1, U.here()), runtime_context():append(v))
 end
 
 ---@param t value
@@ -385,7 +388,7 @@ local function substitute_inner_impl(val, mappings, context_len)
 		return typed_term.pi(param_type, param_info, result_type, result_info)
 	elseif val:is_closure() then
 		local param_name, code, capture = val:unwrap_closure()
-		local unique = { debug = "substitute_inner, val:is_closure" .. utils.here() }
+		local unique = { debug = "substitute_inner, val:is_closure" .. U.here() }
 		local arg = value.neutral(neutral_value.free(free.unique(unique)))
 		val = apply_value(val, arg)
 		--print("applied closure during substitution: (value term follows)")
@@ -394,13 +397,13 @@ local function substitute_inner_impl(val, mappings, context_len)
 		-- Here we need to add the new arg placeholder to a map of things to substitute
 		-- otherwise it would be left as a free.unique in the result
 		local new_mappings = U.shallow_copy(mappings)
-		new_mappings[unique] = typed_term.bound_variable(context_len + 1)
+		new_mappings[unique] = typed_term.bound_variable(context_len + 1, U.here())
 		local val_typed = substitute_inner(val, new_mappings, context_len + 1)
 
 		-- FIXME: this results in more captures every time we substitute a closure ->
 		--   can cause non-obvious memory leaks
 		--   since we don't yet remove unused captures from closure value
-		return typed_term.lambda(param_name .. "*", val_typed)
+		return typed_term.lambda(param_name .. "*", val_typed, NIL_ANCHOR)
 	elseif val:is_name_type() then
 		return typed_term.literal(val)
 	elseif val:is_name() then
@@ -692,7 +695,7 @@ function substitute_type_variables(val, index, param_name)
 	--print("value before substituting (val): (value term follows)")
 	--print(val)
 	local substituted = substitute_inner(val, {
-		[index] = typed_term.bound_variable(1),
+		[index] = typed_term.bound_variable(1, U.here()),
 	}, 1)
 	--print("typed term after substitution (substituted): (typed term follows)")
 	--print(substituted:pretty_print(typechecking_context))
@@ -962,12 +965,16 @@ add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx,
 							"#prefix",
 							typed_term.tuple_elim(
 								string_array("prefix-desc"),
-								typed_term.bound_variable(#rctx + 2),
+								typed_term.bound_variable(#rctx + 2, U.here()),
 								1,
 								typed_term.pi(
-									typed_term.tuple_type(typed_term.bound_variable(#rctx + 3)),
+									typed_term.tuple_type(typed_term.bound_variable(#rctx + 3, U.here())),
 									typed.literal(value.param_info(value.visibility(terms.visibility.explicit))),
-									typed.lambda("#arg" .. tostring(#rctx + 1), typed_term.bound_variable(#rctx + 1)),
+									typed.lambda(
+										"#arg" .. tostring(#rctx + 1),
+										typed_term.bound_variable(#rctx + 1, U.here()),
+										NIL_ANCHOR
+									),
 									typed.literal(value.result_info(terms.result_info(terms.purity.pure)))
 								)
 							),
@@ -1018,12 +1025,16 @@ add_comparer("value.tuple_desc_type", "value.enum_type", function(lctx, a, rctx,
 							"#prefix",
 							typed_term.tuple_elim(
 								string_array("prefix-desc"),
-								typed_term.bound_variable(#rctx + 2),
+								typed_term.bound_variable(#rctx + 2, U.here()),
 								1,
 								typed_term.pi(
-									typed_term.tuple_type(typed_term.bound_variable(#rctx + 3)),
+									typed_term.tuple_type(typed_term.bound_variable(#rctx + 3, U.here())),
 									typed.literal(value.param_info(value.visibility(terms.visibility.explicit))),
-									typed.lambda("#arg" .. tostring(#rctx + 1), typed_term.bound_variable(#rctx + 1)),
+									typed.lambda(
+										"#arg" .. tostring(#rctx + 1),
+										typed_term.bound_variable(#rctx + 1, U.here()),
+										NIL_ANCHOR
+									),
 									typed.literal(value.result_info(terms.result_info(terms.purity.pure)))
 								)
 							),
@@ -1857,7 +1868,7 @@ function infer_impl(
 	end
 
 	if inferrable_term:is_bound_variable() then
-		local index = inferrable_term:unwrap_bound_variable()
+		local index, debug = inferrable_term:unwrap_bound_variable()
 		local typeof_bound = typechecking_context:get_type(index)
 		local usage_counts = usage_array()
 		local context_size = typechecking_context:len()
@@ -1865,7 +1876,7 @@ function infer_impl(
 			usage_counts:append(0)
 		end
 		usage_counts[index] = 1
-		local bound = typed_term.bound_variable(index)
+		local bound = typed_term.bound_variable(index, debug .. "^")
 		return typeof_bound, usage_counts, bound
 	elseif inferrable_term:is_annotated() then
 		local checkable_term, inferrable_goal_type = inferrable_term:unwrap_annotated()
@@ -1898,7 +1909,7 @@ function infer_impl(
 		local lambda_usages = body_usages:copy(1, body_usages:len() - 1)
 		local lambda_type =
 			value.pi(param_type, value.param_info(value.visibility(param_visibility)), result_type, result_info)
-		local lambda_term = typed_term.lambda(param_name .. "^", body_term)
+		local lambda_term = typed_term.lambda(param_name .. "^", body_term, start_anchor)
 		return lambda_type, lambda_usages, lambda_term
 	elseif inferrable_term:is_pi() then
 		local param_type, param_info, result_type, result_info = inferrable_term:unwrap_pi()
@@ -2253,7 +2264,7 @@ function infer_impl(
 				subject_term,
 				term_variants,
 				typed_term.enum_absurd(
-					typed_term.bound_variable(typechecking_context:len() + 1),
+					typed_term.bound_variable(typechecking_context:len() + 1, U.here()),
 					"unacceptable enum variant"
 				)
 			)

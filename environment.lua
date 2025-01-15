@@ -101,7 +101,7 @@ function environment:bind_local(binding)
 			error("infer returned a bad type for expr in bind_local")
 		end
 		local n = self.typechecking_context:len()
-		local term = inferrable_term.bound_variable(n + 1)
+		local term = inferrable_term.bound_variable(n + 1, U.here())
 		local locals = self.locals:put(name, term)
 		local evaled = evaluator.evaluate(expr_term, self.typechecking_context.runtime_context)
 		-- print "doing let binding"
@@ -188,7 +188,7 @@ function environment:bind_local(binding)
 				-- if constructor ~= "cons" then
 				-- 	error("todo: this error message")
 				-- end
-				local term = inferrable_term.bound_variable(n + i)
+				local term = inferrable_term.bound_variable(n + i, U.here())
 				locals = locals:put(v, term)
 
 				local evaled = evaluator.index_tuple_value(subject_value, i)
@@ -250,7 +250,8 @@ function environment:bind_local(binding)
 		--print(annotation_term:pretty_print(self.typechecking_context))
 		local evaled = evaluator.evaluate(annotation_term, self.typechecking_context.runtime_context)
 		local bindings = self.bindings:append(binding)
-		local locals = self.locals:put(param_name, inferrable_term.bound_variable(self.typechecking_context:len() + 1))
+		local locals =
+			self.locals:put(param_name, inferrable_term.bound_variable(self.typechecking_context:len() + 1, U.here()))
 		local typechecking_context = self.typechecking_context:append(param_name, evaled, nil, start_anchor)
 		return update_env(self, {
 			locals = locals,
@@ -270,7 +271,7 @@ function environment:bind_local(binding)
 		local first_effect_sig, first_base_type = first_type:unwrap_program_type()
 		--print("FOUND EFFECTFUL BINDING", first_base_type, "produced by ", first_type)
 		local n = self.typechecking_context:len()
-		local term = inferrable_term.bound_variable(n + 1)
+		local term = inferrable_term.bound_variable(n + 1, U.here())
 		local locals = self.locals:put("#program-sequence", term)
 		local typechecking_context =
 			self.typechecking_context:append("#program-sequence", first_base_type, nil, start_anchor)

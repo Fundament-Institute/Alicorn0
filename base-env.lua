@@ -177,7 +177,7 @@ local switch_case = metalanguage.reducer(function(syntax, env)
 	local shadowed, term
 	shadowed, env = env:enter_block(terms.block_purity.inherit)
 	env = env:bind_local(
-		terms.binding.tuple_elim(names, terms.inferrable_term.bound_variable(env.typechecking_context:len()))
+		terms.binding.tuple_elim(names, terms.inferrable_term.bound_variable(env.typechecking_context:len(), U.here()))
 	)
 	ok, term, env = tail:match({
 		exprs.inferred_expression(metalanguage.accept_handler, env),
@@ -365,15 +365,7 @@ local ascribed_name = metalanguage.reducer(
 		-- print(env.enter_block)
 		local shadowed
 		shadowed, env = env:enter_block(terms.block_purity.pure)
-		local prev_name = "#prev - "
-			.. syntax.start_anchor.sourceid
-			.. ":"
-			.. syntax.start_anchor.line
-			.. "["
-			.. syntax.start_anchor.char
-			.. "-"
-			.. syntax.end_anchor.char
-			.. "]"
+		local prev_name = "#prev - " .. tostring(syntax.start_anchor)
 		env = env:bind_local(
 			terms.binding.annotated_lambda(
 				prev_name,
@@ -848,16 +840,17 @@ local function forall_impl(syntax, env)
 	shadowed, env = env:enter_block(terms.block_purity.pure)
 	-- tail.start_anchor can be nil so we fall back to the start_anchor for this forall type if needed
 	-- TODO: use correct name in lambda parameter instead of adding an extra let
+	local inner_name = "forall(" .. table.concat(params_names, ", ") .. ")"
 	env = env:bind_local(
 		terms.binding.annotated_lambda(
-			"#forall-arguments",
+			inner_name,
 			params_args,
 			tail.start_anchor or syntax.start_anchor,
 			terms.visibility.explicit,
 			literal_purity_pure
 		)
 	)
-	local ok, arg = env:get("#forall-arguments")
+	local ok, arg = env:get(inner_name)
 	if not ok then
 		error("wtf")
 	end
@@ -1041,18 +1034,18 @@ local function lambda_impl(syntax, env)
 	end
 
 	local args, names, env = thread.args, thread.names, thread.env
-
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
+	local inner_name = "λ(" .. table.concat(names, ",") .. ")"
 	inner_env = inner_env:bind_local(
 		terms.binding.annotated_lambda(
-			"#lambda-arguments",
+			inner_name,
 			args,
 			syntax.start_anchor,
 			terms.visibility.explicit,
 			literal_purity_pure
 		)
 	)
-	local _, arg = inner_env:get("#lambda-arguments")
+	local _, arg = inner_env:get(inner_name)
 	inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
 	local ok, expr, env = tail:match(
 		{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env)) },
@@ -1076,18 +1069,19 @@ local function lambda_prog_impl(syntax, env)
 	end
 
 	local args, names, env = thread.args, thread.names, thread.env
+	local inner_name = "λ-prog(" .. table.concat(names, ",") .. ")"
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.effectful)
 	inner_env = inner_env:bind_local(
 		terms.binding.annotated_lambda(
-			"#lambda-arguments",
+			inner_name,
 			args,
 			syntax.start_anchor,
 			terms.visibility.explicit,
 			literal_purity_effectful
 		)
 	)
-	local _, arg = inner_env:get("#lambda-arguments")
+	local _, arg = inner_env:get(inner_name)
 	inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
 	local ok, expr, env = tail:match(
 		{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env)) },
@@ -1165,18 +1159,19 @@ local function lambda_annotated_impl(syntax, env)
 	end
 
 	local args, names, env = thread.args, thread.names, thread.env
+	local inner_name = "λ-named(" .. table.concat(names, ",") .. ")"
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
 	inner_env = inner_env:bind_local(
 		terms.binding.annotated_lambda(
-			"#lambda-arguments",
+			inner_name,
 			args,
 			syntax.start_anchor,
 			terms.visibility.explicit,
 			literal_purity_pure
 		)
 	)
-	local _, arg = inner_env:get("#lambda-arguments")
+	local _, arg = inner_env:get(inner_name)
 	inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
 
 	local ok, ann_expr_env, tail = tail:match({
@@ -1281,13 +1276,14 @@ local function host_term_of(goal, context_len)
 		t,
 		typed.application(typed.literal(value.host_value(host_term_of_inner)), typed.host_tuple_cons(teees(goal))),
 		1,
-		typed.host_unwrap(typed.bound_variable(context_len + 1))
+		typed.host_unwrap(typed.bound_variable(context_len + 1, U.here()))
 	)
 end
 
 ---@param ud_type value
+---@param anchor Anchor
 ---@return value
-local function operative_handler_type(ud_type)
+local function operative_handler_type(ud_type, anchor)
 	local teees = gen.declare_array(typed)
 	local names = gen.declare_array(gen.builtin_string)
 	local namesp4 = names(
@@ -1317,7 +1313,7 @@ local function operative_handler_type(ud_type)
 			pnamer,
 			typed.tuple_elim(
 				namesp4,
-				typed.bound_variable(1),
+				typed.bound_variable(1, U.here()),
 				4,
 				typed.tuple_type(
 					typed.enum_cons(
@@ -1329,11 +1325,15 @@ local function operative_handler_type(ud_type)
 									typed.tuple_cons(
 										teees(
 											typed.enum_cons(terms.DescCons.empty, typed.tuple_cons(teees())),
-											typed.lambda(pnamer0, host_term_of(typed.bound_variable(5), 6))
+											typed.lambda(
+												pnamer0,
+												host_term_of(typed.bound_variable(5, U.here()), 6),
+												anchor
+											)
 										)
 									)
 								),
-								typed.lambda(pnamer1, typed.literal(terms.host_environment_type))
+								typed.lambda(pnamer1, typed.literal(terms.host_environment_type), anchor)
 							)
 						)
 					)
@@ -1386,14 +1386,17 @@ local function into_operative_impl(syntax, env)
 	local ok, handler_chk, env = handler_syntax:match({
 		exprs.expression(
 			metalanguage.accept_handler,
-			exprs.ExpressionArgs.new(terms.expression_goal.check(operative_handler_type(ud_type)), env)
+			exprs.ExpressionArgs.new(
+				terms.expression_goal.check(operative_handler_type(ud_type, syntax.start_anchor)),
+				env
+			)
 		),
 	}, metalanguage.failure_handler)
 	if not ok then
 		return false, handler_chk
 	end
 	local handler_usages, handler_t =
-		evaluator.check(handler_chk, env.typechecking_context, operative_handler_type(ud_type))
+		evaluator.check(handler_chk, env.typechecking_context, operative_handler_type(ud_type, syntax.start_anchor))
 	local handler = evaluator.evaluate(handler_t, env.typechecking_context.runtime_context)
 
 	local op_type = value.operative_type(handler, ud_type)
@@ -1416,7 +1419,7 @@ local function build_wrap(body_fn, type_fn)
 	return lit_term(
 		value.closure(
 			pname_arg,
-			typed.tuple_elim(names2, typed.bound_variable(1), 2, body_fn(typed.bound_variable(3))),
+			typed.tuple_elim(names2, typed.bound_variable(1, U.here()), 2, body_fn(typed.bound_variable(3, U.here()))),
 			terms.runtime_context()
 		),
 		value.pi(
@@ -1424,16 +1427,21 @@ local function build_wrap(body_fn, type_fn)
 				terms.tuple_desc(
 					value.closure(
 						pname_type,
-						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA + 1, 0)),
+						typed.tuple_elim(
+							names0,
+							typed.bound_variable(1, U.here()),
+							0,
+							typed.star(evaluator.OMEGA + 1, 0)
+						),
 						terms.runtime_context()
 					),
 					value.closure(
 						pname_type,
 						terms.typed_term.tuple_elim(
 							names1,
-							terms.typed_term.bound_variable(1),
+							terms.typed_term.bound_variable(1, U.here()),
 							1,
-							typed.bound_variable(2)
+							typed.bound_variable(2, U.here())
 						),
 						terms.runtime_context()
 					)
@@ -1442,7 +1450,12 @@ local function build_wrap(body_fn, type_fn)
 			param_info_explicit,
 			value.closure(
 				pname_type,
-				typed.tuple_elim(names2, typed.bound_variable(1), 2, type_fn(typed.bound_variable(2))),
+				typed.tuple_elim(
+					names2,
+					typed.bound_variable(1, U.here()),
+					2,
+					type_fn(typed.bound_variable(2, U.here()))
+				),
 				terms.runtime_context()
 			),
 			result_info_pure
@@ -1464,7 +1477,7 @@ local function build_unwrap(body_fn, type_fn)
 	return lit_term(
 		value.closure(
 			pname_arg,
-			typed.tuple_elim(names2, typed.bound_variable(1), 2, body_fn(typed.bound_variable(3))),
+			typed.tuple_elim(names2, typed.bound_variable(1, U.here()), 2, body_fn(typed.bound_variable(3, U.here()))),
 			terms.runtime_context()
 		),
 		value.pi(
@@ -1472,16 +1485,21 @@ local function build_unwrap(body_fn, type_fn)
 				terms.tuple_desc(
 					value.closure(
 						pname_type,
-						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA + 1, 0)),
+						typed.tuple_elim(
+							names0,
+							typed.bound_variable(1, U.here()),
+							0,
+							typed.star(evaluator.OMEGA + 1, 0)
+						),
 						terms.runtime_context()
 					),
 					value.closure(
 						pname_type,
 						terms.typed_term.tuple_elim(
 							names1,
-							terms.typed_term.bound_variable(1),
+							terms.typed_term.bound_variable(1, U.here()),
 							1,
-							type_fn(typed.bound_variable(2))
+							type_fn(typed.bound_variable(2, U.here()))
 						),
 						terms.runtime_context()
 					)
@@ -1490,7 +1508,7 @@ local function build_unwrap(body_fn, type_fn)
 			param_info_explicit,
 			value.closure(
 				pname_type,
-				typed.tuple_elim(names2, typed.bound_variable(1), 2, typed.bound_variable(2)),
+				typed.tuple_elim(names2, typed.bound_variable(1, U.here()), 2, typed.bound_variable(2, U.here())),
 				terms.runtime_context()
 			),
 			result_info_pure
@@ -1510,7 +1528,7 @@ local function build_wrapped(body_fn)
 	return lit_term(
 		value.closure(
 			pname_arg,
-			typed.tuple_elim(names1, typed.bound_variable(1), 1, body_fn(typed.bound_variable(2))),
+			typed.tuple_elim(names1, typed.bound_variable(1, U.here()), 1, body_fn(typed.bound_variable(2, U.here()))),
 			terms.runtime_context()
 		),
 		value.pi(
@@ -1518,7 +1536,12 @@ local function build_wrapped(body_fn)
 				terms.tuple_desc(
 					value.closure(
 						pname_type,
-						typed.tuple_elim(names0, typed.bound_variable(1), 0, typed.star(evaluator.OMEGA + 1, 0)),
+						typed.tuple_elim(
+							names0,
+							typed.bound_variable(1, U.here()),
+							0,
+							typed.star(evaluator.OMEGA + 1, 0)
+						),
 						terms.runtime_context()
 					)
 				)
@@ -1526,7 +1549,7 @@ local function build_wrapped(body_fn)
 			param_info_explicit,
 			value.closure(
 				pname_type,
-				typed.tuple_elim(names1, typed.bound_variable(1), 1, typed.literal(value.host_type_type)),
+				typed.tuple_elim(names1, typed.bound_variable(1, U.here()), 1, typed.literal(value.host_type_type)),
 				terms.runtime_context()
 			),
 			result_info_pure
