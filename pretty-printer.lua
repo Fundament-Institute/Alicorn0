@@ -320,6 +320,19 @@ end
 
 ---@param unknown any
 ---@param ... any
+---@return PrettyPrint
+local function pretty_preprint(unknown, ...)
+	local pp = PrettyPrint:new()
+	pp:_enter() -- work around for printing in debug tags
+	pp:_indent()
+	pp:any(unknown, ...)
+	pp:_dedent()
+	pp:_exit()
+	return pp
+end
+
+---@param unknown any
+---@param ... any
 ---@return string
 local function pretty_print(unknown, ...)
 	local pp = PrettyPrint:new()
@@ -356,6 +369,7 @@ _G["p"] = p
 
 return {
 	PrettyPrint = PrettyPrint,
+	pretty_preprint = pretty_preprint,
 	pretty_print = pretty_print,
 	default_print = default_print,
 	s = s,

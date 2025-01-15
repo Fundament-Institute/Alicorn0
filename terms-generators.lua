@@ -171,6 +171,7 @@ local function define_record(self, kind, params_with_types)
 	end
 	self._kind = kind
 	self.__index = {
+		pretty_preprint = pretty_printer.pretty_preprint,
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
 	}
@@ -264,6 +265,7 @@ local function define_enum(self, name, variants)
 	end
 	self._name = name
 	self.__index = {
+		pretty_preprint = pretty_printer.pretty_preprint,
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
 	}
@@ -408,6 +410,7 @@ local function gen_map_methods(self, key_type, value_type)
 			right:copy(new, conflict)
 			return new
 		end,
+		pretty_preprint = pretty_printer.pretty_preprint,
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
 	}
@@ -573,6 +576,7 @@ local function gen_set_methods(self, key_type)
 			end
 			return true
 		end,
+		pretty_preprint = pretty_printer.pretty_preprint,
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
 	}
@@ -690,6 +694,7 @@ local function gen_array_methods(self, value_type)
 		unpack = function(val)
 			return table.unpack(val.array, 1, val.n)
 		end,
+		pretty_preprint = pretty_printer.pretty_preprint,
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
 	}

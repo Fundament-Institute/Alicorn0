@@ -453,7 +453,10 @@ local function speculate_pi_type(env, metaval)
 
 		U.tag(
 			"flow",
-			{ val = metaval, use = pi },
+			{
+				val = metaval:pretty_preprint(env.typechecking_context),
+				use = pi:pretty_preprint(env.typechecking_context),
+			},
 			evaluator.typechecker_state.flow,
 			evaluator.typechecker_state,
 			metaval,
@@ -485,7 +488,10 @@ local function speculate_pi_type(env, metaval)
 
 		U.tag(
 			"flow",
-			{ val = metaval, use = pi },
+			{
+				val = metaval:pretty_preprint(env.typechecking_context),
+				use = pi:pretty_preprint(env.typechecking_context),
+			},
 			evaluator.typechecker_state.flow,
 			evaluator.typechecker_state,
 			metaval,
@@ -1197,7 +1203,10 @@ collect_tuple = metalanguage.reducer(
 		elseif goal:is_check() then
 			U.tag(
 				"flow",
-				{ val = value.tuple_type(desc), use = goal_type },
+				{
+					val = value.tuple_type(desc):pretty_preprint(env.typechecking_context),
+					use = goal_type:pretty_preprint(env.typechecking_context),
+				},
 				evaluator.typechecker_state.flow,
 				evaluator.typechecker_state,
 				value.tuple_type(desc),

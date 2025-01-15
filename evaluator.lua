@@ -99,8 +99,20 @@ local function FunctionRelation(srel)
 			}
 			local u = value.neutral(neutral_value.free(free.unique(inner_info)))
 
-			local applied_val = U.tag("apply_value", { val = val, use = use }, apply_value, val, u)
-			local applied_use = U.tag("apply_value", { val = val, use = use }, apply_value, use, u)
+			local applied_val = U.tag(
+				"apply_value",
+				{ val = val:pretty_preprint(lctx), use = use:pretty_preprint(rctx) },
+				apply_value,
+				val,
+				u
+			)
+			local applied_use = U.tag(
+				"apply_value",
+				{ val = val:pretty_preprint(lctx), use = use:pretty_preprint(rctx) },
+				apply_value,
+				use,
+				u
+			)
 
 			typechecker_state:queue_constrain(
 				lctx,
@@ -1384,7 +1396,7 @@ function check_concrete(lctx, val, rctx, use, cause)
 			val_supertype,
 			rctx,
 			use,
-			terms.constraintcause.nested(U.strip_ansi("singleton subtype"), cause)
+			terms.constraintcause.nested("singleton subtype", cause)
 		)
 		return true
 	end
@@ -1894,14 +1906,11 @@ function infer_impl(
 		local _, purity_term = check(purity, inner_context, terms.host_purity_type)
 		local body_type, body_usages, body_term = infer(body, inner_context)
 
-		local result_type = U.tag(
-			"substitute_type_variables",
-			{ body_type = body_type, index = inner_context:len(), block_level = typechecker_state.block_level },
-			substitute_type_variables,
-			body_type,
-			inner_context:len(),
-			param_name
-		)
+		local result_type = U.tag("substitute_type_variables", {
+			body_type = body_type:pretty_preprint(typechecking_context),
+			index = inner_context:len(),
+			block_level = typechecker_state.block_level,
+		}, substitute_type_variables, body_type, inner_context:len(), param_name)
 		local result_info = value.result_info(
 			result_info(evaluate(purity_term, typechecking_context:get_runtime_context()):unwrap_host_value())
 		) --TODO make more flexible
@@ -2636,17 +2645,40 @@ function evaluate_impl(typed_term, runtime_context)
 		return value.closure(param_name, body, runtime_context)
 	elseif typed_term:is_pi() then
 		local param_type, param_info, result_type, result_info = typed_term:unwrap_pi()
-		local param_type_value = U.tag("evaluate", { param_type = param_type }, evaluate, param_type, runtime_context)
-		local param_info_value = U.tag("evaluate", { param_info = param_info }, evaluate, param_info, runtime_context)
-		local result_type_value =
-			U.tag("evaluate", { result_type = result_type }, evaluate, result_type, runtime_context)
-		local result_info_value =
-			U.tag("evaluate", { result_info = result_info }, evaluate, result_info, runtime_context)
+		local param_type_value = U.tag(
+			"evaluate",
+			{ param_type = param_type:pretty_preprint(runtime_context) },
+			evaluate,
+			param_type,
+			runtime_context
+		)
+		local param_info_value = U.tag(
+			"evaluate",
+			{ param_info = param_info:pretty_preprint(runtime_context) },
+			evaluate,
+			param_info,
+			runtime_context
+		)
+		local result_type_value = U.tag(
+			"evaluate",
+			{ result_type = result_type:pretty_preprint(runtime_context) },
+			evaluate,
+			result_type,
+			runtime_context
+		)
+		local result_info_value = U.tag(
+			"evaluate",
+			{ result_info = result_info:pretty_preprint(runtime_context) },
+			evaluate,
+			result_info,
+			runtime_context
+		)
 		return value.pi(param_type_value, param_info_value, result_type_value, result_info_value)
 	elseif typed_term:is_application() then
 		local f, arg = typed_term:unwrap_application()
-		local f_value = U.tag("evaluate", { f = f }, evaluate, f, runtime_context)
-		local arg_value = U.tag("evaluate", { arg = arg }, evaluate, arg, runtime_context)
+		local f_value = U.tag("evaluate", { f = f:pretty_preprint(runtime_context) }, evaluate, f, runtime_context)
+		local arg_value =
+			U.tag("evaluate", { arg = arg:pretty_preprint(runtime_context) }, evaluate, arg, runtime_context)
 		return U.notail(apply_value(f_value, arg_value))
 		-- if you want to debug things that go through this call, you may comment above and uncomment below
 		-- but beware that this single change has caused tremendous performance degradation
@@ -2694,7 +2726,13 @@ function evaluate_impl(typed_term, runtime_context)
 		end
 	elseif typed_term:is_tuple_elim() then
 		local names, subject, length, body = typed_term:unwrap_tuple_elim()
-		local subject_value = U.tag("evaluate", { subject = subject }, evaluate, subject, runtime_context)
+		local subject_value = U.tag(
+			"evaluate",
+			{ subject = subject:pretty_preprint(runtime_context) },
+			evaluate,
+			subject,
+			runtime_context
+		)
 		local inner_context = runtime_context
 		if subject_value:is_tuple_value() then
 			local subject_elements = subject_value:unwrap_tuple_value()
@@ -2740,18 +2778,30 @@ function evaluate_impl(typed_term, runtime_context)
 			p(subject_value)
 			error("evaluate, is_tuple_elim, subject_value: expected a tuple")
 		end
-		return U.tag("evaluate", { body = body }, evaluate, body, inner_context)
+		return U.tag("evaluate", { body = body:pretty_preprint(runtime_context) }, evaluate, body, inner_context)
 	elseif typed_term:is_tuple_element_access() then
 		local tuple_term, index = typed_term:unwrap_tuple_element_access()
 		--print("tuple_element_access tuple_term: (typed term follows)")
 		--print(tuple_term:pretty_print(runtime_context))
-		local tuple = U.tag("evaluate", { tuple_term = tuple_term }, evaluate, tuple_term, runtime_context)
+		local tuple = U.tag(
+			"evaluate",
+			{ tuple_term = tuple_term:pretty_preprint(runtime_context) },
+			evaluate,
+			tuple_term,
+			runtime_context
+		)
 		--print("tuple_element_access tuple: (value term follows)")
 		--print(tuple)
 		return index_tuple_value(tuple, index)
 	elseif typed_term:is_tuple_type() then
 		local desc_term = typed_term:unwrap_tuple_type()
-		local desc = U.tag("evaluate", { desc_term = desc_term }, evaluate, desc_term, runtime_context)
+		local desc = U.tag(
+			"evaluate",
+			{ desc_term = desc_term:pretty_preprint(runtime_context) },
+			evaluate,
+			desc_term,
+			runtime_context
+		)
 		return terms.value.tuple_type(desc)
 	elseif typed_term:is_tuple_desc_type() then
 		local universe_term = typed_term:unwrap_tuple_desc_type()
@@ -2766,7 +2816,13 @@ function evaluate_impl(typed_term, runtime_context)
 		return value.record_value(new_fields)
 	elseif typed_term:is_record_elim() then
 		local subject, field_names, body = typed_term:unwrap_record_elim()
-		local subject_value = U.tag("evaluate", { subject = subject }, evaluate, subject, runtime_context)
+		local subject_value = U.tag(
+			"evaluate",
+			{ subject = subject:pretty_preprint(runtime_context) },
+			evaluate,
+			subject,
+			runtime_context
+		)
 		local inner_context = runtime_context
 		if subject_value:is_record_value() then
 			local subject_fields = subject_value:unwrap_record_value()
@@ -2782,15 +2838,28 @@ function evaluate_impl(typed_term, runtime_context)
 		else
 			error("evaluate, is_record_elim, subject_value: expected a record")
 		end
-		return U.tag("evaluate", { body = body }, evaluate, body, inner_context)
+		return U.tag("evaluate", { body = body:pretty_preprint(runtime_context) }, evaluate, body, inner_context)
 	elseif typed_term:is_enum_cons() then
 		local constructor, arg = typed_term:unwrap_enum_cons()
-		local arg_value = U.tag("evaluate", { arg = arg }, evaluate, arg, runtime_context)
+		local arg_value =
+			U.tag("evaluate", { arg = arg:pretty_preprint(runtime_context) }, evaluate, arg, runtime_context)
 		return value.enum_value(constructor, arg_value)
 	elseif typed_term:is_enum_elim() then
 		local subject, mechanism = typed_term:unwrap_enum_elim()
-		local subject_value = U.tag("evaluate", { subject = subject }, evaluate, subject, runtime_context)
-		local mechanism_value = U.tag("evaluate", { mechanism = mechanism }, evaluate, mechanism, runtime_context)
+		local subject_value = U.tag(
+			"evaluate",
+			{ subject = subject:pretty_preprint(runtime_context) },
+			evaluate,
+			subject,
+			runtime_context
+		)
+		local mechanism_value = U.tag(
+			"evaluate",
+			{ mechanism = mechanism:pretty_preprint(runtime_context) },
+			evaluate,
+			mechanism,
+			runtime_context
+		)
 		if subject_value:is_enum_value() then
 			if mechanism_value:is_object_value() then
 				local constructor, arg = subject_value:unwrap_enum_value()
@@ -2852,8 +2921,15 @@ function evaluate_impl(typed_term, runtime_context)
 		error("ENUM ABSURD OCCURRED: " .. debug)
 	elseif typed_term:is_variance_cons() then
 		local positive, srel = typed_term:unwrap_variance_cons()
-		local positive_value = U.tag("evaluate", { positive = positive }, evaluate, positive, runtime_context)
-		local srel_value = U.tag("evaluate", { srel = srel }, evaluate, srel, runtime_context)
+		local positive_value = U.tag(
+			"evaluate",
+			{ positive = positive:pretty_preprint(runtime_context) },
+			evaluate,
+			positive,
+			runtime_context
+		)
+		local srel_value =
+			U.tag("evaluate", { srel = srel:pretty_preprint(runtime_context) }, evaluate, srel, runtime_context)
 		---@type Variance
 		local variance = {
 			positive = positive_value:unwrap_host_value(),
@@ -3292,16 +3368,11 @@ UniverseOmegaRelation = setmetatable({
 		error("nyi")
 	end),
 	constrain = luatovalue(function(lctx, val, rctx, use, cause)
-		local ok, err = U.tag(
-			"check_concrete",
-			{ val = val, use = use, block_level = typechecker_state.block_level },
-			check_concrete,
-			lctx,
-			val,
-			rctx,
-			use,
-			cause
-		)
+		local ok, err = U.tag("check_concrete", {
+			val = val:pretty_preprint(lctx),
+			use = use:pretty_preprint(rctx),
+			block_level = typechecker_state.block_level,
+		}, check_concrete, lctx, val, rctx, use, cause)
 		if not ok then
 			error(err)
 		end
@@ -3952,8 +4023,24 @@ end
 ---@param rctx TypecheckingContext
 ---@param cause any
 function TypeCheckerState:queue_subtype(lctx, val, rctx, use, cause)
-	local l = U.tag("check_value", { val = val, use = use }, self.check_value, self, val, TypeCheckerTag.VALUE, lctx)
-	local r = U.tag("check_value", { val = val, use = use }, self.check_value, self, use, TypeCheckerTag.USAGE, rctx)
+	local l = U.tag(
+		"check_value",
+		{ val = val:pretty_preprint(lctx), use = use:pretty_preprint(rctx) },
+		self.check_value,
+		self,
+		val,
+		TypeCheckerTag.VALUE,
+		lctx
+	)
+	local r = U.tag(
+		"check_value",
+		{ val = val:pretty_preprint(lctx), use = use:pretty_preprint(rctx) },
+		self.check_value,
+		self,
+		use,
+		TypeCheckerTag.USAGE,
+		rctx
+	)
 	if type(l) ~= "number" then
 		error("l isn't number, instead found " .. tostring(l))
 	end
@@ -3970,8 +4057,24 @@ end
 ---@param use value
 ---@param cause any
 function TypeCheckerState:queue_constrain(lctx, val, rel, rctx, use, cause)
-	local l = U.tag("check_value", { val = val, use = use }, self.check_value, self, val, TypeCheckerTag.VALUE, lctx)
-	local r = U.tag("check_value", { val = val, use = use }, self.check_value, self, use, TypeCheckerTag.USAGE, rctx)
+	local l = U.tag(
+		"check_value",
+		{ val = val:pretty_preprint(lctx), use = use:pretty_preprint(rctx) },
+		self.check_value,
+		self,
+		val,
+		TypeCheckerTag.VALUE,
+		lctx
+	)
+	local r = U.tag(
+		"check_value",
+		{ val = val:pretty_preprint(lctx), use = use:pretty_preprint(rctx) },
+		self.check_value,
+		self,
+		use,
+		TypeCheckerTag.USAGE,
+		rctx
+	)
 	if type(l) ~= "number" then
 		error("l isn't number, instead found " .. tostring(l))
 	end
@@ -4115,8 +4218,8 @@ function TypeCheckerState:check_heads(left, right, rel, cause)
 			value.host_value(cause)
 		)
 		U.tag("apply_value", {
-			lvalue = lvalue,
-			rvalue = rvalue,
+			lvalue = lvalue:pretty_preprint(lctx),
+			rvalue = rvalue:pretty_preprint(rctx),
 			block_level = typechecker_state.block_level,
 			rel = rel.debug_name,
 			cause = cause,

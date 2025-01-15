@@ -142,7 +142,10 @@ function environment:bind_local(binding)
 			-- )
 			U.tag(
 				"flow",
-				{ subject_type = subject_type, spec_type = spec_type },
+				{
+					subject_type = subject_type:pretty_preprint(self.typechecking_context),
+					spec_type = spec_type:pretty_preprint(self.typechecking_context),
+				},
 				evaluator.typechecker_state.flow,
 				evaluator.typechecker_state,
 				subject_type,
@@ -155,7 +158,7 @@ function environment:bind_local(binding)
 			-- evaluating the subject is necessary for inferring the type of the body
 			local subject_value = U.tag(
 				"evaluate",
-				{ subject_term = subject_term },
+				{ subject_term = subject_term:pretty_preprint(self.typechecking_context) },
 				evaluator.evaluate,
 				subject_term,
 				self.typechecking_context:get_runtime_context()
