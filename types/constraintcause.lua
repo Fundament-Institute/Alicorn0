@@ -8,10 +8,12 @@ constraintcause = {}
 function constraintcause:is_primitive() end
 ---@return string description
 ---@return Anchor position
+---@return any track
 function constraintcause:unwrap_primitive() end
 ---@return boolean
 ---@return string description
 ---@return Anchor position
+---@return any track
 function constraintcause:as_primitive() end
 ---@return boolean
 function constraintcause:is_composition() end
@@ -69,7 +71,7 @@ function constraintcause:as_lost() end
 
 ---@class (exact) constraintcauseType: EnumType
 ---@field define_enum fun(self: constraintcauseType, name: string, variants: Variants): constraintcauseType
----@field primitive fun(description: string, position: Anchor): constraintcause
+---@field primitive fun(description: string, position: Anchor, track: any): constraintcause
 ---@field composition fun(left: number, right: number, position: Anchor): constraintcause
 ---@field nested fun(description: string, inner: constraintcause): constraintcause
 ---@field leftcall_discharge fun(call: number, constraint: number, position: Anchor): constraintcause

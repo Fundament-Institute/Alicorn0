@@ -504,6 +504,7 @@ constraintcause:define_enum("constraintcause", {
 	{ "primitive", {
 		"description", gen.builtin_string,
 		"position",    anchor_type,
+		"track", gen.any_lua_type,
 	} },
 	{ "composition", {
 		"left",     gen.builtin_number,
