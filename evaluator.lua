@@ -1273,11 +1273,11 @@ add_comparer("value.variance_type", "value.variance_type", function(lctx, a, rct
 	local a_target = a:unwrap_variance_type()
 	local b_target = b:unwrap_variance_type()
 	typechecker_state:queue_subtype(
-		lctx,
-		a_target,
 		rctx,
 		b_target,
-		nestcause("variance target", cause, a_target, b_target)
+		lctx,
+		a_target,
+		nestcause("variance target", cause, b_target, a_target)
 	)
 	return true
 end)

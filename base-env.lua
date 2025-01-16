@@ -836,11 +836,16 @@ local function forall_impl(syntax, env)
 	---@cast env Environment
 	--print("moving on to return type")
 
-	local shadowed
+	local shadowed, inner_name
 	shadowed, env = env:enter_block(terms.block_purity.pure)
 	-- tail.start_anchor can be nil so we fall back to the start_anchor for this forall type if needed
 	-- TODO: use correct name in lambda parameter instead of adding an extra let
-	local inner_name = "forall(" .. table.concat(params_names, ", ") .. ")"
+	if params_single then
+		inner_name = "forall(" .. params_names .. ")"
+	else
+		inner_name = "forall(" .. table.concat(params_names, ", ") .. ")"
+	end
+
 	env = env:bind_local(
 		terms.binding.annotated_lambda(
 			inner_name,
