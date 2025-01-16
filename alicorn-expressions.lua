@@ -665,7 +665,10 @@ local function expression_pairhandler(args, a, b)
 		return true, U.tag("call_operative", random, call_operative)
 	end
 
-	local function call_pi()
+	---@param type_of_term value
+	---@return string|checkable|inferrable
+	---@return Environment
+	local function call_pi(type_of_term)
 		local param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
 
 		while param_info:unwrap_param_info():unwrap_visibility():is_implicit() do
@@ -724,11 +727,15 @@ local function expression_pairhandler(args, a, b)
 		--print("success: " .. tostring(random))
 		return res, env
 	end
-	if type_of_term:is_pi() then
-		return true, U.tag("call_pi", random, call_pi)
+	local ok, pi = speculate_pi_type(env, type_of_term)
+	if ok then
+		return true, U.tag("call_pi", random, call_pi, pi)
 	end
 
-	local function call_host_func_type()
+	---@param type_of_term value
+	---@return string|checkable|inferrable
+	---@return Environment
+	local function call_host_func_type(type_of_term)
 		local param_type, result_type, result_info = type_of_term:unwrap_host_function_type()
 		--print("checking host_function_type call args with goal: (value term follows)")
 		--print(param_type)
@@ -782,8 +789,9 @@ local function expression_pairhandler(args, a, b)
 		--print("success: " .. tostring(random))
 		return res, env
 	end
+	--TODO: make this speculate like the pi type does
 	if type_of_term:is_host_function_type() then
-		return true, U.tag("call_host_func_type", random, call_host_func_type)
+		return true, U.tag("call_host_func_type", random, call_host_func_type, type_of_term)
 	end
 
 	print("!!! about to fail of invalid type")
