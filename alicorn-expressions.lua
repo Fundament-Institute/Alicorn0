@@ -442,7 +442,15 @@ local function speculate_pi_type(env, metaval)
 		local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 		local pi = value.pi(param_mv:as_value(), param_info_implicit, result_mv:as_value(), result_info_pure)
 
-		U.tag(
+		evaluator.typechecker_state:flow(
+			metaval,
+			env.typechecking_context,
+			pi,
+			env.typechecking_context,
+			terms.constraintcause.primitive("Speculating on pi type", NIL_ANCHOR)
+		)
+
+		--[[U.tag(
 			"flow",
 			{
 				val = metaval:pretty_preprint(env.typechecking_context),
@@ -455,7 +463,7 @@ local function speculate_pi_type(env, metaval)
 			pi,
 			env.typechecking_context,
 			terms.constraintcause.primitive("Speculating on pi type", NIL_ANCHOR)
-		)
+		)]]
 
 		return pi
 	end)
@@ -468,20 +476,28 @@ local function speculate_pi_type(env, metaval)
 		local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 		local pi = value.pi(param_mv:as_value(), param_info_explicit, result_mv:as_value(), result_info_pure)
 
-		U.tag(
-			"flow",
-			{
-				val = metaval:pretty_preprint(env.typechecking_context),
-				use = pi:pretty_preprint(env.typechecking_context),
-			},
-			evaluator.typechecker_state.flow,
-			evaluator.typechecker_state,
+		evaluator.typechecker_state:flow(
 			metaval,
 			env.typechecking_context,
 			pi,
 			env.typechecking_context,
 			terms.constraintcause.primitive("Speculating on pi type", NIL_ANCHOR)
 		)
+
+		--[[U.tag(
+			"flow",
+			{
+				val = metaval:pretty_preprint(env.typechecking_context),
+				use = pi:pretty_preprint(env.typechecking_context),
+			},
+			,
+			evaluator.typechecker_state,
+			metaval,
+			env.typechecking_context,
+			pi,
+			env.typechecking_context,
+			terms.constraintcause.primitive("Speculating on pi type", NIL_ANCHOR)
+		)]]
 
 		return pi
 	end)
@@ -651,18 +667,16 @@ local function expression_pairhandler(args, a, b)
 			local checkable = data
 			local goal_type = goal:unwrap_check()
 			local usage_counts, term = evaluator.check(checkable, env.typechecking_context, goal_type)
-			--print("success: " .. tostring(random))
 			return checkable_term.inferrable(inferrable_term.typed(goal_type, usage_counts, term)), env
 		elseif goal:is_infer() then
 			local resulting_type, usage_counts, term = infer(data, env.typechecking_context)
-			--print("success: " .. tostring(random))
 			return inferrable_term.typed(resulting_type, usage_counts, term), env
 		else
 			error("NYI goal " .. goal.kind .. " for operative in expression_pairhandler")
 		end
 	end
 	if type_of_term:is_operative_type() then
-		return true, U.tag("call_operative", random, call_operative)
+		return true, call_operative()
 	end
 
 	---@param type_of_term value
@@ -724,12 +738,11 @@ local function expression_pairhandler(args, a, b)
 			res = checkable_term.inferrable(res)
 		end
 
-		--print("success: " .. tostring(random))
 		return res, env
 	end
 	local ok, pi = speculate_pi_type(env, type_of_term)
 	if ok then
-		return true, U.tag("call_pi", random, call_pi, pi)
+		return true, call_pi(pi)
 	end
 
 	---@param type_of_term value
@@ -786,12 +799,11 @@ local function expression_pairhandler(args, a, b)
 			res = checkable_term.inferrable(res)
 		end
 
-		--print("success: " .. tostring(random))
 		return res, env
 	end
 	--TODO: make this speculate like the pi type does
 	if type_of_term:is_host_function_type() then
-		return true, U.tag("call_host_func_type", random, call_host_func_type, type_of_term)
+		return true, call_host_func_type(type_of_term)
 	end
 
 	print("!!! about to fail of invalid type")
@@ -895,7 +907,7 @@ local function expression_symbolhandler(args, name)
 			part = inferrable_term.record_elim(
 				part,
 				name_array(namearray),
-				inferrable_term.bound_variable(env.typechecking_context:len() + 1, U.here())
+				inferrable_term.bound_variable(env.typechecking_context:len() + 1, U.bound_here())
 			)
 		end
 		if goal:is_check() then
@@ -1064,19 +1076,19 @@ local function host_operative(fn, name)
 	-- this way it can take a normal tuple and return a normal tuple
 	local nparams = 4
 	local tuple_conv_elements =
-		typed_array(typed_term.bound_variable(2, U.here()), typed_term.bound_variable(3, U.here()))
+		typed_array(typed_term.bound_variable(2, U.bound_here()), typed_term.bound_variable(3, U.bound_here()))
 	local host_tuple_conv_elements = typed_array()
 	for i = 1, nparams do
 		-- + 1 because variable 1 is the argument tuple
 		-- all variables that follow are the destructured tuple
-		local var = typed_term.bound_variable(i + 1, U.here())
+		local var = typed_term.bound_variable(i + 1, U.bound_here())
 		host_tuple_conv_elements:append(var)
 	end
 	local tuple_conv = typed_term.tuple_cons(tuple_conv_elements)
 	local host_tuple_conv = typed_term.host_tuple_cons(host_tuple_conv_elements)
 	local param_names = name_array("#syntax", "#env", "#userdata", "#goal")
 	local tuple_to_host_tuple =
-		typed_term.tuple_elim(param_names, typed_term.bound_variable(1, U.here()), nparams, host_tuple_conv)
+		typed_term.tuple_elim(param_names, typed_term.bound_variable(1, U.bound_here()), nparams, host_tuple_conv)
 	local tuple_to_host_tuple_fn = typed_term.application(typed_host_fn, tuple_to_host_tuple)
 	local result_names = name_array("#term", "#env")
 	local tuple_to_tuple_fn = typed_term.tuple_elim(result_names, tuple_to_host_tuple_fn, 2, tuple_conv)
@@ -1191,7 +1203,15 @@ collect_tuple = metalanguage.reducer(
 		if goal:is_infer() then
 			return true, inferrable_term.tuple_cons(collected_terms), env
 		elseif goal:is_check() then
-			U.tag(
+			evaluator.typechecker_state:flow(
+				value.tuple_type(desc),
+				env.typechecking_context,
+				goal_type,
+				env.typechecking_context,
+				terms.constraintcause.primitive("tuple type in collect_tuple", NIL_ANCHOR)
+			)
+
+			--[[U.tag(
 				"flow",
 				{
 					val = value.tuple_type(desc):pretty_preprint(env.typechecking_context),
@@ -1204,7 +1224,7 @@ collect_tuple = metalanguage.reducer(
 				goal_type,
 				env.typechecking_context,
 				terms.constraintcause.primitive("tuple type in collect_tuple", NIL_ANCHOR)
-			)
+			)]]
 			return true, checkable_term.tuple_cons(collected_terms), env
 		else
 			error("NYI: collect_tuple goal case " .. goal.kind)

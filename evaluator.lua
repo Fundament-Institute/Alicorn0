@@ -60,14 +60,14 @@ local function luatovalue(luafunc)
 
 	for i = 1, len do
 		parameters:append(debug.getlocal(luafunc, i))
-		new_body:append(typed.bound_variable(i + 1, U.here()))
+		new_body:append(typed.bound_variable(i + 1, U.bound_here()))
 	end
 
 	return value.closure(
 		"#luatovalue-args",
 		typed.application(
 			typed.literal(value.host_value(luafunc)),
-			typed.tuple_elim(parameters, typed.bound_variable(1, U.here()), len, typed.host_tuple_cons(new_body))
+			typed.tuple_elim(parameters, typed.bound_variable(1, U.bound_here()), len, typed.host_tuple_cons(new_body))
 		),
 		runtime_context()
 	)
@@ -128,16 +128,16 @@ local function FunctionRelation(srel)
 		end),
 		constrain = luatovalue(function(lctx, val, rctx, use, cause)
 			local inner_info = {
-				debug = "FunctionRelation("
-					.. srel.debug_name
-					.. ").constrain "
-					.. U.here()
-					.. " caused by: "
-					.. U.strip_ansi(tostring(cause)),
+				debug = "FunctionRelation(" .. srel.debug_name .. ").constrain " .. U.here(),
+				--.. " caused by: "
+				--.. U.strip_ansi(tostring(cause)),
 			}
 			local u = value.neutral(neutral_value.free(free.unique(inner_info)))
 
-			local applied_val = U.tag(
+			local applied_val = apply_value(val, u)
+			local applied_use = apply_value(use, u)
+
+			--[[local applied_val = U.tag(
 				"apply_value",
 				{ val = val:pretty_preprint(lctx), use = use:pretty_preprint(rctx) },
 				apply_value,
@@ -150,7 +150,7 @@ local function FunctionRelation(srel)
 				apply_value,
 				use,
 				u
-			)
+			)]]
 
 			typechecker_state:queue_constrain(
 				lctx,
@@ -365,13 +365,18 @@ local TupleDescRelation = setmetatable({
 			local ok, tuple_types_val, tuple_types_use, tuple_vals, n =
 				infer_tuple_type_unwrapped2(value.tuple_type(val), value.tuple_type(use), placeholder)
 
-				if not ok then
-					if tuple_types_val == "length-mismatch" then
-						error("Tuple lengths do not match: " .. value.tuple_type(val):pretty_print(lctx) .. "\n != " .. value.tuple_type(use):pretty_print(rctx))
-					else
-						error(tuple_types_val)
-					end
+			if not ok then
+				if tuple_types_val == "length-mismatch" then
+					error(
+						"Tuple lengths do not match: "
+							.. value.tuple_type(val):pretty_print(lctx)
+							.. "\n != "
+							.. value.tuple_type(use):pretty_print(rctx)
+					)
+				else
+					error(tuple_types_val)
 				end
+			end
 
 			for i = 1, n do
 				typechecker_state:queue_subtype(
@@ -410,7 +415,7 @@ end
 ---@param v value
 ---@return value
 local function const_combinator(v)
-	return value.closure("#CONST_PARAM", typed_term.bound_variable(1, U.here()), runtime_context():append(v))
+	return value.closure("#CONST_PARAM", typed_term.bound_variable(1, U.bound_here()), runtime_context():append(v))
 end
 
 ---@param t value
@@ -460,7 +465,7 @@ local function substitute_inner_impl(val, mappings, context_len)
 		-- Here we need to add the new arg placeholder to a map of things to substitute
 		-- otherwise it would be left as a free.unique in the result
 		local new_mappings = U.shallow_copy(mappings)
-		new_mappings[unique] = typed_term.bound_variable(context_len + 1, U.here())
+		new_mappings[unique] = typed_term.bound_variable(context_len + 1, U.bound_here())
 		local val_typed = substitute_inner(val, new_mappings, context_len + 1)
 
 		-- FIXME: this results in more captures every time we substitute a closure ->
@@ -758,7 +763,7 @@ function substitute_type_variables(val, index, param_name)
 	--print("value before substituting (val): (value term follows)")
 	--print(val)
 	local substituted = substitute_inner(val, {
-		[index] = typed_term.bound_variable(1, U.here()),
+		[index] = typed_term.bound_variable(1, U.bound_here()),
 	}, 1)
 	--print("typed term after substitution (substituted): (typed term follows)")
 	--print(substituted:pretty_print(typechecking_context))
@@ -804,10 +809,10 @@ local function revealing(ctx, typ)
 				error "FINISH THIS"
 			end
 		else
-			error "NYI, revealing a tuple access that isn't on a variable"
+			error("NYI, revealing a tuple access that isn't on a variable" .. subject:pretty_print(ctx))
 		end
 	end
-	error "NYI, revealing something that isn't a tuple access"
+	error("NYI, revealing something that isn't a tuple access " .. nv:pretty_print(ctx))
 end
 
 ---take apart a symbolic tuple value to produce a (simplified? hopefully?) prefix suitable for use in upcasting and downcasting
@@ -1028,14 +1033,14 @@ add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx,
 							"#prefix",
 							typed_term.tuple_elim(
 								string_array("prefix-desc"),
-								typed_term.bound_variable(#rctx + 2, U.here()),
+								typed_term.bound_variable(#rctx + 2, U.bound_here()),
 								1,
 								typed_term.pi(
-									typed_term.tuple_type(typed_term.bound_variable(#rctx + 3, U.here())),
+									typed_term.tuple_type(typed_term.bound_variable(#rctx + 3, U.bound_here())),
 									typed.literal(value.param_info(value.visibility(terms.visibility.explicit))),
 									typed.lambda(
 										"#arg" .. tostring(#rctx + 1),
-										typed_term.bound_variable(#rctx + 1, U.here()),
+										typed_term.bound_variable(#rctx + 1, U.bound_here()),
 										NIL_ANCHOR
 									),
 									typed.literal(value.result_info(terms.result_info(terms.purity.pure)))
@@ -1089,14 +1094,14 @@ add_comparer("value.tuple_desc_type", "value.enum_type", function(lctx, a, rctx,
 							"#prefix",
 							typed_term.tuple_elim(
 								string_array("prefix-desc"),
-								typed_term.bound_variable(#rctx + 2, U.here()),
+								typed_term.bound_variable(#rctx + 2, U.bound_here()),
 								1,
 								typed_term.pi(
-									typed_term.tuple_type(typed_term.bound_variable(#rctx + 3, U.here())),
+									typed_term.tuple_type(typed_term.bound_variable(#rctx + 3, U.bound_here())),
 									typed.literal(value.param_info(value.visibility(terms.visibility.explicit))),
 									typed.lambda(
 										"#arg" .. tostring(#rctx + 1),
-										typed_term.bound_variable(#rctx + 1, U.here()),
+										typed_term.bound_variable(#rctx + 1, U.bound_here()),
 										NIL_ANCHOR
 									),
 									typed.literal(value.result_info(terms.result_info(terms.purity.pure)))
@@ -1945,11 +1950,12 @@ function infer_impl(
 		local _, purity_term = check(purity, inner_context, terms.host_purity_type)
 		local body_type, body_usages, body_term = infer(body, inner_context)
 
-		local result_type = U.tag("substitute_type_variables", {
+		local result_type = substitute_type_variables(body_type, inner_context:len(), param_name)
+		--[[local result_type = U.tag("substitute_type_variables", {
 			body_type = body_type:pretty_preprint(typechecking_context),
 			index = inner_context:len(),
 			block_level = typechecker_state.block_level,
-		}, substitute_type_variables, body_type, inner_context:len(), param_name)
+		}, substitute_type_variables, body_type, inner_context:len(), param_name)]]
 		local result_info = value.result_info(
 			result_info(evaluate(purity_term, typechecking_context:get_runtime_context()):unwrap_host_value())
 		) --TODO make more flexible
@@ -2312,7 +2318,7 @@ function infer_impl(
 				subject_term,
 				term_variants,
 				typed_term.enum_absurd(
-					typed_term.bound_variable(typechecking_context:len() + 1, U.here()),
+					typed_term.bound_variable(typechecking_context:len() + 1, U.bound_here()),
 					"unacceptable enum variant"
 				)
 			)
@@ -2684,7 +2690,12 @@ function evaluate_impl(typed_term, runtime_context)
 		return value.closure(param_name, body, runtime_context)
 	elseif typed_term:is_pi() then
 		local param_type, param_info, result_type, result_info = typed_term:unwrap_pi()
-		local param_type_value = U.tag(
+		local param_type_value = evaluate(param_type, runtime_context)
+		local param_info_value = evaluate(param_info, runtime_context)
+		local result_type_value = evaluate(result_type, runtime_context)
+		local result_info_value = evaluate(result_info, runtime_context)
+
+		--[[local param_type_value = U.tag(
 			"evaluate",
 			{ param_type = param_type:pretty_preprint(runtime_context) },
 			evaluate,
@@ -2711,13 +2722,15 @@ function evaluate_impl(typed_term, runtime_context)
 			evaluate,
 			result_info,
 			runtime_context
-		)
+		)]]
 		return value.pi(param_type_value, param_info_value, result_type_value, result_info_value)
 	elseif typed_term:is_application() then
 		local f, arg = typed_term:unwrap_application()
-		local f_value = U.tag("evaluate", { f = f:pretty_preprint(runtime_context) }, evaluate, f, runtime_context)
-		local arg_value =
-			U.tag("evaluate", { arg = arg:pretty_preprint(runtime_context) }, evaluate, arg, runtime_context)
+
+		local f_value = evaluate(f, runtime_context)
+		--local f_value = U.tag("evaluate", { f = f:pretty_preprint(runtime_context) }, evaluate, f, runtime_context)
+		local arg_value = evaluate(arg, runtime_context)
+		--local arg_value =	U.tag("evaluate", { arg = arg:pretty_preprint(runtime_context) }, evaluate, arg, runtime_context)
 		return U.notail(apply_value(f_value, arg_value))
 		-- if you want to debug things that go through this call, you may comment above and uncomment below
 		-- but beware that this single change has caused tremendous performance degradation
@@ -2729,7 +2742,8 @@ function evaluate_impl(typed_term, runtime_context)
 		local elements = typed_term:unwrap_tuple_cons()
 		local new_elements = value_array()
 		for i, v in elements:ipairs() do
-			new_elements:append(U.tag("evaluate", { ["element_" .. tostring(i)] = v }, evaluate, v, runtime_context))
+			new_elements:append(evaluate(v, runtime_context))
+			--new_elements:append(U.tag("evaluate", { ["element_" .. tostring(i)] = v }, evaluate, v, runtime_context))
 		end
 		return value.tuple_value(new_elements)
 	elseif typed_term:is_host_tuple_cons() then
@@ -2739,7 +2753,8 @@ function evaluate_impl(typed_term, runtime_context)
 		local stuck_element
 		local trailing_values
 		for i, v in elements:ipairs() do
-			local element_value = U.tag("evaluate", { ["element_" .. tostring(i)] = v }, evaluate, v, runtime_context)
+			local element_value = evaluate(v, runtime_context)
+			--local element_value = U.tag("evaluate", { ["element_" .. tostring(i)] = v }, evaluate, v, runtime_context)
 			if element_value == nil then
 				p("wtf", v.kind)
 			end
@@ -2765,13 +2780,14 @@ function evaluate_impl(typed_term, runtime_context)
 		end
 	elseif typed_term:is_tuple_elim() then
 		local names, subject, length, body = typed_term:unwrap_tuple_elim()
-		local subject_value = U.tag(
+		local subject_value = evaluate(subject, runtime_context)
+		--[[local subject_value = U.tag(
 			"evaluate",
 			{ subject = subject:pretty_preprint(runtime_context) },
 			evaluate,
 			subject,
 			runtime_context
-		)
+		)]]
 		local inner_context = runtime_context
 		if subject_value:is_tuple_value() then
 			local subject_elements = subject_value:unwrap_tuple_value()
@@ -2817,30 +2833,29 @@ function evaluate_impl(typed_term, runtime_context)
 			p(subject_value)
 			error("evaluate, is_tuple_elim, subject_value: expected a tuple")
 		end
-		return U.tag("evaluate", { body = body:pretty_preprint(runtime_context) }, evaluate, body, inner_context)
+		return evaluate(body, inner_context)
+		--return U.tag("evaluate", { body = body:pretty_preprint(runtime_context) }, evaluate, body, inner_context)
 	elseif typed_term:is_tuple_element_access() then
 		local tuple_term, index = typed_term:unwrap_tuple_element_access()
-		--print("tuple_element_access tuple_term: (typed term follows)")
-		--print(tuple_term:pretty_print(runtime_context))
-		local tuple = U.tag(
+		local tuple = evaluate(tuple_term, runtime_context)
+		--[[local tuple = U.tag(
 			"evaluate",
 			{ tuple_term = tuple_term:pretty_preprint(runtime_context) },
 			evaluate,
 			tuple_term,
 			runtime_context
-		)
-		--print("tuple_element_access tuple: (value term follows)")
-		--print(tuple)
+		)]]
 		return index_tuple_value(tuple, index)
 	elseif typed_term:is_tuple_type() then
 		local desc_term = typed_term:unwrap_tuple_type()
-		local desc = U.tag(
+		local desc = evaluate(desc_term, runtime_context)
+		--[[local desc = U.tag(
 			"evaluate",
 			{ desc_term = desc_term:pretty_preprint(runtime_context) },
 			evaluate,
 			desc_term,
 			runtime_context
-		)
+		)]]
 		return terms.value.tuple_type(desc)
 	elseif typed_term:is_tuple_desc_type() then
 		local universe_term = typed_term:unwrap_tuple_desc_type()
@@ -2850,18 +2865,20 @@ function evaluate_impl(typed_term, runtime_context)
 		local fields = typed_term:unwrap_record_cons()
 		local new_fields = string_value_map()
 		for k, v in pairs(fields) do
-			new_fields[k] = U.tag("evaluate", { ["record_field_" .. tostring(k)] = v }, evaluate, v, runtime_context)
+			new_fields[k] = evaluate(v, runtime_context)
+			--new_fields[k] = U.tag("evaluate", { ["record_field_" .. tostring(k)] = v }, evaluate, v, runtime_context)
 		end
 		return value.record_value(new_fields)
 	elseif typed_term:is_record_elim() then
 		local subject, field_names, body = typed_term:unwrap_record_elim()
-		local subject_value = U.tag(
+		local subject_value = evaluate(subject, runtime_context)
+		--[[local subject_value = U.tag(
 			"evaluate",
 			{ subject = subject:pretty_preprint(runtime_context) },
 			evaluate,
 			subject,
 			runtime_context
-		)
+		)]]
 		local inner_context = runtime_context
 		if subject_value:is_record_value() then
 			local subject_fields = subject_value:unwrap_record_value()
@@ -2877,15 +2894,18 @@ function evaluate_impl(typed_term, runtime_context)
 		else
 			error("evaluate, is_record_elim, subject_value: expected a record")
 		end
-		return U.tag("evaluate", { body = body:pretty_preprint(runtime_context) }, evaluate, body, inner_context)
+		return evaluate(body, inner_context)
+		--return U.tag("evaluate", { body = body:pretty_preprint(runtime_context) }, evaluate, body, inner_context)
 	elseif typed_term:is_enum_cons() then
 		local constructor, arg = typed_term:unwrap_enum_cons()
-		local arg_value =
-			U.tag("evaluate", { arg = arg:pretty_preprint(runtime_context) }, evaluate, arg, runtime_context)
+		local arg_value = evaluate(arg, runtime_context)
+		--local arg_value = U.tag("evaluate", { arg = arg:pretty_preprint(runtime_context) }, evaluate, arg, runtime_context)
 		return value.enum_value(constructor, arg_value)
 	elseif typed_term:is_enum_elim() then
 		local subject, mechanism = typed_term:unwrap_enum_elim()
-		local subject_value = U.tag(
+		local subject_value = evaluate(subject, runtime_context)
+		local mechanism_value = evaluate(mechanism, runtime_context)
+		--[[local subject_value = U.tag(
 			"evaluate",
 			{ subject = subject:pretty_preprint(runtime_context) },
 			evaluate,
@@ -2898,7 +2918,7 @@ function evaluate_impl(typed_term, runtime_context)
 			evaluate,
 			mechanism,
 			runtime_context
-		)
+		)]]
 		if subject_value:is_enum_value() then
 			if mechanism_value:is_object_value() then
 				local constructor, arg = subject_value:unwrap_enum_value()
@@ -2960,15 +2980,16 @@ function evaluate_impl(typed_term, runtime_context)
 		error("ENUM ABSURD OCCURRED: " .. debug)
 	elseif typed_term:is_variance_cons() then
 		local positive, srel = typed_term:unwrap_variance_cons()
-		local positive_value = U.tag(
+		local positive_value = evaluate(positive, runtime_context)
+		--[[local positive_value = U.tag(
 			"evaluate",
 			{ positive = positive:pretty_preprint(runtime_context) },
 			evaluate,
 			positive,
 			runtime_context
-		)
-		local srel_value =
-			U.tag("evaluate", { srel = srel:pretty_preprint(runtime_context) }, evaluate, srel, runtime_context)
+		)]]
+		local srel_value = evaluate(srel, runtime_context)
+		-- local srel_value = U.tag("evaluate", { srel = srel:pretty_preprint(runtime_context) }, evaluate, srel, runtime_context)
 		---@type Variance
 		local variance = {
 			positive = positive_value:unwrap_host_value(),
@@ -3407,11 +3428,12 @@ UniverseOmegaRelation = setmetatable({
 		error("nyi")
 	end),
 	constrain = luatovalue(function(lctx, val, rctx, use, cause)
-		local ok, err = U.tag("check_concrete", {
+		local ok, err = check_concrete(lctx, val, rctx, use, cause)
+		--[[local ok, err = U.tag("check_concrete", {
 			val = val:pretty_preprint(lctx),
 			use = use:pretty_preprint(rctx),
 			block_level = typechecker_state.block_level,
-		}, check_concrete, lctx, val, rctx, use, cause)
+		}, check_concrete, lctx, val, rctx, use, cause)]]
 		if not ok then
 			error(err)
 		end
@@ -3722,12 +3744,12 @@ local function verify_tree(store, k)
 end
 
 function TypeCheckerState:Snapshot()
-	return { 
-		values = U.shallow_copy(self.values), 
+	return {
+		values = U.shallow_copy(self.values),
 		constrain_edges = U.shallow_copy(self.graph.constrain_edges:all()),
 		leftcall_edges = U.shallow_copy(self.graph.leftcall_edges:all()),
 		rightcall_edges = U.shallow_copy(self.graph.rightcall_edges:all()),
- 	}
+	}
 end
 
 function TypeCheckerState:Visualize(diff1, diff2, restrict)
@@ -3736,10 +3758,15 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 		prev = diff1
 		cur = diff2
 	else
-		prev = { values = self.values, constrain_edges = self.graph.constrain_edges:all(),  leftcall_edges = self.graph.leftcall_edges:all(),rightcall_edges = self.graph.rightcall_edges:all()}
+		prev = {
+			values = self.values,
+			constrain_edges = self.graph.constrain_edges:all(),
+			leftcall_edges = self.graph.leftcall_edges:all(),
+			rightcall_edges = self.graph.rightcall_edges:all(),
+		}
 		cur = diff1
 	end
-	
+
 	local additions = restrict or {}
 	local g = "digraph State {"
 
@@ -3753,11 +3780,11 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 			end
 			label = label:sub(1, i)
 		end
-		
+
 		--local s = label .. "\\n"
 		--label = {}
 		--for m in s:gmatch("(.-)\\n") do
-			--[[while #m > 50 do
+		--[[while #m > 50 do
 				local i = 50
 				-- Don't slice a unicode character in half
 				while string.byte(m, i) > 127 do
@@ -3766,17 +3793,17 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 				label = label .. m:sub(1, i) .. "\\n"
 				m = m:sub(i + 1)
 			end]]
-			--U.append(label, m)
+		--U.append(label, m)
 		--end
 		--label = table.concat(label, "\\l")
 		label = label:gsub("\\n", "\\l")
-		local line = "\n" .. i .. ' ['
-		
+		local line = "\n" .. i .. " ["
+
 		if cur and cur.values[i] then
 			if restrict ~= nil and restrict[i] == nil then
 				goto continue
 			end
-			line = line .. "fontcolor=\"#cccccc\", color=\"#cccccc\", "
+			line = line .. 'fontcolor="#cccccc", color="#cccccc", '
 		else
 			U.append(additions, i)
 		end
@@ -3786,61 +3813,92 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 		if v[1]:is_enum_value() and v[1]:unwrap_enum_value() == "empty" then
 			g = g .. "shape=doubleoctagon]"
 			goto continue
-		elseif v[1]:is_neutral() and v[1]:unwrap_neutral():is_free() and v[1]:unwrap_neutral():unwrap_free():is_metavariable() then
+		elseif
+			v[1]:is_neutral()
+			and v[1]:unwrap_neutral():is_free()
+			and v[1]:unwrap_neutral():unwrap_free():is_metavariable()
+		then
 			g = g .. "shape=doublecircle]"
 			goto continue
 		elseif v[1]:is_star() then
 			g = g .. "shape=egg, "
-		else 
+		else
 			g = g .. "shape=rect, "
 		end
 
 		g = g .. 'label = "#' .. i .. " " .. label .. '"]'
-  ::continue::
+		-- load-bearing no-op
+		if true then
+		end
+		::continue::
 	end
 
 	for i, e in ipairs(prev.constrain_edges) do
 		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=normal"
 
-		if cur and cur.constrain_edges[i] and cur.constrain_edges[i].left == e.left and cur.constrain_edges[i].right == e.right then
+		if
+			cur
+			and cur.constrain_edges[i]
+			and cur.constrain_edges[i].left == e.left
+			and cur.constrain_edges[i].right == e.right
+		then
 			if restrict ~= nil and restrict[e.left] == nil and restrict[e.right] == nil then
 				goto continue2
 			end
-			line = line .. ', fontcolor=\"#cccccc\", color="#cccccc"'
+			line = line .. ', fontcolor="#cccccc", color="#cccccc"'
 		end
 
 		if e.rel.debug_name then
-			line = line .. ', label="'.. e.rel.debug_name .. '"'
+			line = line .. ', label="' .. e.rel.debug_name .. '"'
 		end
 
 		g = g .. line .. "]"
-  ::continue2::
+		-- load-bearing no-op
+		if true then
+		end
+		::continue2::
 	end
 
 	for i, e in ipairs(prev.leftcall_edges) do
 		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=empty"
-		
-		if cur and cur.leftcall_edges[i] and cur.leftcall_edges[i].left == e.left and cur.leftcall_edges[i].right == e.right then
+
+		if
+			cur
+			and cur.leftcall_edges[i]
+			and cur.leftcall_edges[i].left == e.left
+			and cur.leftcall_edges[i].right == e.right
+		then
 			if restrict ~= nil and restrict[e.left] == nil and restrict[e.right] == nil then
 				goto continue3
 			end
 			line = line .. ', color="#cccccc"'
 		end
 		g = g .. line .. "]"
-  ::continue3::
+		-- load-bearing no-op
+		if true then
+		end
+		::continue3::
 	end
 
 	for i, e in ipairs(prev.rightcall_edges) do
 		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=invempty"
-		
-		if cur and cur.rightcall_edges[i] and cur.rightcall_edges[i].left == e.left and cur.rightcall_edges[i].right == e.right then
+
+		if
+			cur
+			and cur.rightcall_edges[i]
+			and cur.rightcall_edges[i].left == e.left
+			and cur.rightcall_edges[i].right == e.right
+		then
 			if restrict ~= nil and restrict[e.left] == nil and restrict[e.right] == nil then
 				goto continue4
 			end
 			line = line .. ', color="#cccccc"'
 		end
 		g = g .. line .. "]"
-  ::continue4::
+		-- load-bearing no-op
+		if true then
+		end
+		::continue4::
 	end
 
 	return g .. "}", additions
@@ -4187,7 +4245,9 @@ end
 ---@param rctx TypecheckingContext
 ---@param cause any
 function TypeCheckerState:queue_subtype(lctx, val, rctx, use, cause)
-	local l = U.tag(
+	local l = self:check_value(val, TypeCheckerTag.VALUE, lctx)
+	local r = self:check_value(use, TypeCheckerTag.USAGE, rctx)
+	--[[local l = U.tag(
 		"check_value",
 		{ val = val:pretty_preprint(lctx), use = use:pretty_preprint(rctx) },
 		self.check_value,
@@ -4204,7 +4264,7 @@ function TypeCheckerState:queue_subtype(lctx, val, rctx, use, cause)
 		use,
 		TypeCheckerTag.USAGE,
 		rctx
-	)
+	)]]
 	if type(l) ~= "number" then
 		error("l isn't number, instead found " .. tostring(l))
 	end
@@ -4221,7 +4281,9 @@ end
 ---@param use value
 ---@param cause any
 function TypeCheckerState:queue_constrain(lctx, val, rel, rctx, use, cause)
-	local l = U.tag(
+	local l = self:check_value(val, TypeCheckerTag.VALUE, lctx)
+	local r = self:check_value(use, TypeCheckerTag.USAGE, rctx)
+	--[[local l = U.tag(
 		"check_value",
 		{ val = val:pretty_preprint(lctx), use = use:pretty_preprint(rctx) },
 		self.check_value,
@@ -4238,7 +4300,7 @@ function TypeCheckerState:queue_constrain(lctx, val, rel, rctx, use, cause)
 		use,
 		TypeCheckerTag.USAGE,
 		rctx
-	)
+	)]]
 	if type(l) ~= "number" then
 		error("l isn't number, instead found " .. tostring(l))
 	end
@@ -4304,6 +4366,7 @@ function TypeCheckerState:check_value(v, tag, context)
 		local lower_bounds, upper_bounds, relation = v:unwrap_range()
 
 		for _, bound in ipairs(lower_bounds) do
+			print("LOST CONSTRAINT")
 			self:queue_constrain(
 				context,
 				bound,
@@ -4315,6 +4378,7 @@ function TypeCheckerState:check_value(v, tag, context)
 		end
 
 		for _, bound in ipairs(upper_bounds) do
+			print("LOST CONSTRAINT")
 			self:queue_constrain(
 				context,
 				v,
@@ -4356,10 +4420,10 @@ end
 ---@return ...
 function TypeCheckerState:flow(val, val_context, use, use_context, cause)
 	local r = { self:constrain(val, val_context, use, use_context, UniverseOmegaRelation, cause) }
-	
+
 	if self.snapshot_count ~= nil then
 		self.snapshot_index = ((self.snapshot_index or -1) + 1) % self.snapshot_count
-		self.snapshot_buffer[self.snapshot_index + 1] = self:Snapshot() 
+		self.snapshot_buffer[self.snapshot_index + 1] = self:Snapshot()
 	end
 
 	return table.unpack(r)
@@ -4388,13 +4452,15 @@ function TypeCheckerState:check_heads(left, right, rel, cause)
 			value.host_value(rvalue),
 			value.host_value(cause)
 		)
-		U.tag("apply_value", {
+
+		apply_value(rel.constrain, value.tuple_value(tuple_params))
+		--[[U.tag("apply_value", {
 			lvalue = lvalue:pretty_preprint(lctx),
 			rvalue = rvalue:pretty_preprint(rctx),
 			block_level = typechecker_state.block_level,
 			rel = rel.debug_name,
 			cause = cause,
-		}, apply_value, rel.constrain, value.tuple_value(tuple_params))
+		}, apply_value, rel.constrain, value.tuple_value(tuple_params))]]
 	end
 end
 
@@ -4648,7 +4714,8 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 				local edge =
 					{ left = left, rel = rel, right = right, shallowest_block = self.block_level, cause = item_cause }
 				self.graph:constrain_transitivity(edge, edge_id, self.pending)
-				U.tag(
+				self:check_heads(left, right, rel, item_cause)
+				--[[U.tag(
 					"check_heads",
 					{ left = left, right = right, rel = rel.debug_name },
 					self.check_heads,
@@ -4657,7 +4724,7 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 					right,
 					rel,
 					item_cause
-				)
+				)]]
 				self:constrain_induce_call(edge, rel)
 				self:constrain_leftcall_compose_1(edge, edge_id)
 				self:rightcall_constrain_compose_2(edge, edge_id)

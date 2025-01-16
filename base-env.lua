@@ -177,7 +177,10 @@ local switch_case = metalanguage.reducer(function(syntax, env)
 	local shadowed, term
 	shadowed, env = env:enter_block(terms.block_purity.inherit)
 	env = env:bind_local(
-		terms.binding.tuple_elim(names, terms.inferrable_term.bound_variable(env.typechecking_context:len(), U.here()))
+		terms.binding.tuple_elim(
+			names,
+			terms.inferrable_term.bound_variable(env.typechecking_context:len(), U.bound_here())
+		)
 	)
 	ok, term, env = tail:match({
 		exprs.inferred_expression(metalanguage.accept_handler, env),
@@ -1281,7 +1284,7 @@ local function host_term_of(goal, context_len)
 		t,
 		typed.application(typed.literal(value.host_value(host_term_of_inner)), typed.host_tuple_cons(teees(goal))),
 		1,
-		typed.host_unwrap(typed.bound_variable(context_len + 1, U.here()))
+		typed.host_unwrap(typed.bound_variable(context_len + 1, U.bound_here()))
 	)
 end
 
@@ -1318,7 +1321,7 @@ local function operative_handler_type(ud_type, anchor)
 			pnamer,
 			typed.tuple_elim(
 				namesp4,
-				typed.bound_variable(1, U.here()),
+				typed.bound_variable(1, U.bound_here()),
 				4,
 				typed.tuple_type(
 					typed.enum_cons(
@@ -1332,7 +1335,7 @@ local function operative_handler_type(ud_type, anchor)
 											typed.enum_cons(terms.DescCons.empty, typed.tuple_cons(teees())),
 											typed.lambda(
 												pnamer0,
-												host_term_of(typed.bound_variable(5, U.here()), 6),
+												host_term_of(typed.bound_variable(5, U.bound_here()), 6),
 												anchor
 											)
 										)
@@ -1424,7 +1427,12 @@ local function build_wrap(body_fn, type_fn)
 	return lit_term(
 		value.closure(
 			pname_arg,
-			typed.tuple_elim(names2, typed.bound_variable(1, U.here()), 2, body_fn(typed.bound_variable(3, U.here()))),
+			typed.tuple_elim(
+				names2,
+				typed.bound_variable(1, U.bound_here()),
+				2,
+				body_fn(typed.bound_variable(3, U.bound_here()))
+			),
 			terms.runtime_context()
 		),
 		value.pi(
@@ -1434,7 +1442,7 @@ local function build_wrap(body_fn, type_fn)
 						pname_type,
 						typed.tuple_elim(
 							names0,
-							typed.bound_variable(1, U.here()),
+							typed.bound_variable(1, U.bound_here()),
 							0,
 							typed.star(evaluator.OMEGA + 1, 0)
 						),
@@ -1444,9 +1452,9 @@ local function build_wrap(body_fn, type_fn)
 						pname_type,
 						terms.typed_term.tuple_elim(
 							names1,
-							terms.typed_term.bound_variable(1, U.here()),
+							terms.typed_term.bound_variable(1, U.bound_here()),
 							1,
-							typed.bound_variable(2, U.here())
+							typed.bound_variable(2, U.bound_here())
 						),
 						terms.runtime_context()
 					)
@@ -1457,9 +1465,9 @@ local function build_wrap(body_fn, type_fn)
 				pname_type,
 				typed.tuple_elim(
 					names2,
-					typed.bound_variable(1, U.here()),
+					typed.bound_variable(1, U.bound_here()),
 					2,
-					type_fn(typed.bound_variable(2, U.here()))
+					type_fn(typed.bound_variable(2, U.bound_here()))
 				),
 				terms.runtime_context()
 			),
@@ -1482,7 +1490,12 @@ local function build_unwrap(body_fn, type_fn)
 	return lit_term(
 		value.closure(
 			pname_arg,
-			typed.tuple_elim(names2, typed.bound_variable(1, U.here()), 2, body_fn(typed.bound_variable(3, U.here()))),
+			typed.tuple_elim(
+				names2,
+				typed.bound_variable(1, U.bound_here()),
+				2,
+				body_fn(typed.bound_variable(3, U.bound_here()))
+			),
 			terms.runtime_context()
 		),
 		value.pi(
@@ -1492,7 +1505,7 @@ local function build_unwrap(body_fn, type_fn)
 						pname_type,
 						typed.tuple_elim(
 							names0,
-							typed.bound_variable(1, U.here()),
+							typed.bound_variable(1, U.bound_here()),
 							0,
 							typed.star(evaluator.OMEGA + 1, 0)
 						),
@@ -1502,9 +1515,9 @@ local function build_unwrap(body_fn, type_fn)
 						pname_type,
 						terms.typed_term.tuple_elim(
 							names1,
-							terms.typed_term.bound_variable(1, U.here()),
+							terms.typed_term.bound_variable(1, U.bound_here()),
 							1,
-							type_fn(typed.bound_variable(2, U.here()))
+							type_fn(typed.bound_variable(2, U.bound_here()))
 						),
 						terms.runtime_context()
 					)
@@ -1513,7 +1526,12 @@ local function build_unwrap(body_fn, type_fn)
 			param_info_explicit,
 			value.closure(
 				pname_type,
-				typed.tuple_elim(names2, typed.bound_variable(1, U.here()), 2, typed.bound_variable(2, U.here())),
+				typed.tuple_elim(
+					names2,
+					typed.bound_variable(1, U.bound_here()),
+					2,
+					typed.bound_variable(2, U.bound_here())
+				),
 				terms.runtime_context()
 			),
 			result_info_pure
@@ -1533,7 +1551,12 @@ local function build_wrapped(body_fn)
 	return lit_term(
 		value.closure(
 			pname_arg,
-			typed.tuple_elim(names1, typed.bound_variable(1, U.here()), 1, body_fn(typed.bound_variable(2, U.here()))),
+			typed.tuple_elim(
+				names1,
+				typed.bound_variable(1, U.bound_here()),
+				1,
+				body_fn(typed.bound_variable(2, U.bound_here()))
+			),
 			terms.runtime_context()
 		),
 		value.pi(
@@ -1543,7 +1566,7 @@ local function build_wrapped(body_fn)
 						pname_type,
 						typed.tuple_elim(
 							names0,
-							typed.bound_variable(1, U.here()),
+							typed.bound_variable(1, U.bound_here()),
 							0,
 							typed.star(evaluator.OMEGA + 1, 0)
 						),
@@ -1554,7 +1577,12 @@ local function build_wrapped(body_fn)
 			param_info_explicit,
 			value.closure(
 				pname_type,
-				typed.tuple_elim(names1, typed.bound_variable(1, U.here()), 1, typed.literal(value.host_type_type)),
+				typed.tuple_elim(
+					names1,
+					typed.bound_variable(1, U.bound_here()),
+					1,
+					typed.literal(value.host_type_type)
+				),
 				terms.runtime_context()
 			),
 			result_info_pure

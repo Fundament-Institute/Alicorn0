@@ -54,7 +54,7 @@ function M.lock_table(t, userdata)
 
 	mt.__lock = true
 	-- DEBUG: comment this out if you don't need it to make things go faster
-	mt.__locktrace = debug.traceback("lock created here " .. (userdata or ""))
+	-- mt.__locktrace = debug.traceback("lock created here " .. (userdata or ""))
 end
 
 ---@param t table
@@ -407,6 +407,12 @@ end
 function M.here()
 	local info = debug.getinfo(2, "Sl")
 	return " @ " .. info.source .. ":" .. info.currentline
+end
+
+function M.bound_here()
+	-- DEBUG: Uncomment this if you want to know where a bound variable is
+	--return M.here()
+	return ""
 end
 
 function M.file_is_terminal(input_file)
