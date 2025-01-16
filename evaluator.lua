@@ -3730,22 +3730,58 @@ function TypeCheckerState:Snapshot()
  	}
 end
 
-function TypeCheckerState:Visualize(diff)
+function TypeCheckerState:Visualize(diff1, diff2, restrict)
+	local prev, cur
+	if diff2 ~= nil then
+		prev = diff1
+		cur = diff2
+	else
+		prev = { values = self.values, constrain_edges = self.graph.constrain_edges:all(),  leftcall_edges = self.graph.leftcall_edges:all(),rightcall_edges = self.graph.rightcall_edges:all()}
+		cur = diff1
+	end
+	
+	local additions = restrict or {}
 	local g = "digraph State {"
 
-	for i, v in ipairs(self.values) do
+	for i, v in ipairs(prev.values) do
 		local label = U.strip_ansi(v[1]:pretty_print(v[3])):gsub("\n", "\\n"):gsub('"', "'")
 		if #label > 400 then
-			label = label:sub(0, 400)
+			local i = 400
+			-- Don't slice a unicode character in half
+			while string.byte(label, i) > 127 do
+				i = i + 1
+			end
+			label = label:sub(1, i)
 		end
-		for i = 60, #label, 60 do
-			label = label:sub(0, i) .. "\\n" .. label:sub(i + 1)
-		end
-		g = g .. "\n" .. i .. ' ['
 		
-		if diff and diff.values[i] then
-			g = g .. "fontcolor=\"#cccccc\", color=\"#cccccc\", "
+		--local s = label .. "\\n"
+		--label = {}
+		--for m in s:gmatch("(.-)\\n") do
+			--[[while #m > 50 do
+				local i = 50
+				-- Don't slice a unicode character in half
+				while string.byte(m, i) > 127 do
+					i = i + 1
+				end
+				label = label .. m:sub(1, i) .. "\\n"
+				m = m:sub(i + 1)
+			end]]
+			--U.append(label, m)
+		--end
+		--label = table.concat(label, "\\l")
+		label = label:gsub("\\n", "\\l")
+		local line = "\n" .. i .. ' ['
+		
+		if cur and cur.values[i] then
+			if restrict ~= nil and restrict[i] == nil then
+				goto continue
+			end
+			line = line .. "fontcolor=\"#cccccc\", color=\"#cccccc\", "
+		else
+			U.append(additions, i)
 		end
+
+		g = g .. line
 
 		if v[1]:is_enum_value() and v[1]:unwrap_enum_value() == "empty" then
 			g = g .. "shape=doubleoctagon]"
@@ -3763,39 +3799,51 @@ function TypeCheckerState:Visualize(diff)
   ::continue::
 	end
 
-	for i, e in ipairs(self.graph.constrain_edges:all()) do
-		g = g .. "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=normal"
+	for i, e in ipairs(prev.constrain_edges) do
+		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=normal"
 
-		if diff and diff.constrain_edges[i] and diff.constrain_edges[i].left == e.left and diff.constrain_edges[i].right == e.right then
-			g = g .. ', fontcolor=\"#cccccc\", color="#cccccc"'
+		if cur and cur.constrain_edges[i] and cur.constrain_edges[i].left == e.left and cur.constrain_edges[i].right == e.right then
+			if restrict ~= nil and restrict[e.left] == nil and restrict[e.right] == nil then
+				goto continue2
+			end
+			line = line .. ', fontcolor=\"#cccccc\", color="#cccccc"'
 		end
 
 		if e.rel.debug_name then
-			g = g .. ', label="'.. e.rel.debug_name .. '"'
+			line = line .. ', label="'.. e.rel.debug_name .. '"'
 		end
 
-		g = g .. "]"
+		g = g .. line .. "]"
+  ::continue2::
 	end
 
-	for i, e in ipairs(self.graph.leftcall_edges:all()) do
-		g = g .. "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=empty"
+	for i, e in ipairs(prev.leftcall_edges) do
+		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=empty"
 		
-		if diff and diff.leftcall_edges[i] and diff.leftcall_edges[i].left == e.left and diff.leftcall_edges[i].right == e.right then
-			g = g .. ', color="#cccccc"'
+		if cur and cur.leftcall_edges[i] and cur.leftcall_edges[i].left == e.left and cur.leftcall_edges[i].right == e.right then
+			if restrict ~= nil and restrict[e.left] == nil and restrict[e.right] == nil then
+				goto continue3
+			end
+			line = line .. ', color="#cccccc"'
 		end
-		g = g .. "]"
+		g = g .. line .. "]"
+  ::continue3::
 	end
 
-	for i, e in ipairs(self.graph.rightcall_edges:all()) do
-		g = g .. "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=invempty"
+	for i, e in ipairs(prev.rightcall_edges) do
+		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=invempty"
 		
-		if diff and diff.rightcall_edges[i] and diff.rightcall_edges[i].left == e.left and diff.rightcall_edges[i].right == e.right then
-			g = g .. ', color="#cccccc"'
+		if cur and cur.rightcall_edges[i] and cur.rightcall_edges[i].left == e.left and cur.rightcall_edges[i].right == e.right then
+			if restrict ~= nil and restrict[e.left] == nil and restrict[e.right] == nil then
+				goto continue4
+			end
+			line = line .. ', color="#cccccc"'
 		end
-		g = g .. "]"
+		g = g .. line .. "]"
+  ::continue4::
 	end
 
-	return g .. "}"
+	return g .. "}", additions
 end
 
 function TypeCheckerState:DEBUG_VERIFY_TREE()
@@ -4307,7 +4355,14 @@ end
 ---@return boolean
 ---@return ...
 function TypeCheckerState:flow(val, val_context, use, use_context, cause)
-	return self:constrain(val, val_context, use, use_context, UniverseOmegaRelation, cause)
+	local r = { self:constrain(val, val_context, use, use_context, UniverseOmegaRelation, cause) }
+	
+	if self.snapshot_count ~= nil then
+		self.snapshot_index = ((self.snapshot_index or -1) + 1) % self.snapshot_count
+		self.snapshot_buffer[self.snapshot_index + 1] = self:Snapshot() 
+	end
+
+	return table.unpack(r)
 end
 
 ---@param left integer
