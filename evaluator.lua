@@ -2123,8 +2123,10 @@ function infer_impl(
 		end
 		local spec_type = terms.value.tuple_type(desc)
 		local host_spec_type = terms.value.host_tuple_type(desc)
+		local ok, n_elements
+		local tupletypes, htupletypes
 
-		local ok, tupletypes, n_elements = typechecker_state:speculate(function()
+		ok, tupletypes, n_elements = typechecker_state:speculate(function()
 			typechecker_state:flow(
 				subject_type,
 				typechecking_context,
@@ -2136,7 +2138,7 @@ function infer_impl(
 		end)
 		--local tupletypes, n_elements = infer_tuple_type(subject_type, subject_value)
 		if not ok then
-			ok, tupletypes, n_elements = typechecker_state:speculate(function()
+			ok, htupletypes, n_elements = typechecker_state:speculate(function()
 				typechecker_state:flow(
 					subject_type,
 					typechecking_context,
@@ -2146,10 +2148,18 @@ function infer_impl(
 				)
 				return infer_tuple_type(host_spec_type, subject_value)
 			end)
+			if ok then
+				tupletypes = htupletypes
+			end
 		end
 
 		if not ok then
-			error(tupletypes)
+			--error(tupletypes)
+			--error(htupletypes)
+			-- try uncommenting one of the error prints above
+			-- you need to figure out which one is relevant for your problem
+			-- after you're finished, please comment it out so that, next time, the message below can be found again
+			error("(infer) tuple elim speculation failed! debugging this is left as an exercise to the maintainer")
 		end
 
 		local inner_context = typechecking_context
