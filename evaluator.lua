@@ -128,12 +128,9 @@ local function FunctionRelation(srel)
 		end),
 		constrain = luatovalue(function(lctx, val, rctx, use, cause)
 			local inner_info = {
-				debug = "FunctionRelation("
-					.. srel.debug_name
-					.. ").constrain "
-					.. U.here()
-					--.. " caused by: "
-					--.. U.strip_ansi(tostring(cause)),
+				debug = "FunctionRelation(" .. srel.debug_name .. ").constrain " .. U.here(),
+				--.. " caused by: "
+				--.. U.strip_ansi(tostring(cause)),
 			}
 			local u = value.neutral(neutral_value.free(free.unique(inner_info)))
 
@@ -368,13 +365,18 @@ local TupleDescRelation = setmetatable({
 			local ok, tuple_types_val, tuple_types_use, tuple_vals, n =
 				infer_tuple_type_unwrapped2(value.tuple_type(val), value.tuple_type(use), placeholder)
 
-				if not ok then
-					if tuple_types_val == "length-mismatch" then
-						error("Tuple lengths do not match: " .. value.tuple_type(val):pretty_print(lctx) .. "\n != " .. value.tuple_type(use):pretty_print(rctx))
-					else
-						error(tuple_types_val)
-					end
+			if not ok then
+				if tuple_types_val == "length-mismatch" then
+					error(
+						"Tuple lengths do not match: "
+							.. value.tuple_type(val):pretty_print(lctx)
+							.. "\n != "
+							.. value.tuple_type(use):pretty_print(rctx)
+					)
+				else
+					error(tuple_types_val)
 				end
+			end
 
 			for i = 1, n do
 				typechecker_state:queue_subtype(
@@ -2727,7 +2729,7 @@ function evaluate_impl(typed_term, runtime_context)
 
 		local f_value = evaluate(f, runtime_context)
 		--local f_value = U.tag("evaluate", { f = f:pretty_preprint(runtime_context) }, evaluate, f, runtime_context)
-		local arg_value =	evaluate(arg, runtime_context)
+		local arg_value = evaluate(arg, runtime_context)
 		--local arg_value =	U.tag("evaluate", { arg = arg:pretty_preprint(runtime_context) }, evaluate, arg, runtime_context)
 		return U.notail(apply_value(f_value, arg_value))
 		-- if you want to debug things that go through this call, you may comment above and uncomment below
@@ -2897,12 +2899,12 @@ function evaluate_impl(typed_term, runtime_context)
 	elseif typed_term:is_enum_cons() then
 		local constructor, arg = typed_term:unwrap_enum_cons()
 		local arg_value = evaluate(arg, runtime_context)
-			--local arg_value = U.tag("evaluate", { arg = arg:pretty_preprint(runtime_context) }, evaluate, arg, runtime_context)
+		--local arg_value = U.tag("evaluate", { arg = arg:pretty_preprint(runtime_context) }, evaluate, arg, runtime_context)
 		return value.enum_value(constructor, arg_value)
 	elseif typed_term:is_enum_elim() then
 		local subject, mechanism = typed_term:unwrap_enum_elim()
-		local subject_value = evaluate(subject,runtime_context)
-		local mechanism_value = evaluate(mechanism,runtime_context)
+		local subject_value = evaluate(subject, runtime_context)
+		local mechanism_value = evaluate(mechanism, runtime_context)
 		--[[local subject_value = U.tag(
 			"evaluate",
 			{ subject = subject:pretty_preprint(runtime_context) },
@@ -3742,12 +3744,12 @@ local function verify_tree(store, k)
 end
 
 function TypeCheckerState:Snapshot()
-	return { 
-		values = U.shallow_copy(self.values), 
+	return {
+		values = U.shallow_copy(self.values),
 		constrain_edges = U.shallow_copy(self.graph.constrain_edges:all()),
 		leftcall_edges = U.shallow_copy(self.graph.leftcall_edges:all()),
 		rightcall_edges = U.shallow_copy(self.graph.rightcall_edges:all()),
- 	}
+	}
 end
 
 function TypeCheckerState:Visualize(diff1, diff2, restrict)
@@ -3756,10 +3758,15 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 		prev = diff1
 		cur = diff2
 	else
-		prev = { values = self.values, constrain_edges = self.graph.constrain_edges:all(),  leftcall_edges = self.graph.leftcall_edges:all(),rightcall_edges = self.graph.rightcall_edges:all()}
+		prev = {
+			values = self.values,
+			constrain_edges = self.graph.constrain_edges:all(),
+			leftcall_edges = self.graph.leftcall_edges:all(),
+			rightcall_edges = self.graph.rightcall_edges:all(),
+		}
 		cur = diff1
 	end
-	
+
 	local additions = restrict or {}
 	local g = "digraph State {"
 
@@ -3773,11 +3780,11 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 			end
 			label = label:sub(1, i)
 		end
-		
+
 		--local s = label .. "\\n"
 		--label = {}
 		--for m in s:gmatch("(.-)\\n") do
-			--[[while #m > 50 do
+		--[[while #m > 50 do
 				local i = 50
 				-- Don't slice a unicode character in half
 				while string.byte(m, i) > 127 do
@@ -3786,17 +3793,17 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 				label = label .. m:sub(1, i) .. "\\n"
 				m = m:sub(i + 1)
 			end]]
-			--U.append(label, m)
+		--U.append(label, m)
 		--end
 		--label = table.concat(label, "\\l")
 		label = label:gsub("\\n", "\\l")
-		local line = "\n" .. i .. ' ['
-		
+		local line = "\n" .. i .. " ["
+
 		if cur and cur.values[i] then
 			if restrict ~= nil and restrict[i] == nil then
 				goto continue
 			end
-			line = line .. "fontcolor=\"#cccccc\", color=\"#cccccc\", "
+			line = line .. 'fontcolor="#cccccc", color="#cccccc", '
 		else
 			U.append(additions, i)
 		end
@@ -3806,61 +3813,92 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 		if v[1]:is_enum_value() and v[1]:unwrap_enum_value() == "empty" then
 			g = g .. "shape=doubleoctagon]"
 			goto continue
-		elseif v[1]:is_neutral() and v[1]:unwrap_neutral():is_free() and v[1]:unwrap_neutral():unwrap_free():is_metavariable() then
+		elseif
+			v[1]:is_neutral()
+			and v[1]:unwrap_neutral():is_free()
+			and v[1]:unwrap_neutral():unwrap_free():is_metavariable()
+		then
 			g = g .. "shape=doublecircle]"
 			goto continue
 		elseif v[1]:is_star() then
 			g = g .. "shape=egg, "
-		else 
+		else
 			g = g .. "shape=rect, "
 		end
 
 		g = g .. 'label = "#' .. i .. " " .. label .. '"]'
-  ::continue::
+		-- load-bearing no-op
+		if true then
+		end
+		::continue::
 	end
 
 	for i, e in ipairs(prev.constrain_edges) do
 		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=normal"
 
-		if cur and cur.constrain_edges[i] and cur.constrain_edges[i].left == e.left and cur.constrain_edges[i].right == e.right then
+		if
+			cur
+			and cur.constrain_edges[i]
+			and cur.constrain_edges[i].left == e.left
+			and cur.constrain_edges[i].right == e.right
+		then
 			if restrict ~= nil and restrict[e.left] == nil and restrict[e.right] == nil then
 				goto continue2
 			end
-			line = line .. ', fontcolor=\"#cccccc\", color="#cccccc"'
+			line = line .. ', fontcolor="#cccccc", color="#cccccc"'
 		end
 
 		if e.rel.debug_name then
-			line = line .. ', label="'.. e.rel.debug_name .. '"'
+			line = line .. ', label="' .. e.rel.debug_name .. '"'
 		end
 
 		g = g .. line .. "]"
-  ::continue2::
+		-- load-bearing no-op
+		if true then
+		end
+		::continue2::
 	end
 
 	for i, e in ipairs(prev.leftcall_edges) do
 		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=empty"
-		
-		if cur and cur.leftcall_edges[i] and cur.leftcall_edges[i].left == e.left and cur.leftcall_edges[i].right == e.right then
+
+		if
+			cur
+			and cur.leftcall_edges[i]
+			and cur.leftcall_edges[i].left == e.left
+			and cur.leftcall_edges[i].right == e.right
+		then
 			if restrict ~= nil and restrict[e.left] == nil and restrict[e.right] == nil then
 				goto continue3
 			end
 			line = line .. ', color="#cccccc"'
 		end
 		g = g .. line .. "]"
-  ::continue3::
+		-- load-bearing no-op
+		if true then
+		end
+		::continue3::
 	end
 
 	for i, e in ipairs(prev.rightcall_edges) do
 		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=invempty"
-		
-		if cur and cur.rightcall_edges[i] and cur.rightcall_edges[i].left == e.left and cur.rightcall_edges[i].right == e.right then
+
+		if
+			cur
+			and cur.rightcall_edges[i]
+			and cur.rightcall_edges[i].left == e.left
+			and cur.rightcall_edges[i].right == e.right
+		then
 			if restrict ~= nil and restrict[e.left] == nil and restrict[e.right] == nil then
 				goto continue4
 			end
 			line = line .. ', color="#cccccc"'
 		end
 		g = g .. line .. "]"
-  ::continue4::
+		-- load-bearing no-op
+		if true then
+		end
+		::continue4::
 	end
 
 	return g .. "}", additions
@@ -4207,8 +4245,8 @@ end
 ---@param rctx TypecheckingContext
 ---@param cause any
 function TypeCheckerState:queue_subtype(lctx, val, rctx, use, cause)
-	local l = self:check_value(val,	TypeCheckerTag.VALUE,	lctx)
-	local r = self:check_value(use,	TypeCheckerTag.USAGE,	rctx)
+	local l = self:check_value(val, TypeCheckerTag.VALUE, lctx)
+	local r = self:check_value(use, TypeCheckerTag.USAGE, rctx)
 	--[[local l = U.tag(
 		"check_value",
 		{ val = val:pretty_preprint(lctx), use = use:pretty_preprint(rctx) },
@@ -4243,8 +4281,8 @@ end
 ---@param use value
 ---@param cause any
 function TypeCheckerState:queue_constrain(lctx, val, rel, rctx, use, cause)
-	local l = self:check_value(val,	TypeCheckerTag.VALUE,	lctx)
-	local r = self:check_value(use,	TypeCheckerTag.USAGE,	rctx)
+	local l = self:check_value(val, TypeCheckerTag.VALUE, lctx)
+	local r = self:check_value(use, TypeCheckerTag.USAGE, rctx)
 	--[[local l = U.tag(
 		"check_value",
 		{ val = val:pretty_preprint(lctx), use = use:pretty_preprint(rctx) },
@@ -4382,10 +4420,10 @@ end
 ---@return ...
 function TypeCheckerState:flow(val, val_context, use, use_context, cause)
 	local r = { self:constrain(val, val_context, use, use_context, UniverseOmegaRelation, cause) }
-	
+
 	if self.snapshot_count ~= nil then
 		self.snapshot_index = ((self.snapshot_index or -1) + 1) % self.snapshot_count
-		self.snapshot_buffer[self.snapshot_index + 1] = self:Snapshot() 
+		self.snapshot_buffer[self.snapshot_index + 1] = self:Snapshot()
 	end
 
 	return table.unpack(r)
