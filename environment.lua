@@ -8,6 +8,7 @@ local typechecking_context = terms.typechecking_context
 local module_mt = {}
 
 local evaluator = require "evaluator"
+local format = require "format"
 local infer = evaluator.infer
 
 local environment_mt
@@ -100,7 +101,7 @@ function environment:bind_local(binding)
 			error("infer returned a bad type for expr in bind_local")
 		end
 		local n = self.typechecking_context:len()
-		local term = inferrable_term.bound_variable(n + 1)
+		local term = inferrable_term.bound_variable(n + 1, U.here())
 		local locals = self.locals:put(name, term)
 		local evaled = evaluator.evaluate(expr_term, self.typechecking_context.runtime_context)
 		-- print "doing let binding"
@@ -137,24 +138,27 @@ function environment:bind_local(binding)
 			-- 	self.typechecking_context,
 			-- 	spec_type,
 			-- 	self.typechecking_context,
-			-- 	"environment tuple-elim"
+			-- 	terms.constraintcause.primitive("environment tuple-elim", format.create_anchor(0, 0, "<NIL>"))
 			-- )
 			U.tag(
 				"flow",
-				{ subject_type = subject_type, spec_type = spec_type },
+				{
+					subject_type = subject_type:pretty_preprint(self.typechecking_context),
+					spec_type = spec_type:pretty_preprint(self.typechecking_context),
+				},
 				evaluator.typechecker_state.flow,
 				evaluator.typechecker_state,
 				subject_type,
 				self.typechecking_context,
 				spec_type,
 				self.typechecking_context,
-				"environment tuple-elim"
+				terms.constraintcause.primitive("environment tuple-elim", format.create_anchor(0, 0, "<NIL>"))
 			)
 
 			-- evaluating the subject is necessary for inferring the type of the body
 			local subject_value = U.tag(
 				"evaluate",
-				{ subject_term = subject_term },
+				{ subject_term = subject_term:pretty_preprint(self.typechecking_context) },
 				evaluator.evaluate,
 				subject_term,
 				self.typechecking_context:get_runtime_context()
@@ -187,7 +191,7 @@ function environment:bind_local(binding)
 				-- if constructor ~= "cons" then
 				-- 	error("todo: this error message")
 				-- end
-				local term = inferrable_term.bound_variable(n + i)
+				local term = inferrable_term.bound_variable(n + i, U.here())
 				locals = locals:put(v, term)
 
 				local evaled = evaluator.index_tuple_value(subject_value, i)
@@ -235,7 +239,9 @@ function environment:bind_local(binding)
 		end
 		--error(res1)
 		--error(res2)
-		error("tuple elim speculation failed! debugging this is left as an exercise to the maintainer")
+		error(
+			"tuple elim speculation failed! debugging this is left as an exercise to the maintainer: " .. tostring(res2)
+		)
 	elseif binding:is_annotated_lambda() then
 		local param_name, param_annotation, start_anchor, visible = binding:unwrap_annotated_lambda()
 		if not start_anchor or not start_anchor.sourceid then
@@ -247,7 +253,8 @@ function environment:bind_local(binding)
 		--print(annotation_term:pretty_print(self.typechecking_context))
 		local evaled = evaluator.evaluate(annotation_term, self.typechecking_context.runtime_context)
 		local bindings = self.bindings:append(binding)
-		local locals = self.locals:put(param_name, inferrable_term.bound_variable(self.typechecking_context:len() + 1))
+		local locals =
+			self.locals:put(param_name, inferrable_term.bound_variable(self.typechecking_context:len() + 1, U.here()))
 		local typechecking_context = self.typechecking_context:append(param_name, evaled, nil, start_anchor)
 		return update_env(self, {
 			locals = locals,
@@ -267,7 +274,7 @@ function environment:bind_local(binding)
 		local first_effect_sig, first_base_type = first_type:unwrap_program_type()
 		--print("FOUND EFFECTFUL BINDING", first_base_type, "produced by ", first_type)
 		local n = self.typechecking_context:len()
-		local term = inferrable_term.bound_variable(n + 1)
+		local term = inferrable_term.bound_variable(n + 1, U.here())
 		local locals = self.locals:put("#program-sequence", term)
 		local typechecking_context =
 			self.typechecking_context:append("#program-sequence", first_base_type, nil, start_anchor)

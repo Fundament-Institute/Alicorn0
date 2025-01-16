@@ -350,7 +350,7 @@ checkable_term:define_enum("checkable", {
 -- inferrable terms can have their type inferred / don't need a goal type
 -- stylua: ignore
 inferrable_term:define_enum("inferrable", {
-	{ "bound_variable", { "index", gen.builtin_number } },
+	{ "bound_variable", { "index", gen.builtin_number, "debug", gen.any_lua_type } },
 	{ "typed", {
 		"type",         value,
 		"usage_counts", array(gen.builtin_number),
@@ -492,6 +492,10 @@ local subtype_relation_mt = {}
 
 local SubtypeRelation = gen.declare_foreign(gen.metatable_equality(subtype_relation_mt), "SubtypeRelation")
 
+subtype_relation_mt.__tostring = function(self)
+	return "«" .. self.debug_name .. "»"
+end
+
 ---@module 'types.constraintcause'
 local constraintcause = gen.declare_type()
 
@@ -500,20 +504,25 @@ constraintcause:define_enum("constraintcause", {
 	{ "primitive", {
 		"description", gen.builtin_string,
 		"position",    anchor_type,
+		"track", gen.any_lua_type,
 	} },
 	{ "composition", {
-		"left",     constraintcause,
-		"right",    constraintcause,
+		"left",     gen.builtin_number,
+		"right",    gen.builtin_number,
 		"position", anchor_type,
 	} },
+	{ "nested", {
+		"description", gen.builtin_string,
+		"inner",     constraintcause,
+	} },
 	{ "leftcall_discharge", {
-		"call",       constraintcause,
-		"constraint", constraintcause,
+		"call",       gen.builtin_number,
+		"constraint", gen.builtin_number,
 		"position",   anchor_type,
 	} },
 	{ "rightcall_discharge", {
-		"constraint", constraintcause,
-		"call",       constraintcause,
+		"constraint", gen.builtin_number,
+		"call",       gen.builtin_number,
 		"position",   anchor_type,
 	} },
 	{ "lost", { --Information has been lost, please generate any information you can to help someone debug the lost information in the future
@@ -530,41 +539,41 @@ local constraintelem = gen.declare_enum("constraintelem", {
 		"rel",      SubtypeRelation,
 		"right",    typed_term,
 		"rightctx", typechecking_context_type,
-		"cause",    gen.any_lua_type,
+		"cause",    constraintcause,
 	} },
 	{ "constrain_sliced", {
 		"left",    typed_term,
 		"leftctx", typechecking_context_type,
 		"rel",     SubtypeRelation,
-		"cause",   gen.any_lua_type,
+		"cause",   constraintcause,
 	} },
 	{ "sliced_leftcall", {
 		"arg",      typed_term,
 		"rel",      SubtypeRelation,
 		"right",    typed_term,
 		"rightctx", typechecking_context_type,
-		"cause",    gen.any_lua_type,
+		"cause",    constraintcause,
 	} },
 	{ "leftcall_sliced", {
 		"left",    typed_term,
 		"leftctx", typechecking_context_type,
 		"arg",     typed_term,
 		"rel",     SubtypeRelation,
-		"cause",   gen.any_lua_type,
+		"cause",   constraintcause,
 	} },
 	{ "sliced_rightcall", {
 		"rel",      SubtypeRelation,
 		"right",    typed_term,
 		"rightctx", typechecking_context_type,
 		"arg",      typed_term,
-		"cause",    gen.any_lua_type,
+		"cause",    constraintcause,
 	} },
 	{ "rightcall_sliced", {
 		"left",    typed_term,
 		"leftctx", typechecking_context_type,
 		"rel",     SubtypeRelation,
 		"arg",     typed_term,
-		"cause",   gen.any_lua_type,
+		"cause",   constraintcause,
 	} },
 })
 
@@ -573,11 +582,12 @@ local unique_id = gen.builtin_table
 -- typed terms have been typechecked but do not store their type internally
 -- stylua: ignore
 typed_term:define_enum("typed", {
-	{ "bound_variable", { "index", gen.builtin_number } },
+	{ "bound_variable", { "index", gen.builtin_number, "debug", gen.any_lua_type  } },
 	{ "literal", { "literal_value", value } },
 	{ "lambda", {
 		"param_name", gen.builtin_string,
 		"body",       typed_term,
+		"start_anchor",     anchor_type,
 	} },
 	{ "pi", {
 		"param_type",  typed_term,
@@ -1176,6 +1186,7 @@ expression_goal:derive(derivers.pretty_print)
 placeholder_debug:derive(derivers.pretty_print)
 purity:derive(derivers.pretty_print)
 result_info:derive(derivers.pretty_print)
+constraintcause:derive(derivers.pretty_print)
 
 local internals_interface = require "internals-interface"
 internals_interface.terms = terms

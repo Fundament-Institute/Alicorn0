@@ -1,9 +1,12 @@
----@class PrettyPrint
+---@class PrettyPrint : { [integer] : string }
 ---@field opts PrettyPrintOpts
+---@field depth integer
+---@field table_tracker { [table] : boolean }
 local PrettyPrint = {}
 local PrettyPrint_mt = { __index = PrettyPrint }
 
 local traits = require "traits"
+local U = require "alicorn-utils"
 
 local kind_field = "kind"
 local hidden_fields = {
@@ -96,11 +99,16 @@ function PrettyPrint:_dedent()
 	end
 end
 
+-- base16 colors: https://github.com/tinted-theming/home/blob/main/styling.md
 local colors = {
-	"\27[38;5;226m",
-	"\27[38;5;255m",
-	"\27[38;5;135m",
-	"\27[38;2;40;40;40m",
+	"\27[38;5;1m", -- base08
+	-- "\27[38;5;16m", -- base09 (out of stock ANSI range)
+	"\27[38;5;3m", -- base0A
+	"\27[38;5;2m", -- base0B
+	-- "\27[38;5;6m", -- base0C (uncomfortably close to base0D)
+	"\27[38;5;4m", -- base0D
+	"\27[38;5;5m", -- base0E
+	-- "\27[38;5;17m", -- base0F (out of stock ANSI range)
 }
 
 function PrettyPrint:_color()
@@ -112,6 +120,7 @@ function PrettyPrint:_resetcolor()
 end
 
 ---@param array any[]
+---@param ... any
 function PrettyPrint:array(array, ...)
 	self:_enter()
 	self[#self + 1] = self:_color()
@@ -130,6 +139,7 @@ function PrettyPrint:array(array, ...)
 end
 
 ---@param fields table
+---@param ... any
 function PrettyPrint:table(fields, ...)
 	-- i considered keeping track of a path of tables
 	-- but it turned really horrible
@@ -148,6 +158,7 @@ function PrettyPrint:table(fields, ...)
 
 	local count = 0
 	local num = 0
+	---@type { [number] : boolean }
 	local nums = {}
 	for k in pairs(fields) do
 		if k == "kind" then
@@ -227,6 +238,7 @@ end
 
 ---@param kind string
 ---@param fields table
+---@param ... any
 function PrettyPrint:record(kind, fields, ...)
 	local startLen = #self
 	self:_enter()
@@ -287,8 +299,10 @@ function PrettyPrint:unit(name)
 	self[#self + 1] = name
 end
 
+---@param f async fun(...):...
 function PrettyPrint:func(f)
 	local d = debug.getinfo(f, "Su")
+	---@type string[]
 	local params = {}
 	for i = 1, d.nparams do
 		params[#params + 1] = debug.getlocal(f, i)
@@ -304,18 +318,39 @@ function PrettyPrint_mt:__tostring()
 	return table.concat(self, "")
 end
 
+---@param unknown any
+---@param ... any
+---@return PrettyPrint
+local function pretty_preprint(unknown, ...)
+	local pp = PrettyPrint:new()
+	pp:_enter() -- work around for printing in debug tags
+	pp:_indent()
+	pp:any(unknown, ...)
+	pp:_dedent()
+	pp:_exit()
+	return pp
+end
+
+---@param unknown any
+---@param ... any
+---@return string
 local function pretty_print(unknown, ...)
 	local pp = PrettyPrint:new()
 	pp:any(unknown, ...)
 	return tostring(pp)
 end
 
+---@param unknown any
+---@param ... any
+---@return string
 local function default_print(unknown, ...)
 	local pp = PrettyPrint:new({ default_print = true })
 	pp:any(unknown, ...)
 	return tostring(pp)
 end
 
+---@param ... any
+---@return string
 local function s(...)
 	local res = {}
 	local args = table.pack(...)
@@ -325,6 +360,7 @@ local function s(...)
 	return table.concat(res, "    ")
 end
 
+---@param ... any
 local function p(...)
 	print(s(...))
 end
@@ -333,6 +369,7 @@ _G["p"] = p
 
 return {
 	PrettyPrint = PrettyPrint,
+	pretty_preprint = pretty_preprint,
 	pretty_print = pretty_print,
 	default_print = default_print,
 	s = s,

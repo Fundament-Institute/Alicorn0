@@ -295,7 +295,7 @@ local function execute_alc_file(bound_expr, log)
 				evaluator.typechecker_state:metavariable(terms.typechecking_context()):as_value()
 			),
 			nil,
-			"final flow check"
+			terms.constraintcause.primitive("final flow check", format.create_anchor(0, 0, "<NIL>"))
 		)
 	end)
 
@@ -343,8 +343,32 @@ local function execute_alc_file(bound_expr, log)
 	return failurepoint.success
 end
 
+--local graph_backtrace = 5
+local internal_state
+if graph_backtrace ~= nil then
+	local internals_interface = require "internals-interface"
+
+	internal_state = internals_interface.evaluator.typechecker_state
+	internal_state.snapshot_count = graph_backtrace -- Store last [backtrack] snapshots
+	internal_state.snapshot_buffer = {}
+end
+
 local ok, expr, env = load_alc_file(prelude, env, print)
 if not ok then
+	if graph_backtrace ~= nil then
+		local snapshots = internal_state.snapshot_buffer
+		local i = (internal_state.snapshot_count + 1) % graph_backtrace
+		local slice = {}
+		for j = 2, graph_backtrace do
+			local f = io.open("GRAPH_STATE" .. j .. ".dot", "w")
+			local out, additions = internal_state:Visualize(snapshots[i + 1], snapshots[i + 2], slice)
+			f:write(out)
+			f:close()
+			i = (i + 1) % graph_backtrace
+			slice = additions
+		end
+	end
+
 	return
 end
 ---@cast expr inferrable

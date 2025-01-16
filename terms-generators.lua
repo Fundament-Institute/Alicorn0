@@ -171,6 +171,7 @@ local function define_record(self, kind, params_with_types)
 	end
 	self._kind = kind
 	self.__index = {
+		pretty_preprint = pretty_printer.pretty_preprint,
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
 	}
@@ -209,7 +210,7 @@ end
 ---@field __tostring function(EnumValue): string
 
 ---@class EnumValue: Value
----@field pretty_print fun(EnumValue, ...)
+---@field pretty_print fun(EnumValue, ...) : string
 ---@field default_print fun(EnumValue, ...)
 
 local enum_type_mt = {
@@ -264,6 +265,7 @@ local function define_enum(self, name, variants)
 	end
 	self._name = name
 	self.__index = {
+		pretty_preprint = pretty_printer.pretty_preprint,
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
 	}
@@ -408,6 +410,7 @@ local function gen_map_methods(self, key_type, value_type)
 			right:copy(new, conflict)
 			return new
 		end,
+		pretty_preprint = pretty_printer.pretty_preprint,
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
 	}
@@ -573,6 +576,7 @@ local function gen_set_methods(self, key_type)
 			end
 			return true
 		end,
+		pretty_preprint = pretty_printer.pretty_preprint,
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
 	}
@@ -690,6 +694,7 @@ local function gen_array_methods(self, value_type)
 		unpack = function(val)
 			return table.unpack(val.array, 1, val.n)
 		end,
+		pretty_preprint = pretty_printer.pretty_preprint,
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
 	}
@@ -745,7 +750,13 @@ local function gen_array_index_fns(self, value_type)
 		-- so we should make sure to use the :ipairs() method instead
 		if key < 1 or key > val.n then
 			p(key, val.n)
-			error("key passed to array indexing is out of bounds (read code comment above)")
+			error(
+				"key passed to array indexing is out of bounds (read code comment above): "
+					.. tostring(key)
+					.. "is not within [1,"
+					.. tostring(val.n)
+					.. "]"
+			)
 		end
 		return val.array[key]
 	end

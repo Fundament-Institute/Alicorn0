@@ -26,6 +26,7 @@ local value_array = array(value)
 local usage_array = array(gen.builtin_number)
 local name_array = array(gen.builtin_string)
 
+local param_info_implicit = value.param_info(value.visibility(visibility.implicit))
 local param_info_explicit = value.param_info(value.visibility(visibility.explicit))
 local result_info_pure = value.result_info(result_info(purity.pure))
 
@@ -34,6 +35,9 @@ local const_combinator = evaluator.const_combinator
 local infer = evaluator.infer
 -- BUG: do not uncomment this, as speculation relies on changing evaluator.typechecking_state, which is masked by the local
 --local typechecker_state = evaluator.typechecker_state
+
+local format = require "format"
+local NIL_ANCHOR = format.create_anchor(0, 0, "<NIL>")
 
 local U = require "alicorn-utils"
 
@@ -433,30 +437,50 @@ end
 ---@param metaval value
 ---@return boolean, value
 local function speculate_pi_type(env, metaval)
-	return evaluator.typechecker_state:speculate(function()
+	local ok, res = evaluator.typechecker_state:speculate(function()
 		local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 		local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
-		local pi = value.pi(
-			param_mv:as_value(),
-			param_info_explicit,
-			value.closure(
-				"#spec-pi",
-				typed_term.literal(result_mv:as_value()),
-				env.typechecking_context.runtime_context
-			),
-			result_info_pure
-		)
+		local pi = value.pi(param_mv:as_value(), param_info_implicit, result_mv:as_value(), result_info_pure)
 
 		U.tag(
 			"flow",
-			{ val = metaval, use = pi },
+			{
+				val = metaval:pretty_preprint(env.typechecking_context),
+				use = pi:pretty_preprint(env.typechecking_context),
+			},
 			evaluator.typechecker_state.flow,
 			evaluator.typechecker_state,
 			metaval,
 			env.typechecking_context,
 			pi,
 			env.typechecking_context,
-			"Speculating on pi type"
+			terms.constraintcause.primitive("Speculating on pi type", NIL_ANCHOR)
+		)
+
+		return pi
+	end)
+	if ok then
+		return ok, res
+	end
+
+	return evaluator.typechecker_state:speculate(function()
+		local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+		local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+		local pi = value.pi(param_mv:as_value(), param_info_explicit, result_mv:as_value(), result_info_pure)
+
+		U.tag(
+			"flow",
+			{
+				val = metaval:pretty_preprint(env.typechecking_context),
+				use = pi:pretty_preprint(env.typechecking_context),
+			},
+			evaluator.typechecker_state.flow,
+			evaluator.typechecker_state,
+			metaval,
+			env.typechecking_context,
+			pi,
+			env.typechecking_context,
+			terms.constraintcause.primitive("Speculating on pi type", NIL_ANCHOR)
 		)
 
 		return pi
@@ -585,7 +609,7 @@ local function expression_pairhandler(args, a, b)
 			ok, updated_type = operative_test_hack(env, type_of_term)
 		end
 		if not ok then
-			error("speculate DID NOT work for pi!: " .. tostring(pi))
+			error("speculate DID NOT work for pi!: " .. pi:pretty_print(env.typechecking_context))
 		end
 		---@cast updated_type -nil
 		type_of_term = updated_type
@@ -641,20 +665,25 @@ local function expression_pairhandler(args, a, b)
 		return true, U.tag("call_operative", random, call_operative)
 	end
 
-	local function call_pi()
+	---@param type_of_term value
+	---@return string|checkable|inferrable
+	---@return Environment
+	local function call_pi(type_of_term)
 		local param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
 
 		while param_info:unwrap_param_info():unwrap_visibility():is_implicit() do
+			--print("original type of term: ", type_of_term:pretty_print(env.typechecking_context))
 			local metavar = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			local metavalue = metavar:as_value()
 			local metaresult = evaluator.apply_value(result_type, metavalue)
-
+			--print("metaresult: ", metaresult:pretty_print(env.typechecking_context))
 			local ok, pi = speculate_pi_type(env, metaresult)
+			--print("next pi: ", pi:pretty_print(env.typechecking_context))
 
 			if not ok then
 				error(
 					"calling function with implicit args, result type applied on implicit args must be a function type: "
-						.. metaresult:pretty_print()
+						.. metaresult:pretty_print(env.typechecking_context)
 						.. "\n@@@tb1@@@\n"
 						.. pi
 						.. "\n@@@tb2@@@"
@@ -698,11 +727,15 @@ local function expression_pairhandler(args, a, b)
 		--print("success: " .. tostring(random))
 		return res, env
 	end
-	if type_of_term:is_pi() then
-		return true, U.tag("call_pi", random, call_pi)
+	local ok, pi = speculate_pi_type(env, type_of_term)
+	if ok then
+		return true, U.tag("call_pi", random, call_pi, pi)
 	end
 
-	local function call_host_func_type()
+	---@param type_of_term value
+	---@return string|checkable|inferrable
+	---@return Environment
+	local function call_host_func_type(type_of_term)
 		local param_type, result_type, result_info = type_of_term:unwrap_host_function_type()
 		--print("checking host_function_type call args with goal: (value term follows)")
 		--print(param_type)
@@ -756,8 +789,9 @@ local function expression_pairhandler(args, a, b)
 		--print("success: " .. tostring(random))
 		return res, env
 	end
+	--TODO: make this speculate like the pi type does
 	if type_of_term:is_host_function_type() then
-		return true, U.tag("call_host_func_type", random, call_host_func_type)
+		return true, U.tag("call_host_func_type", random, call_host_func_type, type_of_term)
 	end
 
 	print("!!! about to fail of invalid type")
@@ -861,7 +895,7 @@ local function expression_symbolhandler(args, name)
 			part = inferrable_term.record_elim(
 				part,
 				name_array(namearray),
-				inferrable_term.bound_variable(env.typechecking_context:len() + 1)
+				inferrable_term.bound_variable(env.typechecking_context:len() + 1, U.here())
 			)
 		end
 		if goal:is_check() then
@@ -1029,25 +1063,26 @@ local function host_operative(fn, name)
 	-- and a host tuple result to a normal tuple
 	-- this way it can take a normal tuple and return a normal tuple
 	local nparams = 4
-	local tuple_conv_elements = typed_array(typed_term.bound_variable(2), typed_term.bound_variable(3))
+	local tuple_conv_elements =
+		typed_array(typed_term.bound_variable(2, U.here()), typed_term.bound_variable(3, U.here()))
 	local host_tuple_conv_elements = typed_array()
 	for i = 1, nparams do
 		-- + 1 because variable 1 is the argument tuple
 		-- all variables that follow are the destructured tuple
-		local var = typed_term.bound_variable(i + 1)
+		local var = typed_term.bound_variable(i + 1, U.here())
 		host_tuple_conv_elements:append(var)
 	end
 	local tuple_conv = typed_term.tuple_cons(tuple_conv_elements)
 	local host_tuple_conv = typed_term.host_tuple_cons(host_tuple_conv_elements)
 	local param_names = name_array("#syntax", "#env", "#userdata", "#goal")
 	local tuple_to_host_tuple =
-		typed_term.tuple_elim(param_names, typed_term.bound_variable(1), nparams, host_tuple_conv)
+		typed_term.tuple_elim(param_names, typed_term.bound_variable(1, U.here()), nparams, host_tuple_conv)
 	local tuple_to_host_tuple_fn = typed_term.application(typed_host_fn, tuple_to_host_tuple)
 	local result_names = name_array("#term", "#env")
 	local tuple_to_tuple_fn = typed_term.tuple_elim(result_names, tuple_to_host_tuple_fn, 2, tuple_conv)
 	-- 3: wrap it in a closure with an empty capture, not a typed lambda
 	-- this ensures variable 1 is the argument tuple
-	local value_fn = value.closure("#OPERATIVE_PARAM", tuple_to_tuple_fn, runtime_context())
+	local value_fn = value.closure("#" .. name .. "_PARAM", tuple_to_tuple_fn, runtime_context())
 
 	local userdata_type = value.tuple_type(terms.empty)
 	return inferrable_term.typed(
@@ -1158,14 +1193,17 @@ collect_tuple = metalanguage.reducer(
 		elseif goal:is_check() then
 			U.tag(
 				"flow",
-				{ val = value.tuple_type(desc), use = goal_type },
+				{
+					val = value.tuple_type(desc):pretty_preprint(env.typechecking_context),
+					use = goal_type:pretty_preprint(env.typechecking_context),
+				},
 				evaluator.typechecker_state.flow,
 				evaluator.typechecker_state,
 				value.tuple_type(desc),
 				env.typechecking_context,
 				goal_type,
 				env.typechecking_context,
-				"tuple type in collect_tuple"
+				terms.constraintcause.primitive("tuple type in collect_tuple", NIL_ANCHOR)
 			)
 			return true, checkable_term.tuple_cons(collected_terms), env
 		else
@@ -1246,7 +1284,7 @@ collect_host_tuple = metalanguage.reducer(
 				env.typechecking_context,
 				goal_type,
 				env.typechecking_context,
-				"host tuple type in collect_host_tuple"
+				terms.constraintcause.primitive("host tuple type in collect_host_tuple", NIL_ANCHOR)
 			)
 			return true, checkable_term.host_tuple_cons(collected_terms), env
 		else

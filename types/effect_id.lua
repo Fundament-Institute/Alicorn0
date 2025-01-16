@@ -4,7 +4,8 @@
 ---@class (exact) effect_id: RecordValue
 effect_id = {}
 
----@return table, SetValue
+---@return table
+---@return SetValue
 function effect_id:unwrap_effect_id() end
 
 -- TODO: constructor annotation

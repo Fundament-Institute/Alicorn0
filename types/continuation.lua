@@ -12,15 +12,21 @@ function continuation:unwrap_empty() end
 function continuation:as_empty() end
 ---@return boolean
 function continuation:is_frame() end
----@return RuntimeContext, typed
+---@return RuntimeContext context
+---@return typed code
 function continuation:unwrap_frame() end
----@return boolean, RuntimeContext, typed
+---@return boolean
+---@return RuntimeContext context
+---@return typed code
 function continuation:as_frame() end
 ---@return boolean
 function continuation:is_sequence() end
----@return continuation, continuation
+---@return continuation first
+---@return continuation second
 function continuation:unwrap_sequence() end
----@return boolean, continuation, continuation
+---@return boolean
+---@return continuation first
+---@return continuation second
 function continuation:as_sequence() end
 
 ---@class (exact) continuationType: EnumType

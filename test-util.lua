@@ -7,6 +7,10 @@ local blah2 = U.shadowarray(blah)
 U.append(blah2, "3")
 blah2[1] = "1"
 
+--local endTime = os.time() + 3
+--while os.time() < endTime do
+--end
+
 for k, v in ipairs(blah2) do
 	if tostring(k) ~= v then
 		error("FAIL: " .. tostring(k) .. " , " .. tostring(v))
@@ -87,4 +91,188 @@ if bar.foo ~= 1 then
 	error("fail bar.foo: " .. tostring(bar.foo))
 end
 
+do
+	local store = nil
+	local extractors = {
+		---@return integer
+		---@param obj RightCallEdge
+		function(obj)
+			return obj.left
+		end,
+		---@return integer
+		---@param obj RightCallEdge
+		function(obj)
+			return obj.right
+		end,
+	}
+
+	store = U.insert_tree_node({ left = "l1", right = "r1" }, store, 1, extractors, 0)
+	store = U.insert_tree_node({ left = "l2", right = "r2" }, store, 1, extractors, 0)
+
+	U.lock_table(store)
+	U.unlock_table(store)
+	store = U.insert_tree_node({ left = "l3", right = "r3" }, store, 1, extractors, 0)
+
+	if store["l3"]["r3"] == nil then
+		error("fail")
+	end
+
+	store = U.insert_tree_node({ left = "l4", right = "r4" }, store, 1, extractors, 1)
+
+	if store["l3"]["r3"] == nil then
+		error("fail")
+	end
+
+	store = U.insert_tree_node({ left = "l5", right = "r5" }, store, 1, extractors, 2)
+	store = U.revert_tree_node(store, 2)
+	if store["l5"] ~= nil then
+		error("fail")
+	end
+	if store["l3"]["r3"] == nil then
+		error("fail")
+	end
+	store = U.revert_tree_node(store, 2)
+	if store["l4"] == nil then
+		error("fail")
+	end
+	if store["l4"]["r4"] == nil then
+		error("fail")
+	end
+	store = U.revert_tree_node(store, 1)
+	if store["l4"] ~= nil then
+		error("fail")
+	end
+	if store["l3"]["r3"] == nil then
+		error("fail")
+	end
+	store = U.insert_tree_node({ left = "l4", right = "r4" }, store, 1, extractors, 1)
+	store = U.insert_tree_node({ left = "l5", right = "r5" }, store, 1, extractors, 2)
+	store = U.revert_tree_node(store, 2)
+	if store["l3"]["r3"] == nil then
+		error("fail")
+	end
+
+	U.lock_table(store)
+	U.unlock_table(store)
+
+	store = U.insert_tree_node({ left = "l6", right = "r6" }, store, 1, extractors, 2)
+
+	if store["l3"]["r3"] == nil then
+		error("fail")
+	end
+
+	if store["l4"] == nil then
+		error("fail")
+	end
+	if store["l4"]["r4"] == nil then
+		error("fail")
+	end
+	if store["l5"] ~= nil then
+		error("fail")
+	end
+	if store["l6"] == nil then
+		error("fail")
+	end
+	store = U.revert_tree_node(store, 2)
+	if store["l6"] ~= nil then
+		error("fail")
+	end
+	store = U.revert_tree_node(store, 1)
+	if store["l4"] ~= nil then
+		error("fail")
+	end
+	store = U.insert_tree_node({ left = "l3", right = "r3new" }, store, 1, extractors, 1)
+	if store["l3"]["r3new"] == nil then
+		error("fail")
+	end
+	if store["l3"]["r3"] == nil then
+		error("fail")
+	end
+	store = U.revert_tree_node(store, 1)
+	if store["l3"]["r3new"] ~= nil then
+		error("fail")
+	end
+	if store["l3"]["r3"] == nil then
+		error("fail")
+	end
+	store = U.insert_tree_node({ left = "l3", right = "r3new" }, store, 1, extractors, 1)
+	store = U.commit_tree_node(store, 1)
+	if store["l3"]["r3new"] == nil then
+		error("fail")
+	end
+	if store["l3"]["r3"] == nil then
+		error("fail")
+	end
+	store = U.insert_tree_node({ left = "l4", right = "r4" }, store, 1, extractors, 1)
+	store = U.insert_tree_node({ left = "l5", right = "r5" }, store, 1, extractors, 2)
+
+	if store["l4"] == nil then
+		error("fail")
+	end
+	if store["l4"]["r4"] == nil then
+		error("fail")
+	end
+	if store["l5"] == nil then
+		error("fail")
+	end
+	if store["l5"]["r5"] == nil then
+		error("fail")
+	end
+
+	store = U.commit_tree_node(store, 2)
+	store = U.commit_tree_node(store, 1)
+	if store["l4"] == nil then
+		error("fail")
+	end
+	if store["l4"]["r4"] == nil then
+		error("fail")
+	end
+	if store["l5"] == nil then
+		error("fail")
+	end
+	if store["l5"]["r5"] == nil then
+		error("fail")
+	end
+
+	store = U.insert_tree_node({ left = "l6", right = "r6" }, store, 1, extractors, 1)
+	store = U.insert_tree_node({ left = "l7", right = "r7" }, store, 1, extractors, 2)
+
+	if store["l6"] == nil then
+		error("fail")
+	end
+	if store["l6"]["r6"] == nil then
+		error("fail")
+	end
+	if store["l7"] == nil then
+		error("fail")
+	end
+	if store["l7"]["r7"] == nil then
+		error("fail")
+	end
+	store = U.revert_tree_node(store, 2)
+	store = U.commit_tree_node(store, 1)
+
+	if store["l6"] == nil then
+		error("fail")
+	end
+	if store["l6"]["r6"] == nil then
+		error("fail")
+	end
+	if store["l7"] ~= nil then
+		error("fail")
+	end
+	--U.commit_tree_node(store, 1)
+end
+--[[
+local foo = metavariable()
+speculate(function()
+	local bar = something()
+	flow(foo, bar)
+	speculate(function()
+		local quux = something_else()
+		flow(quux, foo)
+	end)
+	fail()
+end)
+]]
 print("Success!")

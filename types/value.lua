@@ -12,9 +12,10 @@ function value:unwrap_visibility_type() end
 function value:as_visibility_type() end
 ---@return boolean
 function value:is_visibility() end
----@return visibility
+---@return visibility visibility
 function value:unwrap_visibility() end
----@return boolean, visibility
+---@return boolean
+---@return visibility visibility
 function value:as_visibility() end
 ---@return boolean
 function value:is_param_info_type() end
@@ -24,9 +25,10 @@ function value:unwrap_param_info_type() end
 function value:as_param_info_type() end
 ---@return boolean
 function value:is_param_info() end
----@return value
+---@return value visibility
 function value:unwrap_param_info() end
----@return boolean, value
+---@return boolean
+---@return value visibility
 function value:as_param_info() end
 ---@return boolean
 function value:is_result_info_type() end
@@ -36,27 +38,45 @@ function value:unwrap_result_info_type() end
 function value:as_result_info_type() end
 ---@return boolean
 function value:is_result_info() end
----@return result_info
+---@return result_info result_info
 function value:unwrap_result_info() end
----@return boolean, result_info
+---@return boolean
+---@return result_info result_info
 function value:as_result_info() end
 ---@return boolean
 function value:is_pi() end
----@return value, value, value, value
+---@return value param_type
+---@return value param_info
+---@return value result_type
+---@return value result_info
 function value:unwrap_pi() end
----@return boolean, value, value, value, value
+---@return boolean
+---@return value param_type
+---@return value param_info
+---@return value result_type
+---@return value result_info
 function value:as_pi() end
 ---@return boolean
 function value:is_closure() end
----@return string, typed, RuntimeContext
+---@return string param_name
+---@return typed code
+---@return RuntimeContext capture
 function value:unwrap_closure() end
----@return boolean, string, typed, RuntimeContext
+---@return boolean
+---@return string param_name
+---@return typed code
+---@return RuntimeContext capture
 function value:as_closure() end
 ---@return boolean
 function value:is_range() end
----@return ArrayValue, ArrayValue, value
+---@return ArrayValue lower_bounds
+---@return ArrayValue upper_bounds
+---@return value relation
 function value:unwrap_range() end
----@return boolean, ArrayValue, ArrayValue, value
+---@return boolean
+---@return ArrayValue lower_bounds
+---@return ArrayValue upper_bounds
+---@return value relation
 function value:as_range() end
 ---@return boolean
 function value:is_name_type() end
@@ -66,99 +86,123 @@ function value:unwrap_name_type() end
 function value:as_name_type() end
 ---@return boolean
 function value:is_name() end
----@return string
+---@return string name
 function value:unwrap_name() end
----@return boolean, string
+---@return boolean
+---@return string name
 function value:as_name() end
 ---@return boolean
 function value:is_operative_value() end
----@return value
+---@return value userdata
 function value:unwrap_operative_value() end
----@return boolean, value
+---@return boolean
+---@return value userdata
 function value:as_operative_value() end
 ---@return boolean
 function value:is_operative_type() end
----@return value, value
+---@return value handler
+---@return value userdata_type
 function value:unwrap_operative_type() end
----@return boolean, value, value
+---@return boolean
+---@return value handler
+---@return value userdata_type
 function value:as_operative_type() end
 ---@return boolean
 function value:is_tuple_value() end
----@return ArrayValue
+---@return ArrayValue elements
 function value:unwrap_tuple_value() end
----@return boolean, ArrayValue
+---@return boolean
+---@return ArrayValue elements
 function value:as_tuple_value() end
 ---@return boolean
 function value:is_tuple_type() end
----@return value
+---@return value desc
 function value:unwrap_tuple_type() end
----@return boolean, value
+---@return boolean
+---@return value desc
 function value:as_tuple_type() end
 ---@return boolean
 function value:is_tuple_desc_type() end
----@return value
+---@return value universe
 function value:unwrap_tuple_desc_type() end
----@return boolean, value
+---@return boolean
+---@return value universe
 function value:as_tuple_desc_type() end
 ---@return boolean
 function value:is_enum_value() end
----@return string, value
+---@return string constructor
+---@return value arg
 function value:unwrap_enum_value() end
----@return boolean, string, value
+---@return boolean
+---@return string constructor
+---@return value arg
 function value:as_enum_value() end
 ---@return boolean
 function value:is_enum_type() end
----@return value
+---@return value desc
 function value:unwrap_enum_type() end
----@return boolean, value
+---@return boolean
+---@return value desc
 function value:as_enum_type() end
 ---@return boolean
 function value:is_enum_desc_type() end
----@return value
+---@return value universe
 function value:unwrap_enum_desc_type() end
----@return boolean, value
+---@return boolean
+---@return value universe
 function value:as_enum_desc_type() end
 ---@return boolean
 function value:is_enum_desc_value() end
----@return MapValue
+---@return MapValue variants
 function value:unwrap_enum_desc_value() end
----@return boolean, MapValue
+---@return boolean
+---@return MapValue variants
 function value:as_enum_desc_value() end
 ---@return boolean
 function value:is_record_value() end
----@return MapValue
+---@return MapValue fields
 function value:unwrap_record_value() end
----@return boolean, MapValue
+---@return boolean
+---@return MapValue fields
 function value:as_record_value() end
 ---@return boolean
 function value:is_record_type() end
----@return value
+---@return value desc
 function value:unwrap_record_type() end
----@return boolean, value
+---@return boolean
+---@return value desc
 function value:as_record_type() end
 ---@return boolean
 function value:is_record_desc_type() end
----@return value
+---@return value universe
 function value:unwrap_record_desc_type() end
----@return boolean, value
+---@return boolean
+---@return value universe
 function value:as_record_desc_type() end
 ---@return boolean
 function value:is_record_extend_stuck() end
----@return neutral_value, MapValue
+---@return neutral_value base
+---@return MapValue extension
 function value:unwrap_record_extend_stuck() end
----@return boolean, neutral_value, MapValue
+---@return boolean
+---@return neutral_value base
+---@return MapValue extension
 function value:as_record_extend_stuck() end
 ---@return boolean
 function value:is_object_value() end
----@return MapValue, RuntimeContext
+---@return MapValue methods
+---@return RuntimeContext capture
 function value:unwrap_object_value() end
----@return boolean, MapValue, RuntimeContext
+---@return boolean
+---@return MapValue methods
+---@return RuntimeContext capture
 function value:as_object_value() end
 ---@return boolean
 function value:is_object_type() end
----@return value
+---@return value desc
 function value:unwrap_object_type() end
----@return boolean, value
+---@return boolean
+---@return value desc
 function value:as_object_type() end
 ---@return boolean
 function value:is_level_type() end
@@ -174,39 +218,47 @@ function value:unwrap_number_type() end
 function value:as_number_type() end
 ---@return boolean
 function value:is_number() end
----@return number
+---@return number number
 function value:unwrap_number() end
----@return boolean, number
+---@return boolean
+---@return number number
 function value:as_number() end
 ---@return boolean
 function value:is_level() end
----@return number
+---@return number level
 function value:unwrap_level() end
----@return boolean, number
+---@return boolean
+---@return number level
 function value:as_level() end
 ---@return boolean
 function value:is_star() end
----@return number, number
+---@return number level
+---@return number depth
 function value:unwrap_star() end
----@return boolean, number, number
+---@return boolean
+---@return number level
+---@return number depth
 function value:as_star() end
 ---@return boolean
 function value:is_prop() end
----@return number
+---@return number level
 function value:unwrap_prop() end
----@return boolean, number
+---@return boolean
+---@return number level
 function value:as_prop() end
 ---@return boolean
 function value:is_neutral() end
----@return neutral_value
+---@return neutral_value neutral
 function value:unwrap_neutral() end
----@return boolean, neutral_value
+---@return boolean
+---@return neutral_value neutral
 function value:as_neutral() end
 ---@return boolean
 function value:is_host_value() end
----@return any
+---@return any host_value
 function value:unwrap_host_value() end
----@return boolean, any
+---@return boolean
+---@return any host_value
 function value:as_host_value() end
 ---@return boolean
 function value:is_host_type_type() end
@@ -234,27 +286,37 @@ function value:unwrap_host_string_type() end
 function value:as_host_string_type() end
 ---@return boolean
 function value:is_host_function_type() end
----@return value, value, value
+---@return value param_type
+---@return value result_type
+---@return value result_info
 function value:unwrap_host_function_type() end
----@return boolean, value, value, value
+---@return boolean
+---@return value param_type
+---@return value result_type
+---@return value result_info
 function value:as_host_function_type() end
 ---@return boolean
 function value:is_host_wrapped_type() end
----@return value
+---@return value type
 function value:unwrap_host_wrapped_type() end
----@return boolean, value
+---@return boolean
+---@return value type
 function value:as_host_wrapped_type() end
 ---@return boolean
 function value:is_host_unstrict_wrapped_type() end
----@return value
+---@return value type
 function value:unwrap_host_unstrict_wrapped_type() end
----@return boolean, value
+---@return boolean
+---@return value type
 function value:as_host_unstrict_wrapped_type() end
 ---@return boolean
 function value:is_host_user_defined_type() end
----@return { name: string }, ArrayValue
+---@return { name: string } id
+---@return ArrayValue family_args
 function value:unwrap_host_user_defined_type() end
----@return boolean, { name: string }, ArrayValue
+---@return boolean
+---@return { name: string } id
+---@return ArrayValue family_args
 function value:as_host_user_defined_type() end
 ---@return boolean
 function value:is_host_nil_type() end
@@ -264,33 +326,44 @@ function value:unwrap_host_nil_type() end
 function value:as_host_nil_type() end
 ---@return boolean
 function value:is_host_tuple_value() end
----@return ArrayValue
+---@return ArrayValue elements
 function value:unwrap_host_tuple_value() end
----@return boolean, ArrayValue
+---@return boolean
+---@return ArrayValue elements
 function value:as_host_tuple_value() end
 ---@return boolean
 function value:is_host_tuple_type() end
----@return value
+---@return value desc
 function value:unwrap_host_tuple_type() end
----@return boolean, value
+---@return boolean
+---@return value desc
 function value:as_host_tuple_type() end
 ---@return boolean
 function value:is_singleton() end
----@return value, value
+---@return value supertype
+---@return value value
 function value:unwrap_singleton() end
----@return boolean, value, value
+---@return boolean
+---@return value supertype
+---@return value value
 function value:as_singleton() end
 ---@return boolean
 function value:is_program_end() end
----@return value
+---@return value result
 function value:unwrap_program_end() end
----@return boolean, value
+---@return boolean
+---@return value result
 function value:as_program_end() end
 ---@return boolean
 function value:is_program_cont() end
----@return table, value, continuation
+---@return table action
+---@return value argument
+---@return continuation continuation
 function value:unwrap_program_cont() end
----@return boolean, table, value, continuation
+---@return boolean
+---@return table action
+---@return value argument
+---@return continuation continuation
 function value:as_program_cont() end
 ---@return boolean
 function value:is_effect_empty() end
@@ -300,9 +373,10 @@ function value:unwrap_effect_empty() end
 function value:as_effect_empty() end
 ---@return boolean
 function value:is_effect_elem() end
----@return effect_id
+---@return effect_id tag
 function value:unwrap_effect_elem() end
----@return boolean, effect_id
+---@return boolean
+---@return effect_id tag
 function value:as_effect_elem() end
 ---@return boolean
 function value:is_effect_type() end
@@ -312,9 +386,12 @@ function value:unwrap_effect_type() end
 function value:as_effect_type() end
 ---@return boolean
 function value:is_effect_row() end
----@return SetValue, value
+---@return SetValue components
+---@return value rest
 function value:unwrap_effect_row() end
----@return boolean, SetValue, value
+---@return boolean
+---@return SetValue components
+---@return value rest
 function value:as_effect_row() end
 ---@return boolean
 function value:is_effect_row_type() end
@@ -324,33 +401,44 @@ function value:unwrap_effect_row_type() end
 function value:as_effect_row_type() end
 ---@return boolean
 function value:is_program_type() end
----@return value, value
+---@return value effect_sig
+---@return value base_type
 function value:unwrap_program_type() end
----@return boolean, value, value
+---@return boolean
+---@return value effect_sig
+---@return value base_type
 function value:as_program_type() end
 ---@return boolean
 function value:is_srel_type() end
----@return value
+---@return value target_type
 function value:unwrap_srel_type() end
----@return boolean, value
+---@return boolean
+---@return value target_type
 function value:as_srel_type() end
 ---@return boolean
 function value:is_variance_type() end
----@return value
+---@return value target_type
 function value:unwrap_variance_type() end
----@return boolean, value
+---@return boolean
+---@return value target_type
 function value:as_variance_type() end
 ---@return boolean
 function value:is_intersection_type() end
----@return value, value
+---@return value left
+---@return value right
 function value:unwrap_intersection_type() end
----@return boolean, value, value
+---@return boolean
+---@return value left
+---@return value right
 function value:as_intersection_type() end
 ---@return boolean
 function value:is_union_type() end
----@return value, value
+---@return value left
+---@return value right
 function value:unwrap_union_type() end
----@return boolean, value, value
+---@return boolean
+---@return value left
+---@return value right
 function value:as_union_type() end
 
 ---@class (exact) valueType: EnumType

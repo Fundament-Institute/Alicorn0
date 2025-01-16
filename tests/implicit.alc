@@ -2,6 +2,13 @@ let id = lambda_implicit (T : type_(10, 0))
 	lambda (x : T)
 		x
 
+let foo =
+	lambda_implicit (a : type)
+		lambda_implicit (b : type)
+			lambda (c : a, d : b)
+				c
+let test = foo(1, 2)
+
 # TODO: test this when tuple-desc can do more than just star-0
 #let point = lambda_implicit (U : type_(10))
 #	lambda (T : U)

@@ -21,6 +21,23 @@ end
 ---@field sourceid string
 local Anchor = {}
 
+---comment
+---@param stop Anchor?
+---@return string
+function Anchor:display(stop)
+	if stop == nil then
+		return tostring(self)
+	end
+
+	return tostring(self.sourceid)
+		.. ":"
+		.. tostring(self.line)
+		.. ":"
+		.. tostring(self.char)
+		.. "-"
+		.. tostring(stop.char)
+end
+
 local anchor_mt = {
 	__lt = function(fst, snd)
 		return snd.line > fst.line or (snd.line == fst.line and snd.char > fst.char)
@@ -32,12 +49,7 @@ local anchor_mt = {
 		return (snd.line == fst.line and snd.char == fst.char)
 	end,
 	__tostring = function(self)
-		return "file "
-			.. tostring(self.sourceid)
-			.. ", line "
-			.. tostring(self.line)
-			.. " character "
-			.. tostring(self.char)
+		return tostring(self.sourceid) .. ":" .. tostring(self.line) .. ":" .. tostring(self.char)
 	end,
 	__index = Anchor,
 }
