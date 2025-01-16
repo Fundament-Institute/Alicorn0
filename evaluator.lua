@@ -362,8 +362,16 @@ local TupleDescRelation = setmetatable({
 			-- value) should be the same across the whole desc
 			local unique = { debug = "TupleDescRelation.constrain" .. U.here() }
 			local placeholder = value.neutral(neutral_value.free(free.unique(unique)))
-			local tuple_types_val, tuple_types_use, tuple_vals, n =
+			local ok, tuple_types_val, tuple_types_use, tuple_vals, n =
 				infer_tuple_type_unwrapped2(value.tuple_type(val), value.tuple_type(use), placeholder)
+
+				if not ok then
+					if tuple_types_val == "length-mismatch" then
+						error("Tuple lengths do not match: " .. value.tuple_type(val):pretty_print(lctx) .. "\n != " .. value.tuple_type(use):pretty_print(rctx))
+					else
+						error(tuple_types_val)
+					end
+				end
 
 			for i = 1, n do
 				typechecker_state:queue_subtype(
@@ -1826,10 +1834,12 @@ function infer_tuple_type(subject_type, subject_value)
 	return infer_tuple_type_unwrapped(subject_type, subject_value)
 end
 
+---@overload fun(desc_a: value, make_prefix_a : fun(i: integer): value, desc_b: value, make_prefix_b : fun(i: integer): value): boolean, string
 ---@param desc_a value
 ---@param make_prefix_a fun(i: integer): value
 ---@param desc_b value
 ---@param make_prefix_b fun(i: integer): value
+---@return boolean
 ---@return value[]
 ---@return value[]
 ---@return value[]
@@ -1838,14 +1848,17 @@ function make_inner_context2(desc_a, make_prefix_a, desc_b, make_prefix_b)
 	local constructor_a, arg_a = desc_a:unwrap_enum_value()
 	local constructor_b, arg_b = desc_b:unwrap_enum_value()
 	if constructor_a == terms.DescCons.empty and constructor_b == terms.DescCons.empty then
-		return value_array(), value_array(), value_array(), 0
+		return true, value_array(), value_array(), value_array(), 0
 	elseif constructor_a == terms.DescCons.empty or constructor_b == terms.DescCons.empty then
-		error("tuple desc lengths must be equal")
+		return false, "length-mismatch"
 	elseif constructor_a == terms.DescCons.cons and constructor_b == terms.DescCons.cons then
 		local details_a = arg_a:unwrap_tuple_value()
 		local details_b = arg_b:unwrap_tuple_value()
-		local tupletypes_a, tupletypes_b, tuplevals, n_elements =
+		local ok, tupletypes_a, tupletypes_b, tuplevals, n_elements =
 			make_inner_context2(details_a[1], make_prefix_a, details_b[1], make_prefix_b)
+		if not ok then
+			return ok, tupletypes_a
+		end
 		local f_a = details_a[2]
 		local f_b = details_b[2]
 		local element_type_a
@@ -1870,16 +1883,17 @@ function make_inner_context2(desc_a, make_prefix_a, desc_b, make_prefix_b)
 		end
 		tupletypes_a:append(element_type_a)
 		tupletypes_b:append(element_type_b)
-		return tupletypes_a, tupletypes_b, tuplevals, n_elements + 1
+		return true, tupletypes_a, tupletypes_b, tuplevals, n_elements + 1
 	else
-		error("infer: unknown tuple type data constructor")
+		return false, "infer: unknown tuple type data constructor"
 	end
 end
 
 ---@param subject_type_a value
 ---@param subject_type_b value
 ---@param subject_value value
----@return value[]
+---@return boolean
+---@return value[]|string
 ---@return value[]
 ---@return value[]
 ---@return integer
