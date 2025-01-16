@@ -75,10 +75,11 @@ let UntypedTerm : (forall )
 
 mutual
 	defenum Value
-		function(capture : Value, code : Term)
+		function(capture : Value, body : Term)
 
 	defenum Term(ctx : Context)
-		bound-variable(idx : CtxRef(ctx))
+		variable()
+		tail()
 
 let Semantics-Reg = new-registry(Categorical-Component)
 
