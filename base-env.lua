@@ -1615,7 +1615,7 @@ local function enum_impl(syntax, env)
 end
 
 ---@type lua_operative
-local function debug_track_impl(syntax, env)
+local function debug_trace_impl(syntax, env)
 	local ok, type_inferrable_term, tail = syntax:match({
 		metalanguage.listtail(metalanguage.accept_handler, exprs.inferred_expression(metalanguage.accept_handler, env)),
 	}, metalanguage.failure_handler, nil)
@@ -1659,7 +1659,7 @@ local core_operations = {
 	mk = exprs.host_operative(mk_impl, "mk_impl"),
 	switch = exprs.host_operative(switch_impl, "switch_impl"),
 	enum = exprs.host_operative(enum_impl, "enum_impl"),
-	["debug-track"] = exprs.host_operative(debug_track_impl, "debug_track_impl"),
+	["debug-trace"] = exprs.host_operative(debug_trace_impl, "debug_trace_impl"),
 	--record = exprs.host_operative(record_build, "record_build"),
 	intrinsic = exprs.host_operative(intrinsic_impl, "intrinsic_impl"),
 	["host-number"] = lit_term(value.host_number_type, value.host_type_type),
