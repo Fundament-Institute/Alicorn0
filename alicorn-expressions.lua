@@ -538,6 +538,224 @@ local function operative_test_hack(env, metaval)
 	return true, res
 end
 
+---@param type_of_term value
+---@param usage_count ArrayValue
+---@param term typed
+---@param sargs ConstructedSyntax
+---@param goal expression_goal
+---@param env Environment
+---@return boolean
+---@return string|checkable|inferrable
+---@return Environment
+local function call_operative(type_of_term, usage_count, term, sargs, goal, env)
+	-- TODO: speculate operative type
+	if
+		type_of_term:is_neutral()
+		and type_of_term:unwrap_neutral():is_free()
+		and type_of_term:unwrap_neutral():unwrap_free():is_metavariable()
+	then
+		local ok, updated_type = operative_test_hack(env, type_of_term)
+		if not ok then
+			return false, updated_type
+		end
+	end
+	local is_op, handler, userdata_type = type_of_term:as_operative_type()
+	if not is_op then
+		return false, "not an operative"
+	end
+
+	-- operative input: env, syntax tree, goal type (if checked)
+	local tuple_args =
+		value_array(value.host_value(sargs), value.host_value(env), value.host_value(term), value.host_value(goal))
+	local operative_result_val = evaluator.apply_value(handler, terms.value.tuple_value(tuple_args))
+	-- result should be able to be an inferred term, can fail
+	-- NYI: operative_cons in evaluator must use Maybe type once it exists
+	-- if not operative_result_val:is_enum_value() then
+	-- 	p(operative_result_val.kind)
+	-- 	print(operative_result_val:pretty_print())
+	-- 	return false, "applying operative did not result in value term with kind enum_value, typechecker or lua operative mistake when applying " .. tostring(a.start_anchor) .. " to the args " .. tostring(b.start_anchor)
+	-- end
+	-- variants: ok, error
+	--if operative_result_val.variant == "error" then
+	--	return false, semantic_error.operative_apply_failed(operative_result_val.data, { a.start_anchor, b.start_anchor })
+	--end
+
+	-- temporary, while it isn't a Maybe
+	if not operative_result_val:is_tuple_value() then
+		print("bad operative?", handler)
+		print("bad result val", operative_result_val)
+		error "operative handler didn't complete properly"
+	end
+	local operative_result_elems = operative_result_val:unwrap_tuple_value()
+	local data = operative_result_elems[1]:unwrap_host_value()
+	local env = operative_result_elems[2]:unwrap_host_value()
+	--if not env then
+	--	print("operative_result_val.elements[2]", operative_result_val.elements[2]:pretty_print())
+	--	error "operative_result_val missing env"
+	--end
+
+	if goal:is_check() then
+		local checkable = data
+		local goal_type = goal:unwrap_check()
+		local usage_counts, term = evaluator.check(checkable, env.typechecking_context, goal_type)
+		return true, checkable_term.inferrable(inferrable_term.typed(goal_type, usage_counts, term)), env
+	elseif goal:is_infer() then
+		local resulting_type, usage_counts, term = infer(data, env.typechecking_context)
+		return true, inferrable_term.typed(resulting_type, usage_counts, term), env
+	else
+		error("NYI goal " .. goal.kind .. " for operative in expression_pairhandler")
+	end
+end
+
+---@param type_of_term value
+---@param usage_count ArrayValue
+---@param term typed
+---@param sargs ConstructedSyntax
+---@param goal expression_goal
+---@param env Environment
+---@return boolean
+---@return string|checkable|inferrable
+---@return Environment
+local function call_pi(type_of_term, usage_count, term, sargs, goal, env)
+	local ok
+	ok, type_of_term = speculate_pi_type(env, type_of_term)
+	if not ok then
+		return false, type_of_term
+	end
+
+	local param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
+
+	while param_info:unwrap_param_info():unwrap_visibility():is_implicit() do
+		local metavar = evaluator.typechecker_state:metavariable(env.typechecking_context)
+		local metavalue = metavar:as_value()
+		local metaresult = evaluator.apply_value(result_type, metavalue)
+		local ok, inner_pi = speculate_pi_type(env, metaresult)
+		if not ok then
+			error(
+				"calling function with implicit args, result type applied on implicit args must be a function type: "
+					.. metaresult:pretty_print(env.typechecking_context)
+					.. "\n\n@@@tb1@@@\n\n"
+					.. inner_pi
+					.. "\n\n@@@tb2@@@"
+			)
+		end
+
+		term = typed_term.application(term, terms.typed_term.literal(metavalue))
+		type_of_term = inner_pi
+		param_type, param_info, result_type, result_info = inner_pi:unwrap_pi()
+	end
+
+	---@type boolean, checkable|string, Environment
+	local ok, tuple, env = sargs:match({
+		collect_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
+	}, metalanguage.failure_handler, nil)
+	if not ok then
+		-- TODO: semantic error? like call_host_func_type
+		error(tuple)
+	end
+	---@cast tuple checkable
+
+	---@type string | inferrable | checkable
+	local res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
+	---@cast res inferrable
+
+	if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
+		local bind = terms.binding.program_sequence(res, a.start_anchor)
+		env = env:bind_local(bind)
+		ok, res = env:get("#program-sequence") --TODO refactor
+		if not ok then
+			error(res)
+		end
+	end
+
+	if goal:is_check() then
+		res = checkable_term.inferrable(res)
+	end
+
+	return true, res, env
+end
+
+---@param type_of_term value
+---@param usage_count ArrayValue
+---@param term typed
+---@param sargs ConstructedSyntax
+---@param goal expression_goal
+---@param env Environment
+---@return boolean
+---@return string|checkable|inferrable
+---@return Environment
+local function call_host_func_type(type_of_term, usage_count, term, sargs, goal, env)
+	local ok
+	ok, type_of_term = evaluator.typechecker_state:speculate(function()
+		local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+		local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+		local host_func_type = value.host_function_type(param_mv:as_value(), result_mv:as_value(), result_info_pure)
+
+		evaluator.typechecker_state:flow(
+			type_of_term,
+			env.typechecking_context,
+			host_func_type,
+			env.typechecking_context,
+			terms.constraintcause.primitive("Speculating on host func type", NIL_ANCHOR)
+		)
+
+		return host_func_type
+	end)
+	if not ok then
+		return ok, type_of_term
+	end
+
+	local param_type, result_type, result_info = type_of_term:unwrap_host_function_type()
+
+	---@type boolean, checkable|string, Environment
+	local ok, tuple, env = sargs:match({
+		collect_host_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
+	}, metalanguage.failure_handler, nil)
+	if not ok then
+		error(semantic_error.host_function_argument_collect_failed(tuple, { a.start_anchor, b.start_anchor }, {
+			host_function_type = type_of_term,
+			host_function_value = term,
+		}, env))
+	end
+	---@cast tuple checkable
+
+	---@type string | inferrable | checkable
+	local res
+
+	if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
+		local tuple_usages, tuple_term = evaluator.check(tuple, env.typechecking_context, param_type)
+		local result_final = evaluator.evaluate(
+			typed_term.application(typed_term.literal(result_type), tuple_term),
+			env.typechecking_context.runtime_context
+		)
+		local app = inferrable_term.typed(
+			result_final,
+			usage_array(),
+			typed_term.program_invoke(
+				typed_term.literal(value.effect_elem(terms.lua_prog)),
+				typed_term.tuple_cons(typed_array(term, tuple_term))
+			)
+		)
+		---@type Environment
+		local bind = terms.binding.program_sequence(app, a.start_anchor)
+		env = env:bind_local(bind)
+		ok, res = env:get("#program-sequence")
+		if not ok then
+			error(res)
+		end
+		---@cast res inferrable
+	else
+		res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
+		---@cast res inferrable
+	end
+
+	if goal:is_check() then
+		res = checkable_term.inferrable(res)
+	end
+
+	return true, res, env
+end
+
 ---@param args ExpressionArgs
 ---@param a ConstructedSyntax
 ---@param b ConstructedSyntax
@@ -546,15 +764,14 @@ end
 ---@return Environment?
 local function expression_pairhandler(args, a, b)
 	local goal, env = args:unwrap()
-	local orig_env = env
-	local is_operator = false
-	local operator_type
-	local left, operator, right
-	local sargs
 
 	-- if the expression is a list containing prefix and infix expressions,
 	-- parse it into a tree of simple prefix/infix expressions with shunting yard
-	local ok, syntax = shunting_yard(a, b, { n = 0 }, { n = 0 }, a.start_anchor, a.end_anchor)
+	local ok, syntax
+	ok, syntax = shunting_yard(a, b, { n = 0 }, { n = 0 }, a.start_anchor, a.end_anchor)
+	local is_operator = false
+	local operator_type
+	local left, operator, right
 	if ok then
 		---@cast syntax ConstructedSyntax
 		is_operator, operator_type, operator, left, right = syntax:match({
@@ -572,7 +789,7 @@ local function expression_pairhandler(args, a, b)
 		}, metalanguage.failure_handler, nil)
 	end
 
-	local combiner
+	local combiner, sargs
 	if is_operator and operator_type == OperatorType.Prefix then
 		ok, combiner = env:get(operator .. "_")
 		if not ok then
@@ -607,211 +824,38 @@ local function expression_pairhandler(args, a, b)
 
 	-- combiner was an evaluated typed value, now it isn't
 	local type_of_term, usage_count, term = infer(combiner, env.typechecking_context)
-	local random = {}
+	local res_term1, res_term2, res_term3, res_env
 
-	--print("kind is " .. type_of_term.kind .. " " .. tostring(random))
-
-	if
-		(
-			type_of_term:is_neutral()
-			and type_of_term:unwrap_neutral():is_free()
-			and type_of_term:unwrap_neutral():unwrap_free():is_metavariable()
-		) or type_of_term:is_range()
-	then
-		local ok, updated_type
-		-- Speculate that this is a pi type
-		ok, updated_type = speculate_pi_type(env, type_of_term)
-		if not ok then
-			ok, updated_type = operative_test_hack(env, type_of_term)
-		end
-		if not ok then
-			error("speculate DID NOT work for pi!: " .. pi:pretty_print(env.typechecking_context))
-		end
-		---@cast updated_type -nil
-		type_of_term = updated_type
-	end
-
-	local function call_operative()
-		local handler, userdata_type = type_of_term:unwrap_operative_type()
-		-- operative input: env, syntax tree, goal type (if checked)
-		local tuple_args =
-			value_array(value.host_value(sargs), value.host_value(env), value.host_value(term), value.host_value(goal))
-		local operative_result_val = evaluator.apply_value(handler, terms.value.tuple_value(tuple_args))
-		-- result should be able to be an inferred term, can fail
-		-- NYI: operative_cons in evaluator must use Maybe type once it exists
-		-- if not operative_result_val:is_enum_value() then
-		-- 	p(operative_result_val.kind)
-		-- 	print(operative_result_val:pretty_print())
-		-- 	return false, "applying operative did not result in value term with kind enum_value, typechecker or lua operative mistake when applying " .. tostring(a.start_anchor) .. " to the args " .. tostring(b.start_anchor)
-		-- end
-		-- variants: ok, error
-		--if operative_result_val.variant == "error" then
-		--	return false, semantic_error.operative_apply_failed(operative_result_val.data, { a.start_anchor, b.start_anchor })
-		--end
-
-		-- temporary, while it isn't a Maybe
-		if not operative_result_val:is_tuple_value() then
-			print("bad operative?", handler)
-			print("bad result val", operative_result_val)
-			error "operative handler didn't complete properly"
-		end
-		local operative_result_elems = operative_result_val:unwrap_tuple_value()
-		local data = operative_result_elems[1]:unwrap_host_value()
-		local env = operative_result_elems[2]:unwrap_host_value()
-		--if not env then
-		--	print("operative_result_val.elements[2]", operative_result_val.elements[2]:pretty_print())
-		--	error "operative_result_val missing env"
-		--end
-
-		if goal:is_check() then
-			local checkable = data
-			local goal_type = goal:unwrap_check()
-			local usage_counts, term = evaluator.check(checkable, env.typechecking_context, goal_type)
-			return checkable_term.inferrable(inferrable_term.typed(goal_type, usage_counts, term)), env
-		elseif goal:is_infer() then
-			local resulting_type, usage_counts, term = infer(data, env.typechecking_context)
-			return inferrable_term.typed(resulting_type, usage_counts, term), env
-		else
-			error("NYI goal " .. goal.kind .. " for operative in expression_pairhandler")
-		end
-	end
-	if type_of_term:is_operative_type() then
-		return true, call_operative()
-	end
-
-	---@param type_of_term value
-	---@return string|checkable|inferrable
-	---@return Environment
-	local function call_pi(type_of_term)
-		local param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
-
-		while param_info:unwrap_param_info():unwrap_visibility():is_implicit() do
-			--print("original type of term: ", type_of_term:pretty_print(env.typechecking_context))
-			local metavar = evaluator.typechecker_state:metavariable(env.typechecking_context)
-			local metavalue = metavar:as_value()
-			local metaresult = evaluator.apply_value(result_type, metavalue)
-			--print("metaresult: ", metaresult:pretty_print(env.typechecking_context))
-			local ok, pi = speculate_pi_type(env, metaresult)
-			--print("next pi: ", pi:pretty_print(env.typechecking_context))
-
-			if not ok then
-				error(
-					"calling function with implicit args, result type applied on implicit args must be a function type: "
-						.. metaresult:pretty_print(env.typechecking_context)
-						.. "\n@@@tb1@@@\n"
-						.. pi
-						.. "\n@@@tb2@@@"
-				)
-			end
-
-			-- local new_term = inferrable_term.application(inferrable_term.typed(type_of_term, usage_array(), term), checkable_term.inferrable(inferrable_term.typed(param_type, usage_array(), terms.typed_term.literal(metavar:as_value()))))
-			term = typed_term.application(term, terms.typed_term.literal(metavar:as_value()))
-			type_of_term = pi
-			param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
-		end
-
-		-- multiple quantity of usages in tuple with usage in function arguments
-		---@type boolean, checkable|string, Environment
-		local ok, tuple, env = sargs:match({
-			collect_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
-		}, metalanguage.failure_handler, nil)
-
-		if not ok then
-			error(tuple)
-		end
-		---@cast tuple checkable
-
-		---@type string | inferrable | checkable
-		local res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
-		---@cast res inferrable
-
-		if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
-			local bind = terms.binding.program_sequence(res, a.start_anchor)
-			env = env:bind_local(bind)
-			ok, res = env:get("#program-sequence") --TODO refactor
-			if not ok then
-				error "broken environment?"
-			end
-		end
-
-		if goal:is_check() then
-			res = checkable_term.inferrable(res)
-		end
-
-		return res, env
-	end
-	local ok, pi = speculate_pi_type(env, type_of_term)
+	ok, res_term1, res_env = call_operative(type_of_term, usage_count, term, sargs, goal, env)
 	if ok then
-		return true, call_pi(pi)
+		return true, res_term1, res_env
 	end
 
-	---@param type_of_term value
-	---@return string|checkable|inferrable
-	---@return Environment
-	local function call_host_func_type(type_of_term)
-		local param_type, result_type, result_info = type_of_term:unwrap_host_function_type()
-		--print("checking host_function_type call args with goal: (value term follows)")
-		--print(param_type)
-		-- multiple quantity of usages in tuple with usage in function arguments
-		---@type boolean, checkable|string, Environment
-		local ok, tuple, env = sargs:match({
-			collect_host_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
-		}, metalanguage.failure_handler, nil)
-
-		if not ok then
-			error(semantic_error.host_function_argument_collect_failed(tuple, { a.start_anchor, b.start_anchor }, {
-				host_function_type = type_of_term,
-				host_function_value = term,
-			}, orig_env))
-		end
-		---@cast tuple checkable
-
-		---@type string | inferrable | checkable
-		local res
-
-		if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
-			local tuple_usages, tuple_term = evaluator.check(tuple, env.typechecking_context, param_type)
-			local result_final = evaluator.evaluate(
-				typed_term.application(typed_term.literal(result_type), tuple_term),
-				env.typechecking_context.runtime_context
-			)
-			local app = inferrable_term.typed(
-				result_final,
-				usage_array(),
-				typed_term.program_invoke(
-					typed_term.literal(value.effect_elem(terms.lua_prog)),
-					typed_term.tuple_cons(typed_array(term, tuple_term))
-				)
-			)
-			---@type Environment
-			env = env:bind_local(terms.binding.program_sequence(app, a.start_anchor))
-			ok, res = env:get("#program-sequence")
-			if not ok then
-				error(res)
-			end
-			---@cast res inferrable
-		else
-			res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
-			---@cast res inferrable
-		end
-
-		if goal:is_check() then
-			res = checkable_term.inferrable(res)
-		end
-
-		return res, env
-	end
-	--TODO: make this speculate like the pi type does
-	if type_of_term:is_host_function_type() then
-		return true, call_host_func_type(type_of_term)
+	ok, res_term2, res_env = call_pi(type_of_term, usage_count, term, sargs, goal, env)
+	if ok then
+		return true, res_term2, res_env
 	end
 
-	print("!!! about to fail of invalid type")
-	print(combiner:pretty_print(env.typechecking_context))
-	print("infers to")
-	print(type_of_term)
-	print("in")
-	env.typechecking_context:dump_names()
+	ok, res_term3, res_env = call_host_func_type(type_of_term, usage_count, term, sargs, goal, env)
+	if ok then
+		return true, res_term3, res_env
+	end
+
+	print("expressions_pairhandler speculate failed!")
+
+	--print(combiner:pretty_print(env.typechecking_context))
+	--print("infers to")
+	--print(type_of_term)
+	--print("in")
+	--env.typechecking_context:dump_names()
+
+	--print(res_term1)
+	--print(res_term2)
+	--print(res_term3)
+	-- try uncommenting one of the error prints above
+	-- you need to figure out which one is relevant for your problem
+	-- after you're finished, please comment it out so that, next time, the message below can be found again
+	print("debugging this is left as an exercise to the maintainer")
 	return false, "unknown type for pairhandler " .. type_of_term.kind, env
 end
 

@@ -132,28 +132,19 @@ function environment:bind_local(binding)
 		end
 		local spec_type = terms.value.tuple_type(desc)
 		local host_spec_type = terms.value.host_tuple_type(desc)
-		local function rest_of_the_tuple_elim(spec_type)
-			evaluator.typechecker_state:flow(
-				subject_type,
-				self.typechecking_context,
-				spec_type,
-				self.typechecking_context,
-				terms.constraintcause.primitive("environment tuple-elim", format.create_anchor(0, 0, "<NIL>"))
-			)
-			--[[U.tag(
-				"flow",
-				{
-					subject_type = subject_type:pretty_preprint(self.typechecking_context),
-					spec_type = spec_type:pretty_preprint(self.typechecking_context),
-				},
-				evaluator.typechecker_state.flow,
-				evaluator.typechecker_state,
-				subject_type,
-				self.typechecking_context,
-				spec_type,
-				self.typechecking_context,
-				terms.constraintcause.primitive("environment tuple-elim", format.create_anchor(0, 0, "<NIL>"))
-			)]]
+		local function inner_tuple_elim(spec_type)
+			local ok, err = evaluator.typechecker_state:speculate(function()
+				evaluator.typechecker_state:flow(
+					subject_type,
+					self.typechecking_context,
+					spec_type,
+					self.typechecking_context,
+					terms.constraintcause.primitive("environment tuple-elim", format.create_anchor(0, 0, "<NIL>"))
+				)
+			end)
+			if not ok then
+				return false, err
+			end
 
 			-- evaluating the subject is necessary for inferring the type of the body
 			local subject_value = evaluator.evaluate(subject_term, self.typechecking_context:get_runtime_context())
@@ -200,49 +191,29 @@ function environment:bind_local(binding)
 				typechecking_context = typechecking_context:append(v, tupletypes[i], evaled)
 			end
 			local bindings = self.bindings:append(binding)
-			return update_env(self, {
-				locals = locals,
-				bindings = bindings,
-				typechecking_context = typechecking_context,
-			})
+			return true,
+				update_env(self, {
+					locals = locals,
+					bindings = bindings,
+					typechecking_context = typechecking_context,
+				})
 		end
 		local unique = {}
 		local ok, res1, res2
-		ok, res1 = evaluator.typechecker_state:speculate(function()
-			return rest_of_the_tuple_elim(spec_type)
-		end)
-		-- local ok, res = U.tag(
-		-- 	"speculate",
-		-- 	{ unique = unique },
-		-- 	evaluator.typechecker_state.speculate,
-		-- 	evaluator.typechecker_state,
-		-- 	function()
-		-- 		return rest_of_the_tuple_elim(spec_type)
-		-- 	end
-		-- )
+		ok, res1 = inner_tuple_elim(spec_type)
 		if ok then
 			return res1
 		end
-		ok, res2 = evaluator.typechecker_state:speculate(function()
-			return rest_of_the_tuple_elim(host_spec_type)
-		end)
-		-- ok, res = U.tag(
-		-- 	"speculate",
-		-- 	{ unique = unique },
-		-- 	evaluator.typechecker_state.speculate,
-		-- 	evaluator.typechecker_state,
-		-- 	function()
-		-- 		return rest_of_the_tuple_elim(host_spec_type)
-		-- 	end
-		-- )
+		ok, res2 = inner_tuple_elim(host_spec_type)
 		if ok then
 			return res2
 		end
 		--error(res1)
 		--error(res2)
-		error(
-			"tuple elim speculation failed! debugging this is left as an exercise to the maintainer: " .. tostring(res2)
-		)
+		-- try uncommenting one of the error prints above
+		-- you need to figure out which one is relevant for your problem
+		-- after you're finished, please comment it out so that, next time, the message below can be found again
+		error("(binding) tuple elim speculation failed! debugging this is left as an exercise to the maintainer")
 	elseif binding:is_annotated_lambda() then
 		local param_name, param_annotation, start_anchor, visible = binding:unwrap_annotated_lambda()
 		if not start_anchor or not start_anchor.sourceid then

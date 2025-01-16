@@ -983,14 +983,19 @@ local function apply_operative_impl(syntax, env)
 	local spec_type = value.pi(param_type, param_info, result_type, result_info)
 	local host_spec_type = value.host_function_type(param_type, result_type, result_info)
 
-	local function rest_of_apply(spec_type)
-		evaluator.typechecker_state:flow(
-			type_of_fn,
-			env.typechecking_context,
-			spec_type,
-			env.typechecking_context,
-			terms.constraintcause.primitive("apply", format.create_anchor(0, 0, "<NIL>"))
-		)
+	local function apply_inner(spec_type)
+		local ok, err = evaluator.typechecker_state:speculate(function()
+			evaluator.typechecker_state:flow(
+				type_of_fn,
+				env.typechecking_context,
+				spec_type,
+				env.typechecking_context,
+				terms.constraintcause.primitive("apply", format.create_anchor(0, 0, "<NIL>"))
+			)
+		end)
+		if not ok then
+			return false, err
+		end
 
 		local ok, args_inferrable_term = tail:match({
 			metalanguage.listmatch(
@@ -1007,28 +1012,25 @@ local function apply_operative_impl(syntax, env)
 		end
 
 		local inf_term, env = utils.unpack_val_env(args_inferrable_term)
-		return terms.inferrable_term.application(
-			terms.inferrable_term.typed(spec_type, usages, fn_typed_term),
-			inf_term
-		),
+		return true,
+			terms.inferrable_term.application(terms.inferrable_term.typed(spec_type, usages, fn_typed_term), inf_term),
 			env
 	end
 
 	local ok, res1, res1env, res2, res2env
-	ok, res1, res1env = evaluator.typechecker_state:speculate(function()
-		return rest_of_apply(spec_type)
-	end)
+	ok, res1, res1env = apply_inner(spec_type)
 	if ok then
 		return true, res1, res1env
 	end
-	ok, res2, res2env = evaluator.typechecker_state:speculate(function()
-		return rest_of_apply(host_spec_type)
-	end)
+	ok, res2, res2env = apply_inner(host_spec_type)
 	if ok then
 		return true, res2, res2env
 	end
 	--error(res1)
 	--error(res2)
+	-- try uncommenting one of the error prints above
+	-- you need to figure out which one is relevant for your problem
+	-- after you're finished, please comment it out so that, next time, the message below can be found again
 	error("apply() speculation failed! debugging this is left as an exercise to the maintainer")
 end
 
