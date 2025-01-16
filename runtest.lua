@@ -365,7 +365,9 @@ if not ok then
 			f:write(out)
 			f:close()
 			i = (i + 1) % graph_backtrace
-			slice = additions
+			for i, v in ipairs(additions) do
+				slice[v] = v
+			end
 		end
 	end
 

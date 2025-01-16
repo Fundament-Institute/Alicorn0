@@ -3768,20 +3768,30 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 		prev = diff1
 		cur = diff2
 	else
-		prev = {
+		prev = diff1
+		cur = {
 			values = self.values,
 			constrain_edges = self.graph.constrain_edges:all(),
 			leftcall_edges = self.graph.leftcall_edges:all(),
 			rightcall_edges = self.graph.rightcall_edges:all(),
 		}
-		cur = diff1
 	end
 
-	local additions = restrict or {}
+	local additions = {}
 	local g = "digraph State {"
 
-	for i, v in ipairs(prev.values) do
-		local label = U.strip_ansi(v[1]:pretty_print(v[3])):gsub("\n", "\\n"):gsub('"', "'")
+	for i, v in ipairs(cur.values) do
+		local changed = true
+		if prev.values[i] then
+			if restrict ~= nil and restrict[i] == nil then
+				goto continue
+			end
+			changed = false
+		else
+			U.append(additions, i)
+		end
+
+		local label = U.strip_ansi(v[1]:pretty_print(v[3]))
 		if #label > 400 then
 			local i = 400
 			-- Don't slice a unicode character in half
@@ -3806,51 +3816,43 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 		--U.append(label, m)
 		--end
 		--label = table.concat(label, "\\l")
-		label = label:gsub("\\n", "\\l")
+		label = label:gsub("\n", "\\n"):gsub('"', "'"):gsub("\\", "\\\\"):gsub("\\\\n", "\\l")
 		local line = "\n" .. i .. " ["
 
-		if cur and cur.values[i] then
-			if restrict ~= nil and restrict[i] == nil then
-				goto continue
-			end
+		if not changed then
 			line = line .. 'fontcolor="#cccccc", color="#cccccc", '
-		else
-			U.append(additions, i)
 		end
 
-		g = g .. line
-
 		if v[1]:is_enum_value() and v[1]:unwrap_enum_value() == "empty" then
-			g = g .. "shape=doubleoctagon]"
+			line = line .. "shape=doubleoctagon]"
 			goto continue
 		elseif
 			v[1]:is_neutral()
 			and v[1]:unwrap_neutral():is_free()
 			and v[1]:unwrap_neutral():unwrap_free():is_metavariable()
 		then
-			g = g .. "shape=doublecircle]"
+			line = line .. "shape=doublecircle]"
 			goto continue
 		elseif v[1]:is_star() then
-			g = g .. "shape=egg, "
+			line = line .. "shape=egg, "
 		else
-			g = g .. "shape=rect, "
+			line = line .. "shape=rect, "
 		end
 
-		g = g .. 'label = "#' .. i .. " " .. label .. '"]'
+		g = g .. line .. 'label = "#' .. i .. " " .. label .. '"]'
 		-- load-bearing no-op
 		if true then
 		end
 		::continue::
 	end
 
-	for i, e in ipairs(prev.constrain_edges) do
+	for i, e in ipairs(cur.constrain_edges) do
 		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=normal"
 
 		if
-			cur
-			and cur.constrain_edges[i]
-			and cur.constrain_edges[i].left == e.left
-			and cur.constrain_edges[i].right == e.right
+			prev.constrain_edges[i]
+			and prev.constrain_edges[i].left == e.left
+			and prev.constrain_edges[i].right == e.right
 		then
 			if restrict ~= nil and restrict[e.left] == nil and restrict[e.right] == nil then
 				goto continue2
@@ -3869,14 +3871,13 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 		::continue2::
 	end
 
-	for i, e in ipairs(prev.leftcall_edges) do
+	for i, e in ipairs(cur.leftcall_edges) do
 		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=empty"
 
 		if
-			cur
-			and cur.leftcall_edges[i]
-			and cur.leftcall_edges[i].left == e.left
-			and cur.leftcall_edges[i].right == e.right
+			prev.leftcall_edges[i]
+			and prev.leftcall_edges[i].left == e.left
+			and prev.leftcall_edges[i].right == e.right
 		then
 			if restrict ~= nil and restrict[e.left] == nil and restrict[e.right] == nil then
 				goto continue3
@@ -3890,14 +3891,13 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 		::continue3::
 	end
 
-	for i, e in ipairs(prev.rightcall_edges) do
+	for i, e in ipairs(cur.rightcall_edges) do
 		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=invempty"
 
 		if
-			cur
-			and cur.rightcall_edges[i]
-			and cur.rightcall_edges[i].left == e.left
-			and cur.rightcall_edges[i].right == e.right
+			prev.rightcall_edges[i]
+			and prev.rightcall_edges[i].left == e.left
+			and prev.rightcall_edges[i].right == e.right
 		then
 			if restrict ~= nil and restrict[e.left] == nil and restrict[e.right] == nil then
 				goto continue4
