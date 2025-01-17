@@ -2016,25 +2016,31 @@ function value_override_pretty:enum_value(pp)
 
 	pp:_enter()
 
-	if constructor == DescCons.empty then
-		pp:unit(pp:_color())
-		pp:unit("enum[<EMPTY>]")
-		pp:unit(pp:_resetcolor())
-	elseif constructor == DescCons.cons then
-		pp:unit(pp:_color())
-		pp:unit("enum[")
+	pp:unit(pp:_color())
+	pp:unit("value.◬")
+	pp:unit(constructor)
+
+	if arg:is_tuple_value() then
+		local elements = arg:unwrap_tuple_value()
+
+		pp:unit("(")
 		pp:unit(pp:_resetcolor())
 
-		pp:any(arg)
+		for i, arg in elements:ipairs() do
+			if i > 1 then
+				pp:unit(pp:_color())
+				pp:unit(", ")
+				pp:unit(pp:_resetcolor())
+			end
+
+			pp:any(arg)
+		end
 
 		pp:unit(pp:_color())
-		pp:unit("]")
+		pp:unit(")")
 		pp:unit(pp:_resetcolor())
 	else
-		pp:unit(pp:_color())
-		pp:unit("enum<")
-		pp:unit(constructor)
-		pp:unit(">[")
+		pp:unit("[")
 		pp:unit(pp:_resetcolor())
 
 		pp:any(arg)
@@ -2060,11 +2066,11 @@ function value_override_pretty:neutral(pp)
 		pp:unit(pp:_resetcolor())
 	else
 		pp:unit(pp:_color())
-		pp:unit("value.neutral[")
+		pp:unit("value.neutral(")
 		pp:unit(pp:_resetcolor())
 		pp:any(desc)
 		pp:unit(pp:_color())
-		pp:unit("]")
+		pp:unit(")")
 		pp:unit(pp:_resetcolor())
 	end
 
