@@ -345,6 +345,35 @@ end
 
 --local graph_backtrace = 5
 local internal_state
+
+local function dump_edges(edge_list)
+	if internal_state == nil then
+		local internals_interface = require "internals-interface"
+
+		internal_state = internals_interface.evaluator.typechecker_state
+	end
+
+	local function dump_edge(l, r)
+		local function dump_edge_from(l, r, edges)
+			for _, v in ipairs(edges) do
+				if v.left == l and v.right == r then
+					print("EDGE FOUND: " .. l .. "->" .. r)
+					v.cause.track = true
+					print("CAUSED BY: " .. tostring(v.cause))
+				end
+			end
+		end
+		dump_edge_from(l, r, internal_state.graph.constrain_edges:all())
+		dump_edge_from(l, r, internal_state.graph.leftcall_edges:all())
+		dump_edge_from(l, r, internal_state.graph.rightcall_edges:all())
+	end
+
+	for i, v in ipairs(edge_list) do
+		print("Searching for: " .. v[1] .. "->" .. v[2])
+		dump_edge(v[1], v[2])
+	end
+end
+
 if graph_backtrace ~= nil then
 	local internals_interface = require "internals-interface"
 
@@ -359,6 +388,7 @@ if not ok then
 		local snapshots = internal_state.snapshot_buffer
 		local i = (internal_state.snapshot_count + 1) % graph_backtrace
 		local slice = {}
+		slice[55825] = 55825
 		for j = 2, graph_backtrace do
 			local f = io.open("GRAPH_STATE" .. j .. ".dot", "w")
 			local out, additions = internal_state:Visualize(snapshots[i + 1], snapshots[i + 2], slice)
@@ -371,8 +401,10 @@ if not ok then
 		end
 	end
 
+	--dump_edges({ { 55825, 47999 }, { 47954, 55825 } })
 	return
 end
+
 ---@cast expr inferrable
 ---@cast env Environment
 

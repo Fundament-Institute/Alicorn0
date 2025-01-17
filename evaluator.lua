@@ -3777,13 +3777,33 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 		}
 	end
 
+	local node_check = nil
+	if restrict ~= nil then
+		node_check = U.shallow_copy(restrict)
+
+		local function propagate_edges(cur_edges, prev_edges)
+			for i, e in ipairs(cur_edges) do
+				if prev_edges[i] and prev_edges[i].left == e.left and prev_edges[i].right == e.right then
+					if restrict[e.left] ~= nil or restrict[e.right] ~= nil then
+						node_check[e.left] = e.left
+						node_check[e.right] = e.right
+					end
+				end
+			end
+		end
+
+		propagate_edges(cur.constrain_edges, prev.constrain_edges)
+		propagate_edges(cur.leftcall_edges, prev.leftcall_edges)
+		propagate_edges(cur.rightcall_edges, prev.rightcall_edges)
+	end
+
 	local additions = {}
 	local g = "digraph State {"
 
 	for i, v in ipairs(cur.values) do
 		local changed = true
 		if prev.values[i] then
-			if restrict ~= nil and restrict[i] == nil then
+			if node_check ~= nil and node_check[i] == nil then
 				goto continue
 			end
 			changed = false
@@ -3825,6 +3845,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 
 		if v[1]:is_enum_value() and v[1]:unwrap_enum_value() == "empty" then
 			line = line .. "shape=doubleoctagon]"
+			g = g .. line
 			goto continue
 		elseif
 			v[1]:is_neutral()
@@ -3832,6 +3853,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 			and v[1]:unwrap_neutral():unwrap_free():is_metavariable()
 		then
 			line = line .. "shape=doublecircle]"
+			g = g .. line
 			goto continue
 		elseif v[1]:is_star() then
 			line = line .. "shape=egg, "
@@ -3892,7 +3914,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 	end
 
 	for i, e in ipairs(cur.rightcall_edges) do
-		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=invempty"
+		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=curve"
 
 		if
 			prev.rightcall_edges[i]
