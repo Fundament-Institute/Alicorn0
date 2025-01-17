@@ -82,13 +82,10 @@ end
 local function nestcause(desc, cause, val, use)
 	local r = terms.constraintcause.nested(desc, cause)
 	r.track = cause.track
-	if r.track then
-		r.val = val
-		r.use = use
-		print("---" .. desc .. "---")
-		print("VAL: " .. tostring(val))
-		print("USE: " .. tostring(use))
-	end
+	--if r.track then
+	r.val = val
+	r.use = use
+	--end
 	return r
 end
 
@@ -104,9 +101,6 @@ local function compositecause(kind, l_index, l, r_index, r, anchor)
 	local cause = terms.constraintcause[kind](l_index, r_index, anchor)
 	if l.track or r.track then
 		cause.track = true
-		print("---" .. kind .. "---")
-		print("LEFT: " .. tostring(l))
-		print("RIGHT: " .. tostring(r))
 	end
 	return cause
 end
@@ -790,7 +784,7 @@ local concrete_comparers = {}
 ---@param ctx TypecheckingContext
 ---@param typ value
 ---@return TypecheckingContext, value
-local function revealing(ctx, typ)
+local function revealing(ctx, typ, cause)
 	if not typ:is_neutral() then
 		return ctx, typ
 	end
@@ -812,7 +806,12 @@ local function revealing(ctx, typ)
 			error("NYI, revealing a tuple access that isn't on a variable" .. subject:pretty_print(ctx))
 		end
 	end
-	error("NYI, revealing something that isn't a tuple access " .. nv:pretty_print(ctx))
+	error(
+		"NYI, revealing something that isn't a tuple access "
+			.. nv:pretty_print(ctx)
+			.. "\ncaused by: "
+			.. tostring(cause)
+	)
 end
 
 ---take apart a symbolic tuple value to produce a (simplified? hopefully?) prefix suitable for use in upcasting and downcasting
@@ -862,7 +861,7 @@ end
 ---@param ctx TypecheckingContext
 ---@param typ value
 ---@return TypecheckingContext, value
-local function upcast(ctx, typ)
+local function upcast(ctx, typ, cause)
 	if not typ:is_neutral() then
 		return ctx, typ
 	end
@@ -877,7 +876,7 @@ local function upcast(ctx, typ)
 				local idx, dbg = var:unwrap_placeholder()
 				local inner = ctx:get_type(idx)
 				--local inner_bound = value.tuple_type(typechecker_state:metavariable(ctx, false):as_value())
-				local context2, boundstype = revealing(ctx, inner)
+				local context2, boundstype = revealing(ctx, inner, cause)
 				--TODO: speculate for bottom
 				--TODO: speculate on tuple type and reformulate extraction in terms of constraining
 				if boundstype:is_tuple_type() then
@@ -1399,7 +1398,7 @@ function check_concrete(lctx, val, rctx, use, cause)
 		end
 		local vnv = val:unwrap_neutral()
 		if vnv:is_tuple_element_access_stuck() then
-			local innerctx, bound = upcast(lctx, val)
+			local innerctx, bound = upcast(lctx, val, cause)
 			typechecker_state:queue_subtype(innerctx, bound, rctx, use, nestcause("concrete upcast", cause, bound, use))
 			return true
 		end
@@ -3869,7 +3868,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 	end
 
 	for i, e in ipairs(cur.constrain_edges) do
-		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=normal"
+		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowtail=inv,arrowhead=normal,dir=both"
 
 		if
 			prev.constrain_edges[i]
@@ -3894,7 +3893,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 	end
 
 	for i, e in ipairs(cur.leftcall_edges) do
-		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=empty"
+		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowtail=invempty,arrowhead=normal,dir=both"
 
 		if
 			prev.leftcall_edges[i]
@@ -3914,7 +3913,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 	end
 
 	for i, e in ipairs(cur.rightcall_edges) do
-		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowhead=curve"
+		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowtail=inv,arrowhead=empty,dir=both"
 
 		if
 			prev.rightcall_edges[i]
@@ -5042,14 +5041,101 @@ local function assemble_causal_chain(cause)
 	end
 end
 
-terms.constraintcause.__tostring = function(self)
-	if self.track then
-		local chain = assemble_causal_chain(self)
-		return "TODO: TRACK" .. table.concat(chain, " → ")
-	else
-		local chain = assemble_causal_chain(self)
-		return table.concat(chain, " → ")
+---@param cause constraintcause
+---@param side boolean
+---@param list table[]
+local function assemble_side_chain(cause, side, list)
+	local g = typechecker_state.graph
+
+	---@param left constraintcause
+	---@param right constraintcause
+	---@return string[]
+	local function split_causal_chain(left, right)
+		if side then
+			local l = g.constrain_edges:all()[left]
+			assemble_side_chain(l.cause, side, list)
+			U.append(
+				list,
+				{ val = typechecker_state.values[l.left][1]:pretty_print(typechecker_state.values[l.left][3]) }
+			)
+		else
+			local r = g.constrain_edges:all()[right]
+			U.append(
+				list,
+				{ use = typechecker_state.values[r.right][1]:pretty_print(typechecker_state.values[r.right][3]) }
+			)
+			assemble_side_chain(r.cause, side, list)
+		end
 	end
+
+	if cause:is_composition() then
+		local left, right, pos = cause:unwrap_composition()
+		split_causal_chain(left, right)
+	elseif cause:is_leftcall_discharge() then
+		local call, constraint, pos = cause:unwrap_leftcall_discharge()
+		split_causal_chain(call, constraint)
+	elseif cause:is_rightcall_discharge() then
+		local constraint, call, pos = cause:unwrap_rightcall_discharge()
+		split_causal_chain(constraint, call)
+	elseif cause:is_nested() then
+		local desc, inner = cause:unwrap_nested()
+		if side then
+			assemble_side_chain(inner, side, list)
+			U.append(list, { desc = desc, val = cause.val })
+			if cause.val == nil then
+				print("NIL VAL!")
+			end
+		else
+			U.append(list, { desc = desc, use = cause.use })
+			assemble_side_chain(inner, side, list)
+		end
+	elseif cause:is_primitive() then
+		local desc, pos = cause:unwrap_primitive()
+		if side then
+			U.append(list, { desc = desc, val = cause.val or "[<PRIMITIVE VAL>]" })
+		else
+			U.append(list, { desc = desc, use = cause.val or "[<PRIMITIVE USE>]" })
+		end
+	elseif cause:is_lost() then
+		local desc, stacktrace, pos = cause:unwrap_lost()
+		if side then
+			U.append(list, { desc = desc, val = "[<LOST>]" })
+		else
+			U.append(list, { desc = desc, use = "[<LOST>]" })
+		end
+	end
+end
+
+terms.constraintcause.__tostring = function(self)
+	--if self.track then
+	local vals = {}
+	local uses = {}
+	assemble_side_chain(self, true, vals)
+	assemble_side_chain(self, false, uses)
+	local output = ""
+	for _, v in ipairs(vals) do
+		output = output .. tostring(v.val)
+		if v.desc then
+			-- Note that ⟞↦ works better here but doesn't render well in the windows terminal, so we use ⊣→
+			output = output .. "\n ⊣ " .. v.desc .. " → \n"
+		else
+			output = output .. "\n → \n"
+		end
+	end
+	output = output .. " : VAL → USE : "
+	for _, v in ipairs(uses) do
+		if v.desc then
+			output = output .. "\n ⊣ " .. v.desc .. " → \n"
+		else
+			output = output .. "\n → \n"
+		end
+		output = output .. tostring(v.use)
+	end
+	return output
+	--else
+	--	local chain = assemble_causal_chain(self)
+	--	return table.concat(chain, " → ")
+	--end
 end
 
 local evaluator = {
