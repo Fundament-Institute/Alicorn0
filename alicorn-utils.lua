@@ -606,4 +606,19 @@ function M.revert_tree_node(node, depth)
 	return node
 end
 
+local litprint_mt = {
+	__tostring = function(val)
+		return val.contents
+	end,
+}
+
+-- turns a string into a table whose __tostring returns the original string
+-- useful for passing a string into tag() to prevent it from being %q formatted
+-- by the pretty-printer
+---@param s string
+---@return table
+function M.litprint(s)
+	return setmetatable({ contents = s }, litprint_mt)
+end
+
 return M
