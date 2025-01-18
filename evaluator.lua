@@ -4672,11 +4672,13 @@ function TypeCheckerState:constrain_leftcall_compose_1(edge, edge_id)
 					"Relations do not match! " .. tostring(FunctionRelation(r2.rel)) .. " is not " .. tostring(edge.rel)
 				)
 			end
+
+			local lvalue, _, lctx = table.unpack(self.values[edge.left])
+			local l = self:check_value(apply_value(lvalue, r2.arg), TypeCheckerTag.VALUE, lctx)
 			U.append(
 				self.pending,
-				EdgeNotif.CallLeft(
-					edge.left,
-					r2.arg,
+				EdgeNotif.Constrain(
+					l,
 					r2.rel,
 					r2.right,
 					math.min(edge.shallowest_block, r2.shallowest_block),
@@ -4777,13 +4779,14 @@ function TypeCheckerState:rightcall_constrain_compose_2(edge, edge_id)
 					"Relations do not match! " .. tostring(FunctionRelation(l2.rel)) .. " is not " .. tostring(edge.rel)
 				)
 			end
+			local rvalue, _, rctx = table.unpack(self.values[l2.left])
+			local r = self:check_value(apply_value(rvalue, l2.arg), TypeCheckerTag.VALUE, rctx)
 			U.append(
 				self.pending,
-				EdgeNotif.CallRight(
+				EdgeNotif.Constrain(
 					edge.left,
 					l2.rel,
-					l2.right,
-					l2.arg,
+					r,
 					math.min(edge.shallowest_block, l2.shallowest_block),
 					compositecause("rightcall_discharge", edge_id, edge, i, l2, NIL_ANCHOR)
 				)
@@ -4804,13 +4807,14 @@ function TypeCheckerState:rightcall_constrain_compose_1(edge, edge_id)
 					"Relations do not match! " .. tostring(r2.rel) .. " is not " .. tostring(FunctionRelation(edge.rel))
 				)
 			end
+			local rvalue, _, rctx = table.unpack(self.values[edge.left])
+			local r = self:check_value(apply_value(rvalue, edge.arg), TypeCheckerTag.VALUE, rctx)
 			U.append(
 				self.pending,
-				EdgeNotif.CallRight(
+				EdgeNotif.Constrain(
 					edge.left,
 					edge.rel,
-					r2.right,
-					edge.arg,
+					r,
 					math.min(edge.shallowest_block, r2.shallowest_block),
 					compositecause("rightcall_discharge", i, r2, edge_id, edge, NIL_ANCHOR)
 				)
