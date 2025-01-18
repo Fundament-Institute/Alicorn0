@@ -7,11 +7,11 @@ typed = {}
 ---@return boolean
 function typed:is_bound_variable() end
 ---@return number index
----@return string debug
+---@return any debug
 function typed:unwrap_bound_variable() end
 ---@return boolean
 ---@return number index
----@return string debug
+---@return any debug
 function typed:as_bound_variable() end
 ---@return boolean
 function typed:is_literal() end
@@ -517,14 +517,16 @@ function typed:as_union_type() end
 ---@return boolean
 function typed:is_constrained_type() end
 ---@return ArrayValue constraints
+---@return TypecheckingContext ctx
 function typed:unwrap_constrained_type() end
 ---@return boolean
 ---@return ArrayValue constraints
+---@return TypecheckingContext ctx
 function typed:as_constrained_type() end
 
 ---@class (exact) typedType: EnumType
 ---@field define_enum fun(self: typedType, name: string, variants: Variants): typedType
----@field bound_variable fun(index: number, debug: string): typed
+---@field bound_variable fun(index: number, debug: any): typed
 ---@field literal fun(literal_value: value): typed
 ---@field lambda fun(param_name: string, body: typed, start_anchor: Anchor): typed
 ---@field pi fun(param_type: typed, param_info: typed, result_type: typed, result_info: typed): typed
@@ -584,5 +586,5 @@ function typed:as_constrained_type() end
 ---@field variance_cons fun(positive: typed, srel: typed): typed
 ---@field intersection_type fun(left: typed, right: typed): typed
 ---@field union_type fun(left: typed, right: typed): typed
----@field constrained_type fun(constraints: ArrayValue): typed
+---@field constrained_type fun(constraints: ArrayValue, ctx: TypecheckingContext): typed
 return {}

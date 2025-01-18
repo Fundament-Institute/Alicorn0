@@ -79,12 +79,14 @@ end
 ---@param val value
 ---@param use value
 ---@return constraintcause
-local function nestcause(desc, cause, val, use)
+local function nestcause(desc, cause, val, use, valctx, usectx)
 	local r = terms.constraintcause.nested(desc, cause)
 	r.track = cause.track
 	--if r.track then
 	r.val = val
+	r.valctx = valctx
 	r.use = use
+	r.usectx = usectx
 	--end
 	return r
 end
@@ -152,7 +154,7 @@ local function FunctionRelation(srel)
 				srel,
 				rctx,
 				applied_use,
-				nestcause("FunctionRelation inner", cause, applied_val, applied_use)
+				nestcause("FunctionRelation inner", cause, applied_val, applied_use, lctx, rctx)
 			)
 		end),
 	}, subtype_relation_mt)
@@ -197,7 +199,14 @@ local function IndepTupleRelation(...)
 							args[i].srel,
 							rctx,
 							use_elems[i],
-							nestcause("positive tuple element constraint", cause, val_elems[i], use_elems[i])
+							nestcause(
+								"positive tuple element constraint",
+								cause,
+								val_elems[i],
+								use_elems[i],
+								lctx,
+								rctx
+							)
 						)
 					else
 						typechecker_state:queue_constrain(
@@ -206,7 +215,14 @@ local function IndepTupleRelation(...)
 							args[i].srel,
 							lctx,
 							val_elems[i],
-							nestcause("negative tuple element constraint", cause, use_elems[i], val_elems[i])
+							nestcause(
+								"negative tuple element constraint",
+								cause,
+								use_elems[i],
+								val_elems[i],
+								lctx,
+								rctx
+							)
 						)
 					end
 				end
@@ -312,7 +328,7 @@ enum_desc_srel = setmetatable({
 					val_type,
 					rctx,
 					use_variant --[[@as value -- please find a better approach]],
-					nestcause("enum variant", cause, val_type, use_variant)
+					nestcause("enum variant", cause, val_type, use_variant, lctx, rctx)
 				)
 			end
 		end
@@ -382,7 +398,9 @@ local TupleDescRelation = setmetatable({
 						"TupleDescRelation.constrain " .. tostring(i),
 						cause,
 						tuple_types_val[i],
-						tuple_types_use[i]
+						tuple_types_use[i],
+						lctx,
+						rctx
 					)
 				)
 			end
@@ -960,7 +978,7 @@ add_comparer("value.tuple_type", "value.tuple_type", function(lctx, a, rctx, b, 
 		TupleDescRelation,
 		rctx,
 		desc_b,
-		nestcause("tuple type", cause, desc_a, desc_b)
+		nestcause("tuple type", cause, desc_a, desc_b, lctx, rctx)
 	)
 	return true
 end)
@@ -973,7 +991,7 @@ add_comparer("value.host_tuple_type", "value.host_tuple_type", function(lctx, a,
 		TupleDescRelation,
 		rctx,
 		desc_b,
-		nestcause("host tuple type", cause, desc_a, desc_b)
+		nestcause("host tuple type", cause, desc_a, desc_b, lctx, rctx)
 	)
 	return true
 end)
@@ -985,7 +1003,7 @@ add_comparer("value.enum_desc_type", "value.enum_desc_type", function(lctx, a, r
 		a_univ,
 		rctx,
 		b_univ,
-		nestcause("enum desc universe covariance", cause, a_univ, b_univ)
+		nestcause("enum desc universe covariance", cause, a_univ, b_univ, lctx, rctx)
 	)
 	return true
 end)
@@ -998,7 +1016,7 @@ add_comparer("value.enum_type", "value.enum_type", function(lctx, a, rctx, b, ca
 		enum_desc_srel,
 		rctx,
 		b_desc,
-		nestcause("enum type description", cause, a_desc, b_desc)
+		nestcause("enum type description", cause, a_desc, b_desc, lctx, rctx)
 	)
 	return true
 end)
@@ -1059,7 +1077,7 @@ add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx,
 		enum_desc_srel,
 		rctx,
 		enum_desc_val,
-		nestcause("use enum construction as tuple desc", cause, a_desc, enum_desc_val)
+		nestcause("use enum construction as tuple desc", cause, a_desc, enum_desc_val, lctx, rctx)
 	)
 	return true
 end)
@@ -1120,7 +1138,7 @@ add_comparer("value.tuple_desc_type", "value.enum_type", function(lctx, a, rctx,
 		enum_desc_srel,
 		rctx,
 		b_desc,
-		nestcause("use tuple description as enum", cause, enum_desc_val, b_desc)
+		nestcause("use tuple description as enum", cause, enum_desc_val, b_desc, lctx, rctx)
 	)
 	return true
 end)
@@ -1149,7 +1167,7 @@ add_comparer("value.pi", "value.pi", function(lctx, a, rctx, b, cause)
 		b_param_type,
 		lctx,
 		a_param_type,
-		nestcause("pi function parameters", cause, b_param_type, a_param_type)
+		nestcause("pi function parameters", cause, b_param_type, a_param_type, rctx, lctx)
 	)
 	--local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
 	--local a_res = apply_value(a_result_type, unique_placeholder)
@@ -1163,7 +1181,7 @@ add_comparer("value.pi", "value.pi", function(lctx, a, rctx, b, cause)
 		FunctionRelation(UniverseOmegaRelation),
 		rctx,
 		b_result_type,
-		nestcause("pi function results", cause, a_result_type, b_result_type)
+		nestcause("pi function results", cause, a_result_type, b_result_type, lctx, rctx)
 	)
 
 	return true
@@ -1187,7 +1205,7 @@ add_comparer("value.host_function_type", "value.host_function_type", function(lc
 		b_param_type,
 		lctx,
 		a_param_type,
-		nestcause("host function parameters", cause, b_param_type, a_param_type)
+		nestcause("host function parameters", cause, b_param_type, a_param_type, rctx, lctx)
 	)
 	--local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
 	--local a_res = apply_value(a_result_type, unique_placeholder)
@@ -1201,7 +1219,7 @@ add_comparer("value.host_function_type", "value.host_function_type", function(lc
 		FunctionRelation(UniverseOmegaRelation),
 		rctx,
 		b_result_type,
-		nestcause("host function results", cause, a_result_type, b_result_type)
+		nestcause("host function results", cause, a_result_type, b_result_type, lctx, rctx)
 	)
 	return true
 end)
@@ -1238,7 +1256,14 @@ add_comparer("value.host_user_defined_type", "value.host_user_defined_type", fun
 				value.host_value(rctx),
 				value.host_value(b_value),
 				value.host_value(
-					nestcause("host_user_defined_type compared against host_user_defined_type", cause, a_value, b_value)
+					nestcause(
+						"host_user_defined_type compared against host_user_defined_type",
+						cause,
+						a_value,
+						b_value,
+						lctx,
+						rctx
+					)
 				)
 			)
 		)
@@ -1269,7 +1294,13 @@ end
 add_comparer("value.srel_type", "value.srel_type", function(lctx, a, rctx, b, cause)
 	local a_target = a:unwrap_srel_type()
 	local b_target = b:unwrap_srel_type()
-	typechecker_state:queue_subtype(lctx, a_target, rctx, b_target, nestcause("srel target", cause, a_target, b_target))
+	typechecker_state:queue_subtype(
+		lctx,
+		a_target,
+		rctx,
+		b_target,
+		nestcause("srel target", cause, a_target, b_target, lctx, rctx)
+	)
 	return true
 end)
 
@@ -1281,7 +1312,7 @@ add_comparer("value.variance_type", "value.variance_type", function(lctx, a, rct
 		b_target,
 		lctx,
 		a_target,
-		nestcause("variance target", cause, b_target, a_target)
+		nestcause("variance target", cause, b_target, a_target, rctx, lctx)
 	)
 	return true
 end)
@@ -1315,7 +1346,7 @@ end)
 
 add_comparer("value.host_wrapped_type", "value.host_wrapped_type", function(lctx, a, rctx, b, cause)
 	local ua, ub = a:unwrap_host_wrapped_type(), b:unwrap_host_wrapped_type()
-	typechecker_state:queue_subtype(lctx, ua, rctx, ub, nestcause("wrapped type target", cause, ua, ub))
+	typechecker_state:queue_subtype(lctx, ua, rctx, ub, nestcause("wrapped type target", cause, ua, ub, lctx, rctx))
 	--U.tag("check_concrete", { ua, ub }, check_concrete, ua, ub)
 	return true
 end)
@@ -1328,7 +1359,7 @@ add_comparer("value.singleton", "value.singleton", function(lctx, a, rctx, b, ca
 		a_supertype,
 		rctx,
 		b_supertype,
-		nestcause("singleton supertypes", cause, a_supertype, b_supertype)
+		nestcause("singleton supertypes", cause, a_supertype, b_supertype, lctx, rctx)
 	)
 
 	if a_value == b_value then
@@ -1346,7 +1377,7 @@ add_comparer("value.tuple_desc_type", "value.tuple_desc_type", function(lctx, a,
 		a_universe,
 		rctx,
 		b_universe,
-		nestcause("tuple_desc_type universes", cause, a_universe, b_universe)
+		nestcause("tuple_desc_type universes", cause, a_universe, b_universe, lctx, rctx)
 	)
 	return true
 end)
@@ -1361,7 +1392,7 @@ add_comparer("value.program_type", "value.program_type", function(lctx, a, rctx,
 		effect_row_srel,
 		rctx,
 		b_eff,
-		nestcause("program effects", cause, a_eff, b_eff)
+		nestcause("program effects", cause, a_eff, b_eff, lctx, rctx)
 	)
 	return true
 end)
@@ -1399,7 +1430,13 @@ function check_concrete(lctx, val, rctx, use, cause)
 		local vnv = val:unwrap_neutral()
 		if vnv:is_tuple_element_access_stuck() then
 			local innerctx, bound = upcast(lctx, val, cause)
-			typechecker_state:queue_subtype(innerctx, bound, rctx, use, nestcause("concrete upcast", cause, bound, use))
+			typechecker_state:queue_subtype(
+				innerctx,
+				bound,
+				rctx,
+				use,
+				nestcause("concrete upcast", cause, bound, use, innerctx, rctx)
+			)
 			return true
 		end
 		if vnv:is_free() then
@@ -1415,7 +1452,7 @@ function check_concrete(lctx, val, rctx, use, cause)
 					boundstype,
 					rctx,
 					use,
-					nestcause("concrete reveal placeholder", cause, boundstype, use)
+					nestcause("concrete reveal placeholder", cause, boundstype, use, innerctx, rctx)
 				)
 				return true
 			end
@@ -1445,22 +1482,46 @@ function check_concrete(lctx, val, rctx, use, cause)
 			val_supertype,
 			rctx,
 			use,
-			nestcause("singleton subtype", cause, val_supertype, use)
+			nestcause("singleton subtype", cause, val_supertype, use, lctx, rctx)
 		)
 		return true
 	end
 
 	if val:is_union_type() then
 		local vala, valb = val:unwrap_union_type()
-		typechecker_state:queue_subtype(lctx, vala, rctx, use, nestcause("union dissasembly", cause, vala, use))
-		typechecker_state:queue_subtype(lctx, valb, rctx, use, nestcause("union dissasembly", cause, valb, use))
+		typechecker_state:queue_subtype(
+			lctx,
+			vala,
+			rctx,
+			use,
+			nestcause("union dissasembly", cause, vala, use, lctx, rctx)
+		)
+		typechecker_state:queue_subtype(
+			lctx,
+			valb,
+			rctx,
+			use,
+			nestcause("union dissasembly", cause, valb, use, lctx, rctx)
+		)
 		return true
 	end
 
 	if use:is_intersection_type() then
 		local usea, useb = use:unwrap_intersection_type()
-		typechecker_state:queue_subtype(lctx, val, rctx, usea, nestcause("intersection dissasembly", cause, val, usea))
-		typechecker_state:queue_subtype(lctx, val, rctx, useb, nestcause("intersection dissasembly", cause, val, useb))
+		typechecker_state:queue_subtype(
+			lctx,
+			val,
+			rctx,
+			usea,
+			nestcause("intersection dissasembly", cause, val, usea, lctx, rctx)
+		)
+		typechecker_state:queue_subtype(
+			lctx,
+			val,
+			rctx,
+			useb,
+			nestcause("intersection dissasembly", cause, val, useb, lctx, rctx)
+		)
 		return true
 	end
 
@@ -2636,6 +2697,7 @@ infer = function(inferrable_term, typechecking_context)
 		print(
 			"\n" .. string.rep("·", recurse_count) .. "INFER: " .. inferrable_term:pretty_print(typechecking_context)
 		)
+		--print(typechecking_context:format_names())
 	end
 
 	recurse_count = recurse_count + 1
@@ -2650,6 +2712,7 @@ infer = function(inferrable_term, typechecking_context)
 				.. " : "
 				.. v:pretty_print(typechecking_context)
 		)
+		--print(typechecking_context:format_names())
 		--v.track = {}
 		term.track = {}
 	end
@@ -3261,20 +3324,34 @@ function evaluate_impl(typed_term, runtime_context)
 		local target = typed_term:unwrap_srel_type()
 		return value.srel_type(evaluate(target, runtime_context))
 	elseif typed_term:is_constrained_type() then
-		local constraints = typed_term:unwrap_constrained_type()
-		local mv = typechecker_state:metavariable(nil, false)
+		local constraints, mv_ctx = typed_term:unwrap_constrained_type()
+		local mv = typechecker_state:metavariable(mv_ctx, false)
 		for i, constraint in constraints:ipairs() do
 			---@cast constraint constraintelem
 			if constraint:is_sliced_constrain() then
 				local rel, right, ctx, cause = constraint:unwrap_sliced_constrain()
-				typechecker_state:send_constrain(ctx, mv:as_value(), rel, ctx, evaluate(right, runtime_context), cause)
+				typechecker_state:send_constrain(
+					mv_ctx,
+					mv:as_value(),
+					rel,
+					ctx,
+					evaluate(right, runtime_context),
+					cause
+				)
 			elseif constraint:is_constrain_sliced() then
 				local left, ctx, rel, cause = constraint:unwrap_constrain_sliced()
-				typechecker_state:send_constrain(ctx, evaluate(left, runtime_context), rel, ctx, mv:as_value(), cause)
+				typechecker_state:send_constrain(
+					ctx,
+					evaluate(left, runtime_context),
+					rel,
+					mv_ctx,
+					mv:as_value(),
+					cause
+				)
 			elseif constraint:is_sliced_leftcall() then
 				local arg, rel, right, ctx, cause = constraint:unwrap_sliced_leftcall()
 				typechecker_state:send_constrain(
-					ctx,
+					mv_ctx,
 					apply_value(mv:as_value(), evaluate(arg, runtime_context)),
 					rel,
 					ctx,
@@ -3287,14 +3364,14 @@ function evaluate_impl(typed_term, runtime_context)
 					ctx,
 					apply_value(evaluate(left, runtime_context), evaluate(arg, runtime_context)),
 					rel,
-					ctx,
+					mv_ctx,
 					mv:as_value(),
 					cause
 				)
 			elseif constraint:is_sliced_rightcall() then
 				local rel, right, ctx, arg, cause = constraint:unwrap_sliced_rightcall()
 				typechecker_state:send_constrain(
-					ctx,
+					mv_ctx,
 					mv:as_value(),
 					rel,
 					ctx,
@@ -3307,7 +3384,7 @@ function evaluate_impl(typed_term, runtime_context)
 					ctx,
 					evaluate(left, runtime_context),
 					rel,
-					ctx,
+					mv_ctx,
 					apply_value(mv:as_value(), evaluate(arg, runtime_context)),
 					cause
 				)
@@ -3343,6 +3420,7 @@ evaluate = function(typed_term, runtime_context)
 	if tracked then
 		local input = typed_term:pretty_print(runtime_context)
 		print(string.rep("·", recurse_count) .. "EVAL: " .. input)
+		--print(runtime_context:format_names())
 	end
 
 	recurse_count = recurse_count + 1
@@ -3351,6 +3429,7 @@ evaluate = function(typed_term, runtime_context)
 
 	if tracked then
 		print(string.rep("·", recurse_count) .. " → " .. r:pretty_print(runtime_context))
+		--print(runtime_context:format_names())
 		r.track = {}
 	end
 	return r
@@ -3801,7 +3880,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 
 	for i, v in ipairs(cur.values) do
 		local changed = true
-		if prev.values[i] then
+		if prev and prev.values[i] then
 			if node_check ~= nil and node_check[i] == nil then
 				goto continue
 			end
@@ -3835,6 +3914,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 		--U.append(label, m)
 		--end
 		--label = table.concat(label, "\\l")
+		--label = label .. "\nCTX: " .. v[3]:format_names()
 		label = label:gsub("\n", "\\n"):gsub('"', "'"):gsub("\\", "\\\\"):gsub("\\\\n", "\\l")
 		local line = "\n" .. i .. " ["
 
@@ -3871,7 +3951,8 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowtail=inv,arrowhead=normal,dir=both"
 
 		if
-			prev.constrain_edges[i]
+			prev
+			and prev.constrain_edges[i]
 			and prev.constrain_edges[i].left == e.left
 			and prev.constrain_edges[i].right == e.right
 		then
@@ -3896,7 +3977,8 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowtail=invempty,arrowhead=normal,dir=both"
 
 		if
-			prev.leftcall_edges[i]
+			prev
+			and prev.leftcall_edges[i]
 			and prev.leftcall_edges[i].left == e.left
 			and prev.leftcall_edges[i].right == e.right
 		then
@@ -3916,7 +3998,8 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowtail=inv,arrowhead=empty,dir=both"
 
 		if
-			prev.rightcall_edges[i]
+			prev
+			and prev.rightcall_edges[i]
 			and prev.rightcall_edges[i].left == e.left
 			and prev.rightcall_edges[i].right == e.right
 		then
@@ -3932,7 +4015,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 		::continue4::
 	end
 
-	return g .. "}", additions
+	return g .. "\n}", additions
 end
 
 function TypeCheckerState:DEBUG_VERIFY_TREE()
@@ -4432,13 +4515,16 @@ end
 ---@param context TypecheckingContext
 ---@param trait boolean?
 function TypeCheckerState:metavariable(context, trait)
+	if context == nil then
+		error("nil context passed into metavariable! You can't do that anymore!!!")
+	end
 	local i = #self.values + 1
 	local mv = setmetatable(
 		-- block level here should probably be inside the context and not inside the metavariable
 		{ value = i, usage = i, trait = trait or false, block_level = self.block_level },
 		terms.metavariable_mt
 	)
-	U.append(self.values, { mv:as_value(), TypeCheckerTag.METAVAR })
+	U.append(self.values, { mv:as_value(), TypeCheckerTag.METAVAR, context })
 	return mv
 end
 
@@ -4520,7 +4606,9 @@ function TypeCheckerState:constrain_induce_call(edge, rel)
 					"Inside constrain_induce_call ltag (maybe wrong constrain type?)",
 					edge.cause,
 					value.neutral(f),
-					rvalue
+					rvalue,
+					lctx,
+					rctx
 				)
 			)
 		)
@@ -4543,7 +4631,9 @@ function TypeCheckerState:constrain_induce_call(edge, rel)
 					"Inside constrain_induce_call rtag (maybe wrong constrain type?)",
 					edge.cause,
 					lvalue,
-					value.neutral(f)
+					value.neutral(f),
+					lctx,
+					rctx
 				)
 			)
 		)
@@ -4942,7 +5032,7 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len)
 		)
 	end)
 
-	return typed.constrained_type(constraints)
+	return typed.constrained_type(constraints, self.values[mv.usage][3])
 end
 
 local typechecker_state_mt = { __index = TypeCheckerState }
@@ -5049,20 +5139,21 @@ local function assemble_side_chain(cause, side, list)
 
 	---@param left constraintcause
 	---@param right constraintcause
+	---@param desc string
 	---@return string[]
-	local function split_causal_chain(left, right)
+	local function split_causal_chain(left, right, desc)
 		if side then
 			local l = g.constrain_edges:all()[left]
 			assemble_side_chain(l.cause, side, list)
 			U.append(
 				list,
-				{ val = typechecker_state.values[l.left][1]:pretty_print(typechecker_state.values[l.left][3]) }
+				{ desc = desc, val = typechecker_state.values[l.left][1], lctx = typechecker_state.values[l.left][3] }
 			)
 		else
 			local r = g.constrain_edges:all()[right]
 			U.append(
 				list,
-				{ use = typechecker_state.values[r.right][1]:pretty_print(typechecker_state.values[r.right][3]) }
+				{ desc = desc, use = typechecker_state.values[r.right][1], rctx = typechecker_state.values[r.right][3] }
 			)
 			assemble_side_chain(r.cause, side, list)
 		end
@@ -5070,31 +5161,31 @@ local function assemble_side_chain(cause, side, list)
 
 	if cause:is_composition() then
 		local left, right, pos = cause:unwrap_composition()
-		split_causal_chain(left, right)
+		split_causal_chain(left, right, "composition")
 	elseif cause:is_leftcall_discharge() then
 		local call, constraint, pos = cause:unwrap_leftcall_discharge()
-		split_causal_chain(call, constraint)
+		split_causal_chain(call, constraint, "leftcall discharge")
 	elseif cause:is_rightcall_discharge() then
 		local constraint, call, pos = cause:unwrap_rightcall_discharge()
-		split_causal_chain(constraint, call)
+		split_causal_chain(constraint, call, "rightcall discharge")
 	elseif cause:is_nested() then
 		local desc, inner = cause:unwrap_nested()
 		if side then
 			assemble_side_chain(inner, side, list)
-			U.append(list, { desc = desc, val = cause.val })
+			U.append(list, { desc = desc, val = cause.val, lctx = cause.lctx })
 			if cause.val == nil then
 				print("NIL VAL!")
 			end
 		else
-			U.append(list, { desc = desc, use = cause.use })
+			U.append(list, { desc = desc, use = cause.use, rctx = cause.rctx })
 			assemble_side_chain(inner, side, list)
 		end
 	elseif cause:is_primitive() then
 		local desc, pos = cause:unwrap_primitive()
 		if side then
-			U.append(list, { desc = desc, val = cause.val or "[<PRIMITIVE VAL>]" })
+			U.append(list, { desc = desc, val = cause.val or "[<PRIMITIVE VAL>]", lctx = cause.lctx })
 		else
-			U.append(list, { desc = desc, use = cause.val or "[<PRIMITIVE USE>]" })
+			U.append(list, { desc = desc, use = cause.val or "[<PRIMITIVE USE>]", rctx = cause.rctx })
 		end
 	elseif cause:is_lost() then
 		local desc, stacktrace, pos = cause:unwrap_lost()
@@ -5114,22 +5205,36 @@ terms.constraintcause.__tostring = function(self)
 	assemble_side_chain(self, false, uses)
 	local output = ""
 	for _, v in ipairs(vals) do
-		output = output .. tostring(v.val)
 		if v.desc then
 			-- Note that ⟞↦ works better here but doesn't render well in the windows terminal, so we use ⊣→
 			output = output .. "\n ⊣ " .. v.desc .. " → \n"
 		else
 			output = output .. "\n → \n"
 		end
+		if type(v.val) == "table" then
+			output = output .. v.val:pretty_print(v.lctx)
+			--if v.lctx then
+			--	output = output .. "\nCONTEXT: " .. v.lctx:format_names()
+			--end
+		else
+			output = output .. v.val
+		end
 	end
-	output = output .. " : VAL → USE : "
+	output = output .. "\n : VAL → USE : \n"
 	for _, v in ipairs(uses) do
+		if type(v.use) == "table" then
+			output = output .. v.use:pretty_print(v.rctx)
+			--if v.rctx then
+			--	output = output .. "\nCONTEXT: " .. v.rctx:format_names()
+			--end
+		else
+			output = output .. v.use
+		end
 		if v.desc then
 			output = output .. "\n ⊣ " .. v.desc .. " → \n"
 		else
 			output = output .. "\n → \n"
 		end
-		output = output .. tostring(v.use)
 	end
 	return output
 	--else

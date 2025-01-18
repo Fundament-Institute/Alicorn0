@@ -410,7 +410,8 @@ end
 local function expression_prefix_handler(_, symbol, arg)
 	if not prefix_data[(symbol.str):sub(1, 1)] or (symbol.str):find("_") then
 		return false,
-			"symbol was provided in a prefix operator place, but the symbol isn't a valid prefix operator: " .. symbol
+			"symbol was provided in a prefix operator place, but the symbol isn't a valid prefix operator: "
+				.. tostring(symbol)
 	end
 	return true, OperatorType.Prefix, symbol.str, arg
 end
@@ -428,7 +429,9 @@ local function expression_infix_handler(_, left, symbol, right)
 
 	if not infix_data[(symbol.str):sub(1, 1)] or (symbol.str):find("_") then
 		return false,
-			"symbol was provided in an infix operator place, but the symbol isn't a valid infix operator: " .. symbol
+			"symbol was provided in an infix operator place, but the symbol isn't a valid infix operator: " .. tostring(
+				symbol
+			)
 	end
 	return true, OperatorType.Infix, symbol.str, left, right
 end
@@ -712,6 +715,8 @@ local function call_host_func_type(type_of_term, usage_count, term, sargs, goal,
 		collect_host_tuple(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.check(param_type), env)),
 	}, metalanguage.failure_handler, nil)
 	if not ok then
+		-- TODO: semantic error here crashes
+		error(tuple)
 		error(semantic_error.host_function_argument_collect_failed(tuple, { a.start_anchor, b.start_anchor }, {
 			host_function_type = type_of_term,
 			host_function_value = term,

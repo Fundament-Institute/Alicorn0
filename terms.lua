@@ -65,6 +65,21 @@ local anchor_type = gen.declare_foreign(gen.metatable_equality(format.anchor_mt)
 ---@field bindings FibonacciBuffer
 local RuntimeContext = {}
 
+function RuntimeContext:dump_names()
+	for i = 1, self.bindings:len() do
+		print(i, self.bindings:get(i).name)
+	end
+end
+
+---@return string
+function RuntimeContext:format_names()
+	local msg = ""
+	for i = 1, self.bindings:len() do
+		msg = msg .. tostring(i) .. "\t" .. self.bindings:get(i).name .. "\n"
+	end
+	return msg
+end
+
 ---@param index integer
 ---@return value
 function RuntimeContext:get(index)
@@ -761,7 +776,10 @@ typed_term:define_enum("typed", {
 		"left",  typed_term,
 		"right", typed_term,
 	} },
-	{ "constrained_type", { "constraints", array(constraintelem) } },
+	{ "constrained_type", { 
+		"constraints", array(constraintelem),
+		"ctx", typechecking_context_type,
+	} },
 }) 
 
 -- stylua: ignore
