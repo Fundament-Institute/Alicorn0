@@ -160,8 +160,9 @@ function PrettyPrint:table(fields, ...)
 	local num = 0
 	---@type { [number] : boolean }
 	local nums = {}
+	local keys = {}
 	for k in pairs(fields) do
-		if k == "kind" then
+		if k == kind_field then
 			self[#self + 1] = " "
 			self[#self + 1] = fields.kind
 		elseif hidden_fields[k] then
@@ -169,8 +170,10 @@ function PrettyPrint:table(fields, ...)
 		elseif type(k) == "number" then
 			num = num + 1
 			nums[k] = true
+			keys[#keys + 1] = tostring(k)
 		else
 			count = count + 1
+			keys[#keys + 1] = tostring(k)
 		end
 	end
 	local seq = false
@@ -190,25 +193,15 @@ function PrettyPrint:table(fields, ...)
 		self[#self + 1] = self:_color()
 		self[#self + 1] = "]"
 		self[#self + 1] = self:_resetcolor()
-	-- elseif num == 0 and count == 1 then
-	-- 	self[#self + 1] = self:_color()
-	-- 	self[#self + 1] = "{"
-	-- 	self[#self + 1] = self:_resetcolor()
-	-- 	for k, v in pairs(fields) do
-	-- 		if not hidden_fields[k] then
-	-- 			self:any(v, ...)
-	-- 		end
-	-- 	end
-	-- 	self[#self + 1] = self:_color()
-	-- 	self[#self + 1] = "}"
-	-- 	self[#self + 1] = self:_resetcolor()
 	else
+		table.sort(keys)
 		self[#self + 1] = self:_color()
 		self[#self + 1] = " {\n"
 		self[#self + 1] = self:_resetcolor()
 		self:_indent()
-		for k, v in pairs(fields) do
+		for i, k in ipairs(keys) do
 			if not hidden_fields[k] then
+				local v = fields[k]
 				self:_prefix()
 				self[#self + 1] = self:_color()
 				if type(k) == "string" then
