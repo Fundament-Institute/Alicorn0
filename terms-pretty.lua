@@ -370,8 +370,8 @@ local function inferrable_tuple_type_flatten(desc, context)
 	if constructor == DescCons.empty then
 		return true, {}, 0
 	elseif constructor == DescCons.cons then
-		local elements = arg:unwrap_tuple_cons()
-		if elements:len() ~= 2 then
+		local ok, elements = arg:as_tuple_cons()
+		if not ok or elements:len() ~= 2 then
 			return false
 		end
 		local desc = elements[1]
@@ -407,8 +407,8 @@ local function inferrable_tuple_type_hydraulicpress(desc)
 	if constructor == DescCons.empty then
 		return {}, 0
 	elseif constructor == DescCons.cons then
-		local elements = arg:unwrap_tuple_cons()
-		if elements:len() ~= 2 then
+		local ok, elements = arg:as_tuple_cons()
+		if not ok or elements:len() ~= 2 then
 			return { "<UNHANDLED EDGE CASE> " .. U.here() }, 1
 		end
 		local desc = elements[1]
@@ -435,8 +435,8 @@ local function typed_tuple_type_flatten(desc, context)
 	if constructor == DescCons.empty then
 		return true, {}, 0
 	elseif constructor == DescCons.cons then
-		local elements = arg:unwrap_tuple_cons()
-		if elements:len() ~= 2 then
+		local ok, elements = arg:as_tuple_cons()
+		if not ok or elements:len() ~= 2 then
 			return false
 		end
 		local desc = elements[1]
@@ -472,8 +472,8 @@ local function typed_tuple_type_hydraulicpress(desc)
 	if constructor == DescCons.empty then
 		return {}, 0
 	elseif constructor == DescCons.cons then
-		local elements = arg:unwrap_tuple_cons()
-		if elements:len() ~= 2 then
+		local ok, elements = arg:as_tuple_cons()
+		if not ok or elements:len() ~= 2 then
 			return { "<UNHANDLED EDGE CASE> " .. U.here() }, 1
 		end
 		local desc = elements[1]
@@ -492,12 +492,15 @@ end
 ---@return TupleDescFlat[]?
 ---@return integer?
 local function value_tuple_type_flatten(desc)
-	local constructor, arg = desc:unwrap_enum_value()
+	local ok, constructor, arg = desc:as_enum_value()
+	if not ok then
+		return false
+	end
 	if constructor == DescCons.empty then
 		return true, {}, 0
 	elseif constructor == DescCons.cons then
-		local elements = arg:unwrap_tuple_value()
-		if elements:len() ~= 2 then
+		local ok, elements = arg:as_tuple_value()
+		if not ok or elements:len() ~= 2 then
 			return false
 		end
 		local desc = elements[1]
@@ -527,12 +530,15 @@ end
 ---@return (value|string)[]
 ---@return integer
 local function value_tuple_type_hydraulicpress(desc)
-	local constructor, arg = desc:unwrap_enum_value()
+	local ok, constructor, arg = desc:as_enum_value()
+	if not ok then
+		return { "<UNHANDLED EDGE CASE> " .. U.here() }, 1
+	end
 	if constructor == DescCons.empty then
 		return {}, 0
 	elseif constructor == DescCons.cons then
-		local elements = arg:unwrap_tuple_value()
-		if elements:len() ~= 2 then
+		local ok, elements = arg:as_tuple_value()
+		if not ok or elements:len() ~= 2 then
 			return { "<UNHANDLED EDGE CASE> " .. U.here() }, 1
 		end
 		local desc = elements[1]
