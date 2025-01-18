@@ -102,7 +102,10 @@ function RuntimeContext:append(v, name)
 	end
 	-- TODO: add caller line number to this fake name?
 	name = name or ("#rctx%d"):format(self.bindings:len() + 1)
-	local copy = { bindings = self.bindings:append(setmetatable({ name = name, val = v }, RuntimeContextBinding)) }
+	local copy = {
+		provenance = self,
+		bindings = self.bindings:append(setmetatable({ name = name, val = v }, RuntimeContextBinding)),
+	}
 	return setmetatable(copy, runtime_context_mt)
 end
 
@@ -115,7 +118,7 @@ function RuntimeContext:set(index, v)
 	end
 	local old = self.bindings:get(index)
 	local new = setmetatable({ name = old.name, val = v }, RuntimeContextBinding)
-	local copy = { bindings = self.bindings:set(index, new) }
+	local copy = { provenance = self, bindings = self.bindings:set(index, new) }
 	return setmetatable(copy, runtime_context_mt)
 end
 
@@ -225,6 +228,58 @@ function TypecheckingContext:get_runtime_context()
 	return self.runtime_context
 end
 
+---@param v table
+local function verify_placeholders(v, ctx)
+	if getmetatable(ctx) == typechecking_context_mt then
+		ctx = ctx.runtime_context
+	end
+	if type(v) ~= "table" then
+		return true
+	end
+	if getmetatable(v) and getmetatable(getmetatable(v)) == gen.array_type_mt then
+		return true
+	end
+	if not v.kind then
+		return true
+	end
+
+	if v.kind == "free.placeholder" then
+		local i, info = v:unwrap_placeholder()
+		if info then
+			local source_ctx = ctx
+
+			while source_ctx do
+				if source_ctx == info.ctx then
+					return true
+				end
+
+				source_ctx = source_ctx.provenance
+			end
+
+			error(
+				debug.traceback(
+					"INVALID PROVENANCE: "
+						.. tostring(info)
+						.. "\nORIGINAL CTX: "
+						.. info.ctx:format_names()
+						.. "\nASSOCIATED CTX: "
+						.. ctx:format_names()
+				)
+			)
+
+			return false
+		end
+	end
+
+	for _, v in pairs(v) do
+		if not verify_placeholders(v, ctx) then
+			return false
+		end
+	end
+
+	return true
+end
+
 ---@param name string
 ---@param type value
 ---@param val value?
@@ -255,12 +310,19 @@ function TypecheckingContext:append(name, type, val, start_anchor)
 	if (val and start_anchor) or (not val and not start_anchor) then
 		error("TypecheckingContext:append expected either val or start_anchor")
 	end
-	val = val
-		or value.neutral(neutral_value.free(free.placeholder(self:len() + 1, placeholder_debug(name, start_anchor))))
+	local info
+	if not val then
+		info = placeholder_debug(name, start_anchor)
+		val = value.neutral(neutral_value.free(free.placeholder(self:len() + 1, info)))
+	end
+
 	local copy = {
 		bindings = self.bindings:append({ name = name, type = type }),
 		runtime_context = self.runtime_context:append(val, name),
 	}
+	if info then
+		info.ctx = copy.runtime_context
+	end
 	return setmetatable(copy, typechecking_context_mt)
 end
 
@@ -1183,6 +1245,7 @@ local terms = {
 	effect_registry = effect_registry,
 	TCState = TCState,
 	lua_prog = lua_prog,
+	verify_placeholders = verify_placeholders,
 }
 
 local override_prettys = require "terms-pretty"(terms)

@@ -947,6 +947,7 @@ local terms_gen = {
 	builtin_string = gen_builtin("string"),
 	builtin_function = gen_builtin("function"),
 	builtin_table = gen_builtin("table"),
+	array_type_mt = array_type_mt,
 	any_lua_type = define_foreign({}, function()
 		return true
 	end, "any"),

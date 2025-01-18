@@ -827,6 +827,8 @@ local function revealing(ctx, typ, cause)
 	error(
 		"NYI, revealing something that isn't a tuple access "
 			.. nv:pretty_print(ctx)
+			.. "\ncontext: "
+			.. ctx:format_names()
 			.. "\ncaused by: "
 			.. tostring(cause)
 	)
@@ -3861,8 +3863,11 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 
 		local function propagate_edges(cur_edges, prev_edges)
 			for i, e in ipairs(cur_edges) do
-				if prev_edges[i] and prev_edges[i].left == e.left and prev_edges[i].right == e.right then
-					if restrict[e.left] ~= nil or restrict[e.right] ~= nil then
+				if restrict[e.left] ~= nil or restrict[e.right] ~= nil then
+					if
+						not prev_edges
+						or (prev_edges[i] and prev_edges[i].left == e.left and prev_edges[i].right == e.right)
+					then
 						node_check[e.left] = e.left
 						node_check[e.right] = e.right
 					end
@@ -3870,9 +3875,15 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 			end
 		end
 
-		propagate_edges(cur.constrain_edges, prev.constrain_edges)
-		propagate_edges(cur.leftcall_edges, prev.leftcall_edges)
-		propagate_edges(cur.rightcall_edges, prev.rightcall_edges)
+		if prev then
+			propagate_edges(cur.constrain_edges, prev.constrain_edges)
+			propagate_edges(cur.leftcall_edges, prev.leftcall_edges)
+			propagate_edges(cur.rightcall_edges, prev.rightcall_edges)
+		else
+			propagate_edges(cur.constrain_edges, nil)
+			propagate_edges(cur.leftcall_edges, nil)
+			propagate_edges(cur.rightcall_edges, nil)
+		end
 	end
 
 	local additions = {}
@@ -3880,10 +3891,12 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 
 	for i, v in ipairs(cur.values) do
 		local changed = true
+
 		if prev and prev.values[i] then
 			if node_check ~= nil and node_check[i] == nil then
 				goto continue
 			end
+
 			changed = false
 		else
 			U.append(additions, i)
@@ -3963,7 +3976,12 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 		end
 
 		if e.rel.debug_name then
-			line = line .. ', label="' .. e.rel.debug_name .. '"'
+			local name = e.rel.debug_name
+			if e.rel.debug_name == "UniverseOmegaRelation" then
+				name = "< Ω :"
+			end
+
+			line = line .. ', label="' .. name .. '"'
 		end
 
 		g = g .. line .. "]"
@@ -4024,6 +4042,7 @@ end
 
 function TypeCheckerState:DEBUG_VERIFY()
 	self:DEBUG_VERIFY_TREE()
+	self:DEBUG_VERIFY_VALUES()
 
 	-- all nodes must be unique (no two nodes can have the same value, using the basic equality comparison on that value via ==)
 	local unique = {}
@@ -4446,6 +4465,7 @@ function TypeCheckerState:check_value(v, tag, context)
 	if not v then
 		error("nil passed into check_value!")
 	end
+	--terms.verify_placeholders(v, context)
 
 	if v:is_neutral() and v:unwrap_neutral():is_free() and v:unwrap_neutral():unwrap_free():is_metavariable() then
 		local mv = v:unwrap_neutral():unwrap_free():unwrap_metavariable()
@@ -4796,6 +4816,12 @@ function TypeCheckerState:rightcall_constrain_compose_1(edge, edge_id)
 				)
 			)
 		end
+	end
+end
+
+function TypeCheckerState:DEBUG_VERIFY_VALUES()
+	for i, v in ipairs(self.values) do
+		terms.verify_placeholders(v[1], v[3])
 	end
 end
 
