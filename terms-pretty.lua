@@ -395,33 +395,6 @@ local function inferrable_tuple_type_flatten(desc, context)
 	end
 end
 
--- flatten at all costs!!
----@param desc inferrable
----@return (inferrable|string)[]
----@return integer
-local function inferrable_tuple_type_hydraulicpress(desc)
-	local ok, constructor, arg = desc:as_enum_cons()
-	if not ok then
-		return { "<UNHANDLED EDGE CASE> " .. U.here() }, 1
-	end
-	if constructor == DescCons.empty then
-		return {}, 0
-	elseif constructor == DescCons.cons then
-		local ok, elements = arg:as_tuple_cons()
-		if not ok or elements:len() ~= 2 then
-			return { "<UNHANDLED EDGE CASE> " .. U.here() }, 1
-		end
-		local desc = elements[1]
-		local f = elements[2]
-		local prev, n = inferrable_tuple_type_hydraulicpress(desc)
-		n = n + 1
-		prev[n] = f
-		return prev, n
-	else
-		return { "<UNHANDLED EDGE CASE> " .. U.here() }, 1
-	end
-end
-
 ---@param desc typed
 ---@param context PrettyPrintingContext
 ---@return boolean
@@ -460,33 +433,6 @@ local function typed_tuple_type_flatten(desc, context)
 	end
 end
 
--- flatten at all costs!!
----@param desc typed
----@return (typed|string)[]
----@return integer
-local function typed_tuple_type_hydraulicpress(desc)
-	local ok, constructor, arg = desc:as_enum_cons()
-	if not ok then
-		return { "<UNHANDLED EDGE CASE> " .. U.here() }, 1
-	end
-	if constructor == DescCons.empty then
-		return {}, 0
-	elseif constructor == DescCons.cons then
-		local ok, elements = arg:as_tuple_cons()
-		if not ok or elements:len() ~= 2 then
-			return { "<UNHANDLED EDGE CASE> " .. U.here() }, 1
-		end
-		local desc = elements[1]
-		local f = elements[2]
-		local prev, n = typed_tuple_type_hydraulicpress(desc)
-		n = n + 1
-		prev[n] = f
-		return prev, n
-	else
-		return { "<UNHANDLED EDGE CASE> " .. U.here() }, 1
-	end
-end
-
 ---@param desc value
 ---@return boolean
 ---@return TupleDescFlat[]?
@@ -522,33 +468,6 @@ local function value_tuple_type_flatten(desc)
 		return true, prev, n
 	else
 		return false
-	end
-end
-
--- flatten at all costs!!
----@param desc value
----@return (value|string)[]
----@return integer
-local function value_tuple_type_hydraulicpress(desc)
-	local ok, constructor, arg = desc:as_enum_value()
-	if not ok then
-		return { "<UNHANDLED EDGE CASE> " .. U.here() }, 1
-	end
-	if constructor == DescCons.empty then
-		return {}, 0
-	elseif constructor == DescCons.cons then
-		local ok, elements = arg:as_tuple_value()
-		if not ok or elements:len() ~= 2 then
-			return { "<UNHANDLED EDGE CASE> " .. U.here() }, 1
-		end
-		local desc = elements[1]
-		local f = elements[2]
-		local prev, n = value_tuple_type_hydraulicpress(desc)
-		n = n + 1
-		prev[n] = f
-		return prev, n
-	else
-		return { "<UNHANDLED EDGE CASE> " .. U.here() }, 1
 	end
 end
 
@@ -1815,17 +1734,7 @@ function inferrable_term_override_pretty:tuple_type(pp, context)
 		---@cast members TupleDescFlat[]
 		tuple_type_helper(pp, members)
 	else
-		members = inferrable_tuple_type_hydraulicpress(desc)
-
-		for i, f in ipairs(members) do
-			if i > 1 then
-				pp:unit(pp:_color())
-				pp:unit(", ")
-				pp:unit(pp:_resetcolor())
-			end
-
-			pp:any(f, context)
-		end
+		pp:any(desc)
 	end
 
 	pp:unit(pp:_color())
@@ -1852,17 +1761,7 @@ function inferrable_term_override_pretty:host_tuple_type(pp, context)
 		---@cast members TupleDescFlat[]
 		tuple_type_helper(pp, members)
 	else
-		members = inferrable_tuple_type_hydraulicpress(desc)
-
-		for i, f in ipairs(members) do
-			if i > 1 then
-				pp:unit(pp:_color())
-				pp:unit(", ")
-				pp:unit(pp:_resetcolor())
-			end
-
-			pp:any(f, context)
-		end
+		pp:any(desc)
 	end
 
 	pp:unit(pp:_color())
@@ -1889,17 +1788,7 @@ function typed_term_override_pretty:tuple_type(pp, context)
 		---@cast members TupleDescFlat[]
 		tuple_type_helper(pp, members)
 	else
-		members = typed_tuple_type_hydraulicpress(desc)
-
-		for i, f in ipairs(members) do
-			if i > 1 then
-				pp:unit(pp:_color())
-				pp:unit(", ")
-				pp:unit(pp:_resetcolor())
-			end
-
-			pp:any(f, context)
-		end
+		pp:any(desc)
 	end
 
 	pp:unit(pp:_color())
@@ -1926,17 +1815,7 @@ function typed_term_override_pretty:host_tuple_type(pp, context)
 		---@cast members TupleDescFlat[]
 		tuple_type_helper(pp, members)
 	else
-		members = typed_tuple_type_hydraulicpress(desc)
-
-		for i, f in ipairs(members) do
-			if i > 1 then
-				pp:unit(pp:_color())
-				pp:unit(", ")
-				pp:unit(pp:_resetcolor())
-			end
-
-			pp:any(f, context)
-		end
+		pp:any(desc)
 	end
 
 	pp:unit(pp:_color())
@@ -1961,17 +1840,7 @@ function value_override_pretty:tuple_type(pp)
 		---@cast members TupleDescFlat[]
 		tuple_type_helper(pp, members)
 	else
-		members = value_tuple_type_hydraulicpress(desc)
-
-		for i, f in ipairs(members) do
-			if i > 1 then
-				pp:unit(pp:_color())
-				pp:unit(", ")
-				pp:unit(pp:_resetcolor())
-			end
-
-			pp:any(f)
-		end
+		pp:any(desc)
 	end
 
 	pp:unit(pp:_color())
@@ -1996,17 +1865,7 @@ function value_override_pretty:host_tuple_type(pp)
 		---@cast members TupleDescFlat[]
 		tuple_type_helper(pp, members)
 	else
-		members = value_tuple_type_hydraulicpress(desc)
-
-		for i, f in ipairs(members) do
-			if i > 1 then
-				pp:unit(pp:_color())
-				pp:unit(", ")
-				pp:unit(pp:_resetcolor())
-			end
-
-			pp:any(f)
-		end
+		pp:any(desc)
 	end
 
 	pp:unit(pp:_color())
