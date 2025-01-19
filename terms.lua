@@ -228,15 +228,34 @@ function TypecheckingContext:get_runtime_context()
 	return self.runtime_context
 end
 
----@param v table
-local function verify_placeholders(v, ctx)
+---@param ctx RuntimeContext|TypecheckingContext
+---@return RuntimeContext
+function to_runtime_context(ctx)
 	if getmetatable(ctx) == typechecking_context_mt then
-		ctx = ctx.runtime_context
+		return ctx.runtime_context
 	end
+	return ctx
+end
+
+---@param v table
+---@param ctx RuntimeContext|TypecheckingContext
+---@param values value[]
+---@return boolean
+local function verify_placeholders(v, ctx, values)
+	-- If it's not a table we don't care
 	if type(v) ~= "table" then
 		return true
 	end
+
+	ctx = to_runtime_context(ctx)
+
+	-- Special handling for arrays
 	if getmetatable(v) and getmetatable(getmetatable(v)) == gen.array_type_mt then
+		for _, v in ipairs(v) do
+			if not verify_placeholders(v, ctx, values) then
+				return false
+			end
+		end
 		return true
 	end
 	if not v.kind then
@@ -256,7 +275,7 @@ local function verify_placeholders(v, ctx)
 				source_ctx = source_ctx.provenance
 			end
 
-			error(
+			--[[error(
 				debug.traceback(
 					"INVALID PROVENANCE: "
 						.. tostring(info)
@@ -265,14 +284,60 @@ local function verify_placeholders(v, ctx)
 						.. "\nASSOCIATED CTX: "
 						.. ctx:format_names()
 				)
-			)
+			)]]
 
 			return false
 		end
+	elseif v.kind == "free.metavariable" then
+		if not values then
+			error(debug.traceback("FORGOT values PARAMETER!"))
+		end
+		---@type Metavariable
+		local mv = v:unwrap_metavariable()
+
+		local source_ctx = ctx
+
+		local mv_ctx = to_runtime_context(values[mv.value][3])
+		while source_ctx do
+			if source_ctx == mv_ctx then
+				return true
+			end
+
+			source_ctx = source_ctx.provenance
+		end
+		print("dumping metavariable paths")
+		source_ctx = ctx
+		while source_ctx do
+			print(source_ctx)
+			source_ctx = source_ctx.provenance
+		end
+
+		print("----")
+		source_ctx = mv_ctx
+		while source_ctx do
+			print(source_ctx)
+			source_ctx = source_ctx.provenance
+		end
+		error(
+			debug.traceback(
+				"INVALID METAVARIABLE PROVENANCE: "
+					.. tostring(v)
+					.. "\nORIGINAL CTX: "
+					.. tostring(values[mv.value][3])
+					.. "\n"
+					.. values[mv.value][3]:format_names()
+					.. "\nASSOCIATED CTX: "
+					.. tostring(ctx)
+					.. "\n"
+					.. ctx:format_names()
+			)
+		)
+
+		return false
 	end
 
 	for _, v in pairs(v) do
-		if not verify_placeholders(v, ctx) then
+		if not verify_placeholders(v, ctx, values) then
 			return false
 		end
 	end
@@ -955,6 +1020,7 @@ value:define_enum("value", {
 		"param_name", gen.builtin_string,
 		"code",       typed_term,
 		"capture",    runtime_context_type,
+		"debug", 			gen.any_lua_type,
 	} },
 
 	-- a list of upper and lower bounds, and a relation being bound with respect to

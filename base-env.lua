@@ -1255,7 +1255,9 @@ local function host_term_of_inner(goal)
 end
 local host_term_of_inner_type = value.host_function_type(
 	value.host_tuple_type(
-		terms.tuple_desc(value.closure("#htoit-empty", typed.literal(terms.host_goal_type), terms.runtime_context()))
+		terms.tuple_desc(
+			value.closure("#htoit-empty", typed.literal(terms.host_goal_type), terms.runtime_context(), U.bound_here())
+		)
 	),
 	value.closure(
 		"#htoit-params",
@@ -1265,12 +1267,14 @@ local host_term_of_inner_type = value.host_function_type(
 					value.closure(
 						"#htoit-empty",
 						typed.host_wrapped_type(typed.literal(value.host_type_type)),
-						terms.runtime_context()
+						terms.runtime_context(),
+						U.bound_here()
 					)
 				)
 			)
 		),
-		terms.runtime_context()
+		terms.runtime_context(),
+		U.bound_here()
 	),
 	result_info_pure
 )
@@ -1312,10 +1316,15 @@ local function operative_handler_type(ud_type, anchor)
 	return value.pi(
 		value.tuple_type(
 			terms.tuple_desc(
-				value.closure(pnamep0, typed.literal(terms.host_syntax_type), terms.runtime_context()),
-				value.closure(pnamep1, typed.literal(terms.host_environment_type), terms.runtime_context()),
-				value.closure(pnamep2, typed.literal(ud_type), terms.runtime_context()),
-				value.closure(pnamep3, typed.literal(terms.host_goal_type), terms.runtime_context())
+				value.closure(pnamep0, typed.literal(terms.host_syntax_type), terms.runtime_context(), U.bound_here()),
+				value.closure(
+					pnamep1,
+					typed.literal(terms.host_environment_type),
+					terms.runtime_context(),
+					U.bound_here()
+				),
+				value.closure(pnamep2, typed.literal(ud_type), terms.runtime_context(), U.bound_here()),
+				value.closure(pnamep3, typed.literal(terms.host_goal_type), terms.runtime_context(), U.bound_here())
 			)
 		),
 		param_info_explicit,
@@ -1349,7 +1358,8 @@ local function operative_handler_type(ud_type, anchor)
 					)
 				)
 			),
-			terms.runtime_context()
+			terms.runtime_context(),
+			U.bound_here()
 		),
 		result_info_pure
 	)
@@ -1435,7 +1445,8 @@ local function build_wrap(body_fn, type_fn)
 				2,
 				body_fn(typed.bound_variable(3, U.bound_here()))
 			),
-			terms.runtime_context()
+			terms.runtime_context(),
+			U.bound_here()
 		),
 		value.pi(
 			value.tuple_type(
@@ -1448,7 +1459,8 @@ local function build_wrap(body_fn, type_fn)
 							0,
 							typed.star(evaluator.OMEGA + 1, 0)
 						),
-						terms.runtime_context()
+						terms.runtime_context(),
+						U.bound_here()
 					),
 					value.closure(
 						pname_type,
@@ -1458,7 +1470,8 @@ local function build_wrap(body_fn, type_fn)
 							1,
 							typed.bound_variable(2, U.bound_here())
 						),
-						terms.runtime_context()
+						terms.runtime_context(),
+						U.bound_here()
 					)
 				)
 			),
@@ -1471,7 +1484,8 @@ local function build_wrap(body_fn, type_fn)
 					2,
 					type_fn(typed.bound_variable(2, U.bound_here()))
 				),
-				terms.runtime_context()
+				terms.runtime_context(),
+				U.bound_here()
 			),
 			result_info_pure
 		)
@@ -1498,7 +1512,8 @@ local function build_unwrap(body_fn, type_fn)
 				2,
 				body_fn(typed.bound_variable(3, U.bound_here()))
 			),
-			terms.runtime_context()
+			terms.runtime_context(),
+			U.bound_here()
 		),
 		value.pi(
 			value.tuple_type(
@@ -1511,7 +1526,8 @@ local function build_unwrap(body_fn, type_fn)
 							0,
 							typed.star(evaluator.OMEGA + 1, 0)
 						),
-						terms.runtime_context()
+						terms.runtime_context(),
+						U.bound_here()
 					),
 					value.closure(
 						pname_type,
@@ -1521,7 +1537,8 @@ local function build_unwrap(body_fn, type_fn)
 							1,
 							type_fn(typed.bound_variable(2, U.bound_here()))
 						),
-						terms.runtime_context()
+						terms.runtime_context(),
+						U.bound_here()
 					)
 				)
 			),
@@ -1534,7 +1551,8 @@ local function build_unwrap(body_fn, type_fn)
 					2,
 					typed.bound_variable(2, U.bound_here())
 				),
-				terms.runtime_context()
+				terms.runtime_context(),
+				U.bound_here()
 			),
 			result_info_pure
 		)
@@ -1559,7 +1577,8 @@ local function build_wrapped(body_fn)
 				1,
 				body_fn(typed.bound_variable(2, U.bound_here()))
 			),
-			terms.runtime_context()
+			terms.runtime_context(),
+			U.bound_here()
 		),
 		value.pi(
 			value.tuple_type(
@@ -1572,7 +1591,8 @@ local function build_wrapped(body_fn)
 							0,
 							typed.star(evaluator.OMEGA + 1, 0)
 						),
-						terms.runtime_context()
+						terms.runtime_context(),
+						U.bound_here()
 					)
 				)
 			),
@@ -1585,7 +1605,8 @@ local function build_wrapped(body_fn)
 					1,
 					typed.literal(value.host_type_type)
 				),
-				terms.runtime_context()
+				terms.runtime_context(),
+				U.bound_here()
 			),
 			result_info_pure
 		)

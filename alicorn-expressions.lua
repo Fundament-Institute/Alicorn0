@@ -1143,7 +1143,7 @@ local function host_operative(fn, name)
 	local tuple_to_tuple_fn = typed_term.tuple_elim(result_names, tuple_to_host_tuple_fn, 2, tuple_conv)
 	-- 3: wrap it in a closure with an empty capture, not a typed lambda
 	-- this ensures variable 1 is the argument tuple
-	local value_fn = value.closure("#" .. name .. "_PARAM", tuple_to_tuple_fn, runtime_context())
+	local value_fn = value.closure("#" .. name .. "_PARAM", tuple_to_tuple_fn, runtime_context(), U.bound_here())
 
 	local userdata_type = value.tuple_type(terms.empty)
 	return inferrable_term.typed(
@@ -1224,7 +1224,8 @@ collect_tuple = metalanguage.reducer(
 						value.closure(
 							"#collect-tuple-param",
 							typed_term.literal(value.singleton(next_elem_type, next_val)),
-							env.typechecking_context.runtime_context
+							env.typechecking_context.runtime_context,
+							U.bound_here()
 						)
 					)
 				end
@@ -1320,7 +1321,8 @@ collect_host_tuple = metalanguage.reducer(
 						value.closure(
 							"#collect-host-tuple-param",
 							typed_term.literal(value.singleton(next_elem_type, next_val)),
-							env.typechecking_context.runtime_context
+							env.typechecking_context.runtime_context,
+							U.bound_here()
 						)
 					)
 				end

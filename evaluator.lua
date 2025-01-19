@@ -69,7 +69,8 @@ local function luatovalue(luafunc)
 			typed.literal(value.host_value(luafunc)),
 			typed.tuple_elim(parameters, typed.bound_variable(1, U.bound_here()), len, typed.host_tuple_cons(new_body))
 		),
-		runtime_context()
+		runtime_context(),
+		U.bound_here()
 	)
 end
 
@@ -427,7 +428,12 @@ end
 ---@param v value
 ---@return value
 local function const_combinator(v)
-	return value.closure("#CONST_PARAM", typed_term.bound_variable(1, U.bound_here()), runtime_context():append(v))
+	return value.closure(
+		"#CONST_PARAM",
+		typed_term.bound_variable(1, U.bound_here()),
+		runtime_context():append(v),
+		U.bound_here()
+	)
 end
 
 ---@param t value
@@ -779,7 +785,7 @@ function substitute_type_variables(val, index, param_name)
 	}, 1)
 	--print("typed term after substitution (substituted): (typed term follows)")
 	--print(substituted:pretty_print(typechecking_context))
-	return value.closure(param_name, substituted, runtime_context())
+	return value.closure(param_name, substituted, runtime_context(), U.bound_here())
 end
 
 ---@param val value
@@ -1044,7 +1050,12 @@ add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx,
 							value.tuple_value(
 								value_array(
 									value.enum_value(terms.DescCons.empty, value.tuple_value(value_array())),
-									value.closure("#prefix", typed_term.literal(b), rctx.runtime_context)
+									value.closure(
+										"#prefix",
+										typed_term.literal(b),
+										rctx.runtime_context,
+										U.bound_here()
+									)
 								)
 							)
 						),
@@ -1065,7 +1076,8 @@ add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx,
 									typed.literal(value.result_info(terms.result_info(terms.purity.pure)))
 								)
 							),
-							rctx.runtime_context:append(b_univ)
+							rctx.runtime_context:append(b_univ),
+							U.bound_here()
 						)
 					)
 				)
@@ -1105,7 +1117,12 @@ add_comparer("value.tuple_desc_type", "value.enum_type", function(lctx, a, rctx,
 							value.tuple_value(
 								value_array(
 									value.enum_value(terms.DescCons.empty, value.tuple_value(value_array())),
-									value.closure("#prefix", typed_term.literal(a), rctx.runtime_context)
+									value.closure(
+										"#prefix",
+										typed_term.literal(a),
+										rctx.runtime_context,
+										U.bound_here()
+									)
 								)
 							)
 						),
@@ -1126,7 +1143,8 @@ add_comparer("value.tuple_desc_type", "value.enum_type", function(lctx, a, rctx,
 									typed.literal(value.result_info(terms.result_info(terms.purity.pure)))
 								)
 							),
-							rctx.runtime_context:append(a_univ)
+							rctx.runtime_context:append(a_univ),
+							U.bound_here()
 						)
 					)
 				)
@@ -1643,7 +1661,8 @@ function check(
 				value.closure(
 					"#check-tuple-cons-param",
 					typed_term.literal(value.singleton(el_type, el_val)),
-					typechecking_context.runtime_context
+					typechecking_context.runtime_context,
+					U.bound_here()
 				)
 			)
 		end
@@ -1678,7 +1697,8 @@ function check(
 				value.closure(
 					"#check-tuple-cons-param",
 					typed_term.literal(value.singleton(el_type, el_val)),
-					typechecking_context.runtime_context
+					typechecking_context.runtime_context,
+					U.bound_here()
 				)
 			)
 		end
@@ -2761,7 +2781,7 @@ function evaluate_impl(typed_term, runtime_context)
 		return typed_term:unwrap_literal()
 	elseif typed_term:is_lambda() then
 		local param_name, body = typed_term:unwrap_lambda()
-		return value.closure(param_name, body, runtime_context)
+		return value.closure(param_name, body, runtime_context, U.bound_here())
 	elseif typed_term:is_pi() then
 		local param_type, param_info, result_type, result_info = typed_term:unwrap_pi()
 		local param_type_value = evaluate(param_type, runtime_context)
@@ -2997,7 +3017,7 @@ function evaluate_impl(typed_term, runtime_context)
 			if mechanism_value:is_object_value() then
 				local constructor, arg = subject_value:unwrap_enum_value()
 				local methods, capture = mechanism_value:unwrap_object_value()
-				local this_method = value.closure("#ENUM_PARAM", methods[constructor], capture)
+				local this_method = value.closure("#ENUM_PARAM", methods[constructor], capture, U.bound_here())
 				return apply_value(this_method, arg)
 			elseif mechanism_value:is_neutral() then
 				-- objects and enums are categorical duals
@@ -3082,7 +3102,7 @@ function evaluate_impl(typed_term, runtime_context)
 			if mechanism_value:is_enum_value() then
 				local methods, capture = subject_value:unwrap_object_value()
 				local constructor, arg = mechanism_value:unwrap_enum_value()
-				local this_method = value.closure("#OBJECT_PARAM", methods[constructor], capture)
+				local this_method = value.closure("#OBJECT_PARAM", methods[constructor], capture, U.bound_here())
 				return apply_value(this_method, arg)
 			elseif mechanism_value:is_neutral() then
 				-- objects and enums are categorical duals
@@ -4465,7 +4485,7 @@ function TypeCheckerState:check_value(v, tag, context)
 	if not v then
 		error("nil passed into check_value!")
 	end
-	--terms.verify_placeholders(v, context)
+	--terms.verify_placeholders(v, context, self.values)
 
 	if v:is_neutral() and v:unwrap_neutral():is_free() and v:unwrap_neutral():unwrap_free():is_metavariable() then
 		local mv = v:unwrap_neutral():unwrap_free():unwrap_metavariable()
@@ -4556,6 +4576,8 @@ end
 ---@return boolean
 ---@return ...
 function TypeCheckerState:flow(val, val_context, use, use_context, cause)
+	--terms.verify_placeholders(val, val_context, self.values)
+	--terms.verify_placeholders(use, use_context, self.values)
 	local r = { self:constrain(val, val_context, use, use_context, UniverseOmegaRelation, cause) }
 
 	if self.snapshot_count ~= nil then
@@ -4752,7 +4774,9 @@ function TypeCheckerState:constrain_leftcall_compose_2(edge, edge_id)
 				)
 			end
 			local lvalue, _, lctx = table.unpack(self.values[l2.left])
-			local l = self:check_value(apply_value(lvalue, edge.arg), TypeCheckerTag.VALUE, lctx)
+			local new_value = apply_value(lvalue, edge.arg)
+
+			local l = self:check_value(new_value, TypeCheckerTag.VALUE, lctx)
 			U.append(
 				self.pending,
 				EdgeNotif.Constrain(
@@ -4825,7 +4849,7 @@ end
 
 function TypeCheckerState:DEBUG_VERIFY_VALUES()
 	for i, v in ipairs(self.values) do
-		terms.verify_placeholders(v[1], v[3])
+		terms.verify_placeholders(v[1], v[3], self.values)
 	end
 end
 
@@ -4895,7 +4919,6 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 					shallowest_block = self.block_level,
 					cause = item_cause,
 				}
-
 				self:constrain_leftcall_compose_2(edge, edge_id)
 				self:constrain_on_left_meet(edge, edge_id)
 			end
