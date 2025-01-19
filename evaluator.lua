@@ -4561,7 +4561,7 @@ function TypeCheckerState:metavariable(context, trait)
 	local i = #self.values + 1
 	local mv = setmetatable(
 		-- block level here should probably be inside the context and not inside the metavariable
-		{ value = i, usage = i, trait = trait or false, block_level = self.block_level },
+		{ value = i, usage = i, trait = trait or false, block_level = self.block_level, trace = U.bound_here(2) },
 		terms.metavariable_mt
 	)
 	U.append(self.values, { mv:as_value(), TypeCheckerTag.METAVAR, context })

@@ -404,15 +404,15 @@ function M.strip_ansi(s)
 	return s:gsub("\x1b%[[^m]*m", "")
 end
 
-function M.here()
-	local info = debug.getinfo(2, "Sl")
+function M.here(offset)
+	local info = debug.getinfo((offset or 1) + 1, "Sl")
 	return " @ " .. info.source .. ":" .. info.currentline
 end
 
-function M.bound_here()
-	-- DEBUG: Uncomment this if you want to know where a bound variable is
-	--return M.here()
-	return ""
+function M.bound_here(offset)
+	-- DEBUG: Uncomment this if you want to know where a bound variable or closure is
+	return M.here(offset)
+	--return ""
 end
 
 function M.file_is_terminal(input_file)

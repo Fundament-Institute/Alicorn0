@@ -218,8 +218,8 @@ local function verify_placeholders(v, ctx, values)
 
 	-- Special handling for arrays
 	if getmetatable(v) and getmetatable(getmetatable(v)) == gen.array_type_mt then
-		for _, v in ipairs(v) do
-			if not verify_placeholders(v, ctx, values) then
+		for k, val in ipairs(v) do
+			if not verify_placeholders(val, ctx, values) then
 				return false
 			end
 		end
@@ -242,7 +242,7 @@ local function verify_placeholders(v, ctx, values)
 				source_ctx = source_ctx.provenance
 			end
 
-			--[[error(
+			print(
 				debug.traceback(
 					"INVALID PROVENANCE: "
 						.. tostring(info)
@@ -251,7 +251,9 @@ local function verify_placeholders(v, ctx, values)
 						.. "\nASSOCIATED CTX: "
 						.. ctx:format_names()
 				)
-			)]]
+			)
+			--error("")
+			os.exit(-1, true)
 
 			return false
 		end
@@ -309,9 +311,11 @@ local function verify_placeholders(v, ctx, values)
 		return false
 	end
 
-	for _, v in pairs(v) do
-		if not verify_placeholders(v, ctx, values) then
-			return false
+	for k, val in pairs(v) do
+		if k ~= "cause" then
+			if not verify_placeholders(val, ctx, values) then
+				return false
+			end
 		end
 	end
 
