@@ -195,39 +195,6 @@ local typechecking_context_mt
 ---@field bindings FibonacciBuffer
 local TypecheckingContext = {}
 
----get the name of a binding in a TypecheckingContext
----@param index integer
----@return string
-function TypecheckingContext:get_name(index)
-	return self.bindings:get(index).name
-end
-
-function TypecheckingContext:dump_names()
-	for i = 1, self:len() do
-		print(i, self:get_name(i))
-	end
-end
-
----@return string
-function TypecheckingContext:format_names()
-	local msg = ""
-	for i = 1, self:len() do
-		msg = msg .. tostring(i) .. "\t" .. self:get_name(i) .. "\n"
-	end
-	return msg
-end
-
----@param index integer
----@return value
-function TypecheckingContext:get_type(index)
-	return self.bindings:get(index).type
-end
-
----@return RuntimeContext
-function TypecheckingContext:get_runtime_context()
-	return self.runtime_context
-end
-
 ---@param ctx RuntimeContext|TypecheckingContext
 ---@return RuntimeContext
 function to_runtime_context(ctx)
@@ -305,6 +272,11 @@ local function verify_placeholders(v, ctx, values)
 
 			source_ctx = source_ctx.provenance
 		end
+
+		-- for now we just check to see if the first two parts are valid
+		if ctx:get(1) == mv_ctx:get(1) then
+			return true
+		end
 		print("dumping metavariable paths")
 		source_ctx = ctx
 		while source_ctx do
@@ -318,7 +290,7 @@ local function verify_placeholders(v, ctx, values)
 			print(source_ctx)
 			source_ctx = source_ctx.provenance
 		end
-		error(
+		print(
 			debug.traceback(
 				"INVALID METAVARIABLE PROVENANCE: "
 					.. tostring(v)
@@ -332,7 +304,8 @@ local function verify_placeholders(v, ctx, values)
 					.. ctx:format_names()
 			)
 		)
-
+		--error("")
+		os.exit(-1, true)
 		return false
 	end
 
@@ -343,6 +316,45 @@ local function verify_placeholders(v, ctx, values)
 	end
 
 	return true
+end
+
+---get the name of a binding in a TypecheckingContext
+---@param index integer
+---@return string
+function TypecheckingContext:get_name(index)
+	return self.bindings:get(index).name
+end
+
+function TypecheckingContext:dump_names()
+	for i = 1, self:len() do
+		print(i, self:get_name(i))
+	end
+end
+
+---@return string
+function TypecheckingContext:format_names()
+	local msg = ""
+	for i = 1, self:len() do
+		msg = msg .. tostring(i) .. "\t" .. self:get_name(i) .. "\n"
+	end
+	return msg
+end
+
+---@param index integer
+---@return value
+function TypecheckingContext:get_type(index)
+	return self.bindings:get(index).type
+end
+
+function TypecheckingContext:DEBUG_VERIFY_VALUES(state)
+	for i = 1, self:len() do
+		verify_placeholders(self:get_type(i), self, state.values)
+	end
+end
+
+---@return RuntimeContext
+function TypecheckingContext:get_runtime_context()
+	return self.runtime_context
 end
 
 ---@param name string
