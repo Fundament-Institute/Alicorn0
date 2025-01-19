@@ -471,7 +471,9 @@ local function substitute_inner_impl(val, mappings, context_len)
 		local param_info = substitute_inner(param_info, mappings, context_len)
 		local result_type = substitute_inner(result_type, mappings, context_len)
 		local result_info = substitute_inner(result_info, mappings, context_len)
-		return typed_term.pi(param_type, param_info, result_type, result_info)
+		local res = typed_term.pi(param_type, param_info, result_type, result_info)
+		res.original_name = val.original_name
+		return res
 	elseif val:is_closure() then
 		local param_name, code, capture = val:unwrap_closure()
 		local unique = { debug = "substitute_inner, val:is_closure" .. U.here() }
@@ -2045,6 +2047,7 @@ function infer_impl(
 		local lambda_usages = body_usages:copy(1, body_usages:len() - 1)
 		local lambda_type =
 			value.pi(param_type, value.param_info(value.visibility(param_visibility)), result_type, result_info)
+		lambda_type.original_name = param_name
 		local lambda_term = typed_term.lambda(param_name .. "^", body_term, start_anchor)
 		return lambda_type, lambda_usages, lambda_term
 	elseif inferrable_term:is_pi() then
@@ -2080,6 +2083,7 @@ function infer_impl(
 		-- )
 
 		local term = typed_term.pi(param_type_term, param_info_term, result_type_term, result_info_term)
+		term.original_name = inferrable_term.original_name -- TODO: If this is an inferrable with an anchor, use the anchor information instead
 
 		local usages = usage_array()
 		add_arrays(usages, param_type_usages)
@@ -2817,7 +2821,9 @@ function evaluate_impl(typed_term, runtime_context)
 			result_info,
 			runtime_context
 		)]]
-		return value.pi(param_type_value, param_info_value, result_type_value, result_info_value)
+		local res = value.pi(param_type_value, param_info_value, result_type_value, result_info_value)
+		res.original_name = typed_term.original_name
+		return res
 	elseif typed_term:is_application() then
 		local f, arg = typed_term:unwrap_application()
 
@@ -3923,8 +3929,8 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 		end
 
 		local label = U.strip_ansi(v[1]:pretty_print(v[3]))
-		if #label > 400 then
-			local i = 400
+		if #label > 800 then
+			local i = 800
 			-- Don't slice a unicode character in half
 			while string.byte(label, i) > 127 do
 				i = i + 1

@@ -13,6 +13,7 @@ local fibbuf = require "fibonacci-buffer"
 local gen = require "terms-generators"
 local derivers = require "derivers"
 local traits = require "traits"
+local U = require "alicorn-utils"
 
 local format = require "format"
 
@@ -394,6 +395,7 @@ function TypecheckingContext:append(name, type, val, start_anchor)
 	local info
 	if not val then
 		info = placeholder_debug(name, start_anchor)
+		info["{TRACE}"] = U.bound_here(2)
 		val = value.neutral(neutral_value.free(free.placeholder(self:len() + 1, info)))
 	end
 

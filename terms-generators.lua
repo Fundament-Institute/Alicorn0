@@ -136,6 +136,7 @@ local function gen_record(self, cons, kind, params_with_types)
 			end
 			val[v] = argi
 		end
+		val["{TRACE}"] = U.bound_here(2)
 		setmetatable(val, self)
 		return val
 	end

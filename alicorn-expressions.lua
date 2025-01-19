@@ -444,6 +444,9 @@ local function speculate_pi_type(env, metaval)
 		local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 		local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 		local pi = value.pi(param_mv:as_value(), param_info_implicit, result_mv:as_value(), result_info_pure)
+		pi.original_name = "#spec-" .. tostring(metaval.original_name)
+		param_mv.source = "param_mv for " .. pi.original_name
+		result_mv.source = "result_mv for " .. pi.original_name
 
 		evaluator.typechecker_state:flow(
 			metaval,
@@ -478,6 +481,9 @@ local function speculate_pi_type(env, metaval)
 		local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 		local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 		local pi = value.pi(param_mv:as_value(), param_info_explicit, result_mv:as_value(), result_info_pure)
+		pi.original_name = "#spec-" .. tostring(metaval.original_name)
+		param_mv.source = "param_mv for " .. pi.original_name
+		result_mv.source = "result_mv for " .. pi.original_name
 
 		evaluator.typechecker_state:flow(
 			metaval,

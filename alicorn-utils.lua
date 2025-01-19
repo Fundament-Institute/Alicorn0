@@ -406,13 +406,14 @@ end
 
 function M.here(offset)
 	local info = debug.getinfo((offset or 1) + 1, "Sl")
-	return " @ " .. info.source .. ":" .. info.currentline
+	return info.source .. ":" .. info.currentline
 end
 
 function M.bound_here(offset)
 	-- DEBUG: Uncomment this if you want to know where a bound variable or closure is
-	return M.here(offset)
-	--return ""
+	--local info = debug.getinfo((offset or 1) + 1, "Sl")
+	--return info.source .. ":" .. info.currentline
+	return ""
 end
 
 function M.file_is_terminal(input_file)
