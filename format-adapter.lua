@@ -119,7 +119,7 @@ local function lispy_print(code, d)
 		end
 	elseif code.accepters.Symbol then
 		local name = code[1]
-		return start_anchor_pfx .. name .. end_anchor_sfx
+		return start_anchor_pfx .. name.str .. end_anchor_sfx
 	elseif code.accepters.Value then
 		local val = code[1]
 		local sval = string.gsub(tostring(val.val), "%c", "")

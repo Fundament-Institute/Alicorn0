@@ -137,11 +137,11 @@ local switch_case_header_matcher = metalanguage.listtail(
 ---@param ... SyntaxSymbol
 ---@return ...
 local function unwrap_into_string(...)
-	local args = { ... }
-	for i, v in ipairs(args) do
-		args[i] = v.str
+	local args = table.pack(...)
+	for i = 1, args.n do
+		args[i] = args[i].str
 	end
-	return table.unpack(args)
+	return table.unpack(args, 1, args.n)
 end
 
 ---@param env Environment
