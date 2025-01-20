@@ -478,7 +478,7 @@ local function substitute_inner_impl(val, mappings, context_len)
 		local param_name, code, capture = val:unwrap_closure()
 		local unique = { debug = "substitute_inner, val:is_closure" .. U.here() }
 		local arg = value.neutral(neutral_value.free(free.unique(unique)))
-		val = apply_value(val, arg)
+		local resval = apply_value(val, arg)
 		--print("applied closure during substitution: (value term follows)")
 		--print(val)
 
@@ -486,7 +486,7 @@ local function substitute_inner_impl(val, mappings, context_len)
 		-- otherwise it would be left as a free.unique in the result
 		local new_mappings = U.shallow_copy(mappings)
 		new_mappings[unique] = typed_term.bound_variable(context_len + 1, U.bound_here())
-		local val_typed = substitute_inner(val, new_mappings, context_len + 1)
+		local val_typed = substitute_inner(resval, new_mappings, context_len + 1)
 
 		-- FIXME: this results in more captures every time we substitute a closure ->
 		--   can cause non-obvious memory leaks
@@ -601,6 +601,9 @@ local function substitute_inner_impl(val, mappings, context_len)
 			local mapping = mappings[lookup]
 			if mapping then
 				return mapping
+			end
+			if free:is_placeholder() then
+				print "found one"
 			end
 			return typed_term.literal(val)
 		end
@@ -777,17 +780,18 @@ end
 ---@param val value
 ---@param index integer
 ---@param param_name string?
+---@param ctx RuntimeContext
 ---@return value
-function substitute_type_variables(val, index, param_name)
+function substitute_type_variables(val, index, param_name, ctx)
 	param_name = param_name and "#sub-" .. param_name or "#sub-param"
 	--print("value before substituting (val): (value term follows)")
 	--print(val)
 	local substituted = substitute_inner(val, {
-		[index] = typed_term.bound_variable(1, U.bound_here()),
-	}, 1)
+		[index] = typed_term.bound_variable(index, U.bound_here()),
+	}, index)
 	--print("typed term after substitution (substituted): (typed term follows)")
 	--print(substituted:pretty_print(typechecking_context))
-	return value.closure(param_name, substituted, runtime_context(), U.bound_here())
+	return value.closure(param_name, substituted, ctx, U.bound_here())
 end
 
 ---@param val value
@@ -2034,7 +2038,12 @@ function infer_impl(
 		local _, purity_term = check(purity, inner_context, terms.host_purity_type)
 		local body_type, body_usages, body_term = infer(body, inner_context)
 
-		local result_type = substitute_type_variables(body_type, inner_context:len(), param_name)
+		local result_type = substitute_type_variables(
+			body_type,
+			inner_context:len(),
+			param_name,
+			typechecking_context:get_runtime_context()
+		)
 		--[[local result_type = U.tag("substitute_type_variables", {
 			body_type = body_type:pretty_preprint(typechecking_context),
 			index = inner_context:len(),
@@ -2163,7 +2172,15 @@ function infer_impl(
 			local el_type, el_usages, el_term = infer(v, typechecking_context)
 			local el_val = evaluate(el_term, typechecking_context.runtime_context)
 			local el_singleton = value.singleton(el_type, el_val)
-			type_data = terms.cons(type_data, substitute_type_variables(el_singleton, typechecking_context:len() + 1))
+			type_data = terms.cons(
+				type_data,
+				substitute_type_variables(
+					el_singleton,
+					typechecking_context:len() + 1,
+					"#tuple-cons-el",
+					typechecking_context:get_runtime_context()
+				)
+			)
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
 		end
@@ -2189,7 +2206,12 @@ function infer_impl(
 			--print(el_type:pretty_print())
 			local el_val = evaluate(el_term, typechecking_context.runtime_context)
 			local el_singleton = value.singleton(el_type, el_val)
-			type_data = terms.cons(type_data, substitute_type_variables(el_singleton, typechecking_context:len() + 1))
+			type_data = terms.cons(
+				type_data,
+				substitute_type_variables(el_singleton, typechecking_context:len() + 1),
+				"#host-tuple-cons-el",
+				typechecking_context:get_runtime_context()
+			)
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
 		end
@@ -2286,7 +2308,12 @@ function infer_impl(
 			type_data = terms.cons(
 				type_data,
 				value.name(k),
-				substitute_type_variables(field_type, typechecking_context:len() + 1)
+				substitute_type_variables(
+					field_type,
+					typechecking_context:len() + 1,
+					"#record-cons-el",
+					typechecking_context:get_runtime_context()
+				)
 			)
 			add_arrays(usages, field_usages)
 			new_fields[k] = field_term

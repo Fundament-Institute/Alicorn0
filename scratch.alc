@@ -77,9 +77,11 @@ mutual
 	defenum Value
 		function(capture : Value, body : Term)
 
-	defenum Term(ctx : Context)
-		variable()
-		tail()
+	defenum Type(ctx : Context)
+
+	defenum Term(ctx : Context, typ : Type(ctx))
+		variable(pfx : Context, typ : Type(pfx)) : Term(Ext(pfx, typ), typ)
+		tail(pfx : )
 
 let Semantics-Reg = new-registry(Categorical-Component)
 

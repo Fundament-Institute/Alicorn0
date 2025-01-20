@@ -1,3 +1,12 @@
+# inlining host-number-type in weird-stuff unbugs the test
+let host-number-type = lambda (U-hnt : type_(9, 1))
+	let inner = intrinsic "return terms.value.host_number_type" : wrapped(U-hnt)
+	unwrap(U-hnt, inner)
+
+let weird-stuff = lambda (U-ws : type_(9, 1))
+	# removing wrapped unbugs the test
+	wrapped(host-number-type(U-ws))
+
 # FIXME: type of universe
 # we need to wrap this, and wrap takes a type in star-10
 # so we have to settle for star-9
