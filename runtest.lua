@@ -295,7 +295,7 @@ local function execute_alc_file(bound_expr, log)
 				evaluator.typechecker_state:metavariable(terms.typechecking_context()):as_value()
 			),
 			nil,
-			terms.constraintcause.primitive("final flow check", format.create_anchor(0, 0, "<NIL>"))
+			terms.constraintcause.primitive("final flow check", U.anchor_here())
 		)
 	end)
 

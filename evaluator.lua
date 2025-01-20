@@ -1,7 +1,6 @@
 local terms = require "terms"
 local metalanguage = require "metalanguage"
 local U = require "alicorn-utils"
-local format = require "format"
 local runtime_context = terms.runtime_context
 local s = require "pretty-printer".s
 --local new_typechecking_context = terms.typechecking_context
@@ -47,8 +46,6 @@ local typechecker_state
 local evaluate, infer, check, apply_value
 local name_array = string_array
 local typed = terms.typed_term
-
-local NIL_ANCHOR = format.create_anchor(0, 0, "<NIL>")
 
 ---@param luafunc function
 ---@return value
@@ -491,7 +488,7 @@ local function substitute_inner_impl(val, mappings, context_len)
 		-- FIXME: this results in more captures every time we substitute a closure ->
 		--   can cause non-obvious memory leaks
 		--   since we don't yet remove unused captures from closure value
-		return typed_term.lambda(param_name .. "*", val_typed, NIL_ANCHOR)
+		return typed_term.lambda(param_name .. "*", val_typed, U.anchor_here())
 	elseif val:is_name_type() then
 		return typed_term.literal(val)
 	elseif val:is_name() then
@@ -1077,7 +1074,7 @@ add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx,
 									typed.lambda(
 										"#arg" .. tostring(#rctx + 1),
 										typed_term.bound_variable(#rctx + 1, U.bound_here()),
-										NIL_ANCHOR
+										U.anchor_here()
 									),
 									typed.literal(value.result_info(terms.result_info(terms.purity.pure)))
 								)
@@ -1144,7 +1141,7 @@ add_comparer("value.tuple_desc_type", "value.enum_type", function(lctx, a, rctx,
 									typed.lambda(
 										"#arg" .. tostring(#rctx + 1),
 										typed_term.bound_variable(#rctx + 1, U.bound_here()),
-										NIL_ANCHOR
+										U.anchor_here()
 									),
 									typed.literal(value.result_info(terms.result_info(terms.purity.pure)))
 								)
@@ -1641,7 +1638,7 @@ function check(
 				typechecking_context,
 				goal_type,
 				typechecking_context,
-				terms.constraintcause.primitive("inferrable", NIL_ANCHOR)
+				terms.constraintcause.primitive("inferrable", U.anchor_here())
 			)
 		end
 
@@ -1678,7 +1675,7 @@ function check(
 			typechecking_context,
 			goal_type,
 			typechecking_context,
-			terms.constraintcause.primitive("checkable_term:is_tuple_cons", NIL_ANCHOR)
+			terms.constraintcause.primitive("checkable_term:is_tuple_cons", U.anchor_here())
 		)
 
 		return usages, typed_term.tuple_cons(new_elements)
@@ -1714,7 +1711,7 @@ function check(
 			typechecking_context,
 			goal_type,
 			typechecking_context,
-			terms.constraintcause.primitive("checkable_term:is_host_tuple_cons", NIL_ANCHOR)
+			terms.constraintcause.primitive("checkable_term:is_host_tuple_cons", U.anchor_here())
 		)
 
 		return usages, typed_term.host_tuple_cons(new_elements)
@@ -2081,7 +2078,7 @@ function infer_impl(
 			typechecking_context,
 			result_type_param_type,
 			typechecking_context,
-			terms.constraintcause.primitive("inferrable pi term", NIL_ANCHOR)
+			terms.constraintcause.primitive("inferrable pi term", U.anchor_here())
 		)
 		local result_type_result_type_result =
 			apply_value(result_type_result_type, evaluate(param_type_term, typechecking_context.runtime_context))
@@ -2240,7 +2237,7 @@ function infer_impl(
 				typechecking_context,
 				spec_type,
 				typechecking_context,
-				terms.constraintcause.primitive("tuple elimination", NIL_ANCHOR)
+				terms.constraintcause.primitive("tuple elimination", U.anchor_here())
 			)
 			return infer_tuple_type(spec_type, subject_value)
 		end)
@@ -2252,7 +2249,7 @@ function infer_impl(
 					typechecking_context,
 					host_spec_type,
 					typechecking_context,
-					terms.constraintcause.primitive("host tuple elimination", NIL_ANCHOR)
+					terms.constraintcause.primitive("host tuple elimination", U.anchor_here())
 				)
 				return infer_tuple_type(host_spec_type, subject_value)
 			end)
@@ -2292,7 +2289,7 @@ function infer_impl(
 			typechecking_context,
 			value.tuple_desc_type(univ_var),
 			typechecking_context,
-			terms.constraintcause.primitive("tuple type construction", NIL_ANCHOR)
+			terms.constraintcause.primitive("tuple type construction", U.anchor_here())
 		)
 		return value.union_type(terms.value.star(0, 0), univ_var), desc_usages, terms.typed_term.tuple_type(desc_term)
 	elseif inferrable_term:is_record_cons() then
@@ -2420,7 +2417,7 @@ function infer_impl(
 			typechecking_context,
 			value.enum_type(value.enum_desc_value(constrain_variants)),
 			typechecking_context,
-			terms.constraintcause.primitive("enum case matching", NIL_ANCHOR)
+			terms.constraintcause.primitive("enum case matching", U.anchor_here())
 		)
 		local term_variants = string_typed_map()
 		local result_types = {}
@@ -2469,7 +2466,7 @@ function infer_impl(
 			typechecking_context,
 			value.enum_desc_type(univ_var),
 			typechecking_context,
-			terms.constraintcause.primitive("enum type construction", NIL_ANCHOR)
+			terms.constraintcause.primitive("enum type construction", U.anchor_here())
 		)
 		return value.union_type(terms.value.star(0, 0), univ_var), desc_usages, terms.typed_term.enum_type(desc_term)
 	elseif inferrable_term:is_object_cons() then
@@ -2502,7 +2499,7 @@ function infer_impl(
 				typechecking_context,
 				op_userdata_type,
 				typechecking_context,
-				terms.constraintcause.primitive("operative userdata", NIL_ANCHOR)
+				terms.constraintcause.primitive("operative userdata", U.anchor_here())
 			)
 		end
 		local operative_usages = usage_array()
@@ -2597,14 +2594,14 @@ function infer_impl(
 			typechecking_context,
 			restype,
 			typechecking_context,
-			terms.constraintcause.primitive("inferred host if consequent", NIL_ANCHOR)
+			terms.constraintcause.primitive("inferred host if consequent", U.anchor_here())
 		)
 		typechecker_state:flow(
 			atype,
 			typechecking_context,
 			restype,
 			typechecking_context,
-			terms.constraintcause.primitive("inferred host if alternate", NIL_ANCHOR)
+			terms.constraintcause.primitive("inferred host if alternate", U.anchor_here())
 		)
 
 		local result_usages = usage_array()
@@ -2668,7 +2665,7 @@ function infer_impl(
 			typechecking_context,
 			value.tuple_desc_type(value.host_type_type),
 			typechecking_context,
-			terms.constraintcause.primitive("host tuple type construction", NIL_ANCHOR)
+			terms.constraintcause.primitive("host tuple type construction", U.anchor_here())
 		)
 		return terms.value.star(0, 0), desc_usages, terms.typed_term.host_tuple_type(desc_term)
 	elseif inferrable_term:is_program_sequence() then
@@ -4212,7 +4209,7 @@ function Reachability:constrain_transitivity(edge, edge_id, queue)
 				edge.rel,
 				edge.right,
 				math.min(edge.shallowest_block, l2.shallowest_block),
-				compositecause("composition", i, l2, edge_id, edge, NIL_ANCHOR)
+				compositecause("composition", i, l2, edge_id, edge, U.anchor_here())
 			)
 		)
 	end
@@ -4228,7 +4225,7 @@ function Reachability:constrain_transitivity(edge, edge_id, queue)
 				edge.rel,
 				r2.right,
 				math.min(edge.shallowest_block, r2.shallowest_block),
-				compositecause("composition", edge_id, edge, i, r2, NIL_ANCHOR)
+				compositecause("composition", edge_id, edge, i, r2, U.anchor_here())
 			)
 		)
 	end
@@ -4737,7 +4734,7 @@ function TypeCheckerState:constrain_leftcall_compose_1(edge, edge_id)
 					r2.rel,
 					r2.right,
 					math.min(edge.shallowest_block, r2.shallowest_block),
-					compositecause("leftcall_discharge", i, r2, edge_id, edge, NIL_ANCHOR)
+					compositecause("leftcall_discharge", i, r2, edge_id, edge, U.anchor_here())
 				)
 			)
 		end
@@ -4762,7 +4759,7 @@ function TypeCheckerState:constrain_on_left_meet(edge, edge_id)
 					edge.rel,
 					edge.right,
 					math.min(edge.shallowest_block, r.shallowest_block),
-					compositecause("composition", i, r, edge_id, edge, NIL_ANCHOR)
+					compositecause("composition", i, r, edge_id, edge, U.anchor_here())
 				)
 			)
 		end
@@ -4787,7 +4784,7 @@ function TypeCheckerState:constrain_on_right_meet(edge, edge_id)
 					edge.rel,
 					l.right,
 					math.min(edge.shallowest_block, l.shallowest_block),
-					compositecause("composition", edge_id, edge, i, l, NIL_ANCHOR)
+					compositecause("composition", edge_id, edge, i, l, U.anchor_here())
 				)
 			)
 		end
@@ -4817,7 +4814,7 @@ function TypeCheckerState:constrain_leftcall_compose_2(edge, edge_id)
 					edge.rel,
 					edge.right,
 					math.min(edge.shallowest_block, l2.shallowest_block),
-					compositecause("composition", i, l2, edge_id, edge, NIL_ANCHOR)
+					compositecause("composition", i, l2, edge_id, edge, U.anchor_here())
 				)
 			)
 		end
@@ -4845,7 +4842,7 @@ function TypeCheckerState:rightcall_constrain_compose_2(edge, edge_id)
 					l2.rel,
 					r,
 					math.min(edge.shallowest_block, l2.shallowest_block),
-					compositecause("rightcall_discharge", edge_id, edge, i, l2, NIL_ANCHOR)
+					compositecause("rightcall_discharge", edge_id, edge, i, l2, U.anchor_here())
 				)
 			)
 		end
@@ -4873,7 +4870,7 @@ function TypeCheckerState:rightcall_constrain_compose_1(edge, edge_id)
 					edge.rel,
 					r,
 					math.min(edge.shallowest_block, r2.shallowest_block),
-					compositecause("rightcall_discharge", i, r2, edge_id, edge, NIL_ANCHOR)
+					compositecause("rightcall_discharge", i, r2, edge_id, edge, U.anchor_here())
 				)
 			)
 		end

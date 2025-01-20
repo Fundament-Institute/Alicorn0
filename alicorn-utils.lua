@@ -1,3 +1,5 @@
+local format = require "format"
+
 local M = {}
 
 ---@param ... any
@@ -414,6 +416,11 @@ function M.bound_here(offset)
 	--local info = debug.getinfo((offset or 1) + 1, "Sl")
 	--return info.source .. ":" .. info.currentline
 	return ""
+end
+
+function M.anchor_here(offset)
+	local info = debug.getinfo((offset or 1) + 1, "Sl")
+	return format.create_anchor(info.currentline, 0, "SYNTH:" .. info.source)
 end
 
 function M.file_is_terminal(input_file)
