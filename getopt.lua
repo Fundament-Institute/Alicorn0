@@ -1,24 +1,4 @@
----@param state string
----@param control integer
----@return integer?
----@return string?
-local function nextchar(state, control)
-	local i = control + 1
-	if i > #state then
-		return nil
-	else
-		return i, state:sub(i, i)
-	end
-end
-
----@param s string
----@return function, string, integer
-local function chars(s)
-	return nextchar, s, 0
-end
-
-local string_mt = getmetatable("")
-string_mt.__index.chars = chars
+local _ = require "lua-ext" -- has side-effect of loading string.chars
 
 local function default_unknown(c)
 	error(("Unrecognized option: '-%s'"):format(c))

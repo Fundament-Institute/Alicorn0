@@ -72,10 +72,6 @@ end
 -- Incrementally Fold Repetitions at Match Time
 -- incrementally fold the stack into actual tables to prevent stack overflows
 local function IFRmt(pattern, numtimes)
-	if _VERSION == "Lua 5.1" then
-		table.unpack = unpack
-	end
-
 	local repetition
 
 	if numtimes == 0 then

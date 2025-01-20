@@ -3,6 +3,8 @@ local pretty_printer = require "pretty-printer"
 local traits = require "traits"
 local U = require "alicorn-utils"
 
+local _ = require "lua-ext" -- has side-effect of loading fixed table.concat
+
 -- record and enum are nominative types.
 -- this means that two record types, given the same arguments, are distinct.
 -- values constructed from one type are of a different type compared to values

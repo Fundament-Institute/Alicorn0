@@ -300,8 +300,7 @@ let new-host-type-family = lambda (unique-id : host-unique-id, signature : type_
 					variances[i] = v:unwrap_host_value()
 				end
 
-				local tunpack = table.unpack or unpack
-				local srel = evaluator.IndepTupleRelation(tunpack(variances))
+				local srel = evaluator.IndepTupleRelation(table.unpack(variances))
 				evaluator.register_host_srel(unique_id, srel)
 
 				local params = typed_array()
@@ -816,7 +815,6 @@ let host-funcprog-type-to-funcprog-type =
 let func-to-host-func-inner =
 	intrinsic
 		""""
-			local tunpack = unpack or table.unpack
 			return function(_type, _valid, afn)
 				return function(...)
 					local args = table.pack(...)
@@ -832,7 +830,7 @@ let func-to-host-func-inner =
 					for i, v in res:unwrap_tuple_value():ipairs() do
 						elems[i] = v:unwrap_host_value()
 					end
-					return tunpack(elems)
+					return table.unpack(elems)
 				end
 			end
 		:
@@ -846,7 +844,6 @@ let func-to-host-func =
 let funcprog-to-host-funcprog-inner =
 	intrinsic
 		""""
-			local tunpack = unpack or table.unpack
 			return function(_type, _valid, afn)
 				return function(...)
 					local args = {...}
@@ -864,7 +861,7 @@ let funcprog-to-host-funcprog-inner =
 					for i, v in res:unwrap_tuple_value():ipairs() do
 						elems[i] = v:unwrap_host_value()
 					end
-					return tunpack(elems)
+					return table.unpack(elems)
 				end
 			end
 		:
