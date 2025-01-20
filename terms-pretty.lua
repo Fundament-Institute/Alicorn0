@@ -490,6 +490,9 @@ local typed_term_override_pretty = {}
 ---@class ValueOverridePretty : value
 local value_override_pretty = {}
 
+---@class NeutralValueOverridePretty : neutral_value
+local neutral_value_override_pretty = {}
+
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function checkable_term_override_pretty:inferrable(pp, context)
@@ -1920,26 +1923,32 @@ end
 
 ---@param pp PrettyPrint
 function value_override_pretty:neutral(pp)
-	local desc = self:unwrap_neutral()
+	local neutral = self:unwrap_neutral()
 
-	pp:_enter()
-
-	if desc:is_free() and desc:unwrap_free():is_metavariable() then
-		local mt = desc:unwrap_free():unwrap_metavariable()
-		pp:unit(pp:_color())
-		pp:unit("⩤ " .. mt.value .. ":" .. mt.usage .. "|" .. mt.block_level .. " ⩥")
-		pp:unit(pp:_resetcolor())
+	if neutral:is_free() and neutral:unwrap_free():is_metavariable() then
+		pp:any(neutral)
 	else
-		pp:unit(pp:_color())
-		pp:unit("value.neutral(")
-		pp:unit(pp:_resetcolor())
-		pp:any(desc)
-		pp:unit(pp:_color())
-		pp:unit(")")
-		pp:unit(pp:_resetcolor())
+		pp:record("value.neutral", { { "neutral", neutral } })
 	end
+end
 
-	pp:_exit()
+---@param pp PrettyPrint
+function neutral_value_override_pretty:free(pp)
+	local free = self:unwrap_free()
+
+	if free:is_metavariable() then
+		local mv = free:unwrap_metavariable()
+
+		pp:_enter()
+
+		pp:unit(pp:_color())
+		pp:unit("⩤ " .. mv.value .. ":" .. mv.usage .. "|" .. mv.block_level .. " ⩥")
+		pp:unit(pp:_resetcolor())
+
+		pp:_exit()
+	else
+		pp:record("neutral_value.free", { { "free", free } })
+	end
 end
 
 ---@param pp PrettyPrint
@@ -2024,6 +2033,7 @@ return function(args)
 		inferrable_term_override_pretty = inferrable_term_override_pretty,
 		typed_term_override_pretty = typed_term_override_pretty,
 		value_override_pretty = value_override_pretty,
+		neutral_value_override_pretty = neutral_value_override_pretty,
 		binding_override_pretty = binding_override_pretty,
 	}
 end

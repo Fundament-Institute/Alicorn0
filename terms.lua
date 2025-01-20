@@ -1337,6 +1337,7 @@ local checkable_term_override_pretty = override_prettys.checkable_term_override_
 local inferrable_term_override_pretty = override_prettys.inferrable_term_override_pretty
 local typed_term_override_pretty = override_prettys.typed_term_override_pretty
 local value_override_pretty = override_prettys.value_override_pretty
+local neutral_value_override_pretty = override_prettys.neutral_value_override_pretty
 local binding_override_pretty = override_prettys.binding_override_pretty
 
 checkable_term:derive(derivers.pretty_print, checkable_term_override_pretty)
@@ -1345,7 +1346,7 @@ typed_term:derive(derivers.pretty_print, typed_term_override_pretty)
 visibility:derive(derivers.pretty_print)
 free:derive(derivers.pretty_print)
 value:derive(derivers.pretty_print, value_override_pretty)
-neutral_value:derive(derivers.pretty_print)
+neutral_value:derive(derivers.pretty_print, neutral_value_override_pretty)
 binding:derive(derivers.pretty_print, binding_override_pretty)
 expression_goal:derive(derivers.pretty_print)
 placeholder_debug:derive(derivers.pretty_print)
