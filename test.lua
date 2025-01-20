@@ -714,7 +714,7 @@ let(
 		{ { "curly-list", { "c", "=", "a" }, { "b", "=", "d" }, { "e", "=", 1, "+", 2, "*", { 3, "+", 6 } } } },
 		{ { "def", "f", { { "a", ":", "int" }, { "b", ":", "int" } }, { "a", "+", "b" } } },
 		{ { "f", { "a", "b" }, "c" } },
-		{ { "braced_list", 1, 2, { 1, "+", 2 } } },
+		{ { "square-list", 1, 2, { 1, "+", 2 } } },
 		{ { "let", { "a", "b" }, "=", { "f", "x" } } },
 		{ { "f", "a" } },
 		{ { "f" } },
@@ -906,7 +906,7 @@ return mktype]],
 end
 
 function test_unformatter()
-	local filename = "testfile.alc"
+	local filename = "prelude.alc"
 	local unformat = require "./unformatter"
 
 	local f = io.open(filename, "r")
@@ -916,7 +916,7 @@ function test_unformatter()
 	f:close()
 
 	local src = ""
-	for line in io.lines("testfile.alc") do
+	for line in io.lines(filename) do
 		src = src .. "\n" .. line
 	end
 
