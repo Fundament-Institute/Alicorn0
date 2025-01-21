@@ -345,6 +345,15 @@ function TypecheckingContext:format_names()
 	return msg
 end
 
+---@return string
+function TypecheckingContext:format_names_and_types()
+	local msg = ""
+	for i = 1, self:len() do
+		msg = msg .. tostring(i) .. "\t" .. self:get_name(i) .. "\t:\t" .. self:get_type(i):pretty_print(self) .. "\n"
+	end
+	return msg
+end
+
 ---@param index integer
 ---@return value
 function TypecheckingContext:get_type(index)
