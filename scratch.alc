@@ -74,6 +74,16 @@ let UntypedTerm : (forall )
 
 
 mutual
+	defenum Context
+		Empty
+		Extend(pfx : Context, typ : Type(pfx))
+
+	defenum Substitution(src :- Context, dst :+ Context)
+		Compose(src : Context, mid : Context, dst : Context, fst : Substitution(src, mid), snd : Substitution(mid, dst)) : Substitution(src, dst)
+		Identity(ctx : Context) : Substitution(ctx, ctx)
+
+	
+
 	defenum Value
 		function(capture : Value, body : Term)
 
