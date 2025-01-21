@@ -1669,15 +1669,34 @@ end
 
 ---@type lua_operative
 local function debug_trace_impl(syntax, env)
-	local ok, type_inferrable_term, tail = syntax:match({
-		metalanguage.listtail(metalanguage.accept_handler, exprs.inferred_expression(metalanguage.accept_handler, env)),
+	local ok, term_env = syntax:match({
+		metalanguage.listmatch(
+			metalanguage.accept_handler,
+			exprs.inferred_expression(metalanguage.accept_bundled, env)
+		),
 	}, metalanguage.failure_handler, nil)
 	if not ok then
-		return ok, type_inferrable_term, tail
+		return ok, term_env
 	end
+	local term, env = utils.unpack_bundle(term_env)
 
-	type_inferrable_term.track = true
-	return ok, type_inferrable_term, env
+	term.track = true
+	return ok, term, env
+end
+
+---@type lua_operative
+local function dump_context_impl(syntax, env)
+	print("\nDUMP CONTEXT:")
+	print(env.typechecking_context:format_names_and_types())
+	local ok, term_env = syntax:match({
+		metalanguage.listmatch(metalanguage.accept_handler, exprs.inferred_expression(utils.accept_bundled, env)),
+	}, metalanguage.failure_handler, nil)
+	if not ok then
+		return ok, term_env
+	end
+	local term, env = utils.unpack_bundle(term_env)
+
+	return ok, term, env
 end
 
 local core_operations = {
@@ -1713,6 +1732,7 @@ local core_operations = {
 	switch = exprs.host_operative(switch_impl, "switch_impl"),
 	enum = exprs.host_operative(enum_impl, "enum_impl"),
 	["debug-trace"] = exprs.host_operative(debug_trace_impl, "debug_trace_impl"),
+	["dump-context"] = exprs.host_operative(dump_context_impl, "dump_context_impl"),
 	--record = exprs.host_operative(record_build, "record_build"),
 	intrinsic = exprs.host_operative(intrinsic_impl, "intrinsic_impl"),
 	["host-number"] = lit_term(value.host_number_type, value.host_type_type),
