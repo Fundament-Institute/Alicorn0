@@ -8,5 +8,5 @@ let symbol-exact =
 		reducer-type(tuple-desc(s : host-string), tuple-desc())
 
 let inferrable-enum-cons =
-	intrinsic "return terms.inferrable_term.enum_cons" :
+	intrinsic "return terms.unanchored_inferrable_term.enum_cons" :
 		host-func-type (name : host-string, arg : host-inferrable-term) -> ((res : host-inferrable-term))

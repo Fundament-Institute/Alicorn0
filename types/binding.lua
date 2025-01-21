@@ -8,53 +8,53 @@ binding = {}
 function binding:is_let() end
 ---@return string name
 ---@return var_debug debug
----@return inferrable expr
+---@return anchored_inferrable expr
 function binding:unwrap_let() end
 ---@return boolean
 ---@return string name
 ---@return var_debug debug
----@return inferrable expr
+---@return anchored_inferrable expr
 function binding:as_let() end
 ---@return boolean
 function binding:is_tuple_elim() end
 ---@return ArrayValue<string> names
 ---@return ArrayValue<var_debug> debug
----@return inferrable subject
+---@return anchored_inferrable subject
 function binding:unwrap_tuple_elim() end
 ---@return boolean
 ---@return ArrayValue<string> names
 ---@return ArrayValue<var_debug> debug
----@return inferrable subject
+---@return anchored_inferrable subject
 function binding:as_tuple_elim() end
 ---@return boolean
 function binding:is_annotated_lambda() end
 ---@return string param_name
----@return inferrable param_annotation
+---@return anchored_inferrable param_annotation
 ---@return Anchor start_anchor
 ---@return visibility visible
 ---@return checkable pure
 function binding:unwrap_annotated_lambda() end
 ---@return boolean
 ---@return string param_name
----@return inferrable param_annotation
+---@return anchored_inferrable param_annotation
 ---@return Anchor start_anchor
 ---@return visibility visible
 ---@return checkable pure
 function binding:as_annotated_lambda() end
 ---@return boolean
 function binding:is_program_sequence() end
----@return inferrable first
+---@return anchored_inferrable first
 ---@return Anchor start_anchor
 function binding:unwrap_program_sequence() end
 ---@return boolean
----@return inferrable first
+---@return anchored_inferrable first
 ---@return Anchor start_anchor
 function binding:as_program_sequence() end
 
 ---@class (exact) bindingType: EnumType
 ---@field define_enum fun(self: bindingType, name: string, variants: Variants): bindingType
----@field let fun(name: string, debug: var_debug, expr: inferrable): binding
----@field tuple_elim fun(names: ArrayValue<string>, debug: ArrayValue<var_debug>, subject: inferrable): binding
----@field annotated_lambda fun(param_name: string, param_annotation: inferrable, start_anchor: Anchor, visible: visibility, pure: checkable): binding
----@field program_sequence fun(first: inferrable, start_anchor: Anchor): binding
+---@field let fun(name: string, debug: var_debug, expr: anchored_inferrable): binding
+---@field tuple_elim fun(names: ArrayValue<string>, debug: ArrayValue<var_debug>, subject: anchored_inferrable): binding
+---@field annotated_lambda fun(param_name: string, param_annotation: anchored_inferrable, start_anchor: Anchor, visible: visibility, pure: checkable): binding
+---@field program_sequence fun(first: anchored_inferrable, start_anchor: Anchor): binding
 return {}

@@ -3,13 +3,15 @@ local U = require "alicorn-utils"
 local terms = require "terms"
 local flex_runtime_context = terms.flex_runtime_context
 local typechecking_context = terms.typechecking_context
-local inferrable_term, inferrable_term_array = terms.inferrable_term, terms.inferrable_term_array
+local unanchored_inferrable_term = terms.unanchored_inferrable_term
+local anchored_inferrable_term, anchored_inferrable_term_array =
+	terms.anchored_inferrable_term, terms.anchored_inferrable_term_array
 local typed_term, typed_term_array = terms.typed_term, terms.typed_term_array
 local value = terms.value
 
 local gen = require "terms-generators"
 local map = gen.declare_map
-local string_inferrable_map = map(gen.builtin_string, inferrable_term)
+local string_inferrable_map = map(gen.builtin_string, unanchored_inferrable_term)
 local string_typed_map = map(gen.builtin_string, typed_term)
 local array = gen.declare_array
 local value_array = array(value)
@@ -96,16 +98,16 @@ local function infer_and_eval(name, inf)
 end
 
 local function inf_t(t)
-	return U.notail(inferrable_term.typed(value.star(0), usage_array(), lit(t)))
+	return U.notail(unanchored_inferrable_term.typed(value.star(0), usage_array(), lit(t)))
 end
 local function inf_typ(t, typ)
-	return U.notail(inferrable_term.typed(t, usage_array(), typ))
+	return U.notail(unanchored_inferrable_term.typed(t, usage_array(), typ))
 end
-local inf_var = inferrable_term.bound_variable
+local inf_var = unanchored_inferrable_term.bound_variable
 local function inf_lam(n, t, b)
-	return U.notail(inferrable_term.annotated_lambda(n, inf_t(t), b))
+	return U.notail(unanchored_inferrable_term.annotated_lambda(n, inf_t(t), b))
 end
-local inf_app = inferrable_term.application
+local inf_app = unanchored_inferrable_term.application
 
 local t_num = value.number_type
 local i42 = inf_typ(t_num, n42)
@@ -127,9 +129,9 @@ infer_and_eval("apply_inf_closure_with_capture", apply_inf_closure_with_capture)
 print("PART THREE!!!!!!!!")
 
 local function inf_tup(...)
-	return U.notail(inferrable_term.tuple_cons(inferrable_array(...)))
+	return U.notail(unanchored_inferrable_term.tuple_cons(anchored_inferrable_term_array(...)))
 end
-local inf_tupelim = inferrable_term.tuple_elim
+local inf_tupelim = unanchored_inferrable_term.tuple_elim
 local tuple_of_69_420 = inf_tup(i69, i420)
 infer_and_eval("tuple_of_69_420", tuple_of_69_420)
 
@@ -161,7 +163,7 @@ local prim_add_69_420 = app(prim_add, prim_tup(p69, p420))
 eval_test("prim_add_69_420", prim_add_69_420)
 
 local function inf_prim_tup(...)
-	return U.notail(inferrable_term.prim_tuple_cons(inferrable_array(...)))
+	return U.notail(unanchored_inferrable_term.prim_tuple_cons(anchored_inferrable_term_array(...)))
 end
 
 local t_prim_num = value.prim_number_type
@@ -233,9 +235,9 @@ local function desc2map(t, map_desc)
 end
 local function inf_rec(map_desc)
 	local map = desc2map(string_inferrable_map, map_desc)
-	return U.notail(inferrable_term.record_cons(map))
+	return U.notail(unanchored_inferrable_term.record_cons(map))
 end
-local inf_recelim = inferrable_term.record_elim
+local inf_recelim = unanchored_inferrable_term.record_elim
 
 local record_621_926 = inf_rec({ "foo", i621, "bar", i926 })
 infer_and_eval("record_621_926", record_621_926)

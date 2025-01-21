@@ -182,7 +182,7 @@ local failurepoint = {
 ---@param env Environment
 ---@param log function
 ---@return boolean
----@return failurepoint |  inferrable
+---@return failurepoint | anchored_inferrable
 ---@return nil | Environment
 local function load_alc_file(name, env, log)
 	local src_file, err = io.open(name)
@@ -244,7 +244,7 @@ local function load_alc_file(name, env, log)
 	return true, expr, env
 end
 
----@param bound_expr inferrable
+---@param bound_expr anchored_inferrable
 ---@param log function
 ---@param env Environment
 ---@return failurepoint
@@ -449,7 +449,7 @@ end
 
 --serialize_graph("GRAPH_DUMP_WORK.dat")
 
----@cast expr inferrable
+---@cast expr anchored_inferrable
 ---@cast env Environment
 
 ---@param file string
