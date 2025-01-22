@@ -1816,6 +1816,7 @@ local function index_tuple_value(subject, index)
 		end
 		return value.neutral(neutral_value.tuple_element_access_stuck(inner, index))
 	end
+	print(index, subject)
 	error("Should be unreachable???")
 end
 
@@ -2104,11 +2105,10 @@ function infer_impl(
 			typechecking_context,
 			terms.constraintcause.primitive("inferrable pi term", U.anchor_here())
 		)
-		local result_type_result_type_result = apply_value(
-			result_type_result_type,
-			evaluate(param_type_term, typechecking_context.runtime_context, typechecking_context),
-			typechecking_context
-		)
+		local sort_arg_unique =
+			value.neutral(neutral_value.free(free.unique({ debug = "pi infer result type type arg" })))
+		local result_type_result_type_result =
+			apply_value(result_type_result_type, sort_arg_unique, typechecking_context)
 		local sort =
 			value.union_type(param_type_type, value.union_type(result_type_result_type_result, value.star(0, 0)))
 		-- local sort = value.star(

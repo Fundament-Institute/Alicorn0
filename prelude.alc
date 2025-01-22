@@ -1,11 +1,3 @@
-# inlining host-number-type in weird-stuff unbugs the test
-let host-number-type = lambda (U-hnt : type_(9, 1))
-	let inner = intrinsic "return terms.value.host_number_type" : wrapped(U-hnt)
-	unwrap(U-hnt, inner)
-
-let weird-stuff = lambda (U-ws : type_(9, 1))
-	# removing wrapped unbugs the test
-	wrapped(host-number-type(U-ws))
 
 # FIXME: type of universe
 # we need to wrap this, and wrap takes a type in star-10
@@ -1389,21 +1381,21 @@ let match-syntax-implicit = lambda_implicit (userdata        : host-type)
 				(r : host-tuple-type(result))
 		inner(matchers, failure-handler, syn, wrap(ud))
 
-#let host-term-of-inner = intrinsic
-#	""""
-#		local function host_term_of(goal)
-#			if goal:is_infer() then
-#				return terms.host_inferrable_term_type
-#			elseif goal:is_check() then
-#				return terms.host_checkable_term_type
-#			else
-#				error("host-term-of: unknown goal")
-#			end
-#		end
-#		return host_term_of
-#	:
-#	host-func-type ((goal : host-goal)) -> ((t : wrapped(host-type)))
-let host-term-of-inner = hackhack-host-term-of-inner
+let host-term-of-inner = intrinsic
+	""""
+		local function host_term_of(goal)
+			if goal:is_infer() then
+				return terms.host_inferrable_term_type
+			elseif goal:is_check() then
+				return terms.host_checkable_term_type
+			else
+				error("host-term-of: unknown goal")
+			end
+		end
+		return host_term_of
+	:
+	host-func-type ((goal : host-goal)) -> ((t : wrapped(host-type)))
+#let host-term-of-inner = hackhack-host-term-of-inner
 let host-term-of = lambda (goal : host-goal)
 	let (t) = host-term-of-inner(goal)
 	unwrap(t)
