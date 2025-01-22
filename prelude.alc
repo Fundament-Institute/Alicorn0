@@ -1051,13 +1051,29 @@ let tuple-desc-concat = lambda (U : universe, head : tuple-desc-type(U), tail : 
 				local tail_n, tail_elems = traverse(tail)
 				local head_last = head_elems[1]
 				local _, head_code, _ = head_last:unwrap_closure()
-				local head_names, _, _, _ = head_code:unwrap_tuple_elim()
+				local head_names
+				if head_code:is_tuple_elim() then
+					head_names, _, _, _ = head_code:unwrap_tuple_elim()
+				else
+					head_names = string_array()
+					for i = 1, head_n do
+						head_names[i] = "head_unk_"..tostring(i)
+					end
+				end
 				local desc = head
 				for i = tail_n, 1, -1 do
 					local tail_n_now = tail_n - i
 					local elem = tail_elems[i]
 					local _, tail_code, _ = elem:unwrap_closure()
-					local tail_names, _, _, _ = tail_code:unwrap_tuple_elim()
+					local tail_names
+					if tail_code:is_tuple_elim() then
+						tail_names, _, _, _ = tail_code:unwrap_tuple_elim()
+					else
+						tail_names = string_array()
+						for i = 1, tail_n do
+							tail_names[i] = "tail_unk_"..tostring(i)
+						end
+					end
 					desc = tuple_desc_elem(desc, elem, head_n, head_names, tail_n_now, tail_names)
 				end
 				return desc
