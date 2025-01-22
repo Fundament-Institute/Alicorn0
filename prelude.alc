@@ -1666,8 +1666,8 @@ let do-impl = lambda (syn : host-syntax, env : host-environment, ud : host-unit,
 	tuple-of(host-type, operative-result-desc(goal))(wrapped, env)
 
 #	let (do-type, do) = new-operative(host-unit, host-nil, do-impl)
-#let do = core-operative(host-nil, do-impl)
-let do = into-operative(host-unit, host-nil, do-impl)
+let do = core-operative(host-nil, do-impl)
+#let do = into-operative(host-unit, host-nil, do-impl)
 
 ## tuple-desc operative
 
@@ -1766,7 +1766,7 @@ let tuple-desc-impl = lambda (syn : host-syntax, env : host-environment, ud : ho
 	tuple-of(host-type, operative-result-desc(goal))(args, env)
 
 #let (tuple-desc-op-type, tuple-desc) = new-operative(host-unit, host-nil, tuple-desc-impl)
-let tuple-desc = into-operative(host-unit, host-nil, tuple-desc-impl)
+let tuple-desc = core-operative(host-nil, tuple-desc-impl)
 # tuple-desc for single-element tuples currently require an extra pair of parens, like lambdas used to.
 # This should eventually be fixed the same way lambdas were fixed.
 
