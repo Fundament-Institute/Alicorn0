@@ -289,12 +289,12 @@ local function execute_alc_file(bound_expr, log)
 	local ok, err = pcall(function()
 		evaluator.typechecker_state:flow(
 			type,
-			nil,
+			env.typechecking_context,
 			terms.value.program_type(
 				terms.value.effect_row(set(unique_id)(terms.TCState, terms.lua_prog), terms.value.effect_empty),
 				evaluator.typechecker_state:metavariable(terms.typechecking_context()):as_value()
 			),
-			nil,
+			env.typechecking_context,
 			terms.constraintcause.primitive("final flow check", U.anchor_here())
 		)
 	end)
@@ -382,13 +382,34 @@ if graph_backtrace ~= nil then
 	internal_state.snapshot_buffer = {}
 end
 
+local function serialize_graph(name)
+	local internals_interface = require "internals-interface"
+
+	internal_state = internals_interface.evaluator.typechecker_state
+
+	local f = io.open(name, "w")
+	for i, v in ipairs(internal_state.values) do
+		f:write(i, "=", U.strip_ansi(v[1]:pretty_print(v[3])):gsub("\n", "\\n"), "\n")
+	end
+
+	local function serialize_edges(edges)
+		f:write("\n")
+		for _, v in ipairs(edges) do
+			f:write(v.left, "=", v.right, "\n")
+		end
+	end
+	serialize_edges(internal_state.graph.constrain_edges:all())
+	serialize_edges(internal_state.graph.leftcall_edges:all())
+	serialize_edges(internal_state.graph.rightcall_edges:all())
+	f:close()
+end
+
 local ok, expr, env = load_alc_file(prelude, env, print)
 if not ok then
 	if graph_backtrace ~= nil then
 		local snapshots = internal_state.snapshot_buffer
 		local i = (internal_state.snapshot_count + 1) % graph_backtrace
 		local slice = {}
-		slice[55825] = 55825
 		for j = 2, graph_backtrace do
 			local f = io.open("GRAPH_STATE" .. j .. ".dot", "w")
 			local out, additions = internal_state:Visualize(snapshots[i + 1], snapshots[i + 2], slice)
@@ -402,8 +423,11 @@ if not ok then
 	end
 
 	--dump_edges({ { 55825, 47999 }, { 47954, 55825 } })
+	--serialize_graph("GRAPH_DUMP_FAIL.dat")
 	return
 end
+
+--serialize_graph("GRAPH_DUMP_WORK.dat")
 
 ---@cast expr inferrable
 ---@cast env Environment

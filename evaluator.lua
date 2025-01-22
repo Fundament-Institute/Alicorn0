@@ -1192,13 +1192,14 @@ add_comparer("value.pi", "value.pi", function(lctx, a, rctx, b, cause)
 	local avis = a_param_info:unwrap_param_info():unwrap_visibility()
 	local bvis = b_param_info:unwrap_param_info():unwrap_visibility()
 	if avis ~= bvis and not avis:is_implicit() then
-		return false, concrete_fail("pi param_info", lctx)
+		return false, concrete_fail("pi param_info", avis:pretty_print(lctx) .. " ~= " .. bvis:pretty_print(rctx), lctx)
 	end
 
 	local apurity = a_result_info:unwrap_result_info():unwrap_result_info()
 	local bpurity = b_result_info:unwrap_result_info():unwrap_result_info()
 	if apurity ~= bpurity then
-		return false, concrete_fail("pi result_info", lctx)
+		return false,
+			concrete_fail("pi result_info", apurity:pretty_print(lctx) .. " ~= " .. bpurity:pretty_print(rctx), lctx)
 	end
 
 	typechecker_state:queue_subtype(
@@ -1236,7 +1237,12 @@ add_comparer("value.host_function_type", "value.host_function_type", function(lc
 	local apurity = a_result_info:unwrap_result_info():unwrap_result_info()
 	local bpurity = b_result_info:unwrap_result_info():unwrap_result_info()
 	if apurity ~= bpurity then
-		return false, concrete_fail("host function result_info", lctx)
+		return false,
+			concrete_fail(
+				"host function result_info",
+				apurity:pretty_print(lctx) .. " ~= " .. bpurity:pretty_print(rctx),
+				lctx
+			)
 	end
 
 	typechecker_state:queue_subtype(
@@ -1424,7 +1430,13 @@ end)
 add_comparer("value.program_type", "value.program_type", function(lctx, a, rctx, b, cause)
 	local a_eff, a_base = a:unwrap_program_type()
 	local b_eff, b_base = b:unwrap_program_type()
-	typechecker_state:queue_subtype(lctx, a_base, rctx, b_base, "program result")
+	typechecker_state:queue_subtype(
+		lctx,
+		a_base,
+		rctx,
+		b_base,
+		terms.constraintcause.primitive("program result", U.anchor_here())
+	)
 	typechecker_state:queue_constrain(
 		lctx,
 		a_eff,
@@ -4581,7 +4593,7 @@ function TypeCheckerState:check_value(v, tag, context)
 		error("nil passed into check_value!")
 	end
 	if context == nil then
-		error("nil context passed into check_value!")
+		error("nil context passed into check_value! " .. debug.traceback())
 	end
 	--terms.verify_placeholders(v, context, self.values)
 
