@@ -241,16 +241,23 @@ function environment:bind_local(binding)
 		end
 		local first, start_anchor = binding:unwrap_program_sequence()
 		local first_type, first_usages, first_term = infer(first, self.typechecking_context)
-		if not first_type:is_program_type() then
-			error("program sequence must infer to a program type")
-		end
-		local first_effect_sig, first_base_type = first_type:unwrap_program_type()
-		--print("FOUND EFFECTFUL BINDING", first_base_type, "produced by ", first_type)
+
+		local first_effect_type = evaluator.typechecker_state:metavariable(self.typechecking_context):as_value()
+		local first_result_type = evaluator.typechecker_state:metavariable(self.typechecking_context):as_value()
+		evaluator.typechecker_state:flow(
+			first_type,
+			self.typechecking_context,
+			terms.value.program_type(first_effect_type, first_result_type),
+			self.typechecking_context,
+			terms.constraintcause.primitive("Inferring on program type ", start_anchor)
+		)
+
+		--print("FOUND EFFECTFUL BINDING", first_result_type, "produced by ", first_type)
 		local n = self.typechecking_context:len()
 		local term = inferrable_term.bound_variable(n + 1, U.bound_here())
 		local locals = self.locals:put("#program-sequence", term)
 		local typechecking_context =
-			self.typechecking_context:append("#program-sequence", first_base_type, nil, start_anchor)
+			self.typechecking_context:append("#program-sequence", first_result_type, nil, start_anchor)
 		local bindings = self.bindings:append(binding)
 		return update_env(self, {
 			locals = locals,

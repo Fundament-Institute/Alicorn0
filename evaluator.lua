@@ -2720,10 +2720,18 @@ function infer_impl(
 	elseif inferrable_term:is_program_sequence() then
 		local first, start_anchor, continue = inferrable_term:unwrap_program_sequence()
 		local first_type, first_usages, first_term = infer(first, typechecking_context)
-		if not first_type:is_program_type() then
-			error("program sequence must infer to a program type")
-		end
-		local first_effect_sig, first_base_type = first_type:unwrap_program_type()
+
+		--local first_effect_sig, first_base_type = first_type:unwrap_program_type()
+		local first_effect_sig = typechecker_state:metavariable(typechecking_context):as_value()
+		local first_base_type = typechecker_state:metavariable(typechecking_context):as_value()
+		typechecker_state:flow(
+			first_type,
+			typechecking_context,
+			terms.value.program_type(first_effect_sig, first_base_type),
+			typechecking_context,
+			terms.constraintcause.primitive("Inferring on program type ", start_anchor)
+		)
+
 		local inner_context = typechecking_context:append("#program-sequence", first_base_type, nil, start_anchor)
 		local continue_type, continue_usages, continue_term = infer(continue, inner_context)
 		if not continue_type:is_program_type() then
@@ -2734,6 +2742,7 @@ function infer_impl(
 					.. continue_type:pretty_print()
 			)
 		end
+
 		local continue_effect_sig, continue_base_type = continue_type:unwrap_program_type()
 		local first_is_row, first_components, first_rest = first_effect_sig:as_effect_row()
 		local continue_is_row, continue_components, continue_rest = continue_effect_sig:as_effect_row()
@@ -2755,7 +2764,12 @@ function infer_impl(
 			result_effect_sig = continue_effect_sig
 		else
 			if not first_effect_sig:is_effect_empty() or not continue_effect_sig:is_effect_empty() then
-				error("unknown effect sig")
+				error(
+					"unknown effect sig"
+						.. first_effect_sig:pretty_print(inner_context)
+						.. " vs "
+						.. continue_effect_sig:pretty_print(inner_context)
+				)
 			end
 			result_effect_sig = value.effect_empty
 		end
