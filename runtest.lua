@@ -158,10 +158,6 @@ end
 
 local prelude = "prelude.alc"
 
-local env = base_env.create()
-
-local prelude_env, env = env:enter_block(terms.block_purity.effectful)
-
 ---@enum failurepoint
 local failurepoint = {
 	parsing = "parsing",
@@ -240,14 +236,15 @@ end
 
 ---@param bound_expr inferrable
 ---@param log function
+---@param env Environment
 ---@return failurepoint
-local function execute_alc_file(bound_expr, log)
+local function execute_alc_file(bound_expr, log, env)
 	checkpointTime = os.clock()
 	log(("Got a term! in %.3f seconds"):format(checkpointTime - checkpointTime2))
 	checkpointTime2 = checkpointTime
 	if print_inferrable then
 		log("bound_expr: (inferrable term follows)")
-		log(bound_expr:pretty_print(terms.typechecking_context()))
+		log(bound_expr:pretty_print(env.typechecking_context))
 	end
 
 	log("Inferring")
@@ -255,7 +252,7 @@ local function execute_alc_file(bound_expr, log)
 		profile.start()
 	end
 	local ok, type, usages, term = pcall(function()
-		return evaluator.infer(bound_expr, terms.typechecking_context())
+		return evaluator.infer(bound_expr, env.typechecking_context)
 	end)
 
 	if not ok then
@@ -293,7 +290,7 @@ local function execute_alc_file(bound_expr, log)
 			env.typechecking_context,
 			terms.value.program_type(
 				terms.value.effect_row(set(unique_id)(terms.TCState, terms.lua_prog), terms.value.effect_empty),
-				evaluator.typechecker_state:metavariable(terms.typechecking_context()):as_value()
+				evaluator.typechecker_state:metavariable(env.typechecking_context):as_value()
 			),
 			env.typechecking_context,
 			terms.constraintcause.primitive("final flow check", U.anchor_here())
@@ -405,6 +402,10 @@ local function serialize_graph(name)
 	f:close()
 end
 
+local env = base_env.create()
+
+local prelude_env, env = env:enter_block(terms.block_purity.effectful)
+
 local ok, expr, env = load_alc_file(prelude, env, print)
 if not ok then
 	if graph_backtrace ~= nil then
@@ -439,7 +440,7 @@ end
 ---@return boolean
 ---@return string
 local function perform_test(file, completion, env)
-	local shadowed, env = env:enter_block(terms.block_purity.effectful)
+	local shadowed, test_env = env:enter_block(terms.block_purity.effectful)
 	local log = ""
 
 	local printrepl = function(...)
@@ -452,7 +453,7 @@ local function perform_test(file, completion, env)
 		log = log .. table.concat(args, " ") .. "\n"
 	end
 
-	local ok, test_expr, test_env = load_alc_file(file, env, printrepl)
+	local ok, test_expr, test_env = load_alc_file(file, test_env, printrepl)
 	if not ok then
 		if completion == test_expr then
 			io.write(U.outputGreen("success: " .. file .. " stopped at " .. test_expr), "\n")
@@ -470,9 +471,9 @@ local function perform_test(file, completion, env)
 	else
 		---@cast test_expr inferrable
 		---@cast test_env Environment
-		local _, test_expr, _ = test_env:exit_block(test_expr, shadowed)
+		local test_env, test_expr, _ = test_env:exit_block(test_expr, shadowed)
 
-		local ok = execute_alc_file(test_expr, printrepl)
+		local ok = execute_alc_file(test_expr, printrepl, test_env)
 
 		if completion == ok then
 			io.write(U.outputGreen("success: " .. file .. " stopped at " .. ok), "\n")
