@@ -155,8 +155,50 @@ function M.shadowtable(obj, userdata)
 		end
 		rawset(t, k, v)
 	end
+	mt.__pairs = function(tbl)
+		local keys = {}
+		local t = tbl
+		local k, _ = next(t, nil)
+		while k do
+			keys[k] = true
+			k, _ = next(t, k)
+		end
+		t = mt.__shadow
+		while t ~= nil do
+			local k, _ = next(t, nil)
+			while k do
+				keys[k] = true
+				k, _ = next(t, k)
+			end
+			t = getmetatable(t)
+			if t then
+				t = t.__shadow
+			end
+		end
+
+		local function iter(t, ind)
+			local k, v = next(keys, ind)
+			if v ~= nil then
+				return k, tbl[k]
+			end
+			return nil
+		end
+
+		return iter, tbl, nil
+	end
 
 	return setmetatable({}, mt)
+end
+
+local function rawpairs(tbl)
+	local function iter(t, ind)
+		local k, v = next(t, ind)
+		if v ~= nil then
+			return k, v
+		end
+		return nil
+	end
+	return iter, tbl, nil
 end
 
 ---@generic T
@@ -530,7 +572,9 @@ function M.insert_tree_node(obj, store, i, extractors, level)
 			for j = curlevel + 1, level do
 				store = M.shadowarray(store)
 			end
-			assert(M.getshadowdepth(store) == level, "Improper shadowing happened!")
+			if M.getshadowdepth(store) ~= level then
+				error("Improper shadowing happened!")
+			end
 		end
 		M.append(store, obj)
 		return store
@@ -542,14 +586,12 @@ function M.insert_tree_node(obj, store, i, extractors, level)
 		for j = curlevel + 1, level do
 			store = M.shadowtable(store)
 		end
-		assert(M.getshadowdepth(store) == level, "Improper shadowing happened!")
+		if M.getshadowdepth(store) ~= level then
+			error("Improper shadowing happened!")
+		end
 	end
 	-- Note: it might be *slightly* more efficient to only reassign if the returned table is different, but the commit
 	-- only copies completely new keys anyway so it doesn't really matter.
-	local oldlevel = 0
-	if store[key] then
-		oldlevel = M.getshadowdepth(store[key])
-	end
 	store[key] = M.insert_tree_node(obj, store[key], i + 1, extractors, level)
 
 	-- Any time we shadow something more than once, we have some "skipped" levels in-between that must be assigned
@@ -580,7 +622,7 @@ function M.commit_tree_node(node, depth)
 	M.unlock_table(base)
 
 	if base then
-		for k, v in pairs(node) do
+		for k, v in rawpairs(node) do
 			-- If this is an array, we only copy keys that do not exist at all in the shadowed table
 			if (not isleaf) or base[k] == nil then
 				rawset(base, k, M.commit_tree_node(v, depth))
@@ -604,11 +646,21 @@ function M.revert_tree_node(node, depth)
 	local base = mt.__shadow
 	setmetatable(node, nil)
 	if base then
-		for k, v in pairs(node) do
-			node[k] = M.revert_tree_node(v, depth)
+		for k, v in rawpairs(node) do
+			M.revert_tree_node(v, depth)
 		end
 		M.unlock_table(base)
 		M.invalidate(node)
+
+		-- If this is a vestigial shadow, revert it too. This is safe because the observed behavior doesn't change, and it is necessary because we "skip" layers of the tree when making shadows.
+		local anykey, _ = next(base, nil)
+		while anykey == nil and getmetatable(base) and getmetatable(base).__shadow do
+			node = base
+			base = getmetatable(node).__shadow
+			M.unlock_table(base)
+			M.invalidate(node)
+			anykey, _ = next(base, nil)
+		end
 		return base
 	end
 	return node

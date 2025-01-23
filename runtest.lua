@@ -19,8 +19,9 @@ if lldebugger_enabled then
 	require("lldebugger").start(true)
 end
 
---local endTime = os.time() + 3
---while os.time() < endTime do end
+local endTime = os.time() + 3
+while os.time() < endTime do
+end
 
 require "pretty-printer" -- has side-effect of loading global p()
 
@@ -159,7 +160,7 @@ local prelude = "prelude.alc"
 
 local env = base_env.create()
 
-local shadowed, env = env:enter_block(terms.block_purity.effectful)
+local prelude_env, env = env:enter_block(terms.block_purity.effectful)
 
 ---@enum failurepoint
 local failurepoint = {
@@ -434,11 +435,11 @@ end
 
 ---@param file string
 ---@param completion string
----@param shadowed ShadowEnvironment
 ---@param env Environment
 ---@return boolean
 ---@return string
-local function perform_test(file, completion, shadowed, env)
+local function perform_test(file, completion, env)
+	local shadowed, env = env:enter_block(terms.block_purity.effectful)
 	local log = ""
 
 	local printrepl = function(...)
@@ -510,11 +511,17 @@ if test_harness then
 	for file, completion in pairs(test_list) do
 		if (not test_single) or (test_single and file == test_name) then
 			total = total + 1
-			local ok, log = perform_test(file, completion, shadowed, env)
-			logs[file] = log
-			if not ok then
-				U.append(failures, file)
-			end
+
+			evaluator.typechecker_state:speculate(function()
+				local ok, log = perform_test(file, completion, env)
+
+				logs[file] = log
+				if not ok then
+					U.append(failures, file)
+				end
+
+				error("pretend to fail so test reverts")
+			end)
 		end
 	end
 
@@ -527,7 +534,7 @@ if test_harness then
 		end
 	end
 else
-	local env, bound_expr, purity = env:exit_block(expr, shadowed)
+	local env, bound_expr, purity = env:exit_block(expr, prelude_env)
 
 	execute_alc_file(bound_expr, print)
 end

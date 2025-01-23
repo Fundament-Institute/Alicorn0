@@ -334,7 +334,7 @@ enum_desc_srel = setmetatable({
 	),
 }, subtype_relation_mt)
 
----@type fun(subject_type_a : value, subject_type_b : value, subject_value : value) : value[], value[], value[], integer
+---@type fun(subject_type_a : value, lctx : TypecheckingContext, subject_type_b : value, rctx : TypecheckingContext, subject_value : value) : value[], value[], value[], integer
 local infer_tuple_type_unwrapped2
 
 ---@type fun(val : value, index : integer, param_name : string?) : value
@@ -372,7 +372,7 @@ local TupleDescRelation = setmetatable({
 			local unique = { debug = "TupleDescRelation.constrain" .. U.here() }
 			local placeholder = value.neutral(neutral_value.free(free.unique(unique)))
 			local ok, tuple_types_val, tuple_types_use, tuple_vals, n =
-				infer_tuple_type_unwrapped2(value.tuple_type(val), value.tuple_type(use), placeholder)
+				infer_tuple_type_unwrapped2(value.tuple_type(val), lctx, value.tuple_type(use), rctx, placeholder)
 
 			if not ok then
 				if tuple_types_val == "length-mismatch" then
@@ -1781,11 +1781,7 @@ function apply_value(f, arg, ambient_typechecking_context)
 		end
 		if arg:is_host_tuple_value() then
 			local arg_elements = arg:unwrap_host_tuple_value()
-			return value.host_tuple_value(
-				host_array(
-					U.tag("host_func_impl", { host_func_impl = host_func_impl }, host_func_impl, arg_elements:unpack())
-				)
-			)
+			return value.host_tuple_value(host_array(host_func_impl(arg_elements:unpack())))
 		elseif arg:is_neutral() then
 			return value.neutral(neutral_value.host_application_stuck(host_func_impl, arg:unwrap_neutral()))
 		else
@@ -1958,17 +1954,18 @@ function infer_tuple_type(subject_type, subject_value)
 	return infer_tuple_type_unwrapped(subject_type, subject_value)
 end
 
----@overload fun(desc_a: value, make_prefix_a : fun(i: integer): value, desc_b: value, make_prefix_b : fun(i: integer): value): boolean, string
 ---@param desc_a value
 ---@param make_prefix_a fun(i: integer): value
+---@param lctx TypecheckingContext
 ---@param desc_b value
 ---@param make_prefix_b fun(i: integer): value
+---@param rctx TypecheckingContext
 ---@return boolean
----@return value[]
+---@return value[]|string
 ---@return value[]
 ---@return value[]
 ---@return integer
-function make_inner_context2(desc_a, make_prefix_a, desc_b, make_prefix_b)
+function make_inner_context2(desc_a, make_prefix_a, lctx, desc_b, make_prefix_b, rctx)
 	local constructor_a, arg_a = desc_a:unwrap_enum_value()
 	local constructor_b, arg_b = desc_b:unwrap_enum_value()
 	if constructor_a == terms.DescCons.empty and constructor_b == terms.DescCons.empty then
@@ -1979,7 +1976,7 @@ function make_inner_context2(desc_a, make_prefix_a, desc_b, make_prefix_b)
 		local details_a = arg_a:unwrap_tuple_value()
 		local details_b = arg_b:unwrap_tuple_value()
 		local ok, tupletypes_a, tupletypes_b, tuplevals, n_elements =
-			make_inner_context2(details_a[1], make_prefix_a, details_b[1], make_prefix_b)
+			make_inner_context2(details_a[1], make_prefix_a, lctx, details_b[1], make_prefix_b, rctx)
 		if not ok then
 			return ok, tupletypes_a
 		end
@@ -1989,8 +1986,8 @@ function make_inner_context2(desc_a, make_prefix_a, desc_b, make_prefix_b)
 		local element_type_b
 		if tupletypes_a:len() == tuplevals:len() then
 			local prefix = value.tuple_value(tuplevals)
-			element_type_a = apply_value(f_a, prefix)
-			element_type_b = apply_value(f_b, prefix)
+			element_type_a = apply_value(f_a, prefix, lctx)
+			element_type_b = apply_value(f_b, prefix, rctx)
 
 			if element_type_a:is_singleton() then
 				local _, val = element_type_a:unwrap_singleton()
@@ -2002,8 +1999,8 @@ function make_inner_context2(desc_a, make_prefix_a, desc_b, make_prefix_b)
 		else
 			local prefix_a = make_prefix_a(n_elements)
 			local prefix_b = make_prefix_b(n_elements)
-			element_type_a = apply_value(f_a, prefix_a)
-			element_type_b = apply_value(f_b, prefix_b)
+			element_type_a = apply_value(f_a, prefix_a, lctx)
+			element_type_b = apply_value(f_b, prefix_b, rctx)
 		end
 		tupletypes_a:append(element_type_a)
 		tupletypes_b:append(element_type_b)
@@ -2014,17 +2011,19 @@ function make_inner_context2(desc_a, make_prefix_a, desc_b, make_prefix_b)
 end
 
 ---@param subject_type_a value
+---@param lctx TypecheckingContext
 ---@param subject_type_b value
+---@param rctx TypecheckingContext
 ---@param subject_value value
 ---@return boolean
 ---@return value[]|string
 ---@return value[]
 ---@return value[]
 ---@return integer
-function infer_tuple_type_unwrapped2(subject_type_a, subject_type_b, subject_value)
+function infer_tuple_type_unwrapped2(subject_type_a, lctx, subject_type_b, rctx, subject_value)
 	local desc_a, make_prefix_a = make_tuple_prefix(subject_type_a, subject_value)
 	local desc_b, make_prefix_b = make_tuple_prefix(subject_type_b, subject_value)
-	return make_inner_context2(desc_a, make_prefix_a, desc_b, make_prefix_b)
+	return make_inner_context2(desc_a, make_prefix_a, lctx, desc_b, make_prefix_b, rctx)
 end
 
 ---@param inferrable_term inferrable
@@ -3747,8 +3746,13 @@ local function IndexedCollection(indices)
 		U.append(self._collection, obj)
 		local id = #self._collection
 		for name, extractors in pairs(indices) do
-			self._index_store[name] =
-				U.insert_tree_node(obj, self._index_store[name], 1, extractors, U.getshadowdepth(self._index_store))
+			self._index_store[name] = U.insert_tree_node(
+				obj,
+				self._index_store[name],
+				1,
+				extractors,
+				U.getshadowdepth(self._index_store[name])
+			)
 		end
 		return id
 	end
@@ -3780,7 +3784,9 @@ local function IndexedCollection(indices)
 	function res:shadow()
 		local n = U.shallow_copy(self) -- Copy all the functions into a new table
 		n._collection = U.shadowarray(self._collection) -- Shadow collection
-		n._index_store = U.shadowtable(self._index_store)
+		for name, extractors in pairs(indices) do
+			n._index_store[name] = U.shadowtable(self._index_store[name])
+		end
 		U.lock_table(self) --  This has to be down here or we'll accidentally copy it
 
 		setmetatable(n, { __shadow = self })
@@ -3789,8 +3795,11 @@ local function IndexedCollection(indices)
 
 	function res:commit()
 		U.commit(self._collection)
+		for name, extractors in pairs(indices) do
+			self._index_store[name] =
+				U.commit_tree_node(self._index_store[name], U.getshadowdepth(self._index_store[name]))
+		end
 
-		self._index_store = U.commit_tree_node(self._index_store, U.getshadowdepth(self._index_store))
 		local orig = getmetatable(self).__shadow
 		U.unlock_table(orig)
 		setmetatable(self, nil)
@@ -3800,7 +3809,11 @@ local function IndexedCollection(indices)
 	function res:revert()
 		U.revert(self._collection)
 
-		self._index_store = U.revert_tree_node(self._index_store, U.getshadowdepth(self._index_store))
+		for name, extractors in pairs(indices) do
+			self._index_store[name] =
+				U.revert_tree_node(self._index_store[name], U.getshadowdepth(self._index_store[name]))
+		end
+
 		local orig = getmetatable(self).__shadow
 		U.unlock_table(orig)
 		setmetatable(self, nil)
@@ -3944,29 +3957,31 @@ local TypeCheckerTag = {
 
 ---@alias ReachabilityQueue edgenotif[]
 
-local function verify_tree(store, k)
+local function verify_tree(store, k1, k2)
 	if type(store) == "table" then
 		if U.is_invalid(store) then
-			print("INVALID KEY: " .. tostring(k))
+			print("INVALID KEY: " .. tostring(k1) .. "\n parent: " .. tostring(k2))
 			os.exit(-1, true)
 			return false
 		end
 
 		if U.is_locked(store) then
-			print("LOCKED KEY: " .. tostring(k))
+			print(debug.traceback("LOCKED KEY: " .. tostring(k1) .. "\n parent: " .. tostring(k2)))
 			os.exit(-1, true)
 			return false
 		end
 
 		if getmetatable(store) and getmetatable(store).__length then
 			if store[1] == nil then
-				print("ARRAY DOESNT START AT 1: " .. tostring(k))
+				print("ARRAY DOESNT START AT 1: " .. tostring(k1))
 				os.exit(-1, true)
 			end
 		end
 		for k, v in pairs(store) do
-			if not verify_tree(v, k) then
-				return false
+			if k ~= "bindings" then
+				if not verify_tree(v, k, k1) then
+					return false
+				end
 			end
 		end
 	end
@@ -4319,6 +4334,12 @@ function Reachability:constrain_transitivity(edge, edge_id, queue)
 				compositecause("composition", edge_id, edge, i, r2, U.anchor_here())
 			)
 		)
+	end
+end
+
+function verify_collection(collection)
+	for _, v in pairs(collection._index_store) do
+		U.check_locked(v)
 	end
 end
 
@@ -5006,8 +5027,8 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 
 		if item:is_Constrain() then
 			local left, rel, right, shallowest_block, item_cause = item:unwrap_Constrain()
-
 			local edge_id = self.graph:add_constrain_edge(left, right, rel, self.block_level, item_cause)
+
 			if edge_id ~= nil then
 				---@type ConstrainEdge
 				local edge =

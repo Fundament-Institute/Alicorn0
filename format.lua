@@ -544,7 +544,9 @@ local grammar = P {
 				acc = elements
 			end
 
-			assert(brace["kind"] == "symbol")
+			if brace["kind"] ~= "symbol" then
+				error("kind not a symbol??")
+			end
 			if (brace["str"] == "square-list") or (brace["str"] == "curly-list") then
 				table.insert(acc, 1, brace)
 			end

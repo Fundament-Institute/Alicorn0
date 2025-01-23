@@ -29,6 +29,7 @@ local name_array = array(gen.builtin_string)
 local param_info_implicit = value.param_info(value.visibility(visibility.implicit))
 local param_info_explicit = value.param_info(value.visibility(visibility.explicit))
 local result_info_pure = value.result_info(result_info(purity.pure))
+local result_info_effectful = value.result_info(result_info(purity.effectful))
 
 local evaluator = require "evaluator"
 local const_combinator = evaluator.const_combinator
@@ -437,76 +438,56 @@ end
 ---@param metaval value
 ---@return boolean, value
 local function speculate_pi_type(env, metaval)
-	local ok, res = evaluator.typechecker_state:speculate(function()
-		local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
-		local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
-		local pi = value.pi(param_mv:as_value(), param_info_implicit, result_mv:as_value(), result_info_pure)
-		pi.original_name = "#spec-" .. tostring(metaval.original_name)
-		param_mv.source = "param_mv for " .. pi.original_name
-		result_mv.source = "result_mv for " .. pi.original_name
+	-- FIXME: There is a way to avoid this combinatoric explosion that nobody has properly explained yet. If this gets too big, we need to do it properly.
+	local pairs = {
+		{ param_info = param_info_implicit, result_info = result_info_pure },
+		{ param_info = param_info_explicit, result_info = result_info_pure },
+		{ param_info = param_info_implicit, result_info = result_info_effectful },
+		{ param_info = param_info_explicit, result_info = result_info_effectful },
+	}
 
-		evaluator.typechecker_state:flow(
-			metaval,
-			env.typechecking_context,
-			pi,
-			env.typechecking_context,
-			terms.constraintcause.primitive("Speculating on pi type", U.anchor_here())
-		)
+	local ok, res
+	for i = 1, 4 do
+		ok, res = evaluator.typechecker_state:speculate(function()
+			local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+			local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+			local pi = value.pi(param_mv:as_value(), pairs[i].param_info, result_mv:as_value(), pairs[i].result_info)
+			pi.original_name = "#spec-" .. tostring(metaval.original_name)
+			param_mv.source = "param_mv for " .. pi.original_name
+			result_mv.source = "result_mv for " .. pi.original_name
 
-		--[[U.tag(
-			"flow",
-			{
-				val = metaval:pretty_preprint(env.typechecking_context),
-				use = pi:pretty_preprint(env.typechecking_context),
-			},
-			evaluator.typechecker_state.flow,
-			evaluator.typechecker_state,
-			metaval,
-			env.typechecking_context,
-			pi,
-			env.typechecking_context,
-			terms.constraintcause.primitive("Speculating on pi type", U.anchor_here())
-		)]]
+			evaluator.typechecker_state:flow(
+				metaval,
+				env.typechecking_context,
+				pi,
+				env.typechecking_context,
+				terms.constraintcause.primitive("Speculating on pi type", U.anchor_here())
+			)
 
-		return pi
-	end)
-	if ok then
-		return ok, res
+			--[[U.tag(
+				"flow",
+				{
+					val = metaval:pretty_preprint(env.typechecking_context),
+					use = pi:pretty_preprint(env.typechecking_context),
+				},
+				evaluator.typechecker_state.flow,
+				evaluator.typechecker_state,
+				metaval,
+				env.typechecking_context,
+				pi,
+				env.typechecking_context,
+				terms.constraintcause.primitive("Speculating on pi type", U.anchor_here())
+			)]]
+
+			return pi
+		end)
+
+		if ok then
+			return ok, res
+		end
 	end
 
-	return evaluator.typechecker_state:speculate(function()
-		local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
-		local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
-		local pi = value.pi(param_mv:as_value(), param_info_explicit, result_mv:as_value(), result_info_pure)
-		pi.original_name = "#spec-" .. tostring(metaval.original_name)
-		param_mv.source = "param_mv for " .. pi.original_name
-		result_mv.source = "result_mv for " .. pi.original_name
-
-		evaluator.typechecker_state:flow(
-			metaval,
-			env.typechecking_context,
-			pi,
-			env.typechecking_context,
-			terms.constraintcause.primitive("Speculating on pi type", U.anchor_here())
-		)
-
-		--[[U.tag(
-			"flow",
-			{
-				val = metaval:pretty_preprint(env.typechecking_context),
-				use = pi:pretty_preprint(env.typechecking_context),
-			},
-			,
-			evaluator.typechecker_state,
-			metaval,
-			env.typechecking_context,
-			pi,
-			env.typechecking_context,
-			terms.constraintcause.primitive("Speculating on pi type", U.anchor_here())
-		)]]
-
-		return pi
-	end)
+	return ok, res
 end
 
 ---HORRIBLE HACK MAKE THIS BETTER
@@ -573,7 +554,8 @@ local function call_operative(type_of_term, usage_count, term, sargs, goal, env)
 	-- operative input: env, syntax tree, goal type (if checked)
 	local tuple_args =
 		value_array(value.host_value(sargs), value.host_value(env), value.host_value(term), value.host_value(goal))
-	local operative_result_val = evaluator.apply_value(handler, terms.value.tuple_value(tuple_args))
+	local operative_result_val =
+		evaluator.apply_value(handler, terms.value.tuple_value(tuple_args), env.typechecking_context)
 	-- result should be able to be an inferred term, can fail
 	-- NYI: operative_cons in evaluator must use Maybe type once it exists
 	-- if not operative_result_val:is_enum_value() then
@@ -634,7 +616,7 @@ local function call_pi(type_of_term, usage_count, term, sargs, goal, env)
 	while param_info:unwrap_param_info():unwrap_visibility():is_implicit() do
 		local metavar = evaluator.typechecker_state:metavariable(env.typechecking_context)
 		local metavalue = metavar:as_value()
-		local metaresult = evaluator.apply_value(result_type, metavalue)
+		local metaresult = evaluator.apply_value(result_type, metavalue, env.typechecking_context)
 		local ok, inner_pi = speculate_pi_type(env, metaresult)
 		if not ok then
 			error(
@@ -666,7 +648,7 @@ local function call_pi(type_of_term, usage_count, term, sargs, goal, env)
 	---@cast res inferrable
 
 	if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
-		local bind = terms.binding.program_sequence(res, a.start_anchor)
+		local bind = terms.binding.program_sequence(res, sargs.start_anchor)
 		env = env:bind_local(bind)
 		ok, res = env:get("#program-sequence") --TODO refactor
 		if not ok then
@@ -690,7 +672,7 @@ end
 ---@return boolean
 ---@return string|checkable|inferrable
 ---@return Environment
-local function call_host_func_type(type_of_term, usage_count, term, sargs, goal, env)
+local function call_host_func_type(type_of_term_input, usage_count, term, sargs, goal, env)
 	local ok
 	ok, type_of_term = evaluator.typechecker_state:speculate(function()
 		local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
@@ -698,7 +680,7 @@ local function call_host_func_type(type_of_term, usage_count, term, sargs, goal,
 		local host_func_type = value.host_function_type(param_mv:as_value(), result_mv:as_value(), result_info_pure)
 
 		evaluator.typechecker_state:flow(
-			type_of_term,
+			type_of_term_input,
 			env.typechecking_context,
 			host_func_type,
 			env.typechecking_context,
@@ -708,7 +690,28 @@ local function call_host_func_type(type_of_term, usage_count, term, sargs, goal,
 		return host_func_type
 	end)
 	if not ok then
-		return ok, type_of_term
+		-- FIXME: Do this correctly instead of just guessing the other purity option
+		ok, type_of_term = evaluator.typechecker_state:speculate(function()
+			local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+			local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+			local host_func_type =
+				value.host_function_type(param_mv:as_value(), result_mv:as_value(), result_info_effectful)
+
+			evaluator.typechecker_state:flow(
+				type_of_term_input,
+				env.typechecking_context,
+				host_func_type,
+				env.typechecking_context,
+				terms.constraintcause.primitive("Speculating on host func type", U.anchor_here())
+			)
+
+			return host_func_type
+		end)
+
+		if not ok then
+			print("ERRORED:", type_of_term)
+			return ok, type_of_term
+		end
 	end
 
 	local param_type, result_type, result_info = type_of_term:unwrap_host_function_type()
@@ -720,7 +723,7 @@ local function call_host_func_type(type_of_term, usage_count, term, sargs, goal,
 	if not ok then
 		-- TODO: semantic error here crashes
 		error(tuple)
-		error(semantic_error.host_function_argument_collect_failed(tuple, { a.start_anchor, b.start_anchor }, {
+		error(semantic_error.host_function_argument_collect_failed(tuple, { sargs.start_anchor, sargs.end_anchor }, {
 			host_function_type = type_of_term,
 			host_function_value = term,
 		}, env))
@@ -745,7 +748,7 @@ local function call_host_func_type(type_of_term, usage_count, term, sargs, goal,
 			)
 		)
 		---@type Environment
-		local bind = terms.binding.program_sequence(app, a.start_anchor)
+		local bind = terms.binding.program_sequence(app, sargs.start_anchor)
 		env = env:bind_local(bind)
 		ok, res = env:get("#program-sequence")
 		if not ok then
