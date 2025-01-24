@@ -495,34 +495,48 @@ end
 ---@param metaval value
 ---@return boolean, value?
 local function operative_test_hack(env, metaval)
-	local edges = evaluator.typechecker_state.graph.constrain_edges:to(
-		metaval:unwrap_neutral():unwrap_free():unwrap_metavariable().usage
-	)
-	local res = nil
-	for _, edge in ipairs(edges) do
-		if not edge.rel == evaluator.UniverseOmegaRelation then
-			do
-				return false
+	if
+		metaval:is_neutral()
+		and metaval:unwrap_neutral():is_free()
+		and metaval:unwrap_neutral():unwrap_free():is_metavariable()
+	then
+		local mv = metaval:unwrap_neutral():unwrap_free():unwrap_metavariable()
+		local edges = evaluator.typechecker_state.graph.constrain_edges:to(mv.usage)
+		local res = nil
+		for _, edge in ipairs(edges) do
+			if res then
+				return false, "too many edges, couldn't pick one"
 			end
-			error "not a subtyping relation"
+			if edge.rel ~= evaluator.UniverseOmegaRelation then
+				return false, "not a subtyping relation"
+			end
+			res = evaluator.typechecker_state.values[edge.left][1]
 		end
-		if evaluator.typechecker_state.values[edge.left][1]:is_operative_type() then
-			if not res then
-				res = evaluator.typechecker_state.values[edge.left][1]
-			else
-				do
-					return false
-				end
-				error "too many edges, couldn't pick one"
+		return true, res
+	elseif
+		metaval:is_neutral()
+		and metaval:unwrap_neutral():is_application_stuck()
+		and metaval:unwrap_neutral():unwrap_application_stuck():is_free()
+		and metaval:unwrap_neutral():unwrap_application_stuck():unwrap_free():is_metavariable()
+	then
+		local stuck_f, arg = metaval:unwrap_neutral():unwrap_application_stuck()
+		local mv = stuck_f:unwrap_free():unwrap_metavariable()
+		local edges = evaluator.typechecker_state.graph.constrain_edges:to(mv.usage)
+		local f = nil
+		for _, edge in ipairs(edges) do
+			if f then
+				return false, "too many edges, couldn't pick one"
 			end
-		else
-			do
-				return false
+			if edge.rel ~= evaluator.FunctionRelation(evaluator.UniverseOmegaRelation) then
+				return false, "not a func(subtyping) relation"
 			end
-			error "was bound to something that wasn't an operative"
+			f = evaluator.typechecker_state.values[edge.left][1]
 		end
+		local res = evaluator.apply_value(f, arg, env.typechecking_context)
+		return true, res
+	else
+		return true, metaval
 	end
-	return true, res
 end
 
 ---@param type_of_term value
@@ -536,15 +550,10 @@ end
 ---@return Environment
 local function call_operative(type_of_term, usage_count, term, sargs, goal, env)
 	-- TODO: speculate operative type
-	if
-		type_of_term:is_neutral()
-		and type_of_term:unwrap_neutral():is_free()
-		and type_of_term:unwrap_neutral():unwrap_free():is_metavariable()
-	then
-		local ok, updated_type = operative_test_hack(env, type_of_term)
-		if not ok then
-			return false, updated_type
-		end
+	local ok
+	ok, type_of_term = operative_test_hack(env, type_of_term)
+	if not ok then
+		return false, type_of_term
 	end
 	local is_op, handler, userdata_type = type_of_term:as_operative_type()
 	if not is_op then
@@ -620,7 +629,7 @@ local function call_pi(type_of_term, usage_count, term, sargs, goal, env)
 			error("Either you have a parameter with more than 1024 implicit parameters or this is an infinite loop!")
 		end
 
-		if overflow > 5 then
+		if overflow > 1000 then
 			print(overflow .. ": ", type_of_term:pretty_print(env.typechecking_context))
 		end
 
@@ -875,7 +884,8 @@ local function expression_pairhandler(args, a, b)
 	--print("in")
 	--env.typechecking_context:dump_names()
 
-	print(res_term1)
+	--print(type_of_term:pretty_print(env.typechecking_context))
+	--print(res_term1)
 	--print(res_term2)
 	--print(res_term3)
 	-- try uncommenting one of the error prints above
