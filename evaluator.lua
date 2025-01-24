@@ -3805,6 +3805,11 @@ local function IndexedCollection(indices)
 
 		for name, extractors in pairs(indices) do
 			self._index_store[name] = U.revert_tree_node(self._index_store[name], U.getshadowdepth(self))
+			-- It's legal for our top-level node to be below our actual shadow level due to skipped shadows, so we restore those shadow layers here
+			-- A commit would have fixed this, but a commit doesn't always happen.
+			while U.getshadowdepth(self._index_store[name]) < U.getshadowdepth(self) do
+				self._index_store[name] = U.shadowtable(self._index_store[name])
+			end
 		end
 
 		local orig = getmetatable(self).__shadow

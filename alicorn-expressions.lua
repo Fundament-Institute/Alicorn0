@@ -629,10 +629,6 @@ local function call_pi(type_of_term, usage_count, term, sargs, goal, env)
 			error("Either you have a parameter with more than 1024 implicit parameters or this is an infinite loop!")
 		end
 
-		if overflow > 1000 then
-			print(overflow .. ": ", type_of_term:pretty_print(env.typechecking_context))
-		end
-
 		local metavar = evaluator.typechecker_state:metavariable(env.typechecking_context)
 		local metavalue = metavar:as_value()
 		local metaresult = evaluator.apply_value(result_type, metavalue, env.typechecking_context)
@@ -787,7 +783,6 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 	return true, res, env
 end
 
-local count = 0
 ---@param args ExpressionArgs
 ---@param a ConstructedSyntax
 ---@param b ConstructedSyntax
@@ -796,10 +791,7 @@ local count = 0
 ---@return Environment?
 local function expression_pairhandler(args, a, b)
 	local goal, env = args:unwrap()
-	count = count + 1
-	if count == 1230 then
-		count = count
-	end
+
 	-- if the expression is a list containing prefix and infix expressions,
 	-- parse it into a tree of simple prefix/infix expressions with shunting yard
 	local ok, syntax
