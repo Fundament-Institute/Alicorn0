@@ -452,7 +452,7 @@ local function speculate_pi_type(env, metaval)
 			local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			local pi = value.pi(param_mv:as_value(), pairs[i].param_info, result_mv:as_value(), pairs[i].result_info)
-			pi.original_name = "#spec-" .. tostring(metaval.original_name)
+			pi.original_name = "#spec-" .. U.strip_ansi(tostring(metaval.original_name or metaval))
 			param_mv.source = "param_mv for " .. pi.original_name
 			result_mv.source = "result_mv for " .. pi.original_name
 
@@ -613,11 +613,22 @@ local function call_pi(type_of_term, usage_count, term, sargs, goal, env)
 
 	local param_type, param_info, result_type, result_info = type_of_term:unwrap_pi()
 
+	local overflow = 0
 	while param_info:unwrap_param_info():unwrap_visibility():is_implicit() do
+		overflow = overflow + 1
+		if overflow > 1024 then
+			error("Either you have a parameter with more than 1024 implicit parameters or this is an infinite loop!")
+		end
+
+		if overflow > 5 then
+			print(overflow .. ": ", type_of_term:pretty_print(env.typechecking_context))
+		end
+
 		local metavar = evaluator.typechecker_state:metavariable(env.typechecking_context)
 		local metavalue = metavar:as_value()
 		local metaresult = evaluator.apply_value(result_type, metavalue, env.typechecking_context)
 		local ok, inner_pi = speculate_pi_type(env, metaresult)
+
 		if not ok then
 			error(
 				"calling function with implicit args, result type applied on implicit args must be a function type: "
@@ -767,6 +778,7 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 	return true, res, env
 end
 
+local count = 0
 ---@param args ExpressionArgs
 ---@param a ConstructedSyntax
 ---@param b ConstructedSyntax
@@ -775,7 +787,10 @@ end
 ---@return Environment?
 local function expression_pairhandler(args, a, b)
 	local goal, env = args:unwrap()
-
+	count = count + 1
+	if count == 1230 then
+		count = count
+	end
 	-- if the expression is a list containing prefix and infix expressions,
 	-- parse it into a tree of simple prefix/infix expressions with shunting yard
 	local ok, syntax
@@ -860,7 +875,7 @@ local function expression_pairhandler(args, a, b)
 	--print("in")
 	--env.typechecking_context:dump_names()
 
-	--print(res_term1)
+	print(res_term1)
 	--print(res_term2)
 	--print(res_term3)
 	-- try uncommenting one of the error prints above
