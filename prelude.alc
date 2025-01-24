@@ -1622,6 +1622,7 @@ let goal-infer = intrinsic "return terms.expression_goal.infer" : host-goal
 
 let do-impl-type = operative-handler-type(host-unit)
 
+
 let do-impl = lambda (syn : host-syntax, env : host-environment, ud : host-unit, goal : host-goal)
 	let (shadowed, inner_env) = enter-block(env)
 
@@ -1820,4 +1821,3 @@ let mul = lambda (a : host-number, b : host-number)
 	let (c) = host-mul(a, b)
 	c
 let _*_ = mul
-

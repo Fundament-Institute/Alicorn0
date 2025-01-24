@@ -1670,10 +1670,7 @@ end
 ---@type lua_operative
 local function debug_trace_impl(syntax, env)
 	local ok, term_env = syntax:match({
-		metalanguage.listmatch(
-			metalanguage.accept_handler,
-			exprs.inferred_expression(metalanguage.accept_bundled, env)
-		),
+		metalanguage.listmatch(metalanguage.accept_handler, exprs.inferred_expression(utils.accept_bundled, env)),
 	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, term_env
