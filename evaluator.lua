@@ -812,11 +812,6 @@ local function is_type_of_types(val)
 	return val:is_star() or val:is_prop() or val:is_host_type_type()
 end
 
-local make_inner_context
-local infer_tuple_type, infer_tuple_type_unwrapped
-local make_inner_context2
-local infer_tuple_type2
-
 local check_concrete
 -- indexed by kind x kind
 ---@type {[string] : {[string] : value_comparer}}
@@ -3789,15 +3784,14 @@ local function IndexedCollection(indices)
 		end
 		U.lock_table(self) --  This has to be down here or we'll accidentally copy it
 
-		setmetatable(n, { __shadow = self })
+		setmetatable(n, { __shadow = self, __depth = U.getshadowdepth(self) + 1 })
 		return n
 	end
 
 	function res:commit()
 		U.commit(self._collection)
 		for name, extractors in pairs(indices) do
-			self._index_store[name] =
-				U.commit_tree_node(self._index_store[name], U.getshadowdepth(self._index_store[name]))
+			self._index_store[name] = U.commit_tree_node(self._index_store[name], U.getshadowdepth(self))
 		end
 
 		local orig = getmetatable(self).__shadow
@@ -3810,8 +3804,7 @@ local function IndexedCollection(indices)
 		U.revert(self._collection)
 
 		for name, extractors in pairs(indices) do
-			self._index_store[name] =
-				U.revert_tree_node(self._index_store[name], U.getshadowdepth(self._index_store[name]))
+			self._index_store[name] = U.revert_tree_node(self._index_store[name], U.getshadowdepth(self))
 		end
 
 		local orig = getmetatable(self).__shadow
@@ -5244,7 +5237,7 @@ function TypeCheckerState:shadow()
 		valcheck = U.shadowtable(self.valcheck),
 		usecheck = U.shadowtable(self.usecheck),
 		trait_registry = self.trait_registry:shadow(),
-	}, { __index = TypeCheckerState, __shadow = self })
+	}, { __index = TypeCheckerState, __shadow = self, __depth = U.getshadowdepth(self) + 1 })
 end
 
 function TypeCheckerState:commit()

@@ -19,9 +19,8 @@ if lldebugger_enabled then
 	require("lldebugger").start(true)
 end
 
-local endTime = os.time() + 3
-while os.time() < endTime do
-end
+--local endTime = os.time() + 3
+--while os.time() < endTime do end
 
 require "pretty-printer" -- has side-effect of loading global p()
 
@@ -277,7 +276,7 @@ local function execute_alc_file(bound_expr, log, env)
 		log(type)
 		log("usages:", usages)
 		log("term: (typed term follows)")
-		log(term:pretty_print(terms.runtime_context()))
+		log(term:pretty_print(env.typechecking_context.runtime_context))
 	end
 
 	local gen = require "terms-generators"
@@ -304,7 +303,7 @@ local function execute_alc_file(bound_expr, log, env)
 
 	log("Evaluating")
 	local ok, result = pcall(function()
-		return evaluator.evaluate(term, terms.runtime_context())
+		return evaluator.evaluate(term, env.typechecking_context.runtime_context)
 	end)
 
 	if not ok then

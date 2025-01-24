@@ -236,7 +236,7 @@ return function(self)
 	if self.kind == %q then
 		return %s
 	else
-		error("unwrap failed: unwrapping for a %s but found a " .. self.kind)
+		error("unwrap failed: unwrapping for a %s but found a " .. tostring(self))
 	end
 end]]
 			chunk = chunk:format(vkind, all_returns, vkind)

@@ -92,6 +92,20 @@ if bar.foo ~= 1 then
 end
 
 do
+	local found = {}
+	for k, v in pairs(foobar) do
+		found[k] = v
+	end
+
+	if found.foo ~= 3 then
+		error("fail found.foo: " .. tostring(foobar.foo))
+	end
+	if found.bar ~= 2 then
+		error("fail found.foo: " .. tostring(bar.foo))
+	end
+end
+
+do
 	local store = nil
 	local extractors = {
 		---@return integer
@@ -262,7 +276,120 @@ do
 		error("fail")
 	end
 	--U.commit_tree_node(store, 1)
+
+	local newstore = U.insert_tree_node({ left = "l1", right = "r1" }, nil, 1, extractors, 2)
+	newstore = U.shadowtable(newstore)
+	newstore = U.shadowtable(newstore)
+	newstore = U.insert_tree_node({ left = "l6", right = "r6" }, newstore, 1, extractors, U.getshadowdepth(newstore))
+	newstore = U.revert_tree_node(newstore, 1)
+	newstore = U.insert_tree_node({ left = "l6", right = "r6" }, newstore, 1, extractors, U.getshadowdepth(newstore))
+
+	local newstore = U.insert_tree_node({ left = "l1", right = "r1" }, nil, 1, extractors, 0)
+	local newstore = U.insert_tree_node({ left = "l1", right = "r2" }, newstore, 1, extractors, 2)
+
+	--local endTime = os.time() + 3
+	--while os.time() < endTime do
+	--end
+
+	if newstore["l1"]["r1"] == nil then
+		error("fail")
+	end
+	if newstore["l1"]["r2"] == nil then
+		error("fail")
+	end
+	newstore = U.commit_tree_node(newstore, 2)
+
+	if newstore["l1"]["r1"] == nil then
+		error("fail")
+	end
+	if newstore["l1"]["r2"] == nil then
+		error("fail")
+	end
+
+	local newstore = U.insert_tree_node({ left = "l2", right = "r1" }, newstore, 1, extractors, 3)
+
+	if newstore["l2"]["r1"] == nil then
+		error("fail")
+	end
+
+	local newstore = U.insert_tree_node({ left = "l2", right = "r2" }, newstore, 1, extractors, 5)
+	local newstore = U.insert_tree_node({ left = "l3", right = "r2" }, newstore, 1, extractors, 5)
+
+	if newstore["l2"]["r1"] == nil then
+		error("fail")
+	end
+	if newstore["l2"]["r2"] == nil then
+		error("fail")
+	end
+
+	newstore = U.commit_tree_node(newstore, 5)
+	newstore = U.revert_tree_node(newstore, 4)
+
+	if newstore["l2"]["r1"] == nil then
+		error("fail")
+	end
+	if newstore["l2"]["r2"] ~= nil then
+		error("fail")
+	end
+	if newstore["l3"] ~= nil then
+		error("fail")
+	end
+
+	local newstore = U.insert_tree_node({ left = "l2", right = "r2" }, newstore, 1, extractors, 5)
+	local newstore = U.insert_tree_node({ left = "l3", right = "r2" }, newstore, 1, extractors, 5)
+
+	if newstore["l2"]["r1"] == nil then
+		error("fail")
+	end
+	if newstore["l2"]["r2"] == nil then
+		error("fail")
+	end
+	if newstore["l3"] == nil then
+		error("fail")
+	end
+
+	newstore = U.revert_tree_node(newstore, 5)
+	newstore = U.commit_tree_node(newstore, 4)
+
+	if newstore["l2"]["r1"] == nil then
+		error("fail")
+	end
+	if newstore["l2"]["r2"] ~= nil then
+		error("fail")
+	end
+	if newstore["l3"] ~= nil then
+		error("fail")
+	end
+
+	newstore = U.commit_tree_node(newstore, 3)
+	newstore = U.revert_tree_node(newstore, 2)
+
+	if newstore["l2"] ~= nil then
+		error("fail")
+	end
+	if newstore["l2"] ~= nil then
+		error("fail")
+	end
+
+	newstore = U.revert_tree_node(newstore, 2)
+
+	if newstore["l1"]["r1"] == nil then
+		error("fail")
+	end
+	if newstore["l1"]["r2"] == nil then
+		error("fail")
+	end
+
+	newstore = U.revert_tree_node(newstore, 1)
+
+	if newstore["l1"]["r1"] == nil then
+		error("fail")
+	end
+	if newstore["l1"]["r2"] ~= nil then
+		error("fail")
+	end
 end
+
 --[[
 local foo = metavariable()
 speculate(function()

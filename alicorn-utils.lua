@@ -622,6 +622,15 @@ function M.commit_tree_node(node, depth)
 	M.unlock_table(base)
 
 	if base then
+		-- Because we sometimes skip shadow layers, this can sometimes be at the wrong shadow level
+		while M.getshadowdepth(base) < (depth - 1) do
+			if isleaf then
+				base = M.shadowarray(base)
+			else
+				base = M.shadowtable(base)
+			end
+		end
+
 		for k, v in rawpairs(node) do
 			-- If this is an array, we only copy keys that do not exist at all in the shadowed table
 			if (not isleaf) or base[k] == nil then
