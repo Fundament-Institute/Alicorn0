@@ -28,7 +28,7 @@ let implicit-unstrict-unwrap = lambda_implicit (T : type_(10, 0))
 	lambda (x : unstrict-wrapped(T))
 		unstrict-unwrap T x
 
-let tuple-of-implicit = lambda_implicit(T : type_(10, 0))
+let tuple-of-implicit = lambda_implicit (T : type_(10, 0))
 	lambda_single (xs : T)
 		xs
 
@@ -1301,31 +1301,32 @@ let get-reducible-constructor = lambda (
 	let (c) = inner(red)
 	c
 
-let host-matcher-reducible = lambda (
-		userdata       : host-type,
-		storage        : tuple-desc-type(host-type),
-		result2        : tuple-desc-type(host-type),
-		result         : tuple-desc-type(host-type),
-		red            : reducer-type(storage, result2),
-		s              : host-tuple-type(storage),
-		accept-handler : reducible-handler-type(userdata, result2, result))
-	# FIXME: this function resolution breaks alicorn, which is extremely very super bad
-	# let c = get-reducible-constructor(userdata, storage, result2, result, red)
-	let inner = intrinsic "return function(r) return r end" :
-		host-func-type ((r : reducer-type(storage, result2))) -> ((c : reducible-constructor-type(userdata, storage, result2, result)))
-	let (c) = inner(red)
+let host-matcher-reducible = 
+	lambda_implicit (userdata       : host-type)
+		lambda (
+				storage        : tuple-desc-type(host-type),
+				result2        : tuple-desc-type(host-type),
+				result         : tuple-desc-type(host-type),
+				red            : reducer-type(storage, result2),
+				s              : host-tuple-type(storage),
+				accept-handler : reducible-handler-type(userdata, result2, result))
+			# FIXME: this function resolution breaks alicorn, which is extremely very super bad
+			# let c = get-reducible-constructor(userdata, storage, result2, result, red)
+			let inner = intrinsic "return function(r) return r end" :
+				host-func-type ((r : reducer-type(storage, result2))) -> ((c : reducible-constructor-type(userdata, storage, result2, result)))
+			let (c) = inner(red)
 
-	let accept-handler-type = reducible-handler-type(userdata, result2, result)
-	let accept-handler-desc = tuple-desc-singleton(host-type, accept-handler-type)
-	# let red-param-desc = tuple-desc-concat(host-type, accept-handler-desc, storage)
-	# let red-result-desc = tuple-desc-singleton(host-type, host-matcher(userdata, result))
+			let accept-handler-type = reducible-handler-type(userdata, result2, result)
+			let accept-handler-desc = tuple-desc-singleton(host-type, accept-handler-type)
+			# let red-param-desc = tuple-desc-concat(host-type, accept-handler-desc, storage)
+			# let red-result-desc = tuple-desc-singleton(host-type, host-matcher(userdata, result))
 
-	let accept-handler-tuple = host-tuple-of(host-type, accept-handler-desc)(accept-handler)
-	let red-param = host-tuple-concat(host-type, accept-handler-desc, storage, accept-handler-tuple, s)
+			let accept-handler-tuple = host-tuple-of(host-type, accept-handler-desc)(accept-handler)
+			let red-param = host-tuple-concat(host-type, accept-handler-desc, storage, accept-handler-tuple, s)
 
-	# look ma, no intrinsics!
-	let (m) = apply(c, red-param)
-	m
+			# look ma, no intrinsics!
+			let (m) = apply(c, red-param)
+			m
 # FIXME: implicit here doesn't work
 # FIXME: out of date
 ####let host-matcher-reducible-implicit = lambda_implicit (userdata       : host-type)
@@ -1535,7 +1536,7 @@ let core-operative-type =
 			wrapped(forall (userdata : host-type, handler : operative-handler-type(userdata)) -> (res : host-type))
 
 
-let core-operative = lambda_implicit(userdata : host-type)
+let core-operative = lambda_implicit (userdata : host-type)
 	unwrap
 		intrinsic
 			""""
@@ -1622,6 +1623,20 @@ let goal-infer = intrinsic "return terms.expression_goal.infer" : host-goal
 
 let do-impl-type = operative-handler-type(host-unit)
 
+####let do-impl = lambda (syn : host-syntax, env : host-environment, ud : host-unit, goal : host-goal)
+	let (shadowed, inner-env) = enter-block(env)
+
+	switch
+		match-syntax
+			make-host-array(1)
+				host-matcher-reducible
+					block-reducer(goal-infer)
+					expression-args-new(goal-infer, inner-env)
+					accept-handler
+		Ok(inner-env, term)
+			let (env, wrapped, purity) = exit-block(inner-env, term, shadowed)
+			mk Ok(env, goalify-inferrable(goal, wrapped))
+		Err e -> (mk Err e)
 
 let do-impl = lambda (syn : host-syntax, env : host-environment, ud : host-unit, goal : host-goal)
 	let (shadowed, inner_env) = enter-block(env)
@@ -1632,7 +1647,6 @@ let do-impl = lambda (syn : host-syntax, env : host-environment, ud : host-unit,
 	let matcher-t = host-matcher(host-unit, block-match-result-desc(goal-infer))
 	let matcher =
 		host-matcher-reducible
-			host-unit
 			block-reducer-storage-desc
 			block-reducer-result2-desc(goal-infer)
 			block-match-result-desc(goal-infer)
