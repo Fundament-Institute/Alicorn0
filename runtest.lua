@@ -251,7 +251,11 @@ local function execute_alc_file(bound_expr, log, env)
 		profile.start()
 	end
 	local ok, type, usages, term = pcall(function()
-		return evaluator.infer(bound_expr, env.typechecking_context)
+		local ok, type, usages, term = evaluator.infer(bound_expr, env.typechecking_context)
+		if not ok then
+			error(type)
+		end
+		return type, usages, term
 	end)
 
 	if not ok then
@@ -284,7 +288,7 @@ local function execute_alc_file(bound_expr, log, env)
 	local unique_id = gen.builtin_table
 
 	local ok, err = pcall(function()
-		evaluator.typechecker_state:flow(
+		local ok, err = evaluator.typechecker_state:flow(
 			type,
 			env.typechecking_context,
 			terms.value.program_type(
@@ -294,6 +298,10 @@ local function execute_alc_file(bound_expr, log, env)
 			env.typechecking_context,
 			terms.constraintcause.primitive("final flow check", U.anchor_here())
 		)
+
+		if not ok then
+			error(tostring(err))
+		end
 	end)
 
 	if not ok then
@@ -512,6 +520,9 @@ if test_harness then
 		if (not test_single) or (test_single and file == test_name) then
 			total = total + 1
 
+			-- We do not attempt to capture errors here because no test should cause an internal compiler error, only recoverable errors.
+			-- If a shadowing error occurs, it means a test caused an internal compiler error that was captured by the syntax that left
+			-- the tests in a bad state.
 			evaluator.typechecker_state:speculate(function()
 				local ok, log = perform_test(file, completion, env)
 
@@ -520,7 +531,7 @@ if test_harness then
 					U.append(failures, file)
 				end
 
-				error("pretend to fail so test reverts")
+				return false
 			end)
 		end
 	end

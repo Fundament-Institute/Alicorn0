@@ -136,6 +136,9 @@ end
 runtime_context_mt = {
 	__index = RuntimeContext,
 	__eq = RuntimeContext.eq,
+	__tostring = function(t)
+		return "RuntimeContext with " .. t.bindings:len() .. " bindings."
+	end,
 }
 
 ---@return RuntimeContext
@@ -426,6 +429,9 @@ end
 typechecking_context_mt = {
 	__index = TypecheckingContext,
 	__len = TypecheckingContext.len,
+	__tostring = function(t)
+		return "TypecheckingContext with " .. t.bindings:len() .. " bindings. " .. tostring(t.runtime_context)
+	end,
 }
 
 ---@return TypecheckingContext
@@ -656,7 +662,7 @@ inferrable_term:define_enum("inferrable", {
 ---@field Rel value -- : (a:T,b:T) -> Prop__
 ---@field refl value -- : (a:T) -> Rel(a,a)
 ---@field antisym value -- : (a:T, B:T, Rel(a,b), Rel(b,a)) -> a == b
----@field constrain value -- : (Node(T), Node(T)) -> [TCState] ()
+---@field constrain value -- : (Node(T), Node(T)) -> [TCState] (Error)
 local subtype_relation_mt = {}
 
 local SubtypeRelation = gen.declare_foreign(gen.metatable_equality(subtype_relation_mt), "SubtypeRelation")
@@ -1279,6 +1285,13 @@ local function tuple_desc_inner(a, e, ...)
 	end
 end
 
+---@module "types.tristate"
+local tristate = gen.declare_enum("tristate", {
+	{ "success" },
+	{ "continue" },
+	{ "failure" },
+})
+
 ---@param ... value
 ---@return value
 local function tuple_desc(...)
@@ -1339,6 +1352,8 @@ local terms = {
 	TCState = TCState,
 	lua_prog = lua_prog,
 	verify_placeholders = verify_placeholders,
+
+	tristate = tristate,
 }
 
 local override_prettys = require "terms-pretty"(terms)

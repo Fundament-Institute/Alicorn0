@@ -83,12 +83,18 @@ local function let_impl(syntax, env)
 			end
 		end
 
-		env = env:bind_local(terms.binding.tuple_elim(tupletype(table.unpack(names)), expr))
+		ok, env = env:bind_local(terms.binding.tuple_elim(tupletype(table.unpack(names)), expr))
+		if not ok then
+			return false, env
+		end
 	else
 		if name["kind"] == nil then
 			error("name['kind'] is nil")
 		end
-		env = env:bind_local(terms.binding.let(name.str, expr))
+		ok, env = env:bind_local(terms.binding.let(name.str, expr))
+		if not ok then
+			return false, env
+		end
 	end
 
 	return true,
@@ -175,12 +181,15 @@ local switch_case = metalanguage.reducer(function(syntax, env)
 	})
 	local shadowed, term
 	shadowed, env = env:enter_block(terms.block_purity.inherit)
-	env = env:bind_local(
+	ok, env = env:bind_local(
 		terms.binding.tuple_elim(
 			names,
 			terms.inferrable_term.bound_variable(env.typechecking_context:len(), U.bound_here())
 		)
 	)
+	if not ok then
+		return false, env
+	end
 	ok, term, env = tail:match({
 		exprs.inferred_expression(metalanguage.accept_handler, env),
 	}, metalanguage.failure_handler, nil)
@@ -368,7 +377,8 @@ local ascribed_name = metalanguage.reducer(
 		local shadowed
 		shadowed, env = env:enter_block(terms.block_purity.pure)
 		local prev_name = "#prev - " .. tostring(syntax.start_anchor)
-		env = env:bind_local(
+		local ok
+		ok, env = env:bind_local(
 			terms.binding.annotated_lambda(
 				prev_name,
 				prev,
@@ -377,12 +387,18 @@ local ascribed_name = metalanguage.reducer(
 				literal_purity_pure
 			)
 		)
+		if not ok then
+			return false, env
+		end
 		local ok, prev_binding = env:get(prev_name)
 		if not ok then
 			error "#prev should always be bound, was just added"
 		end
 		---@cast prev_binding -string
-		env = env:bind_local(terms.binding.tuple_elim(names, prev_binding))
+		ok, env = env:bind_local(terms.binding.tuple_elim(names, prev_binding))
+		if not ok then
+			return false, env
+		end
 		local ok, name, val, env =
 			syntax:match({ pure_ascribed_name(metalanguage.accept_handler, env) }, metalanguage.failure_handler, nil)
 		if not ok then
@@ -412,7 +428,8 @@ local curry_segment = metalanguage.reducer(
 			end, function(thread)
 				--print("type_env: " .. tostring(thread.env))
 				return pure_ascribed_name(function(_, name, type_val, type_env)
-					type_env = type_env:bind_local(
+					local ok
+					ok, type_env = type_env:bind_local(
 						terms.binding.annotated_lambda(
 							name,
 							type_val,
@@ -421,6 +438,9 @@ local curry_segment = metalanguage.reducer(
 							literal_purity_pure
 						)
 					)
+					if not ok then
+						return false, type_env
+					end
 					local newthread = {
 						env = type_env,
 					}
@@ -747,7 +767,7 @@ local function make_host_func_syntax(effectful)
 		shadowed, env = env:enter_block(terms.block_purity.pure)
 		-- tail.start_anchor can be nil so we fall back to the start_anchor for this host func type if needed
 		-- TODO: use correct name in lambda parameter instead of adding an extra let
-		env = env:bind_local(
+		ok, env = env:bind_local(
 			terms.binding.annotated_lambda(
 				"#host-func-arguments",
 				params_args,
@@ -756,15 +776,21 @@ local function make_host_func_syntax(effectful)
 				literal_purity_pure
 			)
 		)
+		if not ok then
+			return false, env
+		end
 		local ok, arg = env:get("#host-func-arguments")
 		if not ok then
 			error("wtf")
 		end
 		---@cast arg -string
 		if params_single then
-			env = env:bind_local(terms.binding.let(params_names, arg))
+			ok, env = env:bind_local(terms.binding.let(params_names, arg))
 		else
-			env = env:bind_local(terms.binding.tuple_elim(params_names, arg))
+			ok, env = env:bind_local(terms.binding.tuple_elim(params_names, arg))
+		end
+		if not ok then
+			return false, env
 		end
 
 		local ok, results_thread = tail:match({
@@ -848,7 +874,7 @@ local function forall_impl(syntax, env)
 		inner_name = "forall(" .. table.concat(params_names, ", ") .. ")"
 	end
 
-	env = env:bind_local(
+	ok, env = env:bind_local(
 		terms.binding.annotated_lambda(
 			inner_name,
 			params_args,
@@ -857,17 +883,22 @@ local function forall_impl(syntax, env)
 			literal_purity_pure
 		)
 	)
+	if not ok then
+		return false, env
+	end
 	local ok, arg = env:get(inner_name)
 	if not ok then
 		error("wtf")
 	end
 	---@cast arg -string
 	if params_single then
-		env = env:bind_local(terms.binding.let(params_names, arg))
+		ok, env = env:bind_local(terms.binding.let(params_names, arg))
 	else
-		env = env:bind_local(terms.binding.tuple_elim(params_names, arg))
+		ok, env = env:bind_local(terms.binding.tuple_elim(params_names, arg))
 	end
-
+	if not ok then
+		return false, env
+	end
 	local ok, results_thread = tail:match({
 		metalanguage.listmatch(metalanguage.accept_handler, ascribed_segment(metalanguage.accept_handler, env)),
 	}, metalanguage.failure_handler, nil)
@@ -922,7 +953,12 @@ local function the_operative_impl(syntax, env)
 		return ok, type_inferrable_term, tail
 	end
 
-	local type_of_typed_term, usages, type_typed_term = evaluator.infer(type_inferrable_term, env.typechecking_context)
+	local ok, type_of_typed_term, usages, type_typed_term =
+		evaluator.infer(type_inferrable_term, env.typechecking_context)
+	if not ok then
+		return false, type_of_typed_term
+	end
+
 	local evaled_type = evaluator.evaluate(type_typed_term, env.typechecking_context.runtime_context)
 
 	--print("type_inferrable_term: (inferrable term follows)")
@@ -968,7 +1004,10 @@ local function apply_operative_impl(syntax, env)
 		return ok, fn_inferrable_term
 	end
 
-	local type_of_fn, usages, fn_typed_term = evaluator.infer(fn_inferrable_term, env.typechecking_context)
+	local ok, type_of_fn, usages, fn_typed_term = evaluator.infer(fn_inferrable_term, env.typechecking_context)
+	if not ok then
+		return ok, type_of_fn
+	end
 
 	-- TODO: apply operative?
 	-- TODO: param info and result info
@@ -987,7 +1026,7 @@ local function apply_operative_impl(syntax, env)
 
 	local function apply_inner(spec_type)
 		local ok, err = evaluator.typechecker_state:speculate(function()
-			evaluator.typechecker_state:flow(
+			return evaluator.typechecker_state:flow(
 				type_of_fn,
 				env.typechecking_context,
 				spec_type,
@@ -1048,7 +1087,7 @@ local function lambda_impl(syntax, env)
 	local args, names, env = thread.args, thread.names, thread.env
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
 	local inner_name = "λ(" .. table.concat(names, ",") .. ")"
-	inner_env = inner_env:bind_local(
+	ok, inner_env = inner_env:bind_local(
 		terms.binding.annotated_lambda(
 			inner_name,
 			args,
@@ -1057,8 +1096,14 @@ local function lambda_impl(syntax, env)
 			literal_purity_pure
 		)
 	)
+	if not ok then
+		return false, inner_env
+	end
 	local _, arg = inner_env:get(inner_name)
-	inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
+	ok, inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
+	if not ok then
+		return false, inner_env
+	end
 	local ok, expr, env = tail:match(
 		{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env)) },
 		metalanguage.failure_handler,
@@ -1084,7 +1129,7 @@ local function lambda_prog_impl(syntax, env)
 	local inner_name = "λ-prog(" .. table.concat(names, ",") .. ")"
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.effectful)
-	inner_env = inner_env:bind_local(
+	ok, inner_env = inner_env:bind_local(
 		terms.binding.annotated_lambda(
 			inner_name,
 			args,
@@ -1093,8 +1138,14 @@ local function lambda_prog_impl(syntax, env)
 			literal_purity_effectful
 		)
 	)
+	if not ok then
+		return false, inner_env
+	end
 	local _, arg = inner_env:get(inner_name)
-	inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
+	ok, inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
+	if not ok then
+		return false, inner_env
+	end
 	local ok, expr, env = tail:match(
 		{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env)) },
 		metalanguage.failure_handler,
@@ -1119,9 +1170,12 @@ local function lambda_single_impl(syntax, env)
 	local name, arg, env = utils.unpack_bundle(thread)
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
-	inner_env = inner_env:bind_local(
+	ok, inner_env = inner_env:bind_local(
 		terms.binding.annotated_lambda(name, arg, syntax.start_anchor, terms.visibility.explicit, literal_purity_pure)
 	)
+	if not ok then
+		return false, inner_env
+	end
 	local ok, expr, env = tail:match(
 		{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env)) },
 		metalanguage.failure_handler,
@@ -1146,9 +1200,12 @@ local function lambda_implicit_impl(syntax, env)
 	local name, arg, env = utils.unpack_bundle(thread)
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
-	inner_env = inner_env:bind_local(
+	ok, inner_env = inner_env:bind_local(
 		terms.binding.annotated_lambda(name, arg, syntax.start_anchor, terms.visibility.implicit, literal_purity_pure)
 	)
+	if not ok then
+		return false, inner_env
+	end
 	local ok, expr, env = tail:match(
 		{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env)) },
 		metalanguage.failure_handler,
@@ -1174,7 +1231,7 @@ local function lambda_annotated_impl(syntax, env)
 	local inner_name = "λ-named(" .. table.concat(names, ",") .. ")"
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
-	inner_env = inner_env:bind_local(
+	ok, inner_env = inner_env:bind_local(
 		terms.binding.annotated_lambda(
 			inner_name,
 			args,
@@ -1183,9 +1240,14 @@ local function lambda_annotated_impl(syntax, env)
 			literal_purity_pure
 		)
 	)
+	if not ok then
+		return false, inner_env
+	end
 	local _, arg = inner_env:get(inner_name)
-	inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
-
+	ok, inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, arg))
+	if not ok then
+		return false, inner_env
+	end
 	local ok, ann_expr_env, tail = tail:match({
 		metalanguage.listtail(
 			metalanguage.accept_handler,
@@ -1390,7 +1452,10 @@ local function into_operative_impl(syntax, env)
 	if not ok then
 		return false, ud_type_chk
 	end
-	local ud_type_usages, ud_type_t = evaluator.check(ud_type_chk, env.typechecking_context, value.host_type_type)
+	local ok, ud_type_usages, ud_type_t = evaluator.check(ud_type_chk, env.typechecking_context, value.host_type_type)
+	if not ok then
+		return false, ud_type_usages
+	end
 	local ud_type = evaluator.evaluate(ud_type_t, env.typechecking_context.runtime_context)
 
 	local ok, ud_chk, env = ud_syntax:match({
@@ -1402,7 +1467,10 @@ local function into_operative_impl(syntax, env)
 	if not ok then
 		return false, ud_chk
 	end
-	local ud_usages, ud_t = evaluator.check(ud_chk, env.typechecking_context, ud_type)
+	local ok, ud_usages, ud_t = evaluator.check(ud_chk, env.typechecking_context, ud_type)
+	if not ok then
+		return false, ud_usages
+	end
 	local ud = evaluator.evaluate(ud_t, env.typechecking_context.runtime_context)
 
 	local ok, handler_chk, env = handler_syntax:match({
@@ -1417,8 +1485,11 @@ local function into_operative_impl(syntax, env)
 	if not ok then
 		return false, handler_chk
 	end
-	local handler_usages, handler_t =
+	local ok, handler_usages, handler_t =
 		evaluator.check(handler_chk, env.typechecking_context, operative_handler_type(ud_type, syntax.start_anchor))
+	if not ok then
+		return false, handler_usages
+	end
 	local handler = evaluator.evaluate(handler_t, env.typechecking_context.runtime_context)
 
 	local op_type = value.operative_type(handler, ud_type)
