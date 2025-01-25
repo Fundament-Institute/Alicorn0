@@ -108,7 +108,11 @@ local function cotuple_dispatch_impl(syntax, env)
 	-- create child scope
 	local childenv = env:child_scope()
 	-- bind local inchild scope
-	childenv = childenv:bind_local(name, { val = subject.val.arg, type = subject.type.params[subject.val.variant + 1] })
+	ok, childenv =
+		childenv:bind_local(name, { val = subject.val.arg, type = subject.type.params[subject.val.variant + 1] })
+	if not ok then
+		return false, childenv
+	end
 	-- eval consequent in child scope
 	local ok, val, childenv = tail:match({
 		evaluator.block(metalanguage.accept_handler, childenv),
@@ -165,10 +169,13 @@ local function cotuple_flow_impl(syntax, env)
 	while subject.val.variant ~= 0 do
 		local name, block = clauses[subject.val.variant].name, clauses[subject.val.variant].block
 		local childenv = env:child_scope()
-		childenv = childenv:bind_local(name, {
+		ok, childenv = childenv:bind_local(name, {
 			val = subject.val.arg,
 			type = subject.type.params[subject.val.variant + 1],
 		})
+		if not ok then
+			return false, childenv
+		end
 		local ok, new_subject, childenv = block:match({
 			evaluator.block(metalanguage.accept_handler, childenv),
 		}, metalanguage.failure_handler, nil)

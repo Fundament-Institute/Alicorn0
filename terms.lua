@@ -656,7 +656,7 @@ inferrable_term:define_enum("inferrable", {
 ---@field Rel value -- : (a:T,b:T) -> Prop__
 ---@field refl value -- : (a:T) -> Rel(a,a)
 ---@field antisym value -- : (a:T, B:T, Rel(a,b), Rel(b,a)) -> a == b
----@field constrain value -- : (Node(T), Node(T)) -> [TCState] ()
+---@field constrain value -- : (Node(T), Node(T)) -> [TCState] (Error)
 local subtype_relation_mt = {}
 
 local SubtypeRelation = gen.declare_foreign(gen.metatable_equality(subtype_relation_mt), "SubtypeRelation")

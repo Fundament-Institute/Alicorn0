@@ -251,7 +251,11 @@ local function execute_alc_file(bound_expr, log, env)
 		profile.start()
 	end
 	local ok, type, usages, term = pcall(function()
-		return evaluator.infer(bound_expr, env.typechecking_context)
+		local ok, type, usages, term = evaluator.infer(bound_expr, env.typechecking_context)
+		if not ok then
+			error(type)
+		end
+		return type, usages, term
 	end)
 
 	if not ok then
@@ -284,7 +288,7 @@ local function execute_alc_file(bound_expr, log, env)
 	local unique_id = gen.builtin_table
 
 	local ok, err = pcall(function()
-		evaluator.typechecker_state:flow(
+		local ok, err = evaluator.typechecker_state:flow(
 			type,
 			env.typechecking_context,
 			terms.value.program_type(
@@ -294,6 +298,10 @@ local function execute_alc_file(bound_expr, log, env)
 			env.typechecking_context,
 			terms.constraintcause.primitive("final flow check", U.anchor_here())
 		)
+
+		if not ok then
+			error(tostring(err))
+		end
 	end)
 
 	if not ok then

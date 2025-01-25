@@ -456,30 +456,18 @@ local function speculate_pi_type(env, metaval)
 			param_mv.source = "param_mv for " .. pi.original_name
 			result_mv.source = "result_mv for " .. pi.original_name
 
-			evaluator.typechecker_state:flow(
+			local ok, err = evaluator.typechecker_state:flow(
 				metaval,
 				env.typechecking_context,
 				pi,
 				env.typechecking_context,
 				terms.constraintcause.primitive("Speculating on pi type", U.anchor_here())
 			)
+			if not ok then
+				return false, err
+			end
 
-			--[[U.tag(
-				"flow",
-				{
-					val = metaval:pretty_preprint(env.typechecking_context),
-					use = pi:pretty_preprint(env.typechecking_context),
-				},
-				evaluator.typechecker_state.flow,
-				evaluator.typechecker_state,
-				metaval,
-				env.typechecking_context,
-				pi,
-				env.typechecking_context,
-				terms.constraintcause.primitive("Speculating on pi type", U.anchor_here())
-			)]]
-
-			return pi
+			return true, pi
 		end)
 
 		if ok then
@@ -594,10 +582,16 @@ local function call_operative(type_of_term, usage_count, term, sargs, goal, env)
 	if goal:is_check() then
 		local checkable = data
 		local goal_type = goal:unwrap_check()
-		local usage_counts, term = evaluator.check(checkable, env.typechecking_context, goal_type)
+		local ok, usage_counts, term = evaluator.check(checkable, env.typechecking_context, goal_type)
+		if not ok then
+			return false, usage_counts
+		end
 		return true, checkable_term.inferrable(inferrable_term.typed(goal_type, usage_counts, term)), env
 	elseif goal:is_infer() then
-		local resulting_type, usage_counts, term = infer(data, env.typechecking_context)
+		local ok, resulting_type, usage_counts, term = infer(data, env.typechecking_context)
+		if not ok then
+			return false, resulting_type
+		end
 		return true, inferrable_term.typed(resulting_type, usage_counts, term), env
 	else
 		error("NYI goal " .. goal.kind .. " for operative in expression_pairhandler")
@@ -665,7 +659,10 @@ local function call_pi(type_of_term, usage_count, term, sargs, goal, env)
 
 	if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
 		local bind = terms.binding.program_sequence(res, sargs.start_anchor)
-		env = env:bind_local(bind)
+		ok, env = env:bind_local(bind)
+		if not ok then
+			return false, env
+		end
 		ok, res = env:get("#program-sequence") --TODO refactor
 		if not ok then
 			error(res)
@@ -695,15 +692,18 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 		local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 		local host_func_type = value.host_function_type(param_mv:as_value(), result_mv:as_value(), result_info_pure)
 
-		evaluator.typechecker_state:flow(
+		local ok, err = evaluator.typechecker_state:flow(
 			type_of_term_input,
 			env.typechecking_context,
 			host_func_type,
 			env.typechecking_context,
 			terms.constraintcause.primitive("Speculating on host func type", U.anchor_here())
 		)
+		if not ok then
+			return false, err
+		end
 
-		return host_func_type
+		return true, host_func_type
 	end)
 	if not ok then
 		-- FIXME: Do this correctly instead of just guessing the other purity option
@@ -713,7 +713,7 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 			local host_func_type =
 				value.host_function_type(param_mv:as_value(), result_mv:as_value(), result_info_effectful)
 
-			evaluator.typechecker_state:flow(
+			local ok, err = evaluator.typechecker_state:flow(
 				type_of_term_input,
 				env.typechecking_context,
 				host_func_type,
@@ -721,7 +721,11 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 				terms.constraintcause.primitive("Speculating on host func type", U.anchor_here())
 			)
 
-			return host_func_type
+			if not ok then
+				return false, err
+			end
+
+			return true, host_func_type
 		end)
 
 		if not ok then
@@ -750,7 +754,10 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 	local res
 
 	if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
-		local tuple_usages, tuple_term = evaluator.check(tuple, env.typechecking_context, param_type)
+		local ok, tuple_usages, tuple_term = evaluator.check(tuple, env.typechecking_context, param_type)
+		if not ok then
+			return false, tuple_usages
+		end
 		local result_final = evaluator.evaluate(
 			typed_term.application(typed_term.literal(result_type), tuple_term),
 			env.typechecking_context.runtime_context
@@ -765,7 +772,10 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 		)
 		---@type Environment
 		local bind = terms.binding.program_sequence(app, sargs.start_anchor)
-		env = env:bind_local(bind)
+		ok, env = env:bind_local(bind)
+		if not ok then
+			return false, env
+		end
 		ok, res = env:get("#program-sequence")
 		if not ok then
 			error(res)
@@ -850,7 +860,10 @@ local function expression_pairhandler(args, a, b)
 	--   pass it into the operative's arguments
 
 	-- combiner was an evaluated typed value, now it isn't
-	local type_of_term, usage_count, term = infer(combiner, env.typechecking_context)
+	local ok, type_of_term, usage_count, term = infer(combiner, env.typechecking_context)
+	if not ok then
+		return false, type_of_term
+	end
 	local res_term1, res_term2, res_term3, res_env
 
 	ok, res_term1, res_env = call_operative(type_of_term, usage_count, term, sargs, goal, env)
@@ -1240,7 +1253,11 @@ collect_tuple = metalanguage.reducer(
 				}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
 				if ok and continue then
 					collected_terms:append(next_term)
-					local _, next_typed = evaluator.check(next_term, env.typechecking_context, next_elem_type)
+					local ok, typed_usages, next_typed =
+						evaluator.check(next_term, env.typechecking_context, next_elem_type)
+					if not ok then
+						return false, typed_usages
+					end
 					local next_val = evaluator.evaluate(next_typed, env.typechecking_context.runtime_context)
 					desc = terms.cons(
 						desc,
@@ -1276,13 +1293,17 @@ collect_tuple = metalanguage.reducer(
 		if goal:is_infer() then
 			return true, inferrable_term.tuple_cons(collected_terms), env
 		elseif goal:is_check() then
-			evaluator.typechecker_state:flow(
+			local ok, err = evaluator.typechecker_state:flow(
 				value.tuple_type(desc),
 				env.typechecking_context,
 				goal_type,
 				env.typechecking_context,
 				terms.constraintcause.primitive("tuple type in collect_tuple", U.anchor_here())
 			)
+
+			if not ok then
+				return false, err
+			end
 
 			--[[U.tag(
 				"flow",
@@ -1337,7 +1358,11 @@ collect_host_tuple = metalanguage.reducer(
 				}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
 				if ok and continue then
 					collected_terms:append(next_term)
-					local _, next_typed = evaluator.check(next_term, env.typechecking_context, next_elem_type)
+					local ok, typed_usages, next_typed =
+						evaluator.check(next_term, env.typechecking_context, next_elem_type)
+					if not ok then
+						return false, typed_usages
+					end
 					local next_val = evaluator.evaluate(next_typed, env.typechecking_context.runtime_context)
 					desc = terms.cons(
 						desc,
@@ -1373,13 +1398,16 @@ collect_host_tuple = metalanguage.reducer(
 		if goal:is_infer() then
 			return true, inferrable_term.host_tuple_cons(collected_terms), env
 		elseif goal:is_check() then
-			evaluator.typechecker_state:flow(
+			local ok, err = evaluator.typechecker_state:flow(
 				value.host_tuple_type(desc),
 				env.typechecking_context,
 				goal_type,
 				env.typechecking_context,
 				terms.constraintcause.primitive("host tuple type in collect_host_tuple", U.anchor_here())
 			)
+			if not ok then
+				return false, err
+			end
 			return true, checkable_term.host_tuple_cons(collected_terms), env
 		else
 			error("NYI: collect_host_tuple goal case " .. goal.kind)
