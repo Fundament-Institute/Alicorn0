@@ -520,6 +520,9 @@ if test_harness then
 		if (not test_single) or (test_single and file == test_name) then
 			total = total + 1
 
+			-- We do not attempt to capture errors here because no test should cause an internal compiler error, only recoverable errors.
+			-- If a shadowing error occurs, it means a test caused an internal compiler error that was captured by the syntax that left
+			-- the tests in a bad state.
 			evaluator.typechecker_state:speculate(function()
 				local ok, log = perform_test(file, completion, env)
 
@@ -528,7 +531,7 @@ if test_harness then
 					U.append(failures, file)
 				end
 
-				error("pretend to fail so test reverts")
+				return false
 			end)
 		end
 	end

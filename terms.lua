@@ -136,6 +136,9 @@ end
 runtime_context_mt = {
 	__index = RuntimeContext,
 	__eq = RuntimeContext.eq,
+	__tostring = function(t)
+		return "RuntimeContext with " .. t.bindings:len() .. " bindings."
+	end,
 }
 
 ---@return RuntimeContext
@@ -426,6 +429,9 @@ end
 typechecking_context_mt = {
 	__index = TypecheckingContext,
 	__len = TypecheckingContext.len,
+	__tostring = function(t)
+		return "TypecheckingContext with " .. t.bindings:len() .. " bindings. " .. tostring(t.runtime_context)
+	end,
 }
 
 ---@return TypecheckingContext
