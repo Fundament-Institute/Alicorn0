@@ -1285,6 +1285,13 @@ local function tuple_desc_inner(a, e, ...)
 	end
 end
 
+---@module "types.tristate"
+local tristate = gen.declare_enum("tristate", {
+	{ "success" },
+	{ "continue" },
+	{ "failure" },
+})
+
 ---@param ... value
 ---@return value
 local function tuple_desc(...)
@@ -1345,6 +1352,8 @@ local terms = {
 	TCState = TCState,
 	lua_prog = lua_prog,
 	verify_placeholders = verify_placeholders,
+
+	tristate = tristate,
 }
 
 local override_prettys = require "terms-pretty"(terms)
