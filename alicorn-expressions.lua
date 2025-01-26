@@ -1309,10 +1309,11 @@ collect_tuple = metalanguage.reducer(
 						desc,
 						value.closure(
 							"#collect-tuple-param",
-							evaluator.substitute_placeholders_identity(
-								value.singleton(next_elem_type, next_val),
-								env.typechecking_context
-							),
+							-- evaluator.substitute_placeholders_identity(
+							-- 	value.singleton(next_elem_type, next_val),
+							-- 	env.typechecking_context
+							-- ), --TODO: might need to swap this back
+							typed_term.literal(value.singleton(next_elem_type, next_val)),
 							env.typechecking_context.runtime_context,
 							U.bound_here()
 						)
@@ -1417,10 +1418,11 @@ collect_host_tuple = metalanguage.reducer(
 						desc,
 						value.closure(
 							"#collect-host-tuple-param",
-							evaluator.substitute_placeholders_identity(
-								value.singleton(next_elem_type, next_val),
-								env.typechecking_context
-							),
+							-- evaluator.substitute_placeholders_identity(
+							-- 	value.singleton(next_elem_type, next_val),
+							-- 	env.typechecking_context
+							-- ), --TODO: might need to swap this back
+							typed_term.literal(value.singleton(next_elem_type, next_val)),
 							env.typechecking_context.runtime_context,
 							U.bound_here()
 						)

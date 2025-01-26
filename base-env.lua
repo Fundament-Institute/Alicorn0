@@ -1195,49 +1195,6 @@ local function lambda_single_impl(syntax, env)
 	return true, term, resenv
 end
 
----@param v table
----@param max integer
----@return boolean
-local function verify_placeholder_lite(v, max)
-	-- If it's not a table we don't care
-	if type(v) ~= "table" then
-		return true
-	end
-
-	-- Special handling for arrays
-	if getmetatable(v) and getmetatable(getmetatable(v)) == gen.array_type_mt then
-		for k, val in ipairs(v) do
-			if not verify_placeholder_lite(val, max) then
-				return false
-			end
-		end
-		return true
-	end
-	if not v.kind then
-		return true
-	end
-
-	if v.kind == "free.placeholder" then
-		local i, info = v:unwrap_placeholder()
-		print(i)
-		if i > max then
-			--os.exit(-1, true)
-			error("AAAAAAAAAAAAAA")
-			return false
-		end
-	end
-
-	for k, val in pairs(v) do
-		if k ~= "cause" and k ~= "bindings" and k ~= "provenance" then
-			if not verify_placeholder_lite(val, max) then
-				return false
-			end
-		end
-	end
-
-	return true
-end
-
 ---@type lua_operative
 local function lambda_implicit_impl(syntax, env)
 	local ok, thread, tail = syntax:match({
@@ -1265,7 +1222,7 @@ local function lambda_implicit_impl(syntax, env)
 		return ok, expr
 	end
 	local resenv, term, purity = env:exit_block(expr, shadow)
-	verify_placeholder_lite(term, resenv.typechecking_context:len()) --DEBUG: check if a placeholder is leaking. remove after tests pass
+	evaluator.verify_placeholder_lite(term, resenv.typechecking_context:len()) --DEBUG: check if a placeholder is leaking. remove after tests pass
 	return true, term, resenv
 end
 

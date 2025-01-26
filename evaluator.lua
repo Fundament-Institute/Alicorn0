@@ -503,6 +503,49 @@ local function get_level(t)
 	return 0
 end
 
+---@param v table
+---@param max integer
+---@return boolean
+local function verify_placeholder_lite(v, max)
+	-- If it's not a table we don't care
+	if type(v) ~= "table" then
+		return true
+	end
+
+	-- Special handling for arrays
+	if getmetatable(v) and getmetatable(getmetatable(v)) == gen.array_type_mt then
+		for k, val in ipairs(v) do
+			if not verify_placeholder_lite(val, max) then
+				return false
+			end
+		end
+		return true
+	end
+	if not v.kind then
+		return true
+	end
+
+	if v.kind == "free.placeholder" then
+		local i, info = v:unwrap_placeholder()
+		print(i)
+		if i > max then
+			--os.exit(-1, true)
+			error("AAAAAAAAAAAAAA")
+			return false
+		end
+	end
+
+	for k, val in pairs(v) do
+		if k ~= "cause" and k ~= "bindings" and k ~= "provenance" then
+			if not verify_placeholder_lite(val, max) then
+				return false
+			end
+		end
+	end
+
+	return true
+end
+
 local substitute_inner
 
 ---@param val value an alicorn value
@@ -641,9 +684,10 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 
 		if nval:is_free() then
 			local free = nval:unwrap_free()
-			local lookup
+			local lookup, mapping
 			if free:is_placeholder() then
 				lookup = free:unwrap_placeholder()
+				mapping = typed_term.bound_variable(lookup)
 			elseif free:is_unique() then
 				lookup = free:unwrap_unique()
 			elseif free:is_metavariable() then
@@ -658,13 +702,13 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 				error("substitute_inner NYI free with kind " .. free.kind)
 			end
 
-			local mapping = mappings[lookup]
+			mapping = mappings[lookup] or mapping
 			if mapping then
 				return mapping
 			end
-			--if free:is_placeholder() then
-			--	print "found one"
-			--end
+			if free:is_placeholder() and lookup > context_len then
+				print "found one"
+			end
 			return typed_term.literal(val)
 		end
 
@@ -792,8 +836,9 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		return typed_term.range(sub_lower_bounds, sub_upper_bounds, sub_relation)
 	elseif val:is_singleton() then
 		local supertype, val = val:unwrap_singleton()
-		local supertype = substitute_inner(supertype, mappings, context_len, ambient_typechecking_context)
-		return typed_term.singleton(supertype, val)
+		local supertype_tm = substitute_inner(supertype, mappings, context_len, ambient_typechecking_context)
+		local val_tm = substitute_inner(val, mappings, context_len, ambient_typechecking_context)
+		return typed_term.singleton(supertype_tm, val_tm)
 	elseif val:is_union_type() then
 		local a, b = val:unwrap_union_type()
 		return typed_term.union_type(
@@ -840,6 +885,7 @@ substitute_inner = function(val, mappings, context_len, ambient_typechecking_con
 	recurse_count = recurse_count + 1
 	local r = substitute_inner_impl(val, mappings, context_len, ambient_typechecking_context)
 	recurse_count = recurse_count - 1
+	verify_placeholder_lite(r, 0)
 
 	if tracked then
 		print(string.rep("·", recurse_count) .. " → " .. tostring(r))
@@ -3712,7 +3758,8 @@ function evaluate_impl(typed_term, runtime_context, ambient_typechecking_context
 	elseif typed_term:is_singleton() then
 		local supertype, val = typed_term:unwrap_singleton()
 		local supertype_val = evaluate(supertype, runtime_context, ambient_typechecking_context)
-		return value.singleton(supertype_val, val)
+		local val_val = evaluate(val, runtime_context, ambient_typechecking_context)
+		return value.singleton(supertype_val, val_val)
 	elseif typed_term:is_program_sequence() then
 		local first, rest = typed_term:unwrap_program_sequence()
 		local startprog = evaluate(first, runtime_context, ambient_typechecking_context)
@@ -5806,6 +5853,7 @@ local evaluator = {
 	TupleDescRelation = TupleDescRelation,
 	register_host_srel = register_host_srel,
 	substitute_placeholders_identity = substitute_placeholders_identity,
+	verify_placeholder_lite = verify_placeholder_lite,
 }
 internals_interface.evaluator = evaluator
 

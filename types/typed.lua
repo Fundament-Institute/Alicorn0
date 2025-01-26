@@ -406,11 +406,11 @@ function typed:as_range() end
 ---@return boolean
 function typed:is_singleton() end
 ---@return typed supertype
----@return value value
+---@return typed value
 function typed:unwrap_singleton() end
 ---@return boolean
 ---@return typed supertype
----@return value value
+---@return typed value
 function typed:as_singleton() end
 ---@return boolean
 function typed:is_program_sequence() end
@@ -573,7 +573,7 @@ function typed:as_constrained_type() end
 ---@field host_if fun(subject: typed, consequent: typed, alternate: typed): typed
 ---@field host_intrinsic fun(source: typed, start_anchor: Anchor): typed
 ---@field range fun(lower_bounds: ArrayValue, upper_bounds: ArrayValue, relation: typed): typed
----@field singleton fun(supertype: typed, value: value): typed
+---@field singleton fun(supertype: typed, value: typed): typed
 ---@field program_sequence fun(first: typed, continue: typed): typed
 ---@field program_end fun(result: typed): typed
 ---@field program_invoke fun(effect_tag: typed, effect_arg: typed): typed

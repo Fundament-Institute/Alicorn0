@@ -894,7 +894,7 @@ typed_term:define_enum("typed", {
 
 	{ "singleton", {
 		"supertype", typed_term,
-		"value",     value,
+		"value",     typed_term,
 	} },
 
 	{ "program_sequence", {
