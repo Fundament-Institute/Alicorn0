@@ -527,7 +527,7 @@ checkable_term:define_enum("checkable", {
 inferrable_term:define_enum("inferrable", {
 	{ "bound_variable", { "index", gen.builtin_number, "debug", gen.any_lua_type } },
 	{ "typed", {
-		"type",         value,
+		"type",         typed_term,
 		"usage_counts", array(gen.builtin_number),
 		"typed_term",   typed_term,
 	} },

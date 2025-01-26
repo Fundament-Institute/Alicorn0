@@ -587,14 +587,26 @@ local function call_operative(type_of_term, usage_count, term, sargs, goal, env)
 			return terms.tristate.failure, usage_counts
 		end
 		return terms.tristate.success,
-			checkable_term.inferrable(inferrable_term.typed(goal_type, usage_counts, term)),
+			checkable_term.inferrable(
+				inferrable_term.typed(
+					evaluator.substitute_placeholders_identity(goal_type, env.typechecking_context),
+					usage_counts,
+					term
+				)
+			),
 			env
 	elseif goal:is_infer() then
 		local ok, resulting_type, usage_counts, term = infer(data, env.typechecking_context)
 		if not ok then
 			return terms.tristate.failure, resulting_type
 		end
-		return terms.tristate.success, inferrable_term.typed(resulting_type, usage_counts, term), env
+		return terms.tristate.success,
+			inferrable_term.typed(
+				evaluator.substitute_placeholders_identity(resulting_type, env.typechecking_context),
+				usage_counts,
+				term
+			),
+			env
 	else
 		error("NYI goal " .. goal.kind .. " for operative in expression_pairhandler")
 	end
@@ -656,7 +668,14 @@ local function call_pi(type_of_term, usage_count, term, sargs, goal, env)
 	---@cast tuple checkable
 
 	---@type string | inferrable | checkable
-	local res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
+	local res = inferrable_term.application(
+		inferrable_term.typed(
+			evaluator.substitute_placeholders_identity(type_of_term, env.typechecking_context),
+			usage_count,
+			term
+		),
+		tuple
+	)
 	---@cast res inferrable
 
 	if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
@@ -784,7 +803,14 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 		end
 		---@cast res inferrable
 	else
-		res = inferrable_term.application(inferrable_term.typed(type_of_term, usage_count, term), tuple)
+		res = inferrable_term.application(
+			inferrable_term.typed(
+				evaluator.substitute_placeholders_identity(type_of_term, env.typechecking_context),
+				usage_count,
+				term
+			),
+			tuple
+		)
 		---@cast res inferrable
 	end
 
@@ -1038,12 +1064,20 @@ local function expression_valuehandler(args, val)
 	if val.type == "f64" then
 		--p(val)
 		return true,
-			inferrable_term.typed(value.host_number_type, usage_array(), typed_term.literal(value.host_value(val.val))),
+			inferrable_term.typed(
+				terms.typed_term.literal(value.host_number_type),
+				usage_array(),
+				typed_term.literal(value.host_value(val.val))
+			),
 			env
 	end
 	if val.type == "string" then
 		return true,
-			inferrable_term.typed(value.host_string_type, usage_array(), typed_term.literal(value.host_value(val.val))),
+			inferrable_term.typed(
+				terms.typed_term.literal(value.host_string_type),
+				usage_array(),
+				typed_term.literal(value.host_value(val.val))
+			),
 			env
 	end
 	p("valuehandler error", val)
@@ -1194,7 +1228,7 @@ local function host_operative(fn, name)
 
 	local userdata_type = value.tuple_type(terms.empty)
 	return inferrable_term.typed(
-		value.operative_type(value_fn, userdata_type),
+		terms.typed_term.literal(value.operative_type(value_fn, userdata_type)),
 		array(gen.builtin_number)(),
 		typed_term.operative_cons(typed_term.tuple_cons(typed_array()))
 	)
@@ -1627,7 +1661,7 @@ local function host_applicative(fn, params, results)
 	local literal_host_fn = terms.typed_term.literal(terms.value.host_value(fn))
 	local host_fn_type =
 		terms.value.host_function_type(build_host_type_tuple(params), build_host_type_tuple(results), result_info_pure)
-	return terms.inferrable_term.typed(host_fn_type, usage_array(), literal_host_fn)
+	return terms.inferrable_term.typed(terms.typed_term.literal(host_fn_type), usage_array(), literal_host_fn)
 end
 
 ---@param syntax ConstructedSyntax

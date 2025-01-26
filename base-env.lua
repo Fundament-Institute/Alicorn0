@@ -21,7 +21,7 @@ local usage_array = gen.declare_array(gen.builtin_number)
 ---@param typ value
 ---@return inferrable
 local function lit_term(val, typ)
-	return terms.inferrable_term.typed(typ, usage_array(), terms.typed_term.literal(val))
+	return terms.inferrable_term.typed(terms.typed_term.literal(typ), usage_array(), terms.typed_term.literal(val))
 end
 
 --- lua_operative is dependently typed and should produce inferrable vs checkable depending on the goal, and an error as the second return if it failed
@@ -99,7 +99,7 @@ local function let_impl(syntax, env)
 
 	return true,
 		terms.inferrable_term.typed(
-			terms.unit_type,
+			terms.typed_term.literal(terms.unit_type),
 			gen.declare_array(gen.builtin_number)(),
 			terms.typed_term.literal(terms.unit_val)
 		),
@@ -305,7 +305,7 @@ end
 local function make_literal_purity(purity)
 	return terms.checkable_term.inferrable(
 		terms.inferrable_term.typed(
-			terms.host_purity_type,
+			typed.literal(terms.host_purity_type),
 			usage_array(),
 			terms.typed_term.literal(terms.value.host_value(purity))
 		)
@@ -348,7 +348,7 @@ local pure_ascribed_name = metalanguage.reducer(
 		else
 			local type_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			type = terms.inferrable_term.typed(
-				value.star(evaluator.OMEGA, 1),
+				terms.typed_term.literal(value.star(evaluator.OMEGA, 1)),
 				usage_array(),
 				typed.literal(type_mv:as_value())
 			)
@@ -810,7 +810,7 @@ local function make_host_func_syntax(effectful)
 			local effect_description =
 				terms.value.effect_row(gen.declare_set(terms.unique_id)(terms.lua_prog), terms.value.effect_empty)
 			local effect_term = terms.inferrable_term.typed(
-				terms.value.effect_row_type,
+				terms.typed_term.literal(terms.value.effect_row_type),
 				usage_array(),
 				terms.typed_term.literal(effect_description)
 			)
@@ -823,7 +823,7 @@ local function make_host_func_syntax(effectful)
 			fn_res_term,
 			terms.checkable_term.inferrable(
 				terms.inferrable_term.typed(
-					terms.value.result_info_type,
+					terms.typed_term.literal(terms.value.result_info_type),
 					usage_array(),
 					terms.typed_term.literal(effectful and result_info_effectful or result_info_pure)
 				)
@@ -917,7 +917,7 @@ local function forall_impl(syntax, env)
 		params_args,
 		terms.checkable_term.inferrable(
 			terms.inferrable_term.typed(
-				terms.value.param_info_type,
+				terms.typed_term.literal(terms.value.param_info_type),
 				usage_array(),
 				terms.typed_term.literal(param_info_explicit)
 			)
@@ -925,7 +925,7 @@ local function forall_impl(syntax, env)
 		fn_res_term,
 		terms.checkable_term.inferrable(
 			terms.inferrable_term.typed(
-				terms.value.result_info_type,
+				terms.typed_term.literal(terms.value.result_info_type),
 				usage_array(),
 				terms.typed_term.literal(result_info_pure)
 			)
@@ -1054,7 +1054,14 @@ local function apply_operative_impl(syntax, env)
 
 		local inf_term, env = utils.unpack_val_env(args_inferrable_term)
 		return true,
-			terms.inferrable_term.application(terms.inferrable_term.typed(spec_type, usages, fn_typed_term), inf_term),
+			terms.inferrable_term.application(
+				terms.inferrable_term.typed(
+					evaluator.substitute_placeholders_identity(spec_type, env.typechecking_context),
+					usages,
+					fn_typed_term
+				),
+				inf_term
+			),
 			env
 	end
 
@@ -1188,6 +1195,49 @@ local function lambda_single_impl(syntax, env)
 	return true, term, resenv
 end
 
+---@param v table
+---@param max integer
+---@return boolean
+local function verify_placeholder_lite(v, max)
+	-- If it's not a table we don't care
+	if type(v) ~= "table" then
+		return true
+	end
+
+	-- Special handling for arrays
+	if getmetatable(v) and getmetatable(getmetatable(v)) == gen.array_type_mt then
+		for k, val in ipairs(v) do
+			if not verify_placeholder_lite(val, max) then
+				return false
+			end
+		end
+		return true
+	end
+	if not v.kind then
+		return true
+	end
+
+	if v.kind == "free.placeholder" then
+		local i, info = v:unwrap_placeholder()
+		print(i)
+		if i > max then
+			--os.exit(-1, true)
+			error("AAAAAAAAAAAAAA")
+			return false
+		end
+	end
+
+	for k, val in pairs(v) do
+		if k ~= "cause" and k ~= "bindings" and k ~= "provenance" then
+			if not verify_placeholder_lite(val, max) then
+				return false
+			end
+		end
+	end
+
+	return true
+end
+
 ---@type lua_operative
 local function lambda_implicit_impl(syntax, env)
 	local ok, thread, tail = syntax:match({
@@ -1215,6 +1265,7 @@ local function lambda_implicit_impl(syntax, env)
 		return ok, expr
 	end
 	local resenv, term, purity = env:exit_block(expr, shadow)
+	verify_placeholder_lite(term, resenv.typechecking_context:len()) --DEBUG: check if a placeholder is leaking. remove after tests pass
 	return true, term, resenv
 end
 
@@ -1298,7 +1349,7 @@ local function startype_impl(syntax, env)
 		return false, "literal must be an integer for type levels"
 	end
 	local term = terms.inferrable_term.typed(
-		value.star(level_val.val + 1, depth_val.val + 1),
+		terms.typed_term.literal(value.star(level_val.val + 1, depth_val.val + 1)),
 		usage_array(),
 		terms.typed_term.star(level_val.val, depth_val.val)
 	)
@@ -1729,7 +1780,7 @@ local function enum_impl(syntax, env)
 			terms.inferrable_term.enum_desc_cons(
 				variants,
 				terms.inferrable_term.typed(
-					value.enum_desc_type(value.star(0, 0)),
+					terms.typed_term.literal(value.enum_desc_type(value.star(0, 0))),
 					usage_array(),
 					typed.literal(value.enum_desc_value(gen.declare_map(gen.builtin_string, terms.value)()))
 				)
@@ -1830,11 +1881,11 @@ local core_operations = {
 	--["tuple-of"] = evaluator.host_operative(tuple_of_impl),
 	--number = { type = types.type, val = types.number }
 	["into-operative"] = exprs.host_operative(into_operative_impl, "into_operative_impl"),
-	["hackhack-host-term-of-inner"] = terms.inferrable_term.typed(
-		host_term_of_inner_type,
-		usage_array(),
-		typed.literal(value.host_value(host_term_of_inner))
-	),
+	-- ["hackhack-host-term-of-inner"] = terms.inferrable_term.typed(
+	-- 	host_term_of_inner_type,
+	-- 	usage_array(),
+	-- 	typed.literal(value.host_value(host_term_of_inner))
+	-- ),
 }
 
 -- FIXME: use these once reimplemented with terms

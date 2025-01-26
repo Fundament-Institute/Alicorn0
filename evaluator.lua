@@ -868,6 +868,18 @@ function substitute_type_variables(val, index, param_name, ctx, ambient_typechec
 end
 
 ---@param val value
+---@param typechecking_context TypecheckingContext
+---@return typed
+local function substitute_placeholders_identity(val, typechecking_context)
+	local mappings = {}
+	local size = typechecking_context.bindings:len()
+	for i = 1, size do
+		mappings[i] = typed.bound_variable(i)
+	end
+	return substitute_inner(val, mappings, size, typechecking_context)
+end
+
+---@param val value
 ---@return boolean
 local function is_type_of_types(val)
 	return val:is_star() or val:is_prop() or val:is_host_type_type()
@@ -2072,7 +2084,7 @@ end
 
 ---@param inferrable_term inferrable
 ---@param typechecking_context TypecheckingContext
----@return value, ArrayValue, typed
+---@return boolean, value, ArrayValue, typed
 function infer_impl(
 	inferrable_term, -- constructed from inferrable
 	typechecking_context -- todo
@@ -2109,7 +2121,8 @@ function infer_impl(
 		end
 		return true, goal_type, el_usages, el_term
 	elseif inferrable_term:is_typed() then
-		return true, inferrable_term:unwrap_typed()
+		local type, usage, term = inferrable_term:unwrap_typed()
+		return true, evaluate(type, typechecking_context:get_runtime_context(), typechecking_context), usage, term
 	elseif inferrable_term:is_annotated_lambda() then
 		local param_name, param_annotation, body, start_anchor, param_visibility, purity =
 			inferrable_term:unwrap_annotated_lambda()
@@ -5792,6 +5805,7 @@ local evaluator = {
 	IndepTupleRelation = IndepTupleRelation,
 	TupleDescRelation = TupleDescRelation,
 	register_host_srel = register_host_srel,
+	substitute_placeholders_identity = substitute_placeholders_identity,
 }
 internals_interface.evaluator = evaluator
 

@@ -21,7 +21,7 @@ local array = gen.declare_array
 local usage_array = array(gen.builtin_number)
 
 local function inf_typ(t, typ)
-	return terms.inferrable_term.typed(t, usage_array(), typ)
+	return terms.inferrable_term.typed(terms.typed_term.literal(t), usage_array(), typ)
 end
 
 local value_array = array(terms.value)
