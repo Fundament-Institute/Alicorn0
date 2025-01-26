@@ -24,6 +24,12 @@
             "args": [
                 "runtest.lua"
             ]
+        },
+        {
+            "type": "lua",
+            "request": "attach",
+            "name": "Luvit Attach (Windows)",
+            "processName": "luvit.exe"
         }
     ]
 }
