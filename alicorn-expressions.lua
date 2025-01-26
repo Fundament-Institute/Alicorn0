@@ -781,7 +781,8 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 		end
 		local result_final = evaluator.evaluate(
 			typed_term.application(typed_term.literal(result_type), tuple_term),
-			env.typechecking_context.runtime_context
+			env.typechecking_context.runtime_context,
+			env.typechecking_context
 		)
 		local app = inferrable_term.typed(
 			result_final,
@@ -1308,7 +1309,10 @@ collect_tuple = metalanguage.reducer(
 						desc,
 						value.closure(
 							"#collect-tuple-param",
-							typed_term.literal(value.singleton(next_elem_type, next_val)),
+							evaluator.substitute_placeholders_identity(
+								value.singleton(next_elem_type, next_val),
+								env.typechecking_context
+							),
 							env.typechecking_context.runtime_context,
 							U.bound_here()
 						)
@@ -1413,7 +1417,10 @@ collect_host_tuple = metalanguage.reducer(
 						desc,
 						value.closure(
 							"#collect-host-tuple-param",
-							typed_term.literal(value.singleton(next_elem_type, next_val)),
+							evaluator.substitute_placeholders_identity(
+								value.singleton(next_elem_type, next_val),
+								env.typechecking_context
+							),
 							env.typechecking_context.runtime_context,
 							U.bound_here()
 						)
