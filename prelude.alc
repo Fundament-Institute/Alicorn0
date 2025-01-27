@@ -467,9 +467,9 @@ let host-tuple-type-to-tuple-type-inner =
 		host-func-type (t : wrapped(type), valid : only-accept-host-tuples(t)) -> ((res : wrapped(type)))
 
 let host-tuple-type-to-tuple-type =
-	lambda (t : wrapped(type), valid : only-accept-host-tuples(t))
-		let (res) = host-tuple-type-to-tuple-type-inner(t, valid)
-		res
+	lambda (t : type, valid : only-accept-host-tuples(wrap(t)))
+		let (res) = host-tuple-type-to-tuple-type-inner(wrap(t), valid)
+		unwrap(res)
 
 let extract-prog-host-tuple-type-inner =
 	intrinsic
@@ -508,7 +508,7 @@ let host-tuple-to-tuple-inner =
 				valid : only-accept-host-tuples(t),
 				val   : wrapped(unwrap(t)))
 			->
-			((res : wrapped(unwrap(host-tuple-type-to-tuple-type(t, valid)))))
+			((res : wrapped(host-tuple-type-to-tuple-type(unwrap(t), valid))))
 
 let host-tuple-to-tuple =
 	lambda (t : wrapped(type), valid : only-accept-host-tuples(t), val : unwrap(t))
@@ -545,12 +545,12 @@ let tuple-to-host-tuple-inner =
 		host-func-type (
 				t     : wrapped(type),
 				valid : only-accept-host-tuples(t),
-				val   : wrapped(unwrap(host-tuple-type-to-tuple-type(t, valid))))
+				val   : wrapped(host-tuple-type-to-tuple-type(unwrap(t), valid)))
 			->
 			((res : wrapped(unwrap(t))))
 
 let tuple-to-host-tuple =
-	lambda (t : wrapped(type), valid : only-accept-host-tuples(t), val : unwrap(host-tuple-type-to-tuple-type(t, valid)))
+	lambda (t : wrapped(type), valid : only-accept-host-tuples(t), val : host-tuple-type-to-tuple-type(unwrap(t), valid))
 		let (res) = tuple-to-host-tuple-inner(t, valid, wrap(val))
 		unwrap(res)
 
@@ -772,15 +772,14 @@ let get-host-funcprog-res-inner =
 let host-func-type-to-func-type =
 	lambda (T : type, valid : only-accept-host-funcs(wrap(T)))
 		let (oldargs oldargs-valid) = get-host-func-arg(T, valid)
-		let (newargs) = host-tuple-type-to-tuple-type-inner(oldargs, oldargs-valid)
-		let newargs = unwrap(newargs)
+		let newargs = host-tuple-type-to-tuple-type(oldargs, oldargs-valid)
 		let (orig-results-wrapped) = get-host-func-res-inner(wrap(T), valid)
 		let orig-results = unwrap(orig-results-wrapped)
 		let (orig-result-info-wrapped) = get-host-func-result-info-inner(wrap(T), valid)
 		
 		let new-results =
 			lambda (args : newargs)
-				let ptuple = tuple-to-host-tuple(oldargs, oldargs-valid, args)
+				let ptuple = tuple-to-host-tuple(wrap(oldargs), oldargs-valid, args)
 				let (oldres oldres-valid) = apply(orig-results, ptuple)
 				let (newres) = host-tuple-type-to-tuple-type-inner(oldres, oldres-valid)
 				unwrap(newres)

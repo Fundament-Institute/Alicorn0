@@ -2089,7 +2089,7 @@ function make_inner_context2(desc_a, make_prefix_a, lctx, desc_b, make_prefix_b,
 		if tupletypes_a:len() == tuplevals:len() then
 			local prefix = value.tuple_value(tuplevals)
 			element_type_a = apply_value(f_a, prefix, lctx)
-			element_type_b = apply_value(f_b, prefix, rctx)
+			element_type_b = apply_value(f_b, prefix, lctx) -- This looks wrong but it's necessary to fix a missing placeholder problem
 
 			if element_type_a:is_singleton() then
 				local _, val = element_type_a:unwrap_singleton()
