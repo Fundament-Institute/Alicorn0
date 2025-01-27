@@ -545,7 +545,6 @@ local nil_accepters = {
 local function new_nilval(start_anchor, end_anchor)
 	return cons_syntax(nil_accepters, start_anchor, end_anchor)
 end
-local nilval = new_nilval()
 
 ---@param start_anchor Anchor
 ---@param end_anchor Anchor
@@ -797,7 +796,6 @@ local metalanguage = {
 	reducer = reducer,
 	isnil = isnil,
 	new_nilval = new_nilval,
-	nilval = nilval,
 	symbol_exact = symbol_exact,
 	pair = pair,
 	list = list,

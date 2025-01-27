@@ -3,7 +3,7 @@ local format = require "format"
 
 local function syntax_convert(tree)
 	if tree.kind == "list" then
-		local res = metalanguage.nilval
+		local res = metalanguage.new_nilval(tree.start_anchor, tree.end_anchor)
 		for i = #tree.elements, 1, -1 do
 			local elem = syntax_convert(tree.elements[i])
 			if elem then -- special handling for comments...
