@@ -105,7 +105,8 @@ function environment:bind_local(binding)
 		local n = self.typechecking_context:len()
 		local term = inferrable_term.bound_variable(n + 1, U.bound_here())
 		local locals = self.locals:put(name, term)
-		local evaled = evaluator.evaluate(expr_term, self.typechecking_context.runtime_context)
+		local evaled =
+			evaluator.evaluate(expr_term, self.typechecking_context.runtime_context, self.typechecking_context)
 		-- print "doing let binding"
 		-- print(expr:pretty_print())
 		--log_binding(name, expr_type, evaled)
@@ -153,7 +154,11 @@ function environment:bind_local(binding)
 			end
 
 			-- evaluating the subject is necessary for inferring the type of the body
-			local subject_value = evaluator.evaluate(subject_term, self.typechecking_context:get_runtime_context())
+			local subject_value = evaluator.evaluate(
+				subject_term,
+				self.typechecking_context:get_runtime_context(),
+				self.typechecking_context
+			)
 			--[[local subject_value = U.tag(
 				"evaluate",
 				{ subject_term = subject_term:pretty_preprint(self.typechecking_context) },
@@ -233,7 +238,8 @@ function environment:bind_local(binding)
 		end
 		--print("binding lambda annotation: (typed term follows)")
 		--print(annotation_term:pretty_print(self.typechecking_context))
-		local evaled = evaluator.evaluate(annotation_term, self.typechecking_context.runtime_context)
+		local evaled =
+			evaluator.evaluate(annotation_term, self.typechecking_context.runtime_context, self.typechecking_context)
 		local bindings = self.bindings:append(binding)
 		local locals = self.locals:put(
 			param_name,

@@ -527,10 +527,10 @@ local function verify_placeholder_lite(v, max)
 
 	if v.kind == "free.placeholder" then
 		local i, info = v:unwrap_placeholder()
-		print(i)
+		--print(i)
 		if i > max then
 			--os.exit(-1, true)
-			error("AAAAAAAAAAAAAA")
+			error("AAAAAAAAAAAAAA found " .. tostring(i) .. " " .. tostring(info))
 			return false
 		end
 	end
@@ -3610,6 +3610,8 @@ function evaluate_impl(typed_term, runtime_context, ambient_typechecking_context
 			print("unwrapped", unwrapped, unwrap_val)
 			error "evaluate, is_host_unwrap: missing as_host_value on unwrapped host_unwrap"
 		end
+
+		verify_placeholder_lite(unwrap_val, ambient_typechecking_context:len())
 		if unwrap_val:is_host_value() then
 			return unwrap_val:unwrap_host_value()
 		elseif unwrap_val:is_neutral() then
@@ -3946,6 +3948,7 @@ evaluate = function(typed_term, runtime_context, ambient_typechecking_context)
 	recurse_count = recurse_count + 1
 	local r = evaluate_impl(typed_term, runtime_context, ambient_typechecking_context)
 	recurse_count = recurse_count - 1
+	--verify_placeholder_lite(r, ambient_typechecking_context:len())
 
 	if tracked then
 		print(string.rep("·", recurse_count) .. " → " .. r:pretty_print(runtime_context))
