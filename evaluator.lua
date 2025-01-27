@@ -2095,6 +2095,7 @@ function make_inner_context2(desc_a, make_prefix_a, lctx, desc_b, make_prefix_b,
 				local _, val = element_type_a:unwrap_singleton()
 				tuplevals:append(val)
 			elseif element_type_b:is_singleton() then
+				error("singleton found in tuple use, this doesn't make sense")
 				local _, val = element_type_b:unwrap_singleton()
 				tuplevals:append(val)
 			end

@@ -715,8 +715,8 @@ let set-func-result-info-inner =
 		host-func-type (subject : wrapped(type), valid : only-accept-funcs(subject), resinf : wrapped(func-result-info)) -> ((result : wrapped(type)))
 
 let func-conv-res-type = 
-	lambda (argtype : wrapped(type))
-		forall (arg : unwrap(argtype)) -> (res : wrapped(type), valid : only-accept-host-tuples(res))
+	lambda (argtype : type)
+		forall (arg : argtype) -> (res : type, valid : only-accept-host-tuples(wrap(res)))
 let funcprog-conv-res-type = 
 	lambda (argtype : wrapped(type))
 		forall (arg : unwrap(argtype)) -> (res : wrapped(type), valid : only-accept-prog-host-tuples(res))
