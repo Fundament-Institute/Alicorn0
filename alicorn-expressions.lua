@@ -520,6 +520,9 @@ local function operative_test_hack(env, metaval)
 			end
 			f = evaluator.typechecker_state.values[edge.left][1]
 		end
+		if terms.value.value_check(f) ~= true then
+			return false, "idk what this is but it ain't an operative"
+		end
 		local res = evaluator.apply_value(f, arg, env.typechecking_context)
 		return true, res
 	else
