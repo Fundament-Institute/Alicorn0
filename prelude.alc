@@ -688,7 +688,7 @@ let get-host-funcprog-arg-inner =
 let just-args =
 	lambda (subject : type, valid : only-accept-host-funcs(wrap(subject)))
 		let (result, valid) = get-host-func-arg(subject, valid)
-		unwrap(result)
+		result
 
 let func-result-info = new-host-type(new-host-unique-id("func-result-info"))
 
@@ -781,7 +781,7 @@ let host-func-type-to-func-type =
 			lambda (args : newargs)
 				let ptuple = tuple-to-host-tuple(wrap(oldargs), oldargs-valid, args)
 				let (oldres oldres-valid) = apply(orig-results, ptuple)
-				let (newres) = host-tuple-type-to-tuple-type-inner(oldres, oldres-valid)
+				let (newres) = host-tuple-type-to-tuple-type-inner(wrap(oldres), oldres-valid)
 				unwrap(newres)
 
 		let new-func-type = forall (x : newargs) -> (y : new-results(x))
