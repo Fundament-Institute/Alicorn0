@@ -138,7 +138,8 @@ local function gen_record(self, cons, kind, params_with_types)
 			end
 			val[v] = argi
 		end
-		val["{TRACE}"] = U.bound_here(2)
+		val["{TRACE}"] = U.bound_here(2) -- debug.traceback()
+		val["{ID}"] = U.debug_id()
 		setmetatable(val, self)
 		return val
 	end
@@ -756,7 +757,7 @@ local function gen_array_index_fns(self, value_type)
 			error(
 				"key passed to array indexing is out of bounds (read code comment above): "
 					.. tostring(key)
-					.. "is not within [1,"
+					.. " is not within [1,"
 					.. tostring(val.n)
 					.. "]"
 			)

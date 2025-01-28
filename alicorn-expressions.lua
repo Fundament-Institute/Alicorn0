@@ -1312,15 +1312,15 @@ collect_tuple = metalanguage.reducer(
 						env.typechecking_context.runtime_context,
 						env.typechecking_context
 					)
+					local subval = evaluator.substitute_placeholders_identity(
+						value.singleton(next_elem_type, next_val),
+						env.typechecking_context
+					)
 					desc = terms.cons(
 						desc,
 						value.closure(
 							"#collect-tuple-param",
-							-- evaluator.substitute_placeholders_identity(
-							-- 	value.singleton(next_elem_type, next_val),
-							-- 	env.typechecking_context
-							-- ), --TODO: might need to swap this back
-							typed_term.literal(value.singleton(next_elem_type, next_val)),
+							subval, --TODO: might need to swap this back
 							env.typechecking_context.runtime_context,
 							U.bound_here()
 						)

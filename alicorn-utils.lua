@@ -690,4 +690,16 @@ function M.litprint(s)
 	return setmetatable({ contents = s }, litprint_mt)
 end
 
+DEBUG_ID = 0
+function M.debug_id()
+	DEBUG_ID = DEBUG_ID + 1
+
+	-- Use this to reliably breakpoint at the moment a term of interest is created
+	--if DEBUG_ID == 105738 then
+	--	print(DEBUG_ID)
+	--end
+
+	return DEBUG_ID
+end
+
 return M
