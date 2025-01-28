@@ -3609,6 +3609,10 @@ function evaluate_impl(typed_term, runtime_context, ambient_typechecking_context
 		local content_val = evaluate(content, runtime_context, ambient_typechecking_context)
 		if content_val:is_neutral() then
 			local nval = content_val:unwrap_neutral()
+			if nval:is_host_unwrap_stuck() then
+				local inner_subj = nval:unwrap_host_unwrap_stuck()
+				return value.neutral(inner_subj)
+			end
 			return value.neutral(neutral_value.host_wrap_stuck(nval))
 		end
 		return value.host_value(content_val)

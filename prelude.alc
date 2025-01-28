@@ -675,16 +675,20 @@ let get-host-func-arg =
 		let (res, resvalid) = inner(wrap(subject), valid)
 		tuple-of-implicit unwrap(res) resvalid
 
-let get-host-funcprog-arg-inner =
-	intrinsic
-		""""
-			local function get_host_func_arg(subject, valid)
-				local param_type, result_type, result_info = subject:unwrap_host_function_type()
-				return param_type, nil
-			end
-			return get_host_func_arg
-		:
-		host-func-type (subject : wrapped(type), valid : only-accept-host-funcprogs(subject)) -> (result : wrapped(type), valid : only-accept-host-tuples(result))
+let get-host-funcprog-arg =
+	lambda (subject : type, valid : only-accept-host-funcprogs(wrap(subject)))
+		let inner =
+			intrinsic
+				""""
+					local function get_host_func_arg(subject, valid)
+						local param_type, result_type, result_info = subject:unwrap_host_function_type()
+						return param_type, nil
+					end
+					return get_host_func_arg
+				:
+				host-func-type (subject : wrapped(type), valid : only-accept-host-funcprogs(subject)) -> (result : wrapped(type), valid : only-accept-host-tuples(result))
+		let (res, resvalid) = inner(wrap(subject), valid)
+		tuple-of-implicit unwrap(res) resvalid
 
 let just-args =
 	lambda (subject : type, valid : only-accept-host-funcs(wrap(subject)))
@@ -722,8 +726,8 @@ let func-conv-res-type =
 	lambda (argtype : type)
 		forall (arg : argtype) -> (res : type, valid : only-accept-host-tuples(wrap(res)))
 let funcprog-conv-res-type = 
-	lambda (argtype : wrapped(type))
-		forall (arg : unwrap(argtype)) -> (res : wrapped(type), valid : only-accept-prog-host-tuples(res))
+	lambda (argtype : type)
+		forall (arg : argtype) -> (res : type, valid : only-accept-prog-host-tuples(wrap(res)))
 
 let get-host-func-res =
 	lambda (subject : type, valid : only-accept-host-funcs(wrap(subject)))
@@ -752,29 +756,33 @@ let get-host-func-res =
 		let (res) = inner(wrap(subject), valid)
 		unwrap(res)
 
-let get-host-funcprog-res-inner =
-	intrinsic
-		""""
-			local function get_host_func_res(subject, valid)
-				local param_type, result_type, result_info = subject:unwrap_host_function_type()
-				local typed_array = terms_gen.declare_array(terms.typed_term)
-				local tuple_build = terms.typed_term.tuple_cons(
-					typed_array(
-						terms.typed_term.host_wrap(
-							terms.typed_term.application(
-								terms.typed_term.bound_variable(1),
-								terms.typed_term.bound_variable(2)
+let get-host-funcprog-res =
+	lambda (subject : type, valid : only-accept-host-funcprogs(wrap(subject)))
+		let inner =
+			intrinsic
+				""""
+					local function get_host_func_res(subject, valid)
+						local param_type, result_type, result_info = subject:unwrap_host_function_type()
+						local typed_array = terms_gen.declare_array(terms.typed_term)
+						local tuple_build = terms.typed_term.tuple_cons(
+							typed_array(
+								terms.typed_term.host_wrap(
+									terms.typed_term.application(
+										terms.typed_term.bound_variable(1),
+										terms.typed_term.bound_variable(2)
+									)
+								),
+								terms.typed_term.literal(terms.value.host_value(nil))
 							)
-						),
-						terms.typed_term.literal(terms.value.host_value(nil))
-					)
-				)
-				local ctx = terms.runtime_context():append(result_type)
-				return terms.value.closure("#TEST-1", tuple_build, ctx)
-			end
-			return get_host_func_res
-		:
-		host-func-type (subject : wrapped(type), valid : only-accept-host-funcprogs(subject)) -> ((results : wrapped(funcprog-conv-res-type(just-args(unwrap(subject), valid)))))
+						)
+						local ctx = terms.runtime_context():append(result_type)
+						return terms.value.closure("#TEST-1", tuple_build, ctx)
+					end
+					return get_host_func_res
+				:
+				host-func-type (subject : wrapped(type), valid : only-accept-host-funcprogs(subject)) -> ((results : wrapped(funcprog-conv-res-type(just-args(unwrap(subject), valid)))))
+		let (res) = inner(wrap(subject), valid)
+		unwrap(res)
 
 let host-func-type-to-func-type =
 	lambda (T : type, valid : only-accept-host-funcs(wrap(T)))
@@ -796,24 +804,23 @@ let host-func-type-to-func-type =
 
 let host-funcprog-type-to-funcprog-type =
 	lambda (T : type, valid : only-accept-host-funcprogs(wrap(T)))
-		let (oldargs oldargs-valid) = get-host-funcprog-arg-inner(wrap(T), valid)
-		let (newargs) = host-tuple-type-to-tuple-type-inner(oldargs, oldargs-valid)
-		let (orig-results-wrapped) = get-host-funcprog-res-inner(wrap(T), valid)
-		let orig-results = unwrap(orig-results-wrapped)
+		let (oldargs oldargs-valid) = get-host-funcprog-arg(T, valid)
+		let newargs = host-tuple-type-to-tuple-type(oldargs, oldargs-valid)
+		let orig-results = get-host-funcprog-res(T, valid)
 		let (orig-result-info-wrapped) = get-host-func-result-info-inner(wrap(T), valid)
 		
 		let new-results =
-			lambda (args : unwrap(newargs))
-				let ptuple = tuple-to-host-tuple(oldargs, oldargs-valid, args)
+			lambda (args : newargs)
+				let ptuple = tuple-to-host-tuple(wrap(oldargs), oldargs-valid, args)
 				let (oldres oldres-valid) = apply(orig-results, ptuple)
-				let (extractres extractres-valid) = extract-prog-host-tuple-type-inner(oldres, oldres-valid)
+				let (extractres extractres-valid) = extract-prog-host-tuple-type-inner(wrap(oldres), oldres-valid)
 				let (newres) = host-tuple-type-to-tuple-type-inner(extractres, extractres-valid)
-				let (rebuilt) = rebuild-prog-type(oldres, oldres-valid, newres)
-				rebuilt
+				let (rebuilt) = rebuild-prog-type(wrap(oldres), oldres-valid, newres)
+				unwrap(rebuilt)
 
-		let new-func-type = forall (x : unwrap(newargs)) -> (y : unwrap(new-results(x)))
-		let (final-func-type-wrapped) = set-func-result-info-inner(wrap(new-func-type), host-nil, orig-result-info-wrapped)
-		unwrap(final-func-type-wrapped)
+		let new-func-type = forall (x : newargs) -> (y : new-results(x))
+		let final-func-type = set-func-result-info(new-func-type, host-nil, unwrap(orig-result-info-wrapped))
+		final-func-type
 
 let func-to-host-func-inner =
 	intrinsic
