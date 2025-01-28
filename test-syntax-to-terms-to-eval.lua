@@ -88,6 +88,6 @@ p("infer", usage_counts)
 print(inferred_type:pretty_print())
 print(inferred_term:pretty_print())
 
-local evaled = evaluator.evaluate(inferred_term, env.runtime_context)
+local evaled = evaluator.evaluate(inferred_term, env.runtime_context, env.typechecking_context)
 p("eval")
 print(evaled:pretty_print())

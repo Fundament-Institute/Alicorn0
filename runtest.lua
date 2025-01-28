@@ -311,7 +311,7 @@ local function execute_alc_file(bound_expr, log, env)
 
 	log("Evaluating")
 	local ok, result = pcall(function()
-		return evaluator.evaluate(term, env.typechecking_context.runtime_context)
+		return evaluator.evaluate(term, env.typechecking_context.runtime_context, env.typechecking_context)
 	end)
 
 	if not ok then

@@ -1400,7 +1400,8 @@ add_comparer("value.host_user_defined_type", "value.host_user_defined_type", fun
 						)
 					)
 				)
-			)
+			),
+			lctx
 		)
 		:unwrap_host_tuple_value()
 		:unpack()
@@ -3334,6 +3335,7 @@ function evaluate_impl(typed_term, runtime_context, ambient_typechecking_context
 	elseif typed_term:is_tuple_elim() then
 		local names, subject, length, body = typed_term:unwrap_tuple_elim()
 		local subject_value = evaluate(subject, runtime_context, ambient_typechecking_context)
+		verify_placeholder_lite(subject_value, ambient_typechecking_context:len())
 		--[[local subject_value = U.tag(
 			"evaluate",
 			{ subject = subject:pretty_preprint(runtime_context) },

@@ -214,7 +214,8 @@ let host-family-sig-variances = lambda (signature : type_(1, 0))
 								type_fun,
 								terms.value.neutral(
 									terms.neutral_value.free(terms.free.unique{})
-								)
+								),
+								terms.typechecking_context()
 							)
 						)
 					local convert_type_fun = terms.value.closure(
@@ -824,7 +825,7 @@ let func-to-host-func-inner =
 					for i = 1, args.n do
 						conv_args:append(terms.value.host_value(args[i]))
 					end
-					local res = evaluator.apply_value(afn, terms.value.tuple_value(conv_args))
+					local res = evaluator.apply_value(afn, terms.value.tuple_value(conv_args), terms.typechecking_context())
 					if not res:is_tuple_value() then
 						error "alicorn function converted to native function has failed to create a real value"
 					end
@@ -854,7 +855,7 @@ let funcprog-to-host-funcprog-inner =
 					for i = 1, nargs do
 						conv_args:append(terms.value.host_value(args[i]))
 					end
-					local res = evaluator.execute_program(evaluator.apply_value(afn, terms.value.tuple_value(conv_args)))
+					local res = evaluator.execute_program(evaluator.apply_value(afn, terms.value.tuple_value(conv_args), terms.typechecking_context()))
 					if not res:is_tuple_value() then
 						print(res)
 						error  "alicorn function converted to native function has failed to create a real value"
@@ -1157,7 +1158,7 @@ let host-number-fold-indep = lambda_implicit (T : type_(9, 0))
 				local value_array = terms_gen.declare_array(terms.value)
 				return function(n, f, acc)
 					for i = n, 1, -1 do
-						acc = evaluator.apply_value(f, terms.value.tuple_value(value_array(terms.value.host_value(i), acc)))
+						acc = evaluator.apply_value(f, terms.value.tuple_value(value_array(terms.value.host_value(i), acc)), terms.typechecking_context())
 					end
 					return acc
 				end

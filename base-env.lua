@@ -959,7 +959,8 @@ local function the_operative_impl(syntax, env)
 		return false, type_of_typed_term
 	end
 
-	local evaled_type = evaluator.evaluate(type_typed_term, env.typechecking_context.runtime_context)
+	local evaled_type =
+		evaluator.evaluate(type_typed_term, env.typechecking_context.runtime_context, env.typechecking_context)
 
 	--print("type_inferrable_term: (inferrable term follows)")
 	--print(type_inferrable_term:pretty_print(env.typechecking_context))
@@ -1464,7 +1465,7 @@ local function into_operative_impl(syntax, env)
 	if not ok then
 		return false, ud_type_usages
 	end
-	local ud_type = evaluator.evaluate(ud_type_t, env.typechecking_context.runtime_context)
+	local ud_type = evaluator.evaluate(ud_type_t, env.typechecking_context.runtime_context, env.typechecking_context)
 
 	local ok, ud_chk, env = ud_syntax:match({
 		exprs.expression(
@@ -1479,7 +1480,7 @@ local function into_operative_impl(syntax, env)
 	if not ok then
 		return false, ud_usages
 	end
-	local ud = evaluator.evaluate(ud_t, env.typechecking_context.runtime_context)
+	local ud = evaluator.evaluate(ud_t, env.typechecking_context.runtime_context, env.typechecking_context)
 
 	local ok, handler_chk, env = handler_syntax:match({
 		exprs.expression(
@@ -1498,7 +1499,7 @@ local function into_operative_impl(syntax, env)
 	if not ok then
 		return false, handler_usages
 	end
-	local handler = evaluator.evaluate(handler_t, env.typechecking_context.runtime_context)
+	local handler = evaluator.evaluate(handler_t, env.typechecking_context.runtime_context, env.typechecking_context)
 
 	local op_type = value.operative_type(handler, ud_type)
 	local op_val = value.operative_value(ud)

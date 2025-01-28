@@ -1420,7 +1420,11 @@ collect_host_tuple = metalanguage.reducer(
 					if not ok then
 						return false, typed_usages
 					end
-					local next_val = evaluator.evaluate(next_typed, env.typechecking_context.runtime_context)
+					local next_val = evaluator.evaluate(
+						next_typed,
+						env.typechecking_context.runtime_context,
+						env.typechecking_context
+					)
 					desc = terms.cons(
 						desc,
 						value.closure(
