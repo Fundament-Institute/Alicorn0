@@ -885,7 +885,7 @@ substitute_inner = function(val, mappings, context_len, ambient_typechecking_con
 	recurse_count = recurse_count + 1
 	local r = substitute_inner_impl(val, mappings, context_len, ambient_typechecking_context)
 	recurse_count = recurse_count - 1
-	verify_placeholder_lite(r, 0)
+	verify_placeholder_lite(r, ambient_typechecking_context:len())
 
 	if tracked then
 		print(string.rep("·", recurse_count) .. " → " .. tostring(r))
