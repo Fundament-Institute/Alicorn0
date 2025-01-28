@@ -788,7 +788,7 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 			env.typechecking_context
 		)
 		local app = inferrable_term.typed(
-			result_final,
+			evaluator.substitute_placeholders_identity(result_final, env.typechecking_context),
 			usage_array(),
 			typed_term.program_invoke(
 				typed_term.literal(value.effect_elem(terms.lua_prog)),

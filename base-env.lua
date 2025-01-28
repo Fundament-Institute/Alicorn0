@@ -1838,7 +1838,7 @@ local core_operations = {
 	--tuple = evaluator.host_operative(tuple_type_impl),
 	--["tuple-of"] = evaluator.host_operative(tuple_of_impl),
 	--number = { type = types.type, val = types.number }
-	["into-operative"] = exprs.host_operative(into_operative_impl, "into_operative_impl"),
+	--["into-operative"] = exprs.host_operative(into_operative_impl, "into_operative_impl"),
 	-- ["hackhack-host-term-of-inner"] = terms.inferrable_term.typed(
 	-- 	host_term_of_inner_type,
 	-- 	usage_array(),

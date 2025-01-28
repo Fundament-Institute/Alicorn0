@@ -2205,7 +2205,7 @@ function infer_impl(
 			inner_context:len(),
 			param_name,
 			typechecking_context:get_runtime_context(),
-			typechecking_context
+			inner_context
 		)
 		--[[local result_type = U.tag("substitute_type_variables", {
 			body_type = body_type:pretty_preprint(typechecking_context),
@@ -3961,7 +3961,7 @@ evaluate = function(typed_term, runtime_context, ambient_typechecking_context)
 	recurse_count = recurse_count + 1
 	local r = evaluate_impl(typed_term, runtime_context, ambient_typechecking_context)
 	recurse_count = recurse_count - 1
-	--verify_placeholder_lite(r, ambient_typechecking_context:len())
+	verify_placeholder_lite(r, ambient_typechecking_context:len())
 
 	if tracked then
 		print(string.rep("·", recurse_count) .. " → " .. r:pretty_print(runtime_context))
