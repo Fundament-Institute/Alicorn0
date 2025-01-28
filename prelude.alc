@@ -703,16 +703,19 @@ let get-host-func-result-info-inner =
 		:
 		host-func-type (subject : wrapped(type), valid : only-accept-host-funcs(subject)) -> ((result : wrapped(func-result-info)))
 
-let set-func-result-info-inner =
-	intrinsic
-		""""
-			local function get_host_func_arg(subject, valid, new_result_info)
-				local param_type, param_info, result_type, result_info = subject:unwrap_pi()
-				return terms.value.pi(param_type, param_info, result_type, new_result_info)
-			end
-			return get_host_func_arg
-		:
-		host-func-type (subject : wrapped(type), valid : only-accept-funcs(subject), resinf : wrapped(func-result-info)) -> ((result : wrapped(type)))
+let set-func-result-info =
+	lambda (subject : type, valid : only-accept-funcs(wrap(subject)), resinf : func-result-info)
+		let inner = intrinsic
+			""""
+				local function get_host_func_arg(subject, valid, new_result_info)
+					local param_type, param_info, result_type, result_info = subject:unwrap_pi()
+					return terms.value.pi(param_type, param_info, result_type, new_result_info)
+				end
+				return get_host_func_arg
+			:
+			host-func-type (subject : wrapped(type), valid : only-accept-funcs(subject), resinf : wrapped(func-result-info)) -> ((result : wrapped(type)))
+		let (res) = inner(wrap(subject), valid, wrap(resinf))
+		unwrap(res)
 
 let func-conv-res-type = 
 	lambda (argtype : type)
@@ -787,8 +790,8 @@ let host-func-type-to-func-type =
 				unwrap(newres)
 
 		let new-func-type = forall (x : newargs) -> (y : new-results(x))
-		let (final-func-type-wrapped) = set-func-result-info-inner(wrap(new-func-type), host-nil, orig-result-info-wrapped)
-		unwrap(final-func-type-wrapped)
+		let final-func-type = set-func-result-info(new-func-type, host-nil, unwrap(orig-result-info-wrapped))
+		final-func-type
 
 let host-funcprog-type-to-funcprog-type =
 	lambda (T : type, valid : only-accept-host-funcprogs(wrap(T)))

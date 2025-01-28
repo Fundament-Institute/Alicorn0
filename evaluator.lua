@@ -506,7 +506,7 @@ end
 ---@param v table
 ---@param max integer
 ---@return boolean
-local function verify_placeholder_lite(v, max)
+local function verify_placeholder_lite(v, max, nested)
 	-- If it's not a table we don't care
 	if type(v) ~= "table" then
 		return true
@@ -515,8 +515,13 @@ local function verify_placeholder_lite(v, max)
 	-- Special handling for arrays
 	if getmetatable(v) and getmetatable(getmetatable(v)) == gen.array_type_mt then
 		for k, val in ipairs(v) do
-			if not verify_placeholder_lite(val, max) then
-				return false
+			local ok, i, info = verify_placeholder_lite(val, max, true)
+			if not ok then
+				if not nested then
+					print(v)
+					error("AAAAAAAAAAAAAA found " .. tostring(i))
+				end
+				return false, i, info
 			end
 		end
 		return true
@@ -530,15 +535,20 @@ local function verify_placeholder_lite(v, max)
 		--print(i)
 		if i > max then
 			--os.exit(-1, true)
-			error("AAAAAAAAAAAAAA found " .. tostring(i) .. " " .. tostring(info))
-			return false
+			--error("AAAAAAAAAAAAAA found " .. tostring(i) .. " " .. tostring(info))
+			return false, i, info
 		end
 	end
 
 	for k, val in pairs(v) do
 		if k ~= "cause" and k ~= "bindings" and k ~= "provenance" then
-			if not verify_placeholder_lite(val, max) then
-				return false
+			local ok, i, info = verify_placeholder_lite(val, max, true)
+			if not ok then
+				if not nested then
+					print(v)
+					error("AAAAAAAAAAAAAA found " .. tostring(i) .. " " .. tostring(info))
+				end
+				return false, i, info
 			end
 		end
 	end
