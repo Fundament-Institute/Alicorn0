@@ -62,6 +62,14 @@ local metavariable_type = gen.declare_foreign(gen.metatable_equality(metavariabl
 
 local anchor_type = gen.declare_foreign(gen.metatable_equality(format.anchor_mt), "Anchor")
 
+---@module "types.var_debug"
+local var_debug = gen.declare_record("var_debug", {
+	"name",
+	gen.builtin_string,
+	"source",
+	anchor_type,
+})
+
 ---@class RuntimeContext
 ---@field bindings FibonacciBuffer
 local RuntimeContext = {}
@@ -97,15 +105,15 @@ local RuntimeContextBinding = {
 ---@param v value
 ---@param name string?
 ---@return RuntimeContext
-function RuntimeContext:append(v, name)
+function RuntimeContext:append(v, name, debug)
 	if value.value_check(v) ~= true then
 		error("RuntimeContext:append v must be a value")
 	end
 	-- TODO: add caller line number to this fake name?
-	name = name or ("#rctx%d"):format(self.bindings:len() + 1)
+	name = name or ("#rctx%d"):format(self.bindings:len() + 1) -- once switchover to debug is complete, no binding should ever enter the environment without debug info and so this name fallback can be removed
 	local copy = {
 		provenance = self,
-		bindings = self.bindings:append(setmetatable({ name = name, val = v }, RuntimeContextBinding)),
+		bindings = self.bindings:append(setmetatable({ name = name, val = v, debug = debug }, RuntimeContextBinding)),
 	}
 	return setmetatable(copy, runtime_context_mt)
 end
@@ -757,10 +765,11 @@ local unique_id = gen.builtin_table
 -- typed terms have been typechecked but do not store their type internally
 -- stylua: ignore
 typed_term:define_enum("typed", {
-	{ "bound_variable", { "index", gen.builtin_number, "debug", gen.any_lua_type  } },
+	{ "bound_variable", { "index", gen.builtin_number, "debug", gen.any_lua_type  } }, --TODO: switch the debug type to use the new structured var_debug
 	{ "literal", { "literal_value", value } },
 	{ "lambda", {
 		"param_name", gen.builtin_string,
+		"param_debug", var_debug,
 		"body",       typed_term,
 		"start_anchor",     anchor_type,
 	} },
@@ -776,6 +785,7 @@ typed_term:define_enum("typed", {
 	} },
 	{ "let", {
 		"name", gen.builtin_string,
+		"debug", var_debug,
 		"expr", typed_term,
 		"body", typed_term,
 	} },
@@ -792,6 +802,7 @@ typed_term:define_enum("typed", {
 	--{"tuple_extend", {"base", typed_term, "fields", array(typed_term)}}, -- maybe?
 	{ "tuple_elim", {
 		"names",   array(gen.builtin_string),
+		"debug", array(var_debug), -- can probably replace the names array entirely
 		"subject", typed_term,
 		"length",  gen.builtin_number,
 		"body",    typed_term,
@@ -836,7 +847,9 @@ typed_term:define_enum("typed", {
 	{ "enum_case", {
 		"target",   typed_term,
 		"variants", map(gen.builtin_string, typed_term),
+		"variant_debug", map(gen.builtin_string, var_debug), -- would be better to make this a single map with a pair value
 		"default",  typed_term,
+		"default_debug", var_debug,
 	} },
 	{ "enum_absurd", {
 		"target", typed_term,
@@ -1327,6 +1340,7 @@ local terms = {
 	host_block_purity_type = host_block_purity_type,
 	host_lua_error_type = host_lua_error_type,
 	unique_id = unique_id,
+	var_debug = var_debug,
 
 	runtime_context = runtime_context,
 	typechecking_context = typechecking_context,

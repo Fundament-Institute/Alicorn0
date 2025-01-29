@@ -23,11 +23,13 @@ function typed:as_literal() end
 ---@return boolean
 function typed:is_lambda() end
 ---@return string param_name
+---@return var_debug param_debug
 ---@return typed body
 ---@return Anchor start_anchor
 function typed:unwrap_lambda() end
 ---@return boolean
 ---@return string param_name
+---@return var_debug param_debug
 ---@return typed body
 ---@return Anchor start_anchor
 function typed:as_lambda() end
@@ -56,11 +58,13 @@ function typed:as_application() end
 ---@return boolean
 function typed:is_let() end
 ---@return string name
+---@return var_debug debug
 ---@return typed expr
 ---@return typed body
 function typed:unwrap_let() end
 ---@return boolean
 ---@return string name
+---@return var_debug debug
 ---@return typed expr
 ---@return typed body
 function typed:as_let() end
@@ -118,12 +122,14 @@ function typed:as_tuple_cons() end
 ---@return boolean
 function typed:is_tuple_elim() end
 ---@return ArrayValue names
+---@return ArrayValue debug
 ---@return typed subject
 ---@return number length
 ---@return typed body
 function typed:unwrap_tuple_elim() end
 ---@return boolean
 ---@return ArrayValue names
+---@return ArrayValue debug
 ---@return typed subject
 ---@return number length
 ---@return typed body
@@ -232,12 +238,16 @@ function typed:as_enum_type() end
 function typed:is_enum_case() end
 ---@return typed target
 ---@return MapValue variants
+---@return MapValue variant_debug
 ---@return typed default
+---@return var_debug default_debug
 function typed:unwrap_enum_case() end
 ---@return boolean
 ---@return typed target
 ---@return MapValue variants
+---@return MapValue variant_debug
 ---@return typed default
+---@return var_debug default_debug
 function typed:as_enum_case() end
 ---@return boolean
 function typed:is_enum_absurd() end
@@ -528,10 +538,10 @@ function typed:as_constrained_type() end
 ---@field define_enum fun(self: typedType, name: string, variants: Variants): typedType
 ---@field bound_variable fun(index: number, debug: any): typed
 ---@field literal fun(literal_value: value): typed
----@field lambda fun(param_name: string, body: typed, start_anchor: Anchor): typed
+---@field lambda fun(param_name: string, param_debug: var_debug, body: typed, start_anchor: Anchor): typed
 ---@field pi fun(param_type: typed, param_info: typed, result_type: typed, result_info: typed): typed
 ---@field application fun(f: typed, arg: typed): typed
----@field let fun(name: string, expr: typed, body: typed): typed
+---@field let fun(name: string, debug: var_debug, expr: typed, body: typed): typed
 ---@field level_type typed
 ---@field level0 typed
 ---@field level_suc fun(previous_level: typed): typed
@@ -539,7 +549,7 @@ function typed:as_constrained_type() end
 ---@field star fun(level: number, depth: number): typed
 ---@field prop fun(level: number): typed
 ---@field tuple_cons fun(elements: ArrayValue): typed
----@field tuple_elim fun(names: ArrayValue, subject: typed, length: number, body: typed): typed
+---@field tuple_elim fun(names: ArrayValue, debug: ArrayValue, subject: typed, length: number, body: typed): typed
 ---@field tuple_element_access fun(subject: typed, index: number): typed
 ---@field tuple_type fun(desc: typed): typed
 ---@field tuple_desc_type fun(universe: typed): typed
@@ -552,7 +562,7 @@ function typed:as_constrained_type() end
 ---@field enum_desc_cons fun(variants: MapValue, rest: typed): typed
 ---@field enum_desc_type fun(univ: typed): typed
 ---@field enum_type fun(desc: typed): typed
----@field enum_case fun(target: typed, variants: MapValue, default: typed): typed
+---@field enum_case fun(target: typed, variants: MapValue, variant_debug: MapValue, default: typed, default_debug: var_debug): typed
 ---@field enum_absurd fun(target: typed, debug: string): typed
 ---@field object_cons fun(methods: MapValue): typed
 ---@field object_corec_cons fun(methods: MapValue): typed
