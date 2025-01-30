@@ -2154,19 +2154,22 @@ end
 local function get_host_func_res(subject, valid)
 	local param_type, result_type, result_info = subject:unwrap_host_function_type()
 	local typed_array = terms_gen.declare_array(terms.typed_term)
+
+	local result_dbg = var_debug("#result_type", U.anchor_here())
+	local arg_dbg = var_debug("#res_arg", U.anchor_here())
 	local tuple_build = terms.typed_term.tuple_cons(
 		typed_array(
 			terms.typed_term.host_wrap(
 				terms.typed_term.application(
-					terms.typed_term.bound_variable(1, var_debug("", U.anchor_here())),
-					terms.typed_term.bound_variable(2, var_debug("", U.anchor_here()))
+					terms.typed_term.bound_variable(1, result_dbg),
+					terms.typed_term.bound_variable(2, arg_dbg)
 				)
 			),
 			terms.typed_term.literal(terms.value.host_value(nil))
 		)
 	)
-	local ctx = terms.runtime_context():append(result_type)
-	return terms.value.closure("#TEST-1", tuple_build, ctx, var_debug("", U.anchor_here()))
+	local ctx = terms.runtime_context():append(result_type, "#res_arg", result_dbg)
+	return terms.value.closure("#TEST-1", tuple_build, ctx, arg_dbg)
 end
 
 local core_operative_type = (function()
