@@ -1166,6 +1166,8 @@ add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx,
 		value.tuple_type(value.enum_value(terms.DescCons.empty, value.tuple_value(value_array())))
 	)
 	local argname = terms.var_debug("#arg" .. tostring(#rctx + 1), U.anchor_here())
+	local univ_dbg = terms.var_debug("#univ", U.anchor_here())
+	local prefix_desc_dbg = terms.var_debug("#prefix-desc", U.anchor_here())
 	-- The cons variant takes a prefix description and a next element, represented as a function from the prefix tuple to a type in the specified universe
 	construction_variants:set(
 		terms.DescCons.cons,
@@ -1192,25 +1194,23 @@ add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx,
 							"#prefix",
 							typed_term.tuple_elim(
 								string_array("prefix-desc"),
-								debug_array(terms.var_debug("prefix-desc", U.anchor_here())),
-								typed_term.bound_variable(#rctx + 2, terms.var_debug("", U.anchor_here())),
+								debug_array(prefix_desc_dbg),
+								typed_term.bound_variable(#rctx + 2, argname),
 								1,
 								typed_term.pi(
-									typed_term.tuple_type(
-										typed_term.bound_variable(#rctx + 3, terms.var_debug("", U.anchor_here()))
-									),
+									typed_term.tuple_type(typed_term.bound_variable(#rctx + 3, prefix_desc_dbg)),
 									typed.literal(value.param_info(value.visibility(terms.visibility.explicit))),
 									typed.lambda(
 										argname.name,
 										argname,
-										typed_term.bound_variable(#rctx + 1, argname),
+										typed_term.bound_variable(#rctx + 1, univ_dbg),
 										U.anchor_here()
 									),
 									typed.literal(value.result_info(terms.result_info(terms.purity.pure)))
 								)
 							),
-							rctx.runtime_context:append(b_univ, "b_univ", terms.var_debug("", U.anchor_here())),
-							terms.var_debug("", U.anchor_here())
+							rctx.runtime_context:append(b_univ, "b_univ", univ_dbg),
+							argname
 						)
 					)
 				)
