@@ -2212,8 +2212,8 @@ function infer_impl(
 		end
 
 		local param_type = evaluate(param_term, typechecking_context:get_runtime_context(), typechecking_context)
-		local inner_context =
-			typechecking_context:append(param_name, param_type, nil, terms.var_debug(param_name, start_anchor))
+		local param_debug = terms.var_debug(param_name, start_anchor)
+		local inner_context = typechecking_context:append(param_name, param_type, nil, param_debug)
 		local ok, purity_usages, purity_term = check(purity, inner_context, terms.host_purity_type)
 		if not ok then
 			return false, purity_usages
@@ -2245,8 +2245,7 @@ function infer_impl(
 		local lambda_type =
 			value.pi(param_type, value.param_info(value.visibility(param_visibility)), result_type, result_info)
 		lambda_type.original_name = param_name
-		local lambda_term =
-			typed_term.lambda(param_name .. "^", terms.var_debug("", U.anchor_here()), body_term, start_anchor)
+		local lambda_term = typed_term.lambda(param_name .. "^", param_debug, body_term, start_anchor)
 		return true, lambda_type, lambda_usages, lambda_term
 	elseif inferrable_term:is_pi() then
 		local param_type, param_info, result_type, result_info = inferrable_term:unwrap_pi()
