@@ -89,8 +89,10 @@ end
 
 ---@param index integer
 ---@return value
+---@return var_debug
 function RuntimeContext:get(index)
-	return self.bindings:get(index).val
+	local binding = self.bindings:get(index)
+	return binding.val, binding.debuginfo
 end
 
 -- without this, some value.closure comparisons fail erroneously
@@ -102,7 +104,7 @@ local RuntimeContextBinding = {
 
 ---@param v value
 ---@param name string?
----@param debug var_debug
+---@param debuginfo var_debug
 ---@return RuntimeContext
 function RuntimeContext:append(v, name, debuginfo)
 	if value.value_check(v) ~= true then
@@ -118,7 +120,7 @@ function RuntimeContext:append(v, name, debuginfo)
 	local copy = {
 		provenance = self,
 		bindings = self.bindings:append(
-			setmetatable({ name = name, val = v, debug = debuginfo }, RuntimeContextBinding)
+			setmetatable({ name = name, val = v, debuginfo = debuginfo }, RuntimeContextBinding)
 		),
 	}
 	return setmetatable(copy, runtime_context_mt)

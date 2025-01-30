@@ -3264,10 +3264,19 @@ function evaluate_impl(typed_term, runtime_context, ambient_typechecking_context
 	end
 
 	if typed_term:is_bound_variable() then
-		local rc_val = runtime_context:get(typed_term:unwrap_bound_variable())
+		local idx, bdbg = typed_term:unwrap_bound_variable()
+		local rc_val, cdbg = runtime_context:get(idx)
 		if rc_val == nil then
 			p(typed_term)
 			error("runtime_context:get() for bound_variable returned nil")
+		end
+		if bdbg ~= cdbg then
+			error(
+				"Debug information doesn't match! Contexts are mismatched! Variable thinks it is getting "
+					.. tostring(bdbg)
+					.. " but context thinks it has "
+					.. tostring(cdbg)
+			)
 		end
 		return rc_val
 	elseif typed_term:is_literal() then
