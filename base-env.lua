@@ -1577,20 +1577,23 @@ local function build_wrap(body_fn, type_fn)
 	local names2 = names("#wrap-TODO1", "#wrap-TODO2")
 	local pname_arg = "#wrap-arguments"
 	local pname_type = "#wrap-prev"
+	local args_dbg = terms.var_debug("#args", U.anchor_here())
+	local args0_dbg = terms.var_debug("#args0", U.anchor_here())
+	local args1_dbg = terms.var_debug("#args1", U.anchor_here())
+	local univ_dbg = terms.var_debug("#univ", U.anchor_here())
+	local subj_dbg = terms.var_debug("#subj", U.anchor_here())
 	return lit_term(
 		value.closure(
 			pname_arg,
 			typed.tuple_elim(
 				names2,
-				names2:map(debug_array, function(n)
-					return var_debug(n, U.anchor_here())
-				end),
-				typed.bound_variable(1, terms.var_debug("", U.anchor_here())),
+				debug_array(univ_dbg, subj_dbg),
+				typed.bound_variable(1, args_dbg),
 				2,
-				body_fn(typed.bound_variable(3, terms.var_debug("", U.anchor_here())))
+				body_fn(typed.bound_variable(3, subj_dbg))
 			),
 			terms.runtime_context(),
-			terms.var_debug("", U.anchor_here())
+			args_dbg
 		),
 		value.pi(
 			value.tuple_type(
@@ -1599,29 +1602,25 @@ local function build_wrap(body_fn, type_fn)
 						pname_type,
 						typed.tuple_elim(
 							names0,
-							names0:map(debug_array, function(n)
-								return var_debug(n, U.anchor_here())
-							end),
-							typed.bound_variable(1, terms.var_debug("", U.anchor_here())),
+							debug_array(),
+							typed.bound_variable(1, args0_dbg),
 							0,
 							typed.star(evaluator.OMEGA + 1, 0)
 						),
 						terms.runtime_context(),
-						terms.var_debug("", U.anchor_here())
+						args0_dbg
 					),
 					value.closure(
 						pname_type,
 						terms.typed_term.tuple_elim(
 							names1,
-							names1:map(debug_array, function(n)
-								return var_debug(n, U.anchor_here())
-							end),
-							terms.typed_term.bound_variable(1, terms.var_debug("", U.anchor_here())),
+							debug_array(univ_dbg),
+							terms.typed_term.bound_variable(1, args1_dbg),
 							1,
-							typed.bound_variable(2, terms.var_debug("", U.anchor_here()))
+							typed.bound_variable(2, univ_dbg)
 						),
 						terms.runtime_context(),
-						terms.var_debug("", U.anchor_here())
+						args1_dbg
 					)
 				)
 			),
@@ -1630,15 +1629,13 @@ local function build_wrap(body_fn, type_fn)
 				pname_type,
 				typed.tuple_elim(
 					names2,
-					names2:map(debug_array, function(n)
-						return var_debug(n, U.anchor_here())
-					end),
-					typed.bound_variable(1, terms.var_debug("", U.anchor_here())),
+					debug_array(univ_dbg, subj_dbg),
+					typed.bound_variable(1, args_dbg),
 					2,
-					type_fn(typed.bound_variable(2, terms.var_debug("", U.anchor_here())))
+					type_fn(typed.bound_variable(2, univ_dbg))
 				),
 				terms.runtime_context(),
-				terms.var_debug("", U.anchor_here())
+				args_dbg
 			),
 			result_info_pure
 		)
@@ -1656,20 +1653,23 @@ local function build_unwrap(body_fn, type_fn)
 	local names2 = names("#unwrap-TODO1", "#unwrap-TODO2")
 	local pname_arg = "#unwrap-arguments"
 	local pname_type = "#unwrap-prev"
+	local args_dbg = terms.var_debug("#args", U.anchor_here())
+	local args0_dbg = terms.var_debug("#args0", U.anchor_here())
+	local args1_dbg = terms.var_debug("#args1", U.anchor_here())
+	local univ_dbg = terms.var_debug("#univ", U.anchor_here())
+	local subj_dbg = terms.var_debug("#subj", U.anchor_here())
 	return lit_term(
 		value.closure(
 			pname_arg,
 			typed.tuple_elim(
 				names2,
-				names2:map(debug_array, function(n)
-					return var_debug(n, U.anchor_here())
-				end),
-				typed.bound_variable(1, terms.var_debug("", U.anchor_here())),
+				debug_array(univ_dbg, subj_dbg),
+				typed.bound_variable(1, args_dbg),
 				2,
-				body_fn(typed.bound_variable(3, terms.var_debug("", U.anchor_here())))
+				body_fn(typed.bound_variable(3, subj_dbg))
 			),
 			terms.runtime_context(),
-			terms.var_debug("", U.anchor_here())
+			args_dbg
 		),
 		value.pi(
 			value.tuple_type(
@@ -1678,29 +1678,25 @@ local function build_unwrap(body_fn, type_fn)
 						pname_type,
 						typed.tuple_elim(
 							names0,
-							names0:map(debug_array, function(n)
-								return var_debug(n, U.anchor_here())
-							end),
-							typed.bound_variable(1, terms.var_debug("", U.anchor_here())),
+							debug_array(),
+							typed.bound_variable(1, args0_dbg),
 							0,
 							typed.star(evaluator.OMEGA + 1, 0)
 						),
 						terms.runtime_context(),
-						terms.var_debug("", U.anchor_here())
+						args0_dbg
 					),
 					value.closure(
 						pname_type,
 						terms.typed_term.tuple_elim(
 							names1,
-							names1:map(debug_array, function(n)
-								return var_debug(n, U.anchor_here())
-							end),
-							terms.typed_term.bound_variable(1, terms.var_debug("", U.anchor_here())),
+							debug_array(univ_dbg),
+							terms.typed_term.bound_variable(1, args1_dbg),
 							1,
-							type_fn(typed.bound_variable(2, terms.var_debug("", U.anchor_here())))
+							type_fn(typed.bound_variable(2, univ_dbg))
 						),
 						terms.runtime_context(),
-						terms.var_debug("", U.anchor_here())
+						args1_dbg
 					)
 				)
 			),
@@ -1709,15 +1705,13 @@ local function build_unwrap(body_fn, type_fn)
 				pname_type,
 				typed.tuple_elim(
 					names2,
-					names2:map(debug_array, function(n)
-						return var_debug(n, U.anchor_here())
-					end),
-					typed.bound_variable(1, terms.var_debug("", U.anchor_here())),
+					debug_array(univ_dbg, subj_dbg),
+					typed.bound_variable(1, args_dbg),
 					2,
-					typed.bound_variable(2, terms.var_debug("", U.anchor_here()))
+					typed.bound_variable(2, univ_dbg)
 				),
 				terms.runtime_context(),
-				terms.var_debug("", U.anchor_here())
+				args_dbg
 			),
 			result_info_pure
 		)
