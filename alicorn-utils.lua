@@ -695,9 +695,9 @@ function M.debug_id()
 	DEBUG_ID = DEBUG_ID + 1
 
 	-- Use this to reliably breakpoint at the moment a term of interest is created
-	--if DEBUG_ID == 105738 then
-	--	print(DEBUG_ID)
-	--end
+	if DEBUG_ID == 2154 then
+		print(DEBUG_ID)
+	end
 
 	return DEBUG_ID
 end

@@ -399,11 +399,8 @@ enum_desc_srel = setmetatable({
 	),
 }, subtype_relation_mt)
 
----@type fun(subject_type_a : value, lctx : TypecheckingContext, subject_type_b : value, rctx : TypecheckingContext, subject_value : value) : value[], value[], value[], integer
+---@type fun(subject_type_a : value, lctx : TypecheckingContext, subject_type_b : value, rctx : TypecheckingContext, subject_value : value) : boolean, value[], value[], value[], integer
 local infer_tuple_type_unwrapped2
-
----@type fun(val : value, index : integer, param_name : string?) : value
-local substitute_type_variables
 
 local Error
 ---@type SubtypeRelation
@@ -919,21 +916,22 @@ end
 
 --for substituting a single var at index
 ---@param val value
+---@param debuginfo var_debug
 ---@param index integer
 ---@param param_name string?
 ---@param ctx RuntimeContext
 ---@param ambient_typechecking_context TypecheckingContext
 ---@return value
-function substitute_type_variables(val, index, param_name, ctx, ambient_typechecking_context)
+function substitute_type_variables(val, debuginfo, index, param_name, ctx, ambient_typechecking_context)
 	param_name = param_name and "#sub-" .. param_name or "#sub-param"
 	--print("value before substituting (val): (value term follows)")
 	--print(val)
 	local substituted = substitute_inner(val, {
-		[index] = typed_term.bound_variable(index, terms.var_debug("", U.anchor_here())),
+		[index] = typed_term.bound_variable(index, debuginfo),
 	}, index, ambient_typechecking_context)
 	--print("typed term after substitution (substituted): (typed term follows)")
 	--print(substituted:pretty_print(typechecking_context))
-	return value.closure(param_name, substituted, ctx, terms.var_debug("", U.anchor_here()))
+	return value.closure(param_name, substituted, ctx, debuginfo)
 end
 
 ---@param val value
@@ -943,7 +941,8 @@ local function substitute_placeholders_identity(val, typechecking_context)
 	local mappings = {}
 	local size = typechecking_context.bindings:len()
 	for i = 1, size do
-		mappings[i] = typed.bound_variable(i)
+		local _, info = typechecking_context.runtime_context:get(i)
+		mappings[i] = typed.bound_variable(i, info)
 	end
 	return substitute_inner(val, mappings, size, typechecking_context)
 end
@@ -2225,6 +2224,7 @@ function infer_impl(
 
 		local result_type = substitute_type_variables(
 			body_type,
+			param_debug,
 			inner_context:len(),
 			param_name,
 			typechecking_context:get_runtime_context(),
@@ -2411,6 +2411,7 @@ function infer_impl(
 				type_data,
 				substitute_type_variables(
 					el_singleton,
+					terms.var_debug("#tuple-cons-el", U.anchor_here()),
 					typechecking_context:len() + 1,
 					"#tuple-cons-el",
 					typechecking_context:get_runtime_context(),
@@ -2448,7 +2449,11 @@ function infer_impl(
 			local el_singleton = value.singleton(el_type, el_val)
 			type_data = terms.cons(
 				type_data,
-				substitute_type_variables(el_singleton, typechecking_context:len() + 1),
+				substitute_type_variables(
+					el_singleton,
+					terms.var_debug("", U.anchor_here()),
+					typechecking_context:len() + 1
+				),
 				"#host-tuple-cons-el",
 				typechecking_context:get_runtime_context()
 			)
@@ -2579,6 +2584,7 @@ function infer_impl(
 				value.name(k),
 				substitute_type_variables(
 					field_type,
+					terms.var_debug("#record-cons-el", U.anchor_here()),
 					typechecking_context:len() + 1,
 					"#record-cons-el",
 					typechecking_context:get_runtime_context(),
@@ -3274,7 +3280,9 @@ function evaluate_impl(typed_term, runtime_context, ambient_typechecking_context
 		end
 		if bdbg ~= cdbg then
 			error(
-				"Debug information doesn't match! Contexts are mismatched! Variable thinks it is getting "
+				"Debug information doesn't match! Contexts are mismatched! Variable #"
+					.. tostring(typed_term["{ID}"])
+					.. " thinks it is getting "
 					.. tostring(bdbg)
 					.. " but context thinks it has "
 					.. tostring(cdbg)
