@@ -1727,20 +1727,21 @@ local function build_wrapped(body_fn)
 	local names1 = names("#wrapped-TODO1")
 	local pname_arg = "#wrapped-arguments"
 	local pname_type = "#wrapped-prev"
+	local args_dbg = terms.var_debug("#args", U.anchor_here())
+	local args0_dbg = terms.var_debug("#args0", U.anchor_here())
+	local typ_dbg = terms.var_debug("#typ", U.anchor_here())
 	return lit_term(
 		value.closure(
 			pname_arg,
 			typed.tuple_elim(
 				names1,
-				names1:map(debug_array, function(n)
-					return var_debug(n, U.anchor_here())
-				end),
-				typed.bound_variable(1, terms.var_debug("", U.anchor_here())),
+				debug_array(typ_dbg),
+				typed.bound_variable(1, args_dbg),
 				1,
-				body_fn(typed.bound_variable(2, terms.var_debug("", U.anchor_here())))
+				body_fn(typed.bound_variable(2, typ_dbg))
 			),
 			terms.runtime_context(),
-			terms.var_debug("", U.anchor_here())
+			args_dbg
 		),
 		value.pi(
 			value.tuple_type(
@@ -1749,10 +1750,8 @@ local function build_wrapped(body_fn)
 						pname_type,
 						typed.tuple_elim(
 							names0,
-							names0:map(debug_array, function(n)
-								return var_debug(n, U.anchor_here())
-							end),
-							typed.bound_variable(1, terms.var_debug("", U.anchor_here())),
+							debug_array(),
+							typed.bound_variable(1, args0_dbg),
 							0,
 							typed.star(evaluator.OMEGA + 1, 0)
 						),
@@ -1766,15 +1765,13 @@ local function build_wrapped(body_fn)
 				pname_type,
 				typed.tuple_elim(
 					names1,
-					names1:map(debug_array, function(n)
-						return var_debug(n, U.anchor_here())
-					end),
-					typed.bound_variable(1, terms.var_debug("", U.anchor_here())),
+					debug_array(typ_dbg),
+					typed.bound_variable(1, args_dbg),
 					1,
 					typed.literal(value.host_type_type)
 				),
 				terms.runtime_context(),
-				terms.var_debug("", U.anchor_here())
+				args_dbg
 			),
 			result_info_pure
 		)
