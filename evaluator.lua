@@ -98,12 +98,17 @@ end
 local function luatovalue(luafunc)
 	local luafunc_debug = debug.getinfo(luafunc, "u")
 	local parameters = name_array()
+	local params_dbg = debug_array()
 	local len = luafunc_debug.nparams
 	local new_body = typed_array()
 
+	local arg_dbg = terms.var_debug("#host-arg", U.anchor_here())
 	for i = 1, len do
-		parameters:append(debug.getlocal(luafunc, i))
-		new_body:append(typed.bound_variable(i + 1, terms.var_debug("", U.anchor_here())))
+		local param_name = debug.getlocal(luafunc, i)
+		local param_dbg = terms.var_debug(param_name, U.anchor_here())
+		parameters:append(param_name)
+		params_dbg:append(param_dbg)
+		new_body:append(typed.bound_variable(i + 1, param_dbg))
 	end
 
 	return value.closure(
@@ -112,16 +117,14 @@ local function luatovalue(luafunc)
 			typed.literal(value.host_value(luafunc)),
 			typed.tuple_elim(
 				parameters,
-				parameters:map(debug_array, function(n)
-					return terms.var_debug(n, U.anchor_here())
-				end),
-				typed.bound_variable(1, terms.var_debug("", U.anchor_here())),
+				params_dbg,
+				typed.bound_variable(1, arg_dbg),
 				len,
 				typed.host_tuple_cons(new_body)
 			)
 		),
 		runtime_context(),
-		terms.var_debug("", U.anchor_here())
+		arg_dbg
 	)
 end
 
