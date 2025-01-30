@@ -936,15 +936,16 @@ end
 
 ---@param val value
 ---@param typechecking_context TypecheckingContext
+---@param hidden integer?
 ---@return typed
-local function substitute_placeholders_identity(val, typechecking_context)
+local function substitute_placeholders_identity(val, typechecking_context, hidden)
 	local mappings = {}
 	local size = typechecking_context.bindings:len()
 	for i = 1, size do
 		local _, info = typechecking_context.runtime_context:get(i)
 		mappings[i] = typed.bound_variable(i, info)
 	end
-	return substitute_inner(val, mappings, size, typechecking_context)
+	return substitute_inner(val, mappings, size + (hidden or 0), typechecking_context)
 end
 
 ---@param val value

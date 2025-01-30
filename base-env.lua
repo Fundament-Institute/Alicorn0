@@ -20,6 +20,7 @@ local usage_array = gen.declare_array(gen.builtin_number)
 local debug_array = gen.declare_array(var_debug)
 local name_array = gen.declare_array(gen.builtin_string)
 local typed_array = gen.declare_array(typed)
+local value_array = gen.declare_array(value)
 
 ---@param val value
 ---@param typ value

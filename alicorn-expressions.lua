@@ -1338,7 +1338,8 @@ collect_tuple = metalanguage.reducer(
 					)
 					local subval = evaluator.substitute_placeholders_identity(
 						value.singleton(next_elem_type, next_val),
-						env.typechecking_context
+						env.typechecking_context,
+						1
 					)
 					desc = terms.cons(
 						desc,
