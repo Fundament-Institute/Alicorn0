@@ -1024,17 +1024,20 @@ local function expression_symbolhandler(args, name)
 			end
 
 			if front and front.str then
-				namearray = front.str
+				namearray = front
 			else
 				assert(name)
 				assert(name.str)
-				namearray = name.str
+				namearray = name
 			end
 
 			part = inferrable_term.record_elim(
 				part,
-				name_array(namearray),
-				inferrable_term.bound_variable(env.typechecking_context:len() + 1, terms.var_debug("", U.anchor_here()))
+				name_array(namearray.str),
+				inferrable_term.bound_variable(
+					env.typechecking_context:len() + 1,
+					terms.var_debug(namearray.str, namearray.start_anchor)
+				)
 			)
 		end
 		if goal:is_check() then

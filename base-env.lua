@@ -329,7 +329,7 @@ local pure_ascribed_name = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
-	---@return string
+	---@return var_debug
 	---@return inferrable?
 	---@return Environment?
 	function(syntax, env)
@@ -364,7 +364,7 @@ local pure_ascribed_name = metalanguage.reducer(
 				typed.literal(type_mv:as_value())
 			)
 		end
-		return true, name.str, type, env
+		return true, var_debug(name.str, name.start_anchor), type, env
 	end,
 	"pure_ascribed_name"
 )
@@ -373,9 +373,9 @@ local ascribed_name = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@param prev inferrable
-	---@param names string[]
+	---@param names var_debug[]
 	---@return boolean
-	---@return string
+	---@return var_debug
 	---@return inferrable?
 	---@return Environment?
 	function(syntax, env, prev, names)
@@ -407,10 +407,10 @@ local ascribed_name = metalanguage.reducer(
 		end
 		---@cast prev_binding -string
 		ok, env = env:bind_local(terms.binding.tuple_elim(
-			names,
-			names:map(debug_array, function(n)
-				return var_debug(n, U.anchor_here())
+			names:map(name_array, function(n)
+				return n.name
 			end),
+			names,
 			prev_binding
 		))
 		if not ok then
@@ -446,11 +446,12 @@ local curry_segment = metalanguage.reducer(
 				--print("type_env: " .. tostring(thread.env))
 				return pure_ascribed_name(function(_, name, type_val, type_env)
 					local ok
+					local str, anchor = name:unwrap_var_debug()
 					ok, type_env = type_env:bind_local(
 						terms.binding.annotated_lambda(
-							name,
+							str,
 							type_val,
-							syntax.start_anchor,
+							anchor,
 							terms.visibility.implicit,
 							literal_purity_pure
 						)
@@ -506,7 +507,7 @@ local tuple_desc_of_ascribed_names = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
-	---@return {names: string[], args: inferrable, env: Environment}|string
+	---@return {names: var_debug[], args: inferrable, env: Environment}|string
 	function(syntax, env)
 		local function build_type_term(args)
 			return terms.inferrable_term.tuple_type(args)
@@ -519,7 +520,7 @@ local tuple_desc_of_ascribed_names = metalanguage.reducer(
 			return terms.inferrable_term.enum_cons(terms.DescCons.cons, tup_cons(...))
 		end
 		local empty = terms.inferrable_term.enum_cons(terms.DescCons.empty, tup_cons())
-		local names = gen.declare_array(gen.builtin_string)()
+		local names = gen.declare_array(var_debug)()
 
 		local ok, thread = syntax:match({
 			metalanguage.list_many_fold(function(_, vals, thread)
@@ -682,7 +683,7 @@ local tuple_desc_wrap_ascribed_name = metalanguage.reducer(
 			return terms.inferrable_term.enum_cons(terms.DescCons.cons, tup_cons(...))
 		end
 		local empty = terms.inferrable_term.enum_cons(terms.DescCons.empty, tup_cons())
-		local names = gen.declare_array(gen.builtin_string)()
+		local names = gen.declare_array(var_debug)()
 		local args = empty
 		local ok, name, type_val, type_env = syntax:match({
 			ascribed_name(metalanguage.accept_handler, env, build_type_term(args), names),
@@ -775,7 +776,7 @@ local function make_host_func_syntax(effectful)
 		end
 		local params_single = params_thread.single
 		local params_args = params_thread.args
-		local params_names = params_thread.names
+		local params_info = params_thread.names
 		env = params_thread.env
 
 		--print("moving on to return type")
@@ -802,13 +803,13 @@ local function make_host_func_syntax(effectful)
 		end
 		---@cast arg -string
 		if params_single then
-			ok, env = env:bind_local(terms.binding.let(params_names, terms.var_debug("", U.anchor_here()), arg))
+			ok, env = env:bind_local(terms.binding.let(params_info.name, params_info, arg))
 		else
 			ok, env = env:bind_local(terms.binding.tuple_elim(
-				params_names,
-				params_names:map(debug_array, function(n)
-					return var_debug(n, U.anchor_here())
+				params_info:map(name_array, function(n)
+					return n.name
 				end),
+				params_info,
 				arg
 			))
 		end
@@ -882,7 +883,8 @@ local function forall_impl(syntax, env)
 	end
 	local params_single = params_thread.single
 	local params_args = params_thread.args
-	local params_names = params_thread.names
+	local params_info = params_thread.names
+	local params_names
 	env = params_thread.env
 	---@cast env Environment
 	--print("moving on to return type")
@@ -892,8 +894,12 @@ local function forall_impl(syntax, env)
 	-- tail.start_anchor can be nil so we fall back to the start_anchor for this forall type if needed
 	-- TODO: use correct name in lambda parameter instead of adding an extra let
 	if params_single then
+		params_names = params_info.name
 		inner_name = "forall(" .. params_names .. ")"
 	else
+		params_names = params_info:map(name_array, function(n)
+			return n.name
+		end)
 		inner_name = "forall(" .. table.concat(params_names, ", ") .. ")"
 	end
 
@@ -915,15 +921,9 @@ local function forall_impl(syntax, env)
 	end
 	---@cast arg -string
 	if params_single then
-		ok, env = env:bind_local(terms.binding.let(params_names, terms.var_debug("", U.anchor_here()), arg))
+		ok, env = env:bind_local(terms.binding.let(params_names, params_info, arg))
 	else
-		ok, env = env:bind_local(terms.binding.tuple_elim(
-			params_names,
-			params_names:map(debug_array, function(n)
-				return var_debug(n, U.anchor_here())
-			end),
-			arg
-		))
+		ok, env = env:bind_local(terms.binding.tuple_elim(params_names, params_info, arg))
 	end
 	if not ok then
 		return false, env
@@ -1121,7 +1121,10 @@ local function lambda_impl(syntax, env)
 		return ok, thread
 	end
 
-	local args, names, env = thread.args, thread.names, thread.env
+	local args, info, env = thread.args, thread.names, thread.env
+	local names = info:map(name_array, function(n)
+		return n.name
+	end)
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
 	local inner_name = "λ(" .. table.concat(names, ",") .. ")"
 	ok, inner_env = inner_env:bind_local(
@@ -1137,13 +1140,7 @@ local function lambda_impl(syntax, env)
 		return false, inner_env
 	end
 	local _, arg = inner_env:get(inner_name)
-	ok, inner_env = inner_env:bind_local(terms.binding.tuple_elim(
-		names,
-		names:map(debug_array, function(n)
-			return var_debug(n, U.anchor_here())
-		end),
-		arg
-	))
+	ok, inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, info, arg))
 	if not ok then
 		return false, inner_env
 	end
@@ -1168,7 +1165,10 @@ local function lambda_prog_impl(syntax, env)
 		return ok, thread
 	end
 
-	local args, names, env = thread.args, thread.names, thread.env
+	local args, info, env = thread.args, thread.names, thread.env
+	local names = info:map(name_array, function(n)
+		return n.name
+	end)
 	local inner_name = "λ-prog(" .. table.concat(names, ",") .. ")"
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.effectful)
@@ -1185,13 +1185,7 @@ local function lambda_prog_impl(syntax, env)
 		return false, inner_env
 	end
 	local _, arg = inner_env:get(inner_name)
-	ok, inner_env = inner_env:bind_local(terms.binding.tuple_elim(
-		names,
-		names:map(debug_array, function(n)
-			return var_debug(n, U.anchor_here())
-		end),
-		arg
-	))
+	ok, inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, info, arg))
 	if not ok then
 		return false, inner_env
 	end
@@ -1220,7 +1214,13 @@ local function lambda_single_impl(syntax, env)
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
 	ok, inner_env = inner_env:bind_local(
-		terms.binding.annotated_lambda(name, arg, syntax.start_anchor, terms.visibility.explicit, literal_purity_pure)
+		terms.binding.annotated_lambda(
+			name.name,
+			arg,
+			syntax.start_anchor,
+			terms.visibility.explicit,
+			literal_purity_pure
+		)
 	)
 	if not ok then
 		return false, inner_env
@@ -1237,6 +1237,7 @@ local function lambda_single_impl(syntax, env)
 	return true, term, resenv
 end
 
+-- TODO: de-duplicate with above function by wrapping in constructor that takes an implicit or explicit visibility
 ---@type lua_operative
 local function lambda_implicit_impl(syntax, env)
 	local ok, thread, tail = syntax:match({
@@ -1250,7 +1251,13 @@ local function lambda_implicit_impl(syntax, env)
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
 	ok, inner_env = inner_env:bind_local(
-		terms.binding.annotated_lambda(name, arg, syntax.start_anchor, terms.visibility.implicit, literal_purity_pure)
+		terms.binding.annotated_lambda(
+			name.name,
+			arg,
+			syntax.start_anchor,
+			terms.visibility.implicit,
+			literal_purity_pure
+		)
 	)
 	if not ok then
 		return false, inner_env
@@ -1277,7 +1284,10 @@ local function lambda_annotated_impl(syntax, env)
 		return ok, thread
 	end
 
-	local args, names, env = thread.args, thread.names, thread.env
+	local args, info, env = thread.args, thread.names, thread.env
+	local names = info:map(name_array, function(n)
+		return n.name
+	end)
 	local inner_name = "λ-named(" .. table.concat(names, ",") .. ")"
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
@@ -1294,13 +1304,7 @@ local function lambda_annotated_impl(syntax, env)
 		return false, inner_env
 	end
 	local _, arg = inner_env:get(inner_name)
-	ok, inner_env = inner_env:bind_local(terms.binding.tuple_elim(
-		names,
-		names:map(debug_array, function(n)
-			return var_debug(n, U.anchor_here())
-		end),
-		arg
-	))
+	ok, inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, info, arg))
 	if not ok then
 		return false, inner_env
 	end
@@ -1756,7 +1760,7 @@ local function build_wrapped(body_fn)
 							typed.star(evaluator.OMEGA + 1, 0)
 						),
 						terms.runtime_context(),
-						terms.var_debug("", U.anchor_here())
+						args0_dbg
 					)
 				)
 			),
@@ -1796,7 +1800,7 @@ local enum_variant = metalanguage.reducer(function(syntax, env)
 		return false, "missing enum variant name"
 	end
 
-	return true, tag.str, terms.inferrable_term.tuple_type(tail.args), env
+	return true, tag.name, terms.inferrable_term.tuple_type(tail.args), env
 end, "enum_variant")
 
 ---@type lua_operative

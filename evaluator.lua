@@ -706,8 +706,8 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 			local free = nval:unwrap_free()
 			local lookup, mapping
 			if free:is_placeholder() then
-				lookup = free:unwrap_placeholder()
-				mapping = typed_term.bound_variable(lookup)
+				lookup, info = free:unwrap_placeholder()
+				mapping = typed_term.bound_variable(lookup, info)
 			elseif free:is_unique() then
 				lookup = free:unwrap_unique()
 			elseif free:is_metavariable() then
