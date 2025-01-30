@@ -93,7 +93,7 @@ function environment:bind_local(binding)
 		error("nyi environment dependent purity")
 	end
 	if binding:is_let() then
-		local name, expr = binding:unwrap_let()
+		local name, debuginfo, expr = binding:unwrap_let()
 		local ok, expr_type, expr_usages, expr_term = infer(expr, self.typechecking_context)
 		if not ok then
 			return false, expr_type
@@ -103,14 +103,14 @@ function environment:bind_local(binding)
 			error("infer returned a bad type for expr in bind_local")
 		end
 		local n = self.typechecking_context:len()
-		local term = inferrable_term.bound_variable(n + 1, U.bound_here())
+		local term = inferrable_term.bound_variable(n + 1, debuginfo)
 		local locals = self.locals:put(name, term)
 		local evaled =
 			evaluator.evaluate(expr_term, self.typechecking_context.runtime_context, self.typechecking_context)
 		-- print "doing let binding"
 		-- print(expr:pretty_print())
 		--log_binding(name, expr_type, evaled)
-		local typechecking_context = self.typechecking_context:append(name, expr_type, evaled)
+		local typechecking_context = self.typechecking_context:append(name, expr_type, evaled, debuginfo)
 		local bindings = self.bindings:append(binding)
 		return true,
 			update_env(self, {
@@ -119,7 +119,7 @@ function environment:bind_local(binding)
 				typechecking_context = typechecking_context,
 			})
 	elseif binding:is_tuple_elim() then
-		local names, subject = binding:unwrap_tuple_elim()
+		local names, infos, subject = binding:unwrap_tuple_elim()
 		local ok, subject_type, subject_usages, subject_term = infer(subject, self.typechecking_context)
 		if not ok then
 			return false, subject_type
@@ -194,12 +194,12 @@ function environment:bind_local(binding)
 				-- if constructor ~= "cons" then
 				-- 	error("todo: this error message")
 				-- end
-				local term = inferrable_term.bound_variable(n + i, U.bound_here())
+				local term = inferrable_term.bound_variable(n + i, infos[i])
 				locals = locals:put(v, term)
 
 				local evaled = evaluator.index_tuple_value(subject_value, i)
 				--log_binding(v, tupletypes[i], evaled)
-				typechecking_context = typechecking_context:append(v, tupletypes[i], evaled)
+				typechecking_context = typechecking_context:append(v, tupletypes[i], evaled, infos[i])
 			end
 			local bindings = self.bindings:append(binding)
 			return true,
@@ -241,11 +241,10 @@ function environment:bind_local(binding)
 		local evaled =
 			evaluator.evaluate(annotation_term, self.typechecking_context.runtime_context, self.typechecking_context)
 		local bindings = self.bindings:append(binding)
-		local locals = self.locals:put(
-			param_name,
-			inferrable_term.bound_variable(self.typechecking_context:len() + 1, U.bound_here())
-		)
-		local typechecking_context = self.typechecking_context:append(param_name, evaled, nil, start_anchor)
+		local info = terms.var_debug(param_name, start_anchor)
+		local locals =
+			self.locals:put(param_name, inferrable_term.bound_variable(self.typechecking_context:len() + 1, info))
+		local typechecking_context = self.typechecking_context:append(param_name, evaled, nil, info)
 		return true,
 			update_env(self, {
 				locals = locals,
@@ -278,10 +277,11 @@ function environment:bind_local(binding)
 
 		--print("FOUND EFFECTFUL BINDING", first_result_type, "produced by ", first_type)
 		local n = self.typechecking_context:len()
-		local term = inferrable_term.bound_variable(n + 1, U.bound_here())
+		local debuginfo = terms.var_debug("#program_sequence", start_anchor)
+		local term = inferrable_term.bound_variable(n + 1, debuginfo)
 		local locals = self.locals:put("#program-sequence", term)
 		local typechecking_context =
-			self.typechecking_context:append("#program-sequence", first_result_type, nil, start_anchor)
+			self.typechecking_context:append("#program-sequence", first_result_type, nil, debuginfo)
 		local bindings = self.bindings:append(binding)
 		return true,
 			update_env(self, {
@@ -398,11 +398,11 @@ function environment:exit_block(term, shadowed)
 			error "missing binding"
 		end
 		if binding:is_let() then
-			local name, expr = binding:unwrap_let()
-			wrapped = terms.inferrable_term.let(name, expr, wrapped)
+			local name, debuginfo, expr = binding:unwrap_let() -- TODO: propagate anchors
+			wrapped = terms.inferrable_term.let(name, debuginfo, expr, wrapped)
 		elseif binding:is_tuple_elim() then
-			local names, subject = binding:unwrap_tuple_elim()
-			wrapped = terms.inferrable_term.tuple_elim(names, subject, wrapped)
+			local names, debuginfo, subject = binding:unwrap_tuple_elim() -- TODO: propagate anchors
+			wrapped = terms.inferrable_term.tuple_elim(names, debuginfo, subject, wrapped)
 		elseif binding:is_annotated_lambda() then
 			local name, annotation, start_anchor, visible, purity = binding:unwrap_annotated_lambda()
 			wrapped = terms.inferrable_term.annotated_lambda(name, annotation, wrapped, start_anchor, visible, purity)

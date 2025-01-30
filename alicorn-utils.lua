@@ -702,4 +702,6 @@ function M.debug_id()
 	return DEBUG_ID
 end
 
+local internals_interface = require "internals-interface"
+internals_interface.utils = M
 return M

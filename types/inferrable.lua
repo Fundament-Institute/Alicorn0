@@ -7,11 +7,11 @@ inferrable = {}
 ---@return boolean
 function inferrable:is_bound_variable() end
 ---@return number index
----@return any debug
+---@return var_debug debug
 function inferrable:unwrap_bound_variable() end
 ---@return boolean
 ---@return number index
----@return any debug
+---@return var_debug debug
 function inferrable:as_bound_variable() end
 ---@return boolean
 function inferrable:is_typed() end
@@ -73,11 +73,13 @@ function inferrable:as_tuple_cons() end
 ---@return boolean
 function inferrable:is_tuple_elim() end
 ---@return ArrayValue names
+---@return ArrayValue debug
 ---@return inferrable subject
 ---@return inferrable body
 function inferrable:unwrap_tuple_elim() end
 ---@return boolean
 ---@return ArrayValue names
+---@return ArrayValue debug
 ---@return inferrable subject
 ---@return inferrable body
 function inferrable:as_tuple_elim() end
@@ -144,10 +146,12 @@ function inferrable:as_enum_type() end
 function inferrable:is_enum_case() end
 ---@return inferrable target
 ---@return MapValue variants
+---@return MapValue variant_debug
 function inferrable:unwrap_enum_case() end
 ---@return boolean
 ---@return inferrable target
 ---@return MapValue variants
+---@return MapValue variant_debug
 function inferrable:as_enum_case() end
 ---@return boolean
 function inferrable:is_enum_absurd() end
@@ -177,11 +181,13 @@ function inferrable:as_object_elim() end
 ---@return boolean
 function inferrable:is_let() end
 ---@return string name
+---@return var_debug debug
 ---@return inferrable expr
 ---@return inferrable body
 function inferrable:unwrap_let() end
 ---@return boolean
 ---@return string name
+---@return var_debug debug
 ---@return inferrable expr
 ---@return inferrable body
 function inferrable:as_let() end
@@ -368,13 +374,13 @@ function inferrable:as_program_type() end
 
 ---@class (exact) inferrableType: EnumType
 ---@field define_enum fun(self: inferrableType, name: string, variants: Variants): inferrableType
----@field bound_variable fun(index: number, debug: any): inferrable
+---@field bound_variable fun(index: number, debug: var_debug): inferrable
 ---@field typed fun(type: typed, usage_counts: ArrayValue, typed_term: typed): inferrable
 ---@field annotated_lambda fun(param_name: string, param_annotation: inferrable, body: inferrable, start_anchor: Anchor, visible: visibility, pure: checkable): inferrable
 ---@field pi fun(param_type: inferrable, param_info: checkable, result_type: inferrable, result_info: checkable): inferrable
 ---@field application fun(f: inferrable, arg: checkable): inferrable
 ---@field tuple_cons fun(elements: ArrayValue): inferrable
----@field tuple_elim fun(names: ArrayValue, subject: inferrable, body: inferrable): inferrable
+---@field tuple_elim fun(names: ArrayValue, debug: ArrayValue, subject: inferrable, body: inferrable): inferrable
 ---@field tuple_type fun(desc: inferrable): inferrable
 ---@field record_cons fun(fields: MapValue): inferrable
 ---@field record_elim fun(subject: inferrable, field_names: ArrayValue, body: inferrable): inferrable
@@ -382,11 +388,11 @@ function inferrable:as_program_type() end
 ---@field enum_desc_cons fun(variants: MapValue, rest: inferrable): inferrable
 ---@field enum_elim fun(subject: inferrable, mechanism: inferrable): inferrable
 ---@field enum_type fun(desc: inferrable): inferrable
----@field enum_case fun(target: inferrable, variants: MapValue): inferrable
+---@field enum_case fun(target: inferrable, variants: MapValue, variant_debug: MapValue): inferrable
 ---@field enum_absurd fun(target: inferrable, debug: string): inferrable
 ---@field object_cons fun(methods: MapValue): inferrable
 ---@field object_elim fun(subject: inferrable, mechanism: inferrable): inferrable
----@field let fun(name: string, expr: inferrable, body: inferrable): inferrable
+---@field let fun(name: string, debug: var_debug, expr: inferrable, body: inferrable): inferrable
 ---@field operative_cons fun(operative_type: inferrable, userdata: inferrable): inferrable
 ---@field operative_type_cons fun(handler: checkable, userdata_type: inferrable): inferrable
 ---@field level_type inferrable

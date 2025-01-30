@@ -61,13 +61,13 @@ function value:is_closure() end
 ---@return string param_name
 ---@return typed code
 ---@return RuntimeContext capture
----@return any debug
+---@return var_debug debug
 function value:unwrap_closure() end
 ---@return boolean
 ---@return string param_name
 ---@return typed code
 ---@return RuntimeContext capture
----@return any debug
+---@return var_debug debug
 function value:as_closure() end
 ---@return boolean
 function value:is_range() end
@@ -452,7 +452,7 @@ function value:as_union_type() end
 ---@field result_info_type value
 ---@field result_info fun(result_info: result_info): value
 ---@field pi fun(param_type: value, param_info: value, result_type: value, result_info: value): value
----@field closure fun(param_name: string, code: typed, capture: RuntimeContext, debug: any): value
+---@field closure fun(param_name: string, code: typed, capture: RuntimeContext, debug: var_debug): value
 ---@field range fun(lower_bounds: ArrayValue, upper_bounds: ArrayValue, relation: value): value
 ---@field name_type value
 ---@field name fun(name: string): value

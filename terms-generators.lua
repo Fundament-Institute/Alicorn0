@@ -698,6 +698,14 @@ local function gen_array_methods(self, value_type)
 		unpack = function(val)
 			return table.unpack(val.array, 1, val.n)
 		end,
+		map = function(val, to, fn)
+			local x = {}
+			for i = 1, val:len() do
+				x[i] = fn(val.array[i])
+			end
+
+			return to(table.unpack(x, 1, val:len()))
+		end,
 		pretty_preprint = pretty_printer.pretty_preprint,
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,

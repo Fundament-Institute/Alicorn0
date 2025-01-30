@@ -217,10 +217,10 @@ end
 local function inferrable_let_or_tuple_elim(pp, term, context)
 	pp:_enter()
 
-	local name, expr, names, subject
+	local name, debuginfo, expr, names, subject
 	while true do
 		if term:is_let() then
-			name, expr, term = term:unwrap_let()
+			name, debuginfo, expr, term = term:unwrap_let()
 
 			-- rear-loading prefix to cheaply handle first loop not needing prefix
 			pp:unit(pp:_color())
@@ -230,7 +230,7 @@ local function inferrable_let_or_tuple_elim(pp, term, context)
 			pp:unit("\n")
 			pp:_prefix()
 		elseif term:is_tuple_elim() then
-			names, subject, term = term:unwrap_tuple_elim()
+			names, debuginfo, subject, term = term:unwrap_tuple_elim()
 
 			pp:unit(pp:_color())
 			pp:unit("inferrable.let ")
@@ -257,7 +257,7 @@ local function typed_let_or_tuple_elim(pp, term, context)
 	local name, expr, names, subject
 	while true do
 		if term:is_let() then
-			name, expr, term = term:unwrap_let()
+			name, debuginfo, expr, term = term:unwrap_let()
 
 			-- rear-loading prefix to cheaply handle first loop not needing prefix
 			pp:unit(pp:_color())
@@ -300,7 +300,7 @@ local function inferrable_destructure_helper(term, context)
 		-- but some operatives that are generic over lets and tuple-elims do this
 		-- e.g. forall, lambda
 		-- so we pretty this anyway
-		local name, expr, body = term:unwrap_let()
+		local name, debuginfo, expr, body = term:unwrap_let()
 		local ok, index = expr:as_bound_variable()
 		local is_destructure = ok and index == context:len()
 		if is_destructure then
@@ -308,7 +308,7 @@ local function inferrable_destructure_helper(term, context)
 			return true, true, name, body, context
 		end
 	elseif term:is_tuple_elim() then
-		local names, subject, body = term:unwrap_tuple_elim()
+		local names, debuginfo, subject, body = term:unwrap_tuple_elim()
 		local ok, index = subject:as_bound_variable()
 		local is_destructure = ok and index == context:len()
 		if is_destructure then
@@ -336,7 +336,7 @@ local function typed_destructure_helper(term, context)
 		-- but some operatives that are generic over lets and tuple-elims do this
 		-- e.g. forall, lambda
 		-- so we pretty this anyway
-		local name, expr, body = term:unwrap_let()
+		local name, debuginfo, expr, body = term:unwrap_let()
 		local ok, index = expr:as_bound_variable()
 		local is_destructure = ok and index == context:len()
 		if is_destructure then
@@ -344,7 +344,7 @@ local function typed_destructure_helper(term, context)
 			return is_destructure, true, name, body, context
 		end
 	elseif term:is_tuple_elim() then
-		local names, subject, _, body = term:unwrap_tuple_elim()
+		local names, debuginfo, subject, _, body = term:unwrap_tuple_elim()
 		local ok, index = subject:as_bound_variable()
 		local is_destructure = ok and index == context:len()
 		if is_destructure then
@@ -414,7 +414,7 @@ local function typed_tuple_type_flatten(desc, context)
 		end
 		local desc = elements[1]
 		local f = elements[2]
-		local ok, param_name, body = f:as_lambda()
+		local ok, param_name, param_debug, body = f:as_lambda()
 		if not ok then
 			return false
 		end
@@ -537,7 +537,7 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function inferrable_term_override_pretty:bound_variable(pp, context)
-	local index, debug = self:unwrap_bound_variable()
+	local index, debuginfo = self:unwrap_bound_variable()
 	context = ensure_context(context)
 
 	pp:_enter()
@@ -556,7 +556,7 @@ function inferrable_term_override_pretty:bound_variable(pp, context)
 		pp:unit(", ")
 		pp:unit(pp:_resetcolor())
 
-		pp:unit(debug)
+		pp:unit(debuginfo)
 
 		pp:unit(pp:_color())
 		pp:unit(")")
@@ -569,7 +569,7 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function typed_term_override_pretty:bound_variable(pp, context)
-	local index, debug = self:unwrap_bound_variable()
+	local index, debuginfo = self:unwrap_bound_variable()
 	context = ensure_context(context)
 
 	pp:_enter()
@@ -588,7 +588,7 @@ function typed_term_override_pretty:bound_variable(pp, context)
 		pp:unit(", ")
 		pp:unit(pp:_resetcolor())
 
-		pp:unit(debug)
+		pp:unit(debuginfo)
 
 		pp:unit(pp:_color())
 		pp:unit(")")
@@ -601,7 +601,7 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function binding_override_pretty:let(pp, context)
-	local name, expr = self:unwrap_let()
+	local name, debuginfo, expr = self:unwrap_let()
 	context = ensure_context(context)
 
 	pp:_enter()
@@ -631,7 +631,7 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function binding_override_pretty:tuple_elim(pp, context)
-	local names, subject = self:unwrap_tuple_elim()
+	local names, debuginfo, subject = self:unwrap_tuple_elim()
 	context = ensure_context(context)
 
 	pp:_enter()
@@ -775,7 +775,7 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function typed_term_override_pretty:lambda(pp, context)
-	local param_name, body, anchor = self:unwrap_lambda()
+	local param_name, param_debug, body, anchor = self:unwrap_lambda()
 	context = ensure_context(context)
 	local inner_context = context:append(param_name)
 	local is_destructure, is_rename, names, body, inner_context = typed_destructure_helper(body, inner_context)

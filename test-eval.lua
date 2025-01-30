@@ -96,10 +96,10 @@ local function infer_and_eval(name, inf)
 end
 
 local function inf_t(t)
-	return inferrable_term.typed(terms.typed_term.literal(value.star(0)), usage_array(), lit(t))
+	return inferrable_term.typed(value.star(0), usage_array(), lit(t))
 end
 local function inf_typ(t, typ)
-	return inferrable_term.typed(terms.typed_term.literal(t), usage_array(), typ)
+	return inferrable_term.typed(t, usage_array(), typ)
 end
 local inf_var = inferrable_term.bound_variable
 local function inf_lam(n, t, b)

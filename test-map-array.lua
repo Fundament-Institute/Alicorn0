@@ -84,3 +84,15 @@ end
 local success_7, err_7 = pcall(fail7)
 assert(not success_7)
 p(err_7)
+
+local name_array = array(gen.builtin_string)
+local num_array = array(gen.builtin_number)
+
+local nums = num_array(4, 5, 6, 7, 8)
+
+local snums = nums:map(name_array, function(n)
+	return tostring(n)
+end)
+assert(snums[1] == "4")
+assert(snums[4] == "7")
+assert(snums[5] == "8")

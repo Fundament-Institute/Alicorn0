@@ -29,8 +29,6 @@ local inferrable_term = gen.declare_type()
 local typed_term = gen.declare_type()
 ---@module "types.free"
 local free = gen.declare_type()
----@module "types.placeholder"
-local placeholder_debug = gen.declare_type()
 ---@module "types.value"
 local value = gen.declare_type()
 ---@module "types.neutral_value"
@@ -104,16 +102,24 @@ local RuntimeContextBinding = {
 
 ---@param v value
 ---@param name string?
+---@param debug var_debug
 ---@return RuntimeContext
-function RuntimeContext:append(v, name, debug)
+function RuntimeContext:append(v, name, debuginfo)
 	if value.value_check(v) ~= true then
 		error("RuntimeContext:append v must be a value")
 	end
-	-- TODO: add caller line number to this fake name?
-	name = name or ("#rctx%d"):format(self.bindings:len() + 1) -- once switchover to debug is complete, no binding should ever enter the environment without debug info and so this name fallback can be removed
+	if debuginfo == nil then
+		error(debug.traceback())
+	end
+	name = name or debuginfo.name -- ("#rctx%d"):format(self.bindings:len() + 1) -- once switchover to debug is complete, no binding should ever enter the environment without debug info and so this name fallback can be removed
+	if name == nil then
+		error("All variables MUST have debug information!")
+	end
 	local copy = {
 		provenance = self,
-		bindings = self.bindings:append(setmetatable({ name = name, val = v, debug = debug }, RuntimeContextBinding)),
+		bindings = self.bindings:append(
+			setmetatable({ name = name, val = v, debug = debuginfo }, RuntimeContextBinding)
+		),
 	}
 	return setmetatable(copy, runtime_context_mt)
 end
@@ -385,9 +391,9 @@ end
 ---@param name string
 ---@param type value
 ---@param val value?
----@param start_anchor Anchor?
+---@param debuginfo var_debug
 ---@return TypecheckingContext
-function TypecheckingContext:append(name, type, val, start_anchor)
+function TypecheckingContext:append(name, type, val, debuginfo)
 	if gen.builtin_string.value_check(name) ~= true then
 		error("TypecheckingContext:append parameter 'name' must be a string")
 	end
@@ -406,22 +412,20 @@ function TypecheckingContext:append(name, type, val, start_anchor)
 	if val ~= nil and value.value_check(val) ~= true then
 		error("TypecheckingContext:append parameter 'val' must be a value (or nil if given start_anchor)")
 	end
-	if start_anchor ~= nil and anchor_type.value_check(start_anchor) ~= true then
+	if debuginfo.source ~= nil and anchor_type.value_check(debuginfo.source) ~= true then
 		error("TypecheckingContext:append parameter 'start_anchor' must be an start_anchor (or nil if given val)")
 	end
-	if (val and start_anchor) or (not val and not start_anchor) then
-		error("TypecheckingContext:append expected either val or start_anchor")
+	if not val and not debuginfo then
+		error("TypecheckingContext:append expected either val or debuginfo")
 	end
-	local info
 	if not val then
-		info = placeholder_debug(name, start_anchor)
-		info["{TRACE}"] = U.bound_here(2)
-		val = value.neutral(neutral_value.free(free.placeholder(self:len() + 1, info)))
+		debuginfo["{TRACE}"] = U.bound_here(2)
+		val = value.neutral(neutral_value.free(free.placeholder(self:len() + 1, debuginfo)))
 	end
 
 	local copy = {
 		bindings = self.bindings:append({ name = name, type = type }),
-		runtime_context = self.runtime_context:append(val, name),
+		runtime_context = self.runtime_context:append(val, name, debuginfo),
 	}
 	if info then
 		info.ctx = copy.runtime_context
@@ -500,10 +504,12 @@ expression_goal:define_enum("expression_goal", {
 binding:define_enum("binding", {
 	{ "let", {
 		"name", gen.builtin_string,
+		"debug", var_debug,
 		"expr", inferrable_term,
 	} },
 	{ "tuple_elim", {
 		"names",   array(gen.builtin_string),
+		"debug", array(var_debug),
 		"subject", inferrable_term,
 	} },
 	{ "annotated_lambda", {
@@ -533,7 +539,7 @@ checkable_term:define_enum("checkable", {
 -- inferrable terms can have their type inferred / don't need a goal type
 -- stylua: ignore
 inferrable_term:define_enum("inferrable", {
-	{ "bound_variable", { "index", gen.builtin_number, "debug", gen.any_lua_type } },
+	{ "bound_variable", { "index", gen.builtin_number, "debug", var_debug } },
 	{ "typed", {
 		"type",         typed_term,
 		"usage_counts", array(gen.builtin_number),
@@ -560,6 +566,7 @@ inferrable_term:define_enum("inferrable", {
 	{ "tuple_cons", { "elements", array(inferrable_term) } },
 	{ "tuple_elim", {
 		"names",   array(gen.builtin_string),
+		"debug", array(var_debug),
 		"subject", inferrable_term,
 		"body",    inferrable_term,
 	} },
@@ -586,6 +593,7 @@ inferrable_term:define_enum("inferrable", {
 	{ "enum_case", {
 		"target",   inferrable_term,
 		"variants", map(gen.builtin_string, inferrable_term),
+		"variant_debug", map(gen.builtin_string, var_debug), -- would be better to make this a single map with a pair value
 		--"default",  inferrable_term,
 	} },
 	{ "enum_absurd", {
@@ -600,6 +608,7 @@ inferrable_term:define_enum("inferrable", {
 	} },
 	{ "let", {
 		"name", gen.builtin_string,
+		"debug", var_debug,
 		"expr", inferrable_term,
 		"body", inferrable_term,
 	} },
@@ -956,17 +965,11 @@ typed_term:define_enum("typed", {
 }) 
 
 -- stylua: ignore
-placeholder_debug:define_record("placeholder_debug", {
-	"name",         gen.builtin_string,
-	"start_anchor", anchor_type,
-})
-
--- stylua: ignore
 free:define_enum("free", {
 	{ "metavariable", { "metavariable", metavariable_type } },
 	{ "placeholder", {
 		"index", gen.builtin_number,
-		"debug", placeholder_debug,
+		"debug", var_debug,
 	} },
 	{ "unique", { "id", unique_id } },
 	-- TODO: axiom
@@ -1066,7 +1069,7 @@ value:define_enum("value", {
 		"param_name", gen.builtin_string,
 		"code",       typed_term,
 		"capture",    runtime_context_type,
-		"debug", 			gen.any_lua_type,
+		"debug", 			var_debug,
 	} },
 
 	-- a list of upper and lower bounds, and a relation being bound with respect to
@@ -1387,7 +1390,7 @@ value:derive(derivers.pretty_print, value_override_pretty)
 neutral_value:derive(derivers.pretty_print, neutral_value_override_pretty)
 binding:derive(derivers.pretty_print, binding_override_pretty)
 expression_goal:derive(derivers.pretty_print)
-placeholder_debug:derive(derivers.pretty_print)
+var_debug:derive(derivers.pretty_print)
 purity:derive(derivers.pretty_print)
 result_info:derive(derivers.pretty_print)
 constraintcause:derive(derivers.pretty_print)
