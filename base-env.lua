@@ -79,7 +79,7 @@ local function let_impl(syntax, env)
 		--print("binding destructuring with let")
 		local debugs = debug_array()
 		for _, v in ipairs(name) do
-			table.insert(debugs, terms.var_debug(v.str, v.start_anchor))
+			debugs:append(terms.var_debug(v.str, v.start_anchor))
 			if v.kind == nil then
 				error("v.kind is nil")
 			end
