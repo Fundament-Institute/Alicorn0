@@ -1108,7 +1108,7 @@ function typed_term_override_pretty:pi(pp, context)
 	context = ensure_context(context)
 	local result_context = context
 	local param_is_tuple_type, param_desc = as_any_tuple_type(param_type)
-	local result_is_readable, param_name, result_body = result_type:as_lambda()
+	local result_is_readable, param_name, param_debug, result_body = result_type:as_lambda()
 	local result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_desc
 	if result_is_readable then
 		result_context = result_context:append(param_name)
