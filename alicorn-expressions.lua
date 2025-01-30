@@ -1199,9 +1199,21 @@ local function host_operative(fn, name)
 		end
 		return res, env
 	end
+
 	-- what we're going for:
 	-- (s : syntax, e : environment, u : wrapped_typed_term(userdata), g : goal) -> (goal_to_term(g), environment)
 	--   goal one of inferable, mechanism, checkable
+
+	local var_debug = terms.var_debug
+	local args_dbg = var_debug("#args", U.anchor_here())
+	local arg_unpack_dbg = debug_array(
+		var_debug("#syn", U.anchor_here()),
+		var_debug("#env", U.anchor_here()),
+		var_debug("#ud", U.anchor_here()),
+		var_debug("#goal", U.anchor_here())
+	)
+	local result_unpack_dbg =
+		debug_array(var_debug("#res-term", U.anchor_here()), var_debug("#res-env", U.anchor_here()))
 
 	-- 1: wrap fn as a typed host_value
 	-- this way it can take a host tuple and return a host tuple
@@ -1211,14 +1223,14 @@ local function host_operative(fn, name)
 	-- this way it can take a normal tuple and return a normal tuple
 	local nparams = 4
 	local tuple_conv_elements = typed_array(
-		typed_term.bound_variable(2, terms.var_debug("", U.anchor_here())),
-		typed_term.bound_variable(3, terms.var_debug("", U.anchor_here()))
+		typed_term.bound_variable(2, result_unpack_dbg[1]),
+		typed_term.bound_variable(3, result_unpack_dbg[2])
 	)
 	local host_tuple_conv_elements = typed_array()
 	for i = 1, nparams do
 		-- + 1 because variable 1 is the argument tuple
 		-- all variables that follow are the destructured tuple
-		local var = typed_term.bound_variable(i + 1, terms.var_debug("", U.anchor_here()))
+		local var = typed_term.bound_variable(i + 1, arg_unpack_dbg[i])
 		host_tuple_conv_elements:append(var)
 	end
 	local tuple_conv = typed_term.tuple_cons(tuple_conv_elements)
@@ -1226,32 +1238,18 @@ local function host_operative(fn, name)
 	local param_names = name_array("#syntax", "#env", "#userdata", "#goal")
 	local tuple_to_host_tuple = typed_term.tuple_elim(
 		param_names,
-		param_names:map(debug_array, function(n)
-			return terms.var_debug(n, U.anchor_here())
-		end),
-		typed_term.bound_variable(1, terms.var_debug("", U.anchor_here())),
+		arg_unpack_dbg,
+		typed_term.bound_variable(1, args_dbg),
 		nparams,
 		host_tuple_conv
 	)
 	local tuple_to_host_tuple_fn = typed_term.application(typed_host_fn, tuple_to_host_tuple)
 	local result_names = name_array("#term", "#env")
-	local tuple_to_tuple_fn = typed_term.tuple_elim(
-		result_names,
-		result_names:map(debug_array, function(n)
-			return terms.var_debug(n, U.anchor_here())
-		end),
-		tuple_to_host_tuple_fn,
-		2,
-		tuple_conv
-	)
+	local tuple_to_tuple_fn =
+		typed_term.tuple_elim(result_names, result_unpack_dbg, tuple_to_host_tuple_fn, 2, tuple_conv)
 	-- 3: wrap it in a closure with an empty capture, not a typed lambda
 	-- this ensures variable 1 is the argument tuple
-	local value_fn = value.closure(
-		"#" .. name .. "_PARAM",
-		tuple_to_tuple_fn,
-		runtime_context(),
-		terms.var_debug("", U.anchor_here())
-	)
+	local value_fn = value.closure("#" .. name .. "_PARAM", tuple_to_tuple_fn, runtime_context(), args_dbg)
 
 	local userdata_type = value.tuple_type(terms.empty)
 	return inferrable_term.typed(
