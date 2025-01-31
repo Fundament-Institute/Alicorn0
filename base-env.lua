@@ -515,7 +515,13 @@ local tuple_desc_of_ascribed_names = metalanguage.reducer(
 		end
 		local inf_array = gen.declare_array(terms.inferrable_term)
 		local function tup_cons(...)
-			return terms.inferrable_term.tuple_cons(inf_array(...))
+			local args = inf_array(...)
+			return terms.inferrable_term.tuple_cons(
+				args,
+				args:map(debug_array, function(_)
+					return var_debug("", U.anchor_here())
+				end)
+			)
 		end
 		local function cons(...)
 			return terms.inferrable_term.enum_cons(terms.DescCons.cons, tup_cons(...))
@@ -678,7 +684,13 @@ local tuple_desc_wrap_ascribed_name = metalanguage.reducer(
 		end
 		local inf_array = gen.declare_array(terms.inferrable_term)
 		local function tup_cons(...)
-			return terms.inferrable_term.tuple_cons(inf_array(...))
+			local args = inf_array(...)
+			return terms.inferrable_term.tuple_cons(
+				args,
+				args:map(debug_array, function(_)
+					return var_debug("", U.anchor_here())
+				end)
+			)
 		end
 		local function cons(...)
 			return terms.inferrable_term.enum_cons(terms.DescCons.cons, tup_cons(...))

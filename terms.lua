@@ -531,7 +531,10 @@ binding:define_enum("binding", {
 -- stylua: ignore
 checkable_term:define_enum("checkable", {
 	{ "inferrable", { "inferrable_term", inferrable_term } },
-	{ "tuple_cons", { "elements", array(checkable_term) } },
+	{ "tuple_cons", { 
+		"elements", array(checkable_term), 
+		"debug", array(var_debug) 
+	} },
 	{ "host_tuple_cons", { "elements", array(checkable_term) } },
 	{ "lambda", {
 		"param_name", gen.builtin_string,
@@ -565,7 +568,10 @@ inferrable_term:define_enum("inferrable", {
 		"f",   inferrable_term,
 		"arg", checkable_term,
 	} },
-	{ "tuple_cons", { "elements", array(inferrable_term) } },
+	{ "tuple_cons", { 
+		"elements", array(inferrable_term), 
+		"debug", array(var_debug),
+	} },
 	{ "tuple_elim", {
 		"names",   array(gen.builtin_string),
 		"debug", array(var_debug),

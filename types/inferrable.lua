@@ -66,9 +66,11 @@ function inferrable:as_application() end
 ---@return boolean
 function inferrable:is_tuple_cons() end
 ---@return ArrayValue elements
+---@return ArrayValue debug
 function inferrable:unwrap_tuple_cons() end
 ---@return boolean
 ---@return ArrayValue elements
+---@return ArrayValue debug
 function inferrable:as_tuple_cons() end
 ---@return boolean
 function inferrable:is_tuple_elim() end
@@ -379,7 +381,7 @@ function inferrable:as_program_type() end
 ---@field annotated_lambda fun(param_name: string, param_annotation: inferrable, body: inferrable, start_anchor: Anchor, visible: visibility, pure: checkable): inferrable
 ---@field pi fun(param_type: inferrable, param_info: checkable, result_type: inferrable, result_info: checkable): inferrable
 ---@field application fun(f: inferrable, arg: checkable): inferrable
----@field tuple_cons fun(elements: ArrayValue): inferrable
+---@field tuple_cons fun(elements: ArrayValue, debug: ArrayValue): inferrable
 ---@field tuple_elim fun(names: ArrayValue, debug: ArrayValue, subject: inferrable, body: inferrable): inferrable
 ---@field tuple_type fun(desc: inferrable): inferrable
 ---@field record_cons fun(fields: MapValue): inferrable

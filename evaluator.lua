@@ -1786,12 +1786,12 @@ function check(
 
 		return true, inferred_usages, typed_term
 	elseif checkable_term:is_tuple_cons() then
-		local elements = checkable_term:unwrap_tuple_cons()
+		local elements, info = checkable_term:unwrap_tuple_cons()
 		local usages = usage_array()
 		local new_elements = typed_array()
 		local desc = terms.empty
 
-		for _, v in elements:ipairs() do
+		for i, v in elements:ipairs() do
 			local el_type_metavar = typechecker_state:metavariable(typechecking_context)
 			local el_type = el_type_metavar:as_value()
 			local ok, el_usages, el_term = check(v, typechecking_context, el_type)
@@ -1810,7 +1810,7 @@ function check(
 					"#check-tuple-cons-param",
 					typed_term.literal(value.singleton(el_type, el_val)),
 					typechecking_context.runtime_context,
-					terms.var_debug("", U.anchor_here())
+					info[i]
 				)
 			)
 		end
@@ -2394,14 +2394,14 @@ function infer_impl(
 			error("infer, is_application, f_type: expected a term with a function type")
 		end
 	elseif inferrable_term:is_tuple_cons() then
-		local elements = inferrable_term:unwrap_tuple_cons()
+		local elements, info = inferrable_term:unwrap_tuple_cons()
 		-- type_data is either "empty", an empty tuple,
 		-- or "cons", a tuple with the previous type_data and a function that
 		-- takes all previous values and produces the type of the next element
 		local type_data = terms.empty
 		local usages = usage_array()
 		local new_elements = typed_array()
-		for _, v in elements:ipairs() do
+		for i, v in elements:ipairs() do
 			local ok, el_type, el_usages, el_term = infer(v, typechecking_context)
 			if not ok then
 				return false, el_type
@@ -2412,11 +2412,11 @@ function infer_impl(
 				type_data,
 				substitute_type_variables(
 					el_singleton,
-					terms.var_debug("#tuple-cons-el", U.anchor_here()),
+					info[i],
 					typechecking_context:len() + 1,
 					"#tuple-cons-el",
 					typechecking_context:get_runtime_context(),
-					typechecking_context
+					typechecking_context:append("#tuple-cons-el", value.tuple_type(type_data), nil, info[i])
 				)
 			)
 			add_arrays(usages, el_usages)
@@ -2424,7 +2424,7 @@ function infer_impl(
 		end
 		return true, value.tuple_type(type_data), usages, typed_term.tuple_cons(new_elements)
 	elseif inferrable_term:is_host_tuple_cons() then
-		error("this code is probably rot")
+		error("this code is definitely rot, will not work without rewrites")
 		--print "inferring tuple construction"
 		--print(inferrable_term:pretty_print())
 		--print "environment_names"

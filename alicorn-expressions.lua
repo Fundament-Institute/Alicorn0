@@ -1313,6 +1313,7 @@ collect_tuple = metalanguage.reducer(
 			collected_terms = inferrable_array()
 		end
 
+		local collected_info = debug_array()
 		local ok, continue, next_term = true, true, nil
 		local i = 0
 		while ok and continue do
@@ -1341,15 +1342,17 @@ collect_tuple = metalanguage.reducer(
 						env.typechecking_context,
 						1
 					)
+					local info = terms.var_debug("#collect-tuple-param", syntax.start_anchor)
 					desc = terms.cons(
 						desc,
 						value.closure(
 							"#collect-tuple-param",
 							subval, --TODO: might need to swap this back
 							env.typechecking_context.runtime_context,
-							terms.var_debug("", U.anchor_here())
+							info
 						)
 					)
+					collected_info:append(info)
 				end
 				if not ok and type(continue) == "string" then
 					continue = continue
@@ -1373,7 +1376,7 @@ collect_tuple = metalanguage.reducer(
 		end
 
 		if goal:is_infer() then
-			return true, inferrable_term.tuple_cons(collected_terms), env
+			return true, inferrable_term.tuple_cons(collected_terms, collected_info), env
 		elseif goal:is_check() then
 			local ok, err = evaluator.typechecker_state:flow(
 				value.tuple_type(desc),
@@ -1401,7 +1404,7 @@ collect_tuple = metalanguage.reducer(
 				env.typechecking_context,
 				terms.constraintcause.primitive("tuple type in collect_tuple", U.anchor_here())
 			)]]
-			return true, checkable_term.tuple_cons(collected_terms), env
+			return true, checkable_term.tuple_cons(collected_terms, collected_info), env
 		else
 			error("NYI: collect_tuple goal case " .. goal.kind)
 		end
@@ -1460,7 +1463,7 @@ collect_host_tuple = metalanguage.reducer(
 							-- ), --TODO: might need to swap this back
 							typed_term.literal(value.singleton(next_elem_type, next_val)),
 							env.typechecking_context.runtime_context,
-							terms.var_debug("", U.anchor_here())
+							terms.var_debug("#collect-host-tuple-param", syntax.start_anchor)
 						)
 					)
 				end
@@ -1541,7 +1544,7 @@ local block = metalanguage.reducer(
 		if not goal:is_infer() then
 			error("NYI non-infer cases for block")
 		end
-		local lastval = inferrable_term.tuple_cons(inferrable_array())
+		local lastval = inferrable_term.tuple_cons(inferrable_array(), debug_array())
 		local newval
 		local ok, continue = true, true
 		while ok and continue do
@@ -1607,7 +1610,7 @@ local top_level_block = metalanguage.reducer(
 		if not goal:is_infer() then
 			error("NYI non-infer cases for block")
 		end
-		local lastval = inferrable_term.tuple_cons(inferrable_array())
+		local lastval = inferrable_term.tuple_cons(inferrable_array(), debug_array())
 		local newval
 		local ok, continue = true, true
 

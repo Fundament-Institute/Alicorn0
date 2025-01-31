@@ -14,9 +14,11 @@ function checkable:as_inferrable() end
 ---@return boolean
 function checkable:is_tuple_cons() end
 ---@return ArrayValue elements
+---@return ArrayValue debug
 function checkable:unwrap_tuple_cons() end
 ---@return boolean
 ---@return ArrayValue elements
+---@return ArrayValue debug
 function checkable:as_tuple_cons() end
 ---@return boolean
 function checkable:is_host_tuple_cons() end
@@ -38,7 +40,7 @@ function checkable:as_lambda() end
 ---@class (exact) checkableType: EnumType
 ---@field define_enum fun(self: checkableType, name: string, variants: Variants): checkableType
 ---@field inferrable fun(inferrable_term: inferrable): checkable
----@field tuple_cons fun(elements: ArrayValue): checkable
+---@field tuple_cons fun(elements: ArrayValue, debug: ArrayValue): checkable
 ---@field host_tuple_cons fun(elements: ArrayValue): checkable
 ---@field lambda fun(param_name: string, body: checkable): checkable
 return {}
