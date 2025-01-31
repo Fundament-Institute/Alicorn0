@@ -297,6 +297,9 @@ end
 
 ---@param name string
 function PrettyPrint:unit(name)
+	if type(name) ~= "string" then
+		error("IMPROPER PRETTYPRINT USAGE")
+	end
 	self[#self + 1] = name
 end
 

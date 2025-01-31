@@ -301,7 +301,7 @@ local function inferrable_destructure_helper(term, context)
 		-- e.g. forall, lambda
 		-- so we pretty this anyway
 		local name, debuginfo, expr, body = term:unwrap_let()
-		local ok, index = expr:as_bound_variable()
+		local ok, index, info = expr:as_bound_variable()
 		local is_destructure = ok and index == context:len()
 		if is_destructure then
 			context = context:append(name)
@@ -309,7 +309,7 @@ local function inferrable_destructure_helper(term, context)
 		end
 	elseif term:is_tuple_elim() then
 		local names, debuginfo, subject, body = term:unwrap_tuple_elim()
-		local ok, index = subject:as_bound_variable()
+		local ok, index, info = subject:as_bound_variable()
 		local is_destructure = ok and index == context:len()
 		if is_destructure then
 			for _, name in names:ipairs() do
@@ -337,7 +337,7 @@ local function typed_destructure_helper(term, context)
 		-- e.g. forall, lambda
 		-- so we pretty this anyway
 		local name, debuginfo, expr, body = term:unwrap_let()
-		local ok, index = expr:as_bound_variable()
+		local ok, index, info = expr:as_bound_variable()
 		local is_destructure = ok and index == context:len()
 		if is_destructure then
 			context = context:append(name)
@@ -345,7 +345,7 @@ local function typed_destructure_helper(term, context)
 		end
 	elseif term:is_tuple_elim() then
 		local names, debuginfo, subject, _, body = term:unwrap_tuple_elim()
-		local ok, index = subject:as_bound_variable()
+		local ok, index, info = subject:as_bound_variable()
 		local is_destructure = ok and index == context:len()
 		if is_destructure then
 			for _, name in names:ipairs() do
@@ -370,7 +370,7 @@ local function inferrable_tuple_type_flatten(desc, context)
 	if constructor == DescCons.empty then
 		return true, {}, 0
 	elseif constructor == DescCons.cons then
-		local ok, elements = arg:as_tuple_cons()
+		local ok, elements, info = arg:as_tuple_cons()
 		if not ok or elements:len() ~= 2 then
 			return false
 		end
@@ -451,7 +451,7 @@ local function value_tuple_type_flatten(desc)
 		end
 		local desc = elements[1]
 		local f = elements[2]
-		local ok, param_name, code, capture = f:as_closure()
+		local ok, param_name, code, capture, info = f:as_closure()
 		if not ok then
 			return false
 		end
@@ -588,7 +588,7 @@ function typed_term_override_pretty:bound_variable(pp, context)
 		pp:unit(", ")
 		pp:unit(pp:_resetcolor())
 
-		pp:unit(debuginfo)
+		pp:any(debuginfo)
 
 		pp:unit(pp:_color())
 		pp:unit(")")
@@ -1217,7 +1217,7 @@ function typed_term_override_pretty:host_function_type(pp, context)
 	context = ensure_context(context)
 	local result_context = context
 	local param_is_tuple_type, param_desc = param_type:as_host_tuple_type()
-	local result_is_readable, param_name, result_body = result_type:as_lambda()
+	local result_is_readable, param_name, param_debug, result_body = result_type:as_lambda()
 	local result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_desc
 	if result_is_readable then
 		result_context = result_context:append(param_name)
@@ -1319,7 +1319,7 @@ end
 function value_override_pretty:pi(pp)
 	local param_type, param_info, result_type, result_info = self:unwrap_pi()
 	local param_is_tuple_type, param_desc = as_any_tuple_type(param_type)
-	local result_is_readable, param_name, result_code, result_capture = result_type:as_closure()
+	local result_is_readable, param_name, result_code, result_capture, info = result_type:as_closure()
 	local result_context, result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_desc
 	if result_is_readable then
 		result_context = ensure_context(result_capture)
@@ -1426,7 +1426,7 @@ end
 function value_override_pretty:host_function_type(pp)
 	local param_type, result_type, result_info = self:unwrap_host_function_type()
 	local param_is_tuple_type, param_desc = param_type:as_host_tuple_type()
-	local result_is_readable, param_name, result_code, result_capture = result_type:as_closure()
+	local result_is_readable, param_name, result_code, result_capture, info = result_type:as_closure()
 	local result_context, result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_desc
 	if result_is_readable then
 		result_context = ensure_context(result_capture)
@@ -1568,7 +1568,7 @@ function inferrable_term_override_pretty:application(pp, context)
 		local f_is_typed, _, _, f_typed_term = f:as_typed()
 		local f_is_bound_variable, f_index = false, 0
 		if f_is_typed then
-			f_is_bound_variable, f_index = f_typed_term:as_bound_variable()
+			f_is_bound_variable, f_index, _ = f_typed_term:as_bound_variable()
 		end
 
 		pp:_enter()
@@ -1584,7 +1584,7 @@ function inferrable_term_override_pretty:application(pp, context)
 				pp:unit(context:get_name(f_index))
 			end
 
-			local ok, elements = arg:as_tuple_cons()
+			local ok, elements, _ = arg:as_tuple_cons()
 			elements = ok and elements or arg:unwrap_host_tuple_cons()
 
 			pp:unit(pp:_color())
@@ -1650,7 +1650,7 @@ function typed_term_override_pretty:application(pp, context)
 	---@param arg typed
 	local function application_inner(f, arg)
 		local f_is_application, f_f, f_arg = f:as_application()
-		local f_is_bound_variable, f_index = f:as_bound_variable()
+		local f_is_bound_variable, f_index, _ = f:as_bound_variable()
 
 		pp:_enter()
 
@@ -1956,7 +1956,7 @@ end
 function typed_term_override_pretty:tuple_element_access(pp, context)
 	local subject, index = self:unwrap_tuple_element_access()
 	context = ensure_context(context)
-	local subject_is_bound_variable, subject_index = subject:as_bound_variable()
+	local subject_is_bound_variable, subject_index, _ = subject:as_bound_variable()
 
 	if subject_is_bound_variable and context:len() >= subject_index then
 		pp:_enter()
