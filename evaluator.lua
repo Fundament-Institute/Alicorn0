@@ -525,10 +525,13 @@ local function verify_placeholder_lite(v, ctx, nested)
 	-- Special handling for arrays
 	if getmetatable(v) and getmetatable(getmetatable(v)) == gen.array_type_mt then
 		for k, val in ipairs(v) do
-			local ok, i, info = verify_placeholder_lite(val, ctx, true)
+			local ok, i, info, info_mismatch = verify_placeholder_lite(val, ctx, true)
 			if not ok then
 				if not nested then
 					print(v)
+					if info_mismatch ~= nil then
+						print("EXPECTED INFO: " .. info_mismatch)
+					end
 					error("AAAAAAAAAAAAAA found " .. tostring(i))
 				end
 				return false, i, info
@@ -908,6 +911,7 @@ substitute_inner = function(val, mappings, context_len, ambient_typechecking_con
 		print(string.rep("·", recurse_count) .. "SUB: " .. tostring(val))
 	end
 
+	verify_placeholder_lite(val, ambient_typechecking_context)
 	recurse_count = recurse_count + 1
 	local r = substitute_inner_impl(val, mappings, context_len, ambient_typechecking_context)
 	recurse_count = recurse_count - 1
@@ -4043,6 +4047,7 @@ evaluate = function(typed_term, runtime_context, ambient_typechecking_context)
 		--print(runtime_context:format_names())
 	end
 
+	verify_placeholder_lite(typed_term, ambient_typechecking_context)
 	recurse_count = recurse_count + 1
 	local r = evaluate_impl(typed_term, runtime_context, ambient_typechecking_context)
 	recurse_count = recurse_count - 1
@@ -5687,7 +5692,7 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len)
 	end, function(edge)
 		constraints:append(
 			terms.constraintelem.sliced_leftcall(
-				substitute_inner(edge.arg, mappings, context_len, getctx(edge.right)),
+				substitute_inner(edge.arg, mappings, context_len, getctx(edge.left)),
 				edge.rel,
 				substitute_inner(getnode(edge.right), mappings, context_len, getctx(edge.right)),
 				getctx(edge.right),
@@ -5703,7 +5708,7 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len)
 				substitute_inner(getnode(edge.left), mappings, context_len, getctx(edge.left)),
 				getctx(edge.left),
 				edge.rel,
-				substitute_inner(edge.arg, mappings, context_len, getctx(edge.left)),
+				substitute_inner(edge.arg, mappings, context_len, getctx(edge.right)),
 				edge.cause
 			)
 		)
