@@ -267,7 +267,7 @@ local function typed_let_or_tuple_elim(pp, term, context)
 			pp:unit("\n")
 			pp:_prefix()
 		elseif term:is_tuple_elim() then
-			names, subject, _, term = term:unwrap_tuple_elim()
+			names, debuginfo, subject, _, term = term:unwrap_tuple_elim()
 
 			pp:unit(pp:_color())
 			pp:unit("typed.let ")
@@ -556,7 +556,7 @@ function inferrable_term_override_pretty:bound_variable(pp, context)
 		pp:unit(", ")
 		pp:unit(pp:_resetcolor())
 
-		pp:unit(debuginfo)
+		pp:any(debuginfo)
 
 		pp:unit(pp:_color())
 		pp:unit(")")
