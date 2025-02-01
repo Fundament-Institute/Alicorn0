@@ -2180,6 +2180,30 @@ local function get_host_func_res(subject, valid)
 	return terms.value.closure("#TEST-1", tuple_build, ctx, arg_dbg)
 end
 
+local function tuple_to_host_tuple_inner(_type, _valid, val)
+	local elems = val:unwrap_tuple_value()
+	local leading = terms_gen.declare_array(terms_gen.any_lua_type)()
+	local stuck = false
+	local stuck_elem = nil
+	local trailing = terms_gen.declare_array(terms.value)()
+	for _, v in ipairs(elems) do
+		if stuck then
+			trailing:append(v)
+		elseif v:is_host_value() then
+			leading:append(v:unwrap_host_value())
+		elseif v:is_neutral() then
+			stuck, stuck_elem = true, v:unwrap_neutral()
+		else
+			error "found an element in a tuple being converted to host-tuple that was neither host nor neutral"
+		end
+	end
+	if not stuck then
+		return terms.value.host_tuple_value(leading)
+	else
+		return terms.value.neutral(terms.neutral_value.host_tuple_stuck(leading, stuck_elem, trailing))
+	end
+end
+
 local core_operative_type = (function()
 	local debug_arg = terms.var_debug("#args", U.anchor_here())
 	local debug_userdata = terms.var_debug("userdata", U.anchor_here())
@@ -2232,8 +2256,10 @@ local base_env = {
 	tuple_desc_concat = tuple_desc_concat,
 	convert_sig = convert_sig,
 	new_host_type_family = new_host_type_family,
+	tuple_to_host_tuple_inner = tuple_to_host_tuple_inner,
 	get_host_func_res = get_host_func_res,
 	core_operative_type = core_operative_type,
+	core_operative = core_operative,
 }
 local internals_interface = require "internals-interface"
 internals_interface.base_env = base_env

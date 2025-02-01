@@ -1457,11 +1457,12 @@ collect_host_tuple = metalanguage.reducer(
 						desc,
 						value.closure(
 							"#collect-host-tuple-param",
-							-- evaluator.substitute_placeholders_identity(
-							-- 	value.singleton(next_elem_type, next_val),
-							-- 	env.typechecking_context
-							-- ), --TODO: might need to swap this back
-							typed_term.literal(value.singleton(next_elem_type, next_val)),
+							evaluator.substitute_placeholders_identity(
+								value.singleton(next_elem_type, next_val),
+								env.typechecking_context,
+								1
+							), --TODO: might need to swap this back
+							-- typed_term.literal(value.singleton(next_elem_type, next_val)),
 							env.typechecking_context.runtime_context,
 							terms.var_debug("#collect-host-tuple-param", syntax.start_anchor)
 						)

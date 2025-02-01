@@ -436,7 +436,7 @@ local TupleDescRelation = setmetatable({
 			local unique = { debug = "TupleDescRelation.constrain" .. U.here() }
 			local placeholder = value.neutral(neutral_value.free(free.unique(unique)))
 			local ok, tuple_types_val, tuple_types_use, tuple_vals, n =
-				infer_tuple_type_unwrapped2(value.tuple_type(val), lctx, value.tuple_type(use), rctx, placeholder)
+				infer_tuple_type_unwrapped2(value.tuple_type(val), lctx, value.tuple_type(use), lctx, placeholder)
 
 			if not ok then
 				if tuple_types_val == "length-mismatch" then
@@ -459,7 +459,7 @@ local TupleDescRelation = setmetatable({
 				typechecker_state:queue_subtype(
 					lctx,
 					tuple_types_val[i],
-					rctx,
+					lctx,
 					tuple_types_use[i],
 					nestcause(
 						"TupleDescRelation.constrain " .. tostring(i),
@@ -723,7 +723,12 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 				local mv = free:unwrap_metavariable()
 
 				if not (mv.block_level < typechecker_state.block_level) then
-					return typechecker_state:slice_constraints_for(mv, mappings, context_len)
+					return typechecker_state:slice_constraints_for(
+						mv,
+						mappings,
+						context_len,
+						ambient_typechecking_context
+					)
 				else
 					lookup = free:unwrap_metavariable()
 				end
@@ -5114,6 +5119,7 @@ function TypeCheckerState:check_value(v, tag, context)
 		error("nil context passed into check_value! " .. debug.traceback())
 	end
 	--terms.verify_placeholders(v, context, self.values)
+	verify_placeholder_lite(v, context)
 
 	if v:is_neutral() and v:unwrap_neutral():is_free() and v:unwrap_neutral():unwrap_free():is_metavariable() then
 		local mv = v:unwrap_neutral():unwrap_free():unwrap_metavariable()
@@ -5598,8 +5604,9 @@ end
 ---@param mv Metavariable
 ---@param mappings {[integer]: typed} the placeholder we are trying to get rid of by substituting
 ---@param context_len integer number of bindings in the runtime context already used - needed for closures
+---@param ambient_typechecking_context TypecheckingContext ambient context for resolving placeholders
 ---@return typed
-function TypeCheckerState:slice_constraints_for(mv, mappings, context_len)
+function TypeCheckerState:slice_constraints_for(mv, mappings, context_len, ambient_typechecking_context)
 	-- take only the constraints that are against this metavariable in such a way that it remains valid as we exit the block
 	-- if the metavariable came from a "lower" block it is still in scope and may gain additional constraints in the future
 	-- because this metavariable is from an outer scope, it doesn't have any constraints against something that is in the deeper scope and needs to be substituted,
@@ -5655,7 +5662,7 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len)
 	end, function(edge)
 		constraints:append(
 			terms.constraintelem.constrain_sliced(
-				substitute_inner(getnode(edge.left), mappings, context_len, getctx(edge.left)),
+				substitute_inner(getnode(edge.left), mappings, context_len, ambient_typechecking_context),
 				getctx(edge.left),
 				edge.rel,
 				edge.cause
@@ -5668,7 +5675,7 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len)
 		constraints:append(
 			terms.constraintelem.sliced_constrain(
 				edge.rel,
-				substitute_inner(getnode(edge.right), mappings, context_len, getctx(edge.right)),
+				substitute_inner(getnode(edge.right), mappings, context_len, ambient_typechecking_context),
 				getctx(edge.right),
 				edge.cause
 			)
@@ -5679,9 +5686,9 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len)
 	end, function(edge)
 		constraints:append(
 			terms.constraintelem.leftcall_sliced(
-				substitute_inner(getnode(edge.left), mappings, context_len, getctx(edge.left)),
+				substitute_inner(getnode(edge.left), mappings, context_len, ambient_typechecking_context),
 				getctx(edge.left),
-				substitute_inner(edge.arg, mappings, context_len, getctx(edge.left)),
+				substitute_inner(edge.arg, mappings, context_len, ambient_typechecking_context),
 				edge.rel,
 				edge.cause
 			)
@@ -5692,9 +5699,9 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len)
 	end, function(edge)
 		constraints:append(
 			terms.constraintelem.sliced_leftcall(
-				substitute_inner(edge.arg, mappings, context_len, getctx(edge.left)),
+				substitute_inner(edge.arg, mappings, context_len, ambient_typechecking_context),
 				edge.rel,
-				substitute_inner(getnode(edge.right), mappings, context_len, getctx(edge.right)),
+				substitute_inner(getnode(edge.right), mappings, context_len, ambient_typechecking_context),
 				getctx(edge.right),
 				edge.cause
 			)
@@ -5705,10 +5712,10 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len)
 	end, function(edge)
 		constraints:append(
 			terms.constraintelem.rightcall_sliced(
-				substitute_inner(getnode(edge.left), mappings, context_len, getctx(edge.left)),
+				substitute_inner(getnode(edge.left), mappings, context_len, ambient_typechecking_context),
 				getctx(edge.left),
 				edge.rel,
-				substitute_inner(edge.arg, mappings, context_len, getctx(edge.right)),
+				substitute_inner(edge.arg, mappings, context_len, ambient_typechecking_context),
 				edge.cause
 			)
 		)
@@ -5719,9 +5726,9 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len)
 		constraints:append(
 			terms.constraintelem.sliced_rightcall(
 				edge.rel,
-				substitute_inner(getnode(edge.right), mappings, context_len, getctx(edge.right)),
+				substitute_inner(getnode(edge.right), mappings, context_len, ambient_typechecking_context),
 				getctx(edge.right),
-				substitute_inner(edge.arg, mappings, context_len, getctx(edge.right)),
+				substitute_inner(edge.arg, mappings, context_len, ambient_typechecking_context),
 				edge.cause
 			)
 		)
