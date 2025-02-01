@@ -514,9 +514,9 @@ local function get_level(t)
 end
 
 ---@param v table
----@param max integer
+---@param ctx TypecheckingContext
 ---@return boolean
-local function verify_placeholder_lite(v, max, nested)
+local function verify_placeholder_lite(v, ctx, nested)
 	-- If it's not a table we don't care
 	if type(v) ~= "table" then
 		return true
@@ -525,7 +525,7 @@ local function verify_placeholder_lite(v, max, nested)
 	-- Special handling for arrays
 	if getmetatable(v) and getmetatable(getmetatable(v)) == gen.array_type_mt then
 		for k, val in ipairs(v) do
-			local ok, i, info = verify_placeholder_lite(val, max, true)
+			local ok, i, info = verify_placeholder_lite(val, ctx, true)
 			if not ok then
 				if not nested then
 					print(v)
@@ -542,20 +542,26 @@ local function verify_placeholder_lite(v, max, nested)
 
 	if v.kind == "free.placeholder" then
 		local i, info = v:unwrap_placeholder()
-		--print(i)
-		if i > max then
+		if i > ctx:len() or i > ctx.runtime_context.bindings:len() then
 			--os.exit(-1, true)
 			--error("AAAAAAAAAAAAAA found " .. tostring(i) .. " " .. tostring(info))
 			return false, i, info
+		end
+		local info_target = ctx.runtime_context.bindings:get(i).debuginfo
+		if info ~= info_target then
+			return false, i, info, info_target
 		end
 	end
 
 	for k, val in pairs(v) do
 		if k ~= "cause" and k ~= "bindings" and k ~= "provenance" then
-			local ok, i, info = verify_placeholder_lite(val, max, true)
+			local ok, i, info, info_mismatch = verify_placeholder_lite(val, ctx, true)
 			if not ok then
 				if not nested then
 					print(v)
+					if info_mismatch ~= nil then
+						print("EXPECTED INFO: " .. info_mismatch)
+					end
 					error("AAAAAAAAAAAAAA found " .. tostring(i) .. " " .. tostring(info))
 				end
 				return false, i, info
@@ -905,7 +911,7 @@ substitute_inner = function(val, mappings, context_len, ambient_typechecking_con
 	recurse_count = recurse_count + 1
 	local r = substitute_inner_impl(val, mappings, context_len, ambient_typechecking_context)
 	recurse_count = recurse_count - 1
-	verify_placeholder_lite(r, ambient_typechecking_context:len())
+	verify_placeholder_lite(r, ambient_typechecking_context)
 
 	if tracked then
 		print(string.rep("·", recurse_count) .. " → " .. tostring(r))
@@ -3393,7 +3399,7 @@ function evaluate_impl(typed_term, runtime_context, ambient_typechecking_context
 			error("Invalid names or infos length!")
 		end
 		local subject_value = evaluate(subject, runtime_context, ambient_typechecking_context)
-		verify_placeholder_lite(subject_value, ambient_typechecking_context:len())
+		verify_placeholder_lite(subject_value, ambient_typechecking_context)
 		--[[local subject_value = U.tag(
 			"evaluate",
 			{ subject = subject:pretty_preprint(runtime_context) },
@@ -3699,7 +3705,7 @@ function evaluate_impl(typed_term, runtime_context, ambient_typechecking_context
 			error "evaluate, is_host_unwrap: missing as_host_value on unwrapped host_unwrap"
 		end
 
-		verify_placeholder_lite(unwrap_val, ambient_typechecking_context:len())
+		verify_placeholder_lite(unwrap_val, ambient_typechecking_context)
 		if unwrap_val:is_host_value() then
 			return unwrap_val:unwrap_host_value()
 		elseif unwrap_val:is_neutral() then
@@ -4040,7 +4046,7 @@ evaluate = function(typed_term, runtime_context, ambient_typechecking_context)
 	recurse_count = recurse_count + 1
 	local r = evaluate_impl(typed_term, runtime_context, ambient_typechecking_context)
 	recurse_count = recurse_count - 1
-	verify_placeholder_lite(r, ambient_typechecking_context:len())
+	verify_placeholder_lite(r, ambient_typechecking_context)
 
 	if tracked then
 		print(string.rep("·", recurse_count) .. " → " .. r:pretty_print(runtime_context))

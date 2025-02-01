@@ -418,7 +418,12 @@ function environment:exit_block(term, shadowed)
 	return env, wrapped, purity
 end
 
-environment_mt = { __index = environment }
+environment_mt = {
+	__index = environment,
+	__tostring = function(s)
+		return "[Environment Omitted]"
+	end,
+}
 
 ---@param env Environment
 ---@return string

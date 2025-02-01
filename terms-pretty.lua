@@ -2012,6 +2012,17 @@ function typed_term_override_pretty:host_intrinsic(pp, context)
 end
 
 ---@param pp PrettyPrint
+function typed_term_override_pretty:constrained_type(pp)
+	pp:_enter()
+
+	pp:unit(pp:_color())
+	pp:unit("typed.constrained_type")
+	pp:unit(pp:_resetcolor())
+
+	pp:_exit()
+end
+
+---@param pp PrettyPrint
 function value_override_pretty:star(pp)
 	local level, depth = self:unwrap_star()
 

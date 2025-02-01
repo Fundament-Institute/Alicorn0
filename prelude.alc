@@ -709,7 +709,7 @@ let host-func-type-to-func-type =
 
 		let new-func-type = forall (x : newargs) -> (y : new-results(x))
 		let final-func-type = set-func-result-info(new-func-type, host-nil, unwrap(orig-result-info-wrapped))
-		final-func-type
+		wrapped(final-func-type)
 
 let host-funcprog-type-to-funcprog-type =
 	lambda (T : type, valid : only-accept-host-funcprogs(wrap(T)))
