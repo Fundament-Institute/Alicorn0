@@ -535,12 +535,16 @@ checkable_term:define_enum("checkable", {
 		"elements", array(checkable_term), 
 		"debug", array(var_debug) 
 	} },
-	{ "host_tuple_cons", { "elements", array(checkable_term) } },
+	{ "host_tuple_cons", { 
+		"elements", array(checkable_term), 
+		"debug", array(var_debug)  
+	} },
 	{ "lambda", {
 		"param_name", gen.builtin_string,
 		"body",       checkable_term,
 	} },
 })
+
 -- inferrable terms can have their type inferred / don't need a goal type
 -- stylua: ignore
 inferrable_term:define_enum("inferrable", {
@@ -642,7 +646,10 @@ inferrable_term:define_enum("inferrable", {
 		"annotated_term", checkable_term,
 		"annotated_type", inferrable_term,
 	} },
-	{ "host_tuple_cons", { "elements", array(inferrable_term) } }, -- host_value
+	{ "host_tuple_cons", { 
+		"elements", array(inferrable_term),
+		"debug", array(var_debug) 
+	} }, -- host_value
 	{ "host_user_defined_type_cons", {
 		"id",          host_user_defined_id, -- host_user_defined_type
 		"family_args", array(inferrable_term), -- host_value

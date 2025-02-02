@@ -1849,12 +1849,12 @@ function check(
 
 		return true, usages, typed_term.tuple_cons(new_elements)
 	elseif checkable_term:is_host_tuple_cons() then
-		local elements = checkable_term:unwrap_host_tuple_cons()
+		local elements, info = checkable_term:unwrap_host_tuple_cons()
 		local usages = usage_array()
 		local new_elements = typed_array()
 		local desc = terms.empty
 
-		for _, v in elements:ipairs() do
+		for i, v in elements:ipairs() do
 			local el_type_metavar = typechecker_state:metavariable(typechecking_context)
 			local el_type = el_type_metavar:as_value()
 			local ok, el_usages, el_term = check(v, typechecking_context, el_type)
@@ -1873,7 +1873,7 @@ function check(
 					"#check-tuple-cons-param",
 					substitute_placeholders_identity(value.singleton(el_type, el_val), typechecking_context),
 					typechecking_context.runtime_context,
-					terms.var_debug("", U.anchor_here())
+					info[i]
 				)
 			)
 		end
@@ -2452,7 +2452,7 @@ function infer_impl(
 		--for i = 1, #typechecking_context do
 		--	print(i, typechecking_context:get_name(i))
 		--end
-		local elements = inferrable_term:unwrap_host_tuple_cons()
+		local elements, info = inferrable_term:unwrap_host_tuple_cons()
 		-- type_data is either "empty", an empty tuple,
 		-- or "cons", a tuple with the previous type_data and a function that
 		-- takes all previous values and produces the type of the next element
@@ -2460,7 +2460,7 @@ function infer_impl(
 		local type_data = terms.empty
 		local usages = usage_array()
 		local new_elements = typed_array()
-		for _, v in elements:ipairs() do
+		for i, v in elements:ipairs() do
 			local ok, el_type, el_usages, el_term = infer(v, typechecking_context)
 			if not ok then
 				return false, el_type
@@ -2471,11 +2471,7 @@ function infer_impl(
 			local el_singleton = value.singleton(el_type, el_val)
 			type_data = terms.cons(
 				type_data,
-				substitute_type_variables(
-					el_singleton,
-					terms.var_debug("", U.anchor_here()),
-					typechecking_context:len() + 1
-				),
+				substitute_type_variables(el_singleton, info[i], typechecking_context:len() + 1),
 				"#host-tuple-cons-el",
 				typechecking_context:get_runtime_context()
 			)

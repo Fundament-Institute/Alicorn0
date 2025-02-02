@@ -251,9 +251,11 @@ function inferrable:as_annotated() end
 ---@return boolean
 function inferrable:is_host_tuple_cons() end
 ---@return ArrayValue elements
+---@return ArrayValue debug
 function inferrable:unwrap_host_tuple_cons() end
 ---@return boolean
 ---@return ArrayValue elements
+---@return ArrayValue debug
 function inferrable:as_host_tuple_cons() end
 ---@return boolean
 function inferrable:is_host_user_defined_type_cons() end
@@ -402,7 +404,7 @@ function inferrable:as_program_type() end
 ---@field level_suc fun(previous_level: inferrable): inferrable
 ---@field level_max fun(level_a: inferrable, level_b: inferrable): inferrable
 ---@field annotated fun(annotated_term: checkable, annotated_type: inferrable): inferrable
----@field host_tuple_cons fun(elements: ArrayValue): inferrable
+---@field host_tuple_cons fun(elements: ArrayValue, debug: ArrayValue): inferrable
 ---@field host_user_defined_type_cons fun(id: { name: string }, family_args: ArrayValue): inferrable
 ---@field host_tuple_type fun(desc: inferrable): inferrable
 ---@field host_function_type fun(param_type: inferrable, result_type: inferrable, result_info: checkable): inferrable
