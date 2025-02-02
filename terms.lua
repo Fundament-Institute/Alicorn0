@@ -92,6 +92,9 @@ end
 ---@return var_debug
 function RuntimeContext:get(index)
 	local binding = self.bindings:get(index)
+	if binding == nil then
+		return nil
+	end
 	return binding.val, binding.debuginfo
 end
 

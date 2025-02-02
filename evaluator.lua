@@ -575,6 +575,87 @@ local function verify_placeholder_lite(v, ctx, nested)
 	return true
 end
 
+local orig_literal_constructor = typed_term.literal
+local function literal_constructor_check(val)
+	-- FIXME: make sure no placeholders in val
+	verify_placeholder_lite(val, terms.typechecking_context())
+	return orig_literal_constructor(val)
+end
+typed_term.literal = literal_constructor_check
+
+---@param v table
+---@param ctx RuntimeContext
+---@return boolean
+local function verify_closure(v, ctx, nested)
+	-- If it's not a table we don't care
+	if type(v) ~= "table" then
+		return true
+	end
+
+	-- Special handling for arrays
+	if getmetatable(v) and getmetatable(getmetatable(v)) == gen.array_type_mt then
+		for k, val in ipairs(v) do
+			local ok, i, info = verify_closure(val, ctx, true)
+			if not ok then
+				if not nested then
+					error("Invalid bound variable with index " .. tostring(i) .. ": " .. tostring(info))
+				end
+				return false, i, info
+			end
+		end
+		return true
+	end
+	if not v.kind then
+		return true
+	end
+
+	if v.kind == "typed.let" then
+		return true -- we can't check these right now
+	end
+
+	if v.kind == "typed.bound_variable" then
+		local idx, bdbg = v:unwrap_bound_variable()
+		local rc_val, cdbg = ctx:get(idx)
+		if rc_val == nil then
+			return true -- TODO: Can we actually validate this?
+			--return false, idx, "runtime_context:get() for bound_variable returned nil"
+		end
+		if bdbg ~= cdbg then
+			local info = "Debug information doesn't match! Contexts are mismatched! Variable #"
+				.. tostring(v["{ID}"])
+				.. " thinks it is getting "
+				.. tostring(bdbg)
+				.. " but context thinks it has "
+				.. tostring(cdbg)
+				.. " at index "
+				.. tostring(idx)
+
+			return false, idx, info
+		end
+	end
+
+	for k, val in pairs(v) do
+		if k ~= "cause" and k ~= "bindings" and k ~= "provenance" then
+			local ok, i, info = verify_closure(val, ctx, true)
+			if not ok then
+				if not nested then
+					error("Invalid bound variable with index " .. tostring(i) .. ": " .. tostring(info))
+				end
+				return false, i, info
+			end
+		end
+	end
+
+	return true
+end
+
+local orig_closure_constructor = value.closure
+local function closure_constructor_check(param_name, code, capture, debug)
+	verify_closure(code, capture)
+	return orig_closure_constructor(param_name, code, capture, debug)
+end
+value.closure = closure_constructor_check
+
 local substitute_inner
 
 ---@param val value an alicorn value
