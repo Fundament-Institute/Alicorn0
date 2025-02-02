@@ -33,10 +33,10 @@
             ${pkgs.lib.getExe' luvitpkgs.packages.${system}.luvit "luvit"} ${file}
           '';
 
-        lqc = luajit.pkgs.buildLuarocksPackage rec {
+        lqc = { argparse, buildLuarocksPackage, fetchFromGitHub, luafilesystem, ... }: buildLuarocksPackage rec {
           pname = "lua-quickcheck";
           version = "0.2-4";
-          src = pkgs.fetchFromGitHub {
+          src = fetchFromGitHub {
             owner = "luc-tielen";
             repo = "lua-quickcheck";
             rev = "v${version}";
@@ -45,9 +45,10 @@
 
           knownRockspec = "${src}/rockspecs/lua-quickcheck-${version}.rockspec";
 
-          propagatedBuildInputs =
-            [ luajit luajit.pkgs.luafilesystem luajit.pkgs.argparse ];
+          propagatedBuildInputs = [ luafilesystem argparse ];
         };
+
+        luajit_lqc = luajit.pkgs.callPackage lqc { };
 
       in
       {
@@ -100,7 +101,7 @@
               pkgs.lua-language-server
 
               (luajit.withPackages
-                (ps: with ps; [ luasocket lpeg inspect luaunit tl lqc ]))
+                (ps: [ ps.luasocket ps.lpeg ps.inspect ps.luaunit ps.tl luajit_lqc ]))
             ];
             shellHook = ''${self.checks.${system}.pre-commit-check.shellHook}'';
           };
