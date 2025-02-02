@@ -3304,6 +3304,8 @@ function evaluate_impl(typed_term, runtime_context, ambient_typechecking_context
 					.. tostring(bdbg)
 					.. " but context thinks it has "
 					.. tostring(cdbg)
+					.. " at index "
+					.. tostring(idx)
 			)
 		end
 		return rc_val
