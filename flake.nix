@@ -3,73 +3,47 @@
     "An experimental language for high performance safe convenient metaprogramming";
 
   inputs = {
+    by-name.url = "github:bb010g/by-name.nix";
+    by-name.inputs.nixpkgs-lib.follows = "nixpkgs";
     nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
-    luvitpkgs = {
-      url = "github:aiverson/luvit-nix";
-      # inputs.nixpkgs.follows = "nixpkgs";
-    };
-    flake-utils.url = "github:numtide/flake-utils";
-    pre-commit-hooks = {
-      url = "github:cachix/pre-commit-hooks.nix";
-      inputs.flake-utils.follows = "flake-utils";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    pre-commit-hooks.url = "github:cachix/pre-commit-hooks.nix";
+    pre-commit-hooks.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs = { self, nixpkgs, luvitpkgs, flake-utils, pre-commit-hooks }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
-        pkgs = nixpkgs.legacyPackages.${system};
-        luajit = pkgs.luajit.override {
-          self = luajit;
-          enable52Compat = true;
-        };
-        alicorn-check = file:
-          pkgs.runCommandNoCC "alicorn-check-${file}" { } ''
-            set -euo pipefail
-            cd ${./.}
-            mkdir $out
-            >&2 echo "Checking ${file}"
-            ${pkgs.lib.getExe' luvitpkgs.packages.${system}.luvit "luvit"} ${file}
-          '';
-
-        lqc = { argparse, buildLuarocksPackage, fetchFromGitHub, luafilesystem, ... }: buildLuarocksPackage rec {
-          pname = "lua-quickcheck";
-          version = "0.2-4";
-          src = fetchFromGitHub {
-            owner = "luc-tielen";
-            repo = "lua-quickcheck";
-            rev = "v${version}";
-            hash = "sha256-B3Gz0emI3MBwp2Bg149KU02RlzVzbKdVPM+B7ZFH+80";
-          };
-
-          knownRockspec = "${src}/rockspecs/lua-quickcheck-${version}.rockspec";
-
-          propagatedBuildInputs = [ luafilesystem argparse ];
+  outputs = inputs:
+    let
+      inherit (inputs) self;
+      inherit (inputs.nixpkgs) lib;
+      inherit (lib.attrsets) genAttrs;
+      allSystems = genAttrs systems (system: perSystem allSystemArgs.${system});
+      allSystemArgs = genAttrs systems perSystemArgs;
+      byNameLib = inputs.by-name.libs.default;
+      forAllSystems = genAttrs systems;
+      importCell = table@{ directoryEntry, ... }: import directoryEntry.path table;
+      lqc = { argparse, buildLuarocksPackage, fetchFromGitHub, luafilesystem, ... }: buildLuarocksPackage rec {
+        pname = "lua-quickcheck";
+        version = "0.2-4";
+        src = fetchFromGitHub {
+          owner = "luc-tielen";
+          repo = "lua-quickcheck";
+          rev = "v${version}";
+          hash = "sha256-B3Gz0emI3MBwp2Bg149KU02RlzVzbKdVPM+B7ZFH+80";
         };
 
-        luajit_lqc = luajit.pkgs.callPackage lqc { };
+        knownRockspec = "${src}/rockspecs/lua-quickcheck-${version}.rockspec";
 
-      in
-      {
-        packages = rec {
-          inherit (pkgs) hello;
-          default = hello;
-        };
-        apps = rec {
-          hello =
-            flake-utils.lib.mkApp { drv = self.packages.${system}.hello; };
-          default = hello;
-        };
+        propagatedBuildInputs = [ luafilesystem argparse ];
+      };
+      perSystem = { currentSystem, pkgs, pre-commit-hooks-lib, ... }: {
         checks = {
-          terms = alicorn-check "test-terms.lua";
-          derive-pretty-print = alicorn-check "test-derive-pretty-print.lua";
-          formatting = pkgs.runCommandNoCC "stylua-check" { } ''
+          terms = pkgs.alicorn-check "test-terms.lua";
+          derive-pretty-print = pkgs.alicorn-check "test-derive-pretty-print.lua";
+          formatting = pkgs.runCommandLocal "stylua-check" { } ''
             cd ${./.}
             mkdir $out
             ${pkgs.lib.getExe pkgs.stylua} . -c
           '';
-          pre-commit-check = pre-commit-hooks.lib.${system}.run {
+          pre-commit-check = pre-commit-hooks-lib.run {
             src = ./.;
             hooks = {
               statix.enable = true;
@@ -91,21 +65,90 @@
             stylua "$@"
           '';
         };
-        devShells = rec {
-          alicorn = pkgs.mkShell {
-            buildInputs = [
-              luvitpkgs.packages.${system}.lit
-              luvitpkgs.packages.${system}.luvit
-              pkgs.stylua
-              pkgs.inferno
-              pkgs.lua-language-server
-
-              (luajit.withPackages
-                (ps: [ ps.luasocket ps.lpeg ps.inspect ps.luaunit ps.tl luajit_lqc ]))
-            ];
-            shellHook = ''${self.checks.${system}.pre-commit-check.shellHook}'';
-          };
-          default = alicorn;
+        devShells.alicorn-generic = pkgs.callPackage
+          ({ inferno, lua-language-server, stylua, mkShell, ... }:
+            mkShell {
+              buildInputs = [
+                stylua
+                inferno
+                lua-language-server
+              ];
+              shellHook = ''${currentSystem.checks.pre-commit-check.shellHook}'';
+            })
+          { };
+        devShells.alicorn-luajit = pkgs.callPackage
+          ({ luajit_lua5_2, mkShell, ... }:
+            mkShell {
+              inputsFrom = [ currentSystem.devShells.alicorn-generic ];
+              buildInputs = [
+                (luajit_lua5_2.withPackages (ps: [
+                  ps.inspect
+                  ps.lpeg
+                  (ps.callPackage lqc { })
+                  ps.luasocket
+                  ps.luaunit
+                  ps.tl
+                ]))
+              ];
+            })
+          { };
+        devShells.alicorn-luvit = pkgs.callPackage
+          ({ luvit, luvit-lit, mkShell, ... }:
+            mkShell {
+              inputsFrom = [ currentSystem.devShells.alicorn-generic ];
+              buildInputs = [ luvit luvit-lit ];
+            })
+          { };
+        devShells.alicorn = currentSystem.devShells.alicorn-luajit;
+        devShells.default = currentSystem.devShells.alicorn;
+        legacyPackages.nixpkgs = lib.dontRecurseIntoAttrs pkgs;
+      };
+      perSystemArgs = system: {
+        inherit system;
+        currentSystem = allSystems.${system};
+        pkgs = import inputs.nixpkgs {
+          inherit system;
+          overlays = [
+            table.rows.luvit.nixpkgsOverlay
+            (pkgsFinal: pkgsPrev: {
+              alicorn-check = pkgsFinal.callPackage
+                ({ lib, luvit, runCommandLocal, ... }: file: runCommandLocal "alicorn-check-${file}" { src = ./.; } ''
+                  set -euo pipefail
+                  cd -- "$src"
+                  mkdir -p "$out"
+                  >&2 echo "Checking "${lib.escapeShellArg file}
+                  ${lib.escapeShellArg (lib.getExe luvit)} ${lib.escapeShellArg file}
+                '')
+                { };
+              luajit_lua5_2 = pkgsFinal.luajit.override { enable52Compat = true; self = pkgsFinal.luajit_lua5_2; };
+              luajitLua52Packages = pkgsFinal.recurseIntoAttrs pkgsFinal.luajit_lua5_2.pkgs;
+            })
+          ];
+          config = { };
         };
-      });
+        pre-commit-hooks-lib = inputs.pre-commit-hooks.lib.${system};
+      };
+      systems = lib.systems.flakeExposed;
+      table = byNameLib.filesystem.readNameBasedTableDirectory {
+        rowFromFile."nixpkgs-overlay.nix" = table: { nixpkgsOverlay = importCell table; };
+        rowFromFile."nixpkgs-package.nix" = table: { nixpkgsPackage = importCell table; };
+        rowsPath = ./nix;
+        specialColumns.input = inputs;
+      };
+      transposition = byNameLib.attrsets.mapAttrs
+        (attrName: attrConfig: byNameLib.attrsets.mapAttrs
+          (system: currentSystem: currentSystem.${attrName} or (abort ''
+            Could not find `perSystem` attribute `${byNameLib.strings.escapeNixIdentifier attrName}` for system `${byNameLib.strings.escapeNixIdentifier system}`. It is required to declare such an attribute whenever `transposition.${byNameLib.strings.escapeNixIdentifier attrName}` is defined.
+          ''))
+          allSystems)
+        transpositionConfig;
+      transpositionConfig.checks = { };
+      transpositionConfig.devShells = { };
+      transpositionConfig.formatter = { };
+      transpositionConfig.legacyPackages = { };
+    in
+    let
+
+    in
+    transposition // { };
 }
