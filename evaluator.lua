@@ -1916,7 +1916,7 @@ function check(
 				desc,
 				value.closure(
 					"#check-tuple-cons-param",
-					substitute_placeholders_identity(value.singleton(el_type, el_val), typechecking_context),
+					substitute_placeholders_identity(value.singleton(el_type, el_val), typechecking_context, 1),
 					typechecking_context.runtime_context,
 					info[i]
 				)
@@ -1958,7 +1958,7 @@ function check(
 				desc,
 				value.closure(
 					"#check-tuple-cons-param",
-					substitute_placeholders_identity(value.singleton(el_type, el_val), typechecking_context),
+					substitute_placeholders_identity(value.singleton(el_type, el_val), typechecking_context, 1),
 					typechecking_context.runtime_context,
 					info[i]
 				)
