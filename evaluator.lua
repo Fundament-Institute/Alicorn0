@@ -941,9 +941,15 @@ function substitute_type_variables(val, debuginfo, index, param_name, ctx, ambie
 	param_name = param_name and "#sub-" .. param_name or "#sub-param"
 	--print("value before substituting (val): (value term follows)")
 	--print(val)
-	local substituted = substitute_inner(val, {
+	local mappings = {
 		[index] = typed_term.bound_variable(index, debuginfo),
-	}, index, ambient_typechecking_context)
+	}
+	local size = ambient_typechecking_context.bindings:len()
+	for i = 1, size do
+		local _, info = ambient_typechecking_context.runtime_context:get(i)
+		mappings[i] = typed.bound_variable(i, info)
+	end
+	local substituted = substitute_inner(val, mappings, index, ambient_typechecking_context)
 	--print("typed term after substitution (substituted): (typed term follows)")
 	--print(substituted:pretty_print(typechecking_context))
 	return value.closure(param_name, substituted, ctx, debuginfo)
@@ -1823,7 +1829,7 @@ function check(
 				desc,
 				value.closure(
 					"#check-tuple-cons-param",
-					typed_term.literal(value.singleton(el_type, el_val)),
+					substitute_placeholders_identity(value.singleton(el_type, el_val), typechecking_context),
 					typechecking_context.runtime_context,
 					info[i]
 				)
@@ -1865,7 +1871,7 @@ function check(
 				desc,
 				value.closure(
 					"#check-tuple-cons-param",
-					typed_term.literal(value.singleton(el_type, el_val)),
+					substitute_placeholders_identity(value.singleton(el_type, el_val), typechecking_context),
 					typechecking_context.runtime_context,
 					terms.var_debug("", U.anchor_here())
 				)
