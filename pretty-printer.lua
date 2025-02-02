@@ -1,3 +1,7 @@
+-- When true any time a long pretty print happens it's
+-- also written to pretty_print_%d.html in cwd
+local use_html_for_long = true
+
 ---@class PrettyPrint : { [integer] : string }
 ---@field opts PrettyPrintOpts
 ---@field depth integer
@@ -245,7 +249,10 @@ function PrettyPrint:record(kind, fields, ...)
 	self:_enter()
 
 	self[#self + 1] = self:_color()
-	if kind then
+	if use_html_for_long then
+		self[#self + 1] = "<details open><summary>" .. kind .. "</summary>"
+	end
+	if kind and not use_html_for_long then
 		self[#self + 1] = kind
 	end
 
@@ -293,6 +300,9 @@ function PrettyPrint:record(kind, fields, ...)
 
 	self[#self + 1] = self:_resetcolor()
 	self:_exit()
+	if use_html_for_long then
+		self[#self + 1] = "</details>"
+	end
 end
 
 ---@param name string
@@ -318,8 +328,60 @@ function PrettyPrint:func(f)
 		string.format("%s function(%s): %s:%d", d.what, table.concat(params, ", "), d.source, d.linedefined)
 end
 
+local pp_count = 0
+
 function PrettyPrint_mt:__tostring()
-	return table.concat(self, "")
+	local function generate_unique_filename()
+		pp_count = pp_count + 1
+		return string.format("pretty_print_%d.html", pp_count)
+	end
+	local function convert_ansi_to_html(str)
+		return str:gsub("\27%[38;5;1m", '<span style="color: #AB4642">')
+			:gsub("\27%[38;5;3m", '<span style="color: #F7CA88">')
+			:gsub("\27%[38;5;2m", '<span style="color: #A1B56C">')
+			:gsub("\27%[38;5;4m", '<span style="color: #7CAFC2">')
+			:gsub("\27%[38;5;5m", '<span style="color: #BA8BAF">')
+			:gsub("\27%[0m", "</span>")
+	end
+	local LONG_OUTPUT_THRESHOLD = 1000 -- Adjust this value as needed
+	local plain_result = table.concat(self, "")
+
+	-- If using HTML details and the output is long
+	if use_html_for_long and #plain_result > LONG_OUTPUT_THRESHOLD then
+		local filename = generate_unique_filename()
+		local html_file = io.open(filename, "w")
+
+		if html_file then
+			-- Write HTML header
+			html_file:write([[
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body { background-color: #111; }
+details { margin-left: 1em; }
+details[open] > summary { display: inline; };
+.code { font-family: monospace; }
+</style>
+</head>
+<body class="code">
+]])
+
+			-- Process and write the content
+			local html_content = plain_result:gsub("\n", "<br/>")
+			html_content = convert_ansi_to_html(html_content)
+
+			html_file:write(html_content)
+			html_file:write("\n</body></html>")
+			html_file:close()
+
+			-- Add a note to the plain output about the HTML file
+			plain_result = plain_result .. "\n[Long output saved to " .. filename .. "]"
+		end
+	end
+
+	-- Always return the plain text version
+	return plain_result:gsub("<details>", ""):gsub("</details>", ""):gsub("<summary>%[%-%-%]</summary>", "")
 end
 
 ---@param unknown any
