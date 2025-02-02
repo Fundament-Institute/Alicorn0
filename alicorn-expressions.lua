@@ -51,15 +51,15 @@ local semantic_error_mt = {
 	---@param self SemanticErrorData
 	---@return unknown
 	__tostring = function(self)
-		local message = self.text
+		local message = { self.text }
 		if self.anchors then
-			message = message .. " at anchors"
+			message[#message + 1] = " at anchors"
 			for _, anchor in ipairs(self.anchors) do
-				message = " " .. message .. " " .. tostring(anchor) --[[@as string]]
+				message[#message], message[#message + 1], message[#message + 2], message[#message + 3] = " ", message[#message], " ", tostring(anchor)
 			end
 		end
 		if self.terms then
-			message = message .. " with terms\n"
+			message[#message + 1] = " with terms\n"
 			for k, term in pairs(self.terms) do
 				local s = nil
 				if term.pretty_print and self.env then
@@ -67,17 +67,17 @@ local semantic_error_mt = {
 				else
 					s = tostring(term)
 				end
-				message = message .. k .. " = " .. s .. "\n"
+				message[#message + 1], message[#message + 2], message[#message + 3], message[#message + 4] = k, " = ", s, "\n"
 			end
 		end
 		if self.env then
-			message = message .. " in env\n"
-			message = message .. self.env.typechecking_context:format_names() .. "\n"
+			message[#message + 1] = " in env\n"
+			message[#message + 1], message[#message + 2] = self.env.typechecking_context:format_names(), "\n"
 		end
 		if self.cause then
-			message = message .. " because:\n" .. tostring(self.cause)
+			message[#message + 1], message[#message + 2] = " because:\n", tostring(self.cause)
 		end
-		return message
+		return table.concat(message, "")
 	end,
 }
 

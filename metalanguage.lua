@@ -238,7 +238,8 @@ local function custom_traceback(err)
 	if type(err) == "table" then
 		return err
 	end
-	local s = type(err) == "string" and err or ("must pass string or table to error handler, found: " .. tostring(err))
+	---@type string[]
+	local s = { type(err) == "string" and err or ("must pass string or table to error handler, found: " .. tostring(err)) }
 	local i = 3
 	local info = debug.getinfo(i, "Sfln")
 	while info ~= nil do
@@ -249,10 +250,10 @@ local function custom_traceback(err)
 			--i = i + 1
 			--info = debug.getinfo(i, "Sfln")
 			local ok, err = pcall(function()
-				s = s .. string.format("\n%s [%s:%d] (%s)", name, info.short_src, info.currentline, pdump(tag))
+				s[#s + 1] = string.format("%s [%s:%d] (%s)", name, info.short_src, info.currentline, pdump(tag))
 			end)
 			if not ok then
-				s = s .. string.format("\nTRACE FAIL: %s [%s:%d] (%s)", name, info.short_src, info.currentline, err)
+				s[#s + 1] = string.format("TRACE FAIL: %s [%s:%d] (%s)", name, info.short_src, info.currentline, err)
 			end
 		else
 			local name = info.name or string.format("<%s:%d>", info.short_src, info.linedefined)
@@ -265,14 +266,14 @@ local function custom_traceback(err)
 				arg, v = debug.getlocal(i, j)
 			end
 
-			--s = s .. string.format("\n%s [%s:%d] (%s)", name, info.short_src, info.currentline, table.concat(args,","))
-			s = s .. string.format("\n%s [%s:%d]", name, info.short_src, info.currentline)
+			--s[#s + 1] = string.format("%s [%s:%d] (%s)", name, info.short_src, info.currentline, table.concat(args,","))
+			s[#s + 1] = string.format("%s [%s:%d]", name, info.short_src, info.currentline)
 		end
 		i = i + 1
 		info = debug.getinfo(i, "Sfln")
 	end
 
-	return s
+	return table.concat(s, "\n")
 end
 
 -- this function should be used when calling for a trace directly

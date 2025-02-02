@@ -312,17 +312,17 @@ end
 ---@return string
 function M.dumptable(t, spaces)
 	spaces = spaces or 0
-	local s = tostring(t) .. ": "
+	local s = { tostring(t) .. ": " }
 	for k, v in pairs(t) do
-		s = s .. "\n" .. string.rep(" ", spaces) .. "  " .. tostring(k) .. ": " .. tostring(v)
+		s[#s + 1] = string.rep(" ", spaces) .. "  " .. tostring(k) .. ": " .. tostring(v)
 	end
 
 	local mt = getmetatable(t)
 	if mt and mt.__shadow then
-		s = s .. "\n" .. string.rep(" ", spaces) .. "  [shadows]: " .. tostring(M.dumptable(mt.__shadow, spaces + 2))
+		s[#s + 1] = string.rep(" ", spaces) .. "  [shadows]: " .. tostring(M.dumptable(mt.__shadow, spaces + 2))
 	end
 
-	return s
+	return table.concat(s, "\n")
 end
 
 ---@param t table
