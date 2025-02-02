@@ -1422,6 +1422,7 @@ collect_host_tuple = metalanguage.reducer(
 		local goal, env = args:unwrap()
 		local goal_type, collected_terms
 		local desc = terms.empty
+		collected_debug = debug_array()
 
 		if goal:is_check() then
 			collected_terms = array(checkable_term)()
@@ -1443,6 +1444,7 @@ collect_host_tuple = metalanguage.reducer(
 				}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
 				if ok and continue then
 					collected_terms:append(next_term)
+					collected_debug:append(terms.var_debug("#collected_term", syntax.start_anchor))
 					local ok, typed_usages, next_typed =
 						evaluator.check(next_term, env.typechecking_context, next_elem_type)
 					if not ok then
@@ -1482,6 +1484,7 @@ collect_host_tuple = metalanguage.reducer(
 				}, metalanguage.failure_handler, ExpressionArgs.new(goal, env))
 				if ok and continue then
 					collected_terms:append(next_term)
+					collected_debug:append(terms.var_debug("#collected_term", syntax.start_anchor))
 				end
 			end
 		end
@@ -1490,7 +1493,7 @@ collect_host_tuple = metalanguage.reducer(
 		end
 
 		if goal:is_infer() then
-			return true, inferrable_term.host_tuple_cons(collected_terms), env
+			return true, inferrable_term.host_tuple_cons(collected_terms, collected_debug), env
 		elseif goal:is_check() then
 			local ok, err = evaluator.typechecker_state:flow(
 				value.host_tuple_type(desc),
@@ -1502,7 +1505,7 @@ collect_host_tuple = metalanguage.reducer(
 			if not ok then
 				return false, err
 			end
-			return true, checkable_term.host_tuple_cons(collected_terms), env
+			return true, checkable_term.host_tuple_cons(collected_terms, collected_debug), env
 		else
 			error("NYI: collect_host_tuple goal case " .. goal.kind)
 		end
