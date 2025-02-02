@@ -613,6 +613,12 @@ local function verify_closure(v, ctx, nested)
 		return true -- we can't check these right now
 	end
 
+	if v.kind == "value.closure" then
+		-- If the closure contains another closure we need to switch contexts
+		local param_name, code, capture, debug = v:unwrap_closure()
+		return verify_closure(code, capture, true)
+	end
+
 	if v.kind == "typed.bound_variable" then
 		local idx, bdbg = v:unwrap_bound_variable()
 		local rc_val, cdbg = ctx:get(idx)
