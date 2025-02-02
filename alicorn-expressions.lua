@@ -1134,7 +1134,7 @@ expression = metalanguage.reducer(
 local OperativeError = {}
 local external_error_mt = {
 	__tostring = function(self)
-		local message = "Lua error occured inside host operative "
+		local message = "Lua error occurred inside host operative "
 			.. self.operative_name
 			.. " "
 			.. (self.start_anchor and tostring(self.start_anchor) or " at unknown position")
