@@ -251,15 +251,15 @@ local function erase(pattern)
 	return pattern / {}
 end
 
+---@param id string
 ---@param line integer
 ---@param char integer
----@param id string
 ---@return Anchor
-local function create_anchor(line, char, id)
+local function create_anchor(id, line, char)
 	return setmetatable({
+		id = id,
 		line = line,
 		char = char,
-		id = id,
 	}, anchor_mt)
 end
 create_anchor = U.memoize(create_anchor, false)
@@ -271,7 +271,7 @@ local function anchor_here(f)
 		f = (f or 1) + 1
 	end
 	local info = debug.getinfo(f, "Sl")
-	return create_anchor(info.currentline, 0, "SYNTH:" .. info.source)
+	return create_anchor("SYNTH:" .. info.source, info.currentline, 0)
 end
 
 ---@class LinePosition
@@ -324,9 +324,9 @@ local grammar = P {
 			line_index = line_index - 1
 		end
 		local simple_anchor = create_anchor(
+			line_ctx.id,
 			line_ctx.positions[line_index].line,
-			position - line_ctx.positions[line_index].pos + 1,
-			line_ctx.id
+			position - line_ctx.positions[line_index].pos + 1
 		)
 		return true, simple_anchor
 	end),
