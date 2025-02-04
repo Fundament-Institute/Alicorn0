@@ -1,6 +1,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 -- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
 local U = require "alicorn-utils"
+local string_format = string.format
 
 local lpeg = require "lpeg"
 local P, C, Cg, Cc, Cmt, Ct, Cb, Cp, Cf, Cs, S, V, R =
@@ -20,40 +21,94 @@ local function DebugPrint(s, patt)
 end
 
 ---@class Anchor
+---@field sourceid string
 ---@field line integer
 ---@field char integer
----@field sourceid string
 local Anchor = {}
 
----comment
 ---@param stop Anchor?
 ---@return string
 function Anchor:display(stop)
 	if stop == nil then
 		return tostring(self)
+	elseif self.sourceid ~= stop.sourceid then
+		error(string_format("(%s).sourceid ~= (%q).sourceid", tostring(self), tostring(stop)))
 	end
 
-	return tostring(self.sourceid)
-		.. ":"
-		.. tostring(self.line)
-		.. ":"
-		.. tostring(self.char)
-		.. "-"
-		.. tostring(stop.char)
+	local start_line, stop_line = self.line, stop.line
+	if start_line ~= stop_line then
+		return string_format(
+			"%s:%s:%s-%s:%s",
+			tostring(self.sourceid),
+			tostring(start_line),
+			tostring(self.char),
+			tostring(stop_line),
+			tostring(stop.char)
+		)
+	end
+	local start_char, stop_char = self.char, stop.char
+	if start_char ~= stop_char then
+		return string_format(
+			"%s:%s:%s-%s",
+			tostring(self.sourceid),
+			tostring(start_line),
+			tostring(start_char),
+			tostring(stop_char)
+		)
+	end
+	return string_format("%s:%s:%s", tostring(self.sourceid), tostring(start_line), tostring(start_char))
 end
 
 local anchor_mt = {
+	---@param fst Anchor
+	---@param snd Anchor
+	---@return boolean
 	__lt = function(fst, snd)
-		return snd.line > fst.line or (snd.line == fst.line and snd.char > fst.char)
+		local fst_sourceid, snd_sourceid = fst.sourceid, snd.sourceid
+		if fst_sourceid < snd_sourceid then
+			return true
+		end
+		if fst_sourceid == snd_sourceid then
+			local fst_line, snd_line = fst.line, snd.line
+			if fst_line < snd_line then
+				return true
+			end
+			if fst_line == snd_line then
+				return fst.char < snd.char
+			end
+		end
+		return false
 	end,
+	---@param fst Anchor
+	---@param snd Anchor
+	---@return boolean
 	__le = function(fst, snd)
-		return fst < snd or fst == snd
+		local fst_sourceid, snd_sourceid = fst.sourceid, snd.sourceid
+		if fst_sourceid < snd_sourceid then
+			return true
+		end
+		if fst_sourceid == snd_sourceid then
+			local fst_line, snd_line = fst.line, snd.line
+			if fst_line < snd_line then
+				return true
+			end
+			if fst_line == snd_line then
+				return fst.char <= snd.char
+			end
+		end
+		return false
 	end,
+	---@param fst Anchor
+	---@param snd Anchor
+	---@return boolean
 	__eq = function(fst, snd)
-		return (snd.line == fst.line and snd.char == fst.char)
+		return fst.sourceid == snd.sourceid and fst.line == snd.line and fst.char == snd.char
 	end,
+	---@param self Anchor
+	---@return string
 	__tostring = function(self)
-		return tostring(self.sourceid) .. ":" .. tostring(self.line) .. ":" .. tostring(self.char)
+		local start_line, start_char = self.line, self.char
+		return string_format("%s:%s:%s", tostring(self.sourceid), tostring(start_line), tostring(start_char))
 	end,
 	__index = Anchor,
 }
@@ -632,7 +687,7 @@ local function span_error(start_anchor, subject, msg)
 	local caret_wsp = ("\t"):rep(tabnum) .. (" "):rep(start_anchor.char - (1 + tabnum))
 	local linenum_wsp = (" "):rep(string.len(start_anchor.line))
 
-	local span = string.format(
+	local span = string_format(
 		[[
 error: %s
 --> %s:%i:%i
