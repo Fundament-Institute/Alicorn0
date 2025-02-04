@@ -68,7 +68,7 @@ local function lispy_print(code, d)
 	local start_anchor_pfx = ""
 	if code.start_anchor ~= nil then
 		local start_anchor_pfx_components = {}
-		table.insert(start_anchor_pfx_components, code.start_anchor.sourceid)
+		table.insert(start_anchor_pfx_components, code.start_anchor.id)
 		table.insert(start_anchor_pfx_components, code.start_anchor.line)
 		table.insert(start_anchor_pfx_components, code.start_anchor.char)
 		if #start_anchor_pfx_components > 0 then
@@ -78,7 +78,7 @@ local function lispy_print(code, d)
 	local end_anchor_sfx = ""
 	if code.end_anchor ~= nil then
 		local end_anchor_sfx_components = {}
-		table.insert(end_anchor_sfx_components, code.end_anchor.sourceid)
+		table.insert(end_anchor_sfx_components, code.end_anchor.id)
 		table.insert(end_anchor_sfx_components, code.end_anchor.line)
 		table.insert(end_anchor_sfx_components, code.end_anchor.char)
 		if #end_anchor_sfx_components > 0 then

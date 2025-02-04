@@ -4597,7 +4597,7 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 			end
 			local has_luvit_require, require_generator = pcall(require, "require")
 			if has_luvit_require then
-				load_env.require = require_generator(start_anchor.sourceid)
+				load_env.require = require_generator(start_anchor.id)
 			end
 			local res = assert(load(source_str, "host_intrinsic<" .. tostring(start_anchor) .. ">", "t", load_env))()
 			intrinsic_memo[source_str] = res

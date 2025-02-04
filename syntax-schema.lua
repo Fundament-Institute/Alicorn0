@@ -9,7 +9,7 @@ local S = schema.create(
 )
 
 S:struct "anchor" "The source position information attached to a node" {
-	schema.text "sourceid"(0) "the file name or other identifying information to locate and distinguish the original source of the code", --TODO: consider making this a generic parameter to accept structured data.
+	schema.text "id"(0) "the file name or other identifying information to locate and distinguish the original source of the code", --TODO: consider making this a generic parameter to accept structured data.
 	schema.u32 "line"(1) "the line number in the file",
 	schema.u32 "char"(2) "the offset within the line",
 }

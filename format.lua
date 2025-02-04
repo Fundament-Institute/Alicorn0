@@ -21,7 +21,7 @@ local function DebugPrint(s, patt)
 end
 
 ---@class Anchor
----@field sourceid string
+---@field id string
 ---@field line integer
 ---@field char integer
 local Anchor = {}
@@ -31,15 +31,15 @@ local Anchor = {}
 function Anchor:display(stop)
 	if stop == nil then
 		return tostring(self)
-	elseif self.sourceid ~= stop.sourceid then
-		error(string_format("(%s).sourceid ~= (%q).sourceid", tostring(self), tostring(stop)))
+	elseif self.id ~= stop.id then
+		error(string_format("(%s).id ~= (%q).id", tostring(self), tostring(stop)))
 	end
 
 	local start_line, stop_line = self.line, stop.line
 	if start_line ~= stop_line then
 		return string_format(
 			"%s:%s:%s-%s:%s",
-			tostring(self.sourceid),
+			tostring(self.id),
 			tostring(start_line),
 			tostring(self.char),
 			tostring(stop_line),
@@ -50,13 +50,13 @@ function Anchor:display(stop)
 	if start_char ~= stop_char then
 		return string_format(
 			"%s:%s:%s-%s",
-			tostring(self.sourceid),
+			tostring(self.id),
 			tostring(start_line),
 			tostring(start_char),
 			tostring(stop_char)
 		)
 	end
-	return string_format("%s:%s:%s", tostring(self.sourceid), tostring(start_line), tostring(start_char))
+	return string_format("%s:%s:%s", tostring(self.id), tostring(start_line), tostring(start_char))
 end
 
 local anchor_mt = {
@@ -64,11 +64,11 @@ local anchor_mt = {
 	---@param snd Anchor
 	---@return boolean
 	__lt = function(fst, snd)
-		local fst_sourceid, snd_sourceid = fst.sourceid, snd.sourceid
-		if fst_sourceid < snd_sourceid then
+		local fst_id, snd_id = fst.id, snd.id
+		if fst_id < snd_id then
 			return true
 		end
-		if fst_sourceid == snd_sourceid then
+		if fst_id == snd_id then
 			local fst_line, snd_line = fst.line, snd.line
 			if fst_line < snd_line then
 				return true
@@ -83,11 +83,11 @@ local anchor_mt = {
 	---@param snd Anchor
 	---@return boolean
 	__le = function(fst, snd)
-		local fst_sourceid, snd_sourceid = fst.sourceid, snd.sourceid
-		if fst_sourceid < snd_sourceid then
+		local fst_id, snd_id = fst.id, snd.id
+		if fst_id < snd_id then
 			return true
 		end
-		if fst_sourceid == snd_sourceid then
+		if fst_id == snd_id then
 			local fst_line, snd_line = fst.line, snd.line
 			if fst_line < snd_line then
 				return true
@@ -102,13 +102,13 @@ local anchor_mt = {
 	---@param snd Anchor
 	---@return boolean
 	__eq = function(fst, snd)
-		return fst.sourceid == snd.sourceid and fst.line == snd.line and fst.char == snd.char
+		return fst.id == snd.id and fst.line == snd.line and fst.char == snd.char
 	end,
 	---@param self Anchor
 	---@return string
 	__tostring = function(self)
 		local start_line, start_char = self.line, self.char
-		return string_format("%s:%s:%s", tostring(self.sourceid), tostring(start_line), tostring(start_char))
+		return string_format("%s:%s:%s", tostring(self.id), tostring(start_line), tostring(start_char))
 	end,
 	__index = Anchor,
 }
@@ -253,13 +253,13 @@ end
 
 ---@param line integer
 ---@param char integer
----@param sourceid string
+---@param id string
 ---@return Anchor
-local function create_anchor(line, char, sourceid)
+local function create_anchor(line, char, id)
 	return setmetatable({
 		line = line,
 		char = char,
-		sourceid = sourceid,
+		id = id,
 	}, anchor_mt)
 end
 create_anchor = U.memoize(create_anchor, false)
@@ -326,7 +326,7 @@ local grammar = P {
 		local simple_anchor = create_anchor(
 			line_ctx.positions[line_index].line,
 			position - line_ctx.positions[line_index].pos + 1,
-			line_ctx.sourceid
+			line_ctx.id
 		)
 		return true, simple_anchor
 	end),
@@ -696,7 +696,7 @@ error: %s
 %s |%s^
 	]],
 		msg,
-		start_anchor.sourceid,
+		start_anchor.id,
 		start_anchor.line,
 		start_anchor.char,
 		linenum_wsp,
@@ -729,7 +729,7 @@ local function parse(input, filename)
 	end
 
 	local line_ctx = {
-		sourceid = filename,
+		id = filename,
 		positions = { create_line_position(1, 1) },
 	}
 	local furthest_forward_ctx = { start_anchor = nil }

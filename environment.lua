@@ -242,7 +242,7 @@ function environment:bind_local(binding)
 		error("(binding) tuple elim speculation failed! debugging this is left as an exercise to the maintainer")
 	elseif binding:is_annotated_lambda() then
 		local param_name, param_annotation, start_anchor, visible = binding:unwrap_annotated_lambda()
-		if not start_anchor or not start_anchor.sourceid then
+		if not start_anchor or not start_anchor.id then
 			print("binding", binding)
 			error "missing start_anchor for annotated lambda binding"
 		end

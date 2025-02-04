@@ -40,11 +40,11 @@ local function simplify_list(list, remove_comments)
 	end
 end
 
-local function create_anchor(line, char, sourceid)
-	if sourceid == nil then
-		sourceid = "inline"
+local function create_anchor(line, char, id)
+	if id == nil then
+		id = "inline"
 	end
-	return format.create_anchor(line, char, sourceid)
+	return format.create_anchor(line, char, id)
 end
 
 local function create_list(start_anchor, end_anchor, elements)
