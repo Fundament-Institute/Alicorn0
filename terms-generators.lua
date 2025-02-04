@@ -39,7 +39,10 @@ end
 ---@return ValueCheckFn
 local function metatable_equality(mt)
 	if type(mt) ~= "table" then
-		error("trying to define metatable equality to something that isn't a metatable (possible typo?)")
+		error(
+			"trying to define metatable equality to something that isn't a metatable (possible typo?): "
+				.. debug.traceback(tostring(mt))
+		)
 	end
 	return function(val)
 		return getmetatable(val) == mt
@@ -84,11 +87,13 @@ local function validate_params_types(kind, params, params_types)
 		local param_type = params_types[i]
 		if type(param_type) ~= "table" or type(param_type.value_check) ~= "function" then
 			error(
-				"trying to set a parameter type to something that isn't a type, in constructor "
-					.. kind
-					.. ", parameter "
-					.. v
-					.. " (possible typo?)"
+				debug.traceback(
+					"trying to set a parameter type to something that isn't a type, in constructor "
+						.. kind
+						.. ", parameter "
+						.. v
+						.. " (possible typo?)"
+				)
 			)
 		end
 		if params_set[v] then
@@ -123,7 +128,7 @@ local function gen_record(self, cons, kind, params_with_types)
 	local params, params_types = parse_params_with_types(params_with_types)
 	validate_params_types(kind, params, params_types)
 	local function build_record(...)
-		local args = { ... }
+		local args = table.pack(...)
 		local val = {
 			kind = kind,
 		}
@@ -134,7 +139,9 @@ local function gen_record(self, cons, kind, params_with_types)
 				print("value of parameter " .. v .. ": (follows)")
 				p(argi)
 				print("expected type of parameter " .. v .. " is :", params_types[i])
-				error("wrong argument type passed to constructor " .. kind .. ", parameter '" .. v .. "'")
+				error(
+					debug.traceback("wrong argument type passed to constructor " .. kind .. ", parameter '" .. v .. "'")
+				)
 			end
 			val[v] = argi
 		end
@@ -284,6 +291,111 @@ local function define_enum(self, name, variants)
 	self:derive(derivers.as)
 	self:derive(derivers.diff)
 	return self
+end
+
+---@param s string
+---@param delim string
+---@return string[]
+local function split_delim(s, delim)
+	local subs = {}
+	-- This might have an extra blank match at the end but we actually don't care in this case
+	for sub in s:gmatch("[^" .. delim .. "]+") do
+		table.insert(subs, sub)
+	end
+	return subs
+end
+
+---@param flex UndefinedType
+---@param flex_name string
+---@param fn_replace fun(tag: string, variant: Type) : Type
+---@param fn_unify fun(args: any[], types: Type[]) : string, any[]
+---@param types { [string]: UndefinedType }
+---@param names { [string]: string }
+---@param variants Variants
+local function define_multi_enum(flex, flex_name, fn_replace, fn_unify, types, names, variants)
+	---@type {[string]: Variants }
+	local keyed_variants = {}
+	---@type Variants
+	local flex_variants = {}
+	for k, v in pairs(types) do
+		keyed_variants[k] = {}
+		table.insert(flex_variants, { k, { k, v } })
+	end
+
+	---@type {[string]: (string|Type)[]}
+	local forward = {}
+
+	for i, v in ipairs(variants) do
+		local vname, vtag = table.unpack(split_delim(v[1], "$"))
+		local vparams_with_types = v[2]
+		if vtag == nil then
+			error("Missing tag on " .. vname)
+		end
+
+		if vtag == "flex" then
+			forward[vname] = vparams_with_types
+			for k, _ in pairs(types) do
+				local fix_variants = {}
+				for i, ty in ipairs(vparams_with_types) do
+					if (i % 2) == 0 and fn_replace then
+						table.insert(fix_variants, fn_replace(k, ty))
+					else
+						table.insert(fix_variants, ty)
+					end
+				end
+				table.insert(keyed_variants[k], { vname, fix_variants })
+			end
+		else
+			if keyed_variants[vtag] == nil then
+				error("Unknown tag: " .. vtag)
+			end
+			table.insert(keyed_variants[vtag], { vname, vparams_with_types })
+		end
+	end
+
+	for k, v in pairs(types) do
+		v:define_enum(names[k], keyed_variants[k])
+	end
+
+	flex:define_enum(flex_name, flex_variants)
+
+	for k, list in pairs(forward) do
+		local vkind = flex_name .. "." .. k
+		local params, params_types = parse_params_with_types(list)
+		validate_params_types(vkind, params, params_types)
+		flex[k] = function(...)
+			local args = table.pack(...)
+			for i, v in ipairs(params) do
+				if params_types[i].value_check(args[i]) ~= true then
+					error(
+						debug.traceback(
+							"wrong argument type passed to constructor " .. kind .. ", parameter '" .. v .. "'"
+						)
+					)
+				end
+			end
+			local tag, unified_args = fn_unify(args, params_types)
+			local subtype = types[tag]
+			local inner = subtype[k](table.unpack(unified_args))
+			return flex[tag](inner)
+		end
+	end
+
+	--[[local lookup = {}
+	for k, v in pairs(types) do
+		lookup[flex_name .. "." .. k] = k
+	end
+
+	for _, k in ipairs(forward) do
+		local derivers = { "is_", "unwrap_", "as_" }
+
+		for _, v in ipairs(derives) do
+			flex[v .. k] = function(self, ...)
+				local child = self[ lookup[self.kind] ]
+				child[v .. k](child, ...)
+			end
+		end
+	end]]
 end
 
 ---@class ForeignType: Type
@@ -866,7 +978,10 @@ end
 ---@return ArrayType
 local function define_array(self, value_type)
 	if type(value_type) ~= "table" or type(value_type.value_check) ~= "function" then
-		error("trying to set the value type to something that isn't a type (possible typo?)")
+		error(
+			"trying to set the value type to something that isn't a type (possible typo?): "
+				.. debug.traceback(tostring(value_type))
+		)
 	end
 
 	setmetatable(self, array_type_mt)
@@ -960,6 +1075,7 @@ local terms_gen = {
 	builtin_function = gen_builtin("function"),
 	builtin_table = gen_builtin("table"),
 	array_type_mt = array_type_mt,
+	define_multi_enum = define_multi_enum,
 	any_lua_type = define_foreign({}, function()
 		return true
 	end, "any"),

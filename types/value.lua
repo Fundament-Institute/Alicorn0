@@ -183,11 +183,11 @@ function value:unwrap_record_desc_type() end
 function value:as_record_desc_type() end
 ---@return boolean
 function value:is_record_extend_stuck() end
----@return neutral_value base
+---@return stuck_value base
 ---@return MapValue extension
 function value:unwrap_record_extend_stuck() end
 ---@return boolean
----@return neutral_value base
+---@return stuck_value base
 ---@return MapValue extension
 function value:as_record_extend_stuck() end
 ---@return boolean
@@ -250,10 +250,10 @@ function value:unwrap_prop() end
 function value:as_prop() end
 ---@return boolean
 function value:is_neutral() end
----@return neutral_value neutral
+---@return stuck_value neutral
 function value:unwrap_neutral() end
 ---@return boolean
----@return neutral_value neutral
+---@return stuck_value neutral
 function value:as_neutral() end
 ---@return boolean
 function value:is_host_value() end
@@ -468,7 +468,7 @@ function value:as_union_type() end
 ---@field record_value fun(fields: MapValue): value
 ---@field record_type fun(desc: value): value
 ---@field record_desc_type fun(universe: value): value
----@field record_extend_stuck fun(base: neutral_value, extension: MapValue): value
+---@field record_extend_stuck fun(base: stuck_value, extension: MapValue): value
 ---@field object_value fun(methods: MapValue, capture: RuntimeContext): value
 ---@field object_type fun(desc: value): value
 ---@field level_type value
@@ -477,7 +477,7 @@ function value:as_union_type() end
 ---@field level fun(level: number): value
 ---@field star fun(level: number, depth: number): value
 ---@field prop fun(level: number): value
----@field neutral fun(neutral: neutral_value): value
+---@field neutral fun(neutral: stuck_value): value
 ---@field host_value fun(host_value: any): value
 ---@field host_type_type value
 ---@field host_number_type value

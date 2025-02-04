@@ -13,7 +13,7 @@ local visibility = terms.visibility
 local purity = terms.purity
 local result_info = terms.result_info
 local value = terms.value
-local neutral_value = terms.neutral_value
+local stuck_value = terms.stuck_value
 local host_syntax_type = terms.host_syntax_type
 local host_environment_type = terms.host_environment_type
 local host_typed_term_type = terms.host_typed_term_type
@@ -183,7 +183,7 @@ local function FunctionRelation(srel)
 				--.. " caused by: "
 				--.. U.strip_ansi(tostring(cause)),
 			}
-			local u = value.neutral(neutral_value.free(free.unique(inner_info)))
+			local u = flex_value.stuck(stuck_value.free(free.unique(inner_info)))
 
 			local applied_val = apply_value(val, u, lctx)
 			local applied_use = apply_value(use, u, rctx)
@@ -434,7 +434,7 @@ local TupleDescRelation = setmetatable({
 			-- checking, but doing it naively won't work because the unique (representing the tuple
 			-- value) should be the same across the whole desc
 			local unique = { debug = "TupleDescRelation.constrain" .. U.here() }
-			local placeholder = value.neutral(neutral_value.free(free.unique(unique)))
+			local placeholder = flex_value.stuck(stuck_value.free(free.unique(unique)))
 			local ok, tuple_types_val, tuple_types_use, tuple_vals, n =
 				infer_tuple_type_unwrapped2(value.tuple_type(val), lctx, value.tuple_type(use), lctx, placeholder)
 
@@ -696,7 +696,7 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 	elseif val:is_closure() then
 		local param_name, code, capture, debuginfo = val:unwrap_closure()
 		local unique = { debug = "substitute_inner, val:is_closure" .. U.here() }
-		local arg = value.neutral(neutral_value.free(free.unique(unique)))
+		local arg = flex_value.stuck(stuck_value.free(free.unique(unique)))
 		local resval = apply_value(val, arg, ambient_typechecking_context)
 		--print("applied closure during substitution: (value term follows)")
 		--print(val)
@@ -836,28 +836,28 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		if nval:is_tuple_element_access_stuck() then
 			local subject, index = nval:unwrap_tuple_element_access_stuck()
 			local subject_term =
-				substitute_inner(value.neutral(subject), mappings, context_len, ambient_typechecking_context)
+				substitute_inner(flex_value.stuck(subject), mappings, context_len, ambient_typechecking_context)
 			return typed_term.tuple_element_access(subject_term, index)
 		end
 
 		if nval:is_host_unwrap_stuck() then
 			local boxed = nval:unwrap_host_unwrap_stuck()
 			return typed_term.host_unwrap(
-				substitute_inner(value.neutral(boxed), mappings, context_len, ambient_typechecking_context)
+				substitute_inner(flex_value.stuck(boxed), mappings, context_len, ambient_typechecking_context)
 			)
 		end
 
 		if nval:is_host_wrap_stuck() then
 			local to_wrap = nval:unwrap_host_wrap_stuck()
 			return typed_term.host_wrap(
-				substitute_inner(value.neutral(to_wrap), mappings, context_len, ambient_typechecking_context)
+				substitute_inner(flex_value.stuck(to_wrap), mappings, context_len, ambient_typechecking_context)
 			)
 		end
 
 		if nval:is_host_unwrap_stuck() then
 			local to_unwrap = nval:unwrap_host_unwrap_stuck()
 			return typed_term.host_unwrap(
-				substitute_inner(value.neutral(to_unwrap), mappings, context_len, ambient_typechecking_context)
+				substitute_inner(flex_value.stuck(to_unwrap), mappings, context_len, ambient_typechecking_context)
 			)
 		end
 
@@ -865,7 +865,7 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 			local fn, arg = nval:unwrap_host_application_stuck()
 			return typed_term.application(
 				typed_term.literal(value.host_value(fn)),
-				substitute_inner(value.neutral(arg), mappings, context_len, ambient_typechecking_context)
+				substitute_inner(flex_value.stuck(arg), mappings, context_len, ambient_typechecking_context)
 			)
 		end
 
@@ -877,7 +877,7 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 				local elem_value = typed_term.literal(value.host_value(elem))
 				elems:append(elem_value)
 			end
-			elems:append(substitute_inner(value.neutral(stuck), mappings, context_len, ambient_typechecking_context))
+			elems:append(substitute_inner(flex_value.stuck(stuck), mappings, context_len, ambient_typechecking_context))
 			for _, elem in trailing:ipairs() do
 				elems:append(substitute_inner(elem, mappings, context_len, ambient_typechecking_context))
 			end
@@ -890,7 +890,7 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		if nval:is_host_if_stuck() then
 			local subject, consequent, alternate = nval:unwrap_host_if_stuck()
 			local subject =
-				substitute_inner(value.neutral(subject), mappings, context_len, ambient_typechecking_context)
+				substitute_inner(flex_value.stuck(subject), mappings, context_len, ambient_typechecking_context)
 			local consequent = substitute_inner(consequent, mappings, context_len, ambient_typechecking_context)
 			local alternate = substitute_inner(alternate, mappings, context_len, ambient_typechecking_context)
 			return typed_term.host_if(subject, consequent, alternate)
@@ -899,7 +899,7 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		if nval:is_application_stuck() then
 			local fn, arg = nval:unwrap_application_stuck()
 			return typed_term.application(
-				substitute_inner(value.neutral(fn), mappings, context_len, ambient_typechecking_context),
+				substitute_inner(flex_value.stuck(fn), mappings, context_len, ambient_typechecking_context),
 				substitute_inner(arg, mappings, context_len, ambient_typechecking_context)
 			)
 		end
@@ -1171,7 +1171,7 @@ local function upcast(ctx, typ, cause)
 				--TODO: speculate on tuple type and reformulate extraction in terms of constraining
 				if boundstype:is_tuple_type() then
 					local desc = boundstype:unwrap_tuple_type()
-					local member = extract_desc_nth(value.neutral(subject), desc, elem)
+					local member = extract_desc_nth(flex_value.stuck(subject), desc, elem)
 					--TODO: level srel? speculate on member types?
 					if member:is_star() then
 						local level, depth = member:unwrap_star()
@@ -1434,7 +1434,7 @@ add_comparer("value.pi", "value.pi", function(lctx, a, rctx, b, cause)
 		a_param_type,
 		nestcause("pi function parameters", cause, b_param_type, a_param_type, rctx, lctx)
 	)
-	--local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
+	--local unique_placeholder = terms.flex_value.stuck(terms.stuck_value.free(terms.free.unique({})))
 	--local a_res = apply_value(a_result_type, unique_placeholder)
 	--local b_res = apply_value(b_result_type, unique_placeholder)
 	--typechecker_state:queue_constrain(a_res, FunctionRelation(UniverseOmegaRelation), b_res, "pi function results")
@@ -1472,7 +1472,7 @@ add_comparer("value.host_function_type", "value.host_function_type", function(lc
 		a_param_type,
 		nestcause("host function parameters", cause, b_param_type, a_param_type, rctx, lctx)
 	)
-	--local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
+	--local unique_placeholder = terms.flex_value.stuck(terms.stuck_value.free(terms.free.unique({})))
 	--local a_res = apply_value(a_result_type, unique_placeholder)
 	--local b_res = apply_value(b_result_type, unique_placeholder)
 	--typechecker_state:queue_constrain(b_res, FunctionRelation(UniverseOmegaRelation), a_res, "host function parameters")
@@ -2007,7 +2007,7 @@ function apply_value(f, arg, ambient_typechecking_context)
 		--return U.notail(U.tag("evaluate", { code = code }, evaluate, code, capture:append(arg)))
 		return evaluate(code, capture:append(arg, param_name, debuginfo), ambient_typechecking_context)
 	elseif f:is_neutral() then
-		return value.neutral(neutral_value.application_stuck(f:unwrap_neutral(), arg))
+		return flex_value.stuck(stuck_value.application_stuck(f:unwrap_neutral(), arg))
 	elseif f:is_host_value() then
 		local host_func_impl = f:unwrap_host_value()
 		if host_func_impl == nil then
@@ -2017,7 +2017,7 @@ function apply_value(f, arg, ambient_typechecking_context)
 			local arg_elements = arg:unwrap_host_tuple_value()
 			return value.host_tuple_value(host_array(host_func_impl(arg_elements:unpack())))
 		elseif arg:is_neutral() then
-			return value.neutral(neutral_value.host_application_stuck(host_func_impl, arg:unwrap_neutral()))
+			return flex_value.stuck(stuck_value.host_application_stuck(host_func_impl, arg:unwrap_neutral()))
 		else
 			error("apply_value, is_host_value, arg: expected a host tuple argument")
 		end
@@ -2055,14 +2055,14 @@ local function index_tuple_value(subject, index)
 			if leading:len() >= index then
 				return terms.value.host_value(leading[index])
 			elseif leading:len() + 1 == index then
-				return terms.value.neutral(stuck_elem)
+				return terms.flex_value.stuck(stuck_elem)
 			elseif leading:len() + 1 + trailing:len() >= index then
 				return trailing[index - leading:len() - 1]
 			else
 				error "tuple index out of bounds"
 			end
 		end
-		return value.neutral(neutral_value.tuple_element_access_stuck(inner, index))
+		return flex_value.stuck(stuck_value.tuple_element_access_stuck(inner, index))
 	end
 	print(index, subject)
 	error("Should be unreachable???")
@@ -2072,7 +2072,7 @@ local host_tuple_make_prefix_mt = {
 	__call = function(self, i)
 		local prefix_elements = value_array()
 		for x = 1, i do
-			prefix_elements:append(value.neutral(neutral_value.tuple_element_access_stuck(self.subject_neutral, x)))
+			prefix_elements:append(flex_value.stuck(stuck_value.tuple_element_access_stuck(self.subject_neutral, x)))
 		end
 		return value.tuple_value(prefix_elements)
 	end,
@@ -2100,7 +2100,7 @@ local function make_tuple_prefix(subject_type, subject_value)
 			function make_prefix(i)
 				local prefix_elements = value_array()
 				for x = 1, i do
-					prefix_elements:append(value.neutral(neutral_value.tuple_element_access_stuck(subject_neutral, x)))
+					prefix_elements:append(flex_value.stuck(stuck_value.tuple_element_access_stuck(subject_neutral, x)))
 				end
 				return value.tuple_value(prefix_elements)
 			end
@@ -2397,7 +2397,7 @@ function infer_impl(
 			return false, err
 		end
 		local sort_arg_unique =
-			value.neutral(neutral_value.free(free.unique({ debug = "pi infer result type type arg" })))
+			flex_value.stuck(stuck_value.free(free.unique({ debug = "pi infer result type type arg" })))
 		local result_type_result_type_result =
 			apply_value(result_type_result_type, sort_arg_unique, typechecking_context)
 		local sort =
@@ -2729,7 +2729,7 @@ function infer_impl(
 			function make_prefix(field_names)
 				local prefix_fields = string_value_map()
 				for _, v in field_names:ipairs() do
-					prefix_fields[v] = value.neutral(neutral_value.record_field_access_stuck(subject_neutral, v))
+					prefix_fields[v] = flex_value.stuck(stuck_value.record_field_access_stuck(subject_neutral, v))
 				end
 				return true, value.record_value(prefix_fields)
 			end
@@ -3489,7 +3489,7 @@ function evaluate_impl(typed_term, runtime_context, ambient_typechecking_context
 			end
 		end
 		if stuck then
-			return value.neutral(neutral_value.host_tuple_stuck(new_elements, stuck_element, trailing_values))
+			return flex_value.stuck(stuck_value.host_tuple_stuck(new_elements, stuck_element, trailing_values))
 		else
 			return value.host_tuple_value(new_elements)
 		end
@@ -3608,7 +3608,7 @@ function evaluate_impl(typed_term, runtime_context, ambient_typechecking_context
 			local subject_neutral = subject_value:unwrap_neutral()
 			for _, v in field_names:ipairs() do
 				inner_context = inner_context:append(
-					value.neutral(neutral_value.record_field_access_stuck(subject_neutral, v)),
+					flex_value.stuck(stuck_value.record_field_access_stuck(subject_neutral, v)),
 					v,
 					var_debug(v, U.anchor_here())
 				)
@@ -3651,13 +3651,13 @@ function evaluate_impl(typed_term, runtime_context, ambient_typechecking_context
 			elseif mechanism_value:is_neutral() then
 				-- objects and enums are categorical duals
 				local mechanism_neutral = mechanism_value:unwrap_neutral()
-				return value.neutral(neutral_value.object_elim_stuck(subject_value, mechanism_neutral))
+				return flex_value.stuck(stuck_value.object_elim_stuck(subject_value, mechanism_neutral))
 			else
 				error("evaluate, is_enum_elim, is_enum_value, mechanism_value: expected an object")
 			end
 		elseif subject_value:is_neutral() then
 			local subject_neutral = subject_value:unwrap_neutral()
-			return value.neutral(neutral_value.enum_elim_stuck(mechanism_value, subject_neutral))
+			return flex_value.stuck(stuck_value.enum_elim_stuck(mechanism_value, subject_neutral))
 		else
 			error("evaluate, is_enum_elim, subject_value: expected an enum")
 		end
@@ -3747,13 +3747,13 @@ function evaluate_impl(typed_term, runtime_context, ambient_typechecking_context
 			elseif mechanism_value:is_neutral() then
 				-- objects and enums are categorical duals
 				local mechanism_neutral = mechanism_value:unwrap_neutral()
-				return value.neutral(neutral_value.enum_elim_stuck(subject_value, mechanism_neutral))
+				return flex_value.stuck(stuck_value.enum_elim_stuck(subject_value, mechanism_neutral))
 			else
 				error("evaluate, is_object_elim, is_object_value, mechanism_value: expected an enum")
 			end
 		elseif subject_value:is_neutral() then
 			local subject_neutral = subject_value:unwrap_neutral()
-			return value.neutral(neutral_value.object_elim_stuck(mechanism_value, subject_neutral))
+			return flex_value.stuck(stuck_value.object_elim_stuck(mechanism_value, subject_neutral))
 		else
 			error("evaluate, is_object_elim, subject_value: expected an object")
 		end
@@ -3788,9 +3788,9 @@ function evaluate_impl(typed_term, runtime_context, ambient_typechecking_context
 			local nval = content_val:unwrap_neutral()
 			if nval:is_host_unwrap_stuck() then
 				local inner_subj = nval:unwrap_host_unwrap_stuck()
-				return value.neutral(inner_subj)
+				return flex_value.stuck(inner_subj)
 			end
-			return value.neutral(neutral_value.host_wrap_stuck(nval))
+			return flex_value.stuck(stuck_value.host_wrap_stuck(nval))
 		end
 		return value.host_value(content_val)
 	elseif typed_term:is_host_unstrict_wrap() then
@@ -3811,9 +3811,9 @@ function evaluate_impl(typed_term, runtime_context, ambient_typechecking_context
 		elseif unwrap_val:is_neutral() then
 			local nval = unwrap_val:unwrap_neutral()
 			if nval:is_host_wrap_stuck() then
-				return value.neutral(nval:unwrap_host_wrap_stuck())
+				return flex_value.stuck(nval:unwrap_host_wrap_stuck())
 			else
-				return value.neutral(neutral_value.host_unwrap_stuck(nval))
+				return flex_value.stuck(stuck_value.host_unwrap_stuck(nval))
 			end
 		else
 			print("unrecognized value in unbox", unwrap_val)
@@ -3830,7 +3830,7 @@ function evaluate_impl(typed_term, runtime_context, ambient_typechecking_context
 			return unwrap_val:unwrap_host_value()
 		elseif unwrap_val:is_neutral() then
 			local nval = unwrap_val:unwrap_neutral()
-			return value.neutral(neutral_value.host_unwrap_stuck(nval))
+			return flex_value.stuck(stuck_value.host_unwrap_stuck(nval))
 		else
 			print("unrecognized value in unbox", unwrap_val)
 			error "invalid value in unbox, must be host_value or neutral"
@@ -3858,7 +3858,7 @@ function evaluate_impl(typed_term, runtime_context, ambient_typechecking_context
 			end
 			local cval = evaluate(consequent, inner_context_c, ambient_typechecking_context)
 			local aval = evaluate(alternate, inner_context_a, ambient_typechecking_context)
-			return value.neutral(neutral_value.host_if_stuck(sval_neutral, cval, aval))
+			return flex_value.stuck(stuck_value.host_if_stuck(sval_neutral, cval, aval))
 		else
 			error("subject of host_if must be host_value or neutral")
 		end
@@ -3890,7 +3890,7 @@ function evaluate_impl(typed_term, runtime_context, ambient_typechecking_context
 			return value.host_value(res)
 		elseif source_val:is_neutral() then
 			local source_neutral = source_val:unwrap_neutral()
-			return value.neutral(neutral_value.host_intrinsic_stuck(source_neutral, start_anchor))
+			return flex_value.stuck(stuck_value.host_intrinsic_stuck(source_neutral, start_anchor))
 		else
 			error "Tried to load an intrinsic with something that isn't a string"
 		end
@@ -5366,7 +5366,7 @@ function TypeCheckerState:constrain_induce_call(edge, rel)
 		lvalue:is_neutral() and lvalue:unwrap_neutral():is_application_stuck()
 	then
 		local f, arg = lvalue:unwrap_neutral():unwrap_application_stuck()
-		local l = self:check_value(value.neutral(f), TypeCheckerTag.VALUE, lctx)
+		local l = self:check_value(flex_value.stuck(f), TypeCheckerTag.VALUE, lctx)
 		U.append(
 			self.pending,
 			EdgeNotif.CallLeft(
@@ -5378,7 +5378,7 @@ function TypeCheckerState:constrain_induce_call(edge, rel)
 				nestcause(
 					"Inside constrain_induce_call ltag (maybe wrong constrain type?)",
 					edge.cause,
-					value.neutral(f),
+					flex_value.stuck(f),
 					rvalue,
 					lctx,
 					rctx
@@ -5391,7 +5391,7 @@ function TypeCheckerState:constrain_induce_call(edge, rel)
 		rvalue:is_neutral() and rvalue:unwrap_neutral():is_application_stuck()
 	then
 		local f, arg = rvalue:unwrap_neutral():unwrap_application_stuck()
-		local r = self:check_value(value.neutral(f), TypeCheckerTag.USAGE, rctx)
+		local r = self:check_value(flex_value.stuck(f), TypeCheckerTag.USAGE, rctx)
 		U.append(
 			self.pending,
 			EdgeNotif.CallRight(
@@ -5404,7 +5404,7 @@ function TypeCheckerState:constrain_induce_call(edge, rel)
 					"Inside constrain_induce_call rtag (maybe wrong constrain type?)",
 					edge.cause,
 					lvalue,
-					value.neutral(f),
+					flex_value.stuck(f),
 					lctx,
 					rctx
 				)

@@ -65,8 +65,9 @@ function FibonacciBuffer:append(value)
 end
 
 -- one-based!!!
+---@generic T
 ---@param index integer
----@return any
+---@return T
 function FibonacciBuffer:get(index)
 	for _, p in ipairs(self) do
 		local length = p.n
@@ -79,8 +80,9 @@ function FibonacciBuffer:get(index)
 	return nil
 end
 
+---@generic T
 ---@param index integer
----@param value any
+---@param value T
 ---@return FibonacciBuffer
 function FibonacciBuffer:set(index, value)
 	if index < 1 then

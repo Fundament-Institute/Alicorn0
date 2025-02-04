@@ -490,7 +490,7 @@ local typed_term_override_pretty = {}
 ---@class ValueOverridePretty : value
 local value_override_pretty = {}
 
----@class NeutralValueOverridePretty : neutral_value
+---@class NeutralValueOverridePretty : stuck_value
 local neutral_value_override_pretty = {}
 
 ---@param pp PrettyPrint
@@ -1928,7 +1928,7 @@ function value_override_pretty:neutral(pp)
 	if neutral:is_free() and neutral:unwrap_free():is_metavariable() then
 		pp:any(neutral)
 	else
-		pp:record("value.neutral", { { "neutral", neutral } })
+		pp:record("flex_value.stuck", { { "neutral", neutral } })
 	end
 end
 
@@ -1947,7 +1947,7 @@ function neutral_value_override_pretty:free(pp)
 
 		pp:_exit()
 	else
-		pp:record("neutral_value.free", { { "free", free } })
+		pp:record("stuck_value.free", { { "free", free } })
 	end
 end
 

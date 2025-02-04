@@ -2,7 +2,7 @@ local gen = require "terms-generators"
 local derivers = require "derivers"
 local terms = require "terms"
 
-local value = terms.value
+local flex_value = terms.flex_value
 
 ---@module "types.edgenotif"
 local EdgeNotif = gen.declare_type()
@@ -20,7 +20,7 @@ EdgeNotif:define_enum("edgenotif", {
 	} },
 	{ "CallLeft", {
 		"left",  gen.builtin_number,
-		"arg",  value,
+		"arg",  flex_value,
 		"rel",  SubtypeRelation,
 		"right", gen.builtin_number,
 		"shallowest_block", gen.builtin_number,
@@ -30,7 +30,7 @@ EdgeNotif:define_enum("edgenotif", {
 		"left",  gen.builtin_number,
 		"rel",  SubtypeRelation,
 		"right", gen.builtin_number,
-		"arg",  value,
+		"arg",  flex_value,
 		"shallowest_block", gen.builtin_number,
 		"cause",  terms.constraintcause,
 	} },

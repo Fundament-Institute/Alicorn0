@@ -18,10 +18,10 @@ function block_purity:unwrap_pure() end
 function block_purity:as_pure() end
 ---@return boolean
 function block_purity:is_dependent() end
----@return value val
+---@return flex_value val
 function block_purity:unwrap_dependent() end
 ---@return boolean
----@return value val
+---@return flex_value val
 function block_purity:as_dependent() end
 ---@return boolean
 function block_purity:is_inherit() end
@@ -34,6 +34,6 @@ function block_purity:as_inherit() end
 ---@field define_enum fun(self: block_purityType, name: string, variants: Variants): block_purityType
 ---@field effectful block_purity
 ---@field pure block_purity
----@field dependent fun(val: value): block_purity
+---@field dependent fun(val: flex_value): block_purity
 ---@field inherit block_purity
 return {}

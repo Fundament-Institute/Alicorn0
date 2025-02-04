@@ -29,16 +29,18 @@ local inferrable_term = gen.declare_type()
 local typed_term = gen.declare_type()
 ---@module "types.free"
 local free = gen.declare_type()
----@module "types.value"
-local value = gen.declare_type()
----@module "types.neutral_value"
-local neutral_value = gen.declare_type()
+---@module "types.strict_value"
+local strict_value = gen.declare_type()
+---@module "types.stuck_value"
+local stuck_value = gen.declare_type()
+---@module "types.flex_value"
+local flex_value = gen.declare_type()
+---@module "types.flex_runtime_context_type"
+local flex_runtime_context_type = gen.declare_type()
 ---@module "types.binding"
 local binding = gen.declare_type()
 ---@module "types.expression_goal"
 local expression_goal = gen.declare_type()
-
-local runtime_context_mt
 
 ---@class Metavariable
 ---@field value integer a unique key that denotes this metavariable in the graph
@@ -47,12 +49,9 @@ local runtime_context_mt
 ---@field block_level integer this probably shouldn't be inside the metavariable
 local Metavariable = {}
 
----@return value
+---@return flex_value
 function Metavariable:as_value()
-	return value.neutral(neutral_value.free(free.metavariable(self)))
-	--local canonical = self:get_canonical()
-	--local canonical_info = getmvinfo(canonical.id, self.typechecker_state.mvs)
-	--return canonical_info.bound_value or value.neutral(neutral_value.free(free.metavariable(canonical)))
+	return flex_value.stuck(stuck_value.free(free.metavariable(self)))
 end
 
 local metavariable_mt = { __index = Metavariable }
@@ -68,18 +67,26 @@ local var_debug = gen.declare_record("var_debug", {
 	anchor_type,
 })
 
----@class RuntimeContext
+---@class (exact) RuntimeContextBase
 ---@field bindings FibonacciBuffer
-local RuntimeContext = {}
+local RuntimeContextBase = {}
 
-function RuntimeContext:dump_names()
+-- without this, some flex_value.closure comparisons fail erroneously
+---@class RuntimeContextBinding<T>: { name: string, val: T, debuginfo: debuginfo }
+local RuntimeContextBinding = {
+	__eq = function(l, r)
+		return l.name == r.name and l.val == r.val
+	end,
+}
+
+function RuntimeContextBase:dump_names()
 	for i = 1, self.bindings:len() do
 		print(i, self.bindings:get(i).name)
 	end
 end
 
 ---@return string
-function RuntimeContext:format_names()
+function RuntimeContextBase:format_names()
 	local msg = ""
 	for i = 1, self.bindings:len() do
 		msg = msg .. tostring(i) .. "\t" .. self.bindings:get(i).name .. "\n"
@@ -87,10 +94,11 @@ function RuntimeContext:format_names()
 	return msg
 end
 
+---@generic T
 ---@param index integer
----@return value
----@return var_debug
-function RuntimeContext:get(index)
+---@return T
+---@return var_debug?
+function RuntimeContextBase:get(index)
 	local binding = self.bindings:get(index)
 	if binding == nil then
 		return nil
@@ -98,21 +106,12 @@ function RuntimeContext:get(index)
 	return binding.val, binding.debuginfo
 end
 
--- without this, some value.closure comparisons fail erroneously
-local RuntimeContextBinding = {
-	__eq = function(l, r)
-		return l.name == r.name and l.val == r.val
-	end,
-}
-
----@param v value
+---@generic T
+---@param v T
 ---@param name string?
 ---@param debuginfo var_debug
----@return RuntimeContext
-function RuntimeContext:append(v, name, debuginfo)
-	if value.value_check(v) ~= true then
-		error("RuntimeContext:append v must be a value")
-	end
+---@return RuntimeContextBase
+function RuntimeContextBase:append(v, name, debuginfo)
 	if debuginfo == nil then
 		error(debug.traceback())
 	end
@@ -126,51 +125,179 @@ function RuntimeContext:append(v, name, debuginfo)
 			setmetatable({ name = name, val = v, debuginfo = debuginfo }, RuntimeContextBinding)
 		),
 	}
-	return setmetatable(copy, runtime_context_mt)
+	return setmetatable(copy, getmetatable(self))
 end
 
+---@generic T
 ---@param index integer
----@param v value
----@return RuntimeContext
-function RuntimeContext:set(index, v)
-	if value.value_check(v) ~= true then
-		error("RuntimeContext:set v must be a value")
-	end
+---@param v T
+---@return RuntimeContextBase
+function RuntimeContextBase:set(index, v)
 	local old = self.bindings:get(index)
 	local new = setmetatable({ name = old.name, val = v }, RuntimeContextBinding)
 	local copy = { provenance = self, bindings = self.bindings:set(index, new) }
-	return setmetatable(copy, runtime_context_mt)
+	return setmetatable(copy, getmetatable(self))
 end
 
----@param other RuntimeContext
+---@param other RuntimeContextBase
 ---@return boolean
-function RuntimeContext:eq(other)
+function RuntimeContextBase:eq(other)
 	local omt = getmetatable(other)
-	if omt ~= runtime_context_mt then
+	if omt ~= getmetatable(self) then
 		return false
 	end
 	return self.bindings == other.bindings
 end
 
-runtime_context_mt = {
-	__index = RuntimeContext,
-	__eq = RuntimeContext.eq,
+-- TODO: Is there a way to generate this somehow? Below code was created via replacing "strict" with stuck or flex
+------------------ BEGIN RUNTIME CONTEXTS
+
+---@class StrictRuntimeContext : RuntimeContextBase
+local StrictRuntimeContext = U.shallow_copy(RuntimeContextBase)
+
+---@param index integer
+---@return strict_value
+---@return var_debug?
+function StrictRuntimeContext:get(index)
+	return RuntimeContextBase.get(self, index)
+end
+
+---@param v strict_value
+---@param name string?
+---@param debuginfo var_debug
+---@return StrictRuntimeContext
+function StrictRuntimeContext:append(v, name, debuginfo)
+	if strict_value.value_check(v) ~= true then
+		error("StrictRuntimeContext:append v must be a strict_value")
+	end
+	---@type StrictRuntimeContext
+	return RuntimeContextBase.append(self, v, name, debuginfo)
+end
+
+---@param index integer
+---@param v strict_value
+---@return StrictRuntimeContext
+function StrictRuntimeContext:set(index, v)
+	if strict_value.value_check(v) ~= true then
+		error("StrictRuntimeContext:set v must be a strict_value")
+	end
+	---@type StrictRuntimeContext
+	return RuntimeContextBase.set(self, index, v)
+end
+
+local strict_runtime_context_mt = {
+	__index = StrictRuntimeContext,
+	__eq = StrictRuntimeContext.eq,
 	__tostring = function(t)
-		return "RuntimeContext with " .. t.bindings:len() .. " bindings."
+		return "StrictRuntimeContext with " .. t.bindings:len() .. " bindings."
 	end,
 }
 
----@return RuntimeContext
-local function runtime_context()
-	return setmetatable({ bindings = fibbuf() }, runtime_context_mt)
+---@return StrictRuntimeContext
+local function strict_runtime_context()
+	return setmetatable({ bindings = fibbuf() }, strict_runtime_context_mt)
 end
+
+---@class StuckRuntimeContext : RuntimeContextBase
+local StuckRuntimeContext = U.shallow_copy(RuntimeContextBase)
+
+---@param index integer
+---@return stuck_value
+---@return var_debug?
+function StuckRuntimeContext:get(index)
+	return RuntimeContextBase.get(self, index)
+end
+
+---@param v stuck_value
+---@param name string?
+---@param debuginfo var_debug
+---@return StuckRuntimeContext
+function StuckRuntimeContext:append(v, name, debuginfo)
+	if stuck_value.value_check(v) ~= true then
+		error("StuckRuntimeContext:append v must be a stuck_value")
+	end
+	---@type StuckRuntimeContext
+	return RuntimeContextBase.append(self, v, name, debuginfo)
+end
+
+---@param index integer
+---@param v stuck_value
+---@return StuckRuntimeContext
+function StuckRuntimeContext:set(index, v)
+	if stuck_value.value_check(v) ~= true then
+		error("StuckRuntimeContext:set v must be a stuck_value")
+	end
+	---@type StuckRuntimeContext
+	return RuntimeContextBase.set(self, index, v)
+end
+
+local stuck_runtime_context_mt = {
+	__index = StuckRuntimeContext,
+	__eq = StuckRuntimeContext.eq,
+	__tostring = function(t)
+		return "StuckRuntimeContext with " .. t.bindings:len() .. " bindings."
+	end,
+}
+
+---@return StuckRuntimeContext
+local function stuck_runtime_context()
+	return setmetatable({ bindings = fibbuf() }, stuck_runtime_context_mt)
+end
+
+---@class FlexRuntimeContext : RuntimeContextBase
+local FlexRuntimeContext = U.shallow_copy(RuntimeContextBase)
+
+---@param index integer
+---@return flex_value
+---@return var_debug?
+function FlexRuntimeContext:get(index)
+	return RuntimeContextBase.get(self, index)
+end
+
+---@param v flex_value
+---@param name string?
+---@param debuginfo var_debug
+---@return FlexRuntimeContext
+function FlexRuntimeContext:append(v, name, debuginfo)
+	if flex_value.value_check(v) ~= true then
+		error("FlexRuntimeContext:append v must be a flex_value")
+	end
+	---@type FlexRuntimeContext
+	return RuntimeContextBase.append(self, v, name, debuginfo)
+end
+
+---@param index integer
+---@param v flex_value
+---@return FlexRuntimeContext
+function FlexRuntimeContext:set(index, v)
+	if flex_value.value_check(v) ~= true then
+		error("FlexRuntimeContext:set v must be a flex_value")
+	end
+	---@type FlexRuntimeContext
+	return RuntimeContextBase.set(self, index, v)
+end
+
+local flex_runtime_context_mt = {
+	__index = FlexRuntimeContext,
+	__eq = FlexRuntimeContext.eq,
+	__tostring = function(t)
+		return "FlexRuntimeContext with " .. t.bindings:len() .. " bindings."
+	end,
+}
+
+---@return FlexRuntimeContext
+local function flex_runtime_context()
+	return setmetatable({ bindings = fibbuf() }, flex_runtime_context_mt)
+end
+
+---------------- END RUNTIME CONTEXTS
 
 local function runtime_context_diff_fn(left, right)
 	print("diffing runtime context...")
 	local rt = getmetatable(right)
-	if runtime_context_mt ~= rt then
+	if getmetatable(left) ~= rt then
 		print("unequal types!")
-		print(runtime_context_mt)
+		print(getmetatable(left))
 		print(rt)
 		print("stopping diff")
 		return
@@ -197,7 +324,14 @@ local function runtime_context_diff_fn(left, right)
 	elseif n == 1 then
 		local d = diff_elems[1]
 		print("difference in element: " .. tostring(d))
-		local diff_impl = traits.diff:get(value)
+		local diff_impl
+		if rt == flex_runtime_context_mt then
+			diff_impl = traits.diff:get(flex_value)
+		elseif rt == stuck_runtime_context_mt then
+			diff_impl = traits.diff:get(stuck_value)
+		elseif rt == strict_runtime_context_mt then
+			diff_impl = traits.diff:get(strict_value)
+		end
 		-- tail call
 		return diff_impl.diff(left:get(d), right:get(d))
 	else
@@ -214,13 +348,13 @@ end
 local typechecking_context_mt
 
 ---@class TypecheckingContext
----@field runtime_context RuntimeContext
+---@field runtime_context FlexRuntimeContext
 ---@field bindings FibonacciBuffer
 local TypecheckingContext = {}
 
----@param ctx RuntimeContext|TypecheckingContext
----@return RuntimeContext
-function to_runtime_context(ctx)
+---@param ctx FlexRuntimeContext|TypecheckingContext
+---@return FlexRuntimeContext
+local function to_runtime_context(ctx)
 	if getmetatable(ctx) == typechecking_context_mt then
 		return ctx.runtime_context
 	end
@@ -228,8 +362,8 @@ function to_runtime_context(ctx)
 end
 
 ---@param v table
----@param ctx RuntimeContext|TypecheckingContext
----@param values value[]
+---@param ctx FlexRuntimeContext|TypecheckingContext
+---@param values flex_value[]
 ---@return boolean
 local function verify_placeholders(v, ctx, values)
 	-- If it's not a table we don't care
@@ -377,7 +511,7 @@ function TypecheckingContext:format_names_and_types()
 end
 
 ---@param index integer
----@return value
+---@return flex_value
 function TypecheckingContext:get_type(index)
 	return self.bindings:get(index).type
 end
@@ -388,34 +522,34 @@ function TypecheckingContext:DEBUG_VERIFY_VALUES(state)
 	end
 end
 
----@return RuntimeContext
+---@return FlexRuntimeContext
 function TypecheckingContext:get_runtime_context()
 	return self.runtime_context
 end
 
 ---@param name string
----@param type value
----@param val value?
+---@param type flex_value
+---@param val flex_value?
 ---@param debuginfo var_debug
 ---@return TypecheckingContext
 function TypecheckingContext:append(name, type, val, debuginfo)
 	if gen.builtin_string.value_check(name) ~= true then
 		error("TypecheckingContext:append parameter 'name' must be a string")
 	end
-	if value.value_check(type) ~= true then
+	if flex_value.value_check(type) ~= true then
 		print("type", type)
 		p(type)
 		for k, v in pairs(type) do
 			print(k, v)
 		end
 		print(getmetatable(type))
-		error("TypecheckingContext:append parameter 'type' must be a value")
+		error("TypecheckingContext:append parameter 'type' must be a flex_value")
 	end
 	if type:is_closure() then
 		error "BUG!!!"
 	end
-	if val ~= nil and value.value_check(val) ~= true then
-		error("TypecheckingContext:append parameter 'val' must be a value (or nil if given start_anchor)")
+	if val ~= nil and flex_value.value_check(val) ~= true then
+		error("TypecheckingContext:append parameter 'val' must be a flex_value (or nil if given start_anchor)")
 	end
 	if debuginfo.source ~= nil and anchor_type.value_check(debuginfo.source) ~= true then
 		error("TypecheckingContext:append parameter 'start_anchor' must be an start_anchor (or nil if given val)")
@@ -425,7 +559,7 @@ function TypecheckingContext:append(name, type, val, debuginfo)
 	end
 	if not val then
 		debuginfo["{TRACE}"] = U.bound_here(2)
-		val = value.neutral(neutral_value.free(free.placeholder(self:len() + 1, debuginfo)))
+		val = flex_value.stuck(stuck_value.free(free.placeholder(self:len() + 1, debuginfo)))
 	end
 
 	local copy = {
@@ -453,20 +587,27 @@ typechecking_context_mt = {
 
 ---@return TypecheckingContext
 local function typechecking_context()
-	return setmetatable({ bindings = fibbuf(), runtime_context = runtime_context() }, typechecking_context_mt)
+	return setmetatable({ bindings = fibbuf(), runtime_context = flex_runtime_context() }, typechecking_context_mt)
 end
 
 -- empty for now, just used to mark the table
 local module_mt = {}
 
-local runtime_context_type = gen.declare_foreign(gen.metatable_equality(runtime_context_mt), "RuntimeContext")
+local strict_runtime_context_type =
+	gen.declare_foreign(gen.metatable_equality(strict_runtime_context_mt), "StrictRuntimeContext")
+local stuck_runtime_context_type =
+	gen.declare_foreign(gen.metatable_equality(stuck_runtime_context_mt), "StuckRuntimeContext")
+local flex_runtime_context_type =
+	gen.declare_foreign(gen.metatable_equality(flex_runtime_context_mt), "FlexRuntimeContext")
 local typechecking_context_type =
 	gen.declare_foreign(gen.metatable_equality(typechecking_context_mt), "TypecheckingContext")
 local host_user_defined_id = gen.declare_foreign(function(val)
 	return type(val) == "table" and type(val.name) == "string"
 end, "{ name: string }")
 
-traits.diff:implement_on(runtime_context_type, { diff = runtime_context_diff_fn })
+traits.diff:implement_on(strict_runtime_context_type, { diff = runtime_context_diff_fn })
+traits.diff:implement_on(stuck_runtime_context_type, { diff = runtime_context_diff_fn })
+traits.diff:implement_on(flex_runtime_context_type, { diff = runtime_context_diff_fn })
 
 -- implicit arguments are filled in through unification
 -- e.g. fn append(t : star(0), n : nat, xs : Array(t, n), val : t) -> Array(t, n+1)
@@ -491,7 +632,7 @@ local purity = gen.declare_enum("purity", {
 local block_purity = gen.declare_enum("block_purity", {
 	{ "effectful" },
 	{ "pure" },
-	{ "dependent", { "val", value } },
+	{ "dependent", { "val", flex_value } },
 	{ "inherit" },
 })
 
@@ -499,9 +640,9 @@ expression_goal:define_enum("expression_goal", {
 	-- infer
 	{ "infer" },
 	-- check to a goal type
-	{ "check", { "goal_type", value } },
+	{ "check", { "goal_type", flex_value } },
 	-- TODO
-	{ "mechanism", { "TODO", value } },
+	{ "mechanism", { "TODO", flex_value } },
 })
 
 -- terms that don't have a body yet
@@ -694,10 +835,10 @@ inferrable_term:define_enum("inferrable", {
 
 ---@class SubtypeRelation
 ---@field debug_name string
----@field Rel value -- : (a:T,b:T) -> Prop__
----@field refl value -- : (a:T) -> Rel(a,a)
----@field antisym value -- : (a:T, B:T, Rel(a,b), Rel(b,a)) -> a == b
----@field constrain value -- : (Node(T), Node(T)) -> [TCState] (Error)
+---@field Rel strict_value -- : (a:T,b:T) -> Prop__
+---@field refl strict_value -- : (a:T) -> Rel(a,a)
+---@field antisym strict_value -- : (a:T, B:T, Rel(a,b), Rel(b,a)) -> a == b
+---@field constrain strict_value -- : (Node(T), Node(T)) -> [TCState] (Error)
 local subtype_relation_mt = {}
 
 local SubtypeRelation = gen.declare_foreign(gen.metatable_equality(subtype_relation_mt), "SubtypeRelation")
@@ -793,7 +934,7 @@ local unique_id = gen.builtin_table
 -- stylua: ignore
 typed_term:define_enum("typed", {
 	{ "bound_variable", { "index", gen.builtin_number, "debug", gen.any_lua_type  } }, --TODO: switch the debug type to use the new structured var_debug
-	{ "literal", { "literal_value", value } },
+	{ "literal", { "literal_value", strict_value } },
 	{ "lambda", {
 		"param_name", gen.builtin_string,
 		"param_debug", var_debug,
@@ -1037,18 +1178,97 @@ semantic_id:define_record("semantic_id", {
 })
 
 --TODO: consider switching to a nicer coterm representation
----@module 'types.continuation'
-local continuation = gen.declare_type()
+---@module 'types.flex_continuation'
+local flex_continuation = gen.declare_type()
+---@module 'types.strict_continuation'
+local strict_continuation = gen.declare_type()
+---@module 'types.stuck_continuation'
+local stuck_continuation = gen.declare_type()
+
+local function replace_flex_values(tag, v)
+	if type(v) == "string" then
+		error(debug.traceback("wrong type passed to replace_flex_values"))
+	end
+	if v == flex_value then
+		if tag == "strict" then
+			return strict_value
+		elseif tag == "stuck" then
+			return flex_value
+		end
+		error("Unknown tag: " .. tag)
+	elseif v == array(flex_value) then
+		if tag == "strict" then
+			return array(strict_value)
+		elseif tag == "stuck" then
+			return array(flex_value)
+		end
+		error("Unknown tag: " .. tag)
+	elseif v == flex_runtime_context_type then
+		if tag == "strict" then
+			return strict_runtime_context_type
+		elseif tag == "stuck" then
+			return flex_runtime_context_type
+		end
+		error("Unknown tag: " .. tag)
+	elseif v == flex_continuation then
+		if tag == "strict" then
+			return strict_continuation
+		elseif tag == "stuck" then
+			return flex_continuation
+		end
+		error("Unknown tag: " .. tag)
+	end
+
+	return v
+end
+
+local function unify_flex_values(args, types)
+	local stuck = false
+	local strict_args = {}
+	for i, t in ipairs(types) do
+		if t == flex_value then
+			if args[i]:is_stuck() then
+				return "stuck", args
+			end
+			table.insert(strict_args, args[i]:unwrap_strict())
+		elseif t == array(flex_value) then
+			for _, v in ipairs(args[i]) do
+				if v:is_stuck() then
+					return "stuck", args
+				end
+			end
+			local strict_array = array(strict_value)()
+			for _, v in ipairs(args[i]) do
+				strict_array:append(v:unwrap_strict())
+			end
+			table.insert(strict_args, strict_array)
+		elseif t == flex_continuation then
+			if args[i]:is_stuck() then
+				return "stuck", args
+			end
+			table.insert(strict_args, args[i]:unwrap_strict())
+			--elseif t == flex_runtime_context then -- TODO: no idea how to handle this
+		else
+			table.insert(strict_args, args[i])
+		end
+	end
+
+	return "strict", strict_args
+end
+
 -- stylua: ignore
-continuation:define_enum("continuation", {
-	{ "empty" },
-	{ "frame", {
-		"context", runtime_context_type,
+gen.define_multi_enum(flex_continuation, "flex_continuation", replace_flex_values, unify_flex_values,
+{ strict = strict_continuation, stuck = stuck_continuation },
+{ strict = "strict_continuation", stuck = "stuck_continuation" },
+{
+	{ "empty$strict" },
+	{ "frame$flex", {
+		"context", flex_runtime_context_type,
 		"code",    typed_term,
 	} },
-	{ "sequence", {
-		"first",  continuation,
-		"second", continuation,
+	{ "sequence$flex", {
+		"first",  flex_continuation,
+		"second", flex_continuation,
 	} },
 })
 
@@ -1063,224 +1283,312 @@ continuation:define_enum("continuation", {
 -- values must all be finite in size and must not have loops.
 -- i.e. destructuring values always (eventually) terminates.
 -- stylua: ignore
-value:define_enum("value", {
-	-- explicit, implicit,
-	{ "visibility_type" },
-	{ "visibility", { "visibility", visibility } },
-	-- info about the parameter (is it implicit / what are the usage restrictions?)
-	-- quantity/visibility should be restricted to free or (quantity/visibility) rather than any value
-	{ "param_info_type" },
-	{ "param_info", { "visibility", value } },
-	-- whether or not a function is effectful /
-	-- for a function returning a monad do i have to be called in an effectful context or am i pure
-	{ "result_info_type" },
-	{ "result_info", { "result_info", result_info } },
-	{ "pi", {
-		"param_type",  value,
-		"param_info",  value, -- param_info
-		"result_type", value, -- closure from input -> result
-		"result_info", value, -- result_info
-	} },
-	-- closure is a type that contains a typed term corresponding to the body
-	-- and a runtime context representng the bound context where the closure was created
-	{ "closure", {
-		"param_name", gen.builtin_string,
-		"code",       typed_term,
-		"capture",    runtime_context_type,
-		"debug", 			var_debug,
-	} },
 
-	-- a list of upper and lower bounds, and a relation being bound with respect to
-	{ "range", {
-		"lower_bounds", array(value),
-		"upper_bounds", array(value),
-		"relation",     value, -- a subtyping relation. not currently represented.
-	} },
+gen.define_multi_enum(
+	flex_value,
+	"flex_value",
+	replace_flex_values,
+	unify_flex_values,
+	{ strict = strict_value, stuck = stuck_value },
+	{ strict = "strict_value", stuck = "stuck_value" },
+	{
+		-- explicit, implicit,
+		{ "visibility_type$strict" },
+		{ "visibility$strict", { "visibility", visibility } },
+		-- info about the parameter (is it implicit / what are the usage restrictions?)
+		-- quantity/visibility should be restricted to free or (quantity/visibility) rather than any value
+		{ "param_info_type$strict" },
+		{ "param_info$flex", { "visibility", flex_value } },
+		-- whether or not a function is effectful /
+		-- for a function returning a monad do i have to be called in an effectful context or am i pure
+		{ "result_info_type$strict" },
+		{ "result_info$strict", { "result_info", result_info } },
+		{
+			"pi$flex",
+			{
+				"param_type",
+				flex_value,
+				"param_info",
+				flex_value, -- param_info
+				"result_type",
+				flex_value, -- closure from input -> result
+				"result_info",
+				flex_value, -- result_info
+			},
+		},
+		-- closure is a type that contains a typed term corresponding to the body
+		-- and a runtime context representng the bound context where the closure was created
+		{
+			"closure$flex",
+			{
+				"param_name",
+				gen.builtin_string,
+				"code",
+				typed_term,
+				"capture",
+				flex_runtime_context_type,
+				"debug",
+				var_debug,
+			},
+		},
+		-- a list of upper and lower bounds, and a relation being bound with respect to
+		{
+			"range$flex",
+			{
+				"lower_bounds",
+				array(flex_value),
+				"upper_bounds",
+				array(flex_value),
+				"relation",
+				strict_value, -- a subtyping relation. not currently represented.
+			},
+		},
+		{ "name_type$strict" },
+		{ "name$strict", { "name", gen.builtin_string } },
+		{ "operative_value$flex", { "userdata", flex_value } },
+		{ "operative_type$flex", {
+			"handler",
+			flex_value,
+			"userdata_type",
+			flex_value,
+		} },
+		-- ordinary data
+		{ "tuple_value$flex", { "elements", array(flex_value) } },
+		{ "tuple_type$flex", { "desc", flex_value } },
+		{ "tuple_desc_type$flex", { "universe", flex_value } },
+		{ "enum_value$flex", {
+			"constructor",
+			gen.builtin_string,
+			"arg",
+			flex_value,
+		} },
+		{ "enum_type$flex", { "desc", flex_value } },
+		{ "enum_desc_type$flex", { "universe", flex_value } },
+		{ "enum_desc_value$flex", { "variants", gen.declare_map(gen.builtin_string, flex_value) } },
+		{ "record_value$flex", { "fields", map(gen.builtin_string, flex_value) } },
+		{ "record_type$flex", { "desc", flex_value } },
+		{ "record_desc_type$flex", { "universe", flex_value } },
+		{
+			"record_extend$stuck",
+			{
+				"base",
+				stuck_value,
+				"extension",
+				map(gen.builtin_string, flex_value),
+			},
+		},
+		{
+			"object_value$flex",
+			{ --Not used yet
+				"methods",
+				map(gen.builtin_string, typed_term),
+				"capture",
+				flex_runtime_context_type,
+			},
+		},
+		{ "object_type$flex", { "desc", flex_value } },
 
-	-- metaprogramming stuff
-	-- TODO: add types of terms, and type indices
-	-- NOTE: we're doing this through host_values instead
-	--{"syntax_value", {"syntax", metalang.constructed_syntax_type}},
-	--{"syntax_type"},
-	--{"matcher_value", {"matcher", metalang.matcher_type}},
-	--{"matcher_type", {"result_type", value}},
-	--{"reducer_value", {"reducer", metalang.reducer_type}},
-	--{"environment_value", {"environment", environment_type}},
-	--{"environment_type"},
-	--{"checkable_term", {"checkable_term", checkable_term}},
-	--{"inferrable_term", {"inferrable_term", inferrable_term}},
-	--{"inferrable_term_type"},
-	--{"typed_term", {"typed_term", typed_term}},
-	--{"typechecker_monad_value", }, -- TODO
-	--{"typechecker_monad_type", {"wrapped_type", value}},
-	{ "name_type" },
-	{ "name", { "name", gen.builtin_string } },
-	{ "operative_value", { "userdata", value } },
-	{ "operative_type", {
-		"handler",       value,
-		"userdata_type", value,
-	} },
+		{ "star$strict", { "level", gen.builtin_number, "depth", gen.builtin_number } },
+		{ "prop$strict", { "level", gen.builtin_number } },
 
-	-- ordinary data
-	{ "tuple_value", { "elements", array(value) } },
-	{ "tuple_type", { "desc", value } },
-	{ "tuple_desc_type", { "universe", value } },
-	{ "enum_value", {
-		"constructor", gen.builtin_string,
-		"arg",         value,
-	} },
-	{ "enum_type", { "desc", value } },
-	{ "enum_desc_type", { "universe", value } },
-	{ "enum_desc_value", { "variants", gen.declare_map(gen.builtin_string, value) } },
-	{ "record_value", { "fields", map(gen.builtin_string, value) } },
-	{ "record_type", { "desc", value } },
-	{ "record_desc_type", { "universe", value } },
-	{ "record_extend_stuck", {
-		"base",      neutral_value,
-		"extension", map(gen.builtin_string, value),
-	} },
-	{ "object_value", {
-		"methods", map(gen.builtin_string, typed_term),
-		"capture", runtime_context_type,
-	} },
-	{ "object_type", { "desc", value } },
-	{ "level_type" },
-	{ "number_type" },
-	{ "number", { "number", gen.builtin_number } },
-	{ "level", { "level", gen.builtin_number } },
-	{ "star", { "level", gen.builtin_number, "depth", gen.builtin_number } },
-	{ "prop", { "level", gen.builtin_number } },
-	{ "neutral", { "neutral", neutral_value } },
+		{ "host_value$strict", { "host_value", gen.any_lua_type } },
+		-- foreign data
+		{ "host_type_type$strict" },
+		{ "host_number_type$strict" },
+		{ "host_bool_type$strict" },
+		{ "host_string_type$strict" },
+		{
+			"host_function_type$flex",
+			{
+				"param_type",
+				flex_value, -- must be a host_tuple_type
+				-- host functions can only have explicit arguments
+				"result_type",
+				flex_value, -- must be a host_tuple_type
+				"result_info",
+				flex_value,
+			},
+		},
+		{ "host_wrapped_type$flex", { "type", flex_value } },
+		{ "host_unstrict_wrapped_type$flex", { "type", flex_value } },
+		{
+			"host_user_defined_type$flex",
+			{
+				"id",
+				host_user_defined_id,
+				"family_args",
+				array(flex_value),
+			},
+		},
+		{ "host_nil_type$strict" },
+		--NOTE: host_tuple is not considered a host type because it's not a first class value in lua.
+		{ "host_tuple_value$strict", { "elements", array(gen.any_lua_type) } },
+		{ "host_tuple_type$flex", { "desc", flex_value } }, -- just like an ordinary tuple type but can only hold host_values
 
-	-- foreign data
-	{ "host_value", { "host_value", gen.any_lua_type } },
-	{ "host_type_type" },
-	{ "host_number_type" },
-	{ "host_bool_type" },
-	{ "host_string_type" },
-	{ "host_function_type", {
-		"param_type",  value, -- must be a host_tuple_type
-		-- host functions can only have explicit arguments
-		"result_type", value, -- must be a host_tuple_type
-		"result_info", value,
-	} },
-	{ "host_wrapped_type", { "type", value } },
-	{ "host_unstrict_wrapped_type", { "type", value } },
-	{ "host_user_defined_type", {
-		"id",          host_user_defined_id,
-		"family_args", array(value),
-	} },
-	{ "host_nil_type" },
-	--NOTE: host_tuple is not considered a host type because it's not a first class value in lua.
-	{ "host_tuple_value", { "elements", array(gen.any_lua_type) } },
-	{ "host_tuple_type", { "desc", value } }, -- just like an ordinary tuple type but can only hold host_values
+		-- a type family, that takes a type and a value, and produces a new type
+		-- inhabited only by that single value and is a subtype of the type.
+		-- example: singleton(integer, 5) is the type that is inhabited only by the
+		-- number 5. values of this type can be, for example, passed to a function
+		-- that takes any integer.
+		-- alternative names include:
+		-- - Most Specific Type (from discussion with open),
+		-- - Val (from julia)
+		{ "singleton$flex", {
+			"supertype",
+			flex_value,
+			"value",
+			flex_value,
+		} },
+		{ "program_end$flex", { "result", flex_value } },
+		{
+			"program_cont$flex",
+			{
+				"action",
+				unique_id,
+				"argument",
+				flex_value,
+				"continuation",
+				flex_continuation,
+			},
+		},
 
-	-- type of key and value of key -> type of the value
-	-- {"host_table_type"},
+		{ "effect_empty$strict" },
+		{ "effect_elem$strict", { "tag", effect_id } },
+		{ "effect_type$strict" },
+		{ "effect_row$strict", {
+			"components",
+			set(unique_id),
+		} },
+		{ "effect_row_extend$stuck", {
+			"base",
+			flex_value,
+			"rest",
+			flex_value,
+		} },
+		{ "effect_row_type$strict" },
 
-	-- a type family, that takes a type and a value, and produces a new type
-	-- inhabited only by that single value and is a subtype of the type.
-	-- example: singleton(integer, 5) is the type that is inhabited only by the
-	-- number 5. values of this type can be, for example, passed to a function
-	-- that takes any integer.
-	-- alternative names include:
-	-- - Most Specific Type (from discussion with open),
-	-- - Val (from julia)
-	{ "singleton", {
-		"supertype", value,
-		"value",     value,
-	} },
-	{ "program_end", { "result", value } },
-	{ "program_cont", {
-		"action",       unique_id,
-		"argument",     value,
-		"continuation", continuation,
-	} },
-	{ "effect_empty" },
-	{ "effect_elem", { "tag", effect_id } },
-	{ "effect_type" },
-	{ "effect_row", {
-		"components", set(unique_id),
-		"rest",       value,
-	} },
-	{ "effect_row_type" },
-	{ "program_type", {
-		"effect_sig", value,
-		"base_type",  value,
-	} },
-	{ "srel_type", { "target_type", value } },
-	{ "variance_type", { "target_type", value } },
-	{ "intersection_type", {
-		"left",  value,
-		"right", value,
-	} },
-	{ "union_type", {
-		"left",  value,
-		"right", value,
-	} },
-})
+		{ "program_type$flex", {
+			"effect_sig",
+			flex_value,
+			"base_type",
+			flex_value,
+		} },
+		{ "srel_type$flex", { "target_type", flex_value } },
+		{ "variance_type$flex", { "target_type", flex_value } },
+		{ "intersection_type$flex", {
+			"left",
+			flex_value,
+			"right",
+			flex_value,
+		} },
+		{ "union_type$flex", {
+			"left",
+			flex_value,
+			"right",
+			flex_value,
+		} },
 
--- stylua: ignore
-neutral_value:define_enum("neutral_value", {
-	-- fn(free_value) and table of functions eg free.metavariable(metavariable)
-	-- value should be constructed w/ free.something()
-	{ "free", { "free", free } },
-	{ "application_stuck", {
-		"f",   neutral_value,
-		"arg", value,
-	} },
-	{ "enum_elim_stuck", {
-		"mechanism", value,
-		"subject",   neutral_value,
-	} },
-	{ "enum_rec_elim_stuck", {
-		"handler", value,
-		"subject", neutral_value,
-	} },
-	{ "object_elim_stuck", {
-		"mechanism", value,
-		"subject",   neutral_value,
-	} },
-	{ "tuple_element_access_stuck", {
-		"subject", neutral_value,
-		"index",   gen.builtin_number,
-	} },
-	{ "record_field_access_stuck", {
-		"subject",    neutral_value,
-		"field_name", gen.builtin_string,
-	} },
-	{ "host_application_stuck", {
-		"function", gen.any_lua_type,
-		"arg",      neutral_value,
-	} },
-	{ "host_tuple_stuck", {
-		"leading",       array(gen.any_lua_type),
-		"stuck_element", neutral_value,
-		"trailing",      array(value), -- either host or neutral
-	} },
-	{ "host_if_stuck", {
-		"subject",    neutral_value,
-		"consequent", value,
-		"alternate",  value,
-	} },
-	{ "host_intrinsic_stuck", {
-		"source",       neutral_value,
-		"start_anchor", anchor_type,
-	} },
-	{ "host_wrap_stuck", { "content", neutral_value } },
-	{ "host_unwrap_stuck", { "container", neutral_value } },
-})
+		{ "free$stuck", { "free", free } },
+		{ "application$stuck", {
+			"f",
+			stuck_value,
+			"arg",
+			flex_value,
+		} },
+		-- { "enum_elim_stuck", {
+		-- 	"mechanism", value,
+		-- 	"subject",   stuck_value,
+		-- } },
+		-- { "enum_rec_elim_stuck", {
+		-- 	"handler", value,
+		-- 	"subject", stuck_value,
+		-- } },
+		-- { "object_elim_stuck", {
+		-- 	"mechanism", value,
+		-- 	"subject",   stuck_value,
+		-- } },
+		{ "tuple_element_access$stuck", {
+			"subject",
+			stuck_value,
+			"index",
+			gen.builtin_number,
+		} },
+		{
+			"record_field_access$stuck",
+			{
+				"subject",
+				stuck_value,
+				"field_name",
+				gen.builtin_string,
+			},
+		},
+		{ "host_application$stuck", {
+			"function",
+			gen.any_lua_type,
+			"arg",
+			stuck_value,
+		} },
+		{
+			"host_tuple$stuck",
+			{
+				"leading",
+				array(gen.any_lua_type),
+				"stuck_element",
+				stuck_value,
+				"trailing",
+				array(flex_value), -- either host or neutral
+			},
+		},
+		{
+			"host_if$stuck",
+			{
+				"subject",
+				stuck_value,
+				"consequent",
+				flex_value,
+				"alternate",
+				flex_value,
+			},
+		},
+		{ "host_intrinsic$stuck", {
+			"source",
+			stuck_value,
+			"start_anchor",
+			anchor_type,
+		} },
+		{ "host_wrap$stuck", { "content", stuck_value } },
+		{ "host_unwrap$stuck", { "container", stuck_value } },
+	}
+)
 
-local host_syntax_type = value.host_user_defined_type({ name = "syntax" }, array(value)())
-local host_environment_type = value.host_user_defined_type({ name = "environment" }, array(value)())
-local host_typed_term_type = value.host_user_defined_type({ name = "typed_term" }, array(value)())
-local host_goal_type = value.host_user_defined_type({ name = "goal" }, array(value)())
-local host_inferrable_term_type = value.host_user_defined_type({ name = "inferrable_term" }, array(value)())
-local host_checkable_term_type = value.host_user_defined_type({ name = "checkable_term" }, array(value)())
-local host_purity_type = value.host_user_defined_type({ name = "purity" }, array(value)())
-local host_block_purity_type = value.host_user_defined_type({ name = "block_purity" }, array(value)())
+-- metaprogramming stuff
+-- TODO: add types of terms, and type indices
+-- NOTE: we're doing this through host_values instead
+--{"syntax_value", {"syntax", metalang.constructed_syntax_type}},
+--{"syntax_type"},
+--{"matcher_value", {"matcher", metalang.matcher_type}},
+--{"matcher_type", {"result_type", value}},
+--{"reducer_value", {"reducer", metalang.reducer_type}},
+--{"environment_value", {"environment", environment_type}},
+--{"environment_type"},
+--{"checkable_term", {"checkable_term", checkable_term}},
+--{"inferrable_term", {"inferrable_term", inferrable_term}},
+--{"inferrable_term_type"},
+--{"typed_term", {"typed_term", typed_term}},
+--{"typechecker_monad_value", }, -- TODO
+--{"typechecker_monad_type", {"wrapped_type", value}},
+
+local host_syntax_type = strict_value.host_user_defined_type({ name = "syntax" }, array(strict_value)())
+local host_environment_type = strict_value.host_user_defined_type({ name = "environment" }, array(strict_value)())
+local host_typed_term_type = strict_value.host_user_defined_type({ name = "typed_term" }, array(strict_value)())
+local host_goal_type = strict_value.host_user_defined_type({ name = "goal" }, array(strict_value)())
+local host_inferrable_term_type =
+	strict_value.host_user_defined_type({ name = "inferrable_term" }, array(strict_value)())
+local host_checkable_term_type = strict_value.host_user_defined_type({ name = "checkable_term" }, array(strict_value)())
+local host_purity_type = strict_value.host_user_defined_type({ name = "purity" }, array(strict_value)())
+local host_block_purity_type = strict_value.host_user_defined_type({ name = "block_purity" }, array(strict_value)())
 -- return ok, err
-local host_lua_error_type = value.host_user_defined_type({ name = "lua_error_type" }, array(value)())
+local host_lua_error_type = strict_value.host_user_defined_type({ name = "lua_error_type" }, array(strict_value)())
 
 ---@class DescConsContainer
 local DescCons = --[[@enum DescCons]]
@@ -1289,28 +1597,28 @@ local DescCons = --[[@enum DescCons]]
 		empty = "empty",
 	}
 
-local value_array = array(value)
+local flex_value_array = array(flex_value)
 
----@param ... value
----@return value
+---@param ... flex_value
+---@return flex_value
 local function tup_val(...)
-	return value.tuple_value(value_array(...))
+	return flex_value.tuple_value(flex_value_array(...))
 end
 
----@param ... value
----@return value
+---@param ... flex_value
+---@return flex_value
 local function cons(...)
-	return value.enum_value(DescCons.cons, tup_val(...))
+	return flex_value.enum_value(DescCons.cons, tup_val(...))
 end
 
-local empty = value.enum_value(DescCons.empty, tup_val())
-local unit_type = value.tuple_type(empty)
+local empty = flex_value.enum_value(DescCons.empty, tup_val())
+local unit_type = flex_value.tuple_type(empty)
 local unit_val = tup_val()
 
----@param a value
----@param e value
----@param ... value
----@return value
+---@param a flex_value
+---@param e flex_value
+---@param ... flex_value
+---@return flex_value
 local function tuple_desc_inner(a, e, ...)
 	if e == nil then
 		return a
@@ -1326,8 +1634,8 @@ local tristate = gen.declare_enum("tristate", {
 	{ "failure" },
 })
 
----@param ... value
----@return value
+---@param ... flex_value
+---@return flex_value
 local function tuple_desc(...)
 	return tuple_desc_inner(empty, ...)
 end
@@ -1347,8 +1655,9 @@ local terms = {
 	purity = purity,
 	block_purity = block_purity,
 	result_info = result_info,
-	value = value,
-	neutral_value = neutral_value,
+	flex_value = flex_value,
+	strict_value = strict_value,
+	stuck_value = stuck_value,
 	binding = binding,
 	expression_goal = expression_goal,
 	host_syntax_type = host_syntax_type,
@@ -1366,7 +1675,9 @@ local terms = {
 	runtime_context = runtime_context,
 	typechecking_context = typechecking_context,
 	module_mt = module_mt,
-	runtime_context_type = runtime_context_type,
+	strict_runtime_context_type = strict_runtime_context_type,
+	stuck_runtime_context_type = stuck_runtime_context_type,
+	flex_runtime_context_type = flex_runtime_context_type,
 	typechecking_context_type = typechecking_context_type,
 	subtype_relation_mt = subtype_relation_mt,
 	SubtypeRelation = SubtypeRelation,
@@ -1404,8 +1715,9 @@ inferrable_term:derive(derivers.pretty_print, inferrable_term_override_pretty)
 typed_term:derive(derivers.pretty_print, typed_term_override_pretty)
 visibility:derive(derivers.pretty_print)
 free:derive(derivers.pretty_print)
-value:derive(derivers.pretty_print, value_override_pretty)
-neutral_value:derive(derivers.pretty_print, neutral_value_override_pretty)
+flex_value:derive(derivers.pretty_print, value_override_pretty)
+strict_value:derive(derivers.pretty_print, value_override_pretty)
+stuck_value:derive(derivers.pretty_print, value_override_pretty)
 binding:derive(derivers.pretty_print, binding_override_pretty)
 expression_goal:derive(derivers.pretty_print)
 var_debug:derive(derivers.pretty_print)
@@ -1415,4 +1727,8 @@ constraintcause:derive(derivers.pretty_print)
 
 local internals_interface = require "internals-interface"
 internals_interface.terms = terms
-return terms
+return setmetatable(terms, {
+	__index = function(_, k)
+		error(debug.traceback("'" .. k .. "' doesn't exist in terms!"))
+	end,
+})

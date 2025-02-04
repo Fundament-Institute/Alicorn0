@@ -15,10 +15,10 @@ function typed:unwrap_bound_variable() end
 function typed:as_bound_variable() end
 ---@return boolean
 function typed:is_literal() end
----@return value literal_value
+---@return strict_value literal_value
 function typed:unwrap_literal() end
 ---@return boolean
----@return value literal_value
+---@return strict_value literal_value
 function typed:as_literal() end
 ---@return boolean
 function typed:is_lambda() end
@@ -537,7 +537,7 @@ function typed:as_constrained_type() end
 ---@class (exact) typedType: EnumType
 ---@field define_enum fun(self: typedType, name: string, variants: Variants): typedType
 ---@field bound_variable fun(index: number, debug: any): typed
----@field literal fun(literal_value: value): typed
+---@field literal fun(literal_value: strict_value): typed
 ---@field lambda fun(param_name: string, param_debug: var_debug, body: typed, start_anchor: Anchor): typed
 ---@field pi fun(param_type: typed, param_info: typed, result_type: typed, result_info: typed): typed
 ---@field application fun(f: typed, arg: typed): typed

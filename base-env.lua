@@ -2086,7 +2086,7 @@ local function convert_desc(desc)
 		local convert_type = terms.value.variance_type(
 			evaluator.apply_value(
 				type_fun,
-				terms.value.neutral(terms.neutral_value.free(terms.free.unique {})),
+				terms.flex_value.stuck(terms.stuck_value.free(terms.free.unique {})),
 				terms.typechecking_context()
 			)
 		)
@@ -2200,7 +2200,7 @@ local function tuple_to_host_tuple_inner(_type, _valid, val)
 	if not stuck then
 		return terms.value.host_tuple_value(leading)
 	else
-		return terms.value.neutral(terms.neutral_value.host_tuple_stuck(leading, stuck_elem, trailing))
+		return terms.flex_value.stuck(terms.stuck_value.host_tuple_stuck(leading, stuck_elem, trailing))
 	end
 end
 
