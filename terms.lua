@@ -49,9 +49,14 @@ local expression_goal = gen.declare_type()
 ---@field block_level integer this probably shouldn't be inside the metavariable
 local Metavariable = {}
 
+---@return stuck_value
+function Metavariable:as_stuck()
+	return stuck_value.free(free.metavariable(self))
+end
+
 ---@return flex_value
-function Metavariable:as_value()
-	return flex_value.stuck(stuck_value.free(free.metavariable(self)))
+function Metavariable:as_flex()
+	return flex_value.stuck(self:as_stuck())
 end
 
 local metavariable_mt = { __index = Metavariable }
@@ -935,6 +940,7 @@ local unique_id = gen.builtin_table
 typed_term:define_enum("typed", {
 	{ "bound_variable", { "index", gen.builtin_number, "debug", gen.any_lua_type  } }, --TODO: switch the debug type to use the new structured var_debug
 	{ "literal", { "literal_value", strict_value } },
+	{ "metavariable", { "metavariable", metavariable_type } },
 	{ "lambda", {
 		"param_name", gen.builtin_string,
 		"param_debug", var_debug,
@@ -1317,7 +1323,7 @@ gen.define_multi_enum(
 			},
 		},
 		-- closure is a type that contains a typed term corresponding to the body
-		-- and a runtime context representng the bound context where the closure was created
+		-- and a runtime context representing the bound context where the closure was created
 		{
 			"closure$flex",
 			{
@@ -1672,7 +1678,8 @@ local terms = {
 	unique_id = unique_id,
 	var_debug = var_debug,
 
-	runtime_context = runtime_context,
+	flex_runtime_context = flex_runtime_context,
+	strict_runtime_context = strict_runtime_context,
 	typechecking_context = typechecking_context,
 	module_mt = module_mt,
 	strict_runtime_context_type = strict_runtime_context_type,

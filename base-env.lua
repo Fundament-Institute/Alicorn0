@@ -8,13 +8,14 @@ local gen = require "terms-generators"
 local evaluator = require "evaluator"
 local U = require "alicorn-utils"
 
-local value = terms.value
+local flex_value = terms.flex_value
+local strict_value = terms.strict_value
 local typed = terms.typed_term
 local var_debug = terms.var_debug
 
-local param_info_explicit = value.param_info(value.visibility(terms.visibility.explicit))
-local result_info_pure = value.result_info(terms.result_info(terms.purity.pure))
-local result_info_effectful = value.result_info(terms.result_info(terms.purity.effectful))
+local param_info_explicit = strict_value.param_info(strict_value.visibility(terms.visibility.explicit))
+local result_info_pure = strict_value.result_info(terms.result_info(terms.purity.pure))
+local result_info_effectful = strict_value.result_info(terms.result_info(terms.purity.effectful))
 
 local usage_array = gen.declare_array(gen.builtin_number)
 local debug_array = gen.declare_array(var_debug)
@@ -22,8 +23,8 @@ local name_array = gen.declare_array(gen.builtin_string)
 local typed_array = gen.declare_array(typed)
 local value_array = gen.declare_array(value)
 
----@param val value
----@param typ value
+---@param val strict_value
+---@param typ strict_value
 ---@return inferrable
 local function lit_term(val, typ)
 	return terms.inferrable_term.typed(terms.typed_term.literal(typ), usage_array(), terms.typed_term.literal(val))
@@ -362,7 +363,7 @@ local pure_ascribed_name = metalanguage.reducer(
 			type = terms.inferrable_term.typed(
 				terms.typed_term.literal(value.star(evaluator.OMEGA, 1)),
 				usage_array(),
-				typed.literal(type_mv:as_value())
+				typed.metavariable(type_mv)
 			)
 		end
 		return true, var_debug(name.str, name.start_anchor), type, env
@@ -1600,7 +1601,7 @@ local function build_wrap(body_fn, type_fn)
 	local univ_dbg = terms.var_debug("#univ", U.anchor_here())
 	local subj_dbg = terms.var_debug("#subj", U.anchor_here())
 	return lit_term(
-		value.closure(
+		strict_value.closure(
 			pname_arg,
 			typed.tuple_elim(
 				names2,
@@ -1612,7 +1613,7 @@ local function build_wrap(body_fn, type_fn)
 			terms.runtime_context(),
 			args_dbg
 		),
-		value.pi(
+		strict_value.pi(
 			value.tuple_type(
 				terms.tuple_desc(
 					value.closure(
@@ -2173,7 +2174,7 @@ local function get_host_func_res(subject, valid)
 					terms.typed_term.bound_variable(2, arg_dbg)
 				)
 			),
-			terms.typed_term.literal(terms.value.host_value(nil))
+			terms.typed_term.literal(terms.strict_value.host_value(nil))
 		)
 	)
 	local ctx = terms.runtime_context():append(result_type, "#res_arg", result_dbg)

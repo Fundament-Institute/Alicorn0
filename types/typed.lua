@@ -21,6 +21,13 @@ function typed:unwrap_literal() end
 ---@return strict_value literal_value
 function typed:as_literal() end
 ---@return boolean
+function typed:is_metavariable() end
+---@return Metavariable metavariable
+function typed:unwrap_metavariable() end
+---@return boolean
+---@return Metavariable metavariable
+function typed:as_metavariable() end
+---@return boolean
 function typed:is_lambda() end
 ---@return string param_name
 ---@return var_debug param_debug
@@ -538,6 +545,7 @@ function typed:as_constrained_type() end
 ---@field define_enum fun(self: typedType, name: string, variants: Variants): typedType
 ---@field bound_variable fun(index: number, debug: any): typed
 ---@field literal fun(literal_value: strict_value): typed
+---@field metavariable fun(metavariable: Metavariable): typed
 ---@field lambda fun(param_name: string, param_debug: var_debug, body: typed, start_anchor: Anchor): typed
 ---@field pi fun(param_type: typed, param_info: typed, result_type: typed, result_info: typed): typed
 ---@field application fun(f: typed, arg: typed): typed

@@ -322,8 +322,8 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_unify, types, n
 		table.insert(flex_variants, { k, { k, v } })
 	end
 
-	---@type {[string]: (string|Type)[]}
-	local forward = {}
+	---@type {[string]: string }
+	local flex_tags = {}
 
 	for i, v in ipairs(variants) do
 		local vname, vtag = table.unpack(split_delim(v[1], "$"))
@@ -331,9 +331,10 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_unify, types, n
 		if vtag == nil then
 			error("Missing tag on " .. vname)
 		end
+		table.insert(flex_variants, { vname, vparams_with_types })
+		flex_tags[vname] = vtag
 
 		if vtag == "flex" then
-			forward[vname] = vparams_with_types
 			for k, _ in pairs(types) do
 				local fix_variants = {}
 				for i, ty in ipairs(vparams_with_types) do
@@ -359,25 +360,62 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_unify, types, n
 
 	flex:define_enum(flex_name, flex_variants)
 
-	for k, list in pairs(forward) do
-		local vkind = flex_name .. "." .. k
-		local params, params_types = parse_params_with_types(list)
-		validate_params_types(vkind, params, params_types)
-		flex[k] = function(...)
-			local args = table.pack(...)
-			for i, v in ipairs(params) do
-				if params_types[i].value_check(args[i]) ~= true then
-					error(
-						debug.traceback(
-							"wrong argument type passed to constructor " .. kind .. ", parameter '" .. v .. "'"
+	for i, pair in ipairs(flex_variants) do
+		local k = pair[1]
+		if flex_tags[k] == "flex" then
+			local vkind = flex_name .. "." .. k
+			local params, params_types = parse_params_with_types(pair[2])
+			validate_params_types(vkind, params, params_types)
+			flex[k] = function(...)
+				local args = table.pack(...)
+				for i, v in ipairs(params) do
+					if params_types[i].value_check(args[i]) ~= true then
+						error(
+							debug.traceback(
+								"wrong argument type passed to constructor " .. kind .. ", parameter '" .. v .. "'"
+							)
 						)
-					)
+					end
+				end
+				local tag, unified_args = fn_unify(args, params_types)
+				local subtype = types[tag]
+				local inner = subtype[k](table.unpack(unified_args))
+				return flex[tag](inner)
+			end
+		elseif flex_tags[k] ~= nil then
+			local tag = flex_tags[k]
+			local subtype = types[tag]
+			local inner = subtype[k]
+			flex[k] = function(...)
+				return flex[tag](inner(...))
+			end
+		end
+
+		local derivers = { "is_", "unwrap_", "as_" }
+		for _, v in ipairs(derivers) do
+			local tag = flex_tags[k]
+			if tag == "flex" then
+				error("NYI")
+			elseif tag ~= nil then
+				local base = flex.__index[v .. k]
+				if not base then
+					error("Trying to override nonexistent function " .. v .. k)
+				end
+				if v == "is_" or v == "as_" then
+					flex.__index[v .. k] = function(self, ...)
+						local ok, inner = flex["as_" .. tag](self)
+						if not ok then
+							return false
+						end
+						return inner[v .. k](inner, ...)
+					end
+				elseif v == "unwrap_" then
+					flex.__index[v .. k] = function(self, ...)
+						local inner = flex[v .. tag](self)
+						return inner[v .. k](inner, ...)
+					end
 				end
 			end
-			local tag, unified_args = fn_unify(args, params_types)
-			local subtype = types[tag]
-			local inner = subtype[k](table.unpack(unified_args))
-			return flex[tag](inner)
 		end
 	end
 

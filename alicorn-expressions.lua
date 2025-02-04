@@ -55,7 +55,8 @@ local semantic_error_mt = {
 		if self.anchors then
 			message[#message + 1] = " at anchors"
 			for _, anchor in ipairs(self.anchors) do
-				message[#message], message[#message + 1], message[#message + 2], message[#message + 3] = " ", message[#message], " ", tostring(anchor)
+				message[#message], message[#message + 1], message[#message + 2], message[#message + 3] =
+					" ", message[#message], " ", tostring(anchor)
 			end
 		end
 		if self.terms then
@@ -67,7 +68,8 @@ local semantic_error_mt = {
 				else
 					s = tostring(term)
 				end
-				message[#message + 1], message[#message + 2], message[#message + 3], message[#message + 4] = k, " = ", s, "\n"
+				message[#message + 1], message[#message + 2], message[#message + 3], message[#message + 4] =
+					k, " = ", s, "\n"
 			end
 		end
 		if self.env then
@@ -452,7 +454,12 @@ local function speculate_pi_type(env, metaval)
 		ok, res = evaluator.typechecker_state:speculate(function()
 			local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
-			local pi = value.pi(param_mv:as_value(), pairs[i].param_info, result_mv:as_value(), pairs[i].result_info)
+			local pi = terms.stuck_value.pi(
+				terms.flex_value.stuck(param_mv:as_stuck()),
+				pairs[i].param_info,
+				terms.flex_value.stuck(result_mv:as_stuck()),
+				pairs[i].result_info
+			)
 			--pi.original_name = "#spec-" .. U.strip_ansi(tostring(metaval.original_name or metaval))
 			--param_mv.source = "param_mv for " .. pi.original_name
 			--result_mv.source = "result_mv for " .. pi.original_name

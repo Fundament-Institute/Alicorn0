@@ -12,7 +12,7 @@ local free = terms.free
 local visibility = terms.visibility
 local purity = terms.purity
 local result_info = terms.result_info
-local value = terms.value
+local flex_value = terms.flex_value
 local stuck_value = terms.stuck_value
 local host_syntax_type = terms.host_syntax_type
 local host_environment_type = terms.host_environment_type
@@ -25,10 +25,10 @@ local diff = require "traits".diff
 local gen = require "terms-generators"
 local map = gen.declare_map
 local string_typed_map = map(gen.builtin_string, typed_term)
-local string_value_map = map(gen.builtin_string, value)
+local string_value_map = map(gen.builtin_string, flex_value)
 local array = gen.declare_array
 local typed_array = array(typed_term)
-local value_array = array(value)
+local flex_value_array = array(flex_value)
 local host_array = array(gen.any_lua_type)
 local usage_array = array(gen.builtin_number)
 local string_array = array(gen.builtin_string)
@@ -40,8 +40,8 @@ local eval_types = require "evaluator-types"
 local subtype_relation_mt, SubtypeRelation, EdgeNotif =
 	eval_types.subtype_relation_mt, eval_types.SubtypeRelation, eval_types.EdgeNotif
 
-local param_info_explicit = value.param_info(value.visibility(visibility.explicit))
-local result_info_pure = value.result_info(result_info(purity.pure))
+local param_info_explicit = flex_value.param_info(flex_value.visibility(visibility.explicit))
+local result_info_pure = flex_value.result_info(result_info(purity.pure))
 
 local OMEGA = 9
 local typechecker_state
@@ -111,10 +111,10 @@ local function luatovalue(luafunc)
 		new_body:append(typed.bound_variable(i + 1, param_dbg))
 	end
 
-	return value.closure(
+	return flex_value.closure(
 		"#luatovalue-args",
 		typed.application(
-			typed.literal(value.host_value(luafunc)),
+			typed.literal(terms.strict_value.host_value(luafunc)),
 			typed.tuple_elim(
 				parameters,
 				params_dbg,
@@ -131,8 +131,8 @@ end
 ---builds a nested cause and propagates track
 ---@param desc string
 ---@param cause constraintcause
----@param val value
----@param use value
+---@param val flex_value
+---@param use flex_value
 ---@return constraintcause
 local function nestcause(desc, cause, val, use, valctx, usectx)
 	local r = terms.constraintcause.nested(desc, cause)
@@ -241,9 +241,9 @@ local function IndepTupleRelation(...)
 		constrain = luatovalue(
 			---constrain tuple elements
 			---@param lctx TypecheckingContext
-			---@param val value
+			---@param val flex_value
 			---@param rctx TypecheckingContext
-			---@param use value
+			---@param use flex_value
 			---@param cause constraintcause
 			function(lctx, val, rctx, use, cause)
 				local val_elems = val:unwrap_tuple_value()
@@ -307,9 +307,9 @@ effect_row_srel = setmetatable({
 
 	constrain = luatovalue(
 		---@param lctx TypecheckingContext
-		---@param val value
+		---@param val flex_value
 		---@param rctx TypecheckingContext
-		---@param use value
+		---@param use flex_value
 		---@param cause constraintcause
 		---@return boolean, string?
 		function(lctx, val, rctx, use, cause)
@@ -359,9 +359,9 @@ enum_desc_srel = setmetatable({
 
 	constrain = luatovalue(
 		---@param lctx TypecheckingContext
-		---@param val value
+		---@param val flex_value
 		---@param rctx TypecheckingContext
-		---@param use value
+		---@param use flex_value
 		---@param cause constraintcause
 		---@return boolean, string?
 		function(lctx, val, rctx, use, cause)
@@ -417,9 +417,9 @@ local TupleDescRelation = setmetatable({
 	end),
 	constrain = luatovalue(
 		---@param lctx TypecheckingContext
-		---@param val value
+		---@param val flex_value
 		---@param rctx TypecheckingContext
-		---@param use value
+		---@param use flex_value
 		---@param cause constraintcause
 		---@return boolean
 		function(lctx, val, rctx, use, cause)
@@ -435,18 +435,23 @@ local TupleDescRelation = setmetatable({
 			-- value) should be the same across the whole desc
 			local unique = { debug = "TupleDescRelation.constrain" .. U.here() }
 			local placeholder = flex_value.stuck(stuck_value.free(free.unique(unique)))
-			local ok, tuple_types_val, tuple_types_use, tuple_vals, n =
-				infer_tuple_type_unwrapped2(value.tuple_type(val), lctx, value.tuple_type(use), lctx, placeholder)
+			local ok, tuple_types_val, tuple_types_use, tuple_vals, n = infer_tuple_type_unwrapped2(
+				flex_value.tuple_type(val),
+				lctx,
+				flex_value.tuple_type(use),
+				lctx,
+				placeholder
+			)
 
 			if not ok then
 				if tuple_types_val == "length-mismatch" then
 					error(
 						ConstraintError.new(
 							"Tuple lengths do not match: ",
-							value.tuple_type(val),
+							flex_value.tuple_type(val),
 							lctx,
 							"!=",
-							value.tuple_type(use),
+							flex_value.tuple_type(use),
 							rctx
 						)
 					)
@@ -664,25 +669,26 @@ value.closure = closure_constructor_check
 
 local substitute_inner
 
----@param val value an alicorn value
+---@param val flex_value an alicorn value
 ---@param mappings {[integer|value]: typed} the placeholder we are trying to get rid of by substituting
 ---@param context_len integer number of bindings in the runtime context already used - needed for closures
 ---@param ambient_typechecking_context TypecheckingContext
 ---@return typed a typed term
 local function substitute_inner_impl(val, mappings, context_len, ambient_typechecking_context)
-	if val:is_visibility_type() then
-		return mark_track(val.track, typed_term.literal(val))
-	elseif val:is_visibility() then
-		return typed_term.literal(val)
-	elseif val:is_param_info_type() then
-		return typed_term.literal(val)
-	elseif val:is_param_info() then
+	-- If this is strict, simply return it inside a literal, since no substitution is necessary no matter what it is.
+	if val:is_strict() then
+		return typed_term.literal(val:unwrap_strict())
+	end
+	if not val:is_stuck() then
+		error("val isn't strict or stuck????????")
+	end
+
+	local val = val:unwrap_stuck()
+	--if val:is_visibility_type() then -- TODO: this track doesn't work anymore
+	--	return mark_track(val.track, typed_term.literal(val:unwrap_strict()))
+	if val:is_param_info() then
 		-- local visibility = val:unwrap_param_info()
 		-- TODO: this needs to be evaluated properly because it contains a value
-		return typed_term.literal(val)
-	elseif val:is_result_info_type() then
-		return typed_term.literal(val)
-	elseif val:is_result_info() then
 		return typed_term.literal(val)
 	elseif val:is_pi() then
 		local param_type, param_info, result_type, result_info = val:unwrap_pi()
@@ -711,10 +717,6 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		--   can cause non-obvious memory leaks
 		--   since we don't yet remove unused captures from closure value
 		return typed_term.lambda(param_name .. "*", debuginfo, val_typed, debuginfo.source)
-	elseif val:is_name_type() then
-		return typed_term.literal(val)
-	elseif val:is_name() then
-		return typed_term.literal(val)
 	elseif val:is_operative_value() then
 		local userdata = val:unwrap_operative_value()
 		local userdata = substitute_inner(userdata, mappings, context_len, ambient_typechecking_context)
@@ -758,16 +760,16 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		for k, v in variants:pairs() do
 			variants_sub:set(k, substitute_inner(v, mappings, context_len, ambient_typechecking_context))
 		end
-		return typed_term.enum_desc_cons(variants_sub, typed_term.literal(value.enum_desc_value(string_value_map())))
+		return typed_term.enum_desc_cons(
+			variants_sub,
+			typed_term.literal(terms.strict_value.enum_desc_value(string_value_map()))
+		)
 	elseif val:is_record_value() then
 		-- TODO: How to deal with a map?
 		error("Records not yet implemented")
 	elseif val:is_record_type() then
 		local desc = val:unwrap_record_type()
 		-- TODO: Handle desc properly, because it's a value.
-		error("Records not yet implemented")
-	elseif val:is_record_extend_stuck() then
-		-- Needs to handle the neutral value and map of values
 		error("Records not yet implemented")
 	elseif val:is_srel_type() then
 		local target = val:unwrap_srel_type()
@@ -778,144 +780,91 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		local target_sub = substitute_inner(target, mappings, context_len, ambient_typechecking_context)
 		return typed_term.variance_type(target_sub)
 	elseif val:is_object_value() then
-		return typed_term.literal(val)
+		-- TODO: this needs to be evaluated properly because it contains a value
+		error("Not yet implemented")
 	elseif val:is_object_type() then
 		-- local desc = val:unwrap_object_type()
 		-- TODO: this needs to be evaluated properly because it contains a value
 		error("Not yet implemented")
-	elseif val:is_level_type() then
-		return typed_term.literal(val)
-	elseif val:is_number_type() then
-		return typed_term.literal(val)
-	elseif val:is_number() then
-		return typed_term.literal(val)
-	elseif val:is_level() then
-		return typed_term.literal(val)
-	elseif val:is_star() then
-		return typed_term.literal(val)
-	elseif val:is_prop() then
-		return typed_term.literal(val)
-	elseif val:is_neutral() then
-		local nval = val:unwrap_neutral()
+	elseif val:is_free() then
+		local free = val:unwrap_free()
+		local lookup, mapping
+		if free:is_placeholder() then
+			lookup, info = free:unwrap_placeholder()
+			mapping = typed_term.bound_variable(lookup, info)
+		elseif free:is_unique() then
+			lookup = free:unwrap_unique()
+		elseif free:is_metavariable() then
+			local mv = free:unwrap_metavariable()
 
-		if nval:is_free() then
-			local free = nval:unwrap_free()
-			local lookup, mapping
-			if free:is_placeholder() then
-				lookup, info = free:unwrap_placeholder()
-				mapping = typed_term.bound_variable(lookup, info)
-			elseif free:is_unique() then
-				lookup = free:unwrap_unique()
-			elseif free:is_metavariable() then
-				local mv = free:unwrap_metavariable()
-
-				if not (mv.block_level < typechecker_state.block_level) then
-					return typechecker_state:slice_constraints_for(
-						mv,
-						mappings,
-						context_len,
-						ambient_typechecking_context
-					)
-				else
-					lookup = free:unwrap_metavariable()
-				end
+			if not (mv.block_level < typechecker_state.block_level) then
+				return typechecker_state:slice_constraints_for(mv, mappings, context_len, ambient_typechecking_context)
 			else
-				error("substitute_inner NYI free with kind " .. free.kind)
+				lookup = free:unwrap_metavariable()
 			end
-
-			mapping = mappings[lookup] or mapping
-			if mapping then
-				return mapping
-			end
-			if free:is_placeholder() and lookup > context_len then
-				print "found one"
-			end
-			return typed_term.literal(val)
+		else
+			error("substitute_inner NYI free with kind " .. free.kind)
 		end
 
-		if nval:is_tuple_element_access_stuck() then
-			local subject, index = nval:unwrap_tuple_element_access_stuck()
-			local subject_term =
-				substitute_inner(flex_value.stuck(subject), mappings, context_len, ambient_typechecking_context)
-			return typed_term.tuple_element_access(subject_term, index)
+		mapping = mappings[lookup] or mapping
+		if mapping then
+			return mapping
 		end
-
-		if nval:is_host_unwrap_stuck() then
-			local boxed = nval:unwrap_host_unwrap_stuck()
-			return typed_term.host_unwrap(
-				substitute_inner(flex_value.stuck(boxed), mappings, context_len, ambient_typechecking_context)
-			)
+		error("no valid mapping for " .. lookup)
+	elseif val:is_tuple_element_access() then
+		local subject, index = val:unwrap_tuple_element_access()
+		local subject_term =
+			substitute_inner(flex_value.stuck(subject), mappings, context_len, ambient_typechecking_context)
+		return typed_term.tuple_element_access(subject_term, index)
+	elseif val:is_host_unwrap() then
+		local boxed = val:unwrap_host_unwrap()
+		return typed_term.host_unwrap(
+			substitute_inner(flex_value.stuck(boxed), mappings, context_len, ambient_typechecking_context)
+		)
+	elseif val:is_host_wrap() then
+		local to_wrap = val:unwrap_host_wrap()
+		return typed_term.host_wrap(
+			substitute_inner(flex_value.stuck(to_wrap), mappings, context_len, ambient_typechecking_context)
+		)
+	elseif val:is_host_unwrap() then
+		local to_unwrap = val:unwrap_host_unwrap()
+		return typed_term.host_unwrap(
+			substitute_inner(flex_value.stuck(to_unwrap), mappings, context_len, ambient_typechecking_context)
+		)
+	elseif val:is_host_application() then
+		local fn, arg = val:unwrap_host_application()
+		return typed_term.application(
+			typed_term.literal(terms.strict_value.host_value(fn)),
+			substitute_inner(flex_value.stuck(arg), mappings, context_len, ambient_typechecking_context)
+		)
+	elseif val:is_host_tuple() then
+		local leading, stuck, trailing = val:unwrap_host_tuple()
+		local elems = typed_array()
+		-- leading is an array of unwrapped host_values and must already be unwrapped host values
+		for _, elem in leading:ipairs() do
+			local elem_value = typed_term.literal(terms.strict_value.host_value(elem))
+			elems:append(elem_value)
 		end
-
-		if nval:is_host_wrap_stuck() then
-			local to_wrap = nval:unwrap_host_wrap_stuck()
-			return typed_term.host_wrap(
-				substitute_inner(flex_value.stuck(to_wrap), mappings, context_len, ambient_typechecking_context)
-			)
+		elems:append(substitute_inner(flex_value.stuck(stuck), mappings, context_len, ambient_typechecking_context))
+		for _, elem in trailing:ipairs() do
+			elems:append(substitute_inner(elem, mappings, context_len, ambient_typechecking_context))
 		end
-
-		if nval:is_host_unwrap_stuck() then
-			local to_unwrap = nval:unwrap_host_unwrap_stuck()
-			return typed_term.host_unwrap(
-				substitute_inner(flex_value.stuck(to_unwrap), mappings, context_len, ambient_typechecking_context)
-			)
-		end
-
-		if nval:is_host_application_stuck() then
-			local fn, arg = nval:unwrap_host_application_stuck()
-			return typed_term.application(
-				typed_term.literal(value.host_value(fn)),
-				substitute_inner(flex_value.stuck(arg), mappings, context_len, ambient_typechecking_context)
-			)
-		end
-
-		if nval:is_host_tuple_stuck() then
-			local leading, stuck, trailing = nval:unwrap_host_tuple_stuck()
-			local elems = typed_array()
-			-- leading is an array of unwrapped host_values and must already be unwrapped host values
-			for _, elem in leading:ipairs() do
-				local elem_value = typed_term.literal(value.host_value(elem))
-				elems:append(elem_value)
-			end
-			elems:append(substitute_inner(flex_value.stuck(stuck), mappings, context_len, ambient_typechecking_context))
-			for _, elem in trailing:ipairs() do
-				elems:append(substitute_inner(elem, mappings, context_len, ambient_typechecking_context))
-			end
-			-- print("host_tuple_stuck nval", nval)
-			local result = typed_term.host_tuple_cons(elems)
-			-- print("host_tuple_stuck result", result)
-			return result
-		end
-
-		if nval:is_host_if_stuck() then
-			local subject, consequent, alternate = nval:unwrap_host_if_stuck()
-			local subject =
-				substitute_inner(flex_value.stuck(subject), mappings, context_len, ambient_typechecking_context)
-			local consequent = substitute_inner(consequent, mappings, context_len, ambient_typechecking_context)
-			local alternate = substitute_inner(alternate, mappings, context_len, ambient_typechecking_context)
-			return typed_term.host_if(subject, consequent, alternate)
-		end
-
-		if nval:is_application_stuck() then
-			local fn, arg = nval:unwrap_application_stuck()
-			return typed_term.application(
-				substitute_inner(flex_value.stuck(fn), mappings, context_len, ambient_typechecking_context),
-				substitute_inner(arg, mappings, context_len, ambient_typechecking_context)
-			)
-		end
-
-		-- TODO: deconstruct neutral value or something
-		error("substitute_inner not implemented yet val:is_neutral - " .. tostring(nval))
-	elseif val:is_host_value() then
-		return typed_term.literal(val)
-	elseif val:is_host_type_type() then
-		return typed_term.literal(val)
-	elseif val:is_host_number_type() then
-		return typed_term.literal(val)
-	elseif val:is_host_bool_type() then
-		return typed_term.literal(val)
-	elseif val:is_host_string_type() then
-		return typed_term.literal(val)
+		-- print("host_tuple_stuck nval", nval)
+		local result = typed_term.host_tuple_cons(elems)
+		-- print("host_tuple_stuck result", result)
+		return result
+	elseif val:is_host_if() then
+		local subject, consequent, alternate = val:unwrap_host_if()
+		local subject = substitute_inner(flex_value.stuck(subject), mappings, context_len, ambient_typechecking_context)
+		local consequent = substitute_inner(consequent, mappings, context_len, ambient_typechecking_context)
+		local alternate = substitute_inner(alternate, mappings, context_len, ambient_typechecking_context)
+		return typed_term.host_if(subject, consequent, alternate)
+	elseif val:is_application() then
+		local fn, arg = val:unwrap_application()
+		return typed_term.application(
+			substitute_inner(flex_value.stuck(fn), mappings, context_len, ambient_typechecking_context),
+			substitute_inner(arg, mappings, context_len, ambient_typechecking_context)
+		)
 	elseif val:is_host_function_type() then
 		local param_type, result_type, resinfo = val:unwrap_host_function_type()
 		local param_type = substitute_inner(param_type, mappings, context_len, ambient_typechecking_context)
@@ -933,10 +882,6 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 			res:append(substitute_inner(v, mappings, context_len, ambient_typechecking_context))
 		end
 		return typed_term.host_user_defined_type_cons(id, res)
-	elseif val:is_host_nil_type() then
-		return typed_term.literal(val)
-	elseif val:is_host_tuple_value() then
-		return typed_term.literal(val)
 	elseif val:is_host_tuple_type() then
 		local desc = val:unwrap_host_tuple_type()
 		local desc = substitute_inner(desc, mappings, context_len, ambient_typechecking_context)
@@ -978,21 +923,19 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 			substitute_inner(effect, mappings, context_len, ambient_typechecking_context),
 			substitute_inner(res, mappings, context_len, ambient_typechecking_context)
 		)
-	elseif val:is_effect_row() then
-		local row, rest = val:unwrap_effect_row()
+	elseif val:is_effect_row_extend() then
+		local row, rest = val:unwrap_effect_row_extend()
 		return typed_term.effect_row_resolve(
 			row,
 			substitute_inner(rest, mappings, context_len, ambient_typechecking_context)
 		)
-	elseif val:is_effect_empty() then
-		return typed_term.literal(val) -- Singleton constructor can't be substituted further
 	else
 		error("Unhandled value kind in substitute_inner: " .. val.kind)
 	end
 end
 
 local recurse_count = 0
----@param val value an alicorn value
+---@param val flex_value an alicorn value
 ---@param mappings {[integer]: typed} the placeholder we are trying to get rid of by substituting
 ---@param context_len integer number of bindings in the runtime context already used - needed for closures
 ---@param ambient_typechecking_context TypecheckingContext
@@ -1017,7 +960,7 @@ substitute_inner = function(val, mappings, context_len, ambient_typechecking_con
 end
 
 --for substituting a single var at index
----@param val value
+---@param val flex_value
 ---@param debuginfo var_debug
 ---@param index integer
 ---@param param_name string?
@@ -1042,7 +985,7 @@ function substitute_type_variables(val, debuginfo, index, param_name, ctx, ambie
 	return value.closure(param_name, substituted, ctx, debuginfo)
 end
 
----@param val value
+---@param val flex_value
 ---@param typechecking_context TypecheckingContext
 ---@param hidden integer?
 ---@return typed
@@ -1056,7 +999,7 @@ local function substitute_placeholders_identity(val, typechecking_context, hidde
 	return substitute_inner(val, mappings, size + (hidden or 0), typechecking_context)
 end
 
----@param val value
+---@param val flex_value
 ---@return boolean
 local function is_type_of_types(val)
 	return val:is_star() or val:is_prop() or val:is_host_type_type()
@@ -1086,7 +1029,7 @@ local function revealing(ctx, typ, cause)
 			if var:is_placeholder() then
 				local idx, dbg = var:unwrap_placeholder()
 				local inner = ctx:get_type(idx)
-				local inner_bound = value.tuple_type(typechecker_state:metavariable(ctx, false):as_value())
+				local inner_bound = flex_value.tuple_type(typechecker_state:metavariable(ctx, false):as_value())
 				print("found inner", inner)
 				error "FINISH THIS"
 			end
@@ -1165,7 +1108,7 @@ local function upcast(ctx, typ, cause)
 			if var:is_placeholder() then
 				local idx, dbg = var:unwrap_placeholder()
 				local inner = ctx:get_type(idx)
-				--local inner_bound = value.tuple_type(typechecker_state:metavariable(ctx, false):as_value())
+				--local inner_bound = flex_value.tuple_type(typechecker_state:metavariable(ctx, false):as_value())
 				local context2, boundstype = revealing(ctx, inner, cause)
 				--TODO: speculate for bottom
 				--TODO: speculate on tuple type and reformulate extraction in terms of constraining
@@ -1186,7 +1129,7 @@ local function upcast(ctx, typ, cause)
 	error "NYI upcast something or other"
 end
 
----@alias value_comparer fun(lctx: TypecheckingContext, a: value, rctx: TypecheckingContext, b: value, cause: constraintcause): boolean, (string|ConstraintError)?
+---@alias value_comparer fun(lctx: TypecheckingContext, a: flex_value, rctx: TypecheckingContext, b: flex_value, cause: constraintcause): boolean, (string|ConstraintError)?
 
 ---@param ka string
 ---@param kb string
@@ -1202,18 +1145,14 @@ local function always_fits_comparer(lctx, a, rctx, b, cause)
 end
 
 -- host types
-for _, host_type in ipairs({
-	value.host_number_type,
-	value.host_string_type,
-	value.host_bool_type,
-	value.host_user_defined_type({ name = "" }, value_array()),
-}) do
-	add_comparer(host_type.kind, host_type.kind, always_fits_comparer)
-end
+add_comparer("flex_value.host_number_type", "flex_value.host_number_type", always_fits_comparer)
+add_comparer("flex_value.host_string_type", "flex_value.host_string_type", always_fits_comparer)
+add_comparer("flex_value.host_bool_type", "flex_value.host_bool_type", always_fits_comparer)
+add_comparer("flex_value.host_user_defined_type", "flex_value.host_user_defined_type", always_fits_comparer)
 
 -- types of types
-add_comparer(value.host_type_type.kind, value.host_type_type.kind, always_fits_comparer)
-add_comparer("value.tuple_type", "value.tuple_type", function(lctx, a, rctx, b, cause)
+add_comparer("flex_value.host_type_type", "flex_value.host_type_type", always_fits_comparer)
+add_comparer("flex_value.tuple_type", "flex_value.tuple_type", function(lctx, a, rctx, b, cause)
 	local desc_a = a:unwrap_tuple_type()
 	local desc_b = b:unwrap_tuple_type()
 	typechecker_state:queue_constrain(
@@ -1226,7 +1165,7 @@ add_comparer("value.tuple_type", "value.tuple_type", function(lctx, a, rctx, b, 
 	)
 	return true
 end)
-add_comparer("value.host_tuple_type", "value.host_tuple_type", function(lctx, a, rctx, b, cause)
+add_comparer("flex_value.host_tuple_type", "flex_value.host_tuple_type", function(lctx, a, rctx, b, cause)
 	local desc_a = a:unwrap_host_tuple_type()
 	local desc_b = b:unwrap_host_tuple_type()
 	typechecker_state:queue_constrain(
@@ -1239,7 +1178,7 @@ add_comparer("value.host_tuple_type", "value.host_tuple_type", function(lctx, a,
 	)
 	return true
 end)
-add_comparer("value.enum_desc_type", "value.enum_desc_type", function(lctx, a, rctx, b, cause)
+add_comparer("flex_value.enum_desc_type", "flex_value.enum_desc_type", function(lctx, a, rctx, b, cause)
 	local a_univ = a:unwrap_enum_desc_type()
 	local b_univ = b:unwrap_enum_desc_type()
 	typechecker_state:queue_subtype(
@@ -1251,7 +1190,7 @@ add_comparer("value.enum_desc_type", "value.enum_desc_type", function(lctx, a, r
 	)
 	return true
 end)
-add_comparer("value.enum_type", "value.enum_type", function(lctx, a, rctx, b, cause)
+add_comparer("flex_value.enum_type", "flex_value.enum_type", function(lctx, a, rctx, b, cause)
 	local a_desc = a:unwrap_enum_type()
 	local b_desc = b:unwrap_enum_type()
 	typechecker_state:queue_constrain(
@@ -1264,14 +1203,14 @@ add_comparer("value.enum_type", "value.enum_type", function(lctx, a, rctx, b, ca
 	)
 	return true
 end)
-add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx, b, cause)
+add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(lctx, a, rctx, b, cause)
 	local a_desc = a:unwrap_enum_type()
 	local b_univ = b:unwrap_tuple_desc_type()
 	local construction_variants = string_value_map()
 	-- The empty variant has no arguments
 	construction_variants:set(
 		terms.DescCons.empty,
-		value.tuple_type(value.enum_value(terms.DescCons.empty, value.tuple_value(value_array())))
+		flex_value.tuple_type(value.enum_value(terms.DescCons.empty, flex_value.tuple_type(flex_value_array())))
 	)
 	local argname = terms.var_debug("#arg" .. tostring(#rctx + 1), U.anchor_here())
 	local univ_dbg = terms.var_debug("#univ", U.anchor_here())
@@ -1279,16 +1218,16 @@ add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx,
 	-- The cons variant takes a prefix description and a next element, represented as a function from the prefix tuple to a type in the specified universe
 	construction_variants:set(
 		terms.DescCons.cons,
-		value.tuple_type(
+		flex_value.tuple_type(
 			value.enum_value(
 				terms.DescCons.cons,
-				value.tuple_value(
-					value_array(
+				flex_value.tuple_type(
+					flex_value_array(
 						value.enum_value(
 							terms.DescCons.cons,
-							value.tuple_value(
-								value_array(
-									value.enum_value(terms.DescCons.empty, value.tuple_value(value_array())),
+							flex_value.tuple_type(
+								flex_value_array(
+									value.enum_value(terms.DescCons.empty, flex_value.tuple_type(flex_value_array())),
 									value.closure(
 										"#prefix",
 										typed_term.literal(b),
@@ -1307,14 +1246,18 @@ add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx,
 								1,
 								typed_term.pi(
 									typed_term.tuple_type(typed_term.bound_variable(#rctx + 3, prefix_desc_dbg)),
-									typed.literal(value.param_info(value.visibility(terms.visibility.explicit))),
+									typed.literal(
+										terms.strict_value.param_info(
+											terms.strict_value.visibility(terms.visibility.explicit)
+										)
+									),
 									typed.lambda(
 										argname.name,
 										argname,
 										typed_term.bound_variable(#rctx + 1, univ_dbg),
 										U.anchor_here()
 									),
-									typed.literal(value.result_info(terms.result_info(terms.purity.pure)))
+									typed.literal(terms.strict_value.result_info(terms.result_info(terms.purity.pure)))
 								)
 							),
 							rctx.runtime_context:append(b_univ, "b_univ", univ_dbg),
@@ -1336,28 +1279,28 @@ add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx,
 	)
 	return true
 end)
-add_comparer("value.tuple_desc_type", "value.enum_type", function(lctx, a, rctx, b, cause)
+add_comparer("flex_value.tuple_desc_type", "flex_value.enum_type", function(lctx, a, rctx, b, cause)
 	local a_univ = a:unwrap_tuple_desc_type()
 	local b_desc = b:unwrap_enum_type()
 	local construction_variants = string_value_map()
 	-- The empty variant has no arguments
 	construction_variants:set(
 		terms.DescCons.empty,
-		value.tuple_type(value.enum_value(terms.DescCons.empty, value.tuple_value(value_array())))
+		flex_value.tuple_type(value.enum_value(terms.DescCons.empty, flex_value.tuple_type(value_array())))
 	)
 	-- The cons variant takes a prefix description and a next element, represented as a function from the prefix tuple to a type in the specified universe
 	construction_variants:set(
 		terms.DescCons.cons,
-		value.tuple_type(
+		flex_value.tuple_type(
 			value.enum_value(
 				terms.DescCons.cons,
-				value.tuple_value(
+				flex_value.tuple_type(
 					value_array(
 						value.enum_value(
 							terms.DescCons.cons,
-							value.tuple_value(
+							flex_value.tuple_type(
 								value_array(
-									value.enum_value(terms.DescCons.empty, value.tuple_value(value_array())),
+									value.enum_value(terms.DescCons.empty, flex_value.tuple_type(value_array())),
 									value.closure(
 										"#prefix",
 										typed_term.literal(a),
@@ -1378,14 +1321,18 @@ add_comparer("value.tuple_desc_type", "value.enum_type", function(lctx, a, rctx,
 									typed_term.tuple_type(
 										typed_term.bound_variable(#rctx + 3, terms.var_debug("", U.anchor_here()))
 									),
-									typed.literal(value.param_info(value.visibility(terms.visibility.explicit))),
+									typed.literal(
+										terms.strict_value.param_info(
+											terms.strict_value.visibility(terms.visibility.explicit)
+										)
+									),
 									typed.lambda(
 										"#arg" .. tostring(#rctx + 1),
 										terms.var_debug("", U.anchor_here()),
 										typed_term.bound_variable(#rctx + 1, terms.var_debug("", U.anchor_here())),
 										U.anchor_here()
 									),
-									typed.literal(value.result_info(terms.result_info(terms.purity.pure)))
+									typed.literal(terms.strict_value.result_info(terms.result_info(terms.purity.pure)))
 								)
 							),
 							rctx.runtime_context:append(a_univ, "a_univ", terms.var_debug("", U.anchor_here())),
@@ -1407,7 +1354,7 @@ add_comparer("value.tuple_desc_type", "value.enum_type", function(lctx, a, rctx,
 	)
 	return true
 end)
-add_comparer("value.pi", "value.pi", function(lctx, a, rctx, b, cause)
+add_comparer("flex_value.pi", "flex_value.pi", function(lctx, a, rctx, b, cause)
 	if a == b then
 		return true
 	end
@@ -1451,7 +1398,7 @@ add_comparer("value.pi", "value.pi", function(lctx, a, rctx, b, cause)
 
 	return true
 end)
-add_comparer("value.host_function_type", "value.host_function_type", function(lctx, a, rctx, b, cause)
+add_comparer("flex_value.host_function_type", "flex_value.host_function_type", function(lctx, a, rctx, b, cause)
 	if a == b then
 		return true
 	end
@@ -1491,7 +1438,7 @@ end)
 
 ---@type {[table] : SubtypeRelation}
 local host_srel_map = {}
-add_comparer("value.host_user_defined_type", "value.host_user_defined_type", function(lctx, a, rctx, b, cause)
+add_comparer("flex_value.host_user_defined_type", "flex_value.host_user_defined_type", function(lctx, a, rctx, b, cause)
 	local a_id, a_args = a:unwrap_host_user_defined_type()
 	local b_id, b_args = b:unwrap_host_user_defined_type()
 
@@ -1510,10 +1457,10 @@ add_comparer("value.host_user_defined_type", "value.host_user_defined_type", fun
 	if not host_srel_map[a_id] then
 		error("No variance specified for user defined host type " .. a_id.name)
 	end
-	local a_value, b_value = value.tuple_value(a_args), value.tuple_value(b_args)
+	local a_value, b_value = flex_value.tuple_type(a_args), flex_value.tuple_type(b_args)
 	return apply_value(
 			host_srel_map[a_id].constrain,
-			value.tuple_value(
+			flex_value.tuple_type(
 				value_array(
 					value.host_value(lctx),
 					value.host_value(a_value),
@@ -1557,7 +1504,7 @@ for i, host_type in ipairs {
 	register_host_srel(id, IndepTupleRelation())
 end
 
-add_comparer("value.srel_type", "value.srel_type", function(lctx, a, rctx, b, cause)
+add_comparer("flex_value.srel_type", "flex_value.srel_type", function(lctx, a, rctx, b, cause)
 	local a_target = a:unwrap_srel_type()
 	local b_target = b:unwrap_srel_type()
 	typechecker_state:queue_subtype(
@@ -1570,7 +1517,7 @@ add_comparer("value.srel_type", "value.srel_type", function(lctx, a, rctx, b, ca
 	return true
 end)
 
-add_comparer("value.variance_type", "value.variance_type", function(lctx, a, rctx, b, cause)
+add_comparer("flex_value.variance_type", "flex_value.variance_type", function(lctx, a, rctx, b, cause)
 	local a_target = a:unwrap_variance_type()
 	local b_target = b:unwrap_variance_type()
 	typechecker_state:queue_subtype(
@@ -1583,7 +1530,7 @@ add_comparer("value.variance_type", "value.variance_type", function(lctx, a, rct
 	return true
 end)
 
-add_comparer("value.host_type_type", "value.star", function(lctx, a, rctx, b, cause)
+add_comparer("flex_value.host_type_type", "flex_value.star", function(lctx, a, rctx, b, cause)
 	local level, depth = b:unwrap_star()
 	if depth == 0 then
 		return true
@@ -1592,7 +1539,7 @@ add_comparer("value.host_type_type", "value.star", function(lctx, a, rctx, b, ca
 	end
 end)
 
-add_comparer(value.star(0, 0).kind, value.star(0, 0).kind, function(lctx, a, rctx, b, cause)
+add_comparer("flex_value.star", "flex_value.star", function(lctx, a, rctx, b, cause)
 	local alevel, adepth = a:unwrap_star()
 	local blevel, bdepth = b:unwrap_star()
 	if alevel > blevel then
@@ -1610,14 +1557,14 @@ add_comparer(value.star(0, 0).kind, value.star(0, 0).kind, function(lctx, a, rct
 	return true
 end)
 
-add_comparer("value.host_wrapped_type", "value.host_wrapped_type", function(lctx, a, rctx, b, cause)
+add_comparer("flex_value.host_wrapped_type", "flex_value.host_wrapped_type", function(lctx, a, rctx, b, cause)
 	local ua, ub = a:unwrap_host_wrapped_type(), b:unwrap_host_wrapped_type()
 	typechecker_state:queue_subtype(lctx, ua, rctx, ub, nestcause("wrapped type target", cause, ua, ub, lctx, rctx))
 	--U.tag("check_concrete", { ua, ub }, check_concrete, ua, ub)
 	return true
 end)
 
-add_comparer("value.singleton", "value.singleton", function(lctx, a, rctx, b, cause)
+add_comparer("flex_value.singleton", "flex_value.singleton", function(lctx, a, rctx, b, cause)
 	local a_supertype, a_value = a:unwrap_singleton()
 	local b_supertype, b_value = b:unwrap_singleton()
 	typechecker_state:queue_subtype(
@@ -1635,7 +1582,7 @@ add_comparer("value.singleton", "value.singleton", function(lctx, a, rctx, b, ca
 	end
 end)
 
-add_comparer("value.tuple_desc_type", "value.tuple_desc_type", function(lctx, a, rctx, b, cause)
+add_comparer("flex_value.tuple_desc_type", "flex_value.tuple_desc_type", function(lctx, a, rctx, b, cause)
 	local a_universe = a:unwrap_tuple_desc_type()
 	local b_universe = b:unwrap_tuple_desc_type()
 	typechecker_state:queue_subtype(
@@ -1648,7 +1595,7 @@ add_comparer("value.tuple_desc_type", "value.tuple_desc_type", function(lctx, a,
 	return true
 end)
 
-add_comparer("value.program_type", "value.program_type", function(lctx, a, rctx, b, cause)
+add_comparer("flex_value.program_type", "flex_value.program_type", function(lctx, a, rctx, b, cause)
 	local a_eff, a_base = a:unwrap_program_type()
 	local b_eff, b_base = b:unwrap_program_type()
 	typechecker_state:queue_subtype(
@@ -1669,18 +1616,18 @@ add_comparer("value.program_type", "value.program_type", function(lctx, a, rctx,
 	return true
 end)
 
-add_comparer("value.effect_row_type", "value.effect_row_type", function(lctx, a, rctx, b, cause)
+add_comparer("flex_value.effect_row_type", "flex_value.effect_row_type", function(lctx, a, rctx, b, cause)
 	return true
 end)
-add_comparer("value.effect_type", "value.effect_type", function(lctx, a, rctx, b, cause)
+add_comparer("flex_value.effect_type", "flex_value.effect_type", function(lctx, a, rctx, b, cause)
 	return true
 end)
 
 -- Compares any non-metavariables, or defers any metavariable comparisons to the work queue
 ---@param lctx TypecheckingContext
----@param val value
+---@param val flex_value
 ---@param rctx TypecheckingContext
----@param use value
+---@param use flex_value
 ---@param cause constraintcause
 ---@return boolean
 ---@return (string|ConstraintError)?
@@ -1716,7 +1663,7 @@ function check_concrete(lctx, val, rctx, use, cause)
 			if free:is_placeholder() then
 				local idx, dbg = free:unwrap_placeholder()
 				local inner = lctx:get_type(idx)
-				--local inner_bound = value.tuple_type(typechecker_state:metavariable(ctx, false):as_value())
+				--local inner_bound = flex_value.tuple_type(typechecker_state:metavariable(ctx, false):as_value())
 				local innerctx, boundstype = revealing(lctx, inner)
 
 				typechecker_state:queue_subtype(
@@ -1821,7 +1768,7 @@ function check_concrete(lctx, val, rctx, use, cause)
 	return comparer(lctx, val, rctx, use, cause)
 end
 
----@param enum_val value
+---@param enum_val flex_value
 ---@param closures ArrayValue
 ---@return ArrayValue
 local function extract_tuple_elem_type_closures(enum_val, closures)
@@ -1844,12 +1791,12 @@ local function extract_tuple_elem_type_closures(enum_val, closures)
 		closures:append(elements[2])
 		return closures
 	end
-	error "unknown enum constructor for value.tuple_type's enum_value, should not be reachable"
+	error "unknown enum constructor for flex_value.tuple_type's enum_value, should not be reachable"
 end
 
 ---@param checkable_term checkable
 ---@param typechecking_context TypecheckingContext
----@param goal_type value
+---@param goal_type flex_value
 ---@return boolean, ArrayValue, typed
 function check(
 	checkable_term, -- constructed from checkable_term
@@ -1863,7 +1810,7 @@ function check(
 	if terms.typechecking_context_type.value_check(typechecking_context) ~= true then
 		error("check, typechecking_context: expected a typechecking context")
 	end
-	if terms.value.value_check(goal_type) ~= true then
+	if terms.flex_value.value_check(goal_type) ~= true then
 		print("goal_type", goal_type)
 		error("check, goal_type: expected a goal type (as an alicorn value)")
 	end
@@ -1924,7 +1871,7 @@ function check(
 		end
 
 		local ok, err = typechecker_state:flow(
-			value.tuple_type(desc),
+			flex_value.tuple_type(desc),
 			typechecking_context,
 			goal_type,
 			typechecking_context,
@@ -1990,15 +1937,15 @@ function check(
 end
 
 ---apply an alicorn function to an alicorn value
----@param f value
----@param arg value
+---@param f flex_value
+---@param arg flex_value
 ---@param ambient_typechecking_context TypecheckingContext
----@return value
+---@return flex_value
 function apply_value(f, arg, ambient_typechecking_context)
-	if terms.value.value_check(f) ~= true then
+	if terms.flex_value.value_check(f) ~= true then
 		error("apply_value, f: expected an alicorn value")
 	end
-	if terms.value.value_check(arg) ~= true then
+	if terms.flex_value.value_check(arg) ~= true then
 		error("apply_value, arg: expected an alicorn value")
 	end
 
@@ -2034,11 +1981,11 @@ function apply_value(f, arg, ambient_typechecking_context)
 	error("unreachable!?")
 end
 
----@param subject value
+---@param subject flex_value
 ---@param index integer
----@return value
+---@return flex_value
 local function index_tuple_value(subject, index)
-	if terms.value.value_check(subject) ~= true then
+	if terms.flex_value.value_check(subject) ~= true then
 		error("index_tuple_value, subject: expected an alicorn value")
 	end
 
@@ -2074,17 +2021,17 @@ local host_tuple_make_prefix_mt = {
 		for x = 1, i do
 			prefix_elements:append(flex_value.stuck(stuck_value.tuple_element_access_stuck(self.subject_neutral, x)))
 		end
-		return value.tuple_value(prefix_elements)
+		return flex_value.tuple_type(prefix_elements)
 	end,
 }
 local function host_tuple_make_prefix(subject_neutral)
 	return setmetatable({ subject_neutral = subject_neutral }, host_tuple_make_prefix_mt)
 end
 
----@param subject_type value
----@param subject_value value
----@return value
----@return fun(i: any) : value
+---@param subject_type flex_value
+---@param subject_value flex_value
+---@return flex_value
+---@return fun(i: any) : flex_value
 local function make_tuple_prefix(subject_type, subject_value)
 	local desc, make_prefix
 	if subject_type:is_tuple_type() then
@@ -2093,7 +2040,7 @@ local function make_tuple_prefix(subject_type, subject_value)
 		if subject_value:is_tuple_value() then
 			local subject_elements = subject_value:unwrap_tuple_value()
 			function make_prefix(i)
-				return value.tuple_value(subject_elements:copy(1, i))
+				return flex_value.tuple_type(subject_elements:copy(1, i))
 			end
 		elseif subject_value:is_neutral() then
 			local subject_neutral = subject_value:unwrap_neutral()
@@ -2102,7 +2049,7 @@ local function make_tuple_prefix(subject_type, subject_value)
 				for x = 1, i do
 					prefix_elements:append(flex_value.stuck(stuck_value.tuple_element_access_stuck(subject_neutral, x)))
 				end
-				return value.tuple_value(prefix_elements)
+				return flex_value.tuple_type(prefix_elements)
 			end
 		else
 			error(
@@ -2122,7 +2069,7 @@ local function make_tuple_prefix(subject_type, subject_value)
 				subject_value_elements:append(value.host_value(v))
 			end
 			function make_prefix(i)
-				return value.tuple_value(subject_value_elements:copy(1, i))
+				return flex_value.tuple_type(subject_value_elements:copy(1, i))
 			end
 		elseif subject_value:is_neutral() then
 			-- yes, literally a copy-paste of the neutral case above
@@ -2144,11 +2091,11 @@ local function make_tuple_prefix(subject_type, subject_value)
 end
 
 -- TODO: create a typechecking context append variant that merges two
----@param desc value
----@param make_prefix fun(i: integer): value
----@return value[]
+---@param desc flex_value
+---@param make_prefix fun(i: integer): flex_value
+---@return flex_value[]
 ---@return integer
----@return value[]
+---@return flex_value[]
 function make_inner_context(desc, make_prefix)
 	-- evaluate the type of the tuple
 	local constructor, arg = desc:unwrap_enum_value()
@@ -2160,7 +2107,7 @@ function make_inner_context(desc, make_prefix)
 		local f = details[2]
 		local element_type
 		if tupletypes:len() == tuplevals:len() then
-			local prefix = value.tuple_value(tuplevals)
+			local prefix = flex_value.tuple_type(tuplevals)
 			element_type = apply_value(f, prefix)
 			if element_type:is_singleton() then
 				local _, val = element_type:unwrap_singleton()
@@ -2177,36 +2124,36 @@ function make_inner_context(desc, make_prefix)
 	end
 end
 
----@param subject_type value
----@param subject_value value
----@return value[]
+---@param subject_type flex_value
+---@param subject_value flex_value
+---@return flex_value[]
 ---@return integer
----@return value[]
+---@return flex_value[]
 function infer_tuple_type_unwrapped(subject_type, subject_value)
 	local desc, make_prefix = make_tuple_prefix(subject_type, subject_value)
 	return make_inner_context(desc, make_prefix)
 end
 
----@param subject_type value
----@param subject_value value
----@return value[]
+---@param subject_type flex_value
+---@param subject_value flex_value
+---@return flex_value[]
 ---@return integer
----@return value[]
+---@return vaflex_valuelue[]
 function infer_tuple_type(subject_type, subject_value)
 	-- define how the type of each tuple element should be evaluated
 	return infer_tuple_type_unwrapped(subject_type, subject_value)
 end
 
----@param desc_a value
----@param make_prefix_a fun(i: integer): value
+---@param desc_a flex_value
+---@param make_prefix_a fun(i: integer): flex_value
 ---@param lctx TypecheckingContext
----@param desc_b value
----@param make_prefix_b fun(i: integer): value
+---@param desc_b flex_value
+---@param make_prefix_b fun(i: integer): flex_value
 ---@param rctx TypecheckingContext
 ---@return boolean
----@return value[]|string
----@return value[]
----@return value[]
+---@return flex_value[]|string
+---@return flex_value[]
+---@return flex_value[]
 ---@return integer
 function make_inner_context2(desc_a, make_prefix_a, lctx, desc_b, make_prefix_b, rctx)
 	local constructor_a, arg_a = desc_a:unwrap_enum_value()
@@ -2228,7 +2175,7 @@ function make_inner_context2(desc_a, make_prefix_a, lctx, desc_b, make_prefix_b,
 		local element_type_a
 		local element_type_b
 		if tupletypes_a:len() == tuplevals:len() then
-			local prefix = value.tuple_value(tuplevals)
+			local prefix = flex_value.tuple_type(tuplevals)
 			element_type_a = apply_value(f_a, prefix, lctx)
 			element_type_b = apply_value(f_b, prefix, lctx) -- This looks wrong but it's necessary to fix a missing placeholder problem
 
@@ -2524,13 +2471,13 @@ function infer_impl(
 					typechecking_context:len() + 1,
 					"#tuple-cons-el",
 					typechecking_context:get_runtime_context(),
-					typechecking_context:append("#tuple-cons-el", value.tuple_type(type_data), nil, info[i])
+					typechecking_context:append("#tuple-cons-el", flex_value.tuple_type(type_data), nil, info[i])
 				)
 			)
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
 		end
-		return true, value.tuple_type(type_data), usages, typed_term.tuple_cons(new_elements)
+		return true, flex_value.tuple_type(type_data), usages, typed_term.tuple_cons(new_elements)
 	elseif inferrable_term:is_host_tuple_cons() then
 		error("this code is definitely rot, will not work without rewrites")
 		--print "inferring tuple construction"
@@ -2582,7 +2529,7 @@ function infer_impl(
 			local next_elem_type = next_elem_type_mv:as_value()
 			desc = terms.cons(desc, next_elem_type)
 		end
-		local spec_type = terms.value.tuple_type(desc)
+		local spec_type = terms.flex_value.tuple_type(desc)
 		local host_spec_type = terms.value.host_tuple_type(desc)
 		local ok, n_elements
 		local tupletypes, htupletypes
@@ -2951,7 +2898,7 @@ function infer_impl(
 	elseif inferrable_term:is_operative_type_cons() then
 		local handler, userdata_type = inferrable_term:unwrap_operative_type_cons()
 		local goal_type = value.pi(
-			value.tuple_type(
+			flex_value.tuple_type(
 				terms.tuple_desc(
 					const_combinator(host_syntax_type),
 					const_combinator(host_environment_type),
@@ -2962,7 +2909,7 @@ function infer_impl(
 			--unrestricted(tup_val(unrestricted(host_syntax_type), unrestricted(host_environment_type))),
 			param_info_explicit,
 			const_combinator(
-				value.tuple_type(
+				flex_value.tuple_type(
 					terms.tuple_desc(
 						const_combinator(host_inferrable_term_type),
 						const_combinator(host_environment_type)
@@ -3460,7 +3407,7 @@ function evaluate_impl(typed_term, runtime_context, ambient_typechecking_context
 			new_elements:append(evaluate(v, runtime_context, ambient_typechecking_context))
 			--new_elements:append(U.tag("evaluate", { ["element_" .. tostring(i)] = v }, evaluate, v, runtime_context))
 		end
-		return value.tuple_value(new_elements)
+		return flex_value.tuple_type(new_elements)
 	elseif typed_term:is_host_tuple_cons() then
 		local elements = typed_term:unwrap_host_tuple_cons()
 		local new_elements = host_array()
@@ -3575,7 +3522,7 @@ function evaluate_impl(typed_term, runtime_context, ambient_typechecking_context
 			desc_term,
 			runtime_context
 		)]]
-		return terms.value.tuple_type(desc)
+		return terms.flex_value.tuple_type(desc)
 	elseif typed_term:is_tuple_desc_type() then
 		local universe_term = typed_term:unwrap_tuple_desc_type()
 		local universe = evaluate(universe_term, runtime_context, ambient_typechecking_context)
@@ -5112,8 +5059,8 @@ local function reachability()
 end
 
 ---@param lctx TypecheckingContext
----@param val value
----@param use value
+---@param val flex_value
+---@param use flex_value
 ---@param rctx TypecheckingContext
 ---@param cause any
 function TypeCheckerState:queue_subtype(lctx, val, rctx, use, cause)
@@ -5147,10 +5094,10 @@ function TypeCheckerState:queue_subtype(lctx, val, rctx, use, cause)
 end
 
 ---@param lctx TypecheckingContext
----@param val value
+---@param val flex_value
 ---@param rel SubtypeRelation
 ---@param rctx TypecheckingContext
----@param use value
+---@param use flex_value
 ---@param cause any
 function TypeCheckerState:queue_constrain(lctx, val, rel, rctx, use, cause)
 	local l = self:check_value(val, TypeCheckerTag.VALUE, lctx)
@@ -5183,10 +5130,10 @@ function TypeCheckerState:queue_constrain(lctx, val, rel, rctx, use, cause)
 end
 
 ---@param lctx TypecheckingContext
----@param val value
+---@param val flex_value
 ---@param rel SubtypeRelation
 ---@param rctx TypecheckingContext
----@param use value
+---@param use flex_value
 ---@param cause any
 ---@return boolean, any
 function TypeCheckerState:send_constrain(lctx, val, rel, rctx, use, cause)
@@ -5293,9 +5240,9 @@ function TypeCheckerState:metavariable(context, trait)
 	return mv
 end
 
----@param val value
+---@param val flex_value
 ---@param val_context TypecheckingContext
----@param use value
+---@param use flex_value
 ---@param use_context TypecheckingContext
 ---@param cause constraintcause
 ---@return boolean
@@ -5338,7 +5285,7 @@ function TypeCheckerState:check_heads(left, right, rel, cause, ambient_typecheck
 			value.host_value(cause)
 		)
 
-		return apply_value(rel.constrain, value.tuple_value(tuple_params), ambient_typechecking_context)
+		return apply_value(rel.constrain, flex_value.tuple_type(tuple_params), ambient_typechecking_context)
 			:unwrap_host_tuple_value()
 			:unpack()
 
@@ -5348,7 +5295,7 @@ function TypeCheckerState:check_heads(left, right, rel, cause, ambient_typecheck
 			block_level = typechecker_state.block_level,
 			rel = rel.debug_name,
 			cause = cause,
-		}, apply_value, rel.constrain, value.tuple_value(tuple_params))]]
+		}, apply_value, rel.constrain, flex_value.tuple_type(tuple_params))]]
 	end
 
 	return true
@@ -5584,9 +5531,9 @@ function TypeCheckerState:DEBUG_VERIFY_VALUES()
 	end
 end
 
----@param val value
+---@param val flex_value
 ---@param val_context TypecheckingContext
----@param use value
+---@param use flex_value
 ---@param use_context TypecheckingContext
 ---@param rel SubtypeRelation
 ---@param cause constraintcause
@@ -5710,7 +5657,7 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len, ambie
 	local constraints = array(terms.constraintelem)()
 
 	---@param id integer
-	---@return value
+	---@return flex_value
 	local function getnode(id)
 		return self.values[id][1]
 	end
