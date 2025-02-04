@@ -40,11 +40,11 @@ local function simplify_list(list, remove_comments)
 	end
 end
 
-local function create_anchor(id, line, char)
+local function create_anchor(internal, id, line, char)
 	if id == nil then
 		id = "inline"
 	end
-	return format.create_anchor(id, line, char)
+	return format.create_anchor(internal, id, line, char)
 end
 
 local function create_list(start_anchor, end_anchor, elements)
@@ -797,50 +797,50 @@ hello
 	}
 
 	local expected = {
-		create_list(create_anchor(nil, 1, 1), create_anchor(nil, 1, 19), {
-			create_list(create_anchor(nil, 1, 1), create_anchor(nil, 1, 19), {
-				create_symbol(create_anchor(nil, 1, 1), "hello"),
-				create_symbol(create_anchor(nil, 1, 7), "hi"),
-				create_symbol(create_anchor(nil, 1, 10), "greetings"),
+		create_list(create_anchor(false, nil, 1, 1), create_anchor(false, nil, 1, 19), {
+			create_list(create_anchor(false, nil, 1, 1), create_anchor(false, nil, 1, 19), {
+				create_symbol(create_anchor(false, nil, 1, 1), "hello"),
+				create_symbol(create_anchor(false, nil, 1, 7), "hi"),
+				create_symbol(create_anchor(false, nil, 1, 10), "greetings"),
 			}),
 		}),
 
-		create_list(create_anchor(nil, 1, 1), create_anchor(nil, 4, 1), {
-			create_list(create_anchor(nil, 1, 1), create_anchor(nil, 2, 8), {
-				create_symbol(create_anchor(nil, 1, 1), "hello"),
-				create_symbol(create_anchor(nil, 2, 2), "nested"),
+		create_list(create_anchor(false, nil, 1, 1), create_anchor(false, nil, 4, 1), {
+			create_list(create_anchor(false, nil, 1, 1), create_anchor(false, nil, 2, 8), {
+				create_symbol(create_anchor(false, nil, 1, 1), "hello"),
+				create_symbol(create_anchor(false, nil, 2, 2), "nested"),
 			}),
-			create_symbol(create_anchor(nil, 3, 1), "hi"),
+			create_symbol(create_anchor(false, nil, 3, 1), "hi"),
 		}),
 
-		create_list(create_anchor(nil, 1, 1), create_anchor(nil, 4, 1), {
-			create_list(create_anchor(nil, 1, 1), create_anchor(nil, 2, 10), {
-				create_symbol(create_anchor(nil, 1, 1), "hello"),
-				create_list(create_anchor(nil, 2, 2), create_anchor(nil, 2, 10), {
-					create_symbol(create_anchor(nil, 2, 2), "nested"),
-					create_symbol(create_anchor(nil, 2, 9), "a"),
+		create_list(create_anchor(false, nil, 1, 1), create_anchor(false, nil, 4, 1), {
+			create_list(create_anchor(false, nil, 1, 1), create_anchor(false, nil, 2, 10), {
+				create_symbol(create_anchor(false, nil, 1, 1), "hello"),
+				create_list(create_anchor(false, nil, 2, 2), create_anchor(false, nil, 2, 10), {
+					create_symbol(create_anchor(false, nil, 2, 2), "nested"),
+					create_symbol(create_anchor(false, nil, 2, 9), "a"),
 				}),
 			}),
-			create_symbol(create_anchor(nil, 3, 1), "hi"),
+			create_symbol(create_anchor(false, nil, 3, 1), "hi"),
 		}),
 
-		create_list(create_anchor(nil, 1, 1), create_anchor(nil, 4, 1), {
-			create_symbol(create_anchor(nil, 1, 1), "hello"),
-			create_list(create_anchor(nil, 2, 1), create_anchor(nil, 3, 9), {
-				create_symbol(create_anchor(nil, 2, 2), "this"),
-				create_symbol(create_anchor(nil, 2, 7), "is"),
-				create_symbol(create_anchor(nil, 3, 2), "a"),
-				create_symbol(create_anchor(nil, 3, 4), "test"),
+		create_list(create_anchor(false, nil, 1, 1), create_anchor(false, nil, 4, 1), {
+			create_symbol(create_anchor(false, nil, 1, 1), "hello"),
+			create_list(create_anchor(false, nil, 2, 1), create_anchor(false, nil, 3, 9), {
+				create_symbol(create_anchor(false, nil, 2, 2), "this"),
+				create_symbol(create_anchor(false, nil, 2, 7), "is"),
+				create_symbol(create_anchor(false, nil, 3, 2), "a"),
+				create_symbol(create_anchor(false, nil, 3, 4), "test"),
 			}),
 		}),
-		create_list(create_anchor(nil, 1, 1), create_anchor(nil, 4, 1), {
-			create_list(create_anchor(nil, 1, 1), create_anchor(nil, 4, 1), {
-				create_symbol(create_anchor(nil, 1, 1), "hello"),
-				create_list(create_anchor(nil, 2, 2), create_anchor(nil, 3, 10), {
-					create_symbol(create_anchor(nil, 2, 3), "this"),
-					create_symbol(create_anchor(nil, 2, 8), "is"),
-					create_symbol(create_anchor(nil, 3, 3), "a"),
-					create_symbol(create_anchor(nil, 3, 5), "test"),
+		create_list(create_anchor(false, nil, 1, 1), create_anchor(false, nil, 4, 1), {
+			create_list(create_anchor(false, nil, 1, 1), create_anchor(false, nil, 4, 1), {
+				create_symbol(create_anchor(false, nil, 1, 1), "hello"),
+				create_list(create_anchor(false, nil, 2, 2), create_anchor(false, nil, 3, 10), {
+					create_symbol(create_anchor(false, nil, 2, 3), "this"),
+					create_symbol(create_anchor(false, nil, 2, 8), "is"),
+					create_symbol(create_anchor(false, nil, 3, 3), "a"),
+					create_symbol(create_anchor(false, nil, 3, 5), "test"),
 				}),
 			}),
 		}),

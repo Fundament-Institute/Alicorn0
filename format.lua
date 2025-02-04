@@ -21,6 +21,7 @@ local function DebugPrint(s, patt)
 end
 
 ---@class Anchor
+---@field internal boolean
 ---@field id string
 ---@field line integer
 ---@field char integer
@@ -31,15 +32,23 @@ local Anchor = {}
 function Anchor:display(stop)
 	if stop == nil then
 		return tostring(self)
+	elseif self.internal ~= stop.internal then
+		error(string.format("(%s).internal ~= (%q).internal", tostring(self), tostring(stop)))
 	elseif self.id ~= stop.id then
 		error(string_format("(%s).id ~= (%q).id", tostring(self), tostring(stop)))
 	end
 
 	local start_line, stop_line = self.line, stop.line
+	local internal_prefix, internal_suffix = "", ""
+	if self.internal then
+		internal_prefix, internal_suffix = "⦃", "⦄"
+	end
 	if start_line ~= stop_line then
 		return string_format(
-			"%s:%s:%s-%s:%s",
+			"%s%s%s:%s:%s-%s:%s",
+			internal_prefix,
 			tostring(self.id),
+			internal_suffix,
 			tostring(start_line),
 			tostring(self.char),
 			tostring(stop_line),
@@ -49,14 +58,23 @@ function Anchor:display(stop)
 	local start_char, stop_char = self.char, stop.char
 	if start_char ~= stop_char then
 		return string_format(
-			"%s:%s:%s-%s",
+			"%s%s%s:%s:%s-%s",
+			internal_prefix,
 			tostring(self.id),
+			internal_suffix,
 			tostring(start_line),
 			tostring(start_char),
 			tostring(stop_char)
 		)
 	end
-	return string_format("%s:%s:%s", tostring(self.id), tostring(start_line), tostring(start_char))
+	return string_format(
+		"%s%s%s:%s:%s",
+		internal_prefix,
+		tostring(self.id),
+		internal_suffix,
+		tostring(start_line),
+		tostring(start_char)
+	)
 end
 
 local anchor_mt = {
@@ -64,17 +82,27 @@ local anchor_mt = {
 	---@param snd Anchor
 	---@return boolean
 	__lt = function(fst, snd)
-		local fst_id, snd_id = fst.id, snd.id
-		if fst_id < snd_id then
+		-- __lt(false, false) = false
+		-- __lt(false, true) = true
+		-- __lt(true, false) = false
+		-- __lt(true, true) = false
+		local fst_internal, snd_internal = fst.internal, snd.internal
+		if not fst_internal and snd_internal then
 			return true
 		end
-		if fst_id == snd_id then
-			local fst_line, snd_line = fst.line, snd.line
-			if fst_line < snd_line then
+		if fst_internal == snd_internal then
+			local fst_id, snd_id = fst.id, snd.id
+			if fst_id < snd_id then
 				return true
 			end
-			if fst_line == snd_line then
-				return fst.char < snd.char
+			if fst_id == snd_id then
+				local fst_line, snd_line = fst.line, snd.line
+				if fst_line < snd_line then
+					return true
+				end
+				if fst_line == snd_line then
+					return fst.char < snd.char
+				end
 			end
 		end
 		return false
@@ -83,17 +111,27 @@ local anchor_mt = {
 	---@param snd Anchor
 	---@return boolean
 	__le = function(fst, snd)
-		local fst_id, snd_id = fst.id, snd.id
-		if fst_id < snd_id then
+		-- __lt(false, false) = false
+		-- __lt(false, true) = true
+		-- __lt(true, false) = false
+		-- __lt(true, true) = false
+		local fst_internal, snd_internal = fst.internal, snd.internal
+		if not fst_internal or snd_internal then
 			return true
 		end
-		if fst_id == snd_id then
-			local fst_line, snd_line = fst.line, snd.line
-			if fst_line < snd_line then
+		if fst_internal == snd_internal then
+			local fst_id, snd_id = fst.id, snd.id
+			if fst_id < snd_id then
 				return true
 			end
-			if fst_line == snd_line then
-				return fst.char <= snd.char
+			if fst_id == snd_id then
+				local fst_line, snd_line = fst.line, snd.line
+				if fst_line < snd_line then
+					return true
+				end
+				if fst_line == snd_line then
+					return fst.char <= snd.char
+				end
 			end
 		end
 		return false
@@ -102,13 +140,24 @@ local anchor_mt = {
 	---@param snd Anchor
 	---@return boolean
 	__eq = function(fst, snd)
-		return fst.id == snd.id and fst.line == snd.line and fst.char == snd.char
+		return fst.internal == snd.internal and fst.id == snd.id and fst.line == snd.line and fst.char == snd.char
 	end,
 	---@param self Anchor
 	---@return string
 	__tostring = function(self)
 		local start_line, start_char = self.line, self.char
-		return string_format("%s:%s:%s", tostring(self.id), tostring(start_line), tostring(start_char))
+		local internal_prefix, internal_suffix = "", ""
+		if self.internal then
+			internal_prefix, internal_suffix = "⦃", "⦄"
+		end
+		return string_format(
+			"%s%s%s:%s:%s",
+			internal_prefix,
+			tostring(self.id),
+			internal_suffix,
+			tostring(start_line),
+			tostring(start_char)
+		)
 	end,
 	__index = Anchor,
 }
@@ -251,12 +300,14 @@ local function erase(pattern)
 	return pattern / {}
 end
 
+---@param internal boolean
 ---@param id string
 ---@param line integer
 ---@param char integer
 ---@return Anchor
-local function create_anchor(id, line, char)
+local function create_anchor(internal, id, line, char)
 	return setmetatable({
+		internal = internal,
 		id = id,
 		line = line,
 		char = char,
@@ -271,7 +322,7 @@ local function anchor_here(f)
 		f = (f or 1) + 1
 	end
 	local info = debug.getinfo(f, "Sl")
-	return create_anchor("SYNTH:" .. info.source, info.currentline, 0)
+	return create_anchor(true, "SYNTH:" .. info.source, info.currentline, 0)
 end
 
 ---@class LinePosition
@@ -324,6 +375,7 @@ local grammar = P {
 			line_index = line_index - 1
 		end
 		local simple_anchor = create_anchor(
+			false,
 			line_ctx.id,
 			line_ctx.positions[line_index].line,
 			position - line_ctx.positions[line_index].pos + 1
