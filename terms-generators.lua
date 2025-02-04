@@ -308,11 +308,12 @@ end
 ---@param flex UndefinedType
 ---@param flex_name string
 ---@param fn_replace fun(tag: string, variant: Type) : Type
----@param fn_unify fun(args: any[], types: Type[]) : string, any[]
+---@param fn_specify fun(args: any[], types: Type[]) : string, any[]
+---@param fn_unify fun(args: any[], types: Type[]) : any[]
 ---@param types { [string]: UndefinedType }
 ---@param names { [string]: string }
 ---@param variants Variants
-local function define_multi_enum(flex, flex_name, fn_replace, fn_unify, types, names, variants)
+local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_unify, types, names, variants)
 	---@type {[string]: Variants }
 	local keyed_variants = {}
 	---@type Variants
@@ -377,7 +378,7 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_unify, types, n
 						)
 					end
 				end
-				local tag, unified_args = fn_unify(args, params_types)
+				local tag, unified_args = fn_specify(args, params_types)
 				local subtype = types[tag]
 				local inner = subtype[k](table.unpack(unified_args))
 				return flex[tag](inner)
@@ -395,7 +396,28 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_unify, types, n
 		for _, v in ipairs(derivers) do
 			local tag = flex_tags[k]
 			if tag == "flex" then
-				error("NYI")
+				if v == "is_" or v == "as_" then
+					flex.__index[v .. k] = function(self, ...)
+						local ok, inner = flex["as_"](self)
+						if not ok then
+							return false
+						end
+						return inner[v .. k](inner, ...)
+					end
+				elseif v == "unwrap_" then
+					flex.__index[v .. k] = function(self, ...)
+						local inner = flex[v .. tag](self)
+						return inner[v .. k](inner, ...)
+					end
+				elseif v == "as_" then
+					flex.__index[v .. k] = function(self, ...)
+						local ok, inner = flex["as_"](self)
+						if not ok then
+							return false
+						end
+						return inner[v .. k](inner, ...)
+					end
+				end
 			elseif tag ~= nil then
 				local base = flex.__index[v .. k]
 				if not base then

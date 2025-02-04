@@ -72,9 +72,10 @@ local var_debug = gen.declare_record("var_debug", {
 	anchor_type,
 })
 
----@class (exact) RuntimeContextBase
+---@class (exact) FlexRuntimeContext
 ---@field bindings FibonacciBuffer
-local RuntimeContextBase = {}
+---@field stuck_count integer
+local FlexRuntimeContext = {}
 
 -- without this, some flex_value.closure comparisons fail erroneously
 ---@class RuntimeContextBinding<T>: { name: string, val: T, debuginfo: debuginfo }
@@ -84,14 +85,14 @@ local RuntimeContextBinding = {
 	end,
 }
 
-function RuntimeContextBase:dump_names()
+function FlexRuntimeContext:dump_names()
 	for i = 1, self.bindings:len() do
 		print(i, self.bindings:get(i).name)
 	end
 end
 
 ---@return string
-function RuntimeContextBase:format_names()
+function FlexRuntimeContext:format_names()
 	local msg = ""
 	for i = 1, self.bindings:len() do
 		msg = msg .. tostring(i) .. "\t" .. self.bindings:get(i).name .. "\n"
@@ -99,11 +100,10 @@ function RuntimeContextBase:format_names()
 	return msg
 end
 
----@generic T
 ---@param index integer
----@return T
+---@return flex_value?
 ---@return var_debug?
-function RuntimeContextBase:get(index)
+function FlexRuntimeContext:get(index)
 	local binding = self.bindings:get(index)
 	if binding == nil then
 		return nil
@@ -111,12 +111,11 @@ function RuntimeContextBase:get(index)
 	return binding.val, binding.debuginfo
 end
 
----@generic T
----@param v T
+---@param v flex_value
 ---@param name string?
 ---@param debuginfo var_debug
----@return RuntimeContextBase
-function RuntimeContextBase:append(v, name, debuginfo)
+---@return FlexRuntimeContext
+function FlexRuntimeContext:append(v, name, debuginfo)
 	if debuginfo == nil then
 		error(debug.traceback())
 	end
@@ -126,27 +125,37 @@ function RuntimeContextBase:append(v, name, debuginfo)
 	end
 	local copy = {
 		provenance = self,
+		stuck_count = self.stuck_count,
 		bindings = self.bindings:append(
 			setmetatable({ name = name, val = v, debuginfo = debuginfo }, RuntimeContextBinding)
 		),
 	}
+	if v:is_stuck() then
+		copy.stuck_count = copy.stuck_count + 1
+	end
 	return setmetatable(copy, getmetatable(self))
 end
 
----@generic T
 ---@param index integer
----@param v T
----@return RuntimeContextBase
-function RuntimeContextBase:set(index, v)
+---@param v flex_value
+---@return FlexRuntimeContext
+function FlexRuntimeContext:set(index, v)
 	local old = self.bindings:get(index)
 	local new = setmetatable({ name = old.name, val = v }, RuntimeContextBinding)
-	local copy = { provenance = self, bindings = self.bindings:set(index, new) }
+	local copy = { provenance = self, stuck_count = self.stuck_count, bindings = self.bindings:set(index, new) }
+
+	if old.val:is_stuck() then
+		copy.stuck_count = copy.stuck_count - 1
+	end
+	if v:is_stuck() then
+		copy.stuck_count = copy.stuck_count + 1
+	end
 	return setmetatable(copy, getmetatable(self))
 end
 
----@param other RuntimeContextBase
+---@param other FlexRuntimeContext
 ---@return boolean
-function RuntimeContextBase:eq(other)
+function FlexRuntimeContext:eq(other)
 	local omt = getmetatable(other)
 	if omt ~= getmetatable(self) then
 		return false
@@ -154,17 +163,14 @@ function RuntimeContextBase:eq(other)
 	return self.bindings == other.bindings
 end
 
--- TODO: Is there a way to generate this somehow? Below code was created via replacing "strict" with stuck or flex
------------------- BEGIN RUNTIME CONTEXTS
-
----@class StrictRuntimeContext : RuntimeContextBase
-local StrictRuntimeContext = U.shallow_copy(RuntimeContextBase)
+---@class StrictRuntimeContext : FlexRuntimeContext
+local StrictRuntimeContext = U.shallow_copy(FlexRuntimeContext)
 
 ---@param index integer
 ---@return strict_value
 ---@return var_debug?
 function StrictRuntimeContext:get(index)
-	return RuntimeContextBase.get(self, index)
+	return FlexRuntimeContext.get(self, index):unwrap_strict()
 end
 
 ---@param v strict_value
@@ -176,7 +182,7 @@ function StrictRuntimeContext:append(v, name, debuginfo)
 		error("StrictRuntimeContext:append v must be a strict_value")
 	end
 	---@type StrictRuntimeContext
-	return RuntimeContextBase.append(self, v, name, debuginfo)
+	return FlexRuntimeContext.append(self, flex_value.strict(v), name, debuginfo)
 end
 
 ---@param index integer
@@ -187,7 +193,7 @@ function StrictRuntimeContext:set(index, v)
 		error("StrictRuntimeContext:set v must be a strict_value")
 	end
 	---@type StrictRuntimeContext
-	return RuntimeContextBase.set(self, index, v)
+	return FlexRuntimeContext.set(self, index, flex_value.strict(v))
 end
 
 local strict_runtime_context_mt = {
@@ -200,86 +206,7 @@ local strict_runtime_context_mt = {
 
 ---@return StrictRuntimeContext
 local function strict_runtime_context()
-	return setmetatable({ bindings = fibbuf() }, strict_runtime_context_mt)
-end
-
----@class StuckRuntimeContext : RuntimeContextBase
-local StuckRuntimeContext = U.shallow_copy(RuntimeContextBase)
-
----@param index integer
----@return stuck_value
----@return var_debug?
-function StuckRuntimeContext:get(index)
-	return RuntimeContextBase.get(self, index)
-end
-
----@param v stuck_value
----@param name string?
----@param debuginfo var_debug
----@return StuckRuntimeContext
-function StuckRuntimeContext:append(v, name, debuginfo)
-	if stuck_value.value_check(v) ~= true then
-		error("StuckRuntimeContext:append v must be a stuck_value")
-	end
-	---@type StuckRuntimeContext
-	return RuntimeContextBase.append(self, v, name, debuginfo)
-end
-
----@param index integer
----@param v stuck_value
----@return StuckRuntimeContext
-function StuckRuntimeContext:set(index, v)
-	if stuck_value.value_check(v) ~= true then
-		error("StuckRuntimeContext:set v must be a stuck_value")
-	end
-	---@type StuckRuntimeContext
-	return RuntimeContextBase.set(self, index, v)
-end
-
-local stuck_runtime_context_mt = {
-	__index = StuckRuntimeContext,
-	__eq = StuckRuntimeContext.eq,
-	__tostring = function(t)
-		return "StuckRuntimeContext with " .. t.bindings:len() .. " bindings."
-	end,
-}
-
----@return StuckRuntimeContext
-local function stuck_runtime_context()
-	return setmetatable({ bindings = fibbuf() }, stuck_runtime_context_mt)
-end
-
----@class FlexRuntimeContext : RuntimeContextBase
-local FlexRuntimeContext = U.shallow_copy(RuntimeContextBase)
-
----@param index integer
----@return flex_value
----@return var_debug?
-function FlexRuntimeContext:get(index)
-	return RuntimeContextBase.get(self, index)
-end
-
----@param v flex_value
----@param name string?
----@param debuginfo var_debug
----@return FlexRuntimeContext
-function FlexRuntimeContext:append(v, name, debuginfo)
-	if flex_value.value_check(v) ~= true then
-		error("FlexRuntimeContext:append v must be a flex_value")
-	end
-	---@type FlexRuntimeContext
-	return RuntimeContextBase.append(self, v, name, debuginfo)
-end
-
----@param index integer
----@param v flex_value
----@return FlexRuntimeContext
-function FlexRuntimeContext:set(index, v)
-	if flex_value.value_check(v) ~= true then
-		error("FlexRuntimeContext:set v must be a flex_value")
-	end
-	---@type FlexRuntimeContext
-	return RuntimeContextBase.set(self, index, v)
+	return setmetatable({ stuck_count = 0, bindings = fibbuf() }, strict_runtime_context_mt)
 end
 
 local flex_runtime_context_mt = {
@@ -292,10 +219,21 @@ local flex_runtime_context_mt = {
 
 ---@return FlexRuntimeContext
 local function flex_runtime_context()
-	return setmetatable({ bindings = fibbuf() }, flex_runtime_context_mt)
+	return setmetatable({ stuck_count = 0, bindings = fibbuf() }, flex_runtime_context_mt)
 end
 
----------------- END RUNTIME CONTEXTS
+---@return StrictRuntimeContext
+function FlexRuntimeContext:as_strict()
+	if self.stuck_count > 0 then
+		error("Cannot convert runtime context to strict, found " .. tostring(self.stuck_count) .. " stuck bindings!")
+	end
+	return setmetatable(self, strict_runtime_context_mt)
+end
+
+---@return FlexRuntimeContext
+function StrictRuntimeContext:as_flex()
+	return setmetatable(self, flex_runtime_context_mt)
+end
 
 local function runtime_context_diff_fn(left, right)
 	print("diffing runtime context...")
@@ -332,8 +270,6 @@ local function runtime_context_diff_fn(left, right)
 		local diff_impl
 		if rt == flex_runtime_context_mt then
 			diff_impl = traits.diff:get(flex_value)
-		elseif rt == stuck_runtime_context_mt then
-			diff_impl = traits.diff:get(stuck_value)
 		elseif rt == strict_runtime_context_mt then
 			diff_impl = traits.diff:get(strict_value)
 		end
@@ -600,8 +536,6 @@ local module_mt = {}
 
 local strict_runtime_context_type =
 	gen.declare_foreign(gen.metatable_equality(strict_runtime_context_mt), "StrictRuntimeContext")
-local stuck_runtime_context_type =
-	gen.declare_foreign(gen.metatable_equality(stuck_runtime_context_mt), "StuckRuntimeContext")
 local flex_runtime_context_type =
 	gen.declare_foreign(gen.metatable_equality(flex_runtime_context_mt), "FlexRuntimeContext")
 local typechecking_context_type =
@@ -611,7 +545,6 @@ local host_user_defined_id = gen.declare_foreign(function(val)
 end, "{ name: string }")
 
 traits.diff:implement_on(strict_runtime_context_type, { diff = runtime_context_diff_fn })
-traits.diff:implement_on(stuck_runtime_context_type, { diff = runtime_context_diff_fn })
 traits.diff:implement_on(flex_runtime_context_type, { diff = runtime_context_diff_fn })
 
 -- implicit arguments are filled in through unification
@@ -1228,7 +1161,7 @@ local function replace_flex_values(tag, v)
 	return v
 end
 
-local function unify_flex_values(args, types)
+local function specify_flex_values(args, types)
 	local stuck = false
 	local strict_args = {}
 	for i, t in ipairs(types) do
@@ -1253,7 +1186,11 @@ local function unify_flex_values(args, types)
 				return "stuck", args
 			end
 			table.insert(strict_args, args[i]:unwrap_strict())
-			--elseif t == flex_runtime_context then -- TODO: no idea how to handle this
+		elseif t == flex_runtime_context_type then
+			if args[i]:num_stuck() > 0 then
+				return "stuck", args
+			end
+			table.insert(strict_args, args[i]:as_strict())
 		else
 			table.insert(strict_args, args[i])
 		end
@@ -1262,8 +1199,41 @@ local function unify_flex_values(args, types)
 	return "strict", strict_args
 end
 
+local function unify_flex_values(args, types)
+	local flex_args = {}
+	for i, t in ipairs(types) do
+		if t == strict_value then
+			table.insert(flex_args, flex_value.strict(args[i]))
+		elseif t == stuck_value then
+			table.insert(flex_args, flex_value.stuck(args[i]))
+		elseif t == array(strict_value) then
+			local flex_array = array(flex_value)()
+			for _, v in ipairs(args[i]) do
+				flex_array:append(flex_value.strict(v))
+			end
+			table.insert(flex_args, flex_array)
+		elseif t == array(stuck_value) then
+			local flex_array = array(flex_value)()
+			for _, v in ipairs(args[i]) do
+				flex_array:append(flex_value.stuck(v))
+			end
+			table.insert(flex_args, flex_array)
+		elseif t == strict_continuation then
+			table.insert(flex_args, flex_continuation.strict(args[i]))
+		elseif t == stuck_continuation then
+			table.insert(flex_args, flex_continuation.stuck(args[i]))
+		elseif t == strict_runtime_context_type then
+			table.insert(flex_args, args[i]:as_flex())
+		else
+			table.insert(flex_args, args[i])
+		end
+	end
+
+	return flex_args
+end
+
 -- stylua: ignore
-gen.define_multi_enum(flex_continuation, "flex_continuation", replace_flex_values, unify_flex_values,
+gen.define_multi_enum(flex_continuation, "flex_continuation", replace_flex_values, specify_flex_values, unify_flex_values,
 { strict = strict_continuation, stuck = stuck_continuation },
 { strict = "strict_continuation", stuck = "stuck_continuation" },
 {
@@ -1294,6 +1264,7 @@ gen.define_multi_enum(
 	flex_value,
 	"flex_value",
 	replace_flex_values,
+	specify_flex_values,
 	unify_flex_values,
 	{ strict = strict_value, stuck = stuck_value },
 	{ strict = "strict_value", stuck = "stuck_value" },
@@ -1683,7 +1654,6 @@ local terms = {
 	typechecking_context = typechecking_context,
 	module_mt = module_mt,
 	strict_runtime_context_type = strict_runtime_context_type,
-	stuck_runtime_context_type = stuck_runtime_context_type,
 	flex_runtime_context_type = flex_runtime_context_type,
 	typechecking_context_type = typechecking_context_type,
 	subtype_relation_mt = subtype_relation_mt,
