@@ -1250,7 +1250,7 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(lctx
 									),
 									flex_value.closure(
 										"#prefix",
-										typed_term.literal(b),
+										substitute_placeholders_identity(b, rctx, 1),
 										rctx.runtime_context,
 										terms.var_debug("#prefix", U.anchor_here())
 									)
