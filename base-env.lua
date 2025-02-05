@@ -2217,7 +2217,7 @@ local function tuple_to_host_tuple_inner(_type, _valid, val)
 	if not stuck then
 		return terms.flex_value.host_tuple_value(leading)
 	else
-		return terms.flex_value.stuck(terms.stuck_value.host_tuple_stuck(leading, stuck_elem, trailing))
+		return terms.flex_value.stuck(terms.stuck_value.host_tuple(leading, stuck_elem, trailing))
 	end
 end
 

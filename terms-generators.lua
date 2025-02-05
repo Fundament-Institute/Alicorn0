@@ -362,7 +362,7 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 	flex:define_enum(flex_name, flex_variants)
 
 	local unify_passthrough = function(ok, ...)
-		return ok, fn_unify(table.pack(...))
+		return ok, table.unpack(fn_unify(table.pack(...)))
 	end
 
 	for i, pair in ipairs(flex_variants) do
@@ -377,7 +377,11 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 					if params_types[i].value_check(args[i]) ~= true then
 						error(
 							debug.traceback(
-								"wrong argument type passed to constructor " .. kind .. ", parameter '" .. v .. "'"
+								"wrong argument type passed to constructor "
+									.. args[i].kind
+									.. ", parameter '"
+									.. v
+									.. "'"
 							)
 						)
 					end
@@ -403,7 +407,7 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 
 			local unwrapper = {}
 			for k, v in pairs(types) do
-				unwrapper[flex_name .. "." .. k] = flex["unwrap_" .. "." .. k]
+				unwrapper[flex_name .. "." .. k] = flex.__index["unwrap_" .. k]
 			end
 
 			if tag == "flex" then
@@ -415,7 +419,7 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 				elseif v == "unwrap_" then
 					flex.__index[key] = function(self, ...)
 						local inner = unwrapper[self.kind](self)
-						return fn_unify(table.pack(inner[key](inner, ...)))
+						return table.unpack(fn_unify(table.pack(inner[key](inner, ...))))
 					end
 				elseif v == "as_" then
 					flex.__index[key] = function(self, ...)
@@ -430,7 +434,7 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 				end
 				if v == "is_" or v == "as_" then
 					flex.__index[key] = function(self, ...)
-						local ok, inner = flex["as_" .. tag](self)
+						local ok, inner = flex.__index["as_" .. tag](self)
 						if not ok then
 							return false
 						end
@@ -438,7 +442,7 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 					end
 				elseif v == "unwrap_" then
 					flex.__index[key] = function(self, ...)
-						local inner = flex[v .. tag](self)
+						local inner = flex.__index[v .. tag](self)
 						return inner[key](inner, ...)
 					end
 				end

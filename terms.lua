@@ -227,12 +227,18 @@ function FlexRuntimeContext:as_strict()
 	if self.stuck_count > 0 then
 		error("Cannot convert runtime context to strict, found " .. tostring(self.stuck_count) .. " stuck bindings!")
 	end
-	return setmetatable(self, strict_runtime_context_mt)
+	return setmetatable(
+		{ provenance = self, stuck_count = self.stuck_count, bindings = self.bindings },
+		strict_runtime_context_mt
+	)
 end
 
 ---@return FlexRuntimeContext
 function StrictRuntimeContext:as_flex()
-	return setmetatable(self, flex_runtime_context_mt)
+	return setmetatable(
+		{ provenance = self, stuck_count = self.stuck_count, bindings = self.bindings },
+		flex_runtime_context_mt
+	)
 end
 
 local function runtime_context_diff_fn(left, right)
@@ -1590,8 +1596,6 @@ local function cons(...)
 end
 
 local empty = flex_value.enum_value(DescCons.empty, tup_val())
-local unit_type = flex_value.tuple_type(empty)
-local unit_val = tup_val()
 
 ---@param a flex_value
 ---@param e flex_value
@@ -1648,6 +1652,8 @@ local function strict_tuple_desc(...)
 	return strict_tuple_desc_inner(empty:unwrap_strict(), ...)
 end
 
+local unit_type = strict_value.tuple_type(empty:unwrap_strict())
+local unit_val = strict_tup_val()
 local effect_registry = new_registry("effect")
 local TCState =
 	effect_id(effect_registry:register("TCState", "effects that manipulate the typechecker state"), set(unique_id)())

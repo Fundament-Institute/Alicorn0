@@ -546,8 +546,8 @@ end
 ---@param goal expression_goal
 ---@param env Environment
 ---@return tristate
----@return string|checkable|inferrable
----@return Environment
+---@return string|checkable|inferrable|flex_value
+---@return Environment?
 local function call_operative(type_of_term, usage_count, term, sargs, goal, env)
 	-- TODO: speculate operative type
 	local ok
@@ -724,7 +724,7 @@ end
 ---@param env Environment
 ---@return tristate
 ---@return string|checkable|inferrable
----@return Environment
+---@return Environment?
 local function call_host_func_type(type_of_term_input, usage_count, term, sargs, goal, env)
 	local ok, type_of_term = evaluator.typechecker_state:speculate(function()
 		local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
@@ -799,6 +799,7 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 	if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
 		local ok, tuple_usages, tuple_term = evaluator.check(tuple, env.typechecking_context, param_type)
 		if not ok then
+			---@cast tuple_usages -ArrayValue
 			return terms.tristate.failure, tuple_usages
 		end
 		local result_final = evaluator.evaluate(
@@ -814,7 +815,6 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 				typed_term.tuple_cons(typed_array(term, tuple_term))
 			)
 		)
-		---@type Environment
 		local bind = terms.binding.program_sequence(app, sargs.start_anchor)
 		ok, env = env:bind_local(bind)
 		if not ok then

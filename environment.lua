@@ -84,6 +84,7 @@ local function log_binding(name, type, value)
 	print(value)
 end
 
+---@overload fun(binding: binding) : boolean, string
 ---@param binding binding
 ---@return boolean, Environment
 function environment:bind_local(binding)
