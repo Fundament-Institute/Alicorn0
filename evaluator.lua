@@ -719,7 +719,7 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		local param_name, code, capture, debuginfo = val:unwrap_closure()
 		local unique = { debug = "substitute_inner, val:is_closure" .. U.here() }
 		local arg = flex_value.stuck(stuck_value.free(free.unique(unique)))
-		local resval = apply_value(val, arg, ambient_typechecking_context)
+		local resval = apply_value(flex_value.stuck(val), arg, ambient_typechecking_context)
 		--print("applied closure during substitution: (value term follows)")
 		--print(val)
 
@@ -2335,7 +2335,7 @@ local function infer_impl(
 		local param_type = evaluate(param_term, typechecking_context:get_runtime_context(), typechecking_context)
 		local param_debug = terms.var_debug(param_name, start_anchor)
 		local inner_context = typechecking_context:append(param_name, param_type, nil, param_debug)
-		local ok, purity_usages, purity_term = check(purity, inner_context, terms.host_purity_type)
+		local ok, purity_usages, purity_term = check(purity, inner_context, flex_value.strict(terms.host_purity_type))
 		if not ok then
 			return false, purity_usages
 		end

@@ -2,7 +2,7 @@ local fibbuf = require "fibonacci-buffer"
 local gen = require "terms-generators"
 local U = require "alicorn-utils"
 local typechecking_context_type
-local runtime_context_type
+local flex_runtime_context_type
 local DescCons
 
 -- pretty printing context stuff
@@ -74,9 +74,16 @@ local function ensure_context(context)
 	elseif typechecking_context_type.value_check(context) == true then
 		---@cast context TypecheckingContext
 		return PrettyprintingContext.from_typechecking_context(context)
-	elseif runtime_context_type.value_check(context) == true then
+	elseif flex_runtime_context_type.value_check(context) == true then
 		---@cast context FlexRuntimeContext
 		return PrettyprintingContext.from_runtime_context(context)
+	elseif
+		context ~= nil
+		and context.as_flex ~= nil
+		and flex_runtime_context_type.value_check(context:as_flex()) == true
+	then
+		---@cast context FlexRuntimeContext
+		return PrettyprintingContext.from_runtime_context(context:as_flex())
 	else
 		--print("!!!!!!!!!! MISSING PRETTYPRINTER CONTEXT !!!!!!!!!!!!!!")
 		--print("making something up")
@@ -2037,7 +2044,7 @@ end
 
 return function(args)
 	typechecking_context_type = args.typechecking_context_type
-	runtime_context_type = args.runtime_context_type
+	flex_runtime_context_type = args.flex_runtime_context_type
 	DescCons = args.DescCons
 	return {
 		checkable_term_override_pretty = checkable_term_override_pretty,
