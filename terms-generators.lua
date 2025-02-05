@@ -309,7 +309,7 @@ end
 ---@param flex_name string
 ---@param fn_replace fun(tag: string, variant: Type) : Type
 ---@param fn_specify fun(args: any[], types: Type[]) : string, any[]
----@param fn_unify fun(args: any[], types: Type[]) : any[]
+---@param fn_unify fun(args: any[]) : any[]
 ---@param types { [string]: UndefinedType }
 ---@param names { [string]: string }
 ---@param variants Variants
@@ -361,6 +361,10 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 
 	flex:define_enum(flex_name, flex_variants)
 
+	local unify_passthrough = function(ok, ...)
+		return ok, fn_unify(table.pack(...))
+	end
+
 	for i, pair in ipairs(flex_variants) do
 		local k = pair[1]
 		if flex_tags[k] == "flex" then
@@ -395,46 +399,47 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 		local derivers = { "is_", "unwrap_", "as_" }
 		for _, v in ipairs(derivers) do
 			local tag = flex_tags[k]
+			local key = v .. k
+
+			local unwrapper = {}
+			for k, v in pairs(types) do
+				unwrapper[flex_name .. "." .. k] = flex["unwrap_" .. "." .. k]
+			end
+
 			if tag == "flex" then
-				if v == "is_" or v == "as_" then
-					flex.__index[v .. k] = function(self, ...)
-						local ok, inner = flex["as_"](self)
-						if not ok then
-							return false
-						end
-						return inner[v .. k](inner, ...)
+				if v == "is_" then
+					flex.__index[key] = function(self, ...)
+						local inner = unwrapper[self.kind](self)
+						return inner[key](inner, ...)
 					end
 				elseif v == "unwrap_" then
-					flex.__index[v .. k] = function(self, ...)
-						local inner = flex[v .. tag](self)
-						return inner[v .. k](inner, ...)
+					flex.__index[key] = function(self, ...)
+						local inner = unwrapper[self.kind](self)
+						return fn_unify(table.pack(inner[key](inner, ...)))
 					end
 				elseif v == "as_" then
-					flex.__index[v .. k] = function(self, ...)
-						local ok, inner = flex["as_"](self)
-						if not ok then
-							return false
-						end
-						return inner[v .. k](inner, ...)
+					flex.__index[key] = function(self, ...)
+						local inner = unwrapper[self.kind](self)
+						return unify_passthrough(inner[key](inner, ...))
 					end
 				end
 			elseif tag ~= nil then
-				local base = flex.__index[v .. k]
+				local base = flex.__index[key]
 				if not base then
-					error("Trying to override nonexistent function " .. v .. k)
+					error("Trying to override nonexistent function " .. key)
 				end
 				if v == "is_" or v == "as_" then
-					flex.__index[v .. k] = function(self, ...)
+					flex.__index[key] = function(self, ...)
 						local ok, inner = flex["as_" .. tag](self)
 						if not ok then
 							return false
 						end
-						return inner[v .. k](inner, ...)
+						return inner[key](inner, ...)
 					end
 				elseif v == "unwrap_" then
-					flex.__index[v .. k] = function(self, ...)
+					flex.__index[key] = function(self, ...)
 						local inner = flex[v .. tag](self)
-						return inner[v .. k](inner, ...)
+						return inner[key](inner, ...)
 					end
 				end
 			end
@@ -965,7 +970,7 @@ local function gen_array_index_fns(self, value_type)
 		if value_type.value_check(value) ~= true then
 			p("array-index-assign", value_type)
 			p(value)
-			error("wrong value type passed to array index-assignment")
+			error(debug.traceback("wrong value type passed to array index-assignment"))
 		end
 		val.array[key] = value
 		if key > val.n then

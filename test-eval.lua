@@ -1,5 +1,5 @@
 local terms = require "terms"
-local runtime_context = terms.runtime_context
+local flex_runtime_context = terms.flex_runtime_context
 local typechecking_context = terms.typechecking_context
 local inferrable_term = terms.inferrable_term
 local typed_term = terms.typed_term
@@ -202,7 +202,7 @@ eval_test("repacking_tuples", result_3)
 -- local value_user_defined_prim_a = infer_and_eval("syn_prim_cons", user_defined_prim_a_cons)
 
 -- local prim_fmt_read = prim_f(function(str) return fmt.read(str, "inline") end)
--- local infer_prim_fmt_read = inferrable_term.typed(value_user_defined_prim_a, usage_array(), typed_term.literal(value.prim(prim_fmt_read)))
+-- local infer_prim_fmt_read = inferrable_term.typed(value_user_defined_prim_a, usage_array(), typed_term.literal(strict_value.prim(prim_fmt_read)))
 -- infer_and_eval("user_defined_prim_syntax_cons", inf_app(infer_prim_fmt_read, inferrable_term.typed(value.prim_string_type, usage_array(), prim_lit("+ 2 3"))))
 
 print("PART SIX!!!!!!!!!!")

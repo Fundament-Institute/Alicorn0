@@ -73,8 +73,8 @@ function environment:get(name)
 end
 
 ---@param name string
----@param type value
----@param value value
+---@param type flex_value
+---@param value flex_value
 local function log_binding(name, type, value)
 	print("New let binding")
 	print("name:", name)
@@ -98,7 +98,7 @@ function environment:bind_local(binding)
 		if not ok then
 			return false, expr_type
 		end
-		if terms.value.value_check(expr_type) ~= true then
+		if terms.flex_value.value_check(expr_type) ~= true then
 			print("expr", expr)
 			error("infer returned a bad type for expr in bind_local")
 		end
@@ -134,11 +134,11 @@ function environment:bind_local(binding)
 		local desc = terms.empty
 		for _ in names:ipairs() do
 			local next_elem_type_mv = evaluator.typechecker_state:metavariable(self.typechecking_context)
-			local next_elem_type = next_elem_type_mv:as_value()
+			local next_elem_type = next_elem_type_mv:as_flex()
 			desc = terms.cons(desc, next_elem_type)
 		end
-		local spec_type = terms.value.tuple_type(desc)
-		local host_spec_type = terms.value.host_tuple_type(desc)
+		local spec_type = terms.flex_value.tuple_type(desc)
+		local host_spec_type = terms.flex_value.host_tuple_type(desc)
 		local function inner_tuple_elim(spec_type)
 			local ok, err = evaluator.typechecker_state:speculate(function()
 				return evaluator.typechecker_state:flow(
@@ -262,12 +262,12 @@ function environment:bind_local(binding)
 			return false, first_type
 		end
 
-		local first_effect_type = evaluator.typechecker_state:metavariable(self.typechecking_context):as_value()
-		local first_result_type = evaluator.typechecker_state:metavariable(self.typechecking_context):as_value()
+		local first_effect_type = evaluator.typechecker_state:metavariable(self.typechecking_context):as_flex()
+		local first_result_type = evaluator.typechecker_state:metavariable(self.typechecking_context):as_flex()
 		local ok, err = evaluator.typechecker_state:flow(
 			first_type,
 			self.typechecking_context,
-			terms.value.program_type(first_effect_type, first_result_type),
+			terms.flex_value.program_type(first_effect_type, first_result_type),
 			self.typechecking_context,
 			terms.constraintcause.primitive("Inferring on program type ", start_anchor)
 		)

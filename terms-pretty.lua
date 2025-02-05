@@ -28,7 +28,7 @@ function PrettyprintingContext.from_typechecking_context(context)
 	return setmetatable(self, prettyprinting_context_mt)
 end
 
----@param context RuntimeContext
+---@param context FlexRuntimeContext
 ---@return PrettyPrintingContext
 function PrettyprintingContext.from_runtime_context(context)
 	local self = {}
@@ -63,7 +63,7 @@ prettyprinting_context_mt.__len = PrettyprintingContext.len
 local prettyprinting_context_type =
 	gen.declare_foreign(gen.metatable_equality(prettyprinting_context_mt), "PrettyPrintingContext")
 
----@alias AnyContext PrettyPrintingContext | TypecheckingContext | RuntimeContext
+---@alias AnyContext PrettyPrintingContext | TypecheckingContext | FlexRuntimeContext
 
 ---@param context AnyContext
 ---@return PrettyPrintingContext
@@ -75,7 +75,7 @@ local function ensure_context(context)
 		---@cast context TypecheckingContext
 		return PrettyprintingContext.from_typechecking_context(context)
 	elseif runtime_context_type.value_check(context) == true then
-		---@cast context RuntimeContext
+		---@cast context FlexRuntimeContext
 		return PrettyprintingContext.from_runtime_context(context)
 	else
 		--print("!!!!!!!!!! MISSING PRETTYPRINTER CONTEXT !!!!!!!!!!!!!!")
@@ -487,11 +487,11 @@ local inferrable_term_override_pretty = {}
 ---@class TypedTermOverride : typed
 local typed_term_override_pretty = {}
 
----@class ValueOverridePretty : value
+---@class ValueOverridePretty : flex_value
 local value_override_pretty = {}
 
----@class NeutralValueOverridePretty : stuck_value
-local neutral_value_override_pretty = {}
+---@class StuckValueOverridePretty : stuck_value
+local stuck_value_override_pretty = {}
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
@@ -1922,18 +1922,18 @@ function value_override_pretty:enum_value(pp)
 end
 
 ---@param pp PrettyPrint
-function value_override_pretty:neutral(pp)
-	local neutral = self:unwrap_neutral()
+function value_override_pretty:stuck(pp)
+	local stuck = self:unwrap_stuck()
 
-	if neutral:is_free() and neutral:unwrap_free():is_metavariable() then
-		pp:any(neutral)
+	if stuck:is_free() and stuck:unwrap_free():is_metavariable() then
+		pp:any(stuck)
 	else
-		pp:record("flex_value.stuck", { { "neutral", neutral } })
+		pp:record("flex_value.stuck", { { "stuck", stuck } })
 	end
 end
 
 ---@param pp PrettyPrint
-function neutral_value_override_pretty:free(pp)
+function stuck_value_override_pretty:free(pp)
 	local free = self:unwrap_free()
 
 	if free:is_metavariable() then
@@ -2044,7 +2044,7 @@ return function(args)
 		inferrable_term_override_pretty = inferrable_term_override_pretty,
 		typed_term_override_pretty = typed_term_override_pretty,
 		value_override_pretty = value_override_pretty,
-		neutral_value_override_pretty = neutral_value_override_pretty,
+		stuck_value_override_pretty = stuck_value_override_pretty,
 		binding_override_pretty = binding_override_pretty,
 	}
 end

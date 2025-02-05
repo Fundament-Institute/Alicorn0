@@ -4,7 +4,6 @@ local metalanguage = require "metalanguage"
 
 local terms = require "terms"
 local expression_goal = terms.expression_goal
-local runtime_context = terms.runtime_context
 --local typechecking_context = terms.typechecking_context
 local checkable_term = terms.checkable_term
 local inferrable_term = terms.inferrable_term
@@ -12,7 +11,8 @@ local typed_term = terms.typed_term
 local visibility = terms.visibility
 local purity = terms.purity
 local result_info = terms.result_info
-local value = terms.value
+local flex_value = terms.flex_value
+local strict_value = terms.strict_value
 --local host_syntax_type = terms.host_syntax_type
 --local host_environment_type = terms.host_environment_type
 --local host_inferrable_term_type = terms.host_inferrable_term_type
@@ -22,15 +22,14 @@ local array = gen.declare_array
 --local checkable_array = array(checkable_term)
 local inferrable_array = array(inferrable_term)
 local typed_array = array(typed_term)
-local value_array = array(value)
 local usage_array = array(gen.builtin_number)
 local name_array = array(gen.builtin_string)
 local debug_array = array(terms.var_debug)
 
-local param_info_implicit = value.param_info(value.visibility(visibility.implicit))
-local param_info_explicit = value.param_info(value.visibility(visibility.explicit))
-local result_info_pure = value.result_info(result_info(purity.pure))
-local result_info_effectful = value.result_info(result_info(purity.effectful))
+local param_info_implicit = strict_value.param_info(strict_value.visibility(visibility.implicit))
+local param_info_explicit = strict_value.param_info(strict_value.visibility(visibility.explicit))
+local result_info_pure = strict_value.result_info(result_info(purity.pure))
+local result_info_effectful = strict_value.result_info(result_info(purity.effectful))
 
 local evaluator = require "evaluator"
 local const_combinator = evaluator.const_combinator
@@ -437,9 +436,10 @@ local function expression_infix_handler(_, left, symbol, right)
 	return true, OperatorType.Infix, symbol.str, left, right
 end
 
+---@overload fun() : boolean, string
 ---@param env Environment
----@param metaval value
----@return boolean, value
+---@param metaval flex_value
+---@return boolean, flex_value
 local function speculate_pi_type(env, metaval)
 	-- FIXME: There is a way to avoid this combinatoric explosion that nobody has properly explained yet. If this gets too big, we need to do it properly.
 	local pairs = {
@@ -456,9 +456,9 @@ local function speculate_pi_type(env, metaval)
 			local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			local pi = terms.stuck_value.pi(
 				terms.flex_value.stuck(param_mv:as_stuck()),
-				pairs[i].param_info,
+				flex_value.strict(pairs[i].param_info),
 				terms.flex_value.stuck(result_mv:as_stuck()),
-				pairs[i].result_info
+				flex_value.strict(pairs[i].result_info)
 			)
 			--pi.original_name = "#spec-" .. U.strip_ansi(tostring(metaval.original_name or metaval))
 			--param_mv.source = "param_mv for " .. pi.original_name
@@ -487,16 +487,17 @@ local function speculate_pi_type(env, metaval)
 end
 
 ---HORRIBLE HACK MAKE THIS BETTER
+---@overload fun() : boolean, string
 ---@param env Environment
----@param metaval value
----@return boolean, value?
+---@param metaval flex_value
+---@return boolean, flex_value
 local function operative_test_hack(env, metaval)
 	if
-		metaval:is_neutral()
-		and metaval:unwrap_neutral():is_free()
-		and metaval:unwrap_neutral():unwrap_free():is_metavariable()
+		metaval:is_stuck()
+		and metaval:unwrap_stuck():is_free()
+		and metaval:unwrap_stuck():unwrap_free():is_metavariable()
 	then
-		local mv = metaval:unwrap_neutral():unwrap_free():unwrap_metavariable()
+		local mv = metaval:unwrap_stuck():unwrap_free():unwrap_metavariable()
 		local edges = evaluator.typechecker_state.graph.constrain_edges:to(mv.usage)
 		local res = nil
 		for _, edge in ipairs(edges) do
@@ -510,12 +511,12 @@ local function operative_test_hack(env, metaval)
 		end
 		return true, res
 	elseif
-		metaval:is_neutral()
-		and metaval:unwrap_neutral():is_application_stuck()
-		and metaval:unwrap_neutral():unwrap_application_stuck():is_free()
-		and metaval:unwrap_neutral():unwrap_application_stuck():unwrap_free():is_metavariable()
+		metaval:is_stuck()
+		and metaval:unwrap_stuck():is_application()
+		and metaval:unwrap_stuck():unwrap_application():is_free()
+		and metaval:unwrap_stuck():unwrap_application():unwrap_free():is_metavariable()
 	then
-		local stuck_f, arg = metaval:unwrap_neutral():unwrap_application_stuck()
+		local stuck_f, arg = metaval:unwrap_stuck():unwrap_application()
 		local mv = stuck_f:unwrap_free():unwrap_metavariable()
 		local edges = evaluator.typechecker_state.graph.constrain_edges:to(mv.usage)
 		local f = nil
@@ -528,7 +529,7 @@ local function operative_test_hack(env, metaval)
 			end
 			f = evaluator.typechecker_state.values[edge.left][1]
 		end
-		if terms.value.value_check(f) ~= true then
+		if terms.flex_value.value_check(f) ~= true then
 			return false, "idk what this is but it ain't an operative"
 		end
 		local res = evaluator.apply_value(f, arg, env.typechecking_context)
@@ -538,7 +539,7 @@ local function operative_test_hack(env, metaval)
 	end
 end
 
----@param type_of_term value
+---@param type_of_term flex_value
 ---@param usage_count ArrayValue
 ---@param term typed
 ---@param sargs ConstructedSyntax
@@ -560,10 +561,18 @@ local function call_operative(type_of_term, usage_count, term, sargs, goal, env)
 	end
 
 	-- operative input: env, syntax tree, goal type (if checked)
-	local tuple_args =
-		value_array(value.host_value(sargs), value.host_value(env), value.host_value(term), value.host_value(goal))
-	local operative_result_val =
-		evaluator.apply_value(handler, terms.value.tuple_value(tuple_args), env.typechecking_context)
+	local tuple_args = array(strict_value)(
+		strict_value.host_value(sargs),
+		strict_value.host_value(env),
+		strict_value.host_value(term),
+		strict_value.host_value(goal)
+	)
+
+	local operative_result_val = evaluator.apply_value(
+		handler,
+		terms.flex_value.strict(terms.strict_value.tuple_value(tuple_args)),
+		env.typechecking_context
+	)
 	-- result should be able to be an inferred term, can fail
 	-- NYI: operative_cons in evaluator must use Maybe type once it exists
 	-- if not operative_result_val:is_enum_value() then
@@ -623,15 +632,15 @@ local function call_operative(type_of_term, usage_count, term, sargs, goal, env)
 	end
 end
 
----@param type_of_term value
+---@param type_of_term flex_value
 ---@param usage_count ArrayValue
 ---@param term typed
 ---@param sargs ConstructedSyntax
 ---@param goal expression_goal
 ---@param env Environment
 ---@return tristate
----@return string|checkable|inferrable
----@return Environment
+---@return string|checkable|inferrable|flex_value
+---@return Environment?
 local function call_pi(type_of_term, usage_count, term, sargs, goal, env)
 	local ok
 	ok, type_of_term = speculate_pi_type(env, type_of_term)
@@ -649,8 +658,7 @@ local function call_pi(type_of_term, usage_count, term, sargs, goal, env)
 		end
 
 		local metavar = evaluator.typechecker_state:metavariable(env.typechecking_context)
-		local metavalue = metavar:as_value()
-		local metaresult = evaluator.apply_value(result_type, metavalue, env.typechecking_context)
+		local metaresult = evaluator.apply_value(result_type, metavar:as_flex(), env.typechecking_context)
 		local ok, inner_pi = speculate_pi_type(env, metaresult)
 
 		if not ok then
@@ -663,7 +671,7 @@ local function call_pi(type_of_term, usage_count, term, sargs, goal, env)
 			)
 		end
 
-		term = typed_term.application(term, terms.typed_term.literal(metavalue))
+		term = typed_term.application(term, terms.typed_term.metavariable(metavar))
 		type_of_term = inner_pi
 		param_type, param_info, result_type, result_info = inner_pi:unwrap_pi()
 	end
@@ -708,7 +716,7 @@ local function call_pi(type_of_term, usage_count, term, sargs, goal, env)
 	return terms.tristate.success, res, env
 end
 
----@param type_of_term value
+---@param type_of_term_input flex_value
 ---@param usage_count ArrayValue
 ---@param term typed
 ---@param sargs ConstructedSyntax
@@ -718,11 +726,11 @@ end
 ---@return string|checkable|inferrable
 ---@return Environment
 local function call_host_func_type(type_of_term_input, usage_count, term, sargs, goal, env)
-	local ok
-	ok, type_of_term = evaluator.typechecker_state:speculate(function()
+	local ok, type_of_term = evaluator.typechecker_state:speculate(function()
 		local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 		local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
-		local host_func_type = value.host_function_type(param_mv:as_value(), result_mv:as_value(), result_info_pure)
+		local host_func_type =
+			flex_value.host_function_type(param_mv:as_flex(), result_mv:as_flex(), flex_value.strict(result_info_pure))
 
 		local ok, err = evaluator.typechecker_state:flow(
 			type_of_term_input,
@@ -739,11 +747,14 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 	end)
 	if not ok then
 		-- FIXME: Do this correctly instead of just guessing the other purity option
-		ok, type_of_term = evaluator.typechecker_state:speculate(function()
+		local ok, type_of_term = evaluator.typechecker_state:speculate(function()
 			local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
-			local host_func_type =
-				value.host_function_type(param_mv:as_value(), result_mv:as_value(), result_info_effectful)
+			local host_func_type = flex_value.host_function_type(
+				param_mv:as_flex(),
+				result_mv:as_flex(),
+				flex_value.strict(result_info_effectful)
+			)
 
 			local ok, err = evaluator.typechecker_state:flow(
 				type_of_term_input,
@@ -799,7 +810,7 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 			evaluator.substitute_placeholders_identity(result_final, env.typechecking_context),
 			usage_array(),
 			typed_term.program_invoke(
-				typed_term.literal(value.effect_elem(terms.lua_prog)),
+				typed_term.literal(strict_value.effect_elem(terms.lua_prog)),
 				typed_term.tuple_cons(typed_array(term, tuple_term))
 			)
 		)
@@ -837,7 +848,7 @@ end
 ---@param a ConstructedSyntax
 ---@param b ConstructedSyntax
 ---@return boolean
----@return inferrable | checkable | string
+---@return inferrable | checkable | string | flex_value
 ---@return Environment?
 local function expression_pairhandler(args, a, b)
 	local goal, env = args:unwrap()
@@ -906,6 +917,7 @@ local function expression_pairhandler(args, a, b)
 	end
 	local res_term1, res_term2, res_term3, res_env
 
+	local ok
 	ok, res_term1, res_env = call_operative(type_of_term, usage_count, term, sargs, goal, env)
 	if ok:is_success() then
 		return true, res_term1, res_env
@@ -1080,18 +1092,18 @@ local function expression_valuehandler(args, val)
 		--p(val)
 		return true,
 			inferrable_term.typed(
-				terms.typed_term.literal(value.host_number_type),
+				terms.typed_term.literal(strict_value.host_number_type),
 				usage_array(),
-				typed_term.literal(value.host_value(val.val))
+				typed_term.literal(strict_value.host_value(val.val))
 			),
 			env
 	end
 	if val.type == "string" then
 		return true,
 			inferrable_term.typed(
-				terms.typed_term.literal(value.host_string_type),
+				terms.typed_term.literal(strict_value.host_bool_type),
 				usage_array(),
-				typed_term.literal(value.host_value(val.val))
+				typed_term.literal(strict_value.host_value(val.val))
 			),
 			env
 	end
@@ -1227,7 +1239,7 @@ local function host_operative(fn, name)
 
 	-- 1: wrap fn as a typed host_value
 	-- this way it can take a host tuple and return a host tuple
-	local typed_host_fn = typed_term.literal(value.host_value(aborting_fn))
+	local typed_host_fn = typed_term.literal(strict_value.host_value(aborting_fn))
 	-- 2: wrap it to convert a normal tuple argument to a host tuple
 	-- and a host tuple result to a normal tuple
 	-- this way it can take a normal tuple and return a normal tuple
@@ -1259,11 +1271,12 @@ local function host_operative(fn, name)
 		typed_term.tuple_elim(result_names, result_unpack_dbg, tuple_to_host_tuple_fn, 2, tuple_conv)
 	-- 3: wrap it in a closure with an empty capture, not a typed lambda
 	-- this ensures variable 1 is the argument tuple
-	local value_fn = value.closure("#" .. name .. "_PARAM", tuple_to_tuple_fn, runtime_context(), args_dbg)
+	local value_fn =
+		strict_value.closure("#" .. name .. "_PARAM", tuple_to_tuple_fn, terms.strict_runtime_context(), args_dbg)
 
-	local userdata_type = value.tuple_type(terms.empty)
+	local userdata_type = strict_value.tuple_type(terms.empty:unwrap_strict())
 	return inferrable_term.typed(
-		terms.typed_term.literal(value.operative_type(value_fn, userdata_type)),
+		terms.typed_term.literal(strict_value.operative_type(value_fn, userdata_type)),
 		array(gen.builtin_number)(),
 		typed_term.operative_cons(typed_term.tuple_cons(typed_array()))
 	)
@@ -1327,7 +1340,7 @@ collect_tuple = metalanguage.reducer(
 			i = i + 1
 			if goal_type then
 				local next_elem_type_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
-				local next_elem_type = next_elem_type_mv:as_value()
+				local next_elem_type = next_elem_type_mv:as_flex()
 				ok, continue, next_term, syntax, env = syntax:match({
 					metalanguage.ispair(collect_tuple_pair_handler),
 					metalanguage.isnil(collect_tuple_nil_handler),
@@ -1345,14 +1358,14 @@ collect_tuple = metalanguage.reducer(
 						env.typechecking_context
 					)
 					local subval = evaluator.substitute_placeholders_identity(
-						value.singleton(next_elem_type, next_val),
+						flex_value.singleton(next_elem_type, next_val),
 						env.typechecking_context,
 						1
 					)
 					local info = terms.var_debug("#collect-tuple-param", syntax.start_anchor)
 					desc = terms.cons(
 						desc,
-						value.closure(
+						flex_value.closure(
 							"#collect-tuple-param",
 							subval, --TODO: might need to swap this back
 							env.typechecking_context.runtime_context,
@@ -1386,7 +1399,7 @@ collect_tuple = metalanguage.reducer(
 			return true, inferrable_term.tuple_cons(collected_terms, collected_info), env
 		elseif goal:is_check() then
 			local ok, err = evaluator.typechecker_state:flow(
-				value.tuple_type(desc),
+				flex_value.tuple_type(desc),
 				env.typechecking_context,
 				goal_type,
 				env.typechecking_context,
@@ -1400,12 +1413,12 @@ collect_tuple = metalanguage.reducer(
 			--[[U.tag(
 				"flow",
 				{
-					val = value.tuple_type(desc):pretty_preprint(env.typechecking_context),
+					val = flex_value.tuple_type(desc):pretty_preprint(env.typechecking_context),
 					use = goal_type:pretty_preprint(env.typechecking_context),
 				},
 				evaluator.typechecker_state.flow,
 				evaluator.typechecker_state,
-				value.tuple_type(desc),
+				flex_value.tuple_type(desc),
 				env.typechecking_context,
 				goal_type,
 				env.typechecking_context,
@@ -1444,7 +1457,7 @@ collect_host_tuple = metalanguage.reducer(
 			i = i + 1
 			if goal_type then
 				local next_elem_type_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
-				local next_elem_type = next_elem_type_mv:as_value()
+				local next_elem_type = next_elem_type_mv:as_flex()
 				ok, continue, next_term, syntax, env = syntax:match({
 					metalanguage.ispair(collect_tuple_pair_handler),
 					metalanguage.isnil(collect_tuple_nil_handler),
@@ -1464,14 +1477,14 @@ collect_host_tuple = metalanguage.reducer(
 					)
 					desc = terms.cons(
 						desc,
-						value.closure(
+						flex_value.closure(
 							"#collect-host-tuple-param",
 							evaluator.substitute_placeholders_identity(
-								value.singleton(next_elem_type, next_val),
+								flex_value.singleton(next_elem_type, next_val),
 								env.typechecking_context,
 								1
 							), --TODO: might need to swap this back
-							-- typed_term.literal(value.singleton(next_elem_type, next_val)),
+							-- typed_term.literal(strict_value.singleton(next_elem_type, next_val)),
 							env.typechecking_context.runtime_context,
 							terms.var_debug("#collect-host-tuple-param", syntax.start_anchor)
 						)
@@ -1503,7 +1516,7 @@ collect_host_tuple = metalanguage.reducer(
 			return true, inferrable_term.host_tuple_cons(collected_terms, collected_debug), env
 		elseif goal:is_check() then
 			local ok, err = evaluator.typechecker_state:flow(
-				value.host_tuple_type(desc),
+				flex_value.host_tuple_type(desc),
 				env.typechecking_context,
 				goal_type,
 				env.typechecking_context,
@@ -1697,29 +1710,35 @@ local top_level_block = metalanguage.reducer(
 
 -- example usage of primitive_applicative
 -- add(a, b) = a + b ->
--- local prim_num = terms.value.prim_number_type
+-- local prim_num = terms.strict_value.prim_number_type
 -- primitive_applicative(function(a, b) return a + b end, {prim_num, prim_num}, {prim_num}),
 
----@param elems value[]
----@return value
+---@param elems strict_value[]
+---@return strict_value
 local function build_host_type_tuple(elems)
-	local result = terms.empty
+	local result = terms.empty:unwrap_strict()
 
 	for _, v in ipairs(elems) do
-		result = terms.cons(result, const_combinator(v))
+		result = strict_value.enum_value(
+			terms.DescCons.cons,
+			strict_value.tuple_value(array(strict_value)(result, const_combinator(v)))
+		)
 	end
 
-	return terms.value.host_tuple_type(result)
+	return terms.strict_value.host_tuple_type(result)
 end
 
 ---@param fn function
----@param params value[]
----@param results value[]
+---@param params strict_value[]
+---@param results strict_value[]
 ---@return inferrable
 local function host_applicative(fn, params, results)
-	local literal_host_fn = terms.typed_term.literal(terms.value.host_value(fn))
-	local host_fn_type =
-		terms.value.host_function_type(build_host_type_tuple(params), build_host_type_tuple(results), result_info_pure)
+	local literal_host_fn = terms.typed_term.literal(terms.strict_value.host_value(fn))
+	local host_fn_type = terms.strict_value.host_function_type(
+		build_host_type_tuple(params),
+		build_host_type_tuple(results),
+		result_info_pure
+	)
 	return terms.inferrable_term.typed(terms.typed_term.literal(host_fn_type), usage_array(), literal_host_fn)
 end
 

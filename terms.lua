@@ -1187,7 +1187,7 @@ local function specify_flex_values(args, types)
 			end
 			table.insert(strict_args, args[i]:unwrap_strict())
 		elseif t == flex_runtime_context_type then
-			if args[i]:num_stuck() > 0 then
+			if args[i].stuck_count > 0 then
 				return "stuck", args
 			end
 			table.insert(strict_args, args[i]:as_strict())
@@ -1199,33 +1199,33 @@ local function specify_flex_values(args, types)
 	return "strict", strict_args
 end
 
-local function unify_flex_values(args, types)
+local function unify_flex_values(args)
 	local flex_args = {}
-	for i, t in ipairs(types) do
-		if t == strict_value then
-			table.insert(flex_args, flex_value.strict(args[i]))
-		elseif t == stuck_value then
-			table.insert(flex_args, flex_value.stuck(args[i]))
-		elseif t == array(strict_value) then
+	for _, v in ipairs(args) do
+		if strict_value.value_check(v) then
+			table.insert(flex_args, flex_value.strict(v))
+		elseif stuck_value.value_check(v) then
+			table.insert(flex_args, flex_value.stuck(v))
+		elseif array(strict_value).value_check(v) then
 			local flex_array = array(flex_value)()
-			for _, v in ipairs(args[i]) do
+			for _, v in ipairs(v) do
 				flex_array:append(flex_value.strict(v))
 			end
 			table.insert(flex_args, flex_array)
-		elseif t == array(stuck_value) then
+		elseif array(stuck_value).value_check(v) then
 			local flex_array = array(flex_value)()
-			for _, v in ipairs(args[i]) do
+			for _, v in ipairs(v) do
 				flex_array:append(flex_value.stuck(v))
 			end
 			table.insert(flex_args, flex_array)
-		elseif t == strict_continuation then
-			table.insert(flex_args, flex_continuation.strict(args[i]))
-		elseif t == stuck_continuation then
-			table.insert(flex_args, flex_continuation.stuck(args[i]))
-		elseif t == strict_runtime_context_type then
-			table.insert(flex_args, args[i]:as_flex())
+		elseif strict_continuation.value_check(v) then
+			table.insert(flex_args, flex_continuation.strict(v))
+		elseif stuck_continuation.value_check(v) then
+			table.insert(flex_args, flex_continuation.stuck(v))
+		elseif strict_runtime_context_type.value_check(v) then
+			table.insert(flex_args, v:as_flex())
 		else
-			table.insert(flex_args, args[i])
+			table.insert(flex_args, v)
 		end
 	end
 
@@ -1575,6 +1575,7 @@ local DescCons = --[[@enum DescCons]]
 	}
 
 local flex_value_array = array(flex_value)
+local strict_value_array = array(strict_value)
 
 ---@param ... flex_value
 ---@return flex_value
@@ -1615,6 +1616,36 @@ local tristate = gen.declare_enum("tristate", {
 ---@return flex_value
 local function tuple_desc(...)
 	return tuple_desc_inner(empty, ...)
+end
+
+---@param ... strict_value
+---@return strict_value
+local function strict_tup_val(...)
+	return strict_value.tuple_value(strict_value_array(...))
+end
+
+---@param ... strict_value
+---@return strict_value
+local function strict_cons(...)
+	return strict_value.enum_value(DescCons.cons, strict_tup_val(...))
+end
+
+---@param a strict_value
+---@param e strict_value
+---@param ... strict_value
+---@return strict_value
+local function strict_tuple_desc_inner(a, e, ...)
+	if e == nil then
+		return a
+	else
+		return strict_tuple_desc_inner(strict_cons(a, e), ...)
+	end
+end
+
+---@param ... strict_value
+---@return strict_value
+local function strict_tuple_desc(...)
+	return strict_tuple_desc_inner(empty:unwrap_strict(), ...)
 end
 
 local effect_registry = new_registry("effect")
@@ -1663,13 +1694,18 @@ local terms = {
 
 	DescCons = DescCons,
 	tup_val = tup_val,
+	strict_tup_val = strict_tup_val,
 	cons = cons,
+	strict_cons = strict_cons,
 	empty = empty,
 	tuple_desc = tuple_desc,
+	strict_tuple_desc = strict_tuple_desc,
 	unit_type = unit_type,
 	unit_val = unit_val,
 	effect_id = effect_id,
-	continuation = continuation,
+	flex_continuation = flex_continuation,
+	strict_continuation = strict_continuation,
+	stuck_continuation = stuck_continuation,
 
 	effect_registry = effect_registry,
 	TCState = TCState,
@@ -1684,7 +1720,7 @@ local checkable_term_override_pretty = override_prettys.checkable_term_override_
 local inferrable_term_override_pretty = override_prettys.inferrable_term_override_pretty
 local typed_term_override_pretty = override_prettys.typed_term_override_pretty
 local value_override_pretty = override_prettys.value_override_pretty
-local neutral_value_override_pretty = override_prettys.neutral_value_override_pretty
+local stuck_value_override_pretty = override_prettys.stuck_value_override_pretty
 local binding_override_pretty = override_prettys.binding_override_pretty
 
 checkable_term:derive(derivers.pretty_print, checkable_term_override_pretty)
@@ -1694,13 +1730,16 @@ visibility:derive(derivers.pretty_print)
 free:derive(derivers.pretty_print)
 flex_value:derive(derivers.pretty_print, value_override_pretty)
 strict_value:derive(derivers.pretty_print, value_override_pretty)
-stuck_value:derive(derivers.pretty_print, value_override_pretty)
+stuck_value:derive(derivers.pretty_print, stuck_value_override_pretty)
 binding:derive(derivers.pretty_print, binding_override_pretty)
 expression_goal:derive(derivers.pretty_print)
 var_debug:derive(derivers.pretty_print)
 purity:derive(derivers.pretty_print)
 result_info:derive(derivers.pretty_print)
 constraintcause:derive(derivers.pretty_print)
+flex_continuation:derive(derivers.pretty_print)
+strict_continuation:derive(derivers.pretty_print)
+stuck_continuation:derive(derivers.pretty_print)
 
 local internals_interface = require "internals-interface"
 internals_interface.terms = terms

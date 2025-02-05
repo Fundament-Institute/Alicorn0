@@ -291,9 +291,12 @@ local function execute_alc_file(bound_expr, log, env)
 		local ok, err = evaluator.typechecker_state:flow(
 			type,
 			env.typechecking_context,
-			terms.value.program_type(
-				terms.value.effect_row(set(unique_id)(terms.TCState, terms.lua_prog), terms.value.effect_empty),
-				evaluator.typechecker_state:metavariable(env.typechecking_context):as_value()
+			terms.flex_value.program_type(
+				terms.flex_value.effect_row_extend(
+					set(unique_id)(terms.TCState, terms.lua_prog),
+					terms.flex_value.effect_empty
+				),
+				evaluator.typechecker_state:metavariable(env.typechecking_context):as_flex()
 			),
 			env.typechecking_context,
 			terms.constraintcause.primitive("final flow check", U.anchor_here())

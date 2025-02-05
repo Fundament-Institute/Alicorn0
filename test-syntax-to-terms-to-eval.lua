@@ -34,7 +34,7 @@ end
 p("tup_val!", tup_val())
 local empty = terms.value.enum_value("empty", tup_val())
 
-local t_host_num = terms.value.host_number_type
+local t_host_num = terms.strict_value.host_number_type
 local two_tuple_desc = terms.value.host_tuple_type(
 	cons(cons(empty, evaluator.const_combinator(t_host_num)), evaluator.const_combinator(t_host_num))
 )
@@ -47,7 +47,7 @@ end
 local add = host_f(function(left, right)
 	return left + right
 end)
-local result_info_pure = terms.value.result_info(terms.result_info(terms.purity.pure))
+local result_info_pure = terms.strict_value.result_info(terms.result_info(terms.purity.pure))
 local inf_add = inf_typ(terms.value.host_function_type(two_tuple_desc, tuple_desc, result_info_pure), add)
 local inf_add_from_host_applicative = exprs.host_applicative(function(a, b)
 	return a + b
