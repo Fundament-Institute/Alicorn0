@@ -1670,7 +1670,7 @@ function unify_kind(kind)
 	return r
 end
 
--- Compares any non-metavariables, or defers any metavariable comparisons to the work queue
+--- Compares concrete type-heads, and induces any necessary constraints on their components.
 ---@param lctx TypecheckingContext
 ---@param val flex_value
 ---@param rctx TypecheckingContext
