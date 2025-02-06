@@ -308,8 +308,8 @@ end
 IndepTupleRelation = U.memoize(IndepTupleRelation)
 
 ---@type SubtypeRelation
-local effect_row_srel = setmetatable({
-	debug_name = "effect_row_srel",
+local EffectRowRelation = setmetatable({
+	debug_name = "EffectRowRelation",
 	Rel = luatovalue(function(a, b)
 		error("nyi")
 	end),
@@ -359,8 +359,8 @@ local effect_row_srel = setmetatable({
 local UniverseOmegaRelation
 
 ---@type SubtypeRelation
-local enum_desc_srel = setmetatable({
-	debug_name = "enum_desc_srel",
+local EnumDescRelation = setmetatable({
+	debug_name = "EnumDescRelation",
 	Rel = luatovalue(function(a, b)
 		error("nyi")
 	end),
@@ -1230,7 +1230,7 @@ add_comparer("flex_value.enum_type", "flex_value.enum_type", function(lctx, a, r
 	typechecker_state:queue_constrain(
 		lctx,
 		a_desc,
-		enum_desc_srel,
+		EnumDescRelation,
 		rctx,
 		b_desc,
 		nestcause("enum type description", cause, a_desc, b_desc, lctx, rctx)
@@ -1307,7 +1307,7 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(lctx
 	typechecker_state:queue_constrain(
 		lctx,
 		a_desc,
-		enum_desc_srel,
+		EnumDescRelation,
 		rctx,
 		enum_desc_val,
 		nestcause("use enum construction as tuple desc", cause, a_desc, enum_desc_val, lctx, rctx)
@@ -1383,7 +1383,7 @@ add_comparer("flex_value.tuple_desc_type", "flex_value.enum_type", function(lctx
 	typechecker_state:queue_constrain(
 		lctx,
 		enum_desc_val,
-		enum_desc_srel,
+		EnumDescRelation,
 		rctx,
 		b_desc,
 		nestcause("use tuple description as enum", cause, enum_desc_val, b_desc, lctx, rctx)
@@ -1653,7 +1653,7 @@ add_comparer("flex_value.program_type", "flex_value.program_type", function(lctx
 	typechecker_state:queue_constrain(
 		lctx,
 		a_eff,
-		effect_row_srel,
+		EffectRowRelation,
 		rctx,
 		b_eff,
 		nestcause("program effects", cause, a_eff, b_eff, lctx, rctx)
