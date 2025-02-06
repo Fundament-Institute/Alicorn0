@@ -24,6 +24,7 @@ local result_info_pure = strict_value.result_info(terms.result_info(terms.purity
 local result_info_effectful = strict_value.result_info(terms.result_info(terms.purity.effectful))
 
 local usage_array = gen.declare_array(gen.builtin_number)
+local debug_array = gen.declare_array(var_debug)
 local name_array = gen.declare_array(gen.builtin_string)
 local empty_tuple = strict_value.tuple_value(strict_value_array())
 
@@ -529,23 +530,8 @@ local tuple_desc_of_ascribed_names = metalanguage.reducer(
 	---@return {names: var_debug[], args: inferrable, env: Environment}|string
 	function(syntax, env)
 		local function build_type_term(args)
-			return U.notail(terms.inferrable_term.tuple_type(args))
+			return U.notail(inferrable_term.tuple_type(args))
 		end
-		local inf_array = gen.declare_array(terms.inferrable_term)
-		local function tup_cons(...)
-			local args = inf_array(...)
-			return U.notail(inferrable_term.tuple_cons(
-				args,
-				args:map(var_debug_array, function(_)
-					return var_debug("", format.anchor_here())
-				end)
-			))
-		end
-		local function cons(...)
-			return U.notail(terms.inferrable_term.enum_cons(terms.DescCons.cons, tup_cons(...)))
-		end
-		local empty = terms.inferrable_term.enum_cons(terms.DescCons.empty, tup_cons())
-		local inf_array = inferrable_term_array
 		local names = var_debug_array()
 
 		local ok, thread = syntax:match({
@@ -557,14 +543,19 @@ local tuple_desc_of_ascribed_names = metalanguage.reducer(
 					names:append(name)
 					local newthread = {
 						names = names,
-						args = cons(thread.args, type_val),
+						args = terms.inferrable_cons(
+							thread.args,
+							var_debug("", format.anchor_here()),
+							type_val,
+							var_debug("", format.anchor_here())
+						),
 						env = type_env,
 					}
 					return true, { name = name, type = type_val }, newthread
 				end, thread.env, build_type_term(thread.args), thread.names)
 			end, {
 				names = names,
-				args = empty,
+				args = terms.inferrable_empty,
 				env = env,
 			}),
 		}, metalanguage.failure_handler, nil)
@@ -702,31 +693,20 @@ local tuple_desc_wrap_ascribed_name = metalanguage.reducer(
 			return U.notail(inferrable_term.tuple_type(args))
 		end
 		local inf_array = gen.declare_array(inferrable_term)
-		local function tup_cons(...)
-			local args = inf_array(...)
-			return U.notail(inferrable_term.tuple_cons(
-				args,
-				args:map(var_debug_array, function(_)
-					return var_debug("", format.anchor_here())
-				end)
-			))
-		end
-		local function cons(...)
-			return U.notail(inferrable_term.enum_cons(terms.DescCons.cons, tup_cons(...)))
-		end
-		local empty = inferrable_term.enum_cons(terms.DescCons.empty, tup_cons())
 		local names = var_debug_array()
-		local args = empty
+		local args = terms.inferrable_empty
+		local debug_args = var_debug("", format.anchor_here())
 		local ok, name, type_val, type_env = syntax:match({
 			ascribed_name(metalanguage.accept_handler, env, build_type_term(args), names),
 		}, metalanguage.failure_handler, nil)
+		local debug_type_val = var_debug("", format.anchor_here())
 		if not ok then
 			return ok, name
 		end
 
 		names = names:copy()
 		names:append(name)
-		args = cons(args, type_val)
+		args = terms.inferrable_cons(args, debug_args, type_val, debug_type_val)
 		env = type_env
 		return ok, { names = names, args = args, env = env }
 	end,
@@ -1526,46 +1506,25 @@ local function operative_handler_type(ud_type, anchor)
 					typed_term.bound_variable(2, pnamer),
 					4,
 					typed_term.tuple_type(
-						typed_term.enum_cons(
-							terms.DescCons.cons,
-							typed_term.tuple_cons(
-								typed_term_array(
-									typed_term.enum_cons(
-										terms.DescCons.cons,
-										typed_term.tuple_cons(
-											typed_term_array(
-												typed_term.enum_cons(
-													terms.DescCons.empty,
-													typed_term.tuple_cons(typed_term_array())
-												),
-												typed_term.lambda(
-													pnamer0.name,
-													pnamer0,
-													host_term_of(
-														typed_term.tuple_element_access(
-															typed_term.bound_variable(1, capture),
-															1
-														),
-														6
-													),
-													typed_term.tuple_cons(
-														typed_term_array(typed_term.bound_variable(6, pnamer0))
-													),
-													capture_dbg,
-													anchor
-												)
-											)
-										)
-									),
-									typed_term.lambda(
-										pnamer1.name,
-										pnamer1,
-										typed_term.literal(terms.host_environment_type),
-										typed_term.tuple_cons(typed_term_array()),
-										var_debug("", format.anchor_here()),
-										anchor
-									)
-								)
+						terms.typed_tuple_desc(
+							typed_term.lambda(
+								pnamer0.name,
+								pnamer0,
+								host_term_of(
+									typed_term.tuple_element_access(typed_term.bound_variable(1, capture), 1),
+									6
+								),
+								typed_term.tuple_cons(typed_term_array(typed_term.bound_variable(6, pnamer0))),
+								capture_dbg,
+								anchor
+							),
+							typed_term.lambda(
+								pnamer1.name,
+								pnamer1,
+								typed_term.literal(terms.host_environment_type),
+								typed_term.tuple_cons(typed_term_array()),
+								var_debug("", format.anchor_here()),
+								anchor
 							)
 						)
 					)
@@ -2057,6 +2016,14 @@ local function traverse(desc, len, elems)
 		return len, elems
 	elseif constructor == terms.DescCons.cons then
 		local elements = arg:unwrap_tuple_value()
+		if elements:len() ~= 2 then
+			error(
+				string.format(
+					"enum_value with constructor DescCons.cons should have 2 args, but has %s",
+					tostring(elements:len())
+				)
+			)
+		end
 		local next_desc = elements[1]
 		len = len + 1
 		elems[len] = elements[2]
@@ -2149,6 +2116,14 @@ local function convert_desc(desc)
 		return desc
 	elseif constructor == terms.DescCons.cons then
 		local elements = arg:unwrap_tuple_value()
+		if elements:len() ~= 2 then
+			error(
+				string.format(
+					"enum_value with constructor DescCons.cons should have 2 args, but has %s",
+					tostring(elements:len())
+				)
+			)
+		end
 		local next_desc, type_fun = elements[1], elements[2]
 		local convert_next = convert_desc(next_desc)
 		local convert_type = flex_value
@@ -2198,6 +2173,14 @@ local function desc_length(desc, len)
 		return len
 	elseif constructor == terms.DescCons.cons then
 		local elements = arg:unwrap_tuple_value()
+		if elements:len() ~= 2 then
+			error(
+				string.format(
+					"enum_value with constructor DescCons.cons should have 2 args, but has %s",
+					tostring(elements:len())
+				)
+			)
+		end
 		local next_desc = elements[1]
 		return desc_length(next_desc, len + 1)
 	else

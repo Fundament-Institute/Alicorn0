@@ -1546,6 +1546,14 @@ local function extract_desc_nth(ctx, subject, desc, idx)
 			done = true
 		elseif variant == terms.DescCons.cons then
 			local elements = args:unwrap_tuple_value()
+			if elements:len() ~= 2 then
+				error(
+					string.format(
+						"enum_value with constructor DescCons.cons should have 2 args, but has %s",
+						tostring(elements:len())
+					)
+				)
+			end
 			local pfx, elem = elements:unpack()
 			slices[#slices + 1] = elem
 			desc = pfx
@@ -2310,13 +2318,18 @@ local function extract_tuple_elem_type_closures(enum_val, closures)
 	local elements = arg:unwrap_tuple_value()
 	if constructor == terms.DescCons.empty then
 		if elements:len() ~= 0 then
-			error "enum_value with constructor empty should have no args"
+			error "enum_value with constructor DescCons.empty should have no args"
 		end
 		return closures
 	end
 	if constructor == terms.DescCons.cons then
 		if elements:len() ~= 2 then
-			error "enum_value with constructor cons should have two args"
+			error(
+				string.format(
+					"enum_value with constructor DescCons.cons should have 2 args, but has %s",
+					tostring(elements:len())
+				)
+			)
 		end
 		extract_tuple_elem_type_closures(elements[1], closures)
 		if not elements[2]:is_closure() then
@@ -2632,6 +2645,14 @@ local function make_inner_context(ctx, desc, make_prefix)
 		return flex_value_array(), 0, flex_value_array()
 	elseif constructor == terms.DescCons.cons then
 		local details = arg:unwrap_tuple_value()
+		if details:len() ~= 2 then
+			error(
+				string.format(
+					"enum_value with constructor DescCons.cons should have 2 args, but has %s",
+					tostring(details:len())
+				)
+			)
+		end
 		local tuple_types, n_elements, tuple_vals = make_inner_context(ctx, details[1], make_prefix)
 		local f = details[2]
 		local element_type
@@ -2701,7 +2722,23 @@ local function make_inner_context2(desc_a, make_prefix_a, l_ctx, desc_b, make_pr
 		return false, "length-mismatch"
 	elseif constructor_a == terms.DescCons.cons and constructor_b == terms.DescCons.cons then
 		local details_a = arg_a:unwrap_tuple_value()
+		if details_a:len() ~= 2 then
+			error(
+				string.format(
+					"enum_value with constructor DescCons.cons should have 2 args, but has %s",
+					tostring(details_a:len())
+				)
+			)
+		end
 		local details_b = arg_b:unwrap_tuple_value()
+		if details_b:len() ~= 2 then
+			error(
+				string.format(
+					"enum_value with constructor DescCons.cons should have 2 args, but has %s",
+					tostring(details_b:len())
+				)
+			)
+		end
 		local ok, tuple_types_a, tuple_types_b, tuple_vals, n_elements =
 			make_inner_context2(details_a[1], make_prefix_a, l_ctx, details_b[1], make_prefix_b, r_ctx)
 		if not ok then
@@ -3273,6 +3310,14 @@ local function infer_impl(
 				return true, string_array(), string_value_map()
 			elseif constructor == terms.DescCons.cons then
 				local details = arg:unwrap_tuple_value()
+				if details:len() ~= 3 then
+					error(
+						string.format(
+							"enum_value with constructor DescCons.cons should have 3 args, but has %s",
+							tostring(details:len())
+						)
+					)
+				end
 				local field_names, field_types = make_type(details[1])
 				local name = details[2]:unwrap_name()
 				local f = details[3]

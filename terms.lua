@@ -1684,46 +1684,30 @@ local function tup_val(...)
 	return U.notail(flex_value.tuple_value(flex_value_array(...)))
 end
 
----@param ... flex_value
+---@param prefix flex_value
+---@param next_elem flex_value
 ---@return flex_value
-local function cons(...)
-	return U.notail(flex_value.enum_value(DescCons.cons, tup_val(...)))
+---@diagnostic disable-next-line: incomplete-signature-doc
+local function cons(prefix, next_elem, ...)
+	if select("#", ...) > 0 then
+		error(("%d extra arguments passed to terms.cons"):format(select("#", ...)))
+	end
+	return U.notail(flex_value.enum_value(DescCons.cons, tup_val(prefix, next_elem)))
 end
 
 local empty = flex_value.enum_value(DescCons.empty, tup_val())
 
----@param prefix typed
----@param next_elem typed
----@return typed `typed_term.enum_cons(DescCons.cons, typed_term.tuple_cons(…))`
-local function typed_cons(prefix, next_elem)
-	return U.notail(typed_term.enum_cons(DescCons.cons, typed_term.tuple_cons(typed_term_array(prefix, next_elem))))
-end
-
-local typed_empty = typed_term.enum_cons(DescCons.empty, typed_term.tuple_cons(typed_term_array()))
-
----@param a flex_value
----@param e flex_value
----@param ... flex_value
----@return flex_value
-local function tuple_desc_inner(a, e, ...)
-	if e == nil then
-		return a
-	else
-		return tuple_desc_inner(cons(a, e), ...)
-	end
-end
-
----@module "types.tristate"
-local tristate = gen.declare_enum("tristate", {
-	{ "success" },
-	{ "continue" },
-	{ "failure" },
-})
-
 ---@param ... flex_value
 ---@return flex_value
 local function tuple_desc(...)
-	return U.notail(tuple_desc_inner(empty, ...))
+	local a = empty
+	for i = 1, select("#", ...) do
+		local e = select(i, ...)
+		if e ~= nil then
+			a = cons(a, e)
+		end
+	end
+	return a
 end
 
 ---@param ... strict_value
@@ -1732,29 +1716,109 @@ local function strict_tup_val(...)
 	return U.notail(strict_value.tuple_value(strict_value_array(...)))
 end
 
----@param ... strict_value
+---@param prefix strict_value
+---@param next_elem strict_value
 ---@return strict_value
-local function strict_cons(...)
-	return U.notail(strict_value.enum_value(DescCons.cons, strict_tup_val(...)))
+---@diagnostic disable-next-line: incomplete-signature-doc
+local function strict_cons(prefix, next_elem, ...)
+	if select("#", ...) > 0 then
+		error(("%d extra arguments passed to terms.strict_cons"):format(select("#", ...)))
+	end
+	return U.notail(strict_value.enum_value(DescCons.cons, strict_tup_val(prefix, next_elem, ...)))
 end
 
----@param a strict_value
----@param e strict_value
----@param ... strict_value
----@return strict_value
-local function strict_tuple_desc_inner(a, e, ...)
-	if e == nil then
-		return a
-	else
-		return strict_tuple_desc_inner(strict_cons(a, e), ...)
-	end
-end
+local strict_empty = empty:unwrap_strict()
 
 ---@param ... strict_value
 ---@return strict_value
 local function strict_tuple_desc(...)
-	return U.notail(strict_tuple_desc_inner(empty:unwrap_strict(), ...))
+	local a = strict_empty
+	for i = 1, select("#", ...) do
+		local e = select(i, ...)
+		if e ~= nil then
+			a = strict_cons(a, e)
+		end
+	end
+	return a
 end
+
+---@param prefix inferrable
+---@param debug_prefix var_debug
+---@param next_elem inferrable
+---@param debug_next_elem var_debug
+---@return inferrable `inferrable_term.enum_cons(DescCons.cons, inferrable_term.tuple_cons(…))`
+---@diagnostic disable-next-line: incomplete-signature-doc
+local function inferrable_cons(prefix, debug_prefix, next_elem, debug_next_elem, ...)
+	if select("#", ...) > 0 then
+		error(("%d extra arguments passed to terms.inferrable_cons"):format(select("#", ...)))
+	end
+	return U.notail(
+		inferrable_term.enum_cons(
+			DescCons.cons,
+			inferrable_term.tuple_cons(
+				inferrable_term_array(prefix, next_elem),
+				var_debug_array(debug_prefix, debug_next_elem)
+			)
+		)
+	)
+end
+
+local inferrable_empty =
+	inferrable_term.enum_cons(DescCons.empty, inferrable_term.tuple_cons(inferrable_term_array(), var_debug_array()))
+local debug_inferrable_empty = var_debug("terms.inferrable_empty", format.anchor_here())
+
+---@param ... (inferrable | var_debug) (`inferrable`, `var_debug`)\*
+---@return inferrable
+local function inferrable_tuple_desc(...)
+	local a = inferrable_empty
+	local debug_a = debug_inferrable_empty
+	local anchor = format.anchor_here(2)
+	for i = 1, select("#", ...), 2 do
+		local e, debug_e = select(i, ...), select(i + 1, ...)
+		if e ~= nil then
+			if debug_e == nil then
+				error(("inferrable_tuple_desc: missing var_debug at argument %d"):format(i + 1))
+			end
+			a, debug_a =
+				inferrable_cons(a, debug_a, e, debug_e),
+				var_debug(("terms.inferrable_tuple_desc.varargs[%d]"):format(i), anchor)
+		end
+	end
+	return a
+end
+
+---@param prefix typed
+---@param next_elem typed
+---@return typed `typed_term.enum_cons(DescCons.cons, typed_term.tuple_cons(…))`
+---@diagnostic disable-next-line: incomplete-signature-doc
+local function typed_cons(prefix, next_elem, ...)
+	if select("#", ...) > 0 then
+		error(("%d extra arguments passed to terms.typed_cons"):format(select("#", ...)))
+	end
+	return U.notail(typed_term.enum_cons(DescCons.cons, typed_term.tuple_cons(typed_term_array(prefix, next_elem))))
+end
+
+local typed_empty = typed_term.enum_cons(DescCons.empty, typed_term.tuple_cons(typed_term_array()))
+
+---@param ... typed
+---@return typed
+local function typed_tuple_desc(...)
+	local a = typed_empty
+	for i = 1, select("#", ...) do
+		local e = select(i, ...)
+		if e ~= nil then
+			a = typed_cons(a, e)
+		end
+	end
+	return a
+end
+
+---@module "types.tristate"
+local tristate = gen.declare_enum("tristate", {
+	{ "success" },
+	{ "continue" },
+	{ "failure" },
+})
 
 local unit_type = strict_value.tuple_type(empty:unwrap_strict())
 local unit_val = strict_tup_val()
@@ -1810,14 +1874,19 @@ local terms = {
 
 	DescCons = DescCons,
 	tup_val = tup_val,
-	strict_tup_val = strict_tup_val,
 	cons = cons,
-	strict_cons = strict_cons,
-	typed_cons = typed_cons,
 	empty = empty,
-	typed_empty = typed_empty,
 	tuple_desc = tuple_desc,
+	strict_tup_val = strict_tup_val,
+	strict_cons = strict_cons,
+	strict_empty = strict_empty,
 	strict_tuple_desc = strict_tuple_desc,
+	typed_cons = typed_cons,
+	typed_empty = typed_empty,
+	typed_tuple_desc = typed_tuple_desc,
+	inferrable_cons = inferrable_cons,
+	inferrable_empty = inferrable_empty,
+	inferrable_tuple_desc = inferrable_tuple_desc,
 	unit_type = unit_type,
 	unit_val = unit_val,
 	effect_id = effect_id,

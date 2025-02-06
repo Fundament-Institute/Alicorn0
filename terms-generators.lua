@@ -1204,26 +1204,35 @@ local function gen_array_index_fns(self, value_type)
 	---@param value Value
 	local function newindex(val, key, value)
 		if val.is_frozen then
-			error("trying to modify a frozen array")
+			error(string.format("trying to set %s on a frozen array to %s: %s", s(key), s(value), s(val)))
 		end
 		if type(key) ~= "number" then
-			p("array-index", value_type)
-			p(key)
-			error("wrong key type passed to array index-assignment")
+			error(
+				string.format(
+					"wrong key type passed to array index-assignment: expected %s but got %s",
+					s(value_type),
+					s(key)
+				)
+			)
 		end
 		if math.floor(key) ~= key then
-			p(key)
-			error("key passed to array index-assignment is not an integer")
+			error(string.format("key passed to array index-assignment is not an integer: %s", s(key)))
 		end
 		-- n+1 can be used to append
 		if key < 1 or key > val.n + 1 then
-			p(key, val.n)
-			error("key passed to array index-assignment is out of bounds")
+			error(string.format("key %s passed to array index-assignment is out of bounds: %s", s(key), s(val.n)))
 		end
 		if value_type.value_check(value) ~= true then
-			p("array-index-assign", value_type)
-			p(value)
-			error(debug.traceback("wrong value type passed to array index-assignment"))
+			error(
+				debug.traceback(
+					string.format(
+						"wrong value type passed to array index-assignment: expected [%s] of type %s but got %s",
+						s(key),
+						s(value_type),
+						s(value)
+					)
+				)
+			)
 		end
 		local freeze_impl_value = traits.freeze:get(value_type)
 		if freeze_impl_value then
