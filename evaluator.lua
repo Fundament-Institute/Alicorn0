@@ -4494,10 +4494,12 @@ local TypeCheckerState = {}
 ---@alias NodeID integer the ID of a node in the graph
 
 ---@class ConstrainEdge
----@field left NodeID -- value
+--- value
+---@field left NodeID
 ---@field rel SubtypeRelation
 ---@field shallowest_block integer
----@field right NodeID -- use
+--- use
+---@field right NodeID
 ---@field cause constraintcause
 
 ---@class LeftCallEdge

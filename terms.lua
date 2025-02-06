@@ -43,10 +43,14 @@ local binding = gen.declare_type()
 local expression_goal = gen.declare_type()
 
 ---@class Metavariable
----@field value integer a unique key that denotes this metavariable in the graph
----@field usage integer a unique key that denotes this metavariable in the graph
----@field trait boolean indicates if this metavariable should be solved with trait search or biunification
----@field block_level integer this probably shouldn't be inside the metavariable
+--- a unique key that denotes this metavariable in the graph
+---@field value integer
+--- a unique key that denotes this metavariable in the graph
+---@field usage integer
+--- indicates if this metavariable should be solved with trait search or biunification
+---@field trait boolean
+--- this probably shouldn't be inside the metavariable
+---@field block_level integer
 local Metavariable = {}
 
 ---@return stuck_value
@@ -779,10 +783,14 @@ inferrable_term:define_enum("inferrable", {
 
 ---@class SubtypeRelation
 ---@field debug_name string
----@field Rel strict_value -- : (a:T,b:T) -> Prop__
----@field refl strict_value -- : (a:T) -> Rel(a,a)
----@field antisym strict_value -- : (a:T, B:T, Rel(a,b), Rel(b,a)) -> a == b
----@field constrain strict_value -- : (Node(T), Node(T)) -> [TCState] (Error)
+--- : (a:T,b:T) -> Prop__
+---@field Rel strict_value
+--- : (a:T) -> Rel(a,a)
+---@field refl strict_value
+--- : (a:T, B:T, Rel(a,b), Rel(b,a)) -> a == b
+---@field antisym strict_value
+--- : (Node(T), Node(T)) -> [TCState] (Error)
+---@field constrain strict_value
 local subtype_relation_mt = {}
 
 local SubtypeRelation = gen.declare_foreign(gen.metatable_equality(subtype_relation_mt), "SubtypeRelation")
