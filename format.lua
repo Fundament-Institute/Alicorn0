@@ -201,15 +201,13 @@ end
 ---@param sourceid string
 ---@return Anchor
 local function create_anchor(line, char, sourceid)
-	local new_anchor = {
+	return setmetatable({
 		line = line,
 		char = char,
 		sourceid = sourceid,
-	}
-	setmetatable(new_anchor, anchor_mt)
-	return new_anchor
+	}, anchor_mt)
 end
-create_anchor = U.memoize(create_anchor)
+create_anchor = U.memoize(create_anchor, false)
 
 ---@param offset? integer
 ---@return Anchor

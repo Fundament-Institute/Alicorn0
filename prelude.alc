@@ -172,7 +172,7 @@ let host-string-concat = intrinsic "return function(a, b) return U.notail(a .. b
 let host-unique-id-wrap = intrinsic
 	""""
 		local id = { name = "unique_id" }
-		evaluator.register_host_srel(id, evaluator.IndepTupleRelation())
+		evaluator.register_host_srel(id, evaluator.IndepTupleRelation({}))
 		return U.notail(terms.strict_value.host_user_defined_type(id, terms_gen.declare_array(terms.strict_value)()))
 	:
 	wrapped(host-type)

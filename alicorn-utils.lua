@@ -3,6 +3,8 @@
 
 local M = {}
 
+local ipairs, select, setmetatable, table_pack, table_unpack = ipairs, select, setmetatable, table.pack, table.unpack
+
 ---@param ... any
 ---@return table
 function M.concat(...)
@@ -436,14 +438,41 @@ local memo_nil_tag = {}
 
 ---cache a function's outputs to ensure purity with respect to identity
 ---@param fn function
+---@param args_table boolean Whether the function takes a single arguments table
 ---@return function
-function M.memoize(fn)
+function M.memoize(fn, args_table)
 	local memotab = setmetatable({}, memo_mt)
+	if args_table then
+		local function wrapfn(args)
+			local thismemo = memotab
+			local n = args.n
+			if n == nil then
+				n = #args
+			end
+			for i = 1, n do
+				this_arg = args[i]
+				if this_arg == nil then
+					this_arg = memo_nil_tag
+				end
+				local nextmemo = thismemo[this_arg]
+				if not nextmemo then
+					nextmemo = setmetatable({}, memo_mt)
+					thismemo[this_arg] = nextmemo
+				end
+				thismemo = nextmemo
+			end
+			if not thismemo[memo_end_tag] then
+				thismemo[memo_end_tag] = table_pack(fn(args))
+			end
+			local values = thismemo[memo_end_tag]
+			return table_unpack(values, 1, values.n)
+		end
+		return wrapfn
+	end
 	local function wrapfn(...)
-		local args = table.pack(...)
 		local thismemo = memotab
-		for i = 1, args.n do
-			local this_arg = args[i]
+		for i = 1, select("#", ...) do
+			local this_arg = select(i, ...)
 			if this_arg == nil then
 				this_arg = memo_nil_tag
 			end
@@ -455,9 +484,10 @@ function M.memoize(fn)
 			thismemo = nextmemo
 		end
 		if not thismemo[memo_end_tag] then
-			thismemo[memo_end_tag] = { fn(...) }
+			thismemo[memo_end_tag] = table_pack(fn(...))
 		end
-		return table.unpack(thismemo[memo_end_tag])
+		local values = thismemo[memo_end_tag]
+		return table_unpack(values, 1, values.n)
 	end
 	return wrapfn
 end

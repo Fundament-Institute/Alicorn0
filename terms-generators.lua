@@ -7,6 +7,7 @@ local U = require "alicorn-utils"
 
 local _ = require "lua-ext" -- has side-effect of loading fixed table.concat
 
+local math_floor, select, type = math.floor, select, type
 local s = pretty_printer.s
 
 -- record and enum are nominative types.
@@ -168,7 +169,7 @@ local function gen_record(self, cons, kind, params_with_types)
 		setmetatable(val, self)
 		return val
 	end
-	build_record = U.memoize(build_record)
+	build_record = U.memoize(build_record, false)
 	-- freeze args before entering memoized function
 	-- because freeze may produce a hash-consed instance of the given arg
 	-- which allows hash-consing to work with arrays etc
@@ -754,7 +755,7 @@ local function map_freeze_helper_2(t, ...)
 	frozenval.is_frozen = true
 	return frozenval
 end
-map_freeze_helper_2 = U.memoize(map_freeze_helper_2)
+map_freeze_helper_2 = U.memoize(map_freeze_helper_2, false)
 
 local function map_freeze_helper(t, keys, map, ...)
 	if #keys > 0 then
@@ -824,7 +825,7 @@ local function define_map(self, key_type, value_type)
 	traits.freeze:implement_on(self, { freeze = map_freeze })
 	return self
 end
-define_map = U.memoize(define_map)
+define_map = U.memoize(define_map, false)
 
 ---@class SetType: Type
 ---@overload fun(...): SetValue
@@ -977,7 +978,7 @@ local function set_freeze_helper_2(t, ...)
 	frozenval.is_frozen = true
 	return frozenval
 end
-set_freeze_helper_2 = U.memoize(set_freeze_helper_2)
+set_freeze_helper_2 = U.memoize(set_freeze_helper_2, false)
 
 local function set_freeze_helper(t, keys, ...)
 	if #keys > 0 then
@@ -1034,7 +1035,7 @@ local function define_set(self, key_type)
 	traits.freeze:implement_on(self, { freeze = set_freeze })
 	return self
 end
-define_set = U.memoize(define_set)
+define_set = U.memoize(define_set, false)
 
 ---@class ArrayType: Type
 ---@overload fun(...): ArrayValue
@@ -1063,17 +1064,29 @@ define_set = U.memoize(define_set)
 
 local array_type_mt = {
 	__call = function(self, ...)
-		local val = {
-			n = 0,
-			array = {},
-			is_frozen = false,
-		}
-		setmetatable(val, self)
-		local args = table.pack(...)
-		for i = 1, args.n do
-			val:append(args[i])
+		local value_type = self.value_type
+		local array, n = {}, select("#", ...)
+		for i = 1, n do
+			local value = select(i, ...)
+			if value_type.value_check(value) ~= true then
+				error(
+					debug.traceback(
+						string.format(
+							"wrong value type passed to array creation: expected [%s] of type %s but got %s",
+							s(i),
+							s(value_type),
+							s(value)
+						)
+					)
+				)
+			end
+			array[i] = value
 		end
-		return val
+		return setmetatable({
+			array = array,
+			is_frozen = false,
+			n = n,
+		}, self)
 	end,
 	__eq = function(left, right)
 		return left.value_type == right.value_type
@@ -1082,6 +1095,57 @@ local array_type_mt = {
 		return "terms-gen array val:<" .. tostring(self.value_type) .. ">"
 	end,
 }
+
+local function array_unchecked_new_fn(self, array, n)
+	local value_type = self.value_type
+	local new_array = {}
+	if n == nil then
+		n = array.n
+		if n == nil then
+			n = #array
+		end
+	end
+	for i = 1, n do
+		new_array[i] = array[i]
+	end
+	return setmetatable({
+		n = n,
+		array = new_array,
+		is_frozen = false,
+	}, self)
+end
+
+local function array_new_fn(self, array, n)
+	local value_type = self.value_type
+	local new_array = {}
+	if n == nil then
+		n = array.n
+		if n == nil then
+			n = #array
+		end
+	end
+	for i = 1, n do
+		local value = array[i]
+		if value_type.value_check(value) ~= true then
+			error(
+				debug.traceback(
+					string.format(
+						"wrong value type passed to array creation: expected [%s] of type %s but got %s",
+						s(i),
+						s(value_type),
+						s(value)
+					)
+				)
+			)
+		end
+		new_array[i] = value
+	end
+	return setmetatable({
+		n = n,
+		array = new_array,
+		is_frozen = false,
+	}, self)
+end
 
 ---@param state ArrayValue
 ---@param control integer
@@ -1108,27 +1172,42 @@ local function gen_array_methods(self, value_type)
 			if val.is_frozen then
 				error("trying to modify a frozen array")
 			end
-			val[val.n + 1] = value
+			local n = val.n + 1
+			val.array[n], val.n = value, n
 		end,
 		copy = function(val, first, last)
 			first = first or 1
-			last = last or val:len()
-			local new = self()
+			last = last or val.n
+			local array, new_array = val.array, {}
 			for i = first, last do
-				new:append(val.array[i])
+				new_array[i] = array[i]
 			end
-			return new
+			return self:unchecked_new(new_array, n)
 		end,
 		unpack = function(val)
 			return table.unpack(val.array, 1, val.n)
 		end,
 		map = function(val, to, fn)
-			local x = {}
-			for i = 1, val:len() do
-				x[i] = fn(val.array[i])
+			local value_type = to.value_type
+			local array, new_array, n = val.array, {}, val.n
+			for i = 1, n do
+				local value = fn(array[i])
+				if value_type.value_check(value) ~= true then
+					error(
+						debug.traceback(
+							string.format(
+								"wrong value type resulting from array mapping: expected [%s] of type %s but got %s",
+								s(i),
+								s(value_type),
+								s(value)
+							)
+						)
+					)
+				end
+				new_array[i] = value
 			end
 
-			return to(table.unpack(x, 1, val:len()))
+			return to:unchecked_new(new_array, n)
 		end,
 		get = function(val, key)
 			return val.array[key]
@@ -1176,7 +1255,7 @@ local function gen_array_index_fns(self, value_type)
 		-- check if integer
 		-- there are many nice ways to do this in lua >=5.3
 		-- unfortunately, this is not part of luajit/luvit
-		if math.floor(key) ~= key then
+		if math_floor(key) ~= key then
 			p(key)
 			error("key passed to array indexing is not an integer")
 		end
@@ -1215,7 +1294,7 @@ local function gen_array_index_fns(self, value_type)
 				)
 			)
 		end
-		if math.floor(key) ~= key then
+		if math_floor(key) ~= key then
 			error(string.format("key passed to array index-assignment is not an integer: %s", s(key)))
 		end
 		-- n+1 can be used to append
@@ -1313,18 +1392,22 @@ local function gen_array_diff_fn(self, value_type)
 	return diff_fn
 end
 
-local function array_freeze_helper(t, ...)
-	local frozenval = t(...)
-	frozenval.is_frozen = true
-	return frozenval
+local function array_freeze_helper(t, n)
+	local function array_freeze_helper_aux(array)
+		local frozenval = t:new(array, n)
+		frozenval.is_frozen = true
+		return frozenval
+	end
+	array_freeze_helper_aux = U.memoize(array_freeze_helper_aux, true)
+	return array_freeze_helper_aux
 end
-array_freeze_helper = U.memoize(array_freeze_helper)
+array_freeze_helper = U.memoize(array_freeze_helper, false)
 
 local function array_freeze(t, val)
 	if val.is_frozen then
 		return val
 	end
-	local frozen = array_freeze_helper(t, val:unpack())
+	local frozen = array_freeze_helper(t, val.n)(val.array)
 	return frozen
 end
 
@@ -1341,6 +1424,8 @@ local function define_array(self, value_type)
 
 	setmetatable(self, array_type_mt)
 	---@cast self ArrayType
+	self.unchecked_new = array_unchecked_new_fn
+	self.new = array_new_fn
 	-- NOTE: this isn't primitive equality; this type has a __eq metamethod!
 	self.value_check = metatable_equality(self)
 	self.value_type = value_type
@@ -1359,13 +1444,13 @@ local function define_array(self, value_type)
 	})
 	traits.value_name:implement_on(self, {
 		value_name = function()
-			return "ArrayValue<" .. traits.value_name:get(value_type).value_name() .. ">"
+			return ("ArrayValue<%s>"):format(traits.value_name:get(value_type).value_name())
 		end,
 	})
 	traits.freeze:implement_on(self, { freeze = array_freeze })
 	return self
 end
-define_array = U.memoize(define_array)
+define_array = U.memoize(define_array, false)
 
 ---@class UndefinedType: Type
 ---@field define_record fun(self: table, kind: string, params_with_types: ParamsWithTypes): RecordType

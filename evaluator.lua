@@ -235,25 +235,24 @@ local function FunctionRelation(srel)
 		end),
 	}, subtype_relation_mt)
 end
-FunctionRelation = U.memoize(FunctionRelation)
+FunctionRelation = U.memoize(FunctionRelation, false)
 
 ---independent tuple relation.
 ---takes variances from a tuple of arguments to a type family.
 ---propagates agreement between those variances to the tuple of arguments as a whole.
 ---
 ---(in lieu of future `TupleRelation` that will be capable of handling dependent tuples.)
----@param ... Variance
+---@param variances Variance[]
 ---@return SubtypeRelation
-local function IndepTupleRelation(...)
-	local args = { ... }
+local function IndepTupleRelation(variances)
 	---@type string[]
 	local names = {}
-	for i, v in ipairs(args) do
+	for i, v in ipairs(variances) do
 		names[i] = (v.positive and "+" or "-") .. v.srel.debug_name
 	end
 	return setmetatable({
 		debug_name = "IndepTupleRelation(" .. table.concat(names, ", ") .. ")",
-		srels = args,
+		srels = variances,
 		Rel = luatovalue(function(a, b)
 			error("nyi")
 		end),
@@ -275,11 +274,11 @@ local function IndepTupleRelation(...)
 				local val_elems = val:unwrap_tuple_value()
 				local use_elems = use:unwrap_tuple_value()
 				for i = 1, val_elems:len() do
-					if args[i].positive then
+					if variances[i].positive then
 						typechecker_state:queue_constrain(
 							l_ctx,
 							val_elems[i],
-							args[i].srel,
+							variances[i].srel,
 							r_ctx,
 							use_elems[i],
 							nestcause(
@@ -295,7 +294,7 @@ local function IndepTupleRelation(...)
 						typechecker_state:queue_constrain(
 							r_ctx,
 							use_elems[i],
-							args[i].srel,
+							variances[i].srel,
 							l_ctx,
 							val_elems[i],
 							nestcause(
@@ -315,7 +314,7 @@ local function IndepTupleRelation(...)
 		),
 	}, subtype_relation_mt)
 end
-IndepTupleRelation = U.memoize(IndepTupleRelation)
+IndepTupleRelation = U.memoize(IndepTupleRelation, true)
 
 ---@type SubtypeRelation
 local EffectRowRelation = setmetatable({
@@ -1919,7 +1918,7 @@ for i, host_type in ipairs {
 	terms.host_lua_error_type,
 } do
 	local id, family_args = host_type:unwrap_host_user_defined_type()
-	register_host_srel(id, IndepTupleRelation())
+	register_host_srel(id, IndepTupleRelation({}))
 end
 
 add_comparer("flex_value.srel_type", "flex_value.srel_type", function(l_ctx, a, r_ctx, b, cause)
@@ -3849,7 +3848,7 @@ function infer(inferrable_term, typechecking_context)
 	end
 	return ok, v, usages, term
 end
-infer = U.memoize(infer)
+infer = U.memoize(infer, false)
 
 ---@param tuple_name string
 ---@param capture flex_value
@@ -4892,7 +4891,7 @@ function evaluate(typed, runtime_context, ambient_typechecking_context)
 	end
 	return r
 end
-evaluate = U.memoize(evaluate)
+evaluate = U.memoize(evaluate, false)
 
 -- evaluate = evaluate_impl
 

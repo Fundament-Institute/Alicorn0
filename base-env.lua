@@ -2295,7 +2295,7 @@ local function new_host_type_family(unique_id, sig, variance)
 		variances[i] = v:unwrap_host_value()
 	end
 
-	local srel = evaluator.IndepTupleRelation(table.unpack(variances))
+	local srel = evaluator.IndepTupleRelation(variances)
 	evaluator.register_host_srel(unique_id, srel)
 
 	local params = typed_term_array()
