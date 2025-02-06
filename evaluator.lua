@@ -1108,7 +1108,8 @@ local function extract_desc_nth(subject, desc, idx)
 		if variant == terms.DescCons.empty then
 			done = true
 		elseif variant == terms.DescCons.cons then
-			local pfx, elem = args:unwrap_tuple_value():unpack()
+			local elements = args:unwrap_host_tuple_value()
+			local pfx, elem = elements:unpack()
 			slices[#slices + 1] = elem
 			desc = pfx
 		else
@@ -2108,22 +2109,26 @@ local function index_tuple_value(subject, index)
 end
 
 local host_tuple_make_prefix_mt = {
+	---@param i integer
+	---@return flex_value
 	__call = function(self, i)
 		local prefix_elements = flex_value_array()
 		for x = 1, i do
-			prefix_elements:append(flex_value.stuck(stuck_value.tuple_element_access(self.subject_neutral, x)))
+			prefix_elements:append(flex_value.stuck(stuck_value.tuple_element_access(self.subject_stuck_value, x)))
 		end
 		return flex_value.tuple_value(prefix_elements)
 	end,
 }
-local function host_tuple_make_prefix(subject_neutral)
-	return setmetatable({ subject_neutral = subject_neutral }, host_tuple_make_prefix_mt)
+---@param subject_stuck_value stuck_value
+---@return fun(i: integer): flex_value
+local function host_tuple_make_prefix(subject_stuck_value)
+	return setmetatable({ subject_stuck_value = subject_stuck_value }, host_tuple_make_prefix_mt)
 end
 
 ---@param subject_type flex_value
 ---@param subject_value flex_value
----@return flex_value
----@return fun(i: any) : flex_value
+---@return flex_value desc `subject_type.desc`
+---@return fun(i: integer): flex_value make_prefix
 local function make_tuple_prefix(subject_type, subject_value)
 	local desc, make_prefix
 	if subject_type:is_tuple_type() then
@@ -2131,15 +2136,19 @@ local function make_tuple_prefix(subject_type, subject_value)
 
 		if subject_value:is_tuple_value() then
 			local subject_elements = subject_value:unwrap_tuple_value()
+			---@param i integer
+			---@return flex_value
 			function make_prefix(i)
 				return flex_value.tuple_value(subject_elements:copy(1, i))
 			end
 		elseif subject_value:is_stuck() then
-			local subject_neutral = subject_value:unwrap_stuck()
+			local subject_stuck_value = subject_value:unwrap_stuck()
+			---@param i integer
+			---@return flex_value
 			function make_prefix(i)
 				local prefix_elements = flex_value_array()
 				for x = 1, i do
-					prefix_elements:append(flex_value.stuck(stuck_value.tuple_element_access(subject_neutral, x)))
+					prefix_elements:append(flex_value.stuck(stuck_value.tuple_element_access(subject_stuck_value, x)))
 				end
 				return flex_value.tuple_value(prefix_elements)
 			end
@@ -2160,13 +2169,15 @@ local function make_tuple_prefix(subject_type, subject_value)
 			for _, v in subject_elements:ipairs() do
 				subject_value_elements:append(flex_value.host_value(v))
 			end
+			---@param i integer
+			---@return flex_value
 			function make_prefix(i)
 				return flex_value.tuple_type(subject_value_elements:copy(1, i))
 			end
 		elseif subject_value:is_stuck() then
-			-- yes, literally a copy-paste of the neutral case above
-			local subject_neutral = subject_value:unwrap_stuck()
-			make_prefix = host_tuple_make_prefix(subject_neutral) --[[@as fun(i: any) : value]]
+			-- yes, literally a copy-paste of the stuck case above
+			local subject_stuck_value = subject_value:unwrap_stuck()
+			make_prefix = host_tuple_make_prefix(subject_stuck_value)
 		else
 			error(
 				ConstraintError.new(
@@ -2185,9 +2196,9 @@ end
 -- TODO: create a typechecking context append variant that merges two
 ---@param desc flex_value
 ---@param make_prefix fun(i: integer): flex_value
----@return flex_value[]
----@return integer
----@return flex_value[]
+---@return flex_value[] tuple_types
+---@return integer n_elements
+---@return flex_value[] tuple_vals
 function make_inner_context(desc, make_prefix)
 	-- evaluate the type of the tuple
 	local constructor, arg = desc:unwrap_enum_value()
@@ -2195,22 +2206,22 @@ function make_inner_context(desc, make_prefix)
 		return flex_value_array(), 0, flex_value_array()
 	elseif constructor == terms.DescCons.cons then
 		local details = arg:unwrap_tuple_value()
-		local tupletypes, n_elements, tuplevals = make_inner_context(details[1], make_prefix)
+		local tuple_types, n_elements, tuple_vals = make_inner_context(details[1], make_prefix)
 		local f = details[2]
 		local element_type
-		if tupletypes:len() == tuplevals:len() then
-			local prefix = flex_value.tuple_value(tuplevals)
+		if tuple_types:len() == tuple_vals:len() then
+			local prefix = flex_value.tuple_value(tuple_vals)
 			element_type = apply_value(f, prefix)
 			if element_type:is_singleton() then
 				local _, val = element_type:unwrap_singleton()
-				tuplevals:append(val)
+				tuple_vals:append(val)
 			end
 		else
 			local prefix = make_prefix(n_elements)
 			element_type = apply_value(f, prefix)
 		end
-		tupletypes:append(element_type)
-		return tupletypes, n_elements + 1, tuplevals
+		tuple_types:append(element_type)
+		return tuple_types, n_elements + 1, tuple_vals
 	else
 		error("infer: unknown tuple type data constructor")
 	end
@@ -2236,16 +2247,16 @@ function infer_tuple_type(subject_type, subject_value)
 	return infer_tuple_type_unwrapped(subject_type, subject_value)
 end
 
----@param desc_a flex_value
+---@param desc_a flex_value `flex_value.enum_value`
 ---@param make_prefix_a fun(i: integer): flex_value
 ---@param lctx TypecheckingContext
----@param desc_b flex_value
+---@param desc_b flex_value `flex_value.enum_value`
 ---@param make_prefix_b fun(i: integer): flex_value
 ---@param rctx TypecheckingContext
 ---@return boolean ok
----@return flex_value[]|string tuple_types_a
----@return flex_value[] tuple_types_b
----@return flex_value[] tuple_vals
+---@return ArrayType|string tuple_types_a array(flex_value)
+---@return ArrayType tuple_types_b array(flex_value)
+---@return ArrayType tuple_vals array(flex_value)
 ---@return integer n_elements
 function make_inner_context2(desc_a, make_prefix_a, lctx, desc_b, make_prefix_b, rctx)
 	local constructor_a, arg_a = desc_a:unwrap_enum_value()
@@ -2257,27 +2268,31 @@ function make_inner_context2(desc_a, make_prefix_a, lctx, desc_b, make_prefix_b,
 	elseif constructor_a == terms.DescCons.cons and constructor_b == terms.DescCons.cons then
 		local details_a = arg_a:unwrap_tuple_value()
 		local details_b = arg_b:unwrap_tuple_value()
-		local ok, tupletypes_a, tupletypes_b, tuplevals, n_elements =
+		local ok, tuple_types_a, tuple_types_b, tuple_vals, n_elements =
 			make_inner_context2(details_a[1], make_prefix_a, lctx, details_b[1], make_prefix_b, rctx)
 		if not ok then
-			return ok, tupletypes_a
+			---@cast tuple_types_a string
+			return ok, tuple_types_a
 		end
-		local f_a = details_a[2]
-		local f_b = details_b[2]
+		---@cast tuple_types_a -string
+		local f_a = details_a[2] --[[@as flex_value]]
+		local f_b = details_b[2] --[[@as flex_value]]
+		---@type flex_value
 		local element_type_a
+		---@type flex_value
 		local element_type_b
-		if tupletypes_a:len() == tuplevals:len() then
-			local prefix = flex_value.tuple_value(tuplevals)
+		if tuple_types_a:len() == tuple_vals:len() then
+			local prefix = flex_value.tuple_value(tuple_vals)
 			element_type_a = apply_value(f_a, prefix, lctx)
 			element_type_b = apply_value(f_b, prefix, lctx) -- This looks wrong but it's necessary to fix a missing placeholder problem
 
 			if element_type_a:is_singleton() then
 				local _, val = element_type_a:unwrap_singleton()
-				tuplevals:append(val)
+				tuple_vals:append(val)
 			elseif element_type_b:is_singleton() then
 				error("singleton found in tuple use, this doesn't make sense")
 				local _, val = element_type_b:unwrap_singleton()
-				tuplevals:append(val)
+				tuple_vals:append(val)
 			end
 		else
 			local prefix_a = make_prefix_a(n_elements)
@@ -2285,9 +2300,9 @@ function make_inner_context2(desc_a, make_prefix_a, lctx, desc_b, make_prefix_b,
 			element_type_a = apply_value(f_a, prefix_a, lctx)
 			element_type_b = apply_value(f_b, prefix_b, rctx)
 		end
-		tupletypes_a:append(element_type_a)
-		tupletypes_b:append(element_type_b)
-		return true, tupletypes_a, tupletypes_b, tuplevals, n_elements + 1
+		tuple_types_a:append(element_type_a)
+		tuple_types_b:append(element_type_b)
+		return true, tuple_types_a, tuple_types_b, tuple_vals, n_elements + 1
 	else
 		return false, "infer: unknown tuple type data constructor"
 	end
@@ -2775,11 +2790,11 @@ local function infer_impl(
 				return true, flex_value.record_value(prefix_fields)
 			end
 		elseif subject_value:is_stuck() then
-			local subject_neutral = subject_value:unwrap_stuck()
+			local subject_stuck_value = subject_value:unwrap_stuck()
 			function make_prefix(field_names)
 				local prefix_fields = string_value_map()
 				for _, v in field_names:ipairs() do
-					prefix_fields[v] = flex_value.stuck(stuck_value.record_field_access(subject_neutral, v))
+					prefix_fields[v] = flex_value.stuck(stuck_value.record_field_access(subject_stuck_value, v))
 				end
 				return true, flex_value.record_value(prefix_fields)
 			end
@@ -3660,10 +3675,10 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 				inner_context = inner_context:append(subject_fields[v], v, var_debug(v, U.anchor_here()))
 			end
 		elseif subject_value:is_stuck() then
-			local subject_neutral = subject_value:unwrap_stuck()
+			local subject_stuck_value = subject_value:unwrap_stuck()
 			for _, v in field_names:ipairs() do
 				inner_context = inner_context:append(
-					flex_value.stuck(stuck_value.record_field_access(subject_neutral, v)),
+					flex_value.stuck(stuck_value.record_field_access(subject_stuck_value, v)),
 					v,
 					var_debug(v, U.anchor_here())
 				)
@@ -3715,8 +3730,8 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 				error("evaluate, is_enum_elim, is_enum_value, mechanism_value: expected an object")
 			end
 		elseif subject_value:is_stuck() then
-			local subject_neutral = subject_value:unwrap_stuck()
-			return flex_value.stuck(stuck_value.enum_elim(mechanism_value, subject_neutral))
+			local subject_stuck_value = subject_value:unwrap_stuck()
+			return flex_value.stuck(stuck_value.enum_elim(mechanism_value, subject_stuck_value))
 		else
 			error("evaluate, is_enum_elim, subject_value: expected an enum")
 		end
@@ -3815,8 +3830,8 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 				error("evaluate, is_object_elim, is_object_value, mechanism_value: expected an enum")
 			end
 		elseif subject_value:is_stuck() then
-			local subject_neutral = subject_value:unwrap_stuck()
-			return flex_value.stuck(stuck_value.object_elim(mechanism_value, subject_neutral))
+			local subject_stuck_value = subject_value:unwrap_stuck()
+			return flex_value.stuck(stuck_value.object_elim(mechanism_value, subject_stuck_value))
 		else
 			error("evaluate, is_object_elim, subject_value: expected an object")
 		end

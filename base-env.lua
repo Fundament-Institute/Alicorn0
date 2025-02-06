@@ -2094,6 +2094,8 @@ local host_if = (function()
 	)
 end)()
 
+---@param desc flex_value
+---@return flex_value desc `flex_value.enum_value(terms.DescCons.…, …)`
 local function convert_desc(desc)
 	local constructor, arg = desc:unwrap_enum_value()
 	if constructor == terms.DescCons.empty then
@@ -2125,6 +2127,8 @@ local function convert_desc(desc)
 	end
 end
 
+---@param sig flex_value `flex_value.pi`
+---@return flex_value param_desc `flex_value.tuple_type`
 local function convert_sig(sig)
 	local param_type, _, _, _ = sig:unwrap_pi()
 	local param_desc = param_type:unwrap_tuple_type()
@@ -2200,6 +2204,8 @@ local function get_host_func_res(subject, valid)
 	return terms.flex_value.closure("#TEST-1", tuple_build, ctx, arg_dbg)
 end
 
+---@param val flex_value
+---@return flex_value
 local function tuple_to_host_tuple_inner(_type, _valid, val)
 	local elems = val:unwrap_tuple_value()
 	local leading = terms_gen.declare_array(terms_gen.any_lua_type)()
@@ -2207,6 +2213,7 @@ local function tuple_to_host_tuple_inner(_type, _valid, val)
 	local stuck_elem = nil
 	local trailing = terms_gen.declare_array(terms.flex_value)()
 	for _, v in ipairs(elems) do
+		---@cast v flex_value
 		if stuck then
 			trailing:append(v)
 		elseif v:is_host_value() then

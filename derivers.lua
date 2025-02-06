@@ -463,12 +463,14 @@ local diff = {
 		local name = info.name
 		local variants = info.variants
 
+		---@type (fun(left, right))[]
 		local variants_checks = {}
 		for _, vname in ipairs(variants) do
 			local vkind = name .. "." .. vname
 			local vdata = variants[vname]
 			local vtype = vdata.type
 			local vinfo = vdata.info
+			---@type fun(left, right)
 			local vcheck
 			if vtype == EnumDeriveInfoVariantKind.Record then
 				---@cast vinfo RecordDeriveInfo
@@ -512,7 +514,7 @@ local diff = {
 					end
 				end
 			elseif vtype == EnumDeriveInfoVariantKind.Unit then
-				function vcheck()
+				function vcheck(_left, _right)
 					print("no difference")
 					print("stopping diff")
 				end

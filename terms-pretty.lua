@@ -1,9 +1,30 @@
 local fibbuf = require "fibonacci-buffer"
 local gen = require "terms-generators"
 local U = require "alicorn-utils"
+---@module "terms".typechecking_context_type
 local typechecking_context_type
+---@module "terms".flex_runtime_context_type
 local flex_runtime_context_type
+---@module "terms".DescCons
 local DescCons
+
+---@module "pretty-printer".PrettyPrint
+local PrettyPrint
+
+---@module "types.binding"
+local binding
+---@module "types.checkable"
+local checkable
+---@module "types.inferrable"
+local inferrable
+---@module "types.typed"
+local typed
+---@module "types.strict_value"
+local strict_value
+---@module "types.flex_value"
+local flex_value
+---@module "types.stuck_value"
+local stuck_value
 
 -- pretty printing context stuff
 
@@ -202,7 +223,7 @@ end
 ---@return boolean
 ---@return T?
 local function as_any_tuple_type(term)
-	---@cast term inferrable|value|typed
+	---@cast term inferrable|flex_value|typed
 	local ok, desc = term:as_tuple_type()
 	if ok then
 		return ok, desc
@@ -440,7 +461,7 @@ local function typed_tuple_type_flatten(desc, context)
 	end
 end
 
----@param desc value
+---@param desc flex_value
 ---@return boolean
 ---@return TupleDescFlat[]?
 ---@return integer?
@@ -494,8 +515,8 @@ local inferrable_term_override_pretty = {}
 ---@class TypedTermOverride : typed
 local typed_term_override_pretty = {}
 
----@class ValueOverridePretty : flex_value
-local value_override_pretty = {}
+---@class FlexValueOverridePretty : flex_value
+local flex_value_override_pretty = {}
 
 ---@class StuckValueOverridePretty : stuck_value
 local stuck_value_override_pretty = {}
@@ -835,7 +856,7 @@ function typed_term_override_pretty:lambda(pp, context)
 end
 
 ---@param pp PrettyPrint
-function value_override_pretty:closure(pp)
+function flex_value_override_pretty:closure(pp)
 	local param_name, code, capture = self:unwrap_closure()
 	local context = ensure_context(capture)
 	local inner_context = context:append(param_name)
@@ -849,7 +870,8 @@ function value_override_pretty:closure(pp)
 	pp:_enter()
 
 	pp:unit(pp:set_color())
-	pp:unit("value.closure ")
+	pp:unit(self._kind)
+	pp:unit(".closure ")
 	pp:unit(pp:reset_color())
 
 	if is_destructure then
@@ -1323,7 +1345,7 @@ function typed_term_override_pretty:host_function_type(pp, context)
 end
 
 ---@param pp PrettyPrint
-function value_override_pretty:pi(pp)
+function flex_value_override_pretty:pi(pp)
 	local param_type, param_info, result_type, result_info = self:unwrap_pi()
 	local param_is_tuple_type, param_desc = as_any_tuple_type(param_type)
 	local result_is_readable, param_name, result_code, result_capture, info = result_type:as_closure()
@@ -1354,7 +1376,8 @@ function value_override_pretty:pi(pp)
 	pp:_enter()
 
 	pp:unit(pp:set_color())
-	pp:unit("value.Π <")
+	pp:unit(self._kind)
+	pp:unit(".Π <")
 	pp:unit(pp:reset_color())
 	pp:any(param_info)
 	pp:unit(pp:set_color())
@@ -1430,7 +1453,7 @@ function value_override_pretty:pi(pp)
 end
 
 ---@param pp PrettyPrint
-function value_override_pretty:host_function_type(pp)
+function flex_value_override_pretty:host_function_type(pp)
 	local param_type, result_type, result_info = self:unwrap_host_function_type()
 	local param_is_tuple_type, param_desc = param_type:as_host_tuple_type()
 	local result_is_readable, param_name, result_code, result_capture, info = result_type:as_closure()
@@ -1461,7 +1484,8 @@ function value_override_pretty:host_function_type(pp)
 	pp:_enter()
 
 	pp:unit(pp:set_color())
-	pp:unit("value.host-Π <")
+	pp:unit(self._kind)
+	pp:unit(".host-Π <")
 	pp:unit(pp:reset_color())
 	pp:any(result_info)
 	pp:unit(pp:set_color())
@@ -1533,7 +1557,7 @@ function value_override_pretty:host_function_type(pp)
 end
 
 ---@param pp PrettyPrint
-function value_override_pretty:visibility(pp)
+function flex_value_override_pretty:visibility(pp)
 	local v = self:unwrap_visibility()
 
 	pp:_enter()
@@ -1551,12 +1575,12 @@ function value_override_pretty:visibility(pp)
 	pp:_exit()
 end
 
-function value_override_pretty:param_info(pp)
+function flex_value_override_pretty:param_info(pp)
 	local v = self:unwrap_param_info()
 	pp:any(v)
 end
 
-function value_override_pretty:result_info(pp)
+function flex_value_override_pretty:result_info(pp)
 	local purity = self:unwrap_result_info():unwrap_result_info()
 	pp:any(purity)
 end
@@ -1836,14 +1860,15 @@ function typed_term_override_pretty:host_tuple_type(pp, context)
 end
 
 ---@param pp PrettyPrint
-function value_override_pretty:tuple_type(pp)
+function flex_value_override_pretty:tuple_type(pp)
 	local desc = self:unwrap_tuple_type()
 	local ok, members = value_tuple_type_flatten(desc)
 
 	pp:_enter()
 
 	pp:unit(pp:set_color())
-	pp:unit("value.tuple_type[")
+	pp:unit(self._kind)
+	pp:unit(".tuple_type[")
 	pp:unit(pp:reset_color())
 
 	if ok then
@@ -1861,14 +1886,15 @@ function value_override_pretty:tuple_type(pp)
 end
 
 ---@param pp PrettyPrint
-function value_override_pretty:host_tuple_type(pp)
+function flex_value_override_pretty:host_tuple_type(pp)
 	local desc = self:unwrap_host_tuple_type()
 	local ok, members = value_tuple_type_flatten(desc)
 
 	pp:_enter()
 
 	pp:unit(pp:set_color())
-	pp:unit("value.host_tuple_type[")
+	pp:unit(self._kind)
+	pp:unit(".host_tuple_type[")
 	pp:unit(pp:reset_color())
 
 	if ok then
@@ -1886,13 +1912,14 @@ function value_override_pretty:host_tuple_type(pp)
 end
 
 ---@param pp PrettyPrint
-function value_override_pretty:enum_value(pp)
+function flex_value_override_pretty:enum_value(pp)
 	local constructor, arg = self:unwrap_enum_value()
 
 	pp:_enter()
 
 	pp:unit(pp:set_color())
-	pp:unit("value.◬")
+	pp:unit(self._kind)
+	pp:unit(".◬")
 	pp:unit(constructor)
 
 	if arg:is_tuple_value() then
@@ -1929,7 +1956,7 @@ function value_override_pretty:enum_value(pp)
 end
 
 ---@param pp PrettyPrint
-function value_override_pretty:stuck(pp)
+function flex_value_override_pretty:stuck(pp)
 	local stuck = self:unwrap_stuck()
 
 	if stuck:is_free() and stuck:unwrap_free():is_metavariable() then
@@ -2030,7 +2057,7 @@ function typed_term_override_pretty:constrained_type(pp)
 end
 
 ---@param pp PrettyPrint
-function value_override_pretty:star(pp)
+function flex_value_override_pretty:star(pp)
 	local level, depth = self:unwrap_star()
 
 	pp:_enter()
@@ -2050,7 +2077,7 @@ return function(args)
 		checkable_term_override_pretty = checkable_term_override_pretty,
 		inferrable_term_override_pretty = inferrable_term_override_pretty,
 		typed_term_override_pretty = typed_term_override_pretty,
-		value_override_pretty = value_override_pretty,
+		flex_value_override_pretty = flex_value_override_pretty,
 		stuck_value_override_pretty = stuck_value_override_pretty,
 		binding_override_pretty = binding_override_pretty,
 	}

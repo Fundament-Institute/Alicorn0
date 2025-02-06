@@ -1662,7 +1662,7 @@ local override_prettys = require "terms-pretty"(terms)
 local checkable_term_override_pretty = override_prettys.checkable_term_override_pretty
 local inferrable_term_override_pretty = override_prettys.inferrable_term_override_pretty
 local typed_term_override_pretty = override_prettys.typed_term_override_pretty
-local value_override_pretty = override_prettys.value_override_pretty
+local flex_value_override_pretty = override_prettys.flex_value_override_pretty
 local stuck_value_override_pretty = override_prettys.stuck_value_override_pretty
 local binding_override_pretty = override_prettys.binding_override_pretty
 
@@ -1671,8 +1671,8 @@ inferrable_term:derive(derivers.pretty_print, inferrable_term_override_pretty)
 typed_term:derive(derivers.pretty_print, typed_term_override_pretty)
 visibility:derive(derivers.pretty_print)
 free:derive(derivers.pretty_print)
-flex_value:derive(derivers.pretty_print, value_override_pretty)
-strict_value:derive(derivers.pretty_print, value_override_pretty)
+flex_value:derive(derivers.pretty_print, flex_value_override_pretty)
+strict_value:derive(derivers.pretty_print, flex_value_override_pretty)
 stuck_value:derive(derivers.pretty_print, stuck_value_override_pretty)
 binding:derive(derivers.pretty_print, binding_override_pretty)
 expression_goal:derive(derivers.pretty_print)
