@@ -773,8 +773,10 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 
 		if not ok then
 			--print("ERRORED:", type_of_term)
+			---@cast type_of_term string
 			return terms.tristate.continue, type_of_term
 		end
+		---@cast type_of_term -string
 	end
 
 	local param_type, result_type, result_info = type_of_term:unwrap_host_function_type()

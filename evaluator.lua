@@ -1505,51 +1505,55 @@ end)
 
 ---@type {[table] : SubtypeRelation}
 local host_srel_map = {}
-add_comparer("flex_value.host_user_defined_type", "flex_value.host_user_defined_type", function(l_ctx, a, r_ctx, b, cause)
-	local a_id, a_args = a:unwrap_host_user_defined_type()
-	local b_id, b_args = b:unwrap_host_user_defined_type()
+add_comparer(
+	"flex_value.host_user_defined_type",
+	"flex_value.host_user_defined_type",
+	function(l_ctx, a, r_ctx, b, cause)
+		local a_id, a_args = a:unwrap_host_user_defined_type()
+		local b_id, b_args = b:unwrap_host_user_defined_type()
 
-	if not a_id == b_id then
-		error(
-			ConstraintError(
-				"ids do not match in host user defined types: " .. a_id.name .. " ",
-				a_id,
-				l_ctx,
-				" ~= " .. b_id.name .. " ",
-				b_id,
-				r_ctx
+		if not a_id == b_id then
+			error(
+				ConstraintError(
+					"ids do not match in host user defined types: " .. a_id.name .. " ",
+					a_id,
+					l_ctx,
+					" ~= " .. b_id.name .. " ",
+					b_id,
+					r_ctx
+				)
 			)
-		)
-	end
-	if not host_srel_map[a_id] then
-		error("No variance specified for user defined host type " .. a_id.name)
-	end
-	local a_value, b_value = flex_value.tuple_value(a_args), flex_value.tuple_value(b_args)
-	return apply_value(
-			flex_value.strict(host_srel_map[a_id].constrain),
-			flex_value.tuple_value(
-				flex_value_array(
-					flex_value.host_value(l_ctx),
-					flex_value.host_value(a_value),
-					flex_value.host_value(r_ctx),
-					flex_value.host_value(b_value),
-					flex_value.host_value(
-						nestcause(
-							"host_user_defined_type compared against host_user_defined_type",
-							cause,
-							a_value,
-							b_value,
-							l_ctx,
-							r_ctx
+		end
+		if not host_srel_map[a_id] then
+			error("No variance specified for user defined host type " .. a_id.name)
+		end
+		local a_value, b_value = flex_value.tuple_value(a_args), flex_value.tuple_value(b_args)
+		return apply_value(
+				flex_value.strict(host_srel_map[a_id].constrain),
+				flex_value.tuple_value(
+					flex_value_array(
+						flex_value.host_value(l_ctx),
+						flex_value.host_value(a_value),
+						flex_value.host_value(r_ctx),
+						flex_value.host_value(b_value),
+						flex_value.host_value(
+							nestcause(
+								"host_user_defined_type compared against host_user_defined_type",
+								cause,
+								a_value,
+								b_value,
+								l_ctx,
+								r_ctx
+							)
 						)
 					)
-				)
-			),
-			l_ctx
-		)
-		:unwrap_host_tuple_value()
-		:unpack()
-end)
+				),
+				l_ctx
+			)
+			:unwrap_host_tuple_value()
+			:unpack()
+	end
+)
 
 ---define subtyping for a user defined host type
 ---@param id table
@@ -1635,7 +1639,13 @@ end)
 
 add_comparer("flex_value.host_wrapped_type", "flex_value.host_wrapped_type", function(l_ctx, a, r_ctx, b, cause)
 	local a_type, b_type = a:unwrap_host_wrapped_type(), b:unwrap_host_wrapped_type()
-	typechecker_state:queue_subtype(l_ctx, a_type, r_ctx, b_type, nestcause("wrapped type target", cause, a_type, b_type, l_ctx, r_ctx))
+	typechecker_state:queue_subtype(
+		l_ctx,
+		a_type,
+		r_ctx,
+		b_type,
+		nestcause("wrapped type target", cause, a_type, b_type, l_ctx, r_ctx)
+	)
 	--U.tag("check_concrete", { ua, ub }, check_concrete, ua, ub)
 	return true
 end)
@@ -6071,10 +6081,11 @@ local function assemble_side_chain(cause, side, list)
 			)
 		else
 			local r = g.constrain_edges:all()[right]
-			U.append(
-				list,
-				{ desc = desc, use = typechecker_state.values[r.right][1], r_ctx = typechecker_state.values[r.right][3] }
-			)
+			U.append(list, {
+				desc = desc,
+				use = typechecker_state.values[r.right][1],
+				r_ctx = typechecker_state.values[r.right][3],
+			})
 			assemble_side_chain(r.cause, side, list)
 		end
 	end
