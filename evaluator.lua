@@ -2393,8 +2393,10 @@ local function infer_impl(
 		local goal_type = evaluate(goal_typed_term, typechecking_context.runtime_context, typechecking_context)
 		local ok, el_usages, el_term = check(checkable_term, typechecking_context, goal_type)
 		if not ok then
+			---@cast el_usages string
 			return false, el_usages
 		end
+		---@cast el_usages -string
 		return true, goal_type, el_usages, el_term
 	elseif inferrable_term:is_typed() then
 		local type, usage, term = inferrable_term:unwrap_typed()

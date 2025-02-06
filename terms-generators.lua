@@ -498,6 +498,7 @@ local function define_foreign(self, value_check, lsp_type)
 end
 
 ---@class MapType: Type
+---@overload fun(...): MapValue
 ---@field key_type Type
 ---@field value_type Type
 ---@field __index table
@@ -652,6 +653,7 @@ end
 define_map = U.memoize(define_map)
 
 ---@class SetType: Type
+---@overload fun(...): SetValue
 ---@field key_type Type
 ---@field __index table
 ---@field __pairs function(SetValue): function, SetValue, Value?
@@ -806,6 +808,7 @@ end
 define_set = U.memoize(define_set)
 
 ---@class ArrayType: Type
+---@overload fun(...): ArrayValue
 ---@field value_type Type
 ---@field methods { [string]: function }
 ---@field __eq fun(ArrayValue, ArrayValue): boolean
