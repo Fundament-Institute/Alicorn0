@@ -810,7 +810,7 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		error("Not yet implemented")
 	elseif val:is_free() then
 		local free = val:unwrap_free()
-		local lookup, mapping, info
+		local lookup, mapping, defaultmapping, info
 		if free:is_placeholder() then
 			lookup, info = free:unwrap_placeholder()
 			mapping = typed_term.bound_variable(lookup, info)
@@ -823,12 +823,13 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 				return typechecker_state:slice_constraints_for(mv, mappings, context_len, ambient_typechecking_context)
 			else
 				lookup = free:unwrap_metavariable()
+				defaultmapping = typed_term.metavariable(free:unwrap_metavariable())
 			end
 		else
 			error("substitute_inner NYI free with kind " .. free.kind)
 		end
 
-		mapping = mappings[lookup] or mapping
+		mapping = mappings[lookup] or mapping or defaultmapping
 		if mapping then
 			return mapping
 		end
