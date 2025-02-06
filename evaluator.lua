@@ -743,43 +743,52 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		-- FIXME: this results in more captures every time we substitute a closure ->
 		--   can cause non-obvious memory leaks
 		--   since we don't yet remove unused captures from closure value
-		return typed_term.lambda(param_name .. "*", debuginfo, val_typed, debuginfo.source)
+		local res = typed_term.lambda(param_name .. "*", debuginfo, val_typed, debuginfo.source)
+		return res
 	elseif val:is_operative_value() then
 		local userdata = val:unwrap_operative_value()
 		local userdata = substitute_inner(userdata, mappings, context_len, ambient_typechecking_context)
-		return typed_term.operative_cons(userdata)
+		local res = typed_term.operative_cons(userdata)
+		return res
 	elseif val:is_operative_type() then
 		local handler, userdata_type = val:unwrap_operative_type()
 		local typed_handler = substitute_inner(handler, mappings, context_len, ambient_typechecking_context)
 		local typed_userdata_type = substitute_inner(userdata_type, mappings, context_len, ambient_typechecking_context)
-		return typed_term.operative_type_cons(typed_handler, typed_userdata_type)
+		local res = typed_term.operative_type_cons(typed_handler, typed_userdata_type)
+		return res
 	elseif val:is_tuple_value() then
 		local elems = val:unwrap_tuple_value()
 		local res = typed_array()
 		for _, v in elems:ipairs() do
 			res:append(substitute_inner(v, mappings, context_len, ambient_typechecking_context))
 		end
-		return typed_term.tuple_cons(res)
+		local res = typed_term.tuple_cons(res)
+		return res
 	elseif val:is_tuple_type() then
 		local desc = val:unwrap_tuple_type()
 		local desc = substitute_inner(desc, mappings, context_len, ambient_typechecking_context)
-		return typed_term.tuple_type(desc)
+		local res = typed_term.tuple_type(desc)
+		return res
 	elseif val:is_tuple_desc_type() then
 		local universe = val:unwrap_tuple_desc_type()
 		local typed_universe = substitute_inner(universe, mappings, context_len, ambient_typechecking_context)
-		return typed_term.tuple_desc_type(typed_universe)
+		local res = typed_term.tuple_desc_type(typed_universe)
+		return res
 	elseif val:is_enum_value() then
 		local constructor, arg = val:unwrap_enum_value()
 		local arg = substitute_inner(arg, mappings, context_len, ambient_typechecking_context)
-		return typed_term.enum_cons(constructor, arg)
+		local res = typed_term.enum_cons(constructor, arg)
+		return res
 	elseif val:is_enum_type() then
 		local desc = val:unwrap_enum_type()
 		local desc_sub = substitute_inner(desc, mappings, context_len, ambient_typechecking_context)
-		return typed_term.enum_type(desc_sub)
+		local res = typed_term.enum_type(desc_sub)
+		return res
 	elseif val:is_enum_desc_type() then
 		local univ = val:unwrap_enum_desc_type()
 		local univ_sub = substitute_inner(univ, mappings, context_len, ambient_typechecking_context)
-		return typed_term.enum_desc_type(univ_sub)
+		local res = typed_term.enum_desc_type(univ_sub)
+		return res
 	elseif val:is_enum_desc_value() then
 		local variants = val:unwrap_enum_desc_value()
 		---@type MapValue
@@ -787,10 +796,11 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		for k, v in variants:pairs() do
 			variants_sub:set(k, substitute_inner(v, mappings, context_len, ambient_typechecking_context))
 		end
-		return typed_term.enum_desc_cons(
+		local res = typed_term.enum_desc_cons(
 			variants_sub,
 			typed_term.literal(strict_value.enum_desc_value(string_value_map()))
 		)
+		return res
 	elseif val:is_record_value() then
 		-- TODO: How to deal with a map?
 		error("Records not yet implemented")
@@ -801,11 +811,13 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 	elseif val:is_srel_type() then
 		local target = val:unwrap_srel_type()
 		local target_sub = substitute_inner(target, mappings, context_len, ambient_typechecking_context)
-		return typed_term.srel_type(target_sub)
+		local res = typed_term.srel_type(target_sub)
+		return res
 	elseif val:is_variance_type() then
 		local target = val:unwrap_variance_type()
 		local target_sub = substitute_inner(target, mappings, context_len, ambient_typechecking_context)
-		return typed_term.variance_type(target_sub)
+		local res = typed_term.variance_type(target_sub)
+		return res
 	elseif val:is_object_value() then
 		-- TODO: this needs to be evaluated properly because it contains a value
 		error("Not yet implemented")
@@ -848,28 +860,33 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		local subject, index = val:unwrap_tuple_element_access()
 		local subject_term =
 			substitute_inner(flex_value.stuck(subject), mappings, context_len, ambient_typechecking_context)
-		return typed_term.tuple_element_access(subject_term, index)
+		local res = typed_term.tuple_element_access(subject_term, index)
+		return res
 	elseif val:is_host_unwrap() then
 		local boxed = val:unwrap_host_unwrap()
-		return typed_term.host_unwrap(
+		local res = typed_term.host_unwrap(
 			substitute_inner(flex_value.stuck(boxed), mappings, context_len, ambient_typechecking_context)
 		)
+		return res
 	elseif val:is_host_wrap() then
 		local to_wrap = val:unwrap_host_wrap()
-		return typed_term.host_wrap(
+		local res = typed_term.host_wrap(
 			substitute_inner(flex_value.stuck(to_wrap), mappings, context_len, ambient_typechecking_context)
 		)
+		return res
 	elseif val:is_host_unwrap() then
 		local to_unwrap = val:unwrap_host_unwrap()
-		return typed_term.host_unwrap(
+		local res = typed_term.host_unwrap(
 			substitute_inner(flex_value.stuck(to_unwrap), mappings, context_len, ambient_typechecking_context)
 		)
+		return res
 	elseif val:is_host_application() then
 		local fn, arg = val:unwrap_host_application()
-		return typed_term.application(
+		local res = typed_term.application(
 			typed_term.literal(strict_value.host_value(fn)),
 			substitute_inner(flex_value.stuck(arg), mappings, context_len, ambient_typechecking_context)
 		)
+		return res
 	elseif val:is_host_tuple() then
 		local leading, stuck, trailing = val:unwrap_host_tuple()
 		local elems = typed_array()
@@ -894,31 +911,36 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		return typed_term.host_if(subject, consequent, alternate)
 	elseif val:is_application() then
 		local fn, arg = val:unwrap_application()
-		return typed_term.application(
+		local res = typed_term.application(
 			substitute_inner(flex_value.stuck(fn), mappings, context_len, ambient_typechecking_context),
 			substitute_inner(arg, mappings, context_len, ambient_typechecking_context)
 		)
+		return res
 	elseif val:is_host_function_type() then
 		local param_type, result_type, resinfo = val:unwrap_host_function_type()
 		local param_type = substitute_inner(param_type, mappings, context_len, ambient_typechecking_context)
 		local result_type = substitute_inner(result_type, mappings, context_len, ambient_typechecking_context)
 		local resinfo = substitute_inner(resinfo, mappings, context_len, ambient_typechecking_context)
-		return typed_term.host_function_type(param_type, result_type, resinfo)
+		local res = typed_term.host_function_type(param_type, result_type, resinfo)
+		return res
 	elseif val:is_host_wrapped_type() then
 		local type = val:unwrap_host_wrapped_type()
 		local type = substitute_inner(type, mappings, context_len, ambient_typechecking_context)
-		return typed_term.host_wrapped_type(type)
+		local res = typed_term.host_wrapped_type(type)
+		return res
 	elseif val:is_host_user_defined_type() then
 		local id, family_args = val:unwrap_host_user_defined_type()
 		local res = typed_array()
 		for _, v in family_args:ipairs() do
 			res:append(substitute_inner(v, mappings, context_len, ambient_typechecking_context))
 		end
-		return typed_term.host_user_defined_type_cons(id, res)
+		local res = typed_term.host_user_defined_type_cons(id, res)
+		return res
 	elseif val:is_host_tuple_type() then
 		local desc = val:unwrap_host_tuple_type()
 		local desc = substitute_inner(desc, mappings, context_len, ambient_typechecking_context)
-		return typed_term.host_tuple_type(desc)
+		local res = typed_term.host_tuple_type(desc)
+		return res
 	elseif val:is_range() then
 		local lower_bounds, upper_bounds, relation = val:unwrap_range()
 		local sub_lower_bounds = typed_array()
@@ -932,36 +954,42 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 			sub_upper_bounds:append(sub)
 		end
 		local sub_relation = substitute_inner(relation, mappings, context_len, ambient_typechecking_context)
-		return typed_term.range(sub_lower_bounds, sub_upper_bounds, sub_relation)
+		local res = typed_term.range(sub_lower_bounds, sub_upper_bounds, sub_relation)
+		return res
 	elseif val:is_singleton() then
 		local supertype, val = val:unwrap_singleton()
 		local supertype_tm = substitute_inner(supertype, mappings, context_len, ambient_typechecking_context)
 		local val_tm = substitute_inner(val, mappings, context_len, ambient_typechecking_context)
-		return typed_term.singleton(supertype_tm, val_tm)
+		local res = typed_term.singleton(supertype_tm, val_tm)
+		return res
 	elseif val:is_union_type() then
 		local a, b = val:unwrap_union_type()
-		return typed_term.union_type(
+		local res = typed_term.union_type(
 			substitute_inner(a, mappings, context_len, ambient_typechecking_context),
 			substitute_inner(b, mappings, context_len, ambient_typechecking_context)
 		)
+		return res
 	elseif val:is_intersection_type() then
 		local a, b = val:unwrap_intersection_type()
-		return typed_term.intersection_type(
+		local res = typed_term.intersection_type(
 			substitute_inner(a, mappings, context_len, ambient_typechecking_context),
 			substitute_inner(b, mappings, context_len, ambient_typechecking_context)
 		)
+		return res
 	elseif val:is_program_type() then
 		local effect, res = val:unwrap_program_type()
-		return typed_term.program_type(
+		local res = typed_term.program_type(
 			substitute_inner(effect, mappings, context_len, ambient_typechecking_context),
 			substitute_inner(res, mappings, context_len, ambient_typechecking_context)
 		)
+		return res
 	elseif val:is_effect_row_extend() then
 		local row, rest = val:unwrap_effect_row_extend()
-		return typed_term.effect_row_resolve(
+		local res = typed_term.effect_row_resolve(
 			row,
 			substitute_inner(rest, mappings, context_len, ambient_typechecking_context)
 		)
+		return res
 	else
 		error("Unhandled value kind in substitute_inner: " .. val.kind)
 	end
@@ -1029,7 +1057,8 @@ local function substitute_placeholders_identity(val, typechecking_context, hidde
 		local _, info = typechecking_context.runtime_context:get(i)
 		mappings[i] = typed.bound_variable(i, info)
 	end
-	return substitute_inner(val, mappings, size + (hidden or 0), typechecking_context)
+	local r = substitute_inner(val, mappings, size + (hidden or 0), typechecking_context)
+	return r
 end
 
 ---@param val flex_value
