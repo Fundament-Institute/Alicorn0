@@ -7,7 +7,7 @@ local U = require "alicorn-utils"
 local format = require "format"
 local flex_runtime_context = terms.flex_runtime_context
 local pretty_printer = require "pretty-printer"
-local s = pretty_printer.s
+local PrettyPrint, s = pretty_printer.PrettyPrint, pretty_printer.s
 --local new_typechecking_context = terms.typechecking_context
 --local checkable_term = terms.checkable_term
 local unanchored_inferrable_term = terms.unanchored_inferrable_term
@@ -558,7 +558,9 @@ end
 
 ---@param v table
 ---@param ctx FlexRuntimeContext
----@return boolean
+---@return boolean ok
+---@return integer index
+---@return string info
 local function verify_closure(v, ctx, nested)
 	-- If it's not a table we don't care
 	if type(v) ~= "table" then
@@ -606,16 +608,10 @@ local function verify_closure(v, ctx, nested)
 			--return false, idx, "runtime_context:get() for bound_variable returned nil"
 		end
 		if b_dbg ~= c_dbg then
-			local info = "Debug information doesn't match! Contexts are mismatched! Variable #"
-				.. tostring(v["{ID}"])
-				.. " thinks it is getting "
-				.. tostring(b_dbg)
-				.. " but context thinks it has "
-				.. tostring(c_dbg)
-				.. " at index "
-				.. tostring(idx)
-
-			return false, idx, info
+			local info_pp = PrettyPrint:new()
+			info_pp:unit("Debug information doesn't match the context's for ")
+			info_pp:any(v, ctx)
+			return false, idx, tostring(info_pp)
 		end
 	end
 
@@ -3976,20 +3972,16 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		local idx, b_dbg = typed:unwrap_bound_variable()
 		local rc_val, c_dbg = runtime_context:get(idx)
 		if rc_val == nil then
-			p(typed)
-			error("runtime_context:get() for bound_variable returned nil")
+			local err_pp = PrettyPrint:new()
+			err_pp:unit("runtime_context:get() returned nil for ")
+			err_pp:any(typed, runtime_context)
+			error(tostring(err_pp))
 		end
 		if b_dbg ~= c_dbg then
-			error(
-				"Debug information doesn't match! Contexts are mismatched! Variable #"
-					.. tostring(typed["{ID}"])
-					.. " thinks it is getting "
-					.. tostring(b_dbg)
-					.. " but context thinks it has "
-					.. tostring(c_dbg)
-					.. " at index "
-					.. tostring(idx)
-			)
+			local err_pp = PrettyPrint:new()
+			err_pp:unit("Debug information doesn't match the context's for ")
+			err_pp:any(typed, runtime_context)
+			error(tostring(err_pp))
 		end
 		return rc_val
 	elseif typed:is_literal() then

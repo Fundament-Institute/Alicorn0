@@ -70,6 +70,7 @@ end
 -- pretty printing context stuff
 
 local prettyprinting_context_mt = {}
+local prettyprinting_context_redirecting_mt = {}
 
 ---@class PrettyPrintingContext
 ---@field bindings FibonacciBuffer
@@ -85,31 +86,60 @@ end
 ---@param context TypecheckingContext
 ---@return PrettyPrintingContext
 function PrettyprintingContext.from_typechecking_context(context)
-	local self = {}
-	self.bindings = context.bindings
-	return setmetatable(self, prettyprinting_context_mt)
+	return setmetatable({
+		prettyprinting_context_from = function(self)
+			local context = self.prettyprinting_context_redirect
+			setmetatable(self, prettyprinting_context_mt)
+			self.bindings = context.bindings
+		end,
+		prettyprinting_context_redirect = context,
+	}, prettyprinting_context_redirecting_mt)
 end
 
 ---@param context StrictRuntimeContext
 ---@return PrettyPrintingContext
 function PrettyprintingContext.from_strict_runtime_context(context)
-	local self = {}
-	self.bindings = context.bindings
-	return setmetatable(self, prettyprinting_context_mt)
+	return setmetatable({
+		prettyprinting_context_from = function(self)
+			local context = self.prettyprinting_context_redirect
+			setmetatable(self, prettyprinting_context_mt)
+			self.bindings = context.bindings
+		end,
+		prettyprinting_context_redirect = context,
+	}, prettyprinting_context_redirecting_mt)
 end
 
 ---@param context FlexRuntimeContext
 ---@return PrettyPrintingContext
 function PrettyprintingContext.from_flex_runtime_context(context)
-	local self = {}
-	self.bindings = context.bindings
-	return setmetatable(self, prettyprinting_context_mt)
+	return setmetatable({
+		prettyprinting_context_from = function(self)
+			local context = self.prettyprinting_context_redirect
+			setmetatable(self, prettyprinting_context_mt)
+			self.bindings = context.bindings
+		end,
+		prettyprinting_context_redirect = context,
+	}, prettyprinting_context_redirecting_mt)
 end
 
 ---@param index integer
 ---@return string
 function PrettyprintingContext:get_name(index)
-	return self.bindings:get(index).name
+	local binding = self.bindings:get(index)
+	if binding == nil then
+		return nil
+	end
+	return binding.name
+end
+
+---@param index integer
+---@return var_debug?
+function PrettyprintingContext:get_var_debug(index)
+	local binding = self.bindings:get(index)
+	if binding == nil then
+		return nil
+	end
+	return binding.debuginfo
 end
 
 ---@param name string
@@ -129,9 +159,39 @@ end
 
 prettyprinting_context_mt.__index = PrettyprintingContext
 prettyprinting_context_mt.__len = PrettyprintingContext.len
+function prettyprinting_context_mt:__tostring()
+	return "PrettyprintingContext with " .. self.bindings:len() .. " bindings."
+end
 
-local prettyprinting_context_type =
-	gen.declare_foreign(gen.metatable_equality(prettyprinting_context_mt), "PrettyPrintingContext")
+function prettyprinting_context_redirecting_mt:__index(k)
+	if k == "append" then
+		return self:prettyprinting_context_from().append
+	end
+	return self.prettyprinting_context_redirect[k]
+end
+
+function prettyprinting_context_redirecting_mt:__newindex(k, v)
+	self.prettyprinting_context_redirect[k] = v
+end
+
+function prettyprinting_context_redirecting_mt:__call(...)
+	return self.prettyprinting_context_redirect(...)
+end
+
+function prettyprinting_context_redirecting_mt:__len()
+	return #self.prettyprinting_context_redirect
+end
+
+function prettyprinting_context_redirecting_mt:__tostring()
+	return tostring(self.prettyprinting_context_redirect)
+end
+
+local prettyprinting_context_metatable_equality = gen.metatable_equality(prettyprinting_context_mt)
+local prettyprinting_context_redirecting_metatable_equality =
+	gen.metatable_equality(prettyprinting_context_redirecting_mt)
+local prettyprinting_context_type = gen.declare_foreign(function(val)
+	return prettyprinting_context_metatable_equality(val) or prettyprinting_context_redirecting_metatable_equality(val)
+end, "PrettyPrintingContext")
 
 ---@alias AnyContext PrettyPrintingContext | TypecheckingContext | StrictRuntimeContext | FlexRuntimeContext
 
@@ -191,7 +251,7 @@ end
 ---@return PrettyPrintingContext
 local function let_helper(pp, name, debuginfo, expr, context)
 	pp:unit(name)
-	pp:any(debuginfo)
+	pp:any(debuginfo, context)
 
 	pp:unit(pp:set_color())
 	pp:unit(" = ")
@@ -233,7 +293,7 @@ local function tuple_elim_helper(pp, names, debuginfo, subject, context)
 
 	pp:unit(pp:set_color())
 	pp:unit(")")
-	pp:any(debuginfo)
+	pp:any(debuginfo, context)
 	pp:unit(" = ")
 	pp:unit(pp:reset_color())
 
@@ -612,7 +672,8 @@ local typed_term_override_pretty = {}
 
 ---@param self var_debug
 ---@param pp PrettyPrint
-local function var_debug_override_pretty(self, pp)
+---@param context AnyContext
+local function var_debug_override_pretty(self, pp, context)
 	local name, anchor = self:unwrap_var_debug()
 	pp:unit(name)
 
@@ -620,7 +681,7 @@ local function var_debug_override_pretty(self, pp)
 	pp:unit("🖉")
 
 	pp:_enter()
-	pp:any(anchor)
+	pp:any(anchor, context)
 	pp:_exit()
 	pp:unit(pp:reset_color())
 end
@@ -645,7 +706,7 @@ function unanchored_inferrable_term_override_pretty:typed(pp, context)
 	pp:unit(enum_name(self, "the ("))
 	pp:unit(pp:reset_color())
 
-	pp:any(type)
+	pp:any(type, context)
 
 	pp:unit(pp:set_color())
 	pp:unit(") (")
@@ -661,7 +722,8 @@ function unanchored_inferrable_term_override_pretty:typed(pp, context)
 end
 
 ---@param pp PrettyPrint
-function typed_term_override_pretty:literal(pp)
+---@param context AnyContext
+function typed_term_override_pretty:literal(pp, context)
 	local literal_value = self:unwrap_literal()
 
 	pp:_enter()
@@ -670,7 +732,7 @@ function typed_term_override_pretty:literal(pp)
 	pp:unit("‹")
 	pp:unit(pp:reset_color())
 
-	pp:any(literal_value)
+	pp:any(literal_value, context)
 
 	pp:unit(pp:set_color())
 	pp:unit("›")
@@ -701,7 +763,7 @@ function unanchored_inferrable_term_override_pretty:bound_variable(pp, context)
 		pp:unit(", ")
 		pp:unit(pp:reset_color())
 
-		pp:any(debuginfo)
+		pp:any(debuginfo, context)
 
 		pp:unit(pp:set_color())
 		pp:unit(")")
@@ -714,12 +776,46 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function typed_term_override_pretty:bound_variable(pp, context)
-	local index, debuginfo = self:unwrap_bound_variable()
+	local index, var_dbg = self:unwrap_bound_variable()
 	context = ensure_context(context)
 
 	pp:_enter()
 
-	if context:len() >= index then
+	print(tostring(context))
+	local context_var_dbg = context:get_var_debug(index)
+	if var_dbg ~= context_var_dbg then
+		pp:unit(pp:set_color())
+		pp:unit(enum_name(self, "bound_variable("))
+		pp:unit(pp:reset_color())
+
+		pp:any(index, context)
+
+		pp:unit(pp:set_color())
+		pp:unit("→(")
+		pp:unit(pp:reset_color())
+
+		pp:_enter()
+		pp:any(context_var_dbg, context)
+		pp:_exit()
+
+		pp:unit(pp:set_color())
+		pp:unit(" from ")
+		pp:unit(pp:reset_color())
+
+		pp:_enter()
+		pp:unit(tostring(context)) -- intentional `tostring()`
+		pp:_exit()
+
+		pp:unit(pp:set_color())
+		pp:unit("), ")
+		pp:unit(pp:reset_color())
+
+		pp:any(var_dbg, context)
+
+		pp:unit(pp:set_color())
+		pp:unit(")")
+		pp:unit(pp:reset_color())
+	elseif context:len() >= index then
 		pp:unit(context:get_name(index))
 	else
 		-- TODO: warn on context too short?
@@ -733,7 +829,7 @@ function typed_term_override_pretty:bound_variable(pp, context)
 		pp:unit(", ")
 		pp:unit(pp:reset_color())
 
-		pp:any(debuginfo)
+		pp:any(var_dbg, context)
 
 		pp:unit(pp:set_color())
 		pp:unit(")")
@@ -816,17 +912,17 @@ function binding_override_pretty:annotated_lambda(pp, context)
 	pp:unit(pp:set_color())
 	pp:unit(enum_name(self, "λ🖉"))
 	pp:_enter()
-	pp:any(anchor)
+	pp:any(anchor, context)
 	pp:_exit()
 	pp:unit(pp:set_color())
 	pp:unit("<")
-	pp:any(visible)
+	pp:any(visible, context)
 	pp:unit(", ")
-	pp:any(pure)
+	pp:any(pure, context)
 	pp:unit("> ")
 	pp:unit(pp:reset_color())
 
-	pp:unit(param_name)
+	pp:any(param_name, context)
 
 	pp:unit(pp:set_color())
 	pp:unit(" : ")
@@ -862,13 +958,13 @@ function unanchored_inferrable_term_override_pretty:annotated_lambda(pp, context
 	pp:unit(pp:set_color())
 	pp:unit(enum_name(self, "λ🖉"))
 	pp:_enter()
-	pp:any(anchor)
+	pp:any(anchor, context)
 	pp:_exit()
 	pp:unit(pp:set_color())
 	pp:unit("<")
-	pp:any(visible)
+	pp:any(visible, context)
 	pp:unit(", ")
-	pp:any(pure)
+	pp:any(pure, context)
 	pp:unit("> ")
 	pp:unit(pp:reset_color())
 
@@ -894,7 +990,7 @@ function unanchored_inferrable_term_override_pretty:annotated_lambda(pp, context
 			if i > 1 then
 				pp:unit(" ")
 			end
-			pp:unit(name)
+			pp:any(name, context)
 		end
 
 		pp:unit(pp:set_color())
@@ -903,7 +999,7 @@ function unanchored_inferrable_term_override_pretty:annotated_lambda(pp, context
 
 		pp:any(param_annotation, context)
 	else
-		pp:unit(param_name)
+		pp:any(param_name, context)
 
 		pp:unit(pp:set_color())
 		pp:unit(" : ")
@@ -948,7 +1044,7 @@ function typed_term_override_pretty:lambda(pp, context)
 	pp:unit(pp:set_color())
 	pp:unit(enum_name(self, "λ🖉"))
 	pp:_enter()
-	pp:any(anchor)
+	pp:any(anchor, context)
 	pp:_exit()
 	pp:unit(pp:reset_color())
 	pp:unit(" ")
@@ -1012,7 +1108,8 @@ function flex_value_override_pretty:stuck(pp, ...)
 end
 
 ---@param pp PrettyPrint
-function flex_value_override_pretty:closure(pp)
+---@param context AnyContext
+function flex_value_override_pretty:closure(pp, context)
 	local param_name, code, capture, capture_debug, param_debug = self:unwrap_closure()
 	local context = PrettyprintingContext.new()
 	context = context:append(capture_debug.name)
@@ -1107,14 +1204,14 @@ function unanchored_inferrable_term_override_pretty:pi(pp, context)
 	pp:unit(pp:set_color())
 	pp:unit(enum_name(self, "Π🖉"))
 	pp:_enter()
-	pp:any(anchor)
+	pp:any(anchor, context)
 	pp:_exit()
 	pp:unit(pp:reset_color())
-	pp:any(param_info)
+	pp:any(param_info, context)
 	pp:unit(pp:set_color())
 	pp:unit(", ")
 	pp:unit(pp:reset_color())
-	pp:any(result_info)
+	pp:any(result_info, context)
 	pp:unit(pp:set_color())
 	pp:unit("> ")
 	pp:unit(pp:reset_color())
@@ -1221,12 +1318,12 @@ function unanchored_inferrable_term_override_pretty:host_function_type(pp, conte
 	pp:unit(pp:set_color())
 	pp:unit(enum_name(self, "host-Π🖉"))
 	pp:_enter()
-	pp:any(anchor)
+	pp:any(anchor, context)
 	pp:_exit()
 	pp:unit(pp:set_color())
 	pp:unit("<")
 	pp:unit(pp:reset_color())
-	pp:any(result_info)
+	pp:any(result_info, context)
 	pp:unit(pp:set_color())
 	pp:unit("> ")
 	pp:unit(pp:reset_color())
@@ -1335,11 +1432,11 @@ function typed_term_override_pretty:pi(pp, context)
 	pp:unit(pp:set_color())
 	pp:unit(enum_name(self, "Π <"))
 	pp:unit(pp:reset_color())
-	pp:any(param_info)
+	pp:any(param_info, context)
 	pp:unit(pp:set_color())
 	pp:unit(", ")
 	pp:unit(pp:reset_color())
-	pp:any(result_info)
+	pp:any(result_info, context)
 	pp:unit(pp:set_color())
 	pp:unit("> ")
 	pp:unit(pp:reset_color())
@@ -1444,7 +1541,7 @@ function typed_term_override_pretty:host_function_type(pp, context)
 	pp:unit(pp:set_color())
 	pp:unit(enum_name(self, "host-Π <"))
 	pp:unit(pp:reset_color())
-	pp:any(result_info)
+	pp:any(result_info, context)
 	pp:unit(pp:set_color())
 	pp:unit("> ")
 	pp:unit(pp:reset_color())
@@ -1514,7 +1611,8 @@ function typed_term_override_pretty:host_function_type(pp, context)
 end
 
 ---@param pp PrettyPrint
-function flex_value_override_pretty:pi(pp)
+---@param context AnyContext
+function flex_value_override_pretty:pi(pp, context)
 	local param_type, param_info, result_type, result_info = self:unwrap_pi()
 	local param_is_tuple_type, param_desc = as_any_tuple_type(param_type)
 	local result_is_readable, param_name, result_code, result_capture, result_capture_debug, param_debug =
@@ -1549,17 +1647,17 @@ function flex_value_override_pretty:pi(pp)
 	pp:unit(pp:set_color())
 	pp:unit(enum_name(self, "Π <"))
 	pp:unit(pp:reset_color())
-	pp:any(param_info)
+	pp:any(param_info, context)
 	pp:unit(pp:set_color())
 	pp:unit(", ")
 	pp:unit(pp:reset_color())
-	pp:any(result_info)
+	pp:any(result_info, context)
 	pp:unit(pp:set_color())
 	pp:unit("> ")
 	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
-		pp:any(param_type)
+		pp:any(param_type, context)
 	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names ArrayValue
 		---@cast param_members TupleDescFlat[]
@@ -1582,22 +1680,22 @@ function flex_value_override_pretty:pi(pp)
 			if i > 1 then
 				pp:unit(" ")
 			end
-			pp:unit(name)
+			pp:any(name, context)
 		end
 
 		pp:unit(pp:set_color())
 		pp:unit(") : ")
 		pp:unit(pp:reset_color())
 
-		pp:any(param_type)
+		pp:any(param_type, context)
 	else
-		pp:unit(param_name)
+		pp:any(param_name, context)
 
 		pp:unit(pp:set_color())
 		pp:unit(" : ")
 		pp:unit(pp:reset_color())
 
-		pp:any(param_type)
+		pp:any(param_type, context)
 	end
 
 	pp:unit(pp:set_color())
@@ -1605,7 +1703,7 @@ function flex_value_override_pretty:pi(pp)
 	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
-		pp:any(result_type)
+		pp:any(result_type, context)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
 		if #result_members == 0 then
@@ -1623,7 +1721,8 @@ function flex_value_override_pretty:pi(pp)
 end
 
 ---@param pp PrettyPrint
-function flex_value_override_pretty:host_function_type(pp)
+---@param context AnyContext
+function flex_value_override_pretty:host_function_type(pp, context)
 	local param_type, result_type, result_info = self:unwrap_host_function_type()
 	local param_is_tuple_type, param_desc = param_type:as_host_tuple_type()
 	local result_is_readable, param_name, result_code, result_capture, result_capture_debug, param_debug =
@@ -1658,13 +1757,13 @@ function flex_value_override_pretty:host_function_type(pp)
 	pp:unit(pp:set_color())
 	pp:unit(enum_name(self, "host-Π <"))
 	pp:unit(pp:reset_color())
-	pp:any(result_info)
+	pp:any(result_info, context)
 	pp:unit(pp:set_color())
 	pp:unit("> ")
 	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
-		pp:any(param_type)
+		pp:any(param_type, context)
 	elseif param_is_tuple_type and result_is_destructure then
 		---@cast param_names ArrayValue
 		---@cast param_members TupleDescFlat[]
@@ -1687,22 +1786,22 @@ function flex_value_override_pretty:host_function_type(pp)
 			if i > 1 then
 				pp:unit(" ")
 			end
-			pp:unit(name)
+			pp:any(name, context)
 		end
 
 		pp:unit(pp:set_color())
 		pp:unit(") : ")
 		pp:unit(pp:reset_color())
 
-		pp:any(param_type)
+		pp:any(param_type, context)
 	else
-		pp:unit(param_name)
+		pp:any(param_name, context)
 
 		pp:unit(pp:set_color())
 		pp:unit(" : ")
 		pp:unit(pp:reset_color())
 
-		pp:any(param_type)
+		pp:any(param_type, context)
 	end
 
 	pp:unit(pp:set_color())
@@ -1710,7 +1809,7 @@ function flex_value_override_pretty:host_function_type(pp)
 	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
-		pp:any(result_type)
+		pp:any(result_type, context)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
 		if #result_members == 0 then
@@ -1728,7 +1827,8 @@ function flex_value_override_pretty:host_function_type(pp)
 end
 
 ---@param pp PrettyPrint
-function flex_value_override_pretty:visibility(pp)
+---@param context AnyContext
+function flex_value_override_pretty:visibility(pp, context)
 	local v = self:unwrap_visibility()
 
 	pp:_enter()
@@ -1739,21 +1839,25 @@ function flex_value_override_pretty:visibility(pp)
 	elseif v:is_explicit() then
 		pp:unit("explicit")
 	else
-		pp:any(v)
+		pp:any(v, context)
 	end
 	pp:unit(pp:reset_color())
 
 	pp:_exit()
 end
 
-function flex_value_override_pretty:param_info(pp)
+---@param pp PrettyPrint
+---@param context AnyContext
+function flex_value_override_pretty:param_info(pp, context)
 	local v = self:unwrap_param_info()
-	pp:any(v)
+	pp:any(v, context)
 end
 
-function flex_value_override_pretty:result_info(pp)
+---@param pp PrettyPrint
+---@param context AnyContext
+function flex_value_override_pretty:result_info(pp, context)
 	local purity = self:unwrap_result_info():unwrap_result_info()
-	pp:any(purity)
+	pp:any(purity, context)
 end
 
 ---@param pp PrettyPrint
@@ -1784,7 +1888,7 @@ function unanchored_inferrable_term_override_pretty:application(pp, context)
 			if f_is_application then
 				application_inner(f_f, f_arg)
 			else
-				pp:unit(context:get_name(f_index))
+				pp:any(context:get_name(f_index), context)
 			end
 
 			local ok, elements, _ = arg:as_tuple_cons()
@@ -1865,7 +1969,7 @@ function typed_term_override_pretty:application(pp, context)
 			if f_is_application then
 				application_inner(f_f, f_arg)
 			else
-				pp:unit(context:get_name(f_index))
+				pp:any(context:get_name(f_index), context)
 			end
 
 			local ok, elements = arg:as_tuple_cons()
@@ -1940,7 +2044,7 @@ function unanchored_inferrable_term_override_pretty:tuple_type(pp, context)
 		---@cast members TupleDescFlat[]
 		tuple_type_helper(pp, members)
 	else
-		pp:any(desc)
+		pp:any(desc, context)
 	end
 
 	pp:unit(pp:set_color())
@@ -1967,7 +2071,7 @@ function unanchored_inferrable_term_override_pretty:host_tuple_type(pp, context)
 		---@cast members TupleDescFlat[]
 		tuple_type_helper(pp, members)
 	else
-		pp:any(desc)
+		pp:any(desc, context)
 	end
 
 	pp:unit(pp:set_color())
@@ -1994,7 +2098,7 @@ function typed_term_override_pretty:tuple_type(pp, context)
 		---@cast members TupleDescFlat[]
 		tuple_type_helper(pp, members)
 	else
-		pp:any(desc)
+		pp:any(desc, context)
 	end
 
 	pp:unit(pp:set_color())
@@ -2021,7 +2125,7 @@ function typed_term_override_pretty:host_tuple_type(pp, context)
 		---@cast members TupleDescFlat[]
 		tuple_type_helper(pp, members)
 	else
-		pp:any(desc)
+		pp:any(desc, context)
 	end
 
 	pp:unit(pp:set_color())
@@ -2046,7 +2150,7 @@ function flex_value_override_pretty:tuple_type(pp)
 		---@cast members TupleDescFlat[]
 		tuple_type_helper(pp, members)
 	else
-		pp:any(desc)
+		pp:any(desc, context)
 	end
 
 	pp:unit(pp:set_color())
@@ -2071,7 +2175,7 @@ function flex_value_override_pretty:host_tuple_type(pp)
 		---@cast members TupleDescFlat[]
 		tuple_type_helper(pp, members)
 	else
-		pp:any(desc)
+		pp:any(desc, context)
 	end
 
 	pp:unit(pp:set_color())
@@ -2082,7 +2186,8 @@ function flex_value_override_pretty:host_tuple_type(pp)
 end
 
 ---@param pp PrettyPrint
-function flex_value_override_pretty:enum_value(pp)
+---@param context AnyContext
+function flex_value_override_pretty:enum_value(pp, context)
 	local constructor, arg = self:unwrap_enum_value()
 
 	pp:_enter()
@@ -2104,7 +2209,7 @@ function flex_value_override_pretty:enum_value(pp)
 				pp:unit(pp:reset_color())
 			end
 
-			pp:any(arg)
+			pp:any(arg, context)
 		end
 
 		pp:unit(pp:set_color())
@@ -2114,7 +2219,7 @@ function flex_value_override_pretty:enum_value(pp)
 		pp:unit("[")
 		pp:unit(pp:reset_color())
 
-		pp:any(arg)
+		pp:any(arg, context)
 
 		pp:unit(pp:set_color())
 		pp:unit("]")
@@ -2125,7 +2230,8 @@ function flex_value_override_pretty:enum_value(pp)
 end
 
 ---@param pp PrettyPrint
-function flex_value_override_pretty:free(pp)
+---@param context AnyContext
+function flex_value_override_pretty:free(pp, context)
 	local free = self:unwrap_free()
 
 	if free:is_metavariable() then
@@ -2145,7 +2251,7 @@ function flex_value_override_pretty:free(pp)
 
 		pp:_exit()
 	else
-		pp:record(enum_name(self, "free"), { { "free", free } })
+		pp:record(enum_name(self, "free"), { { "free", free } }, context)
 	end
 end
 
@@ -2164,7 +2270,7 @@ function typed_term_override_pretty:tuple_element_access(pp, context)
 		-- pp:unit(pp:reset_color())
 
 		local name = context:get_name(subject_index)
-		pp:unit(name)
+		pp:any(name, context)
 
 		pp:unit(pp:set_color())
 		pp:unit(".")
@@ -2178,7 +2284,7 @@ function typed_term_override_pretty:tuple_element_access(pp, context)
 			pp:unit("🖉")
 
 			pp:_enter()
-			pp:any(debug_anchor)
+			pp:any(debug_anchor, context)
 			pp:_exit()
 			pp:unit(pp:reset_color())
 		else
@@ -2187,7 +2293,7 @@ function typed_term_override_pretty:tuple_element_access(pp, context)
 			pp:unit(pp:reset_color())
 
 			pp:_enter()
-			pp:any(subject_debug)
+			pp:any(subject_debug, context)
 			pp:_exit()
 
 			pp:unit(pp:set_color())
@@ -2230,7 +2336,7 @@ function typed_term_override_pretty:host_intrinsic(pp, context)
 			end
 		end)
 
-		pp:any(source_print)
+		pp:unit(source_print)
 	else
 		pp:any(source, context)
 	end
@@ -2239,7 +2345,8 @@ function typed_term_override_pretty:host_intrinsic(pp, context)
 end
 
 ---@param pp PrettyPrint
-function typed_term_override_pretty:constrained_type(pp)
+---@param context AnyContext
+function typed_term_override_pretty:constrained_type(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:set_color())
@@ -2250,16 +2357,17 @@ function typed_term_override_pretty:constrained_type(pp)
 end
 
 ---@param pp PrettyPrint
-function flex_value_override_pretty:star(pp)
+---@param context AnyContext
+function flex_value_override_pretty:star(pp, context)
 	local level, depth = self:unwrap_star()
 
 	pp:_enter()
 
 	pp:unit(pp:set_color())
 	pp:unit("✪ ")
-	pp:unit(tostring(level))
+	pp:any(level, context)
 	pp:unit("|")
-	pp:unit(tostring(depth))
+	pp:any(depth, context)
 	pp:unit(pp:reset_color())
 
 	pp:_exit()
