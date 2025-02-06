@@ -424,17 +424,17 @@ end
 ---@field end_anchor Anchor
 local ConstructedSyntax = {}
 
---[[
-match : forall
-	self : Syntax
-	implicit userdata : type
-	implicit results : tuple-desc
-	matchers : List(Matcher(userdata, results))
-	unmatched : (forall (u : userdata) -> res : tuple-type(results))
-	extra : userdata
-	->
-	res : tuple-type(results)
-]]
+--- ```
+--- match : forall
+--- 	self : Syntax
+--- 	implicit userdata : type
+--- 	implicit results : tuple-desc
+--- 	matchers : List(Matcher(userdata, results))
+--- 	unmatched : (forall (u : userdata) -> res : tuple-type(results))
+--- 	extra : userdata
+--- 	->
+--- 	res : tuple-type(results)
+--- ```
 ---@generic U
 ---@param matchers Matcher[]
 ---@param unmatched fun(u : U, err: SyntaxError) : ...

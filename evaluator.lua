@@ -49,13 +49,13 @@ local typechecker_state
 local name_array = string_array
 local typed = terms.typed_term
 
----@type fun(f: flex_value, arg: flex_value, ambient_typechecking_context: TypecheckingContext) : flex_value
+---@source evaluator.lua
 local apply_value
 
----@type fun(typed_term: typed, runtime_context: FlexRuntimeContext, ambient_typechecking_context: TypecheckingContext) : flex_value
+---@source evaluator.lua
 local evaluate
 
----@type fun(inferrable_term: inferrable, typechecking_context: TypecheckingContext) : boolean, flex_value, ArrayValue, typed
+---@source evaluator.lua
 local infer
 
 ---@class ConstraintError
@@ -171,6 +171,7 @@ local function compositecause(kind, l_index, l, r_index, r, anchor)
 	return cause
 end
 
+--- lifts a subtyping relation (λa, b. Rel(a, b)) to (λf, g. ∀x, y. Rel(f(x), g(y))).
 ---@param srel SubtypeRelation
 ---@return SubtypeRelation
 local function FunctionRelation(srel)
@@ -227,6 +228,11 @@ local function FunctionRelation(srel)
 end
 FunctionRelation = U.memoize(FunctionRelation)
 
+---independent tuple relation.
+---takes variances from a tuple of arguments to a type family.
+---propagates agreement between those variances to the tuple of arguments as a whole.
+---
+---(in lieu of future `TupleRelation` that will be capable of handling dependent tuples.)
 ---@param ... Variance
 ---@return SubtypeRelation
 local function IndepTupleRelation(...)
@@ -302,8 +308,7 @@ end
 IndepTupleRelation = U.memoize(IndepTupleRelation)
 
 ---@type SubtypeRelation
-local effect_row_srel
-effect_row_srel = setmetatable({
+local effect_row_srel = setmetatable({
 	debug_name = "effect_row_srel",
 	Rel = luatovalue(function(a, b)
 		error("nyi")
@@ -350,12 +355,11 @@ effect_row_srel = setmetatable({
 	),
 }, subtype_relation_mt)
 
----@type SubtypeRelation
+---@source evaluator.lua
 local UniverseOmegaRelation
 
 ---@type SubtypeRelation
-local enum_desc_srel
-enum_desc_srel = setmetatable({
+local enum_desc_srel = setmetatable({
 	debug_name = "enum_desc_srel",
 	Rel = luatovalue(function(a, b)
 		error("nyi")
@@ -409,7 +413,7 @@ enum_desc_srel = setmetatable({
 	),
 }, subtype_relation_mt)
 
----@type fun(subject_type_a : flex_value, lctx : TypecheckingContext, subject_type_b : flex_value, rctx : TypecheckingContext, subject_value : flex_value) : boolean, flex_value[], flex_value[], flex_value[], integer
+---@source evaluator.lua
 local infer_tuple_type_unwrapped2
 
 ---@type SubtypeRelation
@@ -689,6 +693,7 @@ local function stuck_closure_constructor_check(param_name, code, capture, debug)
 end
 stuck_value.closure = stuck_closure_constructor_check
 
+---@source evaluator.lua
 local substitute_inner
 
 ---@param val flex_value an alicorn value
@@ -967,8 +972,8 @@ local recurse_count = 0
 ---@param mappings {[integer]: typed} the placeholder we are trying to get rid of by substituting
 ---@param context_len integer number of bindings in the runtime context already used - needed for closures
 ---@param ambient_typechecking_context TypecheckingContext
----@return typed a typed term
-substitute_inner = function(val, mappings, context_len, ambient_typechecking_context)
+---@return typed r a typed term
+function substitute_inner(val, mappings, context_len, ambient_typechecking_context)
 	local tracked = val.track ~= nil
 	if tracked then
 		print(string.rep("·", recurse_count) .. "SUB: " .. tostring(val))
@@ -2026,7 +2031,7 @@ end
 ---@param arg flex_value
 ---@param ambient_typechecking_context TypecheckingContext
 ---@return flex_value
-apply_value = function(f, arg, ambient_typechecking_context)
+function apply_value(f, arg, ambient_typechecking_context)
 	if flex_value.value_check(f) ~= true then
 		error("apply_value, f: expected an alicorn flex_value (did you forget to wrap a strict value in flex_value?)")
 	end
@@ -2237,11 +2242,11 @@ end
 ---@param desc_b flex_value
 ---@param make_prefix_b fun(i: integer): flex_value
 ---@param rctx TypecheckingContext
----@return boolean
----@return flex_value[]|string
----@return flex_value[]
----@return flex_value[]
----@return integer
+---@return boolean ok
+---@return flex_value[]|string tuple_types_a
+---@return flex_value[] tuple_types_b
+---@return flex_value[] tuple_vals
+---@return integer n_elements
 function make_inner_context2(desc_a, make_prefix_a, lctx, desc_b, make_prefix_b, rctx)
 	local constructor_a, arg_a = desc_a:unwrap_enum_value()
 	local constructor_b, arg_b = desc_b:unwrap_enum_value()
@@ -2293,11 +2298,11 @@ end
 ---@param subject_type_b flex_value
 ---@param rctx TypecheckingContext
 ---@param subject_value flex_value
----@return boolean
----@return flex_value[]|string
----@return flex_value[]
----@return flex_value[]
----@return integer
+---@return boolean ok
+---@return flex_value[]|string tuple_types_a
+---@return flex_value[] tuple_types_b
+---@return flex_value[] tuple_vals
+---@return integer n_elements
 function infer_tuple_type_unwrapped2(subject_type_a, lctx, subject_type_b, rctx, subject_value)
 	local desc_a, make_prefix_a = make_tuple_prefix(subject_type_a, subject_value)
 	local desc_b, make_prefix_b = make_tuple_prefix(subject_type_b, subject_value)
@@ -2307,7 +2312,10 @@ end
 ---@overload fun(inferrable_term : inferrable, typechecking_context : TypecheckingContext) : boolean, string
 ---@param inferrable_term inferrable
 ---@param typechecking_context TypecheckingContext
----@return boolean, flex_value, ArrayValue, typed
+---@return boolean ok
+---@return flex_value type
+---@return ArrayValue usages
+---@return typed term
 local function infer_impl(
 	inferrable_term, -- constructed from inferrable
 	typechecking_context -- todo
@@ -3364,8 +3372,11 @@ end
 ---@overload fun(inferrable_term : inferrable, typechecking_context : TypecheckingContext) : boolean, string
 ---@param inferrable_term inferrable
 ---@param typechecking_context TypecheckingContext
----@return boolean, flex_value, ArrayValue, typed
-infer = function(inferrable_term, typechecking_context)
+---@return boolean ok
+---@return flex_value type
+---@return ArrayValue usages
+---@return typed term
+function infer(inferrable_term, typechecking_context)
 	local tracked = inferrable_term.track ~= nil
 	if tracked then
 		print(
@@ -4187,7 +4198,7 @@ local recurse_count = 0
 ---@param runtime_context FlexRuntimeContext
 ---@param ambient_typechecking_context TypecheckingContext
 ---@return flex_value
-evaluate = function(typed_term, runtime_context, ambient_typechecking_context)
+function evaluate(typed_term, runtime_context, ambient_typechecking_context)
 	local tracked = typed_term.track ~= nil
 	if tracked then
 		local input = typed_term:pretty_print(runtime_context)

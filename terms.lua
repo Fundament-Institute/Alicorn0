@@ -781,15 +781,31 @@ inferrable_term:define_enum("inferrable", {
 	} },
 })
 
+-- function Alice wants to assign the value True (of type SingletonTrue) to variable Foo,
+-- which means that SingletonTrue must be a subtype of FooT (the type metavariable for Foo's type).
+-- function Bob wants to consume the value Foo as always the value False (of type SingletonFalse),
+-- which means that Bob wants FooT to be a subtype of SingletonFalse.
+--
+-- on behalf of Bob, Alicorn will, _very_ early,
+-- call `TypeCheckerState:flow(`[`flex_value` for FooT]`, `[`TypecheckingContext` for FooT]`, `[`flex_value` for SingletonFalse]`, `[`TypecheckingContext` for SingletonFalse]`, cause)`.
+-- that'll call out to `TypeCheckerState:constrain(`[`flex_value` for FooT]`, `[`TypecheckingContext` for FooT]`, `[`flex_value` for SingletonFalse]`, `[`TypecheckingContext` for SingletonFalse]`, UniverseOmegaRelation, cause)`.
+-- that'll queue an `EdgeNotif.constrain(`[`flex_value` for FooT]`, UniverseOmegaRelation, `[`flex_value` for SingletonFalse]`, self` (as `TypeCheckerState`)`.block_level, cause)`, to be processed within that last `TypeCheckerState:constrain` call.
+
 ---@class SubtypeRelation
 ---@field debug_name string
---- : (a:T,b:T) -> Prop__
+--- : (val:T, use:T) -> Prop__\
+--- Construct a subtyping relation (val :> use), that type val is a supertype of type use, i.e. that type use is a subtype of type val, i.e. that type val flows into type use.
+--- Lua value is currently used only for reference equality?
 ---@field Rel strict_value
---- : (a:T) -> Rel(a,a)
+--- : (a:T) -> Rel(a,a)\
+--- Construct a reflexive subtyping relation—that a type flows into itself.
+--- Lua value is currently unused?
 ---@field refl strict_value
---- : (a:T, B:T, Rel(a,b), Rel(b,a)) -> a == b
+--- : (a:T, b:T, Rel(a,b), Rel(b,a)) -> a == b\
+--- Lua value is currently unused?
 ---@field antisym strict_value
---- : (Node(T), Node(T)) -> [TCState] (Error)
+--- : (val:Node(T), use:Node(T)) -> [TCState] (Error)\
+--- Work with the ambient typechecker state to constrain that type val flows into type use.
 ---@field constrain strict_value
 local subtype_relation_mt = {}
 
