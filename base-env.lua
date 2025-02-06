@@ -2269,6 +2269,41 @@ local core_operative = (function()
 	)
 end)()
 
+local string_array = gen.declare_array(gen.builtin_string)
+local debug_array = gen.declare_array(terms.var_debug)
+
+---@param fn_op fun(bound_variables: typed[]) : integer, typed
+---@param name string
+---@param ... string
+---@return strict_value
+local function gen_base_operator(fn_op, name, ...)
+	local argname = name .. "-arg"
+	local debug_arg = terms.var_debug(argname, U.anchor_here())
+	local names = string_array(...)
+	local debug_names = names:map(debug_array, function(n)
+		return terms.var_debug(n, U.anchor_here())
+	end)
+	local bound_vars = {}
+	for i, v in ipairs(debug_names) do
+		table.insert(bound_vars, terms.typed_term.bound_variable(1 + i, v))
+	end
+
+	local count, res = fn_op(bound_vars)
+	return terms.strict_value.closure(
+		argname,
+		terms.typed_term.tuple_elim(names, debug_names, terms.typed_term.bound_variable(1, debug_arg), count, res),
+		terms.strict_runtime_context(),
+		debug_arg
+	)
+end
+
+---@return strict_value
+local function contravariant()
+	return gen_base_operator(function(vars)
+		return 1, terms.typed_term.variance_cons(terms.typed_term.literal(terms.strict_value.host_value(true)), vars[1])
+	end, "#contravariant", "base")
+end
+
 local base_env = {
 	ascribed_segment_tuple_desc = ascribed_segment_tuple_desc,
 	create = create,
@@ -2278,6 +2313,7 @@ local base_env = {
 	new_host_type_family = new_host_type_family,
 	tuple_to_host_tuple_inner = tuple_to_host_tuple_inner,
 	get_host_func_res = get_host_func_res,
+	gen_base_operator = gen_base_operator,
 	core_operative_type = core_operative_type,
 	core_operative = core_operative,
 }

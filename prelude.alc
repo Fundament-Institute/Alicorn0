@@ -61,24 +61,9 @@ let srel =
 		unwrap
 			intrinsic
 				""""
-					local string_array = terms_gen.declare_array(terms_gen.builtin_string)
-					local debug_array = terms_gen.declare_array(terms.var_debug)
-					local debug_element = terms.var_debug("target", utils.anchor_here())
-					local debug_arg = terms.var_debug("#srel-arg", utils.anchor_here())
-					return terms.strict_value.closure(
-						"#srel-arg",
-						terms.typed_term.tuple_elim(
-							string_array("target"),
-							debug_array(debug_element),
-							terms.typed_term.bound_variable(1, debug_arg),
-							1,
-							terms.typed_term.srel_type(
-								terms.typed_term.bound_variable(2, debug_element)
-							)
-						),
-						terms.strict_runtime_context(),
-						debug_arg
-					)
+					return base_env.gen_base_operator(function(vars)
+						return 1, terms.typed_term.srel_type(vars[1])
+					end, "#srel", "target")
 				:
 				wrapped (forall ((x : U)) -> (res : U))
 
@@ -87,24 +72,9 @@ let variance =
 		unwrap
 			intrinsic
 				""""
-					local string_array = terms_gen.declare_array(terms_gen.builtin_string)
-					local debug_array = terms_gen.declare_array(terms.var_debug)
-					local debug_element = terms.var_debug("target", utils.anchor_here())
-					local debug_arg = terms.var_debug("#srel-arg", utils.anchor_here())
-					return terms.strict_value.closure(
-						"#srel-arg",
-						terms.typed_term.tuple_elim(
-							string_array("target"),
-							debug_array(debug_element),
-							terms.typed_term.bound_variable(1, debug_arg),
-							1,
-							terms.typed_term.variance_type(
-								terms.typed_term.bound_variable(2, debug_element)
-							)
-						),
-						terms.strict_runtime_context(),
-						debug_arg
-					)
+					return base_env.gen_base_operator(function(vars)
+						return 1, terms.typed_term.variance_type(vars[1])
+					end, "#variance", "target")
 				:
 				wrapped (forall ((x : U)) -> (res : U))
 
@@ -117,26 +87,9 @@ let _|_ =
 		unwrap
 			intrinsic
 				""""
-					local string_array = terms_gen.declare_array(terms_gen.builtin_string)
-					local debug_array = terms_gen.declare_array(terms.var_debug)
-					local debug_left = terms.var_debug("left", utils.anchor_here())
-					local debug_right = terms.var_debug("right", utils.anchor_here())
-					local debug_arg = terms.var_debug("#srel-arg", utils.anchor_here())
-					return terms.strict_value.closure(
-						"#union-args",
-						terms.typed_term.tuple_elim(
-							string_array("left", "right"),
-							debug_array(debug_left, debug_right),
-							terms.typed_term.bound_variable(1, debug_arg),
-							2,
-							terms.typed_term.union_type(
-								terms.typed_term.bound_variable(2, debug_left),
-								terms.typed_term.bound_variable(3, debug_right)
-							)
-						),
-						terms.strict_runtime_context(),
-						debug_arg
-					)
+					return base_env.gen_base_operator(function(vars)
+						return 2, terms.typed_term.union_type(vars[1], vars[2])
+					end, "#union", "left", "right")
 				:
 				wrapped (forall (a : U, b : U) -> (res : U))
 
@@ -145,26 +98,9 @@ let _&_ =
 		unwrap
 			intrinsic
 				""""
-					local string_array = terms_gen.declare_array(terms_gen.builtin_string)
-					local debug_array = terms_gen.declare_array(terms.var_debug)
-					local debug_left = terms.var_debug("left", utils.anchor_here())
-					local debug_right = terms.var_debug("right", utils.anchor_here())
-					local debug_arg = terms.var_debug("#srel-arg", utils.anchor_here())
-					return terms.strict_value.closure(
-						"#intersection-args",
-						terms.typed_term.tuple_elim(
-							string_array("left", "right"),
-							debug_array(debug_left, debug_right),
-							terms.typed_term.bound_variable(1, debug_arg),
-							2,
-							terms.typed_term.intersection_type(
-								terms.typed_term.bound_variable(2, debug_left),
-								terms.typed_term.bound_variable(3, debug_right)
-							)
-						),
-						terms.strict_runtime_context(),
-						debug_arg
-					)
+					return base_env.gen_base_operator(function(vars)
+						return 2, terms.typed_term.intersection_type(vars[1], vars[2])
+					end, "#intersection", "left", "right")
 				:
 				wrapped (forall (a : U, b : U) -> (res : U))
 
@@ -173,27 +109,9 @@ let covariant =
 		unwrap
 			intrinsic
 				""""
-					local string_array = terms_gen.declare_array(terms_gen.builtin_string)
-					local debug_array = terms_gen.declare_array(terms.var_debug)
-					local debug_element = terms.var_debug("base", utils.anchor_here())
-					local debug_arg = terms.var_debug("#srel-arg", utils.anchor_here())
-					return terms.strict_value.closure(
-						"#covariant-args",
-						terms.typed_term.tuple_elim(
-							string_array("base"),
-							debug_array(debug_element),
-							terms.typed_term.bound_variable(1, debug_arg),
-							1,
-							terms.typed_term.variance_cons(
-								terms.typed_term.literal(
-									terms.strict_value.host_value(true)
-								),
-								terms.typed_term.bound_variable(2, debug_element)
-							)
-						),
-						terms.strict_runtime_context(),
-						debug_arg
-					)
+					return base_env.gen_base_operator(function(vars)
+						return 1, terms.typed_term.variance_cons(terms.typed_term.literal(terms.strict_value.host_value(true)), vars[1])
+					end, "#covariant", "base")
 				:
 				wrapped (forall ((rel : srel(a))) -> (res : variance(a)))
 
@@ -202,27 +120,9 @@ let contravariant =
 		unwrap
 			intrinsic
 				""""
-					local string_array = terms_gen.declare_array(terms_gen.builtin_string)
-					local debug_array = terms_gen.declare_array(terms.var_debug)
-					local debug_element = terms.var_debug("target", utils.anchor_here())
-					local debug_arg = terms.var_debug("#srel-arg", utils.anchor_here())
-					return terms.strict_value.closure(
-						"#contravariant-args",
-						terms.typed_term.tuple_elim(
-							string_array("base"),
-							debug_array(debug_element),
-							terms.typed_term.bound_variable(1, debug_arg),
-							1,
-							terms.typed_term.variance_cons(
-								terms.typed_term.literal(
-									terms.strict_value.host_value(false)
-								),
-								terms.typed_term.bound_variable(2, debug_element)
-							)
-						),
-						terms.strict_runtime_context(),
-						debug_arg
-					)
+					return base_env.gen_base_operator(function(vars)
+						return 1, terms.typed_term.variance_cons(terms.typed_term.literal(terms.strict_value.host_value(false)), vars[1])
+					end, "#contravariant", "base")
 				:
 				wrapped (forall ((rel : srel(a))) -> (res : variance(a)))
 
