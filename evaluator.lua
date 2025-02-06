@@ -1675,6 +1675,30 @@ function check_concrete(lctx, val, rctx, use, cause)
 		error("nil usage passed into check_concrete!")
 	end
 
+	local valkind
+	local usekind
+	if val:is_strict() then
+		valkind = unify_kind(val:unwrap_strict().kind)
+	end
+	if val:is_stuck() then
+		valkind = unify_kind(val:unwrap_stuck().kind)
+	end
+	if use:is_strict() then
+		usekind = unify_kind(use:unwrap_strict().kind)
+	end
+	if use:is_stuck() then
+		usekind = unify_kind(use:unwrap_stuck().kind)
+	end
+
+	local comparer = nil
+	if concrete_comparers[valkind] then
+		comparer = (concrete_comparers[valkind] or {})[usekind]
+	end
+
+	if comparer then
+		return comparer(lctx, val, rctx, use, cause)
+	end
+
 	if val:is_stuck() then
 		if use:is_stuck() then
 			if val == use then
@@ -1781,21 +1805,6 @@ function check_concrete(lctx, val, rctx, use, cause)
 		return true
 	end
 
-	local valkind
-	local usekind
-	if val:is_strict() then
-		valkind = unify_kind(val:unwrap_strict().kind)
-	end
-	if val:is_stuck() then
-		valkind = unify_kind(val:unwrap_stuck().kind)
-	end
-	if use:is_strict() then
-		usekind = unify_kind(use:unwrap_strict().kind)
-	end
-	if use:is_stuck() then
-		usekind = unify_kind(use:unwrap_stuck().kind)
-	end
-
 	if not concrete_comparers[valkind] then
 		error(
 			ConstraintError.new(
@@ -1810,7 +1819,6 @@ function check_concrete(lctx, val, rctx, use, cause)
 		)
 	end
 
-	local comparer = (concrete_comparers[valkind] or {})[usekind]
 	if not comparer then
 		--print("kind:", valkind, " use:", usekind)
 		return false,
@@ -1825,7 +1833,7 @@ function check_concrete(lctx, val, rctx, use, cause)
 			)
 	end
 
-	return comparer(lctx, val, rctx, use, cause)
+	error("unreachable???")
 end
 
 ---@param enum_val flex_value
