@@ -3167,7 +3167,7 @@ local function infer_impl(
 	elseif inferrable_term:is_host_intrinsic() then
 		local source, type, start_anchor = inferrable_term:unwrap_host_intrinsic()
 		local ok, source_usages, source_term =
-			check(source, typechecking_context, flex_value.strict(strict_value.host_bool_type))
+			check(source, typechecking_context, flex_value.strict(strict_value.host_string_type))
 		if not ok then
 			return false, source_usages
 		end

@@ -1101,7 +1101,7 @@ local function expression_valuehandler(args, val)
 	if val.type == "string" then
 		return true,
 			inferrable_term.typed(
-				terms.typed_term.literal(strict_value.host_bool_type),
+				terms.typed_term.literal(strict_value.host_string_type),
 				usage_array(),
 				typed_term.literal(strict_value.host_value(val.val))
 			),
