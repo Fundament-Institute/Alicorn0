@@ -286,7 +286,7 @@ local function intrinsic_impl(syntax, env)
 			exprs.expression(
 				utils.accept_with_env,
 				exprs.ExpressionArgs.new(
-					terms.expression_goal.check(flex_value.strict(strict_value.host_bool_type)),
+					terms.expression_goal.check(flex_value.strict(strict_value.host_string_type)),
 					env
 				)
 			),
