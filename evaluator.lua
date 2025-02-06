@@ -4270,13 +4270,13 @@ end
 
 -- evaluate = evaluate_impl
 
----@alias effect_handler fun(arg: value, cont: continuation): value
+---@alias effect_handler fun(arg: flex_value, cont: flex_continuation): flex_value
 ---@type {[thread] : {[table] : effect_handler } }
 local thread_effect_handlers = setmetatable({}, { __mode = "k" })
 
 ---given an evaluated program value, execute it for effects
----@param prog value
----@return value
+---@param prog flex_value
+---@return flex_value
 local function execute_program(prog)
 	if prog:is_program_end() then
 		return prog:unwrap_program_end()
@@ -4290,8 +4290,9 @@ local function execute_program(prog)
 end
 
 ---resume a program after an effect completes
----@param cont continuation
----@param arg value
+---@param cont flex_continuation
+---@param arg flex_value
+---@return flex_value
 local function invoke_continuation(cont, arg)
 	if cont:is_empty() then
 		return arg
@@ -4322,13 +4323,14 @@ end
 
 ---@type effect_handler
 local function host_effect_handler(arg, cont)
-	---@type value, value
-	local func, farg = arg:unwrap_tuple_value():unpack()
-	if not func:is_host_value() or not farg:is_host_tuple_value() then
+	local elements = arg:unwrap_tuple_value()
+	---@type flex_value, flex_value
+	local func, f_arg = elements:unpack()
+	if not func:is_host_value() or not f_arg:is_host_tuple_value() then
 		error "host effect information is the wrong kind"
 	end
 	local res =
-		flex_value.host_tuple_value(host_array(func:unwrap_host_value()(farg:unwrap_host_tuple_value():unpack())))
+		flex_value.host_tuple_value(host_array(func:unwrap_host_value()(f_arg:unwrap_host_tuple_value():unpack())))
 	return invoke_continuation(cont, res)
 end
 
