@@ -1,0 +1,5 @@
+disabled = [
+  "deprecated_is_null",
+  "empty_pattern",
+  "repeated_keys",
+]

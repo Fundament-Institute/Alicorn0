@@ -1,7 +1,6 @@
 { ... }:
 { lib, luvi, luvi-prefix, luvit-lit, stdenv, fetchLitDeps, ... }:
 let
-  inherit (lib.strings) escapeShellArg;
   inherit (lib.trivial) isFunction;
   inherit (stdenv) mkDerivation;
   makeLitPackage = fnOrAttrs:

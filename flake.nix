@@ -18,7 +18,6 @@
       allSystems = genAttrs systems (system: perSystem allSystemArgs.${system});
       allSystemArgs = genAttrs systems perSystemArgs;
       byNameLib = inputs.by-name.libs.default;
-      forAllSystems = genAttrs systems;
       importCell = table@{ directoryEntry, ... }: import directoryEntry.path table;
       lqc = { argparse, buildLuarocksPackage, fetchFromGitHub, luafilesystem, ... }: buildLuarocksPackage rec {
         pname = "lua-quickcheck";
@@ -51,6 +50,8 @@
               stylua.enable = true;
               stylua.excludes = [ "libs/" "vendor/" ];
               deadnix.enable = true;
+              deadnix.settings.noLambdaArg = true;
+              deadnix.settings.noLambdaPatternNames = true;
             };
           };
         };
@@ -58,20 +59,25 @@
         # See https://github.com/NixOS/nix/issues/9132#issuecomment-1754999829
         formatter = pkgs.writeShellApplication {
           name = "run-formatters";
-          runtimeInputs = [ pkgs.stylua pkgs.nixpkgs-fmt ];
+          runtimeInputs = [ pkgs.deadnix pkgs.nixpkgs-fmt pkgs.statix pkgs.stylua ];
           text = ''
             set -xeu
             nixpkgs-fmt "$@"
             stylua "$@"
+            statix check "$@"
+            deadnix -lL "$@"
           '';
         };
         devShells.alicorn-generic = pkgs.callPackage
-          ({ inferno, lua-language-server, stylua, mkShell, ... }:
+          ({ deadnix, inferno, lua-language-server, mkShell, nixpkgs-fmt, statix, stylua, ... }:
             mkShell {
               buildInputs = [
-                stylua
+                deadnix
                 inferno
                 lua-language-server
+                nixpkgs-fmt
+                statix
+                stylua
               ];
               shellHook = ''${currentSystem.checks.pre-commit-check.shellHook}'';
             })
@@ -146,9 +152,6 @@
       transpositionConfig.devShells = { };
       transpositionConfig.formatter = { };
       transpositionConfig.legacyPackages = { };
-    in
-    let
-
     in
     transposition // { };
 }
