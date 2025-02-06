@@ -145,7 +145,11 @@ local function gen_record(self, cons, kind, params_with_types)
 			end
 			val[v] = argi
 		end
-		val["{TRACE}"] = U.bound_here(2) -- debug.traceback()
+		if false then
+			-- val["{TRACE}"] = U.bound_here(2)
+			val["{TRACE}"] = debug.traceback("", 2)
+			-- val["{TRACE}"] = U.custom_traceback("", "", -1)
+		end
 		val["{ID}"] = U.debug_id()
 		setmetatable(val, self)
 		return val

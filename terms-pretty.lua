@@ -3,6 +3,8 @@ local gen = require "terms-generators"
 local U = require "alicorn-utils"
 ---@module "terms".typechecking_context_type
 local typechecking_context_type
+---@module "terms".strict_runtime_context_type
+local strict_runtime_context_type
 ---@module "terms".flex_runtime_context_type
 local flex_runtime_context_type
 ---@module "terms".DescCons
@@ -49,9 +51,17 @@ function PrettyprintingContext.from_typechecking_context(context)
 	return setmetatable(self, prettyprinting_context_mt)
 end
 
+---@param context StrictRuntimeContext
+---@return PrettyPrintingContext
+function PrettyprintingContext.from_strict_runtime_context(context)
+	local self = {}
+	self.bindings = context.bindings
+	return setmetatable(self, prettyprinting_context_mt)
+end
+
 ---@param context FlexRuntimeContext
 ---@return PrettyPrintingContext
-function PrettyprintingContext.from_runtime_context(context)
+function PrettyprintingContext.from_flex_runtime_context(context)
 	local self = {}
 	self.bindings = context.bindings
 	return setmetatable(self, prettyprinting_context_mt)
@@ -84,7 +94,7 @@ prettyprinting_context_mt.__len = PrettyprintingContext.len
 local prettyprinting_context_type =
 	gen.declare_foreign(gen.metatable_equality(prettyprinting_context_mt), "PrettyPrintingContext")
 
----@alias AnyContext PrettyPrintingContext | TypecheckingContext | FlexRuntimeContext
+---@alias AnyContext PrettyPrintingContext | TypecheckingContext | StrictRuntimeContext | FlexRuntimeContext
 
 ---@param context AnyContext
 ---@return PrettyPrintingContext
@@ -95,16 +105,33 @@ local function ensure_context(context)
 	elseif typechecking_context_type.value_check(context) == true then
 		---@cast context TypecheckingContext
 		return PrettyprintingContext.from_typechecking_context(context)
+	elseif strict_runtime_context_type.value_check(context) == true then
+		---@cast context StrictRuntimeContext
+		return PrettyprintingContext.from_strict_runtime_context(context)
 	elseif flex_runtime_context_type.value_check(context) == true then
 		---@cast context FlexRuntimeContext
-		return PrettyprintingContext.from_runtime_context(context)
+		return PrettyprintingContext.from_flex_runtime_context(context)
+	elseif
+		context ~= nil
+		and context.as_strict ~= nil
+		and strict_runtime_context_type.value_check(context:as_strict()) == true
+	then
+		context = context:as_strict()
+		return PrettyprintingContext.from_strict_runtime_context(context)
+	elseif
+		context ~= nil
+		and context.as_strict ~= nil
+		and flex_runtime_context_type.value_check(context:as_strict()) == true
+	then
+		context = context:as_strict()
+		return PrettyprintingContext.from_flex_runtime_context(context)
 	elseif
 		context ~= nil
 		and context.as_flex ~= nil
 		and flex_runtime_context_type.value_check(context:as_flex()) == true
 	then
-		---@cast context FlexRuntimeContext
-		return PrettyprintingContext.from_runtime_context(context:as_flex())
+		context = context:as_flex()
+		return PrettyprintingContext.from_flex_runtime_context(context)
 	else
 		--print("!!!!!!!!!! MISSING PRETTYPRINTER CONTEXT !!!!!!!!!!!!!!")
 		--print("making something up")
@@ -870,7 +897,7 @@ function flex_value_override_pretty:closure(pp)
 	pp:_enter()
 
 	pp:unit(pp:set_color())
-	pp:unit(self._kind)
+	pp:unit(self._name)
 	pp:unit(".closure ")
 	pp:unit(pp:reset_color())
 
@@ -1376,7 +1403,7 @@ function flex_value_override_pretty:pi(pp)
 	pp:_enter()
 
 	pp:unit(pp:set_color())
-	pp:unit(self._kind)
+	pp:unit(self._name)
 	pp:unit(".Π <")
 	pp:unit(pp:reset_color())
 	pp:any(param_info)
@@ -1484,7 +1511,7 @@ function flex_value_override_pretty:host_function_type(pp)
 	pp:_enter()
 
 	pp:unit(pp:set_color())
-	pp:unit(self._kind)
+	pp:unit(self._name)
 	pp:unit(".host-Π <")
 	pp:unit(pp:reset_color())
 	pp:any(result_info)
@@ -1867,7 +1894,7 @@ function flex_value_override_pretty:tuple_type(pp)
 	pp:_enter()
 
 	pp:unit(pp:set_color())
-	pp:unit(self._kind)
+	pp:unit(self._name)
 	pp:unit(".tuple_type[")
 	pp:unit(pp:reset_color())
 
@@ -1893,7 +1920,7 @@ function flex_value_override_pretty:host_tuple_type(pp)
 	pp:_enter()
 
 	pp:unit(pp:set_color())
-	pp:unit(self._kind)
+	pp:unit(self._name)
 	pp:unit(".host_tuple_type[")
 	pp:unit(pp:reset_color())
 
@@ -1918,7 +1945,7 @@ function flex_value_override_pretty:enum_value(pp)
 	pp:_enter()
 
 	pp:unit(pp:set_color())
-	pp:unit(self._kind)
+	pp:unit(self._name)
 	pp:unit(".◬")
 	pp:unit(constructor)
 
@@ -2071,6 +2098,7 @@ end
 
 return function(args)
 	typechecking_context_type = args.typechecking_context_type
+	strict_runtime_context_type = args.strict_runtime_context_type
 	flex_runtime_context_type = args.flex_runtime_context_type
 	DescCons = args.DescCons
 	return {

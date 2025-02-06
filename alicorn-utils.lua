@@ -702,6 +702,64 @@ function M.debug_id()
 	return DEBUG_ID
 end
 
+-- this function should be called as an xpcall error handler
+---@param err table | string
+---@param prefix string?
+---@param level integer?
+---@return table | string
+function M.custom_traceback(err, prefix, level)
+	if type(err) == "table" then
+		return err
+	end
+	if prefix == nil then
+		prefix = ""
+	end
+	---@type string[]
+	local s =
+		{ type(err) == "string" and err or ("must pass string or table to error handler, found: " .. tostring(err)) }
+	local i = 3 + (level or 0)
+	local info = debug.getinfo(i, "Sfln")
+	while info ~= nil do
+		if info.func == M.tag then
+			local _, name = debug.getlocal(i, 1)
+			local _, tag = debug.getlocal(i, 2)
+			local _, fn = debug.getlocal(i, 3)
+			--i = i + 1
+			--info = debug.getinfo(i, "Sfln")
+			local ok, err = pcall(function()
+				s[#s + 1] = string.format("%s [%s:%d] (%s)", name, info.short_src, info.currentline, pdump(tag))
+			end)
+			if not ok then
+				s[#s + 1] = string.format("TRACE FAIL: %s [%s:%d] (%s)", name, info.short_src, info.currentline, err)
+			end
+		else
+			local name = info.name or string.format("<%s:%d>", info.short_src, info.linedefined)
+			local args = {}
+			local j = 1
+			local arg, v = debug.getlocal(i, j)
+			while arg ~= nil do
+				table.insert(args, (type(v) == "table") and "<" .. arg .. ":table>" or string.sub(tostring(v), 1, 12))
+				j = j + 1
+				arg, v = debug.getlocal(i, j)
+			end
+
+			--s[#s + 1] = string.format("%s [%s:%d] (%s)", name, info.short_src, info.currentline, table.concat(args,","))
+			s[#s + 1] = string.format("%s [%s:%d]", name, info.short_src, info.currentline)
+		end
+		i = i + 1
+		info = debug.getinfo(i, "Sfln")
+	end
+
+	return table.concat(s, "\n" .. prefix)
+end
+
+-- this function should be used when calling for a trace directly
+---@param err table | string
+---@return table | string
+function M.stack_trace(err)
+	return M.notail(M.custom_traceback(err))
+end
+
 local internals_interface = require "internals-interface"
 internals_interface.utils = M
 return M

@@ -231,59 +231,6 @@ local pdump = require "pretty-printer".s
 -- end
 local U = require "alicorn-utils"
 
--- this function should be called as an xpcall error handler
----@param err table | string
----@return table | string
-local function custom_traceback(err)
-	if type(err) == "table" then
-		return err
-	end
-	---@type string[]
-	local s =
-		{ type(err) == "string" and err or ("must pass string or table to error handler, found: " .. tostring(err)) }
-	local i = 3
-	local info = debug.getinfo(i, "Sfln")
-	while info ~= nil do
-		if info.func == U.tag then
-			local _, name = debug.getlocal(i, 1)
-			local _, tag = debug.getlocal(i, 2)
-			local _, fn = debug.getlocal(i, 3)
-			--i = i + 1
-			--info = debug.getinfo(i, "Sfln")
-			local ok, err = pcall(function()
-				s[#s + 1] = string.format("%s [%s:%d] (%s)", name, info.short_src, info.currentline, pdump(tag))
-			end)
-			if not ok then
-				s[#s + 1] = string.format("TRACE FAIL: %s [%s:%d] (%s)", name, info.short_src, info.currentline, err)
-			end
-		else
-			local name = info.name or string.format("<%s:%d>", info.short_src, info.linedefined)
-			local args = {}
-			local j = 1
-			local arg, v = debug.getlocal(i, j)
-			while arg ~= nil do
-				table.insert(args, (type(v) == "table") and "<" .. arg .. ":table>" or string.sub(tostring(v), 1, 12))
-				j = j + 1
-				arg, v = debug.getlocal(i, j)
-			end
-
-			--s[#s + 1] = string.format("%s [%s:%d] (%s)", name, info.short_src, info.currentline, table.concat(args,","))
-			s[#s + 1] = string.format("%s [%s:%d]", name, info.short_src, info.currentline)
-		end
-		i = i + 1
-		info = debug.getinfo(i, "Sfln")
-	end
-
-	return table.concat(s, "\n")
-end
-
--- this function should be used when calling for a trace directly
----@param err table | string
----@return table | string
-local function stack_trace(err)
-	return U.notail(custom_traceback(err))
-end
-
 ---@class Reducer
 ---@field wrapper fun(syntax: ConstructedSyntax, matcher: Matcher) : ...
 ---@field create_reducible fun(handler: ReducibleFunc, ...) : Matcher
@@ -305,7 +252,7 @@ local function reducer(func, name)
 	---@param matcher Matcher
 	---@return ...
 	local function funcwrapper(syntax, matcher)
-		return augment_error(syntax, name, xpcall(func, custom_traceback, syntax, table.unpack(matcher.reducible)))
+		return augment_error(syntax, name, xpcall(func, U.custom_traceback, syntax, table.unpack(matcher.reducible)))
 	end
 
 	local reducer = {
@@ -805,8 +752,6 @@ local metalanguage = {
 	constructed_syntax_type = constructed_syntax_type,
 	reducer_type = reducer_type,
 	matcher_type = matcher_type,
-	custom_traceback = custom_traceback,
-	stack_trace = stack_trace,
 }
 local internals_interface = require "internals-interface"
 internals_interface.metalanguage = metalanguage

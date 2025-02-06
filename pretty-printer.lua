@@ -128,7 +128,9 @@ function PrettyPrint:array(array, ...)
 	self[#self + 1] = self:reset_color()
 	for i, v in ipairs(array) do
 		if i > 1 then
+			self[#self + 1] = self:set_color()
 			self[#self + 1] = ", "
+			self[#self + 1] = self:reset_color()
 		end
 		self:any(v, ...)
 	end
@@ -193,7 +195,9 @@ function PrettyPrint:table(fields, ...)
 		self[#self + 1] = self:reset_color()
 		for i, v in ipairs(fields) do
 			if i > 1 then
+				self[#self + 1] = self:set_color()
 				self[#self + 1] = ", "
+				self[#self + 1] = self:reset_color()
 			end
 			self:any(v, ...)
 		end
@@ -224,7 +228,9 @@ function PrettyPrint:table(fields, ...)
 				self[#self + 1] = " = "
 				self[#self + 1] = self:reset_color()
 				self:any(v, ...)
+				self[#self + 1] = self:set_color()
 				self[#self + 1] = ",\n"
+				self[#self + 1] = self:reset_color()
 			end
 		end
 		self:_dedent()
@@ -276,7 +282,9 @@ function PrettyPrint:record(kind, fields, ...)
 			self[#self + 1] = " = "
 			self[#self + 1] = self:reset_color()
 			self:any(v, ...)
+			self[#self + 1] = self:set_color()
 			self[#self + 1] = ",\n"
+			self[#self + 1] = self:reset_color()
 		end
 		self[#self + 1] = self:set_color()
 		-- if the record is big mark what's ending

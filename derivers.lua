@@ -315,6 +315,7 @@ local function record_pretty_printable_trait(info)
 	local kind = info.kind
 	local params = info.params
 
+	---@type string[]
 	local fields = {}
 	for i, param in ipairs(params) do
 		fields[i] = string.format("{ %q, self[%q] }", param, param)
@@ -323,11 +324,14 @@ local function record_pretty_printable_trait(info)
 
 	local chunk = [[
 return function(self, pp, ...)
-	pp:record(%q, {
+    local fields = {
 %s
-	}, ...)
+	}
+    fields[#fields + 1] = (self["{ID}"] ~= nil) and { "{ID}", self["{ID}"] } or nil
+    fields[#fields + 1] = (self["{TRACE}"] ~= nil) and { "{TRACE}", self["{TRACE}"] } or nil
+	pp:record(%q, fields, ...)
 end]]
-	chunk = chunk:format(kind, all_fields)
+	chunk = chunk:format(all_fields, kind)
 
 	derive_print("derive pretty_printable_trait chunk: " .. kind)
 	derive_print("###")
