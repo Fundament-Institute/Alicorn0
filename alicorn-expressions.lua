@@ -454,7 +454,7 @@ local function speculate_pi_type(env, metaval)
 		ok, res = evaluator.typechecker_state:speculate(function()
 			local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
-			local pi = terms.stuck_value.pi(
+			local pi = terms.flex_value.pi(
 				terms.flex_value.stuck(param_mv:as_stuck()),
 				flex_value.strict(pairs[i].param_info),
 				terms.flex_value.stuck(result_mv:as_stuck()),

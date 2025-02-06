@@ -97,8 +97,10 @@ function environment:bind_local(binding)
 		local name, debuginfo, expr = binding:unwrap_let()
 		local ok, expr_type, expr_usages, expr_term = infer(expr, self.typechecking_context)
 		if not ok then
+			---@cast expr_type string
 			return false, expr_type
 		end
+		---@cast expr_type -string
 		if terms.flex_value.value_check(expr_type) ~= true then
 			print("expr", expr)
 			error("infer returned a bad type for expr in bind_local")
@@ -108,6 +110,10 @@ function environment:bind_local(binding)
 		local locals = self.locals:put(name, term)
 		local evaled =
 			evaluator.evaluate(expr_term, self.typechecking_context.runtime_context, self.typechecking_context)
+
+		if terms.strict_value.value_check(evaled) then
+			evaled = evaluator.evaluate(expr_term, self.typechecking_context.runtime_context, self.typechecking_context)
+		end
 		-- print "doing let binding"
 		-- print(expr:pretty_print())
 		--log_binding(name, expr_type, evaled)
@@ -123,8 +129,10 @@ function environment:bind_local(binding)
 		local names, infos, subject = binding:unwrap_tuple_elim()
 		local ok, subject_type, subject_usages, subject_term = infer(subject, self.typechecking_context)
 		if not ok then
+			---@cast subject_type string
 			return false, subject_type
 		end
+		---@cast subject_type -string
 		--local subject_qty, subject_type = subject_type:unwrap_qtype()
 		--DEBUG:
 		if subject_type:is_enum_value() then
@@ -235,8 +243,10 @@ function environment:bind_local(binding)
 		local ok, annotation_type, annotation_usages, annotation_term =
 			infer(param_annotation, self.typechecking_context)
 		if not ok then
+			---@cast annotation_type string
 			return false, annotation_type
 		end
+		---@cast annotation_type -string
 		--print("binding lambda annotation: (typed term follows)")
 		--print(annotation_term:pretty_print(self.typechecking_context))
 		local evaled =

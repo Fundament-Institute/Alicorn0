@@ -627,10 +627,16 @@ local function verify_closure(v, ctx, nested)
 		return true -- we can't check these right now
 	end
 
-	if v.kind == "stuck_value.closure" or v.kind == "strict_value.closure" then
+	if v.kind == "stuck_value.closure" then
 		-- If the closure contains another closure we need to switch contexts
 		local param_name, code, capture, debug = v:unwrap_closure()
 		return verify_closure(code, capture, true)
+	end
+
+	if v.kind == "strict_value.closure" then
+		-- If the closure contains another closure we need to switch contexts
+		local param_name, code, capture, debug = v:unwrap_closure()
+		return verify_closure(code, capture:as_flex(), true)
 	end
 
 	if v.kind == "typed.bound_variable" then
@@ -804,7 +810,7 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		error("Not yet implemented")
 	elseif val:is_free() then
 		local free = val:unwrap_free()
-		local lookup, mapping
+		local lookup, mapping, info
 		if free:is_placeholder() then
 			lookup, info = free:unwrap_placeholder()
 			mapping = typed_term.bound_variable(lookup, info)
@@ -826,7 +832,12 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		if mapping then
 			return mapping
 		end
-		error("no valid mapping for " .. lookup)
+		error(
+			"no valid mapping for "
+				.. free:pretty_print(ambient_typechecking_context)
+				.. " given lookup ID "
+				.. tostring(lookup)
+		)
 	elseif val:is_tuple_element_access() then
 		local subject, index = val:unwrap_tuple_element_access()
 		local subject_term =
@@ -1881,7 +1892,9 @@ local function check(
 	end
 	if flex_value.value_check(goal_type) ~= true then
 		print("goal_type", goal_type)
-		error("check, goal_type: expected a goal type (as an alicorn value)")
+		error(
+			"check, goal_type: expected a goal type (as an alicorn flex_value, did you use a strict or stuck value instead?)"
+		)
 	end
 
 	if checkable_term:is_inferrable() then
@@ -2388,7 +2401,7 @@ local function infer_impl(
 			return false, param_type_type
 		end
 		local ok, param_info_usages, param_info_term =
-			check(param_info, typechecking_context, strict_value.param_info_type)
+			check(param_info, typechecking_context, flex_value.strict(strict_value.param_info_type))
 		if not ok then
 			return false, param_info_usages
 		end
@@ -2397,7 +2410,7 @@ local function infer_impl(
 			return false, result_type_type
 		end
 		local ok, result_info_usages, result_info_term =
-			check(result_info, typechecking_context, strict_value.result_info_type)
+			check(result_info, typechecking_context, flex_value.strict(strict_value.result_info_type))
 		if not ok then
 			return false, result_info_usages
 		end
@@ -3152,7 +3165,8 @@ local function infer_impl(
 		return true, bodytype, result_usages, terms.typed_term.let(name, debuginfo, exprterm, bodyterm)
 	elseif inferrable_term:is_host_intrinsic() then
 		local source, type, start_anchor = inferrable_term:unwrap_host_intrinsic()
-		local ok, source_usages, source_term = check(source, typechecking_context, strict_value.host_bool_type)
+		local ok, source_usages, source_term =
+			check(source, typechecking_context, flex_value.strict(strict_value.host_bool_type))
 		if not ok then
 			return false, source_usages
 		end
@@ -3220,7 +3234,7 @@ local function infer_impl(
 		local ok, err = typechecker_state:flow(
 			desc_type,
 			typechecking_context,
-			flex_value.tuple_desc_type(strict_value.host_type_type),
+			flex_value.tuple_desc_type(flex_value.host_type_type),
 			typechecking_context,
 			terms.constraintcause.primitive("host tuple type construction", U.anchor_here())
 		)
@@ -3361,6 +3375,9 @@ infer = function(inferrable_term, typechecking_context)
 
 	recurse_count = recurse_count + 1
 	local ok, v, usages, term = infer_impl(inferrable_term, typechecking_context)
+	if ok and not flex_value.value_check(v) then
+		error("infer didn't return a flex_value!")
+	end
 	recurse_count = recurse_count - 1
 
 	if tracked then
@@ -3421,6 +3438,8 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		return rc_val
 	elseif typed_term:is_literal() then
 		return flex_value.strict(typed_term:unwrap_literal())
+	elseif typed_term:is_metavariable() then
+		return flex_value.stuck(stuck_value.free(free.metavariable(typed_term:unwrap_metavariable())))
 	elseif typed_term:is_lambda() then
 		local param_name, param_debug, body, anchor = typed_term:unwrap_lambda()
 		return flex_value.closure(param_name, body, runtime_context, param_debug)
@@ -3839,10 +3858,10 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 
 		verify_placeholder_lite(unwrap_val, ambient_typechecking_context)
 		if unwrap_val:is_host_value() then
-			return unwrap_val:unwrap_host_value()
+			return flex_value.strict(unwrap_val:unwrap_host_value())
 		elseif unwrap_val:is_stuck() then
 			local nval = unwrap_val:unwrap_stuck()
-			if nval:is_host_wrap_stuck() then
+			if nval:is_host_wrap() then
 				return flex_value.stuck(nval:unwrap_host_wrap())
 			else
 				return flex_value.stuck(stuck_value.host_unwrap(nval))
@@ -4178,6 +4197,9 @@ evaluate = function(typed_term, runtime_context, ambient_typechecking_context)
 	verify_placeholder_lite(typed_term, ambient_typechecking_context)
 	recurse_count = recurse_count + 1
 	local r = evaluate_impl(typed_term, runtime_context, ambient_typechecking_context)
+	if not flex_value.value_check(r) then
+		error("evaluate didn't return a flex_value after processing: " .. tostring(typed_term))
+	end
 	recurse_count = recurse_count - 1
 	verify_placeholder_lite(r, ambient_typechecking_context)
 
@@ -5239,6 +5261,9 @@ function TypeCheckerState:check_value(v, tag, context)
 	if not v then
 		error("nil passed into check_value!")
 	end
+	if not flex_value.value_check(v) then
+		error("Must pass a flex_value into check_value! (Did you pass a strict or stuck value?)")
+	end
 	if context == nil then
 		error("nil context passed into check_value! " .. debug.traceback())
 	end
@@ -5334,6 +5359,12 @@ end
 ---@return boolean
 ---@return string? error
 function TypeCheckerState:flow(val, val_context, use, use_context, cause)
+	if not flex_value.value_check(val) then
+		error("val isn't a flex_value in flow()! (Did you pass a strict or stuck value?)")
+	end
+	if not flex_value.value_check(use) then
+		error("use isn't a flex_value in flow()! (Did you pass a strict or stuck value?)")
+	end
 	--terms.verify_placeholders(val, val_context, self.values)
 	--terms.verify_placeholders(use, use_context, self.values)
 	local r = { self:constrain(val, val_context, use, use_context, UniverseOmegaRelation, cause) }

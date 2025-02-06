@@ -395,8 +395,12 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 			local tag = flex_tags[k]
 			local subtype = types[tag]
 			local inner = subtype[k]
-			flex[k] = function(...)
-				return flex[tag](inner(...))
+			if not pair[2] then
+				flex[k] = flex[tag](inner)
+			else
+				flex[k] = function(...)
+					return flex[tag](inner(...))
+				end
 			end
 		end
 

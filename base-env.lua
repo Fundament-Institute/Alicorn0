@@ -285,7 +285,10 @@ local function intrinsic_impl(syntax, env)
 			metalanguage.accept_handler,
 			exprs.expression(
 				utils.accept_with_env,
-				exprs.ExpressionArgs.new(terms.expression_goal.check(strict_value.host_bool_type), env)
+				exprs.ExpressionArgs.new(
+					terms.expression_goal.check(flex_value.strict(strict_value.host_bool_type)),
+					env
+				)
 			),
 			metalanguage.symbol_exact(metalanguage.accept_handler, ":")
 		),

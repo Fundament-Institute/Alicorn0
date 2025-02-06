@@ -38,8 +38,8 @@ let unwrap = implicit-unwrap
 let unstrict-wrap = implicit-unstrict-wrap
 let unstrict-unwrap = implicit-unstrict-unwrap
 
-let host-bool-wrap            = intrinsic "return terms.value.host_bool_type"      : wrapped(host-type)
-let host-string-wrap          = intrinsic "return terms.value.host_string_type"    : wrapped(host-type)
+let host-bool-wrap            = intrinsic "return terms.strict_value.host_bool_type"      : wrapped(host-type)
+let host-string-wrap          = intrinsic "return terms.strict_value.host_string_type"    : wrapped(host-type)
 let host-syntax-wrap          = intrinsic "return terms.host_syntax_type"          : wrapped(host-type)
 let host-environment-wrap     = intrinsic "return terms.host_environment_type"     : wrapped(host-type)
 let host-goal-wrap            = intrinsic "return terms.host_goal_type"            : wrapped(host-type)
@@ -65,7 +65,7 @@ let srel =
 					local debug_array = terms_gen.declare_array(terms.var_debug)
 					local debug_element = terms.var_debug("target", utils.anchor_here())
 					local debug_arg = terms.var_debug("#srel-arg", utils.anchor_here())
-					return terms.value.closure(
+					return terms.strict_value.closure(
 						"#srel-arg",
 						terms.typed_term.tuple_elim(
 							string_array("target"),
@@ -76,7 +76,7 @@ let srel =
 								terms.typed_term.bound_variable(2, debug_element)
 							)
 						),
-						terms.runtime_context(),
+						terms.strict_runtime_context(),
 						debug_arg
 					)
 				:
@@ -91,7 +91,7 @@ let variance =
 					local debug_array = terms_gen.declare_array(terms.var_debug)
 					local debug_element = terms.var_debug("target", utils.anchor_here())
 					local debug_arg = terms.var_debug("#srel-arg", utils.anchor_here())
-					return terms.value.closure(
+					return terms.strict_value.closure(
 						"#srel-arg",
 						terms.typed_term.tuple_elim(
 							string_array("target"),
@@ -102,7 +102,7 @@ let variance =
 								terms.typed_term.bound_variable(2, debug_element)
 							)
 						),
-						terms.runtime_context(),
+						terms.strict_runtime_context(),
 						debug_arg
 					)
 				:
@@ -122,7 +122,7 @@ let _|_ =
 					local debug_left = terms.var_debug("left", utils.anchor_here())
 					local debug_right = terms.var_debug("right", utils.anchor_here())
 					local debug_arg = terms.var_debug("#srel-arg", utils.anchor_here())
-					return terms.value.closure(
+					return terms.strict_value.closure(
 						"#union-args",
 						terms.typed_term.tuple_elim(
 							string_array("left", "right"),
@@ -134,7 +134,7 @@ let _|_ =
 								terms.typed_term.bound_variable(3, debug_right)
 							)
 						),
-						terms.runtime_context(),
+						terms.strict_runtime_context(),
 						debug_arg
 					)
 				:
@@ -150,7 +150,7 @@ let _&_ =
 					local debug_left = terms.var_debug("left", utils.anchor_here())
 					local debug_right = terms.var_debug("right", utils.anchor_here())
 					local debug_arg = terms.var_debug("#srel-arg", utils.anchor_here())
-					return terms.value.closure(
+					return terms.strict_value.closure(
 						"#intersection-args",
 						terms.typed_term.tuple_elim(
 							string_array("left", "right"),
@@ -162,7 +162,7 @@ let _&_ =
 								terms.typed_term.bound_variable(3, debug_right)
 							)
 						),
-						terms.runtime_context(),
+						terms.strict_runtime_context(),
 						debug_arg
 					)
 				:
@@ -177,7 +177,7 @@ let covariant =
 					local debug_array = terms_gen.declare_array(terms.var_debug)
 					local debug_element = terms.var_debug("base", utils.anchor_here())
 					local debug_arg = terms.var_debug("#srel-arg", utils.anchor_here())
-					return terms.value.closure(
+					return terms.strict_value.closure(
 						"#covariant-args",
 						terms.typed_term.tuple_elim(
 							string_array("base"),
@@ -186,12 +186,12 @@ let covariant =
 							1,
 							terms.typed_term.variance_cons(
 								terms.typed_term.literal(
-									terms.value.host_value(true)
+									terms.strict_value.host_value(true)
 								),
 								terms.typed_term.bound_variable(2, debug_element)
 							)
 						),
-						terms.runtime_context(),
+						terms.strict_runtime_context(),
 						debug_arg
 					)
 				:
@@ -206,7 +206,7 @@ let contravariant =
 					local debug_array = terms_gen.declare_array(terms.var_debug)
 					local debug_element = terms.var_debug("target", utils.anchor_here())
 					local debug_arg = terms.var_debug("#srel-arg", utils.anchor_here())
-					return terms.value.closure(
+					return terms.strict_value.closure(
 						"#contravariant-args",
 						terms.typed_term.tuple_elim(
 							string_array("base"),
@@ -215,12 +215,12 @@ let contravariant =
 							1,
 							terms.typed_term.variance_cons(
 								terms.typed_term.literal(
-									terms.value.host_value(false)
+									terms.strict_value.host_value(false)
 								),
 								terms.typed_term.bound_variable(2, debug_element)
 							)
 						),
-						terms.runtime_context(),
+						terms.strict_runtime_context(),
 						debug_arg
 					)
 				:
@@ -244,7 +244,7 @@ let host-unique-id-wrap = intrinsic
 	""""
 		local id = { name = "unique_id" }
 		evaluator.register_host_srel(id, evaluator.IndepTupleRelation())
-		return terms.value.host_user_defined_type(id, terms_gen.declare_array(terms.value)())
+		return terms.strict_value.host_user_defined_type(id, terms_gen.declare_array(terms.strict_value)())
 	:
 	wrapped(host-type)
 let host-unique-id = unwrap(host-unique-id-wrap)
@@ -327,7 +327,7 @@ let void =
 		intrinsic
 			""""
 				local desc = terms.empty
-				local basetype = terms.value.enum_type(desc)
+				local basetype = terms.strict_value.enum_type(desc:unwrap_strict())
 				return basetype
 			:
 			wrapped type
@@ -403,7 +403,7 @@ let host-tuple-type-to-tuple-type-inner =
 			local function host_tuple_to_tuple(host_tuple_type)
 				local desc = host_tuple_type:unwrap_host_tuple_type()
 				-- this conversion happens to work since the eliminator for host tuples and tuples is the same term
-				local newbasetype = terms.value.tuple_type(desc)
+				local newbasetype = terms.strict_value.tuple_type(desc)
 				return newbasetype
 			end
 			return host_tuple_to_tuple
@@ -434,7 +434,7 @@ let rebuild-prog-type-inner =
 		""""
 			return function(prog_type, valid, new_base)
 				local effect, base = prog_type:unwrap_program_type()
-				return terms.value.program_type(effect, new_base)
+				return terms.strict_value.program_type(effect, new_base)
 			end
 		:
 		host-func-type (t : wrapped(type), valid : only-accept-prog-host-tuples(t), b : wrapped(type)) -> ((res : wrapped(type)))
@@ -448,11 +448,11 @@ let host-tuple-to-tuple-inner =
 		""""
 			return function(_type, _valid, val)
 				local elems = val:unwrap_host_tuple_value()
-				local vals = terms_gen.declare_array(terms.value)()
+				local vals = terms_gen.declare_array(terms.strict_value)()
 				for _, v in ipairs(elems) do
-					vals:append(terms.value.host_value(v))
+					vals:append(terms.strict_value.host_value(v))
 				end
-				return terms.value.tuple_value(vals)
+				return terms.strict_value.tuple_value(vals)
 			end
 		:
 		host-func-type (
@@ -647,7 +647,7 @@ let set-func-result-info =
 			""""
 				local function get_host_func_arg(subject, valid, new_result_info)
 					local param_type, param_info, result_type, result_info = subject:unwrap_pi()
-					return terms.value.pi(param_type, param_info, result_type, new_result_info)
+					return terms.strict_value.pi(param_type, param_info, result_type, new_result_info)
 				end
 				return get_host_func_arg
 			:
@@ -726,11 +726,11 @@ let func-to-host-func-inner =
 			return function(_type, _valid, afn)
 				return function(...)
 					local args = table.pack(...)
-					local conv_args = terms_gen.declare_array(terms.value)()
+					local conv_args = terms_gen.declare_array(terms.strict_value)()
 					for i = 1, args.n do
-						conv_args:append(terms.value.host_value(args[i]))
+						conv_args:append(terms.strict_value.host_value(args[i]))
 					end
-					local res = evaluator.apply_value(afn, terms.value.tuple_value(conv_args), terms.typechecking_context())
+					local res = evaluator.apply_value(afn, terms.strict_value.tuple_value(conv_args), terms.typechecking_context())
 					if not res:is_tuple_value() then
 						error "alicorn function converted to native function has failed to create a real value"
 					end
@@ -749,6 +749,7 @@ let func-to-host-func =
 		let (res) = func-to-host-func-inner(wrap(T), valid, wrap(fn))
 		res #TODO figure out why `unwrap(res) here doesn't make a nice type error but fails
 
+# TODO rewrite to handle new flex values
 let funcprog-to-host-funcprog-inner =
 	intrinsic
 		""""
@@ -756,11 +757,11 @@ let funcprog-to-host-funcprog-inner =
 				return function(...)
 					local args = {...}
 					local nargs = select("#", ...)
-					local conv_args = terms_gen.declare_array(terms.value)()
+					local conv_args = terms_gen.declare_array(terms.flex_value)()
 					for i = 1, nargs do
-						conv_args:append(terms.value.host_value(args[i]))
+						conv_args:append(terms.flex_value.host_value(args[i]))
 					end
-					local res = evaluator.execute_program(evaluator.apply_value(afn, terms.value.tuple_value(conv_args), terms.typechecking_context()))
+					local res = evaluator.execute_program(evaluator.apply_value(afn, terms.flex_value.tuple_value(conv_args), terms.typechecking_context()))
 					if not res:is_tuple_value() then
 						print(res)
 						error  "alicorn function converted to native function has failed to create a real value"
@@ -793,23 +794,26 @@ let host-if =
 				:
 				wrapped(host-if-type(T))
 		unwrap(inner)
-
+# TODO convert this to a typed term or something
 let tuple-desc-type-inner = intrinsic "return terms.value.tuple_desc_type" :
 	host-func-type ((U : unstrict-wrapped(universe))) -> ((T : unstrict-wrapped(host-type)))
 let tuple-desc-type = lambda (U : universe)
 	let (T) = tuple-desc-type-inner(unstrict-wrap(U))
 	unstrict-unwrap(T)
+# TODO convert this to a typed term or something
 let tuple-type-explicit = lambda (U : universe, desc : tuple-desc-type(U))
 	let inner = intrinsic "return terms.value.tuple_type" :
 		host-func-type ((desc : wrapped(tuple-desc-type(U)))) -> ((T : wrapped(U)))
 	let (T) = inner(wrap(desc))
 	unwrap(T)
+# TODO convert this to a typed term or something
 let tuple-type = lambda_implicit (U : universe)
 	lambda (desc : tuple-desc-type(U))
 		let inner = intrinsic "return terms.value.tuple_type" :
 			host-func-type ((desc : wrapped(tuple-desc-type(U)))) -> ((T : wrapped(U)))
 		let (T) = inner(wrap(desc))
 		unwrap(T)
+# TODO convert this to a typed term or something
 let host-tuple-type = lambda_implicit (U : universe)
 	lambda (desc : tuple-desc-type(U))
 		let inner = intrinsic "return terms.value.host_tuple_type" :
@@ -907,7 +911,7 @@ let tuple-concat = lambda (
 		tl   : tuple-type(tail))
 	let inner = intrinsic
 		""""
-			local value_array = terms_gen.declare_array(terms.value)
+			local value_array = terms_gen.declare_array(terms.strict_value)
 			local function tuple_concat(head, tail)
 				local head_elements = head:unwrap_tuple_value()
 				local tail_elements = tail:unwrap_tuple_value()
@@ -918,7 +922,7 @@ let tuple-concat = lambda (
 				for _, e in tail_elements:ipairs() do
 					new_elements:append(e)
 				end
-				return terms.value.tuple_value(new_elements)
+				return terms.strict_value.tuple_value(new_elements)
 			end
 			return tuple_concat
 		:
@@ -944,7 +948,7 @@ let host-tuple-concat = lambda (
 				for _, e in tail_elements:ipairs() do
 					new_elements:append(e)
 				end
-				return terms.value.host_tuple_value(new_elements)
+				return terms.strict_value.host_tuple_value(new_elements)
 			end
 			return host_tuple_concat
 		:
@@ -956,14 +960,15 @@ let host-tuple-concat = lambda (
 	let (cat) = inner(wrap(hd), wrap(tl))
 	unwrap(cat)
 
+# TODO rewrite for new flex_values
 let host-number-fold-indep = lambda_implicit (T : type_(9, 0))
 	let inner =
 		intrinsic
 			""""
-				local value_array = terms_gen.declare_array(terms.value)
+				local value_array = terms_gen.declare_array(terms.flex_value)
 				return function(n, f, acc)
 					for i = n, 1, -1 do
-						acc = evaluator.apply_value(f, terms.value.tuple_value(value_array(terms.value.host_value(i), acc)), terms.typechecking_context())
+						acc = evaluator.apply_value(f, terms.flex_value.tuple_value(value_array(terms.flex_value.host_value(i), acc)), terms.typechecking_context())
 					end
 					return acc
 				end
@@ -1261,8 +1266,8 @@ let new-operative = lambda (userdata : host-type, ud : userdata, handler : opera
 		""""
 			local function new_operative(userdata, ud, handler)
 				return
-					terms.value.operative_type(handler, userdata),
-					terms.value.operative_value(ud)
+					terms.strict_value.operative_type(handler, userdata),
+					terms.strict_value.operative_value(ud)
 			end
 			return new_operative
 		:
@@ -1299,8 +1304,8 @@ let new-operative-implicit = lambda_implicit (userdata : host-type)
 			""""
 				local function new_operative(userdata, ud, handler)
 					return
-						terms.value.operative_type(handler, userdata),
-						terms.value.operative_value(ud)
+						terms.strict_value.operative_type(handler, userdata),
+						terms.strict_value.operative_value(ud)
 				end
 				return new_operative
 			:
