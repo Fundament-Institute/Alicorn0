@@ -111,11 +111,11 @@ local colors = {
 	-- "\27[38;5;17m", -- base0F (out of stock ANSI range)
 }
 
-function PrettyPrint:_color()
+function PrettyPrint:set_color()
 	return colors[1 + (((self.depth or 0) + #colors - 1) % #colors)]
 end
 
-function PrettyPrint:_resetcolor()
+function PrettyPrint:reset_color()
 	return "\27[0m"
 end
 
@@ -123,18 +123,18 @@ end
 ---@param ... any
 function PrettyPrint:array(array, ...)
 	self:_enter()
-	self[#self + 1] = self:_color()
+	self[#self + 1] = self:set_color()
 	self[#self + 1] = "["
-	self[#self + 1] = self:_resetcolor()
+	self[#self + 1] = self:reset_color()
 	for i, v in ipairs(array) do
 		if i > 1 then
 			self[#self + 1] = ", "
 		end
 		self:any(v, ...)
 	end
-	self[#self + 1] = self:_color()
+	self[#self + 1] = self:set_color()
 	self[#self + 1] = "]"
-	self[#self + 1] = self:_resetcolor()
+	self[#self + 1] = self:reset_color()
 	self:_exit()
 end
 
@@ -188,50 +188,50 @@ function PrettyPrint:table(fields, ...)
 		seq = true
 	end
 	if seq then
-		self[#self + 1] = self:_color()
+		self[#self + 1] = self:set_color()
 		self[#self + 1] = "["
-		self[#self + 1] = self:_resetcolor()
+		self[#self + 1] = self:reset_color()
 		for i, v in ipairs(fields) do
 			if i > 1 then
 				self[#self + 1] = ", "
 			end
 			self:any(v, ...)
 		end
-		self[#self + 1] = self:_color()
+		self[#self + 1] = self:set_color()
 		self[#self + 1] = "]"
-		self[#self + 1] = self:_resetcolor()
+		self[#self + 1] = self:reset_color()
 	else
 		table.sort(keyorder)
-		self[#self + 1] = self:_color()
+		self[#self + 1] = self:set_color()
 		self[#self + 1] = " {\n"
-		self[#self + 1] = self:_resetcolor()
+		self[#self + 1] = self:reset_color()
 		self:_indent()
 		for i, kstring in ipairs(keyorder) do
 			local k = keymap[kstring]
 			if not hidden_fields[k] then
 				local v = fields[k]
 				self:_prefix()
-				self[#self + 1] = self:_color()
+				self[#self + 1] = self:set_color()
 				if type(k) == "string" then
 					self[#self + 1] = k
 				else
 					self[#self + 1] = "["
-					self[#self + 1] = self:_resetcolor()
+					self[#self + 1] = self:reset_color()
 					self[#self + 1] = tostring(k)
-					self[#self + 1] = self:_color()
+					self[#self + 1] = self:set_color()
 					self[#self + 1] = "]"
 				end
 				self[#self + 1] = " = "
-				self[#self + 1] = self:_resetcolor()
+				self[#self + 1] = self:reset_color()
 				self:any(v, ...)
 				self[#self + 1] = ",\n"
 			end
 		end
 		self:_dedent()
 		self:_prefix()
-		self[#self + 1] = self:_color()
+		self[#self + 1] = self:set_color()
 		self[#self + 1] = "}"
-		self[#self + 1] = self:_resetcolor()
+		self[#self + 1] = self:reset_color()
 	end
 
 	self:_exit()
@@ -244,26 +244,26 @@ function PrettyPrint:record(kind, fields, ...)
 	local startLen = #self
 	self:_enter()
 
-	self[#self + 1] = self:_color()
+	self[#self + 1] = self:set_color()
 	if kind then
 		self[#self + 1] = kind
 	end
 
 	if #fields <= 1 then
-		--self[#self + 1] = self:_color()
+		--self[#self + 1] = self:set_color()
 		local k, v = table.unpack(fields[1])
 		if hidden_fields[k] then
 			v = hidden_fields[k](v)
 		end
 		self[#self + 1] = "("
-		self[#self + 1] = self:_resetcolor()
+		self[#self + 1] = self:reset_color()
 		self:any(v, ...)
-		self[#self + 1] = self:_color()
+		self[#self + 1] = self:set_color()
 		self[#self + 1] = ")"
 	else
-		--self[#self + 1] = self:_color()
+		--self[#self + 1] = self:set_color()
 		self[#self + 1] = " {\n"
-		self[#self + 1] = self:_resetcolor()
+		self[#self + 1] = self:reset_color()
 		self:_indent()
 		for _, pair in ipairs(fields) do
 			local k, v = table.unpack(pair)
@@ -271,14 +271,14 @@ function PrettyPrint:record(kind, fields, ...)
 				v = hidden_fields[k](v)
 			end
 			self:_prefix()
-			self[#self + 1] = self:_color()
+			self[#self + 1] = self:set_color()
 			self[#self + 1] = k
 			self[#self + 1] = " = "
-			self[#self + 1] = self:_resetcolor()
+			self[#self + 1] = self:reset_color()
 			self:any(v, ...)
 			self[#self + 1] = ",\n"
 		end
-		self[#self + 1] = self:_color()
+		self[#self + 1] = self:set_color()
 		-- if the record is big mark what's ending
 		if (#self - startLen) > 50 then
 			self:_prefix()
@@ -291,7 +291,7 @@ function PrettyPrint:record(kind, fields, ...)
 		self[#self + 1] = "}"
 	end
 
-	self[#self + 1] = self:_resetcolor()
+	self[#self + 1] = self:reset_color()
 	self:_exit()
 end
 

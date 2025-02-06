@@ -101,9 +101,9 @@ end
 local function let_helper(pp, name, expr, context)
 	pp:unit(name)
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(" = ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:_indent()
 	pp:any(expr, context)
@@ -122,25 +122,25 @@ end
 local function tuple_elim_helper(pp, names, subject, context)
 	local inner_context = context
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("(")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	for i, name in names:ipairs() do
 		inner_context = inner_context:append(name)
 
 		if i > 1 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit(", ")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		end
 
 		pp:unit(name)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(") = ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:any(subject, context)
 
@@ -175,9 +175,9 @@ local function tuple_type_helper(pp, members, names)
 			pp:unit(" ")
 		end
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit("(")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		if i > n then
 			pp:unit(string.format("#unk%d", i))
@@ -185,15 +185,15 @@ local function tuple_type_helper(pp, members, names)
 			pp:unit(names[i])
 		end
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(" : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(mem[2], mem[3])
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(")")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 	end
 end
 
@@ -230,18 +230,18 @@ local function inferrable_let_or_tuple_elim(pp, term, context)
 			name, debuginfo, expr, term = term:unwrap_let()
 
 			-- rear-loading prefix to cheaply handle first loop not needing prefix
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("inferrable.let ")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 			context = let_helper(pp, name, expr, context)
 			pp:unit("\n")
 			pp:_prefix()
 		elseif term:is_tuple_elim() then
 			names, debuginfo, subject, term = term:unwrap_tuple_elim()
 
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("inferrable.let ")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 			context = tuple_elim_helper(pp, names, subject, context)
 			pp:unit("\n")
 			pp:_prefix()
@@ -267,18 +267,18 @@ local function typed_let_or_tuple_elim(pp, term, context)
 			name, debuginfo, expr, term = term:unwrap_let()
 
 			-- rear-loading prefix to cheaply handle first loop not needing prefix
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("typed.let ")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 			context = let_helper(pp, name, expr, context)
 			pp:unit("\n")
 			pp:_prefix()
 		elseif term:is_tuple_elim() then
 			names, debuginfo, subject, _, term = term:unwrap_tuple_elim()
 
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("typed.let ")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 			context = tuple_elim_helper(pp, names, subject, context)
 			pp:unit("\n")
 			pp:_prefix()
@@ -516,21 +516,21 @@ function inferrable_term_override_pretty:typed(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("inferrable.the (")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:any(type)
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(") (")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:any(typed_term, context)
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(")")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:_exit()
 end
@@ -553,21 +553,21 @@ function inferrable_term_override_pretty:bound_variable(pp, context)
 		pp:unit(context:get_name(index))
 	else
 		-- TODO: warn on context too short?
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit("inferrable.bound_variable(")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:unit(tostring(index))
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(", ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(debuginfo)
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(")")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 	end
 
 	pp:_exit()
@@ -585,21 +585,21 @@ function typed_term_override_pretty:bound_variable(pp, context)
 		pp:unit(context:get_name(index))
 	else
 		-- TODO: warn on context too short?
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit("typed.bound_variable(")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:unit(tostring(index))
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(", ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(debuginfo)
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(")")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 	end
 
 	pp:_exit()
@@ -613,9 +613,9 @@ function binding_override_pretty:let(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("binding.let ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 	let_helper(pp, name, expr, context)
 
 	pp:_exit()
@@ -643,9 +643,9 @@ function binding_override_pretty:tuple_elim(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("binding.let ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 	tuple_elim_helper(pp, names, subject, context)
 
 	pp:_exit()
@@ -673,19 +673,19 @@ function binding_override_pretty:annotated_lambda(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("binding.λ [" .. tostring(anchor) .. "] <")
 	pp:any(visible)
 	pp:unit(", ")
 	pp:any(pure)
 	pp:unit("> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:unit(param_name)
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(" : ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:any(param_annotation, context)
 
@@ -713,21 +713,21 @@ function inferrable_term_override_pretty:annotated_lambda(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("inferrable.λ [" .. tostring(anchor) .. "] <")
 	pp:any(visible)
 	pp:unit(", ")
 	pp:any(pure)
 	pp:unit("> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if is_tuple_type and is_destructure then
 		---@cast names ArrayValue
 		---@cast members TupleDescFlat[]
 		if #members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, members, names)
 		end
@@ -735,9 +735,9 @@ function inferrable_term_override_pretty:annotated_lambda(pp, context)
 		---@cast names ArrayValue
 		-- tuple_elim on param but its type isn't a tuple type???
 		-- probably shouldn't happen, but here's a handler
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit("(")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		for i, name in names:ipairs() do
 			if i > 1 then
@@ -746,24 +746,24 @@ function inferrable_term_override_pretty:annotated_lambda(pp, context)
 			pp:unit(name)
 		end
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(") : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_annotation, context)
 	else
 		pp:unit(param_name)
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(" : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_annotation, context)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(" ->")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if body:is_let() or body:is_tuple_elim() then
 		pp:unit("\n")
@@ -794,16 +794,16 @@ function typed_term_override_pretty:lambda(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("typed.λ [" .. tostring(anchor) .. "] ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if is_destructure then
 		---@cast names ArrayValue
 		if names:len() == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		end
 
 		for i, name in names:ipairs() do
@@ -816,9 +816,9 @@ function typed_term_override_pretty:lambda(pp, context)
 		pp:unit(param_name)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(" ->")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if body:is_let() or body:is_tuple_elim() then
 		pp:unit("\n")
@@ -848,16 +848,16 @@ function value_override_pretty:closure(pp)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("value.closure ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if is_destructure then
 		---@cast names ArrayValue
 		if names:len() == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		end
 
 		for i, name in names:ipairs() do
@@ -870,9 +870,9 @@ function value_override_pretty:closure(pp)
 		pp:unit(param_name)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(" ->")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if code:is_let() or code:is_tuple_elim() then
 		pp:unit("\n")
@@ -924,17 +924,17 @@ function inferrable_term_override_pretty:pi(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("inferrable.Π [" .. tostring(anchor) .. "] <")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 	pp:any(param_info)
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(", ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 	pp:any(result_info)
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(param_type, context)
@@ -942,9 +942,9 @@ function inferrable_term_override_pretty:pi(pp, context)
 		---@cast param_names ArrayValue
 		---@cast param_members TupleDescFlat[]
 		if #param_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, param_members, param_names)
 		end
@@ -952,9 +952,9 @@ function inferrable_term_override_pretty:pi(pp, context)
 		---@cast param_names ArrayValue
 		-- tuple_elim on params but params aren't a tuple type???
 		-- probably shouldn't happen, but here's a handler
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit("(")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		for i, name in param_names:ipairs() do
 			if i > 1 then
@@ -963,33 +963,33 @@ function inferrable_term_override_pretty:pi(pp, context)
 			pp:unit(name)
 		end
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(") : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type, context)
 	else
 		pp:unit(param_name)
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(" : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type, context)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(" -> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(result_type, context)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
 		if #result_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, result_members)
 		end
@@ -1033,13 +1033,13 @@ function inferrable_term_override_pretty:host_function_type(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("inferrable.host-Π [" .. tostring(anchor) .. "] <")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 	pp:any(result_info)
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(param_type, context)
@@ -1047,9 +1047,9 @@ function inferrable_term_override_pretty:host_function_type(pp, context)
 		---@cast param_names ArrayValue
 		---@cast param_members TupleDescFlat[]
 		if #param_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, param_members, param_names)
 		end
@@ -1057,9 +1057,9 @@ function inferrable_term_override_pretty:host_function_type(pp, context)
 		---@cast param_names ArrayValue
 		-- tuple_elim on params but params aren't a tuple type???
 		-- probably shouldn't happen, but here's a handler
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit("(")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		for i, name in param_names:ipairs() do
 			if i > 1 then
@@ -1068,33 +1068,33 @@ function inferrable_term_override_pretty:host_function_type(pp, context)
 			pp:unit(name)
 		end
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(") : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type, context)
 	else
 		pp:unit(param_name)
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(" : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type, context)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(" -> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(result_type, context)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
 		if #result_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, result_members)
 		end
@@ -1141,17 +1141,17 @@ function typed_term_override_pretty:pi(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("typed.Π <")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 	pp:any(param_info)
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(", ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 	pp:any(result_info)
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(param_type, context)
@@ -1159,9 +1159,9 @@ function typed_term_override_pretty:pi(pp, context)
 		---@cast param_names ArrayValue
 		---@cast param_members TupleDescFlat[]
 		if #param_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, param_members, param_names)
 		end
@@ -1169,9 +1169,9 @@ function typed_term_override_pretty:pi(pp, context)
 		---@cast param_names ArrayValue
 		-- tuple_elim on params but params aren't a tuple type???
 		-- probably shouldn't happen, but here's a handler
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit("(")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		for i, name in param_names:ipairs() do
 			if i > 1 then
@@ -1180,33 +1180,33 @@ function typed_term_override_pretty:pi(pp, context)
 			pp:unit(name)
 		end
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(") : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type, context)
 	else
 		pp:unit(param_name)
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(" : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type, context)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(" -> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(result_type, context)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
 		if #result_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, result_members)
 		end
@@ -1250,13 +1250,13 @@ function typed_term_override_pretty:host_function_type(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("typed.host-Π <")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 	pp:any(result_info)
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(param_type, context)
@@ -1264,9 +1264,9 @@ function typed_term_override_pretty:host_function_type(pp, context)
 		---@cast param_names ArrayValue
 		---@cast param_members TupleDescFlat[]
 		if #param_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, param_members, param_names)
 		end
@@ -1274,9 +1274,9 @@ function typed_term_override_pretty:host_function_type(pp, context)
 		---@cast param_names ArrayValue
 		-- tuple_elim on params but params aren't a tuple type???
 		-- probably shouldn't happen, but here's a handler
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit("(")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		for i, name in param_names:ipairs() do
 			if i > 1 then
@@ -1285,33 +1285,33 @@ function typed_term_override_pretty:host_function_type(pp, context)
 			pp:unit(name)
 		end
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(") : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type, context)
 	else
 		pp:unit(param_name)
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(" : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type, context)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(" -> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(result_type, context)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
 		if #result_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, result_members)
 		end
@@ -1353,17 +1353,17 @@ function value_override_pretty:pi(pp)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("value.Π <")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 	pp:any(param_info)
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(", ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 	pp:any(result_info)
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(param_type)
@@ -1371,9 +1371,9 @@ function value_override_pretty:pi(pp)
 		---@cast param_names ArrayValue
 		---@cast param_members TupleDescFlat[]
 		if #param_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, param_members, param_names)
 		end
@@ -1381,9 +1381,9 @@ function value_override_pretty:pi(pp)
 		---@cast param_names ArrayValue
 		-- tuple_elim on params but params aren't a tuple type???
 		-- probably shouldn't happen, but here's a handler
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit("(")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		for i, name in param_names:ipairs() do
 			if i > 1 then
@@ -1392,33 +1392,33 @@ function value_override_pretty:pi(pp)
 			pp:unit(name)
 		end
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(") : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type)
 	else
 		pp:unit(param_name)
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(" : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(" -> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(result_type)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
 		if #result_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, result_members)
 		end
@@ -1460,13 +1460,13 @@ function value_override_pretty:host_function_type(pp)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("value.host-Π <")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 	pp:any(result_info)
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(param_type)
@@ -1474,9 +1474,9 @@ function value_override_pretty:host_function_type(pp)
 		---@cast param_names ArrayValue
 		---@cast param_members TupleDescFlat[]
 		if #param_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, param_members, param_names)
 		end
@@ -1484,9 +1484,9 @@ function value_override_pretty:host_function_type(pp)
 		---@cast param_names ArrayValue
 		-- tuple_elim on params but params aren't a tuple type???
 		-- probably shouldn't happen, but here's a handler
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit("(")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		for i, name in param_names:ipairs() do
 			if i > 1 then
@@ -1495,33 +1495,33 @@ function value_override_pretty:host_function_type(pp)
 			pp:unit(name)
 		end
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(") : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type)
 	else
 		pp:unit(param_name)
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(" : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(" -> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(result_type)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
 		if #result_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, result_members)
 		end
@@ -1538,7 +1538,7 @@ function value_override_pretty:visibility(pp)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	if v:is_implicit() then
 		pp:unit("implicit")
 	elseif v:is_explicit() then
@@ -1546,7 +1546,7 @@ function value_override_pretty:visibility(pp)
 	else
 		pp:any(v)
 	end
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:_exit()
 end
@@ -1594,38 +1594,38 @@ function inferrable_term_override_pretty:application(pp, context)
 			local ok, elements, _ = arg:as_tuple_cons()
 			elements = ok and elements or arg:unwrap_host_tuple_cons()
 
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("(")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 
 			for i, arg in elements:ipairs() do
 				if i > 1 then
-					pp:unit(pp:_color())
+					pp:unit(pp:set_color())
 					pp:unit(", ")
-					pp:unit(pp:_resetcolor())
+					pp:unit(pp:reset_color())
 				end
 
 				pp:any(arg, context)
 			end
 
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit(")")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			-- if we're here then the args are probably horrible
 			-- add some newlines
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("inferrable.apply(")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 			pp:unit("\n")
 
 			pp:_indent()
 
 			pp:_prefix()
 			pp:any(f, context)
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit(",")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 			pp:unit("\n")
 
 			pp:_prefix()
@@ -1635,9 +1635,9 @@ function inferrable_term_override_pretty:application(pp, context)
 			pp:_dedent()
 
 			pp:_prefix()
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit(")")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		end
 
 		pp:_exit()
@@ -1675,38 +1675,38 @@ function typed_term_override_pretty:application(pp, context)
 			local ok, elements = arg:as_tuple_cons()
 			elements = ok and elements or arg:unwrap_host_tuple_cons()
 
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("(")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 
 			for i, arg in elements:ipairs() do
 				if i > 1 then
-					pp:unit(pp:_color())
+					pp:unit(pp:set_color())
 					pp:unit(", ")
-					pp:unit(pp:_resetcolor())
+					pp:unit(pp:reset_color())
 				end
 
 				pp:any(arg, context)
 			end
 
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit(")")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			-- if we're here then the args are probably horrible
 			-- add some newlines
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("typed.apply(")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 			pp:unit("\n")
 
 			pp:_indent()
 
 			pp:_prefix()
 			pp:any(f, context)
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit(",")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 			pp:unit("\n")
 
 			pp:_prefix()
@@ -1716,9 +1716,9 @@ function typed_term_override_pretty:application(pp, context)
 			pp:_dedent()
 
 			pp:_prefix()
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit(")")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		end
 
 		pp:_exit()
@@ -1736,9 +1736,9 @@ function inferrable_term_override_pretty:tuple_type(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("inferrable.tuple_type[")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if ok then
 		---@cast members TupleDescFlat[]
@@ -1747,9 +1747,9 @@ function inferrable_term_override_pretty:tuple_type(pp, context)
 		pp:any(desc)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("]")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:_exit()
 end
@@ -1763,9 +1763,9 @@ function inferrable_term_override_pretty:host_tuple_type(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("inferrable.host_tuple_type[")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if ok then
 		---@cast members TupleDescFlat[]
@@ -1774,9 +1774,9 @@ function inferrable_term_override_pretty:host_tuple_type(pp, context)
 		pp:any(desc)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("]")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:_exit()
 end
@@ -1790,9 +1790,9 @@ function typed_term_override_pretty:tuple_type(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("typed.tuple_type[")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if ok then
 		---@cast members TupleDescFlat[]
@@ -1801,9 +1801,9 @@ function typed_term_override_pretty:tuple_type(pp, context)
 		pp:any(desc)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("]")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:_exit()
 end
@@ -1817,9 +1817,9 @@ function typed_term_override_pretty:host_tuple_type(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("typed.host_tuple_type[")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if ok then
 		---@cast members TupleDescFlat[]
@@ -1828,9 +1828,9 @@ function typed_term_override_pretty:host_tuple_type(pp, context)
 		pp:any(desc)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("]")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:_exit()
 end
@@ -1842,9 +1842,9 @@ function value_override_pretty:tuple_type(pp)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("value.tuple_type[")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if ok then
 		---@cast members TupleDescFlat[]
@@ -1853,9 +1853,9 @@ function value_override_pretty:tuple_type(pp)
 		pp:any(desc)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("]")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:_exit()
 end
@@ -1867,9 +1867,9 @@ function value_override_pretty:host_tuple_type(pp)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("value.host_tuple_type[")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if ok then
 		---@cast members TupleDescFlat[]
@@ -1878,9 +1878,9 @@ function value_override_pretty:host_tuple_type(pp)
 		pp:any(desc)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("]")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:_exit()
 end
@@ -1891,7 +1891,7 @@ function value_override_pretty:enum_value(pp)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("value.◬")
 	pp:unit(constructor)
 
@@ -1899,30 +1899,30 @@ function value_override_pretty:enum_value(pp)
 		local elements = arg:unwrap_tuple_value()
 
 		pp:unit("(")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		for i, arg in elements:ipairs() do
 			if i > 1 then
-				pp:unit(pp:_color())
+				pp:unit(pp:set_color())
 				pp:unit(", ")
-				pp:unit(pp:_resetcolor())
+				pp:unit(pp:reset_color())
 			end
 
 			pp:any(arg)
 		end
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(")")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 	else
 		pp:unit("[")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(arg)
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit("]")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 	end
 
 	pp:_exit()
@@ -1948,9 +1948,9 @@ function stuck_value_override_pretty:free(pp)
 
 		pp:_enter()
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit("⩤ " .. mv.value .. ":" .. mv.usage .. "|" .. mv.block_level .. " ⩥")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:_exit()
 	else
@@ -1970,9 +1970,9 @@ function typed_term_override_pretty:tuple_element_access(pp, context)
 
 		pp:unit(context:get_name(subject_index))
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(".")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:unit(tostring(index))
 
@@ -1989,9 +1989,9 @@ function typed_term_override_pretty:host_intrinsic(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("typed.host_intrinsic ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	local source_text
 	local ok, source_val = source:as_literal()
@@ -2022,9 +2022,9 @@ end
 function typed_term_override_pretty:constrained_type(pp)
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("typed.constrained_type")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:_exit()
 end
@@ -2035,9 +2035,9 @@ function value_override_pretty:star(pp)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("✪ " .. level .. "|" .. depth)
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:_exit()
 end
