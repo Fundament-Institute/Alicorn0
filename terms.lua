@@ -1290,8 +1290,7 @@ gen.define_multi_enum(flex_continuation, "flex_continuation", replace_flex_value
 -- i.e. destructuring values always (eventually) terminates.
 -- stylua: ignore
 
-gen.define_multi_enum(
-	flex_value,
+gen.define_multi_enum(flex_value,
 	"flex_value",
 	replace_flex_values,
 	specify_flex_values,
@@ -1310,64 +1309,40 @@ gen.define_multi_enum(
 		-- for a function returning a monad do i have to be called in an effectful context or am i pure
 		{ "result_info_type$strict" },
 		{ "result_info$strict", { "result_info", result_info } },
-		{
-			"pi$flex",
-			{
-				"param_type",
-				flex_value,
-				"param_info",
-				flex_value, -- param_info
-				"result_type",
-				flex_value, -- closure from input -> result
-				"result_info",
-				flex_value, -- result_info
-			},
-		},
+		{ "pi$flex", {
+			"param_type",  flex_value,
+			"param_info",  flex_value, -- param_info
+			"result_type", flex_value, -- closure from input -> result
+			"result_info", flex_value, -- result_info
+		}, },
 		-- closure is a type that contains a typed term corresponding to the body
 		-- and a runtime context representing the bound context where the closure was created
-		{
-			"closure$flex",
-			{
-				"param_name",
-				gen.builtin_string,
-				"code",
-				typed_term,
-				"capture",
-				flex_runtime_context_type,
-				"debug",
-				var_debug,
-			},
-		},
+		{ "closure$flex", {
+			"param_name", gen.builtin_string,
+			"code",       typed_term,
+			"capture",    flex_runtime_context_type,
+			"debug",      var_debug,
+		}, },
 		-- a list of upper and lower bounds, and a relation being bound with respect to
-		{
-			"range$flex",
-			{
-				"lower_bounds",
-				array(flex_value),
-				"upper_bounds",
-				array(flex_value),
-				"relation",
-				strict_value, -- a subtyping relation. not currently represented.
-			},
-		},
+		{ "range$flex", {
+			"lower_bounds", array(flex_value),
+			"upper_bounds", array(flex_value),
+			"relation",     strict_value, -- a subtyping relation. not currently represented.
+		}, },
 		{ "name_type$strict" },
 		{ "name$strict", { "name", gen.builtin_string } },
 		{ "operative_value$flex", { "userdata", flex_value } },
 		{ "operative_type$flex", {
-			"handler",
-			flex_value,
-			"userdata_type",
-			flex_value,
+			"handler",       flex_value,
+			"userdata_type", flex_value,
 		} },
 		-- ordinary data
 		{ "tuple_value$flex", { "elements", array(flex_value) } },
 		{ "tuple_type$flex", { "desc", flex_value } },
 		{ "tuple_desc_type$flex", { "universe", flex_value } },
 		{ "enum_value$flex", {
-			"constructor",
-			gen.builtin_string,
-			"arg",
-			flex_value,
+			"constructor", gen.builtin_string,
+			"arg",         flex_value,
 		} },
 		{ "enum_type$flex", { "desc", flex_value } },
 		{ "enum_desc_type$flex", { "universe", flex_value } },
@@ -1375,24 +1350,15 @@ gen.define_multi_enum(
 		{ "record_value$flex", { "fields", map(gen.builtin_string, flex_value) } },
 		{ "record_type$flex", { "desc", flex_value } },
 		{ "record_desc_type$flex", { "universe", flex_value } },
-		{
-			"record_extend$stuck",
-			{
-				"base",
-				stuck_value,
-				"extension",
-				map(gen.builtin_string, flex_value),
-			},
-		},
-		{
-			"object_value$flex",
-			{ --Not used yet
-				"methods",
-				map(gen.builtin_string, typed_term),
-				"capture",
-				flex_runtime_context_type,
-			},
-		},
+		{ "record_extend$stuck", {
+			"base",      stuck_value,
+			"extension", map(gen.builtin_string, flex_value),
+		}, },
+		-- Not used yet
+		{ "object_value$flex", {
+			"methods", map(gen.builtin_string, typed_term),
+			"capture", flex_runtime_context_type,
+		}, },
 		{ "object_type$flex", { "desc", flex_value } },
 
 		{ "star$strict", { "level", gen.builtin_number, "depth", gen.builtin_number } },
@@ -1404,29 +1370,18 @@ gen.define_multi_enum(
 		{ "host_number_type$strict" },
 		{ "host_bool_type$strict" },
 		{ "host_string_type$strict" },
-		{
-			"host_function_type$flex",
-			{
-				"param_type",
-				flex_value, -- must be a host_tuple_type
-				-- host functions can only have explicit arguments
-				"result_type",
-				flex_value, -- must be a host_tuple_type
-				"result_info",
-				flex_value,
-			},
-		},
+		{ "host_function_type$flex", {
+			"param_type",  flex_value, -- must be a host_tuple_type
+			-- host functions can only have explicit arguments
+			"result_type", flex_value, -- must be a host_tuple_type
+			"result_info", flex_value,
+		}, },
 		{ "host_wrapped_type$flex", { "type", flex_value } },
 		{ "host_unstrict_wrapped_type$flex", { "type", flex_value } },
-		{
-			"host_user_defined_type$flex",
-			{
-				"id",
-				host_user_defined_id,
-				"family_args",
-				array(flex_value),
-			},
-		},
+		{ "host_user_defined_type$flex", {
+			"id",          host_user_defined_id,
+			"family_args", array(flex_value),
+		}, },
 		{ "host_nil_type$strict" },
 		--NOTE: host_tuple is not considered a host type because it's not a first class value in lua.
 		{ "host_tuple_value$strict", { "elements", array(gen.any_lua_type) } },
@@ -1441,66 +1396,47 @@ gen.define_multi_enum(
 		-- - Most Specific Type (from discussion with open),
 		-- - Val (from julia)
 		{ "singleton$flex", {
-			"supertype",
-			flex_value,
-			"value",
-			flex_value,
+			"supertype", flex_value,
+			"value",     flex_value,
 		} },
 		{ "program_end$flex", { "result", flex_value } },
-		{
-			"program_cont$flex",
-			{
-				"action",
-				unique_id,
-				"argument",
-				flex_value,
-				"continuation",
-				flex_continuation,
-			},
-		},
+		{ "program_cont$flex", {
+			"action",       unique_id,
+			"argument",     flex_value,
+			"continuation", flex_continuation,
+		}, },
 
 		{ "effect_empty$strict" },
 		{ "effect_elem$strict", { "tag", effect_id } },
 		{ "effect_type$strict" },
 		{ "effect_row$strict", {
-			"components",
-			set(unique_id),
+			"components", set(unique_id),
 		} },
 		{ "effect_row_extend$stuck", {
-			"base",
-			flex_value,
-			"rest",
-			flex_value,
+			"base", flex_value,
+			"rest", flex_value,
 		} },
 		{ "effect_row_type$strict" },
 
 		{ "program_type$flex", {
-			"effect_sig",
-			flex_value,
-			"base_type",
-			flex_value,
+			"effect_sig", flex_value,
+			"base_type",  flex_value,
 		} },
 		{ "srel_type$flex", { "target_type", flex_value } },
 		{ "variance_type$flex", { "target_type", flex_value } },
 		{ "intersection_type$flex", {
-			"left",
-			flex_value,
-			"right",
-			flex_value,
+			"left",  flex_value,
+			"right", flex_value,
 		} },
 		{ "union_type$flex", {
-			"left",
-			flex_value,
-			"right",
-			flex_value,
+			"left",  flex_value,
+			"right", flex_value,
 		} },
 
 		{ "free$stuck", { "free", free } },
 		{ "application$stuck", {
-			"f",
-			stuck_value,
-			"arg",
-			flex_value,
+			"f",   stuck_value,
+			"arg", flex_value,
 		} },
 		-- { "enum_elim_stuck", {
 		-- 	"mechanism", value,
@@ -1515,53 +1451,30 @@ gen.define_multi_enum(
 		-- 	"subject",   stuck_value,
 		-- } },
 		{ "tuple_element_access$stuck", {
-			"subject",
-			stuck_value,
-			"index",
-			gen.builtin_number,
+			"subject", stuck_value,
+			"index",   gen.builtin_number,
 		} },
-		{
-			"record_field_access$stuck",
-			{
-				"subject",
-				stuck_value,
-				"field_name",
-				gen.builtin_string,
-			},
-		},
+		{ "record_field_access$stuck", {
+			"subject",    stuck_value,
+			"field_name", gen.builtin_string,
+		}, },
 		{ "host_application$stuck", {
-			"function",
-			gen.any_lua_type,
-			"arg",
-			stuck_value,
+			"function", gen.any_lua_type,
+			"arg",      stuck_value,
 		} },
-		{
-			"host_tuple$stuck",
-			{
-				"leading",
-				array(gen.any_lua_type),
-				"stuck_element",
-				stuck_value,
-				"trailing",
-				array(flex_value), -- either host or neutral
-			},
-		},
-		{
-			"host_if$stuck",
-			{
-				"subject",
-				stuck_value,
-				"consequent",
-				flex_value,
-				"alternate",
-				flex_value,
-			},
-		},
+		{ "host_tuple$stuck", {
+			"leading",       array(gen.any_lua_type),
+			"stuck_element", stuck_value,
+			"trailing",      array(flex_value), -- either host or neutral
+		}, },
+		{ "host_if$stuck", {
+			"subject",    stuck_value,
+			"consequent", flex_value,
+			"alternate",  flex_value,
+		}, },
 		{ "host_intrinsic$stuck", {
-			"source",
-			stuck_value,
-			"start_anchor",
-			anchor_type,
+			"source",       stuck_value,
+			"start_anchor", anchor_type,
 		} },
 		{ "host_wrap$stuck", { "content", stuck_value } },
 		{ "host_unwrap$stuck", { "container", stuck_value } },
