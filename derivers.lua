@@ -327,7 +327,7 @@ return function(self, pp, ...)
     local fields = {
 %s
 	}
-    fields[#fields + 1] = (self["{ID}"] ~= nil) and { "{ID}", self["{ID}"] } or nil
+    -- fields[#fields + 1] = (self["{ID}"] ~= nil) and { "{ID}", self["{ID}"] } or nil
     fields[#fields + 1] = (self["{TRACE}"] ~= nil) and { "{TRACE}", self["{TRACE}"] } or nil
 	pp:record(%q, fields, ...)
 end]]
