@@ -516,11 +516,13 @@ end
 ---@return strict_value
 local function const_combinator(v)
 	local d_info = terms.var_debug("#CONST_PARAM", U.anchor_here())
-	return strict_value.closure(
-		d_info.name,
-		typed_term.bound_variable(1, d_info),
-		terms.strict_runtime_context():append(v, d_info.name, d_info),
-		d_info
+	return U.notail(
+		strict_value.closure(
+			d_info.name,
+			typed_term.bound_variable(1, d_info),
+			terms.strict_runtime_context():append(v, d_info.name, d_info),
+			d_info
+		)
 	)
 end
 
@@ -683,14 +685,14 @@ end
 local orig_strict_closure_constructor = strict_value.closure
 local function strict_closure_constructor_check(param_name, code, capture, debug)
 	verify_closure(code, capture:as_flex())
-	return orig_strict_closure_constructor(param_name, code, capture, debug)
+	return U.notail(orig_strict_closure_constructor(param_name, code, capture, debug))
 end
 strict_value.closure = strict_closure_constructor_check
 
 local orig_stuck_closure_constructor = stuck_value.closure
 local function stuck_closure_constructor_check(param_name, code, capture, debug)
 	verify_closure(code, capture)
-	return orig_stuck_closure_constructor(param_name, code, capture, debug)
+	return U.notail(orig_stuck_closure_constructor(param_name, code, capture, debug))
 end
 stuck_value.closure = stuck_closure_constructor_check
 
@@ -1045,7 +1047,7 @@ function substitute_type_variables(val, debuginfo, index, param_name, ctx, ambie
 	local substituted = substitute_inner(val, mappings, index, ambient_typechecking_context)
 	--print("typed term after substitution (substituted): (typed term follows)")
 	--print(substituted:pretty_print(typechecking_context))
-	return flex_value.closure(param_name, substituted, ctx, debuginfo)
+	return U.notail(flex_value.closure(param_name, substituted, ctx, debuginfo))
 end
 
 ---@param val flex_value
@@ -3509,12 +3511,12 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 	elseif typed_term:is_literal() then
 		return flex_value.strict(typed_term:unwrap_literal())
 	elseif typed_term:is_metavariable() then
-		return flex_value.stuck(stuck_value.free(free.metavariable(typed_term:unwrap_metavariable())))
+		return U.notail(flex_value.stuck(stuck_value.free(free.metavariable(typed_term:unwrap_metavariable()))))
 	elseif typed_term:is_unique() then
-		return flex_value.stuck(stuck_value.free(free.unique(typed_term:unwrap_unique())))
+		return U.notail(flex_value.stuck(stuck_value.free(free.unique(typed_term:unwrap_unique()))))
 	elseif typed_term:is_lambda() then
 		local param_name, param_debug, body, anchor = typed_term:unwrap_lambda()
-		return flex_value.closure(param_name, body, runtime_context, param_debug)
+		return U.notail(flex_value.closure(param_name, body, runtime_context, param_debug))
 	elseif typed_term:is_pi() then
 		local param_type, param_info, result_type, result_info = typed_term:unwrap_pi()
 		local param_type_value = evaluate(param_type, runtime_context, ambient_typechecking_context)

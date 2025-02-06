@@ -1,6 +1,7 @@
 local fibbuf = require "fibonacci-buffer"
 local gen = require "terms-generators"
 local U = require "alicorn-utils"
+local pretty_printer = require "pretty-printer"
 ---@module "terms".typechecking_context_type
 local typechecking_context_type
 ---@module "terms".strict_runtime_context_type
@@ -27,6 +28,28 @@ local strict_value
 local flex_value
 ---@module "types.stuck_value"
 local stuck_value
+
+pretty_printer.hidden_fields.capture = function(capture)
+	if capture.bindings and capture.bindings.len then
+		local prefix = ""
+		if strict_runtime_context_type.value_check(capture) then
+			prefix = "strict "
+		end
+		if flex_runtime_context_type.value_check(capture) then
+			prefix = "flex "
+		end
+		-- FIXME: we can't print all the bindings for a capture currently because we
+		-- capture everything in scope and that's way too verbose
+		-- if that gets fixed to only capture used bindings we can print more
+		-- local ret = {}
+		-- for i = 1, capture.bindings:len() do
+		-- 	ret[i] = capture.bindings:get(i)
+		-- end
+		-- return ret
+		return prefix .. "runtime context with len=" .. tostring(capture.bindings:len())
+	end
+	return capture
+end
 
 -- pretty printing context stuff
 
@@ -586,7 +609,20 @@ end
 ---@param pp PrettyPrint
 function typed_term_override_pretty:literal(pp)
 	local literal_value = self:unwrap_literal()
+
+	pp:_enter()
+
+	pp:unit(pp:set_color())
+	pp:unit("‹")
+	pp:unit(pp:reset_color())
+
 	pp:any(literal_value)
+
+	pp:unit(pp:set_color())
+	pp:unit("›")
+	pp:unit(pp:reset_color())
+
+	pp:_exit()
 end
 
 ---@param pp PrettyPrint

@@ -717,7 +717,10 @@ function M.custom_traceback(err, prefix, level)
 	---@type string[]
 	local s =
 		{ type(err) == "string" and err or ("must pass string or table to error handler, found: " .. tostring(err)) }
-	local i = 3 + (level or 0)
+	if level == nil then
+		level = 0
+	end
+	local i = 3 + level
 	local info = debug.getinfo(i, "Sfln")
 	while info ~= nil do
 		if info.func == M.tag then
