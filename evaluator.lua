@@ -1699,6 +1699,56 @@ function check_concrete(lctx, val, rctx, use, cause)
 		return comparer(lctx, val, rctx, use, cause)
 	end
 
+	if val:is_singleton() and not use:is_singleton() then
+		local val_supertype, _ = val:unwrap_singleton()
+		typechecker_state:queue_subtype(
+			lctx,
+			val_supertype,
+			rctx,
+			use,
+			nestcause("singleton subtype", cause, val_supertype, use, lctx, rctx)
+		)
+		return true
+	end
+
+	if val:is_union_type() then
+		local vala, valb = val:unwrap_union_type()
+		typechecker_state:queue_subtype(
+			lctx,
+			vala,
+			rctx,
+			use,
+			nestcause("union dissasembly", cause, vala, use, lctx, rctx)
+		)
+		typechecker_state:queue_subtype(
+			lctx,
+			valb,
+			rctx,
+			use,
+			nestcause("union dissasembly", cause, valb, use, lctx, rctx)
+		)
+		return true
+	end
+
+	if use:is_intersection_type() then
+		local usea, useb = use:unwrap_intersection_type()
+		typechecker_state:queue_subtype(
+			lctx,
+			val,
+			rctx,
+			usea,
+			nestcause("intersection dissasembly", cause, val, usea, lctx, rctx)
+		)
+		typechecker_state:queue_subtype(
+			lctx,
+			val,
+			rctx,
+			useb,
+			nestcause("intersection dissasembly", cause, val, useb, lctx, rctx)
+		)
+		return true
+	end
+
 	if val:is_stuck() then
 		if use:is_stuck() then
 			if val == use then
@@ -1753,56 +1803,6 @@ function check_concrete(lctx, val, rctx, use, cause)
 					cause
 				)
 		end
-	end
-
-	if val:is_singleton() and not use:is_singleton() then
-		local val_supertype, _ = val:unwrap_singleton()
-		typechecker_state:queue_subtype(
-			lctx,
-			val_supertype,
-			rctx,
-			use,
-			nestcause("singleton subtype", cause, val_supertype, use, lctx, rctx)
-		)
-		return true
-	end
-
-	if val:is_union_type() then
-		local vala, valb = val:unwrap_union_type()
-		typechecker_state:queue_subtype(
-			lctx,
-			vala,
-			rctx,
-			use,
-			nestcause("union dissasembly", cause, vala, use, lctx, rctx)
-		)
-		typechecker_state:queue_subtype(
-			lctx,
-			valb,
-			rctx,
-			use,
-			nestcause("union dissasembly", cause, valb, use, lctx, rctx)
-		)
-		return true
-	end
-
-	if use:is_intersection_type() then
-		local usea, useb = use:unwrap_intersection_type()
-		typechecker_state:queue_subtype(
-			lctx,
-			val,
-			rctx,
-			usea,
-			nestcause("intersection dissasembly", cause, val, usea, lctx, rctx)
-		)
-		typechecker_state:queue_subtype(
-			lctx,
-			val,
-			rctx,
-			useb,
-			nestcause("intersection dissasembly", cause, val, useb, lctx, rctx)
-		)
-		return true
 	end
 
 	if not concrete_comparers[valkind] then
