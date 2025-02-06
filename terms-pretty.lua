@@ -897,7 +897,7 @@ function flex_value_override_pretty:closure(pp)
 	pp:_enter()
 
 	pp:unit(pp:set_color())
-	pp:unit(self._name)
+	pp:unit(getmetatable(self)._name)
 	pp:unit(".closure ")
 	pp:unit(pp:reset_color())
 
@@ -1403,7 +1403,7 @@ function flex_value_override_pretty:pi(pp)
 	pp:_enter()
 
 	pp:unit(pp:set_color())
-	pp:unit(self._name)
+	pp:unit(getmetatable(self)._name)
 	pp:unit(".Π <")
 	pp:unit(pp:reset_color())
 	pp:any(param_info)
@@ -1511,7 +1511,7 @@ function flex_value_override_pretty:host_function_type(pp)
 	pp:_enter()
 
 	pp:unit(pp:set_color())
-	pp:unit(self._name)
+	pp:unit(getmetatable(self)._name)
 	pp:unit(".host-Π <")
 	pp:unit(pp:reset_color())
 	pp:any(result_info)
@@ -1894,7 +1894,7 @@ function flex_value_override_pretty:tuple_type(pp)
 	pp:_enter()
 
 	pp:unit(pp:set_color())
-	pp:unit(self._name)
+	pp:unit(getmetatable(self)._name)
 	pp:unit(".tuple_type[")
 	pp:unit(pp:reset_color())
 
@@ -1920,7 +1920,7 @@ function flex_value_override_pretty:host_tuple_type(pp)
 	pp:_enter()
 
 	pp:unit(pp:set_color())
-	pp:unit(self._name)
+	pp:unit(getmetatable(self)._name)
 	pp:unit(".host_tuple_type[")
 	pp:unit(pp:reset_color())
 
@@ -1945,7 +1945,7 @@ function flex_value_override_pretty:enum_value(pp)
 	pp:_enter()
 
 	pp:unit(pp:set_color())
-	pp:unit(self._name)
+	pp:unit(getmetatable(self)._name)
 	pp:unit(".◬")
 	pp:unit(constructor)
 

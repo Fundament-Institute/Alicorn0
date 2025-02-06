@@ -688,7 +688,7 @@ inferrable_term:define_enum("inferrable", {
 	{ "enum_desc_cons", {
 		"variants", map(gen.builtin_string, inferrable_term),
 		"rest",     inferrable_term,
-} },
+	} },
 	{ "enum_elim", {
 		"subject",   inferrable_term,
 		"mechanism", inferrable_term,
@@ -904,6 +904,7 @@ typed_term:define_enum("typed", {
 	{ "bound_variable", { "index", gen.builtin_number, "debug", gen.any_lua_type  } }, --TODO: switch the debug type to use the new structured var_debug
 	{ "literal", { "literal_value", strict_value } },
 	{ "metavariable", { "metavariable", metavariable_type } },
+	{ "unique", { "id", unique_id } },
 	{ "lambda", {
 		"param_name", gen.builtin_string,
 		"param_debug", var_debug,

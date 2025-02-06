@@ -28,6 +28,13 @@ function typed:unwrap_metavariable() end
 ---@return Metavariable metavariable
 function typed:as_metavariable() end
 ---@return boolean
+function typed:is_unique() end
+---@return table id
+function typed:unwrap_unique() end
+---@return boolean
+---@return table id
+function typed:as_unique() end
+---@return boolean
 function typed:is_lambda() end
 ---@return string param_name
 ---@return var_debug param_debug
@@ -546,6 +553,7 @@ function typed:as_constrained_type() end
 ---@field bound_variable fun(index: number, debug: any): typed
 ---@field literal fun(literal_value: strict_value): typed
 ---@field metavariable fun(metavariable: Metavariable): typed
+---@field unique fun(id: table): typed
 ---@field lambda fun(param_name: string, param_debug: var_debug, body: typed, start_anchor: Anchor): typed
 ---@field pi fun(param_type: typed, param_info: typed, result_type: typed, result_info: typed): typed
 ---@field application fun(f: typed, arg: typed): typed

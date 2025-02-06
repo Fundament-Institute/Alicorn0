@@ -447,14 +447,14 @@ local TupleDescRelation = setmetatable({
 			-- i have considered exploiting the linked-list structure of tuple desc for recursive
 			-- checking, but doing it naively won't work because the unique (representing the tuple
 			-- value) should be the same across the whole desc
-			local unique = { debug = "TupleDescRelation.constrain" .. U.here() }
-			local placeholder = flex_value.stuck(stuck_value.free(free.unique(unique)))
+			local unique = { debug = "TupleDescRelation.constrain" .. U.here() .. " value_placeholder" }
+			local value_placeholder = flex_value.stuck(stuck_value.free(free.unique(unique)))
 			local ok, tuple_types_val, tuple_types_use, tuple_vals, n = infer_tuple_type_unwrapped2(
 				flex_value.tuple_type(val),
 				l_ctx,
 				flex_value.tuple_type(use),
-				l_ctx,
-				placeholder
+				r_ctx,
+				value_placeholder
 			)
 
 			if not ok then
@@ -834,6 +834,7 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 			mapping = typed_term.bound_variable(lookup, info)
 		elseif free:is_unique() then
 			lookup = free:unwrap_unique()
+			default_mapping = typed_term.unique(lookup)
 		elseif free:is_metavariable() then
 			local mv = free:unwrap_metavariable()
 
@@ -3509,6 +3510,8 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		return flex_value.strict(typed_term:unwrap_literal())
 	elseif typed_term:is_metavariable() then
 		return flex_value.stuck(stuck_value.free(free.metavariable(typed_term:unwrap_metavariable())))
+	elseif typed_term:is_unique() then
+		return flex_value.stuck(stuck_value.free(free.unique(typed_term:unwrap_unique())))
 	elseif typed_term:is_lambda() then
 		local param_name, param_debug, body, anchor = typed_term:unwrap_lambda()
 		return flex_value.closure(param_name, body, runtime_context, param_debug)
