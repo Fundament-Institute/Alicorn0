@@ -5,19 +5,19 @@
 flex_value = {}
 
 ---@return boolean
-function flex_value:is_strict() end
----@return strict_value strict
-function flex_value:unwrap_strict() end
----@return boolean
----@return strict_value strict
-function flex_value:as_strict() end
----@return boolean
 function flex_value:is_stuck() end
 ---@return stuck_value stuck
 function flex_value:unwrap_stuck() end
 ---@return boolean
 ---@return stuck_value stuck
 function flex_value:as_stuck() end
+---@return boolean
+function flex_value:is_strict() end
+---@return strict_value strict
+function flex_value:unwrap_strict() end
+---@return boolean
+---@return strict_value strict
+function flex_value:as_strict() end
 ---@return boolean
 function flex_value:is_visibility_type() end
 ---@return nil
@@ -523,8 +523,8 @@ function flex_value:as_host_unwrap() end
 
 ---@class (exact) flex_valueType: EnumType
 ---@field define_enum fun(self: flex_valueType, name: string, variants: Variants): flex_valueType
----@field strict fun(strict: strict_value): flex_value
 ---@field stuck fun(stuck: stuck_value): flex_value
+---@field strict fun(strict: strict_value): flex_value
 ---@field visibility_type flex_value
 ---@field visibility fun(visibility: visibility): flex_value
 ---@field param_info_type flex_value

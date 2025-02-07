@@ -733,10 +733,10 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		res.original_name = val.original_name
 		return res
 	elseif val:is_closure() then
-		local param_name, code, capture, debuginfo = val:unwrap_closure()
+		local param_name, code, capture, capture_info, param_info = val:unwrap_closure()
 
 		local capture_sub = substitute_inner(capture, mappings, context_len, ambient_typechecking_context)
-		local res = typed_term.lambda(param_name, debuginfo, code, capture_sub, debuginfo.source)
+		local res = typed_term.lambda(param_name, param_info, code, capture_sub, capture_info, param_info.source)
 		return res
 	elseif val:is_operative_value() then
 		local userdata = val:unwrap_operative_value()
@@ -2420,13 +2420,32 @@ local function infer_impl(
 		local inner_context = typechecking_context:append(param_name, param_type, nil, param_debug)
 		local ok, purity_usages, purity_term = check(purity, inner_context, flex_value.strict(terms.host_purity_type))
 		if not ok then
+			---@cast purity_usages string
 			return false, purity_usages
 		end
+		---@cast purity_usages -string
 		local ok, body_type, body_usages, body_term = infer(body, inner_context)
 		if not ok then
 			return false, body_type
 		end
-		-- TODO: construct a tuple containing everything used by the closure, substitute the body term to replace bound variable references with tuple accesses
+
+		local elements = typed_array()
+		local mappings = {}
+		local capture_info = terms.var_debug("#capture", start_anchor)
+
+		for i, v in ipairs(body_usages) do
+			if i <= typechecking_context:len() and v > 0 then
+				local _, info = typechecking_context:get_runtime_context():get(i)
+				elements:append(typed_term.bound_variable(i, info))
+				mappings[i] = typed_term.tuple_element_access(typed_term.bound_variable(1, capture_info), #elements)
+			end
+		end
+
+		local capture = typed_term.tuple_cons(elements)
+
+		local body_value = evaluate(body_term, typechecking_context.runtime_context, typechecking_context)
+
+		local body_term_sub = substitute_inner(body_value, mappings, 2, typechecking_context)
 
 		local result_type = substitute_type_variables(
 			body_type,
@@ -2455,7 +2474,8 @@ local function infer_impl(
 			result_info
 		)
 		lambda_type.original_name = param_name
-		local lambda_term = typed_term.lambda(param_name .. "^", param_debug, body_term, start_anchor) -- TODO: add constructed tuple term as the capture term
+		local lambda_term =
+			typed_term.lambda(param_name .. "^", param_debug, body_term_sub, capture, capture_info, start_anchor)
 		return true, lambda_type, lambda_usages, lambda_term
 	elseif inferrable_term:is_pi() then
 		local param_type, param_info, result_type, result_info = inferrable_term:unwrap_pi()
