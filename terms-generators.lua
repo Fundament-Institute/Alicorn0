@@ -116,6 +116,7 @@ end
 ---@field __eq fun(left: RecordValue, right: RecordValue): boolean
 ---@field __index table
 ---@field __tostring function(RecordValue): string
+---@overload fun(...): RecordValue
 
 ---@class RecordValue: Value
 ---@field pretty_print fun(RecordValue, ...)
@@ -225,6 +226,7 @@ end
 ---@field __eq fun(left: EnumValue, right: EnumValue): boolean
 ---@field __index table
 ---@field __tostring function(EnumValue): string
+---@overload fun(...): EnumValue
 
 ---@class EnumValue: Value
 ---@field pretty_print fun(EnumValue, ...) : string
@@ -511,6 +513,7 @@ end
 ---@field __newindex function
 ---@field __pairs function(MapValue): function, MapValue, Value?
 ---@field __tostring function(MapValue): string
+---@overload fun(...): MapValue
 
 ---@class MapValue: Value
 ---@field _map { [Value]: Value }
@@ -664,6 +667,7 @@ define_map = U.memoize(define_map)
 ---@field __index table
 ---@field __pairs function(SetValue): function, SetValue, Value?
 ---@field __tostring function(SetValue): string
+---@overload fun(...): SetValue
 
 ---@class SetValue: Value
 ---@field _set { [Value]: boolean }
@@ -823,6 +827,7 @@ define_set = U.memoize(define_set)
 ---@field __ipairs fun(ArrayValue): function, ArrayValue, integer
 ---@field __len fun(ArrayValue): integer
 ---@field __tostring fun(ArrayValue): string
+---@overload fun(...): ArrayValue
 
 ---@class ArrayValue: Value
 ---@field n integer
