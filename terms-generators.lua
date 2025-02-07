@@ -111,12 +111,12 @@ local function validate_params_types(kind, params, params_types)
 end
 
 ---@class RecordType: Type
+---@overload fun(...): RecordValue
 ---@field derive fun(self: RecordType, deriver: Deriver, ...)
 ---@field _kind string
 ---@field __eq fun(left: RecordValue, right: RecordValue): boolean
 ---@field __index table
 ---@field __tostring function(RecordValue): string
----@overload fun(...): RecordValue
 
 ---@class RecordValue: Value
 ---@field pretty_print fun(RecordValue, ...)
@@ -221,12 +221,12 @@ local function gen_unit(self, kind)
 end
 
 ---@class EnumType: Type
+---@overload fun(...): EnumValue
 ---@field derive fun(self: EnumType, deriver: Deriver, ...)
 ---@field _name string
 ---@field __eq fun(left: EnumValue, right: EnumValue): boolean
 ---@field __index table
 ---@field __tostring function(EnumValue): string
----@overload fun(...): EnumValue
 
 ---@class EnumValue: Value
 ---@field pretty_print fun(EnumValue, ...) : string
@@ -513,7 +513,6 @@ end
 ---@field __newindex function
 ---@field __pairs function(MapValue): function, MapValue, Value?
 ---@field __tostring function(MapValue): string
----@overload fun(...): MapValue
 
 ---@class MapValue: Value
 ---@field _map { [Value]: Value }
@@ -667,7 +666,6 @@ define_map = U.memoize(define_map)
 ---@field __index table
 ---@field __pairs function(SetValue): function, SetValue, Value?
 ---@field __tostring function(SetValue): string
----@overload fun(...): SetValue
 
 ---@class SetValue: Value
 ---@field _set { [Value]: boolean }
@@ -827,9 +825,8 @@ define_set = U.memoize(define_set)
 ---@field __ipairs fun(ArrayValue): function, ArrayValue, integer
 ---@field __len fun(ArrayValue): integer
 ---@field __tostring fun(ArrayValue): string
----@overload fun(...): ArrayValue
 
----@class ArrayValue: Value
+---@class ArrayValue<T>: Value, { [integer]: T }
 ---@field n integer
 ---@field array Value[]
 ---@field ipairs fun(ArrayValue): function, ArrayValue, integer
