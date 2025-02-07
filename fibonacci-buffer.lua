@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
+
 -- persistent binary compacting buffer
 -- for brevity, referred to as a fibonacci buffer.
 -- in the case where the only methods implemented are append and get,

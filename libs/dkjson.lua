@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: MIT
+-- SPDX-FileCopyrightText: Copyright (C) 2010-2024 David Heiko Kolf
 -- Module options:
 local always_use_lpeg = true
 local register_global_module_table = false

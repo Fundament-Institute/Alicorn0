@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
+
 local _ = require "lua-ext" -- has side-effect of loading string.chars
 
 local function default_unknown(c)

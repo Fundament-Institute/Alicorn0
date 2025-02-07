@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
 local derivers = require "derivers"
 local pretty_printer = require "pretty-printer"
 local traits = require "traits"

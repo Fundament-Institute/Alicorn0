@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
+
 [package]
 name = "alicorn"
 version = "0.1.0"
@@ -10,9 +13,7 @@ Rust embedding of the Alicorn compiler
 homepage = "https://github.com/Fundament-Software/alicorn0"
 repository = "https://github.com/Fundament-Software/alicorn0"
 readme = "README.md"
-keywords = [
-  "compiler"
-]
+keywords = ["compiler"]
 license = "Apache-2.0"
 links = "alicorn"
 

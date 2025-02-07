@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
 -- provide ways to construct all terms
 -- checker untyped term and typechecking context -> typed term
 -- evaluator takes typed term and runtime context -> value
