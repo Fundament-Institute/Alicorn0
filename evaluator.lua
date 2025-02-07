@@ -105,6 +105,7 @@ function ConstraintError.new(desc, left, l_ctx, op, right, r_ctx, cause)
 	}, constraint_error_mt)
 end
 
+local strict_value_array = gen.declare_array(strict_value)
 local empty_tuple = terms.strict_value.tuple_value(strict_value_array())
 
 ---@param luafunc function
@@ -122,7 +123,7 @@ local function luatovalue(luafunc)
 		local param_dbg = terms.var_debug(param_name, U.anchor_here())
 		parameters:append(param_name)
 		params_dbg:append(param_dbg)
-		new_body:append(typed.bound_variable(i + 1, param_dbg))
+		new_body:append(typed.bound_variable(i + 2, param_dbg))
 	end
 
 	return strict_value.closure(
@@ -132,12 +133,13 @@ local function luatovalue(luafunc)
 			typed.tuple_elim(
 				parameters,
 				params_dbg,
-				typed.bound_variable(1, arg_dbg),
+				typed.bound_variable(2, arg_dbg),
 				len,
 				typed.host_tuple_cons(new_body)
 			)
 		),
-		terms.strict_runtime_context(),
+		empty_tuple,
+		terms.var_debug("#capture", U.anchor_here()),
 		arg_dbg
 	)
 end
