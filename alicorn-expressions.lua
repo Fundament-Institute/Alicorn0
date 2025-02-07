@@ -34,6 +34,9 @@ local param_info_explicit = strict_value.param_info(strict_value.visibility(visi
 local result_info_pure = strict_value.result_info(result_info(purity.pure))
 local result_info_effectful = strict_value.result_info(result_info(purity.effectful))
 
+local strict_value_array = gen.declare_array(strict_value)
+local empty_tuple = terms.strict_value.tuple_value(strict_value_array())
+
 local evaluator = require "evaluator"
 local const_combinator = evaluator.const_combinator
 local infer = evaluator.infer
@@ -1250,14 +1253,14 @@ local function host_operative(fn, name)
 	-- this way it can take a normal tuple and return a normal tuple
 	local nparams = 4
 	local tuple_conv_elements = typed_array(
-		typed_term.bound_variable(2, result_unpack_dbg[1]),
-		typed_term.bound_variable(3, result_unpack_dbg[2])
+		typed_term.bound_variable(3, result_unpack_dbg[1]),
+		typed_term.bound_variable(4, result_unpack_dbg[2])
 	)
 	local host_tuple_conv_elements = typed_array()
 	for i = 1, nparams do
-		-- + 1 because variable 1 is the argument tuple
+		-- + 2 because variable 2 is the argument tuple
 		-- all variables that follow are the destructured tuple
-		local var = typed_term.bound_variable(i + 1, arg_unpack_dbg[i])
+		local var = typed_term.bound_variable(i + 2, arg_unpack_dbg[i])
 		host_tuple_conv_elements:append(var)
 	end
 	local tuple_conv = typed_term.tuple_cons(tuple_conv_elements)
@@ -1266,7 +1269,7 @@ local function host_operative(fn, name)
 	local tuple_to_host_tuple = typed_term.tuple_elim(
 		param_names,
 		arg_unpack_dbg,
-		typed_term.bound_variable(1, args_dbg),
+		typed_term.bound_variable(2, args_dbg),
 		nparams,
 		host_tuple_conv
 	)
@@ -1276,8 +1279,13 @@ local function host_operative(fn, name)
 		typed_term.tuple_elim(result_names, result_unpack_dbg, tuple_to_host_tuple_fn, 2, tuple_conv)
 	-- 3: wrap it in a closure with an empty capture, not a typed lambda
 	-- this ensures variable 1 is the argument tuple
-	local value_fn =
-		strict_value.closure("#" .. name .. "_PARAM", tuple_to_tuple_fn, terms.strict_runtime_context(), args_dbg)
+	local value_fn = strict_value.closure(
+		"#" .. name .. "_PARAM",
+		tuple_to_tuple_fn,
+		empty_tuple,
+		var_debug("#capture", U.anchor_here()),
+		args_dbg
+	)
 
 	local userdata_type = strict_value.tuple_type(terms.empty:unwrap_strict())
 	return inferrable_term.typed(

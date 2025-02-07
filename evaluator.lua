@@ -2430,7 +2430,7 @@ local function infer_impl(
 		end
 
 		local elements = typed_array()
-		local mappings = {}
+		local mappings = { [typechecking_context:len() + 1] = typed_term.bound_variable(2, param_dbg) }
 		local capture_info = terms.var_debug("#capture", start_anchor)
 
 		for i, v in ipairs(body_usages) do
