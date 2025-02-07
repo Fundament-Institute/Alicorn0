@@ -17,13 +17,13 @@ function binding:unwrap_let() end
 function binding:as_let() end
 ---@return boolean
 function binding:is_tuple_elim() end
----@return ArrayValue names
----@return ArrayValue debug
+---@return ArrayValue<string> names
+---@return ArrayValue<var_debug> debug
 ---@return inferrable subject
 function binding:unwrap_tuple_elim() end
 ---@return boolean
----@return ArrayValue names
----@return ArrayValue debug
+---@return ArrayValue<string> names
+---@return ArrayValue<var_debug> debug
 ---@return inferrable subject
 function binding:as_tuple_elim() end
 ---@return boolean
@@ -54,7 +54,7 @@ function binding:as_program_sequence() end
 ---@class (exact) bindingType: EnumType
 ---@field define_enum fun(self: bindingType, name: string, variants: Variants): bindingType
 ---@field let fun(name: string, debug: var_debug, expr: inferrable): binding
----@field tuple_elim fun(names: ArrayValue, debug: ArrayValue, subject: inferrable): binding
+---@field tuple_elim fun(names: ArrayValue<string>, debug: ArrayValue<var_debug>, subject: inferrable): binding
 ---@field annotated_lambda fun(param_name: string, param_annotation: inferrable, start_anchor: Anchor, visible: visibility, pure: checkable): binding
 ---@field program_sequence fun(first: inferrable, start_anchor: Anchor): binding
 return {}

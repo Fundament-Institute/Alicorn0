@@ -478,6 +478,7 @@ local function speculate_pi_type(env, metaval)
 				terms.constraintcause.primitive("Speculating on pi type", U.anchor_here())
 			)
 			if not ok then
+				---@cast err -nil
 				return false, err
 			end
 
@@ -485,10 +486,12 @@ local function speculate_pi_type(env, metaval)
 		end)
 
 		if ok then
+			---@cast res -nil
 			return ok, res
 		end
 	end
 
+	---@cast res -nil
 	return ok, res
 end
 

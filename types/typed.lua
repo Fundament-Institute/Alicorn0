@@ -132,22 +132,22 @@ function typed:unwrap_prop() end
 function typed:as_prop() end
 ---@return boolean
 function typed:is_tuple_cons() end
----@return ArrayValue elements
+---@return ArrayValue<typed> elements
 function typed:unwrap_tuple_cons() end
 ---@return boolean
----@return ArrayValue elements
+---@return ArrayValue<typed> elements
 function typed:as_tuple_cons() end
 ---@return boolean
 function typed:is_tuple_elim() end
----@return ArrayValue names
----@return ArrayValue debug
+---@return ArrayValue<string> names
+---@return ArrayValue<var_debug> debug
 ---@return typed subject
 ---@return number length
 ---@return typed body
 function typed:unwrap_tuple_elim() end
 ---@return boolean
----@return ArrayValue names
----@return ArrayValue debug
+---@return ArrayValue<string> names
+---@return ArrayValue<var_debug> debug
 ---@return typed subject
 ---@return number length
 ---@return typed body
@@ -194,12 +194,12 @@ function typed:as_record_extend() end
 ---@return boolean
 function typed:is_record_elim() end
 ---@return typed subject
----@return ArrayValue field_names
+---@return ArrayValue<string> field_names
 ---@return typed body
 function typed:unwrap_record_elim() end
 ---@return boolean
 ---@return typed subject
----@return ArrayValue field_names
+---@return ArrayValue<string> field_names
 ---@return typed body
 function typed:as_record_elim() end
 ---@return boolean
@@ -317,19 +317,19 @@ function typed:unwrap_operative_type_cons() end
 function typed:as_operative_type_cons() end
 ---@return boolean
 function typed:is_host_tuple_cons() end
----@return ArrayValue elements
+---@return ArrayValue<typed> elements
 function typed:unwrap_host_tuple_cons() end
 ---@return boolean
----@return ArrayValue elements
+---@return ArrayValue<typed> elements
 function typed:as_host_tuple_cons() end
 ---@return boolean
 function typed:is_host_user_defined_type_cons() end
 ---@return { name: string } id
----@return ArrayValue family_args
+---@return ArrayValue<typed> family_args
 function typed:unwrap_host_user_defined_type_cons() end
 ---@return boolean
 ---@return { name: string } id
----@return ArrayValue family_args
+---@return ArrayValue<typed> family_args
 function typed:as_host_user_defined_type_cons() end
 ---@return boolean
 function typed:is_host_tuple_type() end
@@ -394,11 +394,11 @@ function typed:as_host_unstrict_unwrap() end
 ---@return boolean
 function typed:is_host_user_defined_type() end
 ---@return { name: string } id
----@return ArrayValue family_args
+---@return ArrayValue<typed> family_args
 function typed:unwrap_host_user_defined_type() end
 ---@return boolean
 ---@return { name: string } id
----@return ArrayValue family_args
+---@return ArrayValue<typed> family_args
 function typed:as_host_user_defined_type() end
 ---@return boolean
 function typed:is_host_if() end
@@ -422,13 +422,13 @@ function typed:unwrap_host_intrinsic() end
 function typed:as_host_intrinsic() end
 ---@return boolean
 function typed:is_range() end
----@return ArrayValue lower_bounds
----@return ArrayValue upper_bounds
+---@return ArrayValue<typed> lower_bounds
+---@return ArrayValue<typed> upper_bounds
 ---@return typed relation
 function typed:unwrap_range() end
 ---@return boolean
----@return ArrayValue lower_bounds
----@return ArrayValue upper_bounds
+---@return ArrayValue<typed> lower_bounds
+---@return ArrayValue<typed> upper_bounds
 ---@return typed relation
 function typed:as_range() end
 ---@return boolean
@@ -467,20 +467,20 @@ function typed:unwrap_program_invoke() end
 function typed:as_program_invoke() end
 ---@return boolean
 function typed:is_effect_type() end
----@return ArrayValue components
+---@return ArrayValue<typed> components
 ---@return typed base
 function typed:unwrap_effect_type() end
 ---@return boolean
----@return ArrayValue components
+---@return ArrayValue<typed> components
 ---@return typed base
 function typed:as_effect_type() end
 ---@return boolean
 function typed:is_effect_row() end
----@return ArrayValue elems
+---@return ArrayValue<typed> elems
 ---@return typed rest
 function typed:unwrap_effect_row() end
 ---@return boolean
----@return ArrayValue elems
+---@return ArrayValue<typed> elems
 ---@return typed rest
 function typed:as_effect_row() end
 ---@return boolean
@@ -544,11 +544,11 @@ function typed:unwrap_union_type() end
 function typed:as_union_type() end
 ---@return boolean
 function typed:is_constrained_type() end
----@return ArrayValue constraints
+---@return ArrayValue<constraintelem> constraints
 ---@return TypecheckingContext ctx
 function typed:unwrap_constrained_type() end
 ---@return boolean
----@return ArrayValue constraints
+---@return ArrayValue<constraintelem> constraints
 ---@return TypecheckingContext ctx
 function typed:as_constrained_type() end
 
@@ -568,14 +568,14 @@ function typed:as_constrained_type() end
 ---@field level_max fun(level_a: typed, level_b: typed): typed
 ---@field star fun(level: number, depth: number): typed
 ---@field prop fun(level: number): typed
----@field tuple_cons fun(elements: ArrayValue): typed
----@field tuple_elim fun(names: ArrayValue, debug: ArrayValue, subject: typed, length: number, body: typed): typed
+---@field tuple_cons fun(elements: ArrayValue<typed>): typed
+---@field tuple_elim fun(names: ArrayValue<string>, debug: ArrayValue<var_debug>, subject: typed, length: number, body: typed): typed
 ---@field tuple_element_access fun(subject: typed, index: number): typed
 ---@field tuple_type fun(desc: typed): typed
 ---@field tuple_desc_type fun(universe: typed): typed
 ---@field record_cons fun(fields: MapValue): typed
 ---@field record_extend fun(base: typed, fields: MapValue): typed
----@field record_elim fun(subject: typed, field_names: ArrayValue, body: typed): typed
+---@field record_elim fun(subject: typed, field_names: ArrayValue<string>, body: typed): typed
 ---@field enum_cons fun(constructor: string, arg: typed): typed
 ---@field enum_elim fun(subject: typed, mechanism: typed): typed
 ---@field enum_rec_elim fun(subject: typed, mechanism: typed): typed
@@ -589,8 +589,8 @@ function typed:as_constrained_type() end
 ---@field object_elim fun(subject: typed, mechanism: typed): typed
 ---@field operative_cons fun(userdata: typed): typed
 ---@field operative_type_cons fun(handler: typed, userdata_type: typed): typed
----@field host_tuple_cons fun(elements: ArrayValue): typed
----@field host_user_defined_type_cons fun(id: { name: string }, family_args: ArrayValue): typed
+---@field host_tuple_cons fun(elements: ArrayValue<typed>): typed
+---@field host_user_defined_type_cons fun(id: { name: string }, family_args: ArrayValue<typed>): typed
 ---@field host_tuple_type fun(desc: typed): typed
 ---@field host_function_type fun(param_type: typed, result_type: typed, result_info: typed): typed
 ---@field host_wrapped_type fun(type: typed): typed
@@ -599,16 +599,16 @@ function typed:as_constrained_type() end
 ---@field host_unwrap fun(container: typed): typed
 ---@field host_unstrict_wrap fun(content: typed): typed
 ---@field host_unstrict_unwrap fun(container: typed): typed
----@field host_user_defined_type fun(id: { name: string }, family_args: ArrayValue): typed
+---@field host_user_defined_type fun(id: { name: string }, family_args: ArrayValue<typed>): typed
 ---@field host_if fun(subject: typed, consequent: typed, alternate: typed): typed
 ---@field host_intrinsic fun(source: typed, start_anchor: Anchor): typed
----@field range fun(lower_bounds: ArrayValue, upper_bounds: ArrayValue, relation: typed): typed
+---@field range fun(lower_bounds: ArrayValue<typed>, upper_bounds: ArrayValue<typed>, relation: typed): typed
 ---@field singleton fun(supertype: typed, value: typed): typed
 ---@field program_sequence fun(first: typed, continue: typed): typed
 ---@field program_end fun(result: typed): typed
 ---@field program_invoke fun(effect_tag: typed, effect_arg: typed): typed
----@field effect_type fun(components: ArrayValue, base: typed): typed
----@field effect_row fun(elems: ArrayValue, rest: typed): typed
+---@field effect_type fun(components: ArrayValue<typed>, base: typed): typed
+---@field effect_row fun(elems: ArrayValue<typed>, rest: typed): typed
 ---@field effect_row_resolve fun(elems: SetValue, rest: typed): typed
 ---@field program_type fun(effect_type: typed, result_type: typed): typed
 ---@field srel_type fun(target_type: typed): typed
@@ -616,5 +616,5 @@ function typed:as_constrained_type() end
 ---@field variance_cons fun(positive: typed, srel: typed): typed
 ---@field intersection_type fun(left: typed, right: typed): typed
 ---@field union_type fun(left: typed, right: typed): typed
----@field constrained_type fun(constraints: ArrayValue, ctx: TypecheckingContext): typed
+---@field constrained_type fun(constraints: ArrayValue<constraintelem>, ctx: TypecheckingContext): typed
 return {}

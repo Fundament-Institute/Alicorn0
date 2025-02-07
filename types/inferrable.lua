@@ -16,12 +16,12 @@ function inferrable:as_bound_variable() end
 ---@return boolean
 function inferrable:is_typed() end
 ---@return typed type
----@return ArrayValue usage_counts
+---@return ArrayValue<number> usage_counts
 ---@return typed typed_term
 function inferrable:unwrap_typed() end
 ---@return boolean
 ---@return typed type
----@return ArrayValue usage_counts
+---@return ArrayValue<number> usage_counts
 ---@return typed typed_term
 function inferrable:as_typed() end
 ---@return boolean
@@ -65,23 +65,23 @@ function inferrable:unwrap_application() end
 function inferrable:as_application() end
 ---@return boolean
 function inferrable:is_tuple_cons() end
----@return ArrayValue elements
----@return ArrayValue debug
+---@return ArrayValue<inferrable> elements
+---@return ArrayValue<var_debug> debug
 function inferrable:unwrap_tuple_cons() end
 ---@return boolean
----@return ArrayValue elements
----@return ArrayValue debug
+---@return ArrayValue<inferrable> elements
+---@return ArrayValue<var_debug> debug
 function inferrable:as_tuple_cons() end
 ---@return boolean
 function inferrable:is_tuple_elim() end
----@return ArrayValue names
----@return ArrayValue debug
+---@return ArrayValue<string> names
+---@return ArrayValue<var_debug> debug
 ---@return inferrable subject
 ---@return inferrable body
 function inferrable:unwrap_tuple_elim() end
 ---@return boolean
----@return ArrayValue names
----@return ArrayValue debug
+---@return ArrayValue<string> names
+---@return ArrayValue<var_debug> debug
 ---@return inferrable subject
 ---@return inferrable body
 function inferrable:as_tuple_elim() end
@@ -102,12 +102,12 @@ function inferrable:as_record_cons() end
 ---@return boolean
 function inferrable:is_record_elim() end
 ---@return inferrable subject
----@return ArrayValue field_names
+---@return ArrayValue<string> field_names
 ---@return inferrable body
 function inferrable:unwrap_record_elim() end
 ---@return boolean
 ---@return inferrable subject
----@return ArrayValue field_names
+---@return ArrayValue<string> field_names
 ---@return inferrable body
 function inferrable:as_record_elim() end
 ---@return boolean
@@ -250,21 +250,21 @@ function inferrable:unwrap_annotated() end
 function inferrable:as_annotated() end
 ---@return boolean
 function inferrable:is_host_tuple_cons() end
----@return ArrayValue elements
----@return ArrayValue debug
+---@return ArrayValue<inferrable> elements
+---@return ArrayValue<var_debug> debug
 function inferrable:unwrap_host_tuple_cons() end
 ---@return boolean
----@return ArrayValue elements
----@return ArrayValue debug
+---@return ArrayValue<inferrable> elements
+---@return ArrayValue<var_debug> debug
 function inferrable:as_host_tuple_cons() end
 ---@return boolean
 function inferrable:is_host_user_defined_type_cons() end
 ---@return { name: string } id
----@return ArrayValue family_args
+---@return ArrayValue<inferrable> family_args
 function inferrable:unwrap_host_user_defined_type_cons() end
 ---@return boolean
 ---@return { name: string } id
----@return ArrayValue family_args
+---@return ArrayValue<inferrable> family_args
 function inferrable:as_host_user_defined_type_cons() end
 ---@return boolean
 function inferrable:is_host_tuple_type() end
@@ -379,15 +379,15 @@ function inferrable:as_program_type() end
 ---@class (exact) inferrableType: EnumType
 ---@field define_enum fun(self: inferrableType, name: string, variants: Variants): inferrableType
 ---@field bound_variable fun(index: number, debug: var_debug): inferrable
----@field typed fun(type: typed, usage_counts: ArrayValue, typed_term: typed): inferrable
+---@field typed fun(type: typed, usage_counts: ArrayValue<number>, typed_term: typed): inferrable
 ---@field annotated_lambda fun(param_name: string, param_annotation: inferrable, body: inferrable, start_anchor: Anchor, visible: visibility, pure: checkable): inferrable
 ---@field pi fun(param_type: inferrable, param_info: checkable, result_type: inferrable, result_info: checkable): inferrable
 ---@field application fun(f: inferrable, arg: checkable): inferrable
----@field tuple_cons fun(elements: ArrayValue, debug: ArrayValue): inferrable
----@field tuple_elim fun(names: ArrayValue, debug: ArrayValue, subject: inferrable, body: inferrable): inferrable
+---@field tuple_cons fun(elements: ArrayValue<inferrable>, debug: ArrayValue<var_debug>): inferrable
+---@field tuple_elim fun(names: ArrayValue<string>, debug: ArrayValue<var_debug>, subject: inferrable, body: inferrable): inferrable
 ---@field tuple_type fun(desc: inferrable): inferrable
 ---@field record_cons fun(fields: MapValue): inferrable
----@field record_elim fun(subject: inferrable, field_names: ArrayValue, body: inferrable): inferrable
+---@field record_elim fun(subject: inferrable, field_names: ArrayValue<string>, body: inferrable): inferrable
 ---@field enum_cons fun(constructor: string, arg: inferrable): inferrable
 ---@field enum_desc_cons fun(variants: MapValue, rest: inferrable): inferrable
 ---@field enum_elim fun(subject: inferrable, mechanism: inferrable): inferrable
@@ -404,8 +404,8 @@ function inferrable:as_program_type() end
 ---@field level_suc fun(previous_level: inferrable): inferrable
 ---@field level_max fun(level_a: inferrable, level_b: inferrable): inferrable
 ---@field annotated fun(annotated_term: checkable, annotated_type: inferrable): inferrable
----@field host_tuple_cons fun(elements: ArrayValue, debug: ArrayValue): inferrable
----@field host_user_defined_type_cons fun(id: { name: string }, family_args: ArrayValue): inferrable
+---@field host_tuple_cons fun(elements: ArrayValue<inferrable>, debug: ArrayValue<var_debug>): inferrable
+---@field host_user_defined_type_cons fun(id: { name: string }, family_args: ArrayValue<inferrable>): inferrable
 ---@field host_tuple_type fun(desc: inferrable): inferrable
 ---@field host_function_type fun(param_type: inferrable, result_type: inferrable, result_info: checkable): inferrable
 ---@field host_wrapped_type fun(type: inferrable): inferrable

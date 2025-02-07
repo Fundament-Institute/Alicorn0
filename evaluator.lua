@@ -689,20 +689,6 @@ local function verify_closure(v, ctx, nested)
 	return true
 end
 
-local orig_strict_closure_constructor = strict_value.closure
-local function strict_closure_constructor_check(param_name, code, capture, debug)
-	verify_closure(code, capture:as_flex())
-	return U.notail(orig_strict_closure_constructor(param_name, code, capture, debug))
-end
-strict_value.closure = strict_closure_constructor_check
-
-local orig_stuck_closure_constructor = stuck_value.closure
-local function stuck_closure_constructor_check(param_name, code, capture, debug)
-	verify_closure(code, capture)
-	return U.notail(orig_stuck_closure_constructor(param_name, code, capture, debug))
-end
-stuck_value.closure = stuck_closure_constructor_check
-
 ---@source evaluator.lua
 local substitute_inner
 

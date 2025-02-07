@@ -1088,8 +1088,7 @@ local function define_array(self, value_type)
 	})
 	traits.value_name:implement_on(self, {
 		value_name = function()
-			-- TODO: augment this with generics
-			return "ArrayValue"
+			return "ArrayValue<" .. traits.value_name:get(value_type).value_name() .. ">"
 		end,
 	})
 	return self

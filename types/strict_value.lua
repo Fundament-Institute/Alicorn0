@@ -73,13 +73,13 @@ function strict_value:unwrap_closure() end
 function strict_value:as_closure() end
 ---@return boolean
 function strict_value:is_range() end
----@return ArrayValue lower_bounds
----@return ArrayValue upper_bounds
+---@return ArrayValue<strict_value> lower_bounds
+---@return ArrayValue<strict_value> upper_bounds
 ---@return strict_value relation
 function strict_value:unwrap_range() end
 ---@return boolean
----@return ArrayValue lower_bounds
----@return ArrayValue upper_bounds
+---@return ArrayValue<strict_value> lower_bounds
+---@return ArrayValue<strict_value> upper_bounds
 ---@return strict_value relation
 function strict_value:as_range() end
 ---@return boolean
@@ -113,10 +113,10 @@ function strict_value:unwrap_operative_type() end
 function strict_value:as_operative_type() end
 ---@return boolean
 function strict_value:is_tuple_value() end
----@return ArrayValue elements
+---@return ArrayValue<strict_value> elements
 function strict_value:unwrap_tuple_value() end
 ---@return boolean
----@return ArrayValue elements
+---@return ArrayValue<strict_value> elements
 function strict_value:as_tuple_value() end
 ---@return boolean
 function strict_value:is_tuple_type() end
@@ -274,11 +274,11 @@ function strict_value:as_host_unstrict_wrapped_type() end
 ---@return boolean
 function strict_value:is_host_user_defined_type() end
 ---@return { name: string } id
----@return ArrayValue family_args
+---@return ArrayValue<strict_value> family_args
 function strict_value:unwrap_host_user_defined_type() end
 ---@return boolean
 ---@return { name: string } id
----@return ArrayValue family_args
+---@return ArrayValue<strict_value> family_args
 function strict_value:as_host_user_defined_type() end
 ---@return boolean
 function strict_value:is_host_nil_type() end
@@ -288,10 +288,10 @@ function strict_value:unwrap_host_nil_type() end
 function strict_value:as_host_nil_type() end
 ---@return boolean
 function strict_value:is_host_tuple_value() end
----@return ArrayValue elements
+---@return ArrayValue<any> elements
 function strict_value:unwrap_host_tuple_value() end
 ---@return boolean
----@return ArrayValue elements
+---@return ArrayValue<any> elements
 function strict_value:as_host_tuple_value() end
 ---@return boolean
 function strict_value:is_host_tuple_type() end
@@ -411,12 +411,12 @@ function strict_value:as_union_type() end
 ---@field result_info fun(result_info: result_info): strict_value
 ---@field pi fun(param_type: strict_value, param_info: strict_value, result_type: strict_value, result_info: strict_value): strict_value
 ---@field closure fun(param_name: string, code: typed, capture: strict_value, capture_dbg: var_debug, param_debug: var_debug): strict_value
----@field range fun(lower_bounds: ArrayValue, upper_bounds: ArrayValue, relation: strict_value): strict_value
+---@field range fun(lower_bounds: ArrayValue<strict_value>, upper_bounds: ArrayValue<strict_value>, relation: strict_value): strict_value
 ---@field name_type strict_value
 ---@field name fun(name: string): strict_value
 ---@field operative_value fun(userdata: strict_value): strict_value
 ---@field operative_type fun(handler: strict_value, userdata_type: strict_value): strict_value
----@field tuple_value fun(elements: ArrayValue): strict_value
+---@field tuple_value fun(elements: ArrayValue<strict_value>): strict_value
 ---@field tuple_type fun(desc: strict_value): strict_value
 ---@field tuple_desc_type fun(universe: strict_value): strict_value
 ---@field enum_value fun(constructor: string, arg: strict_value): strict_value
@@ -438,9 +438,9 @@ function strict_value:as_union_type() end
 ---@field host_function_type fun(param_type: strict_value, result_type: strict_value, result_info: strict_value): strict_value
 ---@field host_wrapped_type fun(type: strict_value): strict_value
 ---@field host_unstrict_wrapped_type fun(type: strict_value): strict_value
----@field host_user_defined_type fun(id: { name: string }, family_args: ArrayValue): strict_value
+---@field host_user_defined_type fun(id: { name: string }, family_args: ArrayValue<strict_value>): strict_value
 ---@field host_nil_type strict_value
----@field host_tuple_value fun(elements: ArrayValue): strict_value
+---@field host_tuple_value fun(elements: ArrayValue<any>): strict_value
 ---@field host_tuple_type fun(desc: strict_value): strict_value
 ---@field singleton fun(supertype: strict_value, value: strict_value): strict_value
 ---@field program_end fun(result: strict_value): strict_value

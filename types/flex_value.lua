@@ -5,19 +5,19 @@
 flex_value = {}
 
 ---@return boolean
-function flex_value:is_stuck() end
----@return stuck_value stuck
-function flex_value:unwrap_stuck() end
----@return boolean
----@return stuck_value stuck
-function flex_value:as_stuck() end
----@return boolean
 function flex_value:is_strict() end
 ---@return strict_value strict
 function flex_value:unwrap_strict() end
 ---@return boolean
 ---@return strict_value strict
 function flex_value:as_strict() end
+---@return boolean
+function flex_value:is_stuck() end
+---@return stuck_value stuck
+function flex_value:unwrap_stuck() end
+---@return boolean
+---@return stuck_value stuck
+function flex_value:as_stuck() end
 ---@return boolean
 function flex_value:is_visibility_type() end
 ---@return nil
@@ -87,13 +87,13 @@ function flex_value:unwrap_closure() end
 function flex_value:as_closure() end
 ---@return boolean
 function flex_value:is_range() end
----@return ArrayValue lower_bounds
----@return ArrayValue upper_bounds
+---@return ArrayValue<flex_value> lower_bounds
+---@return ArrayValue<flex_value> upper_bounds
 ---@return strict_value relation
 function flex_value:unwrap_range() end
 ---@return boolean
----@return ArrayValue lower_bounds
----@return ArrayValue upper_bounds
+---@return ArrayValue<flex_value> lower_bounds
+---@return ArrayValue<flex_value> upper_bounds
 ---@return strict_value relation
 function flex_value:as_range() end
 ---@return boolean
@@ -127,10 +127,10 @@ function flex_value:unwrap_operative_type() end
 function flex_value:as_operative_type() end
 ---@return boolean
 function flex_value:is_tuple_value() end
----@return ArrayValue elements
+---@return ArrayValue<flex_value> elements
 function flex_value:unwrap_tuple_value() end
 ---@return boolean
----@return ArrayValue elements
+---@return ArrayValue<flex_value> elements
 function flex_value:as_tuple_value() end
 ---@return boolean
 function flex_value:is_tuple_type() end
@@ -297,11 +297,11 @@ function flex_value:as_host_unstrict_wrapped_type() end
 ---@return boolean
 function flex_value:is_host_user_defined_type() end
 ---@return { name: string } id
----@return ArrayValue family_args
+---@return ArrayValue<flex_value> family_args
 function flex_value:unwrap_host_user_defined_type() end
 ---@return boolean
 ---@return { name: string } id
----@return ArrayValue family_args
+---@return ArrayValue<flex_value> family_args
 function flex_value:as_host_user_defined_type() end
 ---@return boolean
 function flex_value:is_host_nil_type() end
@@ -311,10 +311,10 @@ function flex_value:unwrap_host_nil_type() end
 function flex_value:as_host_nil_type() end
 ---@return boolean
 function flex_value:is_host_tuple_value() end
----@return ArrayValue elements
+---@return ArrayValue<any> elements
 function flex_value:unwrap_host_tuple_value() end
 ---@return boolean
----@return ArrayValue elements
+---@return ArrayValue<any> elements
 function flex_value:as_host_tuple_value() end
 ---@return boolean
 function flex_value:is_host_tuple_type() end
@@ -477,14 +477,14 @@ function flex_value:unwrap_host_application() end
 function flex_value:as_host_application() end
 ---@return boolean
 function flex_value:is_host_tuple() end
----@return ArrayValue leading
+---@return ArrayValue<any> leading
 ---@return stuck_value stuck_element
----@return ArrayValue trailing
+---@return ArrayValue<flex_value> trailing
 function flex_value:unwrap_host_tuple() end
 ---@return boolean
----@return ArrayValue leading
+---@return ArrayValue<any> leading
 ---@return stuck_value stuck_element
----@return ArrayValue trailing
+---@return ArrayValue<flex_value> trailing
 function flex_value:as_host_tuple() end
 ---@return boolean
 function flex_value:is_host_if() end
@@ -523,8 +523,8 @@ function flex_value:as_host_unwrap() end
 
 ---@class (exact) flex_valueType: EnumType
 ---@field define_enum fun(self: flex_valueType, name: string, variants: Variants): flex_valueType
----@field stuck fun(stuck: stuck_value): flex_value
 ---@field strict fun(strict: strict_value): flex_value
+---@field stuck fun(stuck: stuck_value): flex_value
 ---@field visibility_type flex_value
 ---@field visibility fun(visibility: visibility): flex_value
 ---@field param_info_type flex_value
@@ -533,12 +533,12 @@ function flex_value:as_host_unwrap() end
 ---@field result_info fun(result_info: result_info): flex_value
 ---@field pi fun(param_type: flex_value, param_info: flex_value, result_type: flex_value, result_info: flex_value): flex_value
 ---@field closure fun(param_name: string, code: typed, capture: flex_value, capture_dbg: var_debug, param_debug: var_debug): flex_value
----@field range fun(lower_bounds: ArrayValue, upper_bounds: ArrayValue, relation: strict_value): flex_value
+---@field range fun(lower_bounds: ArrayValue<flex_value>, upper_bounds: ArrayValue<flex_value>, relation: strict_value): flex_value
 ---@field name_type flex_value
 ---@field name fun(name: string): flex_value
 ---@field operative_value fun(userdata: flex_value): flex_value
 ---@field operative_type fun(handler: flex_value, userdata_type: flex_value): flex_value
----@field tuple_value fun(elements: ArrayValue): flex_value
+---@field tuple_value fun(elements: ArrayValue<flex_value>): flex_value
 ---@field tuple_type fun(desc: flex_value): flex_value
 ---@field tuple_desc_type fun(universe: flex_value): flex_value
 ---@field enum_value fun(constructor: string, arg: flex_value): flex_value
@@ -561,9 +561,9 @@ function flex_value:as_host_unwrap() end
 ---@field host_function_type fun(param_type: flex_value, result_type: flex_value, result_info: flex_value): flex_value
 ---@field host_wrapped_type fun(type: flex_value): flex_value
 ---@field host_unstrict_wrapped_type fun(type: flex_value): flex_value
----@field host_user_defined_type fun(id: { name: string }, family_args: ArrayValue): flex_value
+---@field host_user_defined_type fun(id: { name: string }, family_args: ArrayValue<flex_value>): flex_value
 ---@field host_nil_type flex_value
----@field host_tuple_value fun(elements: ArrayValue): flex_value
+---@field host_tuple_value fun(elements: ArrayValue<any>): flex_value
 ---@field host_tuple_type fun(desc: flex_value): flex_value
 ---@field singleton fun(supertype: flex_value, value: flex_value): flex_value
 ---@field program_end fun(result: flex_value): flex_value
@@ -584,7 +584,7 @@ function flex_value:as_host_unwrap() end
 ---@field tuple_element_access fun(subject: stuck_value, index: number): flex_value
 ---@field record_field_access fun(subject: stuck_value, field_name: string): flex_value
 ---@field host_application fun(function: any, arg: stuck_value): flex_value
----@field host_tuple fun(leading: ArrayValue, stuck_element: stuck_value, trailing: ArrayValue): flex_value
+---@field host_tuple fun(leading: ArrayValue<any>, stuck_element: stuck_value, trailing: ArrayValue<flex_value>): flex_value
 ---@field host_if fun(subject: stuck_value, consequent: flex_value, alternate: flex_value): flex_value
 ---@field host_intrinsic fun(source: stuck_value, start_anchor: Anchor): flex_value
 ---@field host_wrap fun(content: stuck_value): flex_value
