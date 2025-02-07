@@ -41,7 +41,7 @@ end
 local function gen_base_operator(fn_op, name, ...)
 	local argname = name .. "-arg"
 	local debug_arg = terms.var_debug(argname, U.anchor_here())
-	local names = string_array(...)
+	local names = name_array(...)
 	local debug_names = names:map(debug_array, function(n)
 		return terms.var_debug(n, U.anchor_here())
 	end)
@@ -2359,16 +2359,6 @@ local core_operative = (function()
 		debug_arg
 	)
 end)()
-
-local string_array = gen.declare_array(gen.builtin_string)
-local debug_array = gen.declare_array(terms.var_debug)
-
----@return strict_value
-local function contravariant()
-	return gen_base_operator(function(vars)
-		return 1, terms.typed_term.variance_cons(terms.typed_term.literal(terms.strict_value.host_value(true)), vars[1])
-	end, "#contravariant", "base")
-end
 
 local base_env = {
 	ascribed_segment_tuple_desc = ascribed_segment_tuple_desc,

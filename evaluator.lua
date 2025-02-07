@@ -105,6 +105,8 @@ function ConstraintError.new(desc, left, l_ctx, op, right, r_ctx, cause)
 	}, constraint_error_mt)
 end
 
+local empty_tuple = terms.strict_value.tuple_value(strict_value_array())
+
 ---@param luafunc function
 ---@return strict_value
 local function luatovalue(luafunc)
@@ -1029,15 +1031,25 @@ function substitute_type_variables(val, debuginfo, index, param_name, ctx, ambie
 	local mappings = {
 		[index] = typed_term.bound_variable(index, debuginfo),
 	}
-	local size = ambient_typechecking_context.bindings:len()
-	for i = 1, size do
-		local _, info = ambient_typechecking_context.runtime_context:get(i)
-		mappings[i] = typed.bound_variable(i, info)
+
+	local capture_info = terms.var_debug("#capture", debuginfo.source)
+
+	local elements = typed_array()
+
+	for i, v in ipairs(body_usages) do
+		if i <= ambient_typechecking_context:len() and v > 0 then
+			local _, info = ambient_typechecking_context.runtime_context:get(i)
+			elements:append(typed_term.bound_variable(i, info))
+			mappings[i] = typed_term.tuple_element_access(typed.bound_variable(i, capture_info), #elements)
+		end
 	end
+
+	local capture = typed_term.tuple_cons(elements)
+
 	local substituted = substitute_inner(val, mappings, index, ambient_typechecking_context)
 	--print("typed term after substitution (substituted): (typed term follows)")
 	--print(substituted:pretty_print(typechecking_context))
-	return U.notail(flex_value.closure(param_name, substituted, ctx, debuginfo))
+	return U.notail(flex_value.closure(param_name, substituted, capture, capture_info, debuginfo))
 end
 
 ---@param val flex_value
