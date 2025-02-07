@@ -522,14 +522,10 @@ end
 ---@param v strict_value
 ---@return strict_value
 local function const_combinator(v)
-	local d_info = terms.var_debug("#CONST_PARAM", U.anchor_here())
+	local arg_info = terms.var_debug("#CONST_PARAM", U.anchor_here())
+	local data_info = terms.var_debug("#CONST_CAPTURE", U.anchor_here())
 	return U.notail(
-		strict_value.closure(
-			d_info.name,
-			typed_term.bound_variable(1, d_info),
-			terms.strict_runtime_context():append(v, d_info.name, d_info),
-			d_info
-		)
+		strict_value.closure(arg_info.name, typed_term.bound_variable(1, data_info), v, data_info, arg_info)
 	)
 end
 
