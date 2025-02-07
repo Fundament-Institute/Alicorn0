@@ -5,19 +5,19 @@
 flex_value = {}
 
 ---@return boolean
-function flex_value:is_stuck() end
----@return stuck_value stuck
-function flex_value:unwrap_stuck() end
----@return boolean
----@return stuck_value stuck
-function flex_value:as_stuck() end
----@return boolean
 function flex_value:is_strict() end
 ---@return strict_value strict
 function flex_value:unwrap_strict() end
 ---@return boolean
 ---@return strict_value strict
 function flex_value:as_strict() end
+---@return boolean
+function flex_value:is_stuck() end
+---@return stuck_value stuck
+function flex_value:unwrap_stuck() end
+---@return boolean
+---@return stuck_value stuck
+function flex_value:as_stuck() end
 ---@return boolean
 function flex_value:is_visibility_type() end
 ---@return nil
@@ -74,14 +74,16 @@ function flex_value:as_pi() end
 function flex_value:is_closure() end
 ---@return string param_name
 ---@return typed code
----@return FlexRuntimeContext capture
----@return var_debug debug
+---@return flex_value capture
+---@return var_debug capture_dbg
+---@return var_debug param_debug
 function flex_value:unwrap_closure() end
 ---@return boolean
 ---@return string param_name
 ---@return typed code
----@return FlexRuntimeContext capture
----@return var_debug debug
+---@return flex_value capture
+---@return var_debug capture_dbg
+---@return var_debug param_debug
 function flex_value:as_closure() end
 ---@return boolean
 function flex_value:is_range() end
@@ -521,8 +523,8 @@ function flex_value:as_host_unwrap() end
 
 ---@class (exact) flex_valueType: EnumType
 ---@field define_enum fun(self: flex_valueType, name: string, variants: Variants): flex_valueType
----@field stuck fun(stuck: stuck_value): flex_value
 ---@field strict fun(strict: strict_value): flex_value
+---@field stuck fun(stuck: stuck_value): flex_value
 ---@field visibility_type flex_value
 ---@field visibility fun(visibility: visibility): flex_value
 ---@field param_info_type flex_value
@@ -530,7 +532,7 @@ function flex_value:as_host_unwrap() end
 ---@field result_info_type flex_value
 ---@field result_info fun(result_info: result_info): flex_value
 ---@field pi fun(param_type: flex_value, param_info: flex_value, result_type: flex_value, result_info: flex_value): flex_value
----@field closure fun(param_name: string, code: typed, capture: FlexRuntimeContext, debug: var_debug): flex_value
+---@field closure fun(param_name: string, code: typed, capture: flex_value, capture_dbg: var_debug, param_debug: var_debug): flex_value
 ---@field range fun(lower_bounds: ArrayValue, upper_bounds: ArrayValue, relation: strict_value): flex_value
 ---@field name_type flex_value
 ---@field name fun(name: string): flex_value

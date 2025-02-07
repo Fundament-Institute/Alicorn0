@@ -734,22 +734,9 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		return res
 	elseif val:is_closure() then
 		local param_name, code, capture, debuginfo = val:unwrap_closure()
-		local unique = { debug = "substitute_inner, val:is_closure" .. U.here() }
-		local arg = flex_value.stuck(stuck_value.free(free.unique(unique)))
-		local resval = apply_value(flex_value.stuck(val), arg, ambient_typechecking_context)
-		--print("applied closure during substitution: (value term follows)")
-		--print(val)
 
-		-- Here we need to add the new arg placeholder to a map of things to substitute
-		-- otherwise it would be left as a free.unique in the result
-		local new_mappings = U.shallow_copy(mappings)
-		new_mappings[unique] = typed_term.bound_variable(context_len + 1, debuginfo)
-		local val_typed = substitute_inner(resval, new_mappings, context_len + 1, ambient_typechecking_context)
-
-		-- FIXME: this results in more captures every time we substitute a closure ->
-		--   can cause non-obvious memory leaks
-		--   since we don't yet remove unused captures from closure value
-		local res = typed_term.lambda(param_name .. "*", debuginfo, val_typed, debuginfo.source)
+		local capture_sub = substitute_inner(capture, mappings, context_len, ambient_typechecking_context)
+		local res = typed_term.lambda(param_name, debuginfo, code, capture_sub, debuginfo.source)
 		return res
 	elseif val:is_operative_value() then
 		local userdata = val:unwrap_operative_value()
@@ -2087,9 +2074,12 @@ function apply_value(f, arg, ambient_typechecking_context)
 	end
 
 	if f:is_closure() then
-		local param_name, code, capture, debuginfo = f:unwrap_closure()
+		local param_name, code, capture, capture_dbg, debuginfo = f:unwrap_closure()
 		--return U.notail(U.tag("evaluate", { code = code }, evaluate, code, capture:append(arg)))
-		return evaluate(code, capture:append(arg, param_name, debuginfo), ambient_typechecking_context)
+		local ctx = terms.flex_runtime_context()
+		ctx = ctx:append(capture, "#capture", capture_dbg)
+		ctx = ctx:append(arg, param_name, debuginfo)
+		return evaluate(code, ctx, ambient_typechecking_context)
 	elseif f:is_stuck() then
 		return flex_value.stuck(stuck_value.application(f:unwrap_stuck(), arg))
 	elseif f:is_host_value() then
@@ -2436,6 +2426,7 @@ local function infer_impl(
 		if not ok then
 			return false, body_type
 		end
+		-- TODO: construct a tuple containing everything used by the closure, substitute the body term to replace bound variable references with tuple accesses
 
 		local result_type = substitute_type_variables(
 			body_type,
@@ -2464,7 +2455,7 @@ local function infer_impl(
 			result_info
 		)
 		lambda_type.original_name = param_name
-		local lambda_term = typed_term.lambda(param_name .. "^", param_debug, body_term, start_anchor)
+		local lambda_term = typed_term.lambda(param_name .. "^", param_debug, body_term, start_anchor) -- TODO: add constructed tuple term as the capture term
 		return true, lambda_type, lambda_usages, lambda_term
 	elseif inferrable_term:is_pi() then
 		local param_type, param_info, result_type, result_info = inferrable_term:unwrap_pi()
@@ -3518,8 +3509,9 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 	elseif typed_term:is_unique() then
 		return U.notail(flex_value.stuck(stuck_value.free(free.unique(typed_term:unwrap_unique()))))
 	elseif typed_term:is_lambda() then
-		local param_name, param_debug, body, anchor = typed_term:unwrap_lambda()
-		return U.notail(flex_value.closure(param_name, body, runtime_context, param_debug))
+		local param_name, param_debug, body, capture, capture_dbg, anchor = typed_term:unwrap_lambda()
+		local capture_val = evaluate(capture, runtime_context, ambient_typechecking_context)
+		return flex_value.closure(param_name, body, capture_val, capture_dbg, param_debug)
 	elseif typed_term:is_pi() then
 		local param_type, param_info, result_type, result_info = typed_term:unwrap_pi()
 		local param_type_value = evaluate(param_type, runtime_context, ambient_typechecking_context)

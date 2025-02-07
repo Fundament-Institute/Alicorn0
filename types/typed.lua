@@ -39,12 +39,16 @@ function typed:is_lambda() end
 ---@return string param_name
 ---@return var_debug param_debug
 ---@return typed body
+---@return typed capture
+---@return var_debug capture_dbg
 ---@return Anchor start_anchor
 function typed:unwrap_lambda() end
 ---@return boolean
 ---@return string param_name
 ---@return var_debug param_debug
 ---@return typed body
+---@return typed capture
+---@return var_debug capture_dbg
 ---@return Anchor start_anchor
 function typed:as_lambda() end
 ---@return boolean
@@ -554,7 +558,7 @@ function typed:as_constrained_type() end
 ---@field literal fun(literal_value: strict_value): typed
 ---@field metavariable fun(metavariable: Metavariable): typed
 ---@field unique fun(id: table): typed
----@field lambda fun(param_name: string, param_debug: var_debug, body: typed, start_anchor: Anchor): typed
+---@field lambda fun(param_name: string, param_debug: var_debug, body: typed, capture: typed, capture_dbg: var_debug, start_anchor: Anchor): typed
 ---@field pi fun(param_type: typed, param_info: typed, result_type: typed, result_info: typed): typed
 ---@field application fun(f: typed, arg: typed): typed
 ---@field let fun(name: string, debug: var_debug, expr: typed, body: typed): typed

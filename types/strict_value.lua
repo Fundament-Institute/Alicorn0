@@ -60,14 +60,16 @@ function strict_value:as_pi() end
 function strict_value:is_closure() end
 ---@return string param_name
 ---@return typed code
----@return StrictRuntimeContext capture
----@return var_debug debug
+---@return strict_value capture
+---@return var_debug capture_dbg
+---@return var_debug param_debug
 function strict_value:unwrap_closure() end
 ---@return boolean
 ---@return string param_name
 ---@return typed code
----@return StrictRuntimeContext capture
----@return var_debug debug
+---@return strict_value capture
+---@return var_debug capture_dbg
+---@return var_debug param_debug
 function strict_value:as_closure() end
 ---@return boolean
 function strict_value:is_range() end
@@ -408,7 +410,7 @@ function strict_value:as_union_type() end
 ---@field result_info_type strict_value
 ---@field result_info fun(result_info: result_info): strict_value
 ---@field pi fun(param_type: strict_value, param_info: strict_value, result_type: strict_value, result_info: strict_value): strict_value
----@field closure fun(param_name: string, code: typed, capture: StrictRuntimeContext, debug: var_debug): strict_value
+---@field closure fun(param_name: string, code: typed, capture: strict_value, capture_dbg: var_debug, param_debug: var_debug): strict_value
 ---@field range fun(lower_bounds: ArrayValue, upper_bounds: ArrayValue, relation: strict_value): strict_value
 ---@field name_type strict_value
 ---@field name fun(name: string): strict_value

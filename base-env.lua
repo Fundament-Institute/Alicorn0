@@ -2295,14 +2295,15 @@ local function gen_base_operator(fn_op, name, ...)
 	end)
 	local bound_vars = {}
 	for i, v in ipairs(debug_names) do
-		table.insert(bound_vars, terms.typed_term.bound_variable(1 + i, v))
+		table.insert(bound_vars, terms.typed_term.bound_variable(2 + i, v))
 	end
 
 	local count, res = fn_op(bound_vars)
 	return terms.strict_value.closure(
 		argname,
 		terms.typed_term.tuple_elim(names, debug_names, terms.typed_term.bound_variable(1, debug_arg), count, res),
-		terms.strict_runtime_context(),
+		terms.strict_value.tuple_value(flex_value_array()),
+		terms.var_debug("#capture", U.anchor_here()),
 		debug_arg
 	)
 end

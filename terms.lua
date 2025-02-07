@@ -911,6 +911,8 @@ typed_term:define_enum("typed", {
 		"param_name", gen.builtin_string,
 		"param_debug", var_debug,
 		"body",       typed_term,
+		"capture",    typed_term,
+		"capture_dbg", var_debug,
 		"start_anchor",     anchor_type,
 	} },
 	{ "pi", {
@@ -1323,8 +1325,9 @@ gen.define_multi_enum(flex_value,
 		{ "closure$flex", {
 			"param_name", gen.builtin_string,
 			"code",       typed_term,
-			"capture",    flex_runtime_context_type,
-			"debug",      var_debug,
+			"capture",    flex_value,
+			"capture_dbg", var_debug,
+			"param_debug",      var_debug,
 		}, },
 		-- a list of upper and lower bounds, and a relation being bound with respect to
 		{ "range$flex", {
