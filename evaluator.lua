@@ -171,7 +171,7 @@ local function compositecause(kind, l_index, l, r_index, r, anchor)
 	return cause
 end
 
---- lifts a subtyping relation (λa, b. Rel(a, b)) to (λf, g. ∀x, y. Rel(f(x), g(y))).
+--- lifts a subtyping relation (λ(a, b). Rel(a, b)) to (λ(f, g). ∀x. Rel(f(x), g(x))).
 ---@param srel SubtypeRelation
 ---@return SubtypeRelation
 local function FunctionRelation(srel)

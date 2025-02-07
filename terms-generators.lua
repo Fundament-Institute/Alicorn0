@@ -145,7 +145,7 @@ local function gen_record(self, cons, kind, params_with_types)
 			end
 			val[v] = argi
 		end
-		if kind == "stuck_value.closure" then
+		if false then
 			-- val["{TRACE}"] = U.bound_here(2)
 			val["{TRACE}"] = debug.traceback("", 2)
 			-- val["{TRACE}"] = U.custom_traceback("", "", -1)
