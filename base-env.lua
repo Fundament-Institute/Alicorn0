@@ -25,6 +25,7 @@ local debug_array = gen.declare_array(var_debug)
 local name_array = gen.declare_array(gen.builtin_string)
 local typed_array = gen.declare_array(typed)
 local flex_value_array = gen.declare_array(flex_value)
+local strict_value_array = gen.declare_array(strict_value)
 
 ---@param val strict_value
 ---@param typ strict_value
@@ -32,6 +33,34 @@ local flex_value_array = gen.declare_array(flex_value)
 local function lit_term(val, typ)
 	return terms.inferrable_term.typed(terms.typed_term.literal(typ), usage_array(), terms.typed_term.literal(val))
 end
+
+---@param fn_op fun(bound_variables: typed[]) : integer, typed
+---@param name string
+---@param ... string
+---@return strict_value
+local function gen_base_operator(fn_op, name, ...)
+	local argname = name .. "-arg"
+	local debug_arg = terms.var_debug(argname, U.anchor_here())
+	local names = string_array(...)
+	local debug_names = names:map(debug_array, function(n)
+		return terms.var_debug(n, U.anchor_here())
+	end)
+	local bound_vars = {}
+	for i, v in ipairs(debug_names) do
+		table.insert(bound_vars, terms.typed_term.bound_variable(2 + i, v))
+	end
+
+	local count, res = fn_op(bound_vars)
+	return terms.strict_value.closure(
+		argname,
+		terms.typed_term.tuple_elim(names, debug_names, terms.typed_term.bound_variable(1, debug_arg), count, res),
+		terms.strict_value.tuple_value(flex_value_array()),
+		terms.var_debug("#capture", U.anchor_here()),
+		debug_arg
+	)
+end
+
+local empty_tuple = terms.strict_value.tuple_value(strict_value_array())
 
 --- lua_operative is dependently typed and should produce inferrable vs checkable depending on the goal, and an error as the second return if it failed
 --- | unknown in the second return insufficiently constrains the non-error cases to be inferrable or checkable terms
@@ -1403,7 +1432,8 @@ local host_term_of_inner_type = strict_value.host_function_type(
 			strict_value.closure(
 				"#htoit-empty",
 				typed.literal(terms.host_goal_type),
-				terms.strict_runtime_context(),
+				empty_tuple,
+				terms.var_debug("", U.anchor_here()),
 				terms.var_debug("", U.anchor_here())
 			)
 		)
@@ -1416,13 +1446,15 @@ local host_term_of_inner_type = strict_value.host_function_type(
 					strict_value.closure(
 						"#htoit-empty",
 						typed.host_wrapped_type(typed.literal(strict_value.host_type_type)),
-						terms.strict_runtime_context(),
+						empty_tuple,
+						terms.var_debug("", U.anchor_here()),
 						terms.var_debug("", U.anchor_here())
 					)
 				)
 			)
 		),
-		terms.strict_runtime_context(),
+		empty_tuple,
+		terms.var_debug("", U.anchor_here()),
 		terms.var_debug("", U.anchor_here())
 	),
 	result_info_pure
@@ -1468,26 +1500,36 @@ local function operative_handler_type(ud_type, anchor)
 	local pnamer = terms.var_debug("#operative_handler_type-params", anchor)
 	local pnamer0 = terms.var_debug("#operative_handler_type-result-empty", anchor)
 	local pnamer1 = terms.var_debug("#operative_handler_type-result-term", anchor)
+	local capture_dbg = terms.var_debug("#capture", anchor)
 	return strict_value.pi(
 		strict_value.tuple_type(
 			terms.strict_tuple_desc(
 				strict_value.closure(
 					pnamep0.name,
 					typed.literal(terms.host_syntax_type),
-					terms.strict_runtime_context(),
+					empty_tuple,
+					terms.var_debug("", U.anchor_here()),
 					pnamep0
 				),
 				strict_value.closure(
 					pnamep1.name,
 					typed.literal(terms.host_environment_type),
-					terms.strict_runtime_context(),
+					empty_tuple,
+					terms.var_debug("", U.anchor_here()),
 					pnamep1
 				),
-				strict_value.closure(pnamep2.name, typed.literal(ud_type), terms.strict_runtime_context(), pnamep2),
+				strict_value.closure(
+					pnamep2.name,
+					typed.literal(ud_type),
+					empty_tuple,
+					terms.var_debug("", U.anchor_here()),
+					pnamep2
+				),
 				strict_value.closure(
 					pnamep3.name,
 					typed.literal(terms.host_goal_type),
-					terms.strict_runtime_context(),
+					empty_tuple,
+					terms.var_debug("", U.anchor_here()),
 					pnamep3
 				)
 			)
@@ -1500,7 +1542,7 @@ local function operative_handler_type(ud_type, anchor)
 					return d.name
 				end),
 				namesp4,
-				typed.bound_variable(1, pnamer),
+				typed.bound_variable(2, pnamer),
 				4,
 				typed.tuple_type(
 					typed.enum_cons(
@@ -1515,19 +1557,32 @@ local function operative_handler_type(ud_type, anchor)
 											typed.lambda(
 												pnamer0.name,
 												pnamer0,
-												host_term_of(typed.bound_variable(5, pnamer0), 6),
+												host_term_of(
+													typed.tuple_element_access(typed.bound_variable(1, capture), 1),
+													6
+												),
+												typed.tuple_cons(typed_array(typed.bound_variable(6, pnamer0))),
+												capture_dbg,
 												anchor
 											)
 										)
 									)
 								),
-								typed.lambda(pnamer1.name, pnamer1, typed.literal(terms.host_environment_type), anchor)
+								typed.lambda(
+									pnamer1.name,
+									pnamer1,
+									typed.literal(terms.host_environment_type),
+									typed.tuple_cons(typed_array()),
+									terms.var_debug("", U.anchor_here()),
+									anchor
+								)
 							)
 						)
 					)
 				)
 			),
-			terms.strict_runtime_context(),
+			empty_tuple,
+			terms.var_debug("", U.anchor_here()),
 			pnamer
 		),
 		result_info_pure
@@ -1626,11 +1681,12 @@ local function build_wrap(body_fn, type_fn)
 			typed.tuple_elim(
 				names2,
 				debug_array(univ_dbg, subj_dbg),
-				typed.bound_variable(1, args_dbg),
+				typed.bound_variable(2, args_dbg),
 				2,
-				body_fn(typed.bound_variable(3, subj_dbg))
+				body_fn(typed.bound_variable(4, subj_dbg))
 			),
-			terms.strict_runtime_context(),
+			empty_tuple,
+			terms.var_debug("", U.anchor_here()),
 			args_dbg
 		),
 		strict_value.pi(
@@ -1641,11 +1697,12 @@ local function build_wrap(body_fn, type_fn)
 						typed.tuple_elim(
 							names0,
 							debug_array(),
-							typed.bound_variable(1, args0_dbg),
+							typed.bound_variable(2, args0_dbg),
 							0,
 							typed.star(evaluator.OMEGA + 1, 0)
 						),
-						terms.strict_runtime_context(),
+						empty_tuple,
+						terms.var_debug("", U.anchor_here()),
 						args0_dbg
 					),
 					strict_value.closure(
@@ -1653,11 +1710,12 @@ local function build_wrap(body_fn, type_fn)
 						terms.typed_term.tuple_elim(
 							names1,
 							debug_array(univ_dbg),
-							terms.typed_term.bound_variable(1, args1_dbg),
+							terms.typed_term.bound_variable(2, args1_dbg),
 							1,
-							typed.bound_variable(2, univ_dbg)
+							typed.bound_variable(3, univ_dbg)
 						),
-						terms.strict_runtime_context(),
+						empty_tuple,
+						terms.var_debug("", U.anchor_here()),
 						args1_dbg
 					)
 				)
@@ -1668,11 +1726,12 @@ local function build_wrap(body_fn, type_fn)
 				typed.tuple_elim(
 					names2,
 					debug_array(univ_dbg, subj_dbg),
-					typed.bound_variable(1, args_dbg),
+					typed.bound_variable(2, args_dbg),
 					2,
-					type_fn(typed.bound_variable(2, univ_dbg))
+					type_fn(typed.bound_variable(3, univ_dbg))
 				),
-				terms.strict_runtime_context(),
+				empty_tuple,
+				terms.var_debug("", U.anchor_here()),
 				args_dbg
 			),
 			result_info_pure
@@ -1702,11 +1761,12 @@ local function build_unwrap(body_fn, type_fn)
 			typed.tuple_elim(
 				names2,
 				debug_array(univ_dbg, subj_dbg),
-				typed.bound_variable(1, args_dbg),
+				typed.bound_variable(2, args_dbg),
 				2,
-				body_fn(typed.bound_variable(3, subj_dbg))
+				body_fn(typed.bound_variable(4, subj_dbg))
 			),
-			terms.strict_runtime_context(),
+			empty_tuple,
+			terms.var_debug("", U.anchor_here()),
 			args_dbg
 		),
 		strict_value.pi(
@@ -1717,11 +1777,12 @@ local function build_unwrap(body_fn, type_fn)
 						typed.tuple_elim(
 							names0,
 							debug_array(),
-							typed.bound_variable(1, args0_dbg),
+							typed.bound_variable(2, args0_dbg),
 							0,
 							typed.star(evaluator.OMEGA + 1, 0)
 						),
-						terms.strict_runtime_context(),
+						empty_tuple,
+						terms.var_debug("", U.anchor_here()),
 						args0_dbg
 					),
 					strict_value.closure(
@@ -1729,11 +1790,12 @@ local function build_unwrap(body_fn, type_fn)
 						terms.typed_term.tuple_elim(
 							names1,
 							debug_array(univ_dbg),
-							terms.typed_term.bound_variable(1, args1_dbg),
+							terms.typed_term.bound_variable(2, args1_dbg),
 							1,
-							type_fn(typed.bound_variable(2, univ_dbg))
+							type_fn(typed.bound_variable(3, univ_dbg))
 						),
-						terms.strict_runtime_context(),
+						empty_tuple,
+						terms.var_debug("", U.anchor_here()),
 						args1_dbg
 					)
 				)
@@ -1744,11 +1806,12 @@ local function build_unwrap(body_fn, type_fn)
 				typed.tuple_elim(
 					names2,
 					debug_array(univ_dbg, subj_dbg),
-					typed.bound_variable(1, args_dbg),
+					typed.bound_variable(2, args_dbg),
 					2,
-					typed.bound_variable(2, univ_dbg)
+					typed.bound_variable(3, univ_dbg)
 				),
-				terms.strict_runtime_context(),
+				empty_tuple,
+				terms.var_debug("", U.anchor_here()),
 				args_dbg
 			),
 			result_info_pure
@@ -1774,11 +1837,12 @@ local function build_wrapped(body_fn)
 			typed.tuple_elim(
 				names1,
 				debug_array(typ_dbg),
-				typed.bound_variable(1, args_dbg),
+				typed.bound_variable(2, args_dbg),
 				1,
-				body_fn(typed.bound_variable(2, typ_dbg))
+				body_fn(typed.bound_variable(3, typ_dbg))
 			),
-			terms.strict_runtime_context(),
+			empty_tuple,
+			terms.var_debug("", U.anchor_here()),
 			args_dbg
 		),
 		strict_value.pi(
@@ -1789,11 +1853,12 @@ local function build_wrapped(body_fn)
 						typed.tuple_elim(
 							names0,
 							debug_array(),
-							typed.bound_variable(1, args0_dbg),
+							typed.bound_variable(2, args0_dbg),
 							0,
 							typed.star(evaluator.OMEGA + 1, 0)
 						),
-						terms.strict_runtime_context(),
+						empty_tuple,
+						terms.var_debug("", U.anchor_here()),
 						args0_dbg
 					)
 				)
@@ -1804,11 +1869,12 @@ local function build_wrapped(body_fn)
 				typed.tuple_elim(
 					names1,
 					debug_array(typ_dbg),
-					typed.bound_variable(1, args_dbg),
+					typed.bound_variable(2, args_dbg),
 					1,
 					typed.literal(strict_value.host_type_type)
 				),
-				terms.strict_runtime_context(),
+				empty_tuple,
+				terms.var_debug("", U.anchor_here()),
 				args_dbg
 			),
 			result_info_pure
@@ -2013,27 +2079,29 @@ local function tuple_desc_elem(desc, elem, head_n, head_names, tail_n, tail_name
 	for _, name in tail_names:ipairs() do
 		names:append(name)
 	end
+	local arg_dbg = var_debug("#tuple-desc-concat", U.anchor_here())
 	-- convert to just tuple of tail
 	local tail_args = typed_array()
 	for i = 1, tail_n do
-		-- 1 for closure argument (passed to tuple_elim)
+		-- 2 for closure argument and capture (passed to tuple_elim)
 		-- head_n for head
-		tail_args:append(typed.bound_variable(1 + head_n + i, names[1 + head_n + i]))
+		tail_args:append(typed.bound_variable(2 + head_n + i, names[1 + head_n + i]))
 	end
 	local body = typed.tuple_elim(
 		names:map(name_array, function(n)
 			return n.name
 		end),
 		names,
-		typed.bound_variable(1, var_debug("", U.anchor_here())),
+		typed.bound_variable(2, arg_dbg),
 		head_n + tail_n,
 		typed.application(typed.literal(elem), typed.tuple_cons(tail_args))
 	)
 	local elem_wrap = terms.flex_value.closure(
 		"#tuple-desc-concat",
 		body,
-		terms.flex_runtime_context(),
-		var_debug("#tuple-desc-concat", U.anchor_here())
+		flex_value.strict(empty_tuple),
+		terms.var_debug("", U.anchor_here()),
+		arg_dbg
 	)
 	return terms.cons(desc, elem_wrap)
 end
@@ -2041,6 +2109,7 @@ end
 local function tuple_desc_concat(head, tail)
 	local head_n, head_elems = traverse(head)
 	local tail_n, tail_elems = traverse(tail)
+	---@type flex_value
 	local head_last = head_elems[1]
 	local _, head_code, _, _ = head_last:unwrap_closure()
 	local head_names
@@ -2055,6 +2124,7 @@ local function tuple_desc_concat(head, tail)
 	local desc = head
 	for i = tail_n, 1, -1 do
 		local tail_n_now = tail_n - i
+		---@type flex_value
 		local elem = tail_elems[i]
 		local _, tail_code, _, _ = elem:unwrap_closure()
 		local tail_names
@@ -2084,15 +2154,16 @@ local host_if = (function()
 				return n.name
 			end),
 			debug_elements,
-			typed.bound_variable(1, debug_arg),
+			typed.bound_variable(2, debug_arg),
 			3,
 			typed.host_if(
-				typed.bound_variable(2, debug_subject),
-				typed.bound_variable(3, debug_consequent),
-				typed.bound_variable(4, debug_alternate)
+				typed.bound_variable(3, debug_subject),
+				typed.bound_variable(4, debug_consequent),
+				typed.bound_variable(5, debug_alternate)
 			)
 		),
-		terms.flex_runtime_context(),
+		flex_value.strict(empty_tuple),
+		var_debug("", U.anchor_here()),
 		debug_arg
 	)
 end)()
@@ -2117,7 +2188,8 @@ local function convert_desc(desc)
 		local convert_type_fun = terms.flex_value.closure(
 			"#tuple-prefix",
 			terms.typed_term.literal(convert_type),
-			terms.flex_runtime_context(),
+			flex_value.strict(empty_tuple),
+			var_debug("#capture", U.anchor_here()),
 			var_debug("#tuple-prefix", U.anchor_here())
 		)
 		evaluator.verify_placeholder_lite(convert_type_fun, terms.typechecking_context())
@@ -2169,7 +2241,7 @@ local function new_host_type_family(unique_id, sig, variance)
 	local param_names = debug_array()
 	for i = 1, nparams do
 		local info = var_debug("#type-family-A-" .. tostring(i), U.anchor_here())
-		params:append(terms.typed_term.bound_variable(i + 1, info))
+		params:append(terms.typed_term.bound_variable(i + 2, info))
 		param_names:append(info)
 	end
 	local info = var_debug("body", U.anchor_here())
@@ -2178,14 +2250,21 @@ local function new_host_type_family(unique_id, sig, variance)
 			return n.name
 		end),
 		param_names,
-		terms.typed_term.bound_variable(1, info),
+		terms.typed_term.bound_variable(2, info),
 		nparams,
 		terms.typed_term.host_user_defined_type_cons(unique_id, params)
 	)
-	return terms.flex_value.closure("#type-family-B", body, terms.flex_runtime_context(), info)
+	return terms.flex_value.closure(
+		"#type-family-B",
+		body,
+		flex_value.strict(empty_tuple),
+		var_debug("#capture", U.anchor_here()),
+		info
+	)
 end
 
 ---@param subject flex_value
+---@return flex_value
 local function get_host_func_res(subject, valid)
 	local param_type, result_type, result_info = subject:unwrap_host_function_type()
 	local typed_array = terms_gen.declare_array(terms.typed_term)
@@ -2204,7 +2283,7 @@ local function get_host_func_res(subject, valid)
 		)
 	)
 	local ctx = terms.flex_runtime_context():append(result_type, "#res_arg", result_dbg)
-	return terms.flex_value.closure("#TEST-1", tuple_build, ctx, arg_dbg)
+	return terms.flex_value.closure("#TEST-1", tuple_build, result_type, result_dbg, arg_dbg)
 end
 
 ---@param val flex_value
@@ -2246,14 +2325,15 @@ local core_operative_type = (function()
 				return n.name
 			end),
 			debug_elements,
-			terms.typed_term.bound_variable(1, debug_arg),
+			terms.typed_term.bound_variable(2, debug_arg),
 			2,
 			terms.typed_term.operative_type_cons(
-				terms.typed_term.bound_variable(3, debug_handler),
-				terms.typed_term.bound_variable(2, debug_userdata) --TODO: fix the order on this
+				terms.typed_term.bound_variable(4, debug_handler),
+				terms.typed_term.bound_variable(3, debug_userdata) --TODO: fix the order on this
 			)
 		),
-		terms.flex_runtime_context(),
+		flex_value.strict(empty_tuple),
+		var_debug("#capture", U.anchor_here()),
 		debug_arg
 	)
 end)()
@@ -2270,43 +2350,18 @@ local core_operative = (function()
 				return n.name
 			end),
 			debug_elements,
-			terms.typed_term.bound_variable(1, debug_arg),
+			terms.typed_term.bound_variable(2, debug_arg),
 			2,
-			terms.typed_term.operative_cons(terms.typed_term.bound_variable(2, debug_ud))
+			terms.typed_term.operative_cons(terms.typed_term.bound_variable(3, debug_ud))
 		),
-		terms.flex_runtime_context(),
+		flex_value.strict(empty_tuple),
+		var_debug("#capture", U.anchor_here()),
 		debug_arg
 	)
 end)()
 
 local string_array = gen.declare_array(gen.builtin_string)
 local debug_array = gen.declare_array(terms.var_debug)
-
----@param fn_op fun(bound_variables: typed[]) : integer, typed
----@param name string
----@param ... string
----@return strict_value
-local function gen_base_operator(fn_op, name, ...)
-	local argname = name .. "-arg"
-	local debug_arg = terms.var_debug(argname, U.anchor_here())
-	local names = string_array(...)
-	local debug_names = names:map(debug_array, function(n)
-		return terms.var_debug(n, U.anchor_here())
-	end)
-	local bound_vars = {}
-	for i, v in ipairs(debug_names) do
-		table.insert(bound_vars, terms.typed_term.bound_variable(2 + i, v))
-	end
-
-	local count, res = fn_op(bound_vars)
-	return terms.strict_value.closure(
-		argname,
-		terms.typed_term.tuple_elim(names, debug_names, terms.typed_term.bound_variable(1, debug_arg), count, res),
-		terms.strict_value.tuple_value(flex_value_array()),
-		terms.var_debug("#capture", U.anchor_here()),
-		debug_arg
-	)
-end
 
 ---@return strict_value
 local function contravariant()
