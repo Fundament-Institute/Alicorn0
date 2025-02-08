@@ -1491,9 +1491,10 @@ collect_host_tuple = metalanguage.reducer(
 						desc,
 						evaluator.substitute_into_closure(
 							flex_value.singleton(next_elem_type, next_val),
-							env.typechecking_context,
+							env.typechecking_context.runtime_context,
 							syntax.start_anchor,
-							terms.var_debug("#collect-host-tuple-param", syntax.start_anchor)
+							terms.var_debug("#collect-host-tuple-param", syntax.start_anchor),
+							env.typechecking_context
 						)
 					)
 				end
