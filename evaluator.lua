@@ -1236,6 +1236,24 @@ local function substitute_into_lambda(body_val, context, anchor, param_dbg, ambi
 	return U.notail(substitute_usages_into_lambda(body_val, context, usages, anchor, param_dbg))
 end
 
+---@param body_val flex_value
+---@param context FlexRuntimeContext
+---@param anchor Anchor
+---@param param_dbg var_debug
+---@param ambient_typechecking_context TypecheckingContext
+---@return typed lambda_term `typed_term.lambda`
+local function substitute_into_closure(body_val, context, anchor, param_dbg, ambient_typechecking_context)
+	local usages = usage_array()
+	gather_usages(body_val, usages, context.bindings:len(), ambient_typechecking_context)
+	return U.notail(
+		evaluate(
+			substitute_usages_into_lambda(body_val, context, usages, anchor, param_dbg),
+			context,
+			ambient_typechecking_context
+		)
+	)
+end
+
 ---@param val flex_value
 ---@return boolean
 local function is_type_of_types(val)
@@ -2172,11 +2190,12 @@ local function check(
 
 			desc = terms.cons(
 				desc,
-				flex_value.closure(
-					"#check-tuple-cons-param",
-					substitute_placeholders_identity(flex_value.singleton(el_type, el_val), typechecking_context, 1),
+				substitute_into_closure(
+					flex_value.singleton(el_type, el_val),
 					typechecking_context.runtime_context,
-					info[i]
+					U.anchor_here(),
+					info[i],
+					typechecking_context
 				)
 			)
 		end
