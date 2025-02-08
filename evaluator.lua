@@ -1516,7 +1516,7 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 					arg_name.name,
 					arg_name,
 					typed_term.bound_variable(1, universe_dbg),
-					typed.literal(empty_tuple),
+					typed_term.bound_variable(1, universe_dbg),
 					universe_dbg,
 					U.anchor_here()
 				),
