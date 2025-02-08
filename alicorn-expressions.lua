@@ -1489,15 +1489,10 @@ collect_host_tuple = metalanguage.reducer(
 					)
 					desc = terms.cons(
 						desc,
-						flex_value.closure(
-							"#collect-host-tuple-param",
-							evaluator.substitute_placeholders_identity(
-								flex_value.singleton(next_elem_type, next_val),
-								env.typechecking_context,
-								1
-							), --TODO: might need to swap this back
-							-- typed_term.literal(strict_value.singleton(next_elem_type, next_val)),
-							env.typechecking_context.runtime_context,
+						evaluator.substitute_into_closure(
+							flex_value.singleton(next_elem_type, next_val),
+							env.typechecking_context,
+							syntax.start_anchor,
 							terms.var_debug("#collect-host-tuple-param", syntax.start_anchor)
 						)
 					)
