@@ -94,10 +94,10 @@ function inferrable:unwrap_tuple_type() end
 function inferrable:as_tuple_type() end
 ---@return boolean
 function inferrable:is_record_cons() end
----@return MapValue fields
+---@return MapValue<string,inferrable> fields
 function inferrable:unwrap_record_cons() end
 ---@return boolean
----@return MapValue fields
+---@return MapValue<string,inferrable> fields
 function inferrable:as_record_cons() end
 ---@return boolean
 function inferrable:is_record_elim() end
@@ -121,11 +121,11 @@ function inferrable:unwrap_enum_cons() end
 function inferrable:as_enum_cons() end
 ---@return boolean
 function inferrable:is_enum_desc_cons() end
----@return MapValue variants
+---@return MapValue<string,inferrable> variants
 ---@return inferrable rest
 function inferrable:unwrap_enum_desc_cons() end
 ---@return boolean
----@return MapValue variants
+---@return MapValue<string,inferrable> variants
 ---@return inferrable rest
 function inferrable:as_enum_desc_cons() end
 ---@return boolean
@@ -147,13 +147,13 @@ function inferrable:as_enum_type() end
 ---@return boolean
 function inferrable:is_enum_case() end
 ---@return inferrable target
----@return MapValue variants
----@return MapValue variant_debug
+---@return MapValue<string,inferrable> variants
+---@return MapValue<string,var_debug> variant_debug
 function inferrable:unwrap_enum_case() end
 ---@return boolean
 ---@return inferrable target
----@return MapValue variants
----@return MapValue variant_debug
+---@return MapValue<string,inferrable> variants
+---@return MapValue<string,var_debug> variant_debug
 function inferrable:as_enum_case() end
 ---@return boolean
 function inferrable:is_enum_absurd() end
@@ -166,10 +166,10 @@ function inferrable:unwrap_enum_absurd() end
 function inferrable:as_enum_absurd() end
 ---@return boolean
 function inferrable:is_object_cons() end
----@return MapValue methods
+---@return MapValue<string,inferrable> methods
 function inferrable:unwrap_object_cons() end
 ---@return boolean
----@return MapValue methods
+---@return MapValue<string,inferrable> methods
 function inferrable:as_object_cons() end
 ---@return boolean
 function inferrable:is_object_elim() end
@@ -386,15 +386,15 @@ function inferrable:as_program_type() end
 ---@field tuple_cons fun(elements: ArrayValue<inferrable>, debug: ArrayValue<var_debug>): inferrable
 ---@field tuple_elim fun(names: ArrayValue<string>, debug: ArrayValue<var_debug>, subject: inferrable, body: inferrable): inferrable
 ---@field tuple_type fun(desc: inferrable): inferrable
----@field record_cons fun(fields: MapValue): inferrable
+---@field record_cons fun(fields: MapValue<string,inferrable>): inferrable
 ---@field record_elim fun(subject: inferrable, field_names: ArrayValue<string>, body: inferrable): inferrable
 ---@field enum_cons fun(constructor: string, arg: inferrable): inferrable
----@field enum_desc_cons fun(variants: MapValue, rest: inferrable): inferrable
+---@field enum_desc_cons fun(variants: MapValue<string,inferrable>, rest: inferrable): inferrable
 ---@field enum_elim fun(subject: inferrable, mechanism: inferrable): inferrable
 ---@field enum_type fun(desc: inferrable): inferrable
----@field enum_case fun(target: inferrable, variants: MapValue, variant_debug: MapValue): inferrable
+---@field enum_case fun(target: inferrable, variants: MapValue<string,inferrable>, variant_debug: MapValue<string,var_debug>): inferrable
 ---@field enum_absurd fun(target: inferrable, debug: string): inferrable
----@field object_cons fun(methods: MapValue): inferrable
+---@field object_cons fun(methods: MapValue<string,inferrable>): inferrable
 ---@field object_elim fun(subject: inferrable, mechanism: inferrable): inferrable
 ---@field let fun(name: string, debug: var_debug, expr: inferrable, body: inferrable): inferrable
 ---@field operative_cons fun(operative_type: inferrable, userdata: inferrable): inferrable

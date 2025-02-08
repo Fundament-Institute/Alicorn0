@@ -188,7 +188,7 @@ local function let_helper(pp, name, expr, context)
 end
 
 ---@param pp PrettyPrint
----@param names ArrayValue
+---@param names ArrayValue<string>
 ---@param subject inferrable | typed
 ---@param context PrettyPrintingContext
 ---@return PrettyPrintingContext
@@ -199,7 +199,7 @@ local function tuple_elim_helper(pp, names, subject, context)
 	pp:unit("(")
 	pp:unit(pp:reset_color())
 
-	for i, name in names:ipairs() do
+	for i, name in ipairs(names) do
 		inner_context = inner_context:append(name)
 
 		if i > 1 then

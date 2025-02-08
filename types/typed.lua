@@ -177,19 +177,19 @@ function typed:unwrap_tuple_desc_type() end
 function typed:as_tuple_desc_type() end
 ---@return boolean
 function typed:is_record_cons() end
----@return MapValue fields
+---@return MapValue<string,typed> fields
 function typed:unwrap_record_cons() end
 ---@return boolean
----@return MapValue fields
+---@return MapValue<string,typed> fields
 function typed:as_record_cons() end
 ---@return boolean
 function typed:is_record_extend() end
 ---@return typed base
----@return MapValue fields
+---@return MapValue<string,typed> fields
 function typed:unwrap_record_extend() end
 ---@return boolean
 ---@return typed base
----@return MapValue fields
+---@return MapValue<string,typed> fields
 function typed:as_record_extend() end
 ---@return boolean
 function typed:is_record_elim() end
@@ -231,11 +231,11 @@ function typed:unwrap_enum_rec_elim() end
 function typed:as_enum_rec_elim() end
 ---@return boolean
 function typed:is_enum_desc_cons() end
----@return MapValue variants
+---@return MapValue<string,typed> variants
 ---@return typed rest
 function typed:unwrap_enum_desc_cons() end
 ---@return boolean
----@return MapValue variants
+---@return MapValue<string,typed> variants
 ---@return typed rest
 function typed:as_enum_desc_cons() end
 ---@return boolean
@@ -255,15 +255,15 @@ function typed:as_enum_type() end
 ---@return boolean
 function typed:is_enum_case() end
 ---@return typed target
----@return MapValue variants
----@return MapValue variant_debug
+---@return MapValue<string,typed> variants
+---@return MapValue<string,var_debug> variant_debug
 ---@return typed default
 ---@return var_debug default_debug
 function typed:unwrap_enum_case() end
 ---@return boolean
 ---@return typed target
----@return MapValue variants
----@return MapValue variant_debug
+---@return MapValue<string,typed> variants
+---@return MapValue<string,var_debug> variant_debug
 ---@return typed default
 ---@return var_debug default_debug
 function typed:as_enum_case() end
@@ -278,17 +278,17 @@ function typed:unwrap_enum_absurd() end
 function typed:as_enum_absurd() end
 ---@return boolean
 function typed:is_object_cons() end
----@return MapValue methods
+---@return MapValue<string,typed> methods
 function typed:unwrap_object_cons() end
 ---@return boolean
----@return MapValue methods
+---@return MapValue<string,typed> methods
 function typed:as_object_cons() end
 ---@return boolean
 function typed:is_object_corec_cons() end
----@return MapValue methods
+---@return MapValue<string,typed> methods
 function typed:unwrap_object_corec_cons() end
 ---@return boolean
----@return MapValue methods
+---@return MapValue<string,typed> methods
 function typed:as_object_corec_cons() end
 ---@return boolean
 function typed:is_object_elim() end
@@ -485,11 +485,11 @@ function typed:unwrap_effect_row() end
 function typed:as_effect_row() end
 ---@return boolean
 function typed:is_effect_row_resolve() end
----@return SetValue elems
+---@return SetValue<table> elems
 ---@return typed rest
 function typed:unwrap_effect_row_resolve() end
 ---@return boolean
----@return SetValue elems
+---@return SetValue<table> elems
 ---@return typed rest
 function typed:as_effect_row_resolve() end
 ---@return boolean
@@ -573,19 +573,19 @@ function typed:as_constrained_type() end
 ---@field tuple_element_access fun(subject: typed, index: number): typed
 ---@field tuple_type fun(desc: typed): typed
 ---@field tuple_desc_type fun(universe: typed): typed
----@field record_cons fun(fields: MapValue): typed
----@field record_extend fun(base: typed, fields: MapValue): typed
+---@field record_cons fun(fields: MapValue<string,typed>): typed
+---@field record_extend fun(base: typed, fields: MapValue<string,typed>): typed
 ---@field record_elim fun(subject: typed, field_names: ArrayValue<string>, body: typed): typed
 ---@field enum_cons fun(constructor: string, arg: typed): typed
 ---@field enum_elim fun(subject: typed, mechanism: typed): typed
 ---@field enum_rec_elim fun(subject: typed, mechanism: typed): typed
----@field enum_desc_cons fun(variants: MapValue, rest: typed): typed
+---@field enum_desc_cons fun(variants: MapValue<string,typed>, rest: typed): typed
 ---@field enum_desc_type fun(univ: typed): typed
 ---@field enum_type fun(desc: typed): typed
----@field enum_case fun(target: typed, variants: MapValue, variant_debug: MapValue, default: typed, default_debug: var_debug): typed
+---@field enum_case fun(target: typed, variants: MapValue<string,typed>, variant_debug: MapValue<string,var_debug>, default: typed, default_debug: var_debug): typed
 ---@field enum_absurd fun(target: typed, debug: string): typed
----@field object_cons fun(methods: MapValue): typed
----@field object_corec_cons fun(methods: MapValue): typed
+---@field object_cons fun(methods: MapValue<string,typed>): typed
+---@field object_corec_cons fun(methods: MapValue<string,typed>): typed
 ---@field object_elim fun(subject: typed, mechanism: typed): typed
 ---@field operative_cons fun(userdata: typed): typed
 ---@field operative_type_cons fun(handler: typed, userdata_type: typed): typed
@@ -609,7 +609,7 @@ function typed:as_constrained_type() end
 ---@field program_invoke fun(effect_tag: typed, effect_arg: typed): typed
 ---@field effect_type fun(components: ArrayValue<typed>, base: typed): typed
 ---@field effect_row fun(elems: ArrayValue<typed>, rest: typed): typed
----@field effect_row_resolve fun(elems: SetValue, rest: typed): typed
+---@field effect_row_resolve fun(elems: SetValue<table>, rest: typed): typed
 ---@field program_type fun(effect_type: typed, result_type: typed): typed
 ---@field srel_type fun(target_type: typed): typed
 ---@field variance_type fun(target_type: typed): typed

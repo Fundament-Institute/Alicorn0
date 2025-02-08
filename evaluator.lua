@@ -503,11 +503,12 @@ local TupleDescRelation = setmetatable({
 	),
 }, subtype_relation_mt)
 
----@param onto ArrayValue
----@param with ArrayValue
+---@generic T
+---@param onto ArrayValue<T>
+---@param with ArrayValue<T>
 local function add_arrays(onto, with)
 	local o_len = onto:len()
-	for i, n in with:ipairs() do
+	for i, n in ipairs(with) do
 		local x
 		if i > o_len then
 			x = 0
@@ -923,9 +924,9 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		U.notail(typed_term.enum_desc_type(univ_sub))
 	elseif val:is_enum_desc_value() then
 		local variants = val:unwrap_enum_desc_value()
-		---@type MapValue
+		---@type MapValue<string, typed>
 		local variants_sub = string_typed_map()
-		for k, v in variants:pairs() do
+		for k, v in pairs(variants) do
 			variants_sub:set(k, substitute_inner(v, mappings, context_len, ambient_typechecking_context))
 		end
 		local res = typed_term.enum_desc_cons(
@@ -994,19 +995,25 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		U.notail(typed_term.tuple_element_access(subject_term, index))
 	elseif val:is_host_unwrap() then
 		local boxed = val:unwrap_host_unwrap()
-		U.notail(typed_term.host_unwrap(
-			substitute_inner(flex_value.stuck(boxed), mappings, context_len, ambient_typechecking_context)
-		))
+		U.notail(
+			typed_term.host_unwrap(
+				substitute_inner(flex_value.stuck(boxed), mappings, context_len, ambient_typechecking_context)
+			)
+		)
 	elseif val:is_host_wrap() then
 		local to_wrap = val:unwrap_host_wrap()
-		U.notail(typed_term.host_wrap(
-			substitute_inner(flex_value.stuck(to_wrap), mappings, context_len, ambient_typechecking_context)
-		))
+		U.notail(
+			typed_term.host_wrap(
+				substitute_inner(flex_value.stuck(to_wrap), mappings, context_len, ambient_typechecking_context)
+			)
+		)
 	elseif val:is_host_unwrap() then
 		local to_unwrap = val:unwrap_host_unwrap()
-		U.notail(typed_term.host_unwrap(
-			substitute_inner(flex_value.stuck(to_unwrap), mappings, context_len, ambient_typechecking_context)
-		))
+		U.notail(
+			typed_term.host_unwrap(
+				substitute_inner(flex_value.stuck(to_unwrap), mappings, context_len, ambient_typechecking_context)
+			)
+		)
 	elseif val:is_host_application() then
 		local fn, arg = val:unwrap_host_application()
 		local res = typed_term.application(
@@ -2025,8 +2032,8 @@ function check_concrete(l_ctx, val, r_ctx, use, cause)
 end
 
 ---@param enum_val flex_value
----@param closures ArrayValue
----@return ArrayValue
+---@param closures ArrayValue<flex_value>
+---@return ArrayValue<flex_value>
 local function extract_tuple_elem_type_closures(enum_val, closures)
 	local constructor, arg = enum_val:unwrap_enum_value()
 	local elements = arg:unwrap_tuple_value()
@@ -2054,7 +2061,7 @@ end
 ---@param checkable_term checkable
 ---@param typechecking_context TypecheckingContext
 ---@param goal_type flex_value
----@return boolean, ArrayValue, typed
+---@return boolean, ArrayValue<integer>, typed
 local function check(
 	checkable_term, -- constructed from checkable_term
 	typechecking_context, -- todo
@@ -2502,7 +2509,7 @@ end
 ---@param typechecking_context TypecheckingContext
 ---@return boolean ok
 ---@return flex_value type
----@return ArrayValue usages
+---@return ArrayValue<integer> usages
 ---@return typed term
 local function infer_impl(
 	inferrable_term, -- constructed from inferrable

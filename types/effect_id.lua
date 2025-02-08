@@ -5,7 +5,7 @@
 effect_id = {}
 
 ---@return table
----@return SetValue
+---@return SetValue<table>
 function effect_id:unwrap_effect_id() end
 
 -- TODO: constructor annotation

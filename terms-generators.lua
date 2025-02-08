@@ -511,19 +511,19 @@ end
 ---@field value_type Type
 ---@field __index table
 ---@field __newindex function
----@field __pairs function(MapValue): function, MapValue, Value?
----@field __tostring function(MapValue): string
+---@field __pairs fun(self: MapValue): function, MapValue, Value?
+---@field __tostring fun(self: MapValue): string
 
----@class MapValue: Value
+---@class MapValue<K, V>: Value, { K: V }
 ---@field _map { [Value]: Value }
----@field set fun(MapValue, Value, Value)
----@field reset fun(MapValue, Value)
----@field get fun(MapValue, Value): Value?
----@field pairs fun(MapValue): function, MapValue, Value?
----@field copy fun(MapValue, MapValue?, function?): MapValue
----@field union fun(MapValue, MapValue, function): MapValue
----@field pretty_print fun(MapValue, ...)
----@field default_print fun(MapValue, ...)
+---@field set fun(self: MapValue, key: Value, value: Value)
+---@field reset fun(self: MapValue, key: Value)
+---@field get fun(self: MapValue, key: Value): Value?
+---@field pairs fun(self: MapValue): function, MapValue, Value?
+---@field copy fun(self: MapValue, onto: MapValue?, conflict: function?): MapValue
+---@field union fun(self: MapValue, right: MapValue, conflict: function): MapValue
+---@field pretty_print fun(self: MapValue, ...)
+---@field default_print fun(self: MapValue, ...)
 
 local map_type_mt = {
 	__call = function(self, ...)
@@ -652,8 +652,11 @@ local function define_map(self, key_type, value_type)
 	})
 	traits.value_name:implement_on(self, {
 		value_name = function()
-			-- TODO: augment this with generics
-			return "MapValue"
+			return "MapValue<"
+				.. traits.value_name:get(key_type).value_name()
+				.. ","
+				.. traits.value_name:get(value_type).value_name()
+				.. ">"
 		end,
 	})
 	return self
@@ -664,21 +667,21 @@ define_map = U.memoize(define_map)
 ---@overload fun(...): SetValue
 ---@field key_type Type
 ---@field __index table
----@field __pairs function(SetValue): function, SetValue, Value?
----@field __tostring function(SetValue): string
+---@field __pairs fun(SetValue): function, SetValue, Value?
+---@field __tostring fun(SetValue): string
 
----@class SetValue: Value
+---@class SetValue<K>: Value, { K: boolean }
 ---@field _set { [Value]: boolean }
----@field put fun(SetValue, Value)
----@field remove fun(SetValue, Value)
----@field test fun(SetValue, Value): boolean?
----@field pairs function(SetValue): function, SetValue, Value?
----@field copy fun(SetValue, SetValue?): SetValue
----@field union fun(SetValue, SetValue): SetValue
----@field subtract fun(SetValue, SetValue): SetValue
----@field superset fun(SetValue, SetValue): boolean
----@field pretty_print fun(SetValue, ...)
----@field default_print fun(SetValue, ...)
+---@field put fun(self: SetValue, key: Value)
+---@field remove fun(self: SetValue, key: Value)
+---@field test fun(self: SetValue, key: Value): boolean?
+---@field pairs fun(self: SetValue): function, SetValue, Value?
+---@field copy fun(self: SetValue, onto: SetValue?): SetValue
+---@field union fun(self: SetValue, right: SetValue): SetValue
+---@field subtract fun(self: SetValue, right: SetValue): SetValue
+---@field superset fun(self: SetValue, right: SetValue): boolean
+---@field pretty_print fun(self: SetValue, ...)
+---@field default_print fun(self: SetValue, ...)
 
 local set_type_mt = {
 	__call = function(self, ...)
@@ -807,8 +810,7 @@ local function define_set(self, key_type)
 	})
 	traits.value_name:implement_on(self, {
 		value_name = function()
-			-- TODO: augment this with generics
-			return "SetValue"
+			return "SetValue<" .. traits.value_name:get(key_type).value_name() .. ">"
 		end,
 	})
 	return self
@@ -822,20 +824,21 @@ define_set = U.memoize(define_set)
 ---@field __eq fun(ArrayValue, ArrayValue): boolean
 ---@field __index fun(self: ArrayValue, key: integer | string) : Value | function
 ---@field __newindex fun(self: ArrayValue, key: integer, value: Value)
----@field __ipairs fun(ArrayValue): function, ArrayValue, integer
----@field __len fun(ArrayValue): integer
----@field __tostring fun(ArrayValue): string
+---@field __ipairs fun(self: ArrayValue): function, ArrayValue, integer
+---@field __len fun(self: ArrayValue): integer
+---@field __tostring fun(self: ArrayValue): string
 
 ---@class ArrayValue<T>: Value, { [integer]: T }
 ---@field n integer
 ---@field array Value[]
----@field ipairs fun(ArrayValue): function, ArrayValue, integer
----@field len fun(ArrayValue): integer
----@field append fun(ArrayValue, Value)
----@field copy fun(ArrayValue, integer?, integer?): ArrayValue
----@field unpack fun(ArrayValue): ...
----@field pretty_print fun(ArrayValue, ...)
----@field default_print fun(ArrayValue, ...)
+---@field ipairs fun(self: ArrayValue): function, ArrayValue, integer
+---@field len fun(self: ArrayValue): integer
+---@field append fun(self: ArrayValue, v: Value)
+---@field copy fun(self: ArrayValue, integer?, integer?): ArrayValue
+---@field map fun(self: ArrayValue, target: ArrayType, fn: fun(any) : any): ArrayValue
+---@field unpack fun(self: ArrayValue): ...
+---@field pretty_print fun(self: ArrayValue, ...)
+---@field default_print fun(self: ArrayValue, ...)
 
 local array_type_mt = {
 	__call = function(self, ...)

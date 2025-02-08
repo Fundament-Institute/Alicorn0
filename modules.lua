@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 -- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
 local types = require "typesystem"
-local evaluator = require "alicorn-evaluator"
+local evaluator = require "evaluator"
 local environment = require "environment"
 local metalanguage = require "metalanguage"
 local trie = require "lazy-prefix-tree"

@@ -13,6 +13,7 @@ local module_mt = {}
 local evaluator = require "evaluator"
 local infer = evaluator.infer
 
+---@source environment.lua
 local environment_mt
 
 ---Takes a table resembling an old environment (can be missing fields, it doesn't matter) and turns it into a new environment

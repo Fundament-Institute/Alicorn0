@@ -549,7 +549,7 @@ local function operative_test_hack(env, metaval)
 end
 
 ---@param type_of_term flex_value
----@param usage_count ArrayValue
+---@param usage_count ArrayValue<integer>
 ---@param term typed
 ---@param sargs ConstructedSyntax
 ---@param goal expression_goal
@@ -642,7 +642,7 @@ local function call_operative(type_of_term, usage_count, term, sargs, goal, env)
 end
 
 ---@param type_of_term flex_value
----@param usage_count ArrayValue
+---@param usage_count ArrayValue<integer>
 ---@param term typed
 ---@param sargs ConstructedSyntax
 ---@param goal expression_goal
@@ -726,7 +726,7 @@ local function call_pi(type_of_term, usage_count, term, sargs, goal, env)
 end
 
 ---@param type_of_term_input flex_value
----@param usage_count ArrayValue
+---@param usage_count ArrayValue<integer>
 ---@param term typed
 ---@param sargs ConstructedSyntax
 ---@param goal expression_goal
@@ -810,7 +810,7 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 	if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
 		local ok, tuple_usages, tuple_term = evaluator.check(tuple, env.typechecking_context, param_type)
 		if not ok then
-			---@cast tuple_usages -ArrayValue
+			---@cast tuple_usages string
 			return terms.tristate.failure, tuple_usages
 		end
 		local result_final = evaluator.evaluate(
@@ -872,7 +872,7 @@ local function expression_pairhandler(args, a, b)
 	local operator_type
 	local left, operator, right
 	if ok then
-		---@cast syntax ConstructedSyntax
+		---@cast syntax -string
 		is_operator, operator_type, operator, left, right = syntax:match({
 			metalanguage.listmatch(
 				expression_prefix_handler,

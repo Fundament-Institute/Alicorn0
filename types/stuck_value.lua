@@ -112,17 +112,17 @@ function stuck_value:unwrap_enum_desc_type() end
 function stuck_value:as_enum_desc_type() end
 ---@return boolean
 function stuck_value:is_enum_desc_value() end
----@return MapValue variants
+---@return MapValue<string,flex_value> variants
 function stuck_value:unwrap_enum_desc_value() end
 ---@return boolean
----@return MapValue variants
+---@return MapValue<string,flex_value> variants
 function stuck_value:as_enum_desc_value() end
 ---@return boolean
 function stuck_value:is_record_value() end
----@return MapValue fields
+---@return MapValue<string,flex_value> fields
 function stuck_value:unwrap_record_value() end
 ---@return boolean
----@return MapValue fields
+---@return MapValue<string,flex_value> fields
 function stuck_value:as_record_value() end
 ---@return boolean
 function stuck_value:is_record_type() end
@@ -141,19 +141,19 @@ function stuck_value:as_record_desc_type() end
 ---@return boolean
 function stuck_value:is_record_extend() end
 ---@return stuck_value base
----@return MapValue extension
+---@return MapValue<string,flex_value> extension
 function stuck_value:unwrap_record_extend() end
 ---@return boolean
 ---@return stuck_value base
----@return MapValue extension
+---@return MapValue<string,flex_value> extension
 function stuck_value:as_record_extend() end
 ---@return boolean
 function stuck_value:is_object_value() end
----@return MapValue methods
+---@return MapValue<string,typed> methods
 ---@return FlexRuntimeContext capture
 function stuck_value:unwrap_object_value() end
 ---@return boolean
----@return MapValue methods
+---@return MapValue<string,typed> methods
 ---@return FlexRuntimeContext capture
 function stuck_value:as_object_value() end
 ---@return boolean
@@ -384,12 +384,12 @@ function stuck_value:as_host_unwrap() end
 ---@field enum_value fun(constructor: string, arg: flex_value): stuck_value
 ---@field enum_type fun(desc: flex_value): stuck_value
 ---@field enum_desc_type fun(universe: flex_value): stuck_value
----@field enum_desc_value fun(variants: MapValue): stuck_value
----@field record_value fun(fields: MapValue): stuck_value
+---@field enum_desc_value fun(variants: MapValue<string,flex_value>): stuck_value
+---@field record_value fun(fields: MapValue<string,flex_value>): stuck_value
 ---@field record_type fun(desc: flex_value): stuck_value
 ---@field record_desc_type fun(universe: flex_value): stuck_value
----@field record_extend fun(base: stuck_value, extension: MapValue): stuck_value
----@field object_value fun(methods: MapValue, capture: FlexRuntimeContext): stuck_value
+---@field record_extend fun(base: stuck_value, extension: MapValue<string,flex_value>): stuck_value
+---@field object_value fun(methods: MapValue<string,typed>, capture: FlexRuntimeContext): stuck_value
 ---@field object_type fun(desc: flex_value): stuck_value
 ---@field host_function_type fun(param_type: flex_value, result_type: flex_value, result_info: flex_value): stuck_value
 ---@field host_wrapped_type fun(type: flex_value): stuck_value

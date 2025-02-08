@@ -8,7 +8,7 @@ local function default_unknown(c)
 end
 
 ---@param argv string[]
----@param opttab {[string]: function(string, string?)}
+---@param opttab {[string]: fun(string, string?)}
 ---@return integer
 local function getopt(argv, opttab)
 	local handle_unknown = opttab["?"] or default_unknown
