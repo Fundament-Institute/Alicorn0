@@ -774,16 +774,16 @@ local function gather_usages(val, usages, context_len, ambient_typechecking_cont
 		gather_usages(flex_value.stuck(subject), usages, context_len, ambient_typechecking_context)
 	elseif val:is_host_unwrap() then
 		local boxed = val:unwrap_host_unwrap()
-			gather_usages(flex_value.stuck(boxed), usages, context_len, ambient_typechecking_context)
+		gather_usages(flex_value.stuck(boxed), usages, context_len, ambient_typechecking_context)
 	elseif val:is_host_wrap() then
 		local to_wrap = val:unwrap_host_wrap()
-			gather_usages(flex_value.stuck(to_wrap), usages, context_len, ambient_typechecking_context)
+		gather_usages(flex_value.stuck(to_wrap), usages, context_len, ambient_typechecking_context)
 	elseif val:is_host_unwrap() then
 		local to_unwrap = val:unwrap_host_unwrap()
-			gather_usages(flex_value.stuck(to_unwrap), usages, context_len, ambient_typechecking_context)
+		gather_usages(flex_value.stuck(to_unwrap), usages, context_len, ambient_typechecking_context)
 	elseif val:is_host_application() then
 		local fn, arg = val:unwrap_host_application()
-			gather_usages(flex_value.stuck(arg), usages, context_len, ambient_typechecking_context)
+		gather_usages(flex_value.stuck(arg), usages, context_len, ambient_typechecking_context)
 	elseif val:is_host_tuple() then
 		local leading, stuck, trailing = val:unwrap_host_tuple()
 		gather_usages(flex_value.stuck(stuck), usages, context_len, ambient_typechecking_context)
@@ -797,8 +797,8 @@ local function gather_usages(val, usages, context_len, ambient_typechecking_cont
 		gather_usages(alternate, usages, context_len, ambient_typechecking_context)
 	elseif val:is_application() then
 		local fn, arg = val:unwrap_application()
-			gather_usages(flex_value.stuck(fn), usages, context_len, ambient_typechecking_context),
-			gather_usages(arg, usages, context_len, ambient_typechecking_context)
+		gather_usages(flex_value.stuck(fn), usages, context_len, ambient_typechecking_context)
+		gather_usages(arg, usages, context_len, ambient_typechecking_context)
 	elseif val:is_host_function_type() then
 		local param_type, result_type, res_info = val:unwrap_host_function_type()
 		local param_type = gather_usages(param_type, usages, context_len, ambient_typechecking_context)
@@ -829,19 +829,19 @@ local function gather_usages(val, usages, context_len, ambient_typechecking_cont
 		local val_tm = gather_usages(val, usages, context_len, ambient_typechecking_context)
 	elseif val:is_union_type() then
 		local a, b = val:unwrap_union_type()
-			gather_usages(a, usages, context_len, ambient_typechecking_context),
-			gather_usages(b, usages, context_len, ambient_typechecking_context)
+		gather_usages(a, usages, context_len, ambient_typechecking_context)
+		gather_usages(b, usages, context_len, ambient_typechecking_context)
 	elseif val:is_intersection_type() then
 		local a, b = val:unwrap_intersection_type()
-			gather_usages(a, usages, context_len, ambient_typechecking_context),
-			gather_usages(b, usages, context_len, ambient_typechecking_context)
+		gather_usages(a, usages, context_len, ambient_typechecking_context)
+		gather_usages(b, usages, context_len, ambient_typechecking_context)
 	elseif val:is_program_type() then
 		local effect, res = val:unwrap_program_type()
-			gather_usages(effect, usages, context_len, ambient_typechecking_context),
-			gather_usages(res, usages, context_len, ambient_typechecking_context)
+		gather_usages(effect, usages, context_len, ambient_typechecking_context)
+		gather_usages(res, usages, context_len, ambient_typechecking_context)
 	elseif val:is_effect_row_extend() then
 		local row, rest = val:unwrap_effect_row_extend()
-			gather_usages(rest, usages, context_len, ambient_typechecking_context)
+		gather_usages(rest, usages, context_len, ambient_typechecking_context)
 	else
 		error("Unhandled value kind in gather_usages: " .. val.kind)
 	end
