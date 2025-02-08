@@ -2184,11 +2184,12 @@ local function convert_desc(desc)
 				terms.typechecking_context()
 			)
 		)
+		local capture_dbg = var_debug("#capture", U.anchor_here())
 		local convert_type_fun = terms.flex_value.closure(
 			"#tuple-prefix",
-			terms.typed_term.literal(convert_type),
-			flex_value.strict(empty_tuple),
-			var_debug("#capture", U.anchor_here()),
+			typed.bound_variable(1, capture_dbg),
+			convert_type,
+			capture_dbg,
 			var_debug("#tuple-prefix", U.anchor_here())
 		)
 		evaluator.verify_placeholder_lite(convert_type_fun, terms.typechecking_context())
