@@ -54,7 +54,7 @@ local function gen_base_operator(fn_op, name, ...)
 	local count, res = fn_op(bound_vars)
 	return terms.strict_value.closure(
 		argname,
-		terms.typed_term.tuple_elim(names, debug_names, terms.typed_term.bound_variable(1, debug_arg), count, res),
+		terms.typed_term.tuple_elim(names, debug_names, terms.typed_term.bound_variable(2, debug_arg), count, res),
 		empty_tuple,
 		terms.var_debug("#capture", U.anchor_here()),
 		debug_arg
