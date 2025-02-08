@@ -1200,6 +1200,43 @@ local function substitute_placeholders_identity(val, typechecking_context, hidde
 end
 
 ---@param val flex_value
+---@param context FlexRuntimeContext
+---@param usages ArrayValue<integer>
+---@param anchor Anchor
+---@param param_dbg var_debug
+---@return typed lambda_term `typed_term.lambda`
+local function substitute_usages_into_lambda(val, context, usages, anchor, param_dbg)
+	local elements = typed_array()
+	local mappings = { [context.bindings:len() + 1] = typed_term.bound_variable(2, param_dbg) }
+	local capture_info = terms.var_debug("#capture", anchor)
+
+	for i, v in ipairs(usages) do
+		if i <= context.bindings:len() and v > 0 then
+			local _, info = context:get(i)
+			elements:append(typed_term.bound_variable(i, info))
+			mappings[i] = typed_term.tuple_element_access(typed_term.bound_variable(1, capture_info), #elements)
+		end
+	end
+
+	local body_term_sub = substitute_inner(val, mappings, 2, typechecking_context)
+
+	local capture = typed_term.tuple_cons(elements)
+	return typed_term.lambda(param_dbg.name, param_dbg, body_term_sub, capture, capture_info, anchor)
+end
+
+---@param body_val flex_value
+---@param context FlexRuntimeContext
+---@param anchor Anchor
+---@param param_dbg var_debug
+---@param ambient_typechecking_context TypecheckingContext
+---@return typed lambda_term `typed_term.lambda`
+local function substitute_into_lambda(body_val, context, anchor, param_dbg, ambient_typechecking_context)
+	local usages = usage_array()
+	gather_usages(body_val, usages, context.bindings:len(), ambient_typechecking_context)
+	return substitute_usages_into_lambda(body_val, context, usages, anchor, param_dbg)
+end
+
+---@param val flex_value
 ---@return boolean
 local function is_type_of_types(val)
 	return val:is_star() or val:is_prop() or val:is_host_type_type()
@@ -1407,7 +1444,7 @@ add_comparer("flex_value.enum_type", "flex_value.enum_type", function(l_ctx, a, 
 end)
 add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ctx, a, r_ctx, b, cause)
 	local a_desc = a:unwrap_enum_type()
-	local b_univ = b:unwrap_tuple_desc_type()
+	local b_universe = b:unwrap_tuple_desc_type()
 	local construction_variants = string_value_map()
 	-- The empty variant has no arguments
 	construction_variants:set(
@@ -1415,8 +1452,16 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 		flex_value.tuple_type(flex_value.enum_value(terms.DescCons.empty, flex_value.tuple_value(flex_value_array())))
 	)
 	local arg_name = terms.var_debug("#arg" .. tostring(#r_ctx + 1), U.anchor_here())
-	local univ_dbg = terms.var_debug("#univ", U.anchor_here())
+	local universe_dbg = terms.var_debug("#univ", U.anchor_here())
 	local prefix_desc_dbg = terms.var_debug("#prefix-desc", U.anchor_here())
+	-- The tuple descriptor's universe can depend on it's context.
+	local universe_lambda = substitute_into_lambda(
+		b,
+		r_ctx.runtime_context,
+		U.anchor_here(),
+		terms.var_debug("#prefix", U.anchor_here()),
+		r_ctx
+	)
 	-- The cons variant takes a prefix description and a next element, represented as a function from the prefix tuple to a type in the specified universe
 	construction_variants:set(
 		terms.DescCons.cons,
@@ -1433,12 +1478,7 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 										terms.DescCons.empty,
 										flex_value.tuple_value(flex_value_array())
 									),
-									flex_value.closure(
-										"#prefix",
-										substitute_placeholders_identity(b, r_ctx, 1),
-										r_ctx.runtime_context,
-										terms.var_debug("#prefix", U.anchor_here())
-									)
+									evaluate(universe_lambda, r_ctx.runtime_context, r_ctx)
 								)
 							)
 						),
@@ -1457,13 +1497,13 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 									typed.lambda(
 										arg_name.name,
 										arg_name,
-										typed_term.bound_variable(#r_ctx + 1, univ_dbg),
+										typed_term.bound_variable(#r_ctx + 1, universe_dbg),
 										U.anchor_here()
 									),
 									typed.literal(strict_value.result_info(terms.result_info(terms.purity.pure)))
 								)
 							),
-							r_ctx.runtime_context:append(b_univ, "b_univ", univ_dbg),
+							r_ctx.runtime_context:append(b_universe, "b_universe", universe_dbg),
 							arg_name
 						)
 					)
@@ -2573,23 +2613,7 @@ local function infer_impl(
 			return false, body_type
 		end
 
-		local elements = typed_array()
-		local mappings = { [typechecking_context:len() + 1] = typed_term.bound_variable(2, param_dbg) }
-		local capture_info = terms.var_debug("#capture", start_anchor)
-
-		for i, v in ipairs(body_usages) do
-			if i <= typechecking_context:len() and v > 0 then
-				local _, info = typechecking_context:get_runtime_context():get(i)
-				elements:append(typed_term.bound_variable(i, info))
-				mappings[i] = typed_term.tuple_element_access(typed_term.bound_variable(1, capture_info), #elements)
-			end
-		end
-
-		local capture = typed_term.tuple_cons(elements)
-
 		local body_value = evaluate(body_term, typechecking_context.runtime_context, typechecking_context)
-
-		local body_term_sub = substitute_inner(body_value, mappings, 2, typechecking_context)
 
 		local result_type = substitute_type_variables(
 			body_type,
@@ -2618,8 +2642,14 @@ local function infer_impl(
 			result_info
 		)
 		lambda_type.original_name = param_name
-		local lambda_term =
-			typed_term.lambda(param_name .. "^", param_debug, body_term_sub, capture, capture_info, start_anchor)
+		local lambda_term = substitute_usages_into_lambda(
+			body_value,
+			typechecking_context.runtime_context,
+			body_usages,
+			start_anchor,
+			param_debug
+		)
+
 		return true, lambda_type, lambda_usages, lambda_term
 	elseif inferrable_term:is_pi() then
 		local param_type, param_info, result_type, result_info = inferrable_term:unwrap_pi()
