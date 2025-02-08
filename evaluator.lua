@@ -2637,7 +2637,7 @@ local function infer_impl(
 			return false, body_type
 		end
 
-		local body_value = evaluate(body_term, typechecking_context.runtime_context, typechecking_context)
+		local body_value = evaluate(body_term, inner_context.runtime_context, inner_context)
 
 		local result_type = substitute_type_variables(
 			body_type,
