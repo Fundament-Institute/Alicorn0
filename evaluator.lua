@@ -883,10 +883,11 @@ local substitute_inner
 
 ---@param val flex_value an alicorn value
 ---@param mappings {[integer|flex_value]: typed} the placeholder we are trying to get rid of by substituting
+---@param mappings_changed boolean whether `mappings` should be used in this substitution
 ---@param context_len integer number of bindings in the runtime context already used - needed for closures
 ---@param ambient_typechecking_context TypecheckingContext
----@return typed a typed term
-local function substitute_inner_impl(val, mappings, context_len, ambient_typechecking_context)
+---@return typed term a typed term
+local function substitute_inner_impl(val, mappings, mappings_changed, context_len, ambient_typechecking_context)
 	-- If this is strict, simply return it inside a literal, since no substitution is necessary no matter what it is.
 	if terms.flex_value.value_check(val) ~= true then
 		error(
@@ -910,60 +911,72 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		return U.notail(typed_term.literal(val))
 	elseif val:is_pi() then
 		local param_type, param_info, result_type, result_info = val:unwrap_pi()
-		local param_type = substitute_inner(param_type, mappings, context_len, ambient_typechecking_context)
-		local param_info = substitute_inner(param_info, mappings, context_len, ambient_typechecking_context)
-		local result_type = substitute_inner(result_type, mappings, context_len, ambient_typechecking_context)
-		local result_info = substitute_inner(result_info, mappings, context_len, ambient_typechecking_context)
+		local param_type =
+			substitute_inner(param_type, mappings, mappings_changed, context_len, ambient_typechecking_context)
+		local param_info =
+			substitute_inner(param_info, mappings, mappings_changed, context_len, ambient_typechecking_context)
+		local result_type =
+			substitute_inner(result_type, mappings, mappings_changed, context_len, ambient_typechecking_context)
+		local result_info =
+			substitute_inner(result_info, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		local res = typed_term.pi(param_type, param_info, result_type, result_info)
 		res.original_name = val.original_name
 		return res
 	elseif val:is_closure() then
 		local param_name, code, capture, capture_info, param_info = val:unwrap_closure()
 
-		local capture_sub = substitute_inner(capture, mappings, context_len, ambient_typechecking_context)
+		local capture_sub =
+			substitute_inner(capture, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		return U.notail(typed_term.lambda(param_name, param_info, code, capture_sub, capture_info, param_info.source))
 	elseif val:is_operative_value() then
 		local userdata = val:unwrap_operative_value()
-		local userdata = substitute_inner(userdata, mappings, context_len, ambient_typechecking_context)
+		local userdata =
+			substitute_inner(userdata, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		return U.notail(typed_term.operative_cons(userdata))
 	elseif val:is_operative_type() then
 		local handler, userdata_type = val:unwrap_operative_type()
-		local typed_handler = substitute_inner(handler, mappings, context_len, ambient_typechecking_context)
-		local typed_userdata_type = substitute_inner(userdata_type, mappings, context_len, ambient_typechecking_context)
+		local typed_handler =
+			substitute_inner(handler, mappings, mappings_changed, context_len, ambient_typechecking_context)
+		local typed_userdata_type =
+			substitute_inner(userdata_type, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		return U.notail(typed_term.operative_type_cons(typed_handler, typed_userdata_type))
 	elseif val:is_tuple_value() then
 		local elems = val:unwrap_tuple_value()
 		local res = typed_array()
 		for _, v in elems:ipairs() do
-			res:append(substitute_inner(v, mappings, context_len, ambient_typechecking_context))
+			res:append(substitute_inner(v, mappings, mappings_changed, context_len, ambient_typechecking_context))
 		end
 		return U.notail(typed_term.tuple_cons(res))
 	elseif val:is_tuple_type() then
 		local desc = val:unwrap_tuple_type()
-		local desc = substitute_inner(desc, mappings, context_len, ambient_typechecking_context)
+		local desc = substitute_inner(desc, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		return U.notail(typed_term.tuple_type(desc))
 	elseif val:is_tuple_desc_type() then
 		local universe = val:unwrap_tuple_desc_type()
-		local typed_universe = substitute_inner(universe, mappings, context_len, ambient_typechecking_context)
+		local typed_universe =
+			substitute_inner(universe, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		return U.notail(typed_term.tuple_desc_type(typed_universe))
 	elseif val:is_enum_value() then
 		local constructor, arg = val:unwrap_enum_value()
-		local arg = substitute_inner(arg, mappings, context_len, ambient_typechecking_context)
+		local arg = substitute_inner(arg, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		return U.notail(typed_term.enum_cons(constructor, arg))
 	elseif val:is_enum_type() then
 		local desc = val:unwrap_enum_type()
-		local desc_sub = substitute_inner(desc, mappings, context_len, ambient_typechecking_context)
+		local desc_sub = substitute_inner(desc, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		return U.notail(typed_term.enum_type(desc_sub))
 	elseif val:is_enum_desc_type() then
 		local univ = val:unwrap_enum_desc_type()
-		local univ_sub = substitute_inner(univ, mappings, context_len, ambient_typechecking_context)
+		local univ_sub = substitute_inner(univ, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		return U.notail(typed_term.enum_desc_type(univ_sub))
 	elseif val:is_enum_desc_value() then
 		local variants = val:unwrap_enum_desc_value()
 		---@type MapValue<string, typed>
 		local variants_sub = string_typed_map()
 		for k, v in pairs(variants) do
-			variants_sub:set(k, substitute_inner(v, mappings, context_len, ambient_typechecking_context))
+			variants_sub:set(
+				k,
+				substitute_inner(v, mappings, mappings_changed, context_len, ambient_typechecking_context)
+			)
 		end
 		return U.notail(
 			typed_term.enum_desc_cons(
@@ -980,11 +993,13 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		error("Records not yet implemented")
 	elseif val:is_srel_type() then
 		local target = val:unwrap_srel_type()
-		local target_sub = substitute_inner(target, mappings, context_len, ambient_typechecking_context)
+		local target_sub =
+			substitute_inner(target, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		return U.notail(typed_term.srel_type(target_sub))
 	elseif val:is_variance_type() then
 		local target = val:unwrap_variance_type()
-		local target_sub = substitute_inner(target, mappings, context_len, ambient_typechecking_context)
+		local target_sub =
+			substitute_inner(target, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		return U.notail(typed_term.variance_type(target_sub))
 	elseif val:is_object_value() then
 		-- TODO: this needs to be evaluated properly because it contains a value
@@ -1006,7 +1021,13 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 			local mv = free:unwrap_metavariable()
 
 			if not (mv.block_level < typechecker_state.block_level) then
-				return typechecker_state:slice_constraints_for(mv, mappings, context_len, ambient_typechecking_context)
+				return typechecker_state:slice_constraints_for(
+					mv,
+					mappings,
+					mappings_changed,
+					context_len,
+					ambient_typechecking_context
+				)
 			else
 				lookup = free:unwrap_metavariable()
 				default_mapping = typed_term.metavariable(free:unwrap_metavariable())
@@ -1015,7 +1036,20 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 			error("substitute_inner NYI free with kind " .. free.kind)
 		end
 
-		mapping = mappings[lookup] or mapping or default_mapping
+		if mappings_changed and free:is_placeholder() then
+			mapping = mappings[lookup]
+			if mapping == nil then
+				error(
+					string.format(
+						"no valid mapping for placeholder %s given lookup ID %s when mappings have changed",
+						free:pretty_print(ambient_typechecking_context),
+						tostring(lookup)
+					)
+				)
+			end
+		else
+			mapping = mappings[lookup] or mapping or default_mapping
+		end
 		if mapping then
 			return mapping
 		end
@@ -1027,28 +1061,51 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		)
 	elseif val:is_tuple_element_access() then
 		local subject, index = val:unwrap_tuple_element_access()
-		local subject_term =
-			substitute_inner(flex_value.stuck(subject), mappings, context_len, ambient_typechecking_context)
+		local subject_term = substitute_inner(
+			flex_value.stuck(subject),
+			mappings,
+			mappings_changed,
+			context_len,
+			ambient_typechecking_context
+		)
 		return U.notail(typed_term.tuple_element_access(subject_term, index))
 	elseif val:is_host_unwrap() then
 		local boxed = val:unwrap_host_unwrap()
 		return U.notail(
 			typed_term.host_unwrap(
-				substitute_inner(flex_value.stuck(boxed), mappings, context_len, ambient_typechecking_context)
+				substitute_inner(
+					flex_value.stuck(boxed),
+					mappings,
+					mappings_changed,
+					context_len,
+					ambient_typechecking_context
+				)
 			)
 		)
 	elseif val:is_host_wrap() then
 		local to_wrap = val:unwrap_host_wrap()
 		return U.notail(
 			typed_term.host_wrap(
-				substitute_inner(flex_value.stuck(to_wrap), mappings, context_len, ambient_typechecking_context)
+				substitute_inner(
+					flex_value.stuck(to_wrap),
+					mappings,
+					mappings_changed,
+					context_len,
+					ambient_typechecking_context
+				)
 			)
 		)
 	elseif val:is_host_unwrap() then
 		local to_unwrap = val:unwrap_host_unwrap()
 		return U.notail(
 			typed_term.host_unwrap(
-				substitute_inner(flex_value.stuck(to_unwrap), mappings, context_len, ambient_typechecking_context)
+				substitute_inner(
+					flex_value.stuck(to_unwrap),
+					mappings,
+					mappings_changed,
+					context_len,
+					ambient_typechecking_context
+				)
 			)
 		)
 	elseif val:is_host_application() then
@@ -1056,7 +1113,13 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		return U.notail(
 			typed_term.application(
 				typed_term.literal(strict_value.host_value(fn)),
-				substitute_inner(flex_value.stuck(arg), mappings, context_len, ambient_typechecking_context)
+				substitute_inner(
+					flex_value.stuck(arg),
+					mappings,
+					mappings_changed,
+					context_len,
+					ambient_typechecking_context
+				)
 			)
 		)
 	elseif val:is_host_tuple() then
@@ -1067,9 +1130,17 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 			local elem_value = typed_term.literal(strict_value.host_value(elem))
 			elems:append(elem_value)
 		end
-		elems:append(substitute_inner(flex_value.stuck(stuck), mappings, context_len, ambient_typechecking_context))
+		elems:append(
+			substitute_inner(
+				flex_value.stuck(stuck),
+				mappings,
+				mappings_changed,
+				context_len,
+				ambient_typechecking_context
+			)
+		)
 		for _, elem in trailing:ipairs() do
-			elems:append(substitute_inner(elem, mappings, context_len, ambient_typechecking_context))
+			elems:append(substitute_inner(elem, mappings, mappings_changed, context_len, ambient_typechecking_context))
 		end
 		-- print("host_tuple_stuck nval", nval)
 		local result = typed_term.host_tuple_cons(elems)
@@ -1077,80 +1148,99 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		return result
 	elseif val:is_host_if() then
 		local subject, consequent, alternate = val:unwrap_host_if()
-		local subject = substitute_inner(flex_value.stuck(subject), mappings, context_len, ambient_typechecking_context)
-		local consequent = substitute_inner(consequent, mappings, context_len, ambient_typechecking_context)
-		local alternate = substitute_inner(alternate, mappings, context_len, ambient_typechecking_context)
+		local subject = substitute_inner(
+			flex_value.stuck(subject),
+			mappings,
+			mappings_changed,
+			context_len,
+			ambient_typechecking_context
+		)
+		local consequent =
+			substitute_inner(consequent, mappings, mappings_changed, context_len, ambient_typechecking_context)
+		local alternate =
+			substitute_inner(alternate, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		return U.notail(typed_term.host_if(subject, consequent, alternate))
 	elseif val:is_application() then
 		local fn, arg = val:unwrap_application()
 		return U.notail(
 			typed_term.application(
-				substitute_inner(flex_value.stuck(fn), mappings, context_len, ambient_typechecking_context),
-				substitute_inner(arg, mappings, context_len, ambient_typechecking_context)
+				substitute_inner(
+					flex_value.stuck(fn),
+					mappings,
+					mappings_changed,
+					context_len,
+					ambient_typechecking_context
+				),
+				substitute_inner(arg, mappings, mappings_changed, context_len, ambient_typechecking_context)
 			)
 		)
 	elseif val:is_host_function_type() then
 		local param_type, result_type, res_info = val:unwrap_host_function_type()
-		local param_type = substitute_inner(param_type, mappings, context_len, ambient_typechecking_context)
-		local result_type = substitute_inner(result_type, mappings, context_len, ambient_typechecking_context)
-		local res_info = substitute_inner(res_info, mappings, context_len, ambient_typechecking_context)
+		local param_type =
+			substitute_inner(param_type, mappings, mappings_changed, context_len, ambient_typechecking_context)
+		local result_type =
+			substitute_inner(result_type, mappings, mappings_changed, context_len, ambient_typechecking_context)
+		local res_info =
+			substitute_inner(res_info, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		return U.notail(typed_term.host_function_type(param_type, result_type, res_info))
 	elseif val:is_host_wrapped_type() then
 		local type = val:unwrap_host_wrapped_type()
-		local type = substitute_inner(type, mappings, context_len, ambient_typechecking_context)
+		local type = substitute_inner(type, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		return U.notail(typed_term.host_wrapped_type(type))
 	elseif val:is_host_user_defined_type() then
 		local id, family_args = val:unwrap_host_user_defined_type()
 		local res = typed_array()
 		for _, v in family_args:ipairs() do
-			res:append(substitute_inner(v, mappings, context_len, ambient_typechecking_context))
+			res:append(substitute_inner(v, mappings, mappings_changed, context_len, ambient_typechecking_context))
 		end
 		return U.notail(typed_term.host_user_defined_type_cons(id, res))
 	elseif val:is_host_tuple_type() then
 		local desc = val:unwrap_host_tuple_type()
-		local desc = substitute_inner(desc, mappings, context_len, ambient_typechecking_context)
+		local desc = substitute_inner(desc, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		return U.notail(typed_term.host_tuple_type(desc))
 	elseif val:is_range() then
 		local lower_bounds, upper_bounds, relation = val:unwrap_range()
 		local sub_lower_bounds = typed_array()
 		local sub_upper_bounds = typed_array()
 		for _, v in lower_bounds:ipairs() do
-			local sub = substitute_inner(v, mappings, context_len, ambient_typechecking_context)
+			local sub = substitute_inner(v, mappings, mappings_changed, context_len, ambient_typechecking_context)
 			sub_lower_bounds:append(sub)
 		end
 		for _, v in upper_bounds:ipairs() do
-			local sub = substitute_inner(v, mappings, context_len, ambient_typechecking_context)
+			local sub = substitute_inner(v, mappings, mappings_changed, context_len, ambient_typechecking_context)
 			sub_upper_bounds:append(sub)
 		end
-		local sub_relation = substitute_inner(relation, mappings, context_len, ambient_typechecking_context)
+		local sub_relation =
+			substitute_inner(relation, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		return U.notail(typed_term.range(sub_lower_bounds, sub_upper_bounds, sub_relation))
 	elseif val:is_singleton() then
 		local supertype, val = val:unwrap_singleton()
-		local supertype_tm = substitute_inner(supertype, mappings, context_len, ambient_typechecking_context)
-		local val_tm = substitute_inner(val, mappings, context_len, ambient_typechecking_context)
+		local supertype_tm =
+			substitute_inner(supertype, mappings, mappings_changed, context_len, ambient_typechecking_context)
+		local val_tm = substitute_inner(val, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		return U.notail(typed_term.singleton(supertype_tm, val_tm))
 	elseif val:is_union_type() then
 		local a, b = val:unwrap_union_type()
 		return U.notail(
 			typed_term.union_type(
-				substitute_inner(a, mappings, context_len, ambient_typechecking_context),
-				substitute_inner(b, mappings, context_len, ambient_typechecking_context)
+				substitute_inner(a, mappings, mappings_changed, context_len, ambient_typechecking_context),
+				substitute_inner(b, mappings, mappings_changed, context_len, ambient_typechecking_context)
 			)
 		)
 	elseif val:is_intersection_type() then
 		local a, b = val:unwrap_intersection_type()
 		return U.notail(
 			typed_term.intersection_type(
-				substitute_inner(a, mappings, context_len, ambient_typechecking_context),
-				substitute_inner(b, mappings, context_len, ambient_typechecking_context)
+				substitute_inner(a, mappings, mappings_changed, context_len, ambient_typechecking_context),
+				substitute_inner(b, mappings, mappings_changed, context_len, ambient_typechecking_context)
 			)
 		)
 	elseif val:is_program_type() then
 		local effect, res = val:unwrap_program_type()
 		return U.notail(
 			typed_term.program_type(
-				substitute_inner(effect, mappings, context_len, ambient_typechecking_context),
-				substitute_inner(res, mappings, context_len, ambient_typechecking_context)
+				substitute_inner(effect, mappings, mappings_changed, context_len, ambient_typechecking_context),
+				substitute_inner(res, mappings, mappings_changed, context_len, ambient_typechecking_context)
 			)
 		)
 	elseif val:is_effect_row_extend() then
@@ -1158,13 +1248,18 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		return U.notail(
 			typed_term.effect_row_resolve(
 				row,
-				substitute_inner(rest, mappings, context_len, ambient_typechecking_context)
+				substitute_inner(rest, mappings, mappings_changed, context_len, ambient_typechecking_context)
 			)
 		)
 	elseif val:is_host_intrinsic() then
 		local source, start_anchor = val:unwrap_host_intrinsic()
-		local source_term =
-			substitute_inner(flex_value.stuck(source), mappings, context_len, ambient_typechecking_context)
+		local source_term = substitute_inner(
+			flex_value.stuck(source),
+			mappings,
+			mappings_changed,
+			context_len,
+			ambient_typechecking_context
+		)
 		return U.notail(typed.host_intrinsic(source_term, start_anchor))
 	else
 		error("Unhandled value kind in substitute_inner: " .. val.kind)
@@ -1173,7 +1268,7 @@ end
 
 local recurse_count = 0
 ---@module "_meta/evaluator/substitute_inner"
-function substitute_inner(val, mappings, context_len, ambient_typechecking_context)
+function substitute_inner(val, mappings, mappings_changed, context_len, ambient_typechecking_context)
 	local tracked = val.track ~= nil
 	if tracked then
 		print(string.rep("·", recurse_count) .. "SUB: " .. tostring(val))
@@ -1181,7 +1276,7 @@ function substitute_inner(val, mappings, context_len, ambient_typechecking_conte
 
 	terms.verify_placeholder_lite(val, ambient_typechecking_context)
 	recurse_count = recurse_count + 1
-	local r = substitute_inner_impl(val, mappings, context_len, ambient_typechecking_context)
+	local r = substitute_inner_impl(val, mappings, mappings_changed, context_len, ambient_typechecking_context)
 	recurse_count = recurse_count - 1
 	terms.verify_placeholder_lite(r, ambient_typechecking_context)
 
@@ -1225,7 +1320,7 @@ local function substitute_type_variables(val, debuginfo, index, param_name, ctx,
 
 	local capture = typed_term.tuple_cons(elements)
 
-	local substituted = substitute_inner(val, mappings, index, ambient_typechecking_context)
+	local substituted = substitute_inner(val, mappings, false, index, ambient_typechecking_context)
 	--print("typed term after substitution (substituted): (typed term follows)")
 	--print(substituted:pretty_print(typechecking_context))
 	return U.notail(flex_value.closure(param_name, substituted, capture, capture_info, debuginfo))
@@ -1242,7 +1337,7 @@ local function substitute_placeholders_identity(val, typechecking_context, hidde
 		local _, info = typechecking_context.runtime_context:get(i)
 		mappings[i] = typed.bound_variable(i, info)
 	end
-	return U.notail(substitute_inner(val, mappings, size + (hidden or 0), typechecking_context))
+	return U.notail(substitute_inner(val, mappings, false, size + (hidden or 0), typechecking_context))
 end
 
 ---@param val flex_value
@@ -1281,7 +1376,7 @@ local function substitute_usages_into_lambda(val, context, usages, anchor, param
 
 	mappings[context.bindings:len() + 1] = typed_term.bound_variable(2, param_dbg)
 
-	local body_term_sub = substitute_inner(val, mappings, 2, ambient_typechecking_context)
+	local body_term_sub = substitute_inner(val, mappings, true, 2, ambient_typechecking_context)
 
 	local capture = typed_term.tuple_cons(elements)
 	return U.notail(typed_term.lambda(param_dbg.name, param_dbg, body_term_sub, capture, capture_info, anchor))
@@ -6089,10 +6184,17 @@ end
 ---extract a region of a graph based on the block depth around a metavariable, for use in substitution
 ---@param mv Metavariable
 ---@param mappings {[integer]: typed} the placeholder we are trying to get rid of by substituting
+---@param mappings_changed boolean whether `mappings` should be used in this substitution
 ---@param context_len integer number of bindings in the runtime context already used - needed for closures
 ---@param ambient_typechecking_context TypecheckingContext ambient context for resolving placeholders
 ---@return typed
-function TypeCheckerState:slice_constraints_for(mv, mappings, context_len, ambient_typechecking_context)
+function TypeCheckerState:slice_constraints_for(
+	mv,
+	mappings,
+	mapppings_changed,
+	context_len,
+	ambient_typechecking_context
+)
 	-- take only the constraints that are against this metavariable in such a way that it remains valid as we exit the block
 	-- if the metavariable came from a "lower" block it is still in scope and may gain additional constraints in the future
 	-- because this metavariable is from an outer scope, it doesn't have any constraints against something that is in the deeper scope and needs to be substituted,
@@ -6148,7 +6250,13 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len, ambie
 	end, function(edge)
 		constraints:append(
 			terms.constraintelem.constrain_sliced(
-				substitute_inner(getnode(edge.left), mappings, context_len, ambient_typechecking_context),
+				substitute_inner(
+					getnode(edge.left),
+					mappings,
+					mappings_changed,
+					context_len,
+					ambient_typechecking_context
+				),
 				getctx(edge.left),
 				edge.rel,
 				edge.cause
@@ -6161,7 +6269,13 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len, ambie
 		constraints:append(
 			terms.constraintelem.sliced_constrain(
 				edge.rel,
-				substitute_inner(getnode(edge.right), mappings, context_len, ambient_typechecking_context),
+				substitute_inner(
+					getnode(edge.right),
+					mappings,
+					mappings_changed,
+					context_len,
+					ambient_typechecking_context
+				),
 				getctx(edge.right),
 				edge.cause
 			)
@@ -6172,9 +6286,15 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len, ambie
 	end, function(edge)
 		constraints:append(
 			terms.constraintelem.leftcall_sliced(
-				substitute_inner(getnode(edge.left), mappings, context_len, ambient_typechecking_context),
+				substitute_inner(
+					getnode(edge.left),
+					mappings,
+					mappings_changed,
+					context_len,
+					ambient_typechecking_context
+				),
 				getctx(edge.left),
-				substitute_inner(edge.arg, mappings, context_len, ambient_typechecking_context),
+				substitute_inner(edge.arg, mappings, mappings_changed, context_len, ambient_typechecking_context),
 				edge.rel,
 				edge.cause
 			)
@@ -6185,9 +6305,15 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len, ambie
 	end, function(edge)
 		constraints:append(
 			terms.constraintelem.sliced_leftcall(
-				substitute_inner(edge.arg, mappings, context_len, ambient_typechecking_context),
+				substitute_inner(edge.arg, mappings, mappings_changed, context_len, ambient_typechecking_context),
 				edge.rel,
-				substitute_inner(getnode(edge.right), mappings, context_len, ambient_typechecking_context),
+				substitute_inner(
+					getnode(edge.right),
+					mappings,
+					mappings_changed,
+					context_len,
+					ambient_typechecking_context
+				),
 				getctx(edge.right),
 				edge.cause
 			)
@@ -6198,10 +6324,16 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len, ambie
 	end, function(edge)
 		constraints:append(
 			terms.constraintelem.rightcall_sliced(
-				substitute_inner(getnode(edge.left), mappings, context_len, ambient_typechecking_context),
+				substitute_inner(
+					getnode(edge.left),
+					mappings,
+					mappings_changed,
+					context_len,
+					ambient_typechecking_context
+				),
 				getctx(edge.left),
 				edge.rel,
-				substitute_inner(edge.arg, mappings, context_len, ambient_typechecking_context),
+				substitute_inner(edge.arg, mappings, mappings_changed, context_len, ambient_typechecking_context),
 				edge.cause
 			)
 		)
@@ -6212,9 +6344,15 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len, ambie
 		constraints:append(
 			terms.constraintelem.sliced_rightcall(
 				edge.rel,
-				substitute_inner(getnode(edge.right), mappings, context_len, ambient_typechecking_context),
+				substitute_inner(
+					getnode(edge.right),
+					mappings,
+					mappings_changed,
+					context_len,
+					ambient_typechecking_context
+				),
 				getctx(edge.right),
-				substitute_inner(edge.arg, mappings, context_len, ambient_typechecking_context),
+				substitute_inner(edge.arg, mappings, mappings_changed, context_len, ambient_typechecking_context),
 				edge.cause
 			)
 		)

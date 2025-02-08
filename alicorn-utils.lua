@@ -696,9 +696,12 @@ function M.debug_id()
 	DEBUG_ID = DEBUG_ID + 1
 
 	-- Use this to reliably breakpoint at the moment a term of interest is created
-	--if DEBUG_ID == 1361047 then
-	--	print("STOP")
-	--end
+	if DEBUG_ID == 115726 then
+		local ok, lldebugger = pcall(require, "lldebugger")
+		if ok then
+			lldebugger.requestBreak()
+		end
+	end
 
 	return DEBUG_ID
 end
