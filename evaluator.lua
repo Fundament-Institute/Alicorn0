@@ -195,7 +195,7 @@ local function FunctionRelation(srel)
 		antisym = luatovalue(function(a, b, r1, r2)
 			error("nyi")
 		end),
-		constrain = luatovalue(function(l_ctx, val, r_ctx, use, cause)
+		constrain = strict_value.host_value(function(l_ctx, val, r_ctx, use, cause)
 			local inner_info = {
 				debug = "FunctionRelation(" .. srel.debug_name .. ").constrain " .. U.here(),
 				--.. " caused by: "
@@ -262,7 +262,7 @@ local function IndepTupleRelation(...)
 		antisym = luatovalue(function(a, b, r1, r2)
 			error("nyi")
 		end),
-		constrain = luatovalue(
+		constrain = strict_value.host_value(
 			---constrain tuple elements
 			---@param l_ctx TypecheckingContext
 			---@param val flex_value
@@ -329,7 +329,7 @@ local EffectRowRelation = setmetatable({
 		error("nyi")
 	end),
 
-	constrain = luatovalue(
+	constrain = strict_value.host_value(
 		---@param l_ctx TypecheckingContext
 		---@param val flex_value
 		---@param r_ctx TypecheckingContext
@@ -380,7 +380,7 @@ local EnumDescRelation = setmetatable({
 		error("nyi")
 	end),
 
-	constrain = luatovalue(
+	constrain = strict_value.host_value(
 		---@param l_ctx TypecheckingContext
 		---@param val flex_value
 		---@param r_ctx TypecheckingContext
@@ -437,7 +437,7 @@ local TupleDescRelation = setmetatable({
 	antisym = luatovalue(function(a, b, r1, r2)
 		error("nyi")
 	end),
-	constrain = luatovalue(
+	constrain = strict_value.host_value(
 		---@param l_ctx TypecheckingContext
 		---@param val flex_value
 		---@param r_ctx TypecheckingContext
@@ -4645,7 +4645,7 @@ UniverseOmegaRelation = setmetatable({
 	antisym = luatovalue(function(a, b, r1, r2)
 		error("nyi")
 	end),
-	constrain = luatovalue(function(l_ctx, val, r_ctx, use, cause)
+	constrain = strict_value.host_value(function(l_ctx, val, r_ctx, use, cause)
 		return check_concrete(l_ctx, val, r_ctx, use, cause)
 	end),
 }, subtype_relation_mt)
@@ -5738,17 +5738,19 @@ function TypeCheckerState:check_heads(left, right, rel, cause, ambient_typecheck
 			return true
 		end
 		-- Unpacking tuples hasn't been fixed in VSCode yet (despite the issue being closed???) so we have to override the types: https://github.com/LuaLS/lua-language-server/issues/1816
-		local tuple_params = flex_value_array(
-			flex_value.host_value(l_ctx),
-			flex_value.host_value(l_value),
-			flex_value.host_value(r_ctx),
-			flex_value.host_value(r_value),
-			flex_value.host_value(cause)
-		)
+		-- local tuple_params = flex_value_array(
+		-- 	flex_value.host_value(l_ctx),
+		-- 	flex_value.host_value(l_value),
+		-- 	flex_value.host_value(r_ctx),
+		-- 	flex_value.host_value(r_value),
+		-- 	flex_value.host_value(cause)
+		-- )
 
-		return apply_value(flex_value.strict(rel.constrain), flex_value.tuple_value(tuple_params), ambient_typechecking_context)
-			:unwrap_host_tuple_value()
-			:unpack()
+		local constrain = rel.constrain:unwrap_host_value()
+		return constrain(l_ctx, l_value, r_ctx, r_value, cause)
+		-- return apply_value(flex_value.strict(rel.constrain), flex_value.tuple_value(tuple_params), ambient_typechecking_context)
+		-- 	:unwrap_host_tuple_value()
+		-- 	:unpack()
 
 		--[[U.tag("apply_value", {
 			l_value = l_value:pretty_preprint(l_ctx),

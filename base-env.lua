@@ -1318,7 +1318,7 @@ local function lambda_implicit_impl(syntax, env)
 		return ok, expr
 	end
 	local resenv, term, purity = env:exit_block(expr, shadow)
-	evaluator.verify_placeholder_lite(term, resenv.typechecking_context) --DEBUG: check if a placeholder is leaking. remove after tests pass
+	terms.verify_placeholder_lite(term, resenv.typechecking_context) --DEBUG: check if a placeholder is leaking. remove after tests pass
 	return true, term, resenv
 end
 
@@ -2192,7 +2192,7 @@ local function convert_desc(desc)
 			capture_dbg,
 			var_debug("#tuple-prefix", U.anchor_here())
 		)
-		evaluator.verify_placeholder_lite(convert_type_fun, terms.typechecking_context())
+		terms.verify_placeholder_lite(convert_type_fun, terms.typechecking_context())
 		return terms.flex_value.enum_value(
 			terms.DescCons.cons,
 			terms.flex_value.tuple_value(flex_value_array(convert_next, convert_type_fun))
