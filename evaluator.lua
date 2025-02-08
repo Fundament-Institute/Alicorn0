@@ -889,6 +889,12 @@ local substitute_inner
 ---@return typed a typed term
 local function substitute_inner_impl(val, mappings, context_len, ambient_typechecking_context)
 	-- If this is strict, simply return it inside a literal, since no substitution is necessary no matter what it is.
+	if terms.flex_value.value_check(val) ~= true then
+		error(
+			"substitute_inner_impl: expected a flex_value (did you forget to wrap a strict or stuck value?): "
+				.. tostring(val)
+		)
+	end
 	if val:is_strict() then
 		return typed_term.literal(val:unwrap_strict())
 	end
@@ -1151,7 +1157,8 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		return res
 	elseif val:is_host_intrinsic() then
 		local source, start_anchor = val:unwrap_host_intrinsic()
-		local source_term = substitute_inner(source, mappings, context_len, ambient_typechecking_context)
+		local source_term =
+			substitute_inner(flex_value.stuck(source), mappings, context_len, ambient_typechecking_context)
 		return typed.host_intrinsic(source_term, start_anchor)
 	else
 		error("Unhandled value kind in substitute_inner: " .. val.kind)
@@ -2334,7 +2341,7 @@ function apply_value(f, arg, ambient_typechecking_context)
 		elseif arg:is_stuck() then
 			return flex_value.stuck(stuck_value.host_application(host_func_impl, arg:unwrap_stuck()))
 		else
-			error("apply_value, is_host_value, arg: expected a host tuple argument")
+			error("apply_value, is_host_value, arg: expected a host tuple argument but got " .. tostring(arg))
 		end
 	else
 		error(
