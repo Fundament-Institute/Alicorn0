@@ -380,10 +380,10 @@ local grammar = P {
 	),
 
 	semicolon = update_ffp(";", space_tokens(P ";") * (V "comment" * #(V "newline" + V "eof")) ^ -1),
+
 	naked_list = V "empty_line"
-		+ (V "tokens" * V "comment" ^ -1 * #(V "superior_indent" + V "eof"))
-		+ (V "comment" * #(V "superior_indent" + V "eof"))
-		+ (V "block_comment") --
+		+ V "block_comment"
+		+ (((V "tokens" * V "comment" ^ -1) + V "comment") * (V "empty_line" + (V "indent" * V "blockline" * V "block_comment" * V "dedent")) ^ 0 * #(V "superior_indent" + V "eof"))
 		+ (list(V "tokens" ^ 0 * V "semicolon") * #(V "blockline" + V "eof"))
 		+ list(
 			(((list(V "tokens" ^ 1 * V "semicolon") + V "semicolon") ^ 1 * V "tokens" ^ 0) + V "tokens" ^ 1)
@@ -495,7 +495,6 @@ local grammar = P {
 			end
 
 			if found_semicolons then
-				print("got here")
 				local semicolon_outer_acc = {}
 				local semicolon_acc = {}
 

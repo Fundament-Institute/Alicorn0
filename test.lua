@@ -1,7 +1,7 @@
 local luaunit = require "luaunit"
 local format = require "format"
 
-local function simplify_list(list)
+local function simplify_list(list, remove_comments)
 	if not list then
 		return nil
 	end
@@ -9,7 +9,7 @@ local function simplify_list(list)
 		local simplified_list = {}
 
 		for i = 1, #list.elements do
-			local result = simplify_list(list.elements[i])
+			local result = simplify_list(list.elements[i], remove_comments)
 			table.insert(simplified_list, result)
 		end
 
@@ -20,7 +20,10 @@ local function simplify_list(list)
 		elseif list.kind == "symbol" then
 			return list.str
 		elseif list.kind == "comment" then
-			return list.val
+			if not remove_comments then
+				return list.val
+			end
+			return nil
 		elseif list.kind == "string" then
 			local val = ""
 
@@ -342,7 +345,7 @@ print a; print b;
 	}
 
 	for i = 1, #example do
-		local results = format.parse(example[i], "inline")
+		local results = format.parse(example[i], ("inline example " .. tostring(i) .. " "))
 		luaunit.assertTrue(forward_moving_cursor(results))
 		luaunit.assertTrue(samelength_testfile_list(example[i], results))
 		luaunit.assertEquals(simplify_list(results), expected[i])
@@ -385,7 +388,7 @@ function testSymbols()
 	}
 
 	for i = 1, #example do
-		local results = format.parse(example[i], "inline")
+		local results = format.parse(example[i], ("inline example " .. tostring(i) .. " "))
 		luaunit.assertTrue(forward_moving_cursor(results))
 		luaunit.assertTrue(samelength_testfile_list(example[i], results))
 		luaunit.assertEquals(simplify_list(results), expected[i])
@@ -462,21 +465,47 @@ print
 ]],
 		[[
 print
+	# hello
+	42
+]],
+		[[
+print
+	42 #testing
+	#### hello
+
+]],
+		[[
+print
 	(+ 1 2
 		\ 3 * 4)
 ]],
+		"foo\n\t\n\tbar",
+		[[
+foo
+
+bar
+]],
+
+		"foo baz intnop\n\t\nbar",
+		"foo\n\t\nbar",
 	}
 
 	local expected = {
 		{ { "print", { "+", 1, 2, { 3, "*", 4 } } } },
 		{ { "print", { "+", 1, 2, { 3, "*", 4 } } } },
 		{ { "print", 42 } },
+		{ { "print", 42 } },
+		{ { "print", 42 } },
 		{ { "print", { "+", 1, 2, { 3, "*", 4 } } } },
+		{ { "foo", "bar" } },
+		{ "foo", "bar" },
+		{ { "foo", "baz", "intnop" }, "bar" },
+		{ "foo", "bar" },
 	}
 
 	for i = 1, #example do
-		local results = format.parse(example[i], "inline")
-		luaunit.assertEquals(simplify_list(results), expected[i])
+		local results = format.parse(example[i], ("inline example " .. tostring(i) .. " "))
+		luaunit.assertEquals(simplify_list(results, true), expected[i])
 		luaunit.assertTrue(forward_moving_cursor(results))
 		luaunit.assertTrue(samelength_testfile_list(example[i], results))
 	end
@@ -514,7 +543,7 @@ toplevel
 	}
 
 	for i = 1, #example do
-		local results = format.parse(example[i], "inline")
+		local results = format.parse(example[i], ("inline example " .. tostring(i) .. " "))
 		local parsed = simplify_list(results)
 		luaunit.assertEquals(parsed, expected[i])
 		luaunit.assertTrue(samelength_testfile_list(example[i], results))
@@ -541,7 +570,7 @@ function testbracedlist()
 	}
 
 	for i = 1, #example do
-		local results = format.parse(example[i], "inline")
+		local results = format.parse(example[i], ("inline example " .. tostring(i) .. " "))
 		luaunit.assertTrue(forward_moving_cursor(results))
 		luaunit.assertEquals(simplify_list(results), expected[i])
 		luaunit.assertTrue(samelength_testfile_list(example[i], results))
@@ -577,7 +606,8 @@ function testcomments()
 		"token # comment T# comment # comment",
 		'#### comment U\n\t""""',
 
-		[[let (orig-results) = get-prim-func-res-inner(wrap(type, foo), prim-nil)
+		[[
+let (orig-results) = get-prim-func-res-inner(wrap(type, foo), prim-nil)
 let orig-results = unwrap(func-conv-res-type(oldargs), orig-results)
 let new-results =
 	lambda ((args : unwrap(type, newargs)))
@@ -607,10 +637,10 @@ let new-results =
 		{ " comment L\ntoken\n\ttoken" },
 		{ { "token", " comment M", { "token", "token" } } },
 		{ { "token", " comment N", "token" }, "token" },
-		{ { "token", " comment O\ntoken" }, "token" },
+		{ "token", " comment O\ntoken", "token" },
 		{ { "token", " comment P\ntoken", "token" } },
-		{ { "token", " comment Q\ntoken\ntoken" } },
-		{ { "token", " comment R\ntoken\n\ttoken" } },
+		{ "token", " comment Q\ntoken\ntoken" },
+		{ "token", " comment R\ntoken\n\ttoken" },
 		{ "token", " comment S1", "token" },
 		{ { "token", " comment S2", "token" } },
 		{ { "token", " comment S3", "token", "token" } },
@@ -638,9 +668,9 @@ let new-results =
 	}
 
 	for i = 1, #example do
-		local results = format.parse(example[i], "inline")
+		local results = format.parse(example[i], ("inline example " .. tostring(i) .. " "))
 		luaunit.assertTrue(samelength_testfile_list(example[i], results))
-		luaunit.assertEquals(simplify_list(results), expected[i])
+		luaunit.assertEquals(simplify_list(results, false), expected[i])
 	end
 end
 
@@ -666,8 +696,8 @@ function testfailedparse()
 		" A",
 	}
 	for i = 1, #example do
-		function assertFunction()
-			local results = format.parse(example[i], "inline")
+		local function assertFunction()
+			local results = format.parse(example[i], ("inline example " .. tostring(i) .. " "))
 		end
 
 		local success, errorMessage = pcall(assertFunction)
@@ -725,7 +755,7 @@ let(
 	}
 
 	for i = 1, #example do
-		local results = format.parse(example[i], "inline")
+		local results = format.parse(example[i], ("inline example " .. tostring(i) .. " "))
 		-- print(inspect(results))
 		luaunit.assertEquals(simplify_list(results), expected[i])
 		luaunit.assertTrue(samelength_testfile_list(example[i], results))
@@ -819,7 +849,7 @@ hello
 	assert(#expected == #example)
 
 	for i = 1, #example do
-		local results = format.parse(example[i], "inline")
+		local results = format.parse(example[i], ("inline example " .. tostring(i) .. " "))
 		luaunit.assertEquals(simplify_list(results), simplify_list(expected[i]))
 		luaunit.assertTrue(compare_list_anchors(results, expected[i]))
 		luaunit.assertTrue(forward_moving_cursor(results))
@@ -896,7 +926,7 @@ return mktype]],
 	assert(#expected == #example)
 
 	for i = 1, #example do
-		local results = format.parse(example[i], "inline")
+		local results = format.parse(example[i], ("inline example " .. tostring(i) .. " "))
 		-- print("test# ", i)
 		-- print("results: ", inspect(results))
 		luaunit.assertEquals(simplify_list(results), expected[i])
