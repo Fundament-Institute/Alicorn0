@@ -1204,8 +1204,9 @@ end
 ---@param usages ArrayValue<integer>
 ---@param anchor Anchor
 ---@param param_dbg var_debug
+---@param ambient_typechecking_context TypecheckingContext
 ---@return typed lambda_term `typed_term.lambda`
-local function substitute_usages_into_lambda(val, context, usages, anchor, param_dbg)
+local function substitute_usages_into_lambda(val, context, usages, anchor, param_dbg, ambient_typechecking_context)
 	local elements = typed_array()
 	local mappings = { [context.bindings:len() + 1] = typed_term.bound_variable(2, param_dbg) }
 	local capture_info = terms.var_debug("#capture", anchor)
@@ -1218,7 +1219,7 @@ local function substitute_usages_into_lambda(val, context, usages, anchor, param
 		end
 	end
 
-	local body_term_sub = substitute_inner(val, mappings, 2, typechecking_context)
+	local body_term_sub = substitute_inner(val, mappings, 2, ambient_typechecking_context)
 
 	local capture = typed_term.tuple_cons(elements)
 	return U.notail(typed_term.lambda(param_dbg.name, param_dbg, body_term_sub, capture, capture_info, anchor))
