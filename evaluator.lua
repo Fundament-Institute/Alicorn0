@@ -1221,7 +1221,7 @@ local function substitute_usages_into_lambda(val, context, usages, anchor, param
 	local body_term_sub = substitute_inner(val, mappings, 2, typechecking_context)
 
 	local capture = typed_term.tuple_cons(elements)
-	return typed_term.lambda(param_dbg.name, param_dbg, body_term_sub, capture, capture_info, anchor)
+	return U.notail(typed_term.lambda(param_dbg.name, param_dbg, body_term_sub, capture, capture_info, anchor))
 end
 
 ---@param body_val flex_value
@@ -1233,7 +1233,7 @@ end
 local function substitute_into_lambda(body_val, context, anchor, param_dbg, ambient_typechecking_context)
 	local usages = usage_array()
 	gather_usages(body_val, usages, context.bindings:len(), ambient_typechecking_context)
-	return substitute_usages_into_lambda(body_val, context, usages, anchor, param_dbg)
+	return U.notail(substitute_usages_into_lambda(body_val, context, usages, anchor, param_dbg))
 end
 
 ---@param val flex_value
@@ -1487,23 +1487,26 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 							typed_term.tuple_elim(
 								string_array("prefix-desc"),
 								debug_array(prefix_desc_dbg),
-								typed_term.bound_variable(#r_ctx + 2, arg_name),
+								typed_term.bound_variable(2, arg_name),
 								1,
 								typed_term.pi(
-									typed_term.tuple_type(typed_term.bound_variable(#r_ctx + 3, prefix_desc_dbg)),
+									typed_term.tuple_type(typed_term.bound_variable(3, prefix_desc_dbg)),
 									typed.literal(
 										strict_value.param_info(strict_value.visibility(terms.visibility.explicit))
 									),
 									typed.lambda(
 										arg_name.name,
 										arg_name,
-										typed_term.bound_variable(#r_ctx + 1, universe_dbg),
+										typed_term.bound_variable(1, universe_dbg),
+										typed.literal(empty_tuple),
+										var_debug("#capture", U.anchor_here()),
 										U.anchor_here()
 									),
 									typed.literal(strict_value.result_info(terms.result_info(terms.purity.pure)))
 								)
 							),
-							r_ctx.runtime_context:append(b_universe, "b_universe", universe_dbg),
+							b_universe,
+							universe_dbg,
 							arg_name
 						)
 					)
