@@ -1517,7 +1517,7 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 					arg_name,
 					typed_term.bound_variable(1, universe_dbg),
 					typed.literal(empty_tuple),
-					terms.var_debug("#capture", U.anchor_here()),
+					universe_dbg,
 					U.anchor_here()
 				),
 				typed.literal(strict_value.result_info(terms.result_info(terms.purity.pure)))
