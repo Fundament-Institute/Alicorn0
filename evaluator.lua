@@ -1337,6 +1337,8 @@ local function substitute_usages_into_lambda(val, context, usages, anchor, param
 		end
 	end
 
+	mappings[context.bindings:len() + 1] = typed_term.bound_variable(2, param_dbg)
+
 	local body_term_sub = substitute_inner(val, mappings, 2, ambient_typechecking_context)
 
 	local capture = typed_term.tuple_cons(elements)
@@ -2749,7 +2751,8 @@ local function infer_impl(
 		local param_type = evaluate(param_term, typechecking_context:get_runtime_context(), typechecking_context)
 		local param_debug = terms.var_debug(param_name, start_anchor)
 		local inner_context = typechecking_context:append(param_name, param_type, nil, param_debug)
-		local ok, purity_usages, purity_term = check(purity, inner_context, flex_value.strict(terms.host_purity_type))
+		local ok, purity_usages, purity_term =
+			check(purity, typechecking_context, flex_value.strict(terms.host_purity_type))
 		if not ok then
 			---@cast purity_usages string
 			return false, purity_usages
@@ -2764,7 +2767,7 @@ local function infer_impl(
 
 		local result_type = substitute_into_closure(
 			body_type,
-			inner_context.runtime_context,
+			typechecking_context.runtime_context,
 			param_debug.source,
 			param_debug,
 			inner_context
@@ -2794,7 +2797,7 @@ local function infer_impl(
 			body_usages,
 			start_anchor,
 			param_debug,
-			typechecking_context
+			inner_context
 		)
 
 		return true, lambda_type, lambda_usages, lambda_term
@@ -3793,7 +3796,7 @@ function infer(inferrable_term, typechecking_context)
 		error("infer didn't return a flex_value!")
 	end
 	recurse_count = recurse_count - 1
-
+	verify_placeholder_lite(v, typechecking_context)
 	if tracked then
 		if not ok then
 			print(v)
