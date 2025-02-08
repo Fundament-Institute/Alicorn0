@@ -152,7 +152,7 @@ local function val_bind(syntax, env)
 	if not ok then
 		return false, symbol.str
 	end
-	return true, value(nil), env + newenv { [symbol.str] = val }
+	return true, value(nil), env + newenv({ [symbol.str] = val })
 end
 
 local env = newenv {

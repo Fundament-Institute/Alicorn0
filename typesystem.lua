@@ -3,6 +3,8 @@
 -- typeclass : tuple a -> constraint
 --
 
+local U = require("alicorn-utils")
+
 -- indexed sum type
 -- parameters may appear in fields that don't
 -- indexed product type
@@ -30,13 +32,13 @@ local typeerror_mt = {
 }
 
 local function type_name(t)
-	return t.kind.type_name(t.params)
+	return U.notail(t.kind.type_name(t.params))
 end
 local function is_duplicable(t)
-	return t.kind.duplicable(t.params)
+	return U.notail(t.kind.duplicable(t.params))
 end
 local function is_discardable(t)
-	return t.kind.discardable(t.params)
+	return U.notail(t.kind.discardable(t.params))
 end
 
 local typeerror = {
@@ -91,17 +93,17 @@ local function typeident(a, b)
 	-- p(a)
 	-- p(b)
 	if a.kind ~= b.kind then
-		return false, typeerror.kind_mismatch(a.kind, b.kind)
+		return false, U.notail(typeerror.kind_mismatch(a.kind, b.kind))
 	end
 	if #a.params ~= #b.params then
 		-- error "two types were provided different length parameterizations, which is illegal"
 		-- TODO: make this properly typed again; temporary workaround for tuples until indexed types can be reintroduced
-		return false, typeerror.param_length(a.kind, #a.params, #b.params)
+		return false, U.notail(typeerror.param_length(a.kind, #a.params, #b.params))
 	end
 	for i = 1, #a.params do
 		local ok, err = typeident(a.params[i], b.params[i])
 		if not ok then
-			return false, typeerror.param_notidentical(a.kind, i, err)
+			return false, U.notail(typeerror.param_notidentical(a.kind, i, err))
 		end
 	end
 	return true
@@ -109,14 +111,14 @@ end
 
 local function typepat(quantmatch, pattern, subject)
 	if subject.kind ~= inputpattern.kind then
-		return false, typeerror.kind_mismatch(subject.kind, inputpattern.kind)
+		return false, U.notail(typeerror.kind_mismatch(subject.kind, inputpattern.kind))
 	end
 	for i, patarg in ipairs(inputpattern.params) do
 		if patarg.kind == "variable" then
 			if quantmatch[patarg.idx] then
 				local ok, err = typeident(quantmatch[patarg.idx], subject.params[i])
 				if not ok then
-					return false, typeerror.unification_failed(i, err)
+					return false, U.notail(typeerror.unification_failed(i, err))
 				end
 			end
 		elseif patarg.kind == "pattern" then
@@ -147,7 +149,7 @@ local function typematch_args(quantifications, inputpattern, subject, outputpatt
 	if not ok then
 		return false, err
 	end
-	return true, realize_typepat(quantmatch, outputpattern)
+	return true, U.notail(realize_typepat(quantmatch, outputpattern))
 end
 
 local function realize_trait(trait, subject)

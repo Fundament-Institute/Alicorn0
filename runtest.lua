@@ -191,7 +191,7 @@ local function load_alc_file(name, env, log)
 
 	log("Parsing code")
 	local ok, code = pcall(function()
-		return format.read(src, name)
+		return U.notail(format.read(src, name))
 	end)
 
 	if not ok then
@@ -316,7 +316,7 @@ local function execute_alc_file(bound_expr, log, env)
 
 	log("Evaluating")
 	local ok, result = pcall(function()
-		return evaluator.evaluate(term, env.typechecking_context.runtime_context, env.typechecking_context)
+		return U.notail(evaluator.evaluate(term, env.typechecking_context.runtime_context, env.typechecking_context))
 	end)
 
 	if not ok then
@@ -334,7 +334,7 @@ local function execute_alc_file(bound_expr, log, env)
 
 	log("Executing")
 	local ok, result_exec = pcall(function()
-		return evaluator.execute_program(result)
+		return U.notail(evaluator.execute_program(result))
 	end)
 
 	if not ok then

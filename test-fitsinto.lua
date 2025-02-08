@@ -12,10 +12,10 @@ local val_array = gen.declare_array(value)
 local debug_array = gen.declare_array(terms.var_debug)
 
 local function val_tup_cons(...)
-	return value.tuple_value(val_array(...))
+	return U.notail(value.tuple_value(val_array(...)))
 end
 local function val_desc_elem(x)
-	return value.enum_value("cons", x)
+	return U.notail(value.enum_value("cons", x))
 end
 local val_desc_empty = value.enum_value("empty", val_tup_cons())
 

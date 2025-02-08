@@ -109,7 +109,7 @@ local function build_meta_file_for_record(info)
 		variant = kind,
 		parts = unwraptypes,
 	}
-	return meta_gen {
+	return U.notail(meta_gen({
 		kind = "file",
 		filename = "types." .. kind,
 		definition = {
@@ -119,7 +119,7 @@ local function build_meta_file_for_record(info)
 			methods = methods,
 			constructor = constructor,
 		},
-	}
+	}))
 end
 
 ---@param info EnumDeriveInfo
@@ -181,7 +181,7 @@ local function build_meta_file_for_enum(info)
 			parts = astypes,
 		}
 	end
-	return meta_gen {
+	return U.notail(meta_gen({
 		kind = "file",
 		filename = "types." .. name,
 		definition = {
@@ -191,7 +191,7 @@ local function build_meta_file_for_enum(info)
 			methods = methods,
 			constructors = constructors,
 		},
-	}
+	}))
 end
 
 ---@type Deriver

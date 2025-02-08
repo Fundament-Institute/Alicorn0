@@ -3878,7 +3878,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		end
 		return rc_val
 	elseif typed_term:is_literal() then
-		return flex_value.strict(typed_term:unwrap_literal())
+		return U.notail(flex_value.strict(typed_term:unwrap_literal()))
 	elseif typed_term:is_metavariable() then
 		return U.notail(flex_value.stuck(stuck_value.free(free.metavariable(typed_term:unwrap_metavariable()))))
 	elseif typed_term:is_unique() then
@@ -3886,7 +3886,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 	elseif typed_term:is_lambda() then
 		local param_name, param_debug, body, capture, capture_dbg, anchor = typed_term:unwrap_lambda()
 		local capture_val = evaluate(capture, runtime_context, ambient_typechecking_context)
-		return flex_value.closure(param_name, body, capture_val, capture_dbg, param_debug)
+		return U.notail(flex_value.closure(param_name, body, capture_val, capture_dbg, param_debug))
 	elseif typed_term:is_pi() then
 		local param_type, param_info, result_type, result_info = typed_term:unwrap_pi()
 		local param_type_value = evaluate(param_type, runtime_context, ambient_typechecking_context)
@@ -3946,7 +3946,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			new_elements:append(evaluate(v, runtime_context, ambient_typechecking_context))
 			--new_elements:append(U.tag("evaluate", { ["element_" .. tostring(i)] = v }, evaluate, v, runtime_context))
 		end
-		return flex_value.tuple_value(new_elements)
+		return U.notail(flex_value.tuple_value(new_elements))
 	elseif typed_term:is_host_tuple_cons() then
 		local elements = typed_term:unwrap_host_tuple_cons()
 		local new_elements = host_array()
@@ -3976,9 +3976,9 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			end
 		end
 		if stuck then
-			return flex_value.stuck(stuck_value.host_tuple(new_elements, stuck_element, trailing_values))
+			return U.notail(flex_value.stuck(stuck_value.host_tuple(new_elements, stuck_element, trailing_values)))
 		else
-			return flex_value.host_tuple_value(new_elements)
+			return U.notail(flex_value.host_tuple_value(new_elements))
 		end
 	elseif typed_term:is_tuple_elim() then
 		local names, infos, subject, length, body = typed_term:unwrap_tuple_elim()
@@ -4038,7 +4038,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			p(subject_value)
 			error("evaluate, is_tuple_elim, subject_value: expected a tuple")
 		end
-		return evaluate(body, inner_context, ambient_typechecking_context)
+		return U.notail(evaluate(body, inner_context, ambient_typechecking_context))
 		--return U.tag("evaluate", { body = body:pretty_preprint(runtime_context) }, evaluate, body, inner_context)
 	elseif typed_term:is_tuple_element_access() then
 		local tuple_term, index = typed_term:unwrap_tuple_element_access()
@@ -4050,7 +4050,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			tuple_term,
 			runtime_context
 		)]]
-		return index_tuple_value(tuple, index)
+		return U.notail(index_tuple_value(tuple, index))
 	elseif typed_term:is_tuple_type() then
 		local desc_term = typed_term:unwrap_tuple_type()
 		local desc = evaluate(desc_term, runtime_context, ambient_typechecking_context)
@@ -4061,11 +4061,11 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			desc_term,
 			runtime_context
 		)]]
-		return flex_value.tuple_type(desc)
+		return U.notail(flex_value.tuple_type(desc))
 	elseif typed_term:is_tuple_desc_type() then
 		local universe_term = typed_term:unwrap_tuple_desc_type()
 		local universe = evaluate(universe_term, runtime_context, ambient_typechecking_context)
-		return flex_value.tuple_desc_type(universe)
+		return U.notail(flex_value.tuple_desc_type(universe))
 	elseif typed_term:is_record_cons() then
 		local fields = typed_term:unwrap_record_cons()
 		local new_fields = string_value_map()
@@ -4073,7 +4073,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			new_fields[k] = evaluate(v, runtime_context, ambient_typechecking_context)
 			--new_fields[k] = U.tag("evaluate", { ["record_field_" .. tostring(k)] = v }, evaluate, v, runtime_context)
 		end
-		return flex_value.record_value(new_fields)
+		return U.notail(flex_value.record_value(new_fields))
 	elseif typed_term:is_record_elim() then
 		local subject, field_names, body = typed_term:unwrap_record_elim()
 		local subject_value = evaluate(subject, runtime_context, ambient_typechecking_context)
@@ -4102,13 +4102,13 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		else
 			error("evaluate, is_record_elim, subject_value: expected a record")
 		end
-		return evaluate(body, inner_context, ambient_typechecking_context)
+		return U.notail(evaluate(body, inner_context, ambient_typechecking_context))
 		--return U.tag("evaluate", { body = body:pretty_preprint(runtime_context) }, evaluate, body, inner_context)
 	elseif typed_term:is_enum_cons() then
 		local constructor, arg = typed_term:unwrap_enum_cons()
 		local arg_value = evaluate(arg, runtime_context, ambient_typechecking_context)
 		--local arg_value = U.tag("evaluate", { arg = arg:pretty_preprint(runtime_context) }, evaluate, arg, runtime_context)
-		return flex_value.enum_value(constructor, arg_value)
+		return U.notail(flex_value.enum_value(constructor, arg_value))
 	elseif typed_term:is_enum_elim() then
 		local subject, mechanism = typed_term:unwrap_enum_elim()
 		local subject_value = evaluate(subject, runtime_context, ambient_typechecking_context)
@@ -4137,17 +4137,17 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 					capture,
 					terms.var_debug("", U.anchor_here())
 				)
-				return apply_value(this_method, arg, ambient_typechecking_context)
+				return U.notail(apply_value(this_method, arg, ambient_typechecking_context))
 			elseif mechanism_value:is_stuck() then
 				-- objects and enums are categorical duals
 				local mechanism_neutral = mechanism_value:unwrap_stuck()
-				return flex_value.stuck(stuck_value.object_elim(subject_value, mechanism_neutral))
+				return U.notail(flex_value.stuck(stuck_value.object_elim(subject_value, mechanism_neutral)))
 			else
 				error("evaluate, is_enum_elim, is_enum_value, mechanism_value: expected an object")
 			end
 		elseif subject_value:is_stuck() then
 			local subject_stuck_value = subject_value:unwrap_stuck()
-			return flex_value.stuck(stuck_value.enum_elim(mechanism_value, subject_stuck_value))
+			return U.notail(flex_value.stuck(stuck_value.enum_elim(mechanism_value, subject_stuck_value)))
 		else
 			error("evaluate, is_enum_elim, subject_value: expected an enum")
 		end
@@ -4161,36 +4161,40 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		local res_rest = evaluate(rest, runtime_context, ambient_typechecking_context)
 		if res_rest:is_enum_desc_value() then
 			local variants_rest = res_rest:unwrap_enum_desc_value()
-			return flex_value.enum_desc_value(result:union(variants_rest, function(a, b)
+			return U.notail(flex_value.enum_desc_value(result:union(variants_rest, function(a, b)
 				return a
-			end))
+			end)))
 		else
 			error "non-concrete enum desc in rest slot, TODO"
 		end
 	elseif typed_term:is_enum_type() then
 		local desc = typed_term:unwrap_enum_type()
 		local desc_val = evaluate(desc, runtime_context, ambient_typechecking_context)
-		return flex_value.enum_type(desc_val)
+		return U.notail(flex_value.enum_type(desc_val))
 	elseif typed_term:is_enum_desc_type() then
 		local universe_term = typed_term:unwrap_enum_desc_type()
 		local universe = evaluate(universe_term, runtime_context, ambient_typechecking_context)
-		return flex_value.enum_desc_type(universe)
+		return U.notail(flex_value.enum_desc_type(universe))
 	elseif typed_term:is_enum_case() then
 		local target, variants, variant_debug, default, default_debug = typed_term:unwrap_enum_case()
 		local target_val = evaluate(target, runtime_context, ambient_typechecking_context)
 		if target_val:is_enum_value() then
 			local variant, arg = target_val:unwrap_enum_value()
 			if variants:get(variant) then
-				return evaluate(
-					variants:get(variant),
-					runtime_context:append(arg, variant, variant_debug:get(variant)),
-					ambient_typechecking_context
+				return U.notail(
+					evaluate(
+						variants:get(variant),
+						runtime_context:append(arg, variant, variant_debug:get(variant)),
+						ambient_typechecking_context
+					)
 				)
 			else
-				return evaluate(
-					default,
-					runtime_context:append(target_val, "default", default_debug),
-					ambient_typechecking_context
+				return U.notail(
+					evaluate(
+						default,
+						runtime_context:append(target_val, "default", default_debug),
+						ambient_typechecking_context
+					)
 				)
 			end
 		else
@@ -4216,13 +4220,15 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			positive = positive_value:unwrap_host_value(),
 			srel = srel_value:unwrap_host_value(),
 		}
-		return flex_value.host_value(variance)
+		return U.notail(flex_value.host_value(variance))
 	elseif typed_term:is_variance_type() then
-		return flex_value.variance_type(
-			evaluate(typed_term:unwrap_variance_type(), runtime_context, ambient_typechecking_context)
+		return U.notail(
+			flex_value.variance_type(
+				evaluate(typed_term:unwrap_variance_type(), runtime_context, ambient_typechecking_context)
+			)
 		)
 	elseif typed_term:is_object_cons() then
-		return flex_value.object_value(typed_term:unwrap_object_cons(), runtime_context)
+		return U.notail(flex_value.object_value(typed_term:unwrap_object_cons(), runtime_context))
 	elseif typed_term:is_object_elim() then
 		local subject, mechanism = typed_term:unwrap_object_elim()
 		local subject_value = evaluate(subject, runtime_context, ambient_typechecking_context)
@@ -4237,44 +4243,44 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 					capture,
 					terms.var_debug("", U.anchor_here())
 				)
-				return apply_value(this_method, arg, ambient_typechecking_context)
+				return U.notail(apply_value(this_method, arg, ambient_typechecking_context))
 			elseif mechanism_value:is_stuck() then
 				-- objects and enums are categorical duals
 				local mechanism_neutral = mechanism_value:unwrap_stuck()
-				return flex_value.stuck(stuck_value.enum_elim(subject_value, mechanism_neutral))
+				return U.notail(flex_value.stuck(stuck_value.enum_elim(subject_value, mechanism_neutral)))
 			else
 				error("evaluate, is_object_elim, is_object_value, mechanism_value: expected an enum")
 			end
 		elseif subject_value:is_stuck() then
 			local subject_stuck_value = subject_value:unwrap_stuck()
-			return flex_value.stuck(stuck_value.object_elim(mechanism_value, subject_stuck_value))
+			return U.notail(flex_value.stuck(stuck_value.object_elim(mechanism_value, subject_stuck_value)))
 		else
 			error("evaluate, is_object_elim, subject_value: expected an object")
 		end
 	elseif typed_term:is_operative_cons() then
 		local userdata = typed_term:unwrap_operative_cons()
 		local userdata_value = evaluate(userdata, runtime_context, ambient_typechecking_context)
-		return flex_value.operative_value(userdata_value)
+		return U.notail(flex_value.operative_value(userdata_value))
 	elseif typed_term:is_operative_type_cons() then
 		local handler, userdata_type = typed_term:unwrap_operative_type_cons()
 		local handler_value = evaluate(handler, runtime_context, ambient_typechecking_context)
 		local userdata_type_value = evaluate(userdata_type, runtime_context, ambient_typechecking_context)
-		return flex_value.operative_type(handler_value, userdata_type_value)
+		return U.notail(flex_value.operative_type(handler_value, userdata_type_value))
 	elseif typed_term:is_host_user_defined_type_cons() then
 		local id, family_args = typed_term:unwrap_host_user_defined_type_cons()
 		local new_family_args = flex_value_array()
 		for _, v in family_args:ipairs() do
 			new_family_args:append(evaluate(v, runtime_context, ambient_typechecking_context))
 		end
-		return flex_value.host_user_defined_type(id, new_family_args)
+		return U.notail(flex_value.host_user_defined_type(id, new_family_args))
 	elseif typed_term:is_host_wrapped_type() then
 		local type_term = typed_term:unwrap_host_wrapped_type()
 		local type_value = evaluate(type_term, runtime_context, ambient_typechecking_context)
-		return flex_value.host_wrapped_type(type_value)
+		return U.notail(flex_value.host_wrapped_type(type_value))
 	elseif typed_term:is_host_unstrict_wrapped_type() then
 		local type_term = typed_term:unwrap_host_unstrict_wrapped_type()
 		local type_value = evaluate(type_term, runtime_context, ambient_typechecking_context)
-		return flex_value.host_wrapped_type(type_value)
+		return U.notail(flex_value.host_wrapped_type(type_value))
 	elseif typed_term:is_host_wrap() then
 		local content = typed_term:unwrap_host_wrap()
 		local content_val = evaluate(content, runtime_context, ambient_typechecking_context)
@@ -4282,15 +4288,15 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			local nval = content_val:unwrap_stuck()
 			if nval:is_host_unwrap() then
 				local inner_subj = nval:unwrap_host_unwrap()
-				return flex_value.stuck(inner_subj)
+				return U.notail(flex_value.stuck(inner_subj))
 			end
-			return flex_value.stuck(stuck_value.host_wrap(nval))
+			return U.notail(flex_value.stuck(stuck_value.host_wrap(nval)))
 		end
-		return flex_value.host_value(content_val:unwrap_strict())
+		return U.notail(flex_value.host_value(content_val:unwrap_strict()))
 	elseif typed_term:is_host_unstrict_wrap() then
 		local content = typed_term:unwrap_host_unstrict_wrap()
 		local content_val = evaluate(content, runtime_context, ambient_typechecking_context)
-		return flex_value.host_value(content_val)
+		return U.notail(flex_value.host_value(content_val))
 	elseif typed_term:is_host_unwrap() then
 		local unwrapped = typed_term:unwrap_host_unwrap()
 		local unwrap_val = evaluate(unwrapped, runtime_context, ambient_typechecking_context)
@@ -4301,13 +4307,13 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 
 		terms.verify_placeholder_lite(unwrap_val, ambient_typechecking_context)
 		if unwrap_val:is_host_value() then
-			return flex_value.strict(unwrap_val:unwrap_host_value())
+			return U.notail(flex_value.strict(unwrap_val:unwrap_host_value()))
 		elseif unwrap_val:is_stuck() then
 			local nval = unwrap_val:unwrap_stuck()
 			if nval:is_host_wrap() then
-				return flex_value.stuck(nval:unwrap_host_wrap())
+				return U.notail(flex_value.stuck(nval:unwrap_host_wrap()))
 			else
-				return flex_value.stuck(stuck_value.host_unwrap(nval))
+				return U.notail(flex_value.stuck(stuck_value.host_unwrap(nval)))
 			end
 		else
 			print("unrecognized value in unbox", unwrap_val)
@@ -4321,10 +4327,10 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			error "evaluate, is_host_unwrap: missing as_host_value on unwrapped host_unwrap"
 		end
 		if unwrap_val:is_host_value() then
-			return unwrap_val:unwrap_host_value()
+			return U.notail(unwrap_val:unwrap_host_value())
 		elseif unwrap_val:is_stuck() then
 			local nval = unwrap_val:unwrap_stuck()
-			return flex_value.stuck(stuck_value.host_unwrap(nval))
+			return U.notail(flex_value.stuck(stuck_value.host_unwrap(nval)))
 		else
 			print("unrecognized value in unbox", unwrap_val)
 			error "invalid value in unbox, must be host_value or neutral"
@@ -4338,9 +4344,9 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 				error("subject of host_if must be a host bool")
 			end
 			if sbool then
-				return evaluate(consequent, runtime_context, ambient_typechecking_context)
+				return U.notail(evaluate(consequent, runtime_context, ambient_typechecking_context))
 			else
-				return evaluate(alternate, runtime_context, ambient_typechecking_context)
+				return U.notail(evaluate(alternate, runtime_context, ambient_typechecking_context))
 			end
 		elseif sval:is_stuck() then
 			local sval_neutral = sval:unwrap_stuck()
@@ -4352,21 +4358,23 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			end
 			local cval = evaluate(consequent, inner_context_c, ambient_typechecking_context)
 			local aval = evaluate(alternate, inner_context_a, ambient_typechecking_context)
-			return flex_value.stuck(stuck_value.host_if(sval_neutral, cval, aval))
+			return U.notail(flex_value.stuck(stuck_value.host_if(sval_neutral, cval, aval)))
 		else
 			error("subject of host_if must be host_value or neutral")
 		end
 	elseif typed_term:is_let() then
 		local name, let_debug, expr, body = typed_term:unwrap_let()
 		local expr_value = evaluate(expr, runtime_context, ambient_typechecking_context)
-		return evaluate(body, runtime_context:append(expr_value, name, let_debug), ambient_typechecking_context)
+		return U.notail(
+			evaluate(body, runtime_context:append(expr_value, name, let_debug), ambient_typechecking_context)
+		)
 	elseif typed_term:is_host_intrinsic() then
 		local source, start_anchor = typed_term:unwrap_host_intrinsic()
 		local source_val = evaluate(source, runtime_context, ambient_typechecking_context)
 		if source_val:is_host_value() then
 			local source_str = source_val:unwrap_host_value()
 			if intrinsic_memo[source_str] then
-				return flex_value.host_value(intrinsic_memo[source_str])
+				return U.notail(flex_value.host_value(intrinsic_memo[source_str]))
 			end
 			local load_env = {}
 			for k, v in pairs(_G) do
@@ -4381,10 +4389,10 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			end
 			local res = assert(load(source_str, "host_intrinsic<" .. tostring(start_anchor) .. ">", "t", load_env))()
 			intrinsic_memo[source_str] = res
-			return flex_value.host_value(res)
+			return U.notail(flex_value.host_value(res))
 		elseif source_val:is_stuck() then
 			local source_neutral = source_val:unwrap_stuck()
-			return flex_value.stuck(stuck_value.host_intrinsic(source_neutral, start_anchor))
+			return U.notail(flex_value.stuck(stuck_value.host_intrinsic(source_neutral, start_anchor)))
 		else
 			error "Tried to load an intrinsic with something that isn't a string"
 		end
@@ -4393,9 +4401,9 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		local args_val = evaluate(args, runtime_context, ambient_typechecking_context)
 		local returns_val = evaluate(returns, runtime_context, ambient_typechecking_context)
 		local resinfo_val = evaluate(res_info, runtime_context, ambient_typechecking_context)
-		return flex_value.host_function_type(args_val, returns_val, resinfo_val)
+		return U.notail(flex_value.host_function_type(args_val, returns_val, resinfo_val))
 	elseif typed_term:is_level0() then
-		return flex_value.level(0)
+		return U.notail(flex_value.level(0))
 	elseif typed_term:is_level_suc() then
 		local previous_level = typed_term:unwrap_level_suc()
 		local previous_level_value = evaluate(previous_level, runtime_context, ambient_typechecking_context)
@@ -4407,7 +4415,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		if level > OMEGA then
 			error("NYI: level too high for typed_level_suc" .. tostring(level))
 		end
-		return flex_value.level(level + 1)
+		return U.notail(flex_value.level(level + 1))
 	elseif typed_term:is_level_max() then
 		local level_a, level_b = typed_term:unwrap_level_max()
 		local level_a_value = evaluate(level_a, runtime_context, ambient_typechecking_context)
@@ -4417,19 +4425,19 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		if not oka or not okb then
 			error "wrong type for level_a or level_b"
 		end
-		return flex_value.level(math.max(level_a_level, level_b_level))
+		return U.notail(flex_value.level(math.max(level_a_level, level_b_level)))
 	elseif typed_term:is_level_type() then
 		return flex_value.level_type
 	elseif typed_term:is_star() then
 		local level, depth = typed_term:unwrap_star()
-		return flex_value.star(level, depth)
+		return U.notail(flex_value.star(level, depth))
 	elseif typed_term:is_prop() then
 		local level = typed_term:unwrap_prop()
-		return flex_value.prop(level)
+		return U.notail(flex_value.prop(level))
 	elseif typed_term:is_host_tuple_type() then
 		local desc = typed_term:unwrap_host_tuple_type()
 		local desc_val = evaluate(desc, runtime_context, ambient_typechecking_context)
-		return flex_value.host_tuple_type(desc_val)
+		return U.notail(flex_value.host_tuple_type(desc_val))
 	elseif typed_term:is_range() then
 		local lower_bounds, upper_bounds, relation = typed_term:unwrap_range()
 		local lower_acc, upper_acc = flex_value_array(), flex_value_array()
@@ -4444,12 +4452,12 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 
 		local reln = evaluate(relation, runtime_context, ambient_typechecking_context)
 
-		return flex_value.range(lower_acc, upper_acc, reln)
+		return U.notail(flex_value.range(lower_acc, upper_acc, reln))
 	elseif typed_term:is_singleton() then
 		local supertype, val = typed_term:unwrap_singleton()
 		local supertype_val = evaluate(supertype, runtime_context, ambient_typechecking_context)
 		local val_val = evaluate(val, runtime_context, ambient_typechecking_context)
-		return flex_value.singleton(supertype_val, val_val)
+		return U.notail(flex_value.singleton(supertype_val, val_val))
 	elseif typed_term:is_program_sequence() then
 		local first, rest = typed_term:unwrap_program_sequence()
 		local startprog = evaluate(first, runtime_context, ambient_typechecking_context)
@@ -4463,7 +4471,9 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		elseif startprog:is_program_cont() then
 			local effect_id, effect_arg, cont = startprog:unwrap_program_cont()
 			local restframe = terms.continuation.frame(runtime_context, rest)
-			return flex_value.program_cont(effect_id, effect_arg, terms.continuation.sequence(cont, restframe))
+			return U.notail(
+				flex_value.program_cont(effect_id, effect_arg, terms.continuation.sequence(cont, restframe))
+			)
 		else
 			error(
 				ConstraintError.new(
@@ -4476,24 +4486,24 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 	elseif typed_term:is_program_end() then
 		local result = typed_term:unwrap_program_end()
 
-		return flex_value.program_end(evaluate(result, runtime_context, ambient_typechecking_context))
+		return U.notail(flex_value.program_end(evaluate(result, runtime_context, ambient_typechecking_context)))
 	elseif typed_term:is_program_invoke() then
 		local effect_term, arg_term = typed_term:unwrap_program_invoke()
 		local effect_val = evaluate(effect_term, runtime_context, ambient_typechecking_context)
 		local arg_val = evaluate(arg_term, runtime_context, ambient_typechecking_context)
 		if effect_val:is_effect_elem() then
 			local effect_id = effect_val:unwrap_effect_elem()
-			return flex_value.program_cont(effect_id, arg_val, terms.continuation.empty)
+			return U.notail(flex_value.program_cont(effect_id, arg_val, terms.continuation.empty))
 		end
 		error "NYI stuck program invoke"
 	elseif typed_term:is_program_type() then
 		local effect_type, result_type = typed_term:unwrap_program_type()
 		local effect_type_val = evaluate(effect_type, runtime_context, ambient_typechecking_context)
 		local result_type_val = evaluate(result_type, runtime_context, ambient_typechecking_context)
-		return flex_value.program_type(effect_type_val, result_type_val)
+		return U.notail(flex_value.program_type(effect_type_val, result_type_val))
 	elseif typed_term:is_srel_type() then
 		local target = typed_term:unwrap_srel_type()
-		return flex_value.srel_type(evaluate(target, runtime_context, ambient_typechecking_context))
+		return U.notail(flex_value.srel_type(evaluate(target, runtime_context, ambient_typechecking_context)))
 	elseif typed_term:is_constrained_type() then
 		local mv_ctx = ambient_typechecking_context
 		local ctx = ambient_typechecking_context
@@ -4599,22 +4609,28 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 				error "unrecognized constraint kind"
 			end
 		end
-		return mv:as_flex()
+		return U.notail(mv:as_flex())
 	elseif typed_term:is_union_type() then
 		local a, b = typed_term:unwrap_union_type()
-		return flex_value.union_type(
-			evaluate(a, runtime_context, ambient_typechecking_context),
-			evaluate(b, runtime_context, ambient_typechecking_context)
+		return U.notail(
+			flex_value.union_type(
+				evaluate(a, runtime_context, ambient_typechecking_context),
+				evaluate(b, runtime_context, ambient_typechecking_context)
+			)
 		)
 	elseif typed_term:is_intersection_type() then
 		local a, b = typed_term:unwrap_intersection_type()
-		return flex_value.intersection_type(
-			evaluate(a, runtime_context, ambient_typechecking_context),
-			evaluate(b, runtime_context, ambient_typechecking_context)
+		return U.notail(
+			flex_value.intersection_type(
+				evaluate(a, runtime_context, ambient_typechecking_context),
+				evaluate(b, runtime_context, ambient_typechecking_context)
+			)
 		)
 	elseif typed_term:is_effect_row_resolve() then
 		local ids, rest = typed_term:unwrap_effect_row_resolve()
-		return flex_value.effect_row_extend(ids, evaluate(rest, runtime_context, ambient_typechecking_context))
+		return U.notail(
+			flex_value.effect_row_extend(ids, evaluate(rest, runtime_context, ambient_typechecking_context))
+		)
 	else
 		error("evaluate: unknown kind: " .. typed_term.kind)
 	end
@@ -4661,12 +4677,12 @@ local thread_effect_handlers = setmetatable({}, { __mode = "k" })
 ---@return flex_value
 local function execute_program(prog)
 	if prog:is_program_end() then
-		return prog:unwrap_program_end()
+		return U.notail(prog:unwrap_program_end())
 	elseif prog:is_program_cont() then
 		local effect_id, effect_arg, cont = prog:unwrap_program_cont()
 		local thr = coroutine.running()
 		local handler = thread_effect_handlers[thr][effect_id]
-		return handler(effect_arg, cont)
+		return U.notail(handler(effect_arg, cont))
 	end
 	error "unrecognized program variant"
 end
@@ -4681,12 +4697,12 @@ local function invoke_continuation(cont, arg)
 	elseif cont:is_frame() then
 		local ctx, term = cont:unwrap_frame()
 		local frame_res = evaluate(term, ctx:append(arg))
-		return execute_program(frame_res)
+		return U.notail(execute_program(frame_res))
 	elseif cont:is_sequence() then
 		local first, rest = cont:unwrap_sequence()
 		--TODO: refold continuations and make stack tracing alicorn nice
 		local firstres = invoke_continuation(first, arg)
-		return invoke_continuation(rest, firstres)
+		return U.notail(invoke_continuation(rest, firstres))
 	end
 end
 
@@ -4736,7 +4752,7 @@ UniverseOmegaRelation = setmetatable({
 		error("nyi")
 	end),
 	constrain = strict_value.host_value(function(l_ctx, val, r_ctx, use, cause)
-		return check_concrete(l_ctx, val, r_ctx, use, cause)
+		return U.notail(check_concrete(l_ctx, val, r_ctx, use, cause))
 	end),
 }, subtype_relation_mt)
 
@@ -5260,7 +5276,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 end
 
 function TypeCheckerState:DEBUG_VERIFY_TREE()
-	return verify_tree(self.graph.constrain_edges._index_store)
+	return U.notail(verify_tree(self.graph.constrain_edges._index_store))
 end
 
 function TypeCheckerState:DEBUG_VERIFY()
@@ -5439,7 +5455,7 @@ function Reachability:add_constrain_edge(left, right, rel, shallowest_block, cau
 
 	---@type ConstrainEdge
 	local edge = { left = left, right = right, rel = rel, shallowest_block = shallowest_block, cause = cause }
-	return self.constrain_edges:add(edge)
+	return U.notail(self.constrain_edges:add(edge))
 end
 
 ---@param left integer
@@ -5472,7 +5488,7 @@ function Reachability:add_call_left_edge(left, arg, rel, right, shallowest_block
 		cause = cause,
 	}
 
-	return self.leftcall_edges:add(edge)
+	return U.notail(self.leftcall_edges:add(edge))
 end
 
 ---@param left integer
@@ -5505,7 +5521,7 @@ function Reachability:add_call_right_edge(left, rel, right, arg, shallowest_bloc
 		cause = cause,
 	}
 
-	return self.rightcall_edges:add(edge)
+	return U.notail(self.rightcall_edges:add(edge))
 end
 
 reachability_mt = { __index = Reachability }
@@ -5681,7 +5697,7 @@ end
 ---@return boolean, string?
 function TypeCheckerState:send_constrain(l_ctx, val, rel, r_ctx, use, cause)
 	if #self.pending == 0 then
-		return self:constrain(val, l_ctx, use, r_ctx, rel, cause)
+		return U.notail(self:constrain(val, l_ctx, use, r_ctx, rel, cause))
 	else
 		self:queue_constrain(l_ctx, val, rel, r_ctx, use, cause)
 		return true
@@ -5837,7 +5853,7 @@ function TypeCheckerState:check_heads(left, right, rel, cause, ambient_typecheck
 		-- )
 
 		local constrain = rel.constrain:unwrap_host_value()
-		return constrain(l_ctx, l_value, r_ctx, r_value, cause)
+		return U.notail(constrain(l_ctx, l_value, r_ctx, r_value, cause))
 		-- return apply_value(flex_value.strict(rel.constrain), flex_value.tuple_value(tuple_params), ambient_typechecking_context)
 		-- 	:unwrap_host_tuple_value()
 		-- 	:unpack()
@@ -6368,7 +6384,7 @@ function TypeCheckerState:slice_constraints_for(
 		)
 	end)
 
-	return typed.constrained_type(constraints, self.values[mv.usage][3])
+	return U.notail(typed.constrained_type(constraints, self.values[mv.usage][3]))
 end
 
 local typechecker_state_mt = { __index = TypeCheckerState }

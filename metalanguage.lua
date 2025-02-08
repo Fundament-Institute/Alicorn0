@@ -1,5 +1,8 @@
 -- SPDX-License-Identifier: Apache-2.0
 -- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
+
+local U = require "alicorn-utils"
+
 --[[
 Matcher(userdata : type, results : tuple-desc) : type
 Syntax : type
@@ -221,7 +224,7 @@ end
 ---@return boolean | any, ExternalError | any, ...
 local function augment_error(syntax, reducer_name, ok, err_msg, ...)
 	if not ok then
-		return false, ExternalError.new(err_msg, syntax.start_anchor, reducer_name)
+		return false, U.notail(ExternalError.new(err_msg, syntax.start_anchor, reducer_name))
 	end
 	-- err_msg is the first result arg otherwise
 	return err_msg, ...
@@ -231,7 +234,6 @@ local pdump = require "pretty-printer".s
 -- local function pdump(_)
 -- 	return ""
 -- end
-local U = require "alicorn-utils"
 
 ---@class Reducer
 ---@field wrapper fun(syntax: ConstructedSyntax, matcher: Matcher) : ...
@@ -310,9 +312,9 @@ end
 ---@return boolean
 ---@return string?
 local function SymbolExact(syntax, name)
-	return syntax:match({
+	return U.notail(syntax:match({
 		issymbol(symbolexacthandler),
-	}, failure_handler, name)
+	}, failure_handler, name))
 end
 
 local symbol_exact = reducer(SymbolExact, "symbol exact")
@@ -408,7 +410,7 @@ function ConstructedSyntax:match(matchers, unmatched, extra)
 				if not matcher.handler then
 					print("missing handler for ", matcher.kind, debug.traceback())
 				end
-				return matcher.handler(extra, table.unpack(res, 2, res.n))
+				return U.notail(matcher.handler(extra, table.unpack(res, 2, res.n)))
 			end
 			--print("rejected syntax reduction")
 			lasterr = res[2] --[[@as any]]
@@ -416,7 +418,7 @@ function ConstructedSyntax:match(matchers, unmatched, extra)
 		-- local name = getmetatable(matcher.reducible)
 		-- print("rejected syntax kind", matcher.kind, name)
 	end
-	return unmatched(extra, syntax_error(matchers, self.start_anchor, self.end_anchor, lasterr))
+	return U.notail(unmatched(extra, syntax_error(matchers, self.start_anchor, self.end_anchor, lasterr)))
 end
 
 local constructed_syntax_mt = {
@@ -437,7 +439,7 @@ end
 
 local pair_accepters = {
 	Pair = function(self, matcher, extra)
-		return matcher.handler(extra, self[1], self[2])
+		return U.notail(matcher.handler(extra, self[1], self[2]))
 	end,
 }
 
@@ -447,12 +449,12 @@ local pair_accepters = {
 ---@param b ConstructedSyntax
 ---@return ConstructedSyntax
 local function pair(start_anchor, end_anchor, a, b)
-	return cons_syntax(pair_accepters, start_anchor, end_anchor, a, b)
+	return U.notail(cons_syntax(pair_accepters, start_anchor, end_anchor, a, b))
 end
 
 local symbol_accepters = {
 	Symbol = function(self, matcher, extra)
-		return matcher.handler(extra, self[1])
+		return U.notail(matcher.handler(extra, self[1]))
 	end,
 }
 
@@ -461,12 +463,12 @@ local symbol_accepters = {
 ---@param syntaxsymbol SyntaxSymbol
 ---@return ConstructedSyntax
 local function symbol(start_anchor, end_anchor, syntaxsymbol)
-	return cons_syntax(symbol_accepters, start_anchor, end_anchor, syntaxsymbol)
+	return U.notail(cons_syntax(symbol_accepters, start_anchor, end_anchor, syntaxsymbol))
 end
 
 local value_accepters = {
 	Value = function(self, matcher, extra)
-		return matcher.handler(extra, self[1])
+		return U.notail(matcher.handler(extra, self[1]))
 	end,
 }
 
@@ -481,12 +483,12 @@ local value_accepters = {
 ---@param val SyntaxValue
 ---@return ConstructedSyntax
 local function value(start_anchor, end_anchor, val)
-	return cons_syntax(value_accepters, start_anchor, end_anchor, val)
+	return U.notail(cons_syntax(value_accepters, start_anchor, end_anchor, val))
 end
 
 local nil_accepters = {
 	Nil = function(self, matcher, extra)
-		return matcher.handler(extra)
+		return U.notail(matcher.handler(extra))
 	end,
 }
 
@@ -494,7 +496,7 @@ local nil_accepters = {
 ---@param end_anchor Anchor
 ---@return ConstructedSyntax
 local function new_nilval(start_anchor, end_anchor)
-	return cons_syntax(nil_accepters, start_anchor, end_anchor)
+	return U.notail(cons_syntax(nil_accepters, start_anchor, end_anchor))
 end
 
 ---@param start_anchor Anchor
@@ -504,7 +506,7 @@ end
 ---@return ConstructedSyntax
 local function list(start_anchor, end_anchor, a, ...)
 	if a == nil then
-		return new_nilval(start_anchor, end_anchor)
+		return U.notail(new_nilval(start_anchor, end_anchor))
 	end
 	return pair(start_anchor, end_anchor, a, list(start_anchor, end_anchor, ...))
 end
@@ -693,7 +695,7 @@ local oneof = reducer(
 	---@param ... Matcher
 	---@return ...
 	function(syntax, ...)
-		return syntax:match({ ... }, failure_handler, nil)
+		return U.notail(syntax:match({ ... }, failure_handler, nil))
 	end,
 	"oneof"
 )

@@ -4,16 +4,29 @@
 
 (return_statement
 	(expression_list
-		(function_call
-			name: [
-				(identifier) @_function_name
-				(dot_index_expression
-					field: (identifier) @_function_name
+		[
+			(function_call
+				name: [
+					(identifier) @_function_name
+					(dot_index_expression
+						field: (identifier) @_function_name
+					)
+					(method_index_expression
+						method: (identifier) @_function_name
+					)
+				]
+				(#not-any-of? @_function_name
+					"getmetatable"
+					"notail"
+					"pack"
+					"setmetatable"
+					"unpack"
+					"var_debug"
 				)
-				(method_index_expression)
-				(parenthesized_expression)
-			]
-			(#not-eq? @_function_name "notail")
-		)
+			)
+			(function_call
+				name: (parenthesized_expression)
+			)
+		]
 	)
 ) @tail_call

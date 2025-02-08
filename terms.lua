@@ -57,12 +57,12 @@ local Metavariable = {}
 
 ---@return stuck_value
 function Metavariable:as_stuck()
-	return stuck_value.free(free.metavariable(self))
+	return U.notail(stuck_value.free(free.metavariable(self)))
 end
 
 ---@return flex_value
 function Metavariable:as_flex()
-	return flex_value.stuck(self:as_stuck())
+	return U.notail(flex_value.stuck(self:as_stuck()))
 end
 
 local metavariable_mt = { __index = Metavariable }
@@ -176,7 +176,7 @@ local StrictRuntimeContext = U.shallow_copy(FlexRuntimeContext)
 ---@return strict_value
 ---@return var_debug?
 function StrictRuntimeContext:get(index)
-	return FlexRuntimeContext.get(self, index):unwrap_strict()
+	return U.notail(FlexRuntimeContext.get(self, index):unwrap_strict())
 end
 
 ---@param v strict_value
@@ -188,7 +188,7 @@ function StrictRuntimeContext:append(v, name, debuginfo)
 		error("StrictRuntimeContext:append v must be a strict_value")
 	end
 	---@type StrictRuntimeContext
-	return FlexRuntimeContext.append(self, flex_value.strict(v), name, debuginfo)
+	return U.notail(FlexRuntimeContext.append(self, flex_value.strict(v), name, debuginfo))
 end
 
 ---@param index integer
@@ -199,7 +199,7 @@ function StrictRuntimeContext:set(index, v)
 		error("StrictRuntimeContext:set v must be a strict_value")
 	end
 	---@type StrictRuntimeContext
-	return FlexRuntimeContext.set(self, index, flex_value.strict(v))
+	return U.notail(FlexRuntimeContext.set(self, index, flex_value.strict(v)))
 end
 
 local strict_runtime_context_mt = {
@@ -527,7 +527,7 @@ end
 
 ---@return integer
 function TypecheckingContext:len()
-	return self.bindings:len()
+	return U.notail(self.bindings:len())
 end
 
 typechecking_context_mt = {
@@ -1163,7 +1163,7 @@ local orig_literal_constructor = typed_term.literal
 local function literal_constructor_check(val)
 	-- FIXME: make sure no placeholders in val
 	verify_placeholder_lite(val, typechecking_context())
-	return orig_literal_constructor(val)
+	return U.notail(orig_literal_constructor(val))
 end
 typed_term.literal = literal_constructor_check
 
@@ -1242,9 +1242,9 @@ local function replace_flex_values(tag, v)
 		error("Unknown tag: " .. tag)
 	elseif v == array(flex_value) then
 		if tag == "strict" then
-			return array(strict_value)
+			return U.notail(array(strict_value))
 		elseif tag == "stuck" then
-			return array(flex_value)
+			return U.notail(array(flex_value))
 		end
 		error("Unknown tag: " .. tag)
 	elseif v == flex_runtime_context_type then
@@ -1563,7 +1563,7 @@ gen.define_multi_enum(
 			if stuck_value.value_check(val) or flex_value.value_check(val) then
 				error("Tried to put flex or stuck value into strict_value.host_value!" .. tostring(val))
 			end
-			return orig_host_value_constructor(val)
+			return U.notail(orig_host_value_constructor(val))
 		end
 		strict_value.host_value = host_value_constructor_check
 		
@@ -1576,7 +1576,7 @@ gen.define_multi_enum(
 				end
 			end
 		
-			return orig_host_tuple_value_constructor(val)
+			return U.notail(orig_host_tuple_value_constructor(val))
 		end
 		strict_value.host_tuple_value = host_tuple_value_constructor_check
 	end
@@ -1624,13 +1624,13 @@ local strict_value_array = array(strict_value)
 ---@param ... flex_value
 ---@return flex_value
 local function tup_val(...)
-	return flex_value.tuple_value(flex_value_array(...))
+	return U.notail(flex_value.tuple_value(flex_value_array(...)))
 end
 
 ---@param ... flex_value
 ---@return flex_value
 local function cons(...)
-	return flex_value.enum_value(DescCons.cons, tup_val(...))
+	return U.notail(flex_value.enum_value(DescCons.cons, tup_val(...)))
 end
 
 local empty = flex_value.enum_value(DescCons.empty, tup_val())
@@ -1657,19 +1657,19 @@ local tristate = gen.declare_enum("tristate", {
 ---@param ... flex_value
 ---@return flex_value
 local function tuple_desc(...)
-	return tuple_desc_inner(empty, ...)
+	return U.notail(tuple_desc_inner(empty, ...))
 end
 
 ---@param ... strict_value
 ---@return strict_value
 local function strict_tup_val(...)
-	return strict_value.tuple_value(strict_value_array(...))
+	return U.notail(strict_value.tuple_value(strict_value_array(...)))
 end
 
 ---@param ... strict_value
 ---@return strict_value
 local function strict_cons(...)
-	return strict_value.enum_value(DescCons.cons, strict_tup_val(...))
+	return U.notail(strict_value.enum_value(DescCons.cons, strict_tup_val(...)))
 end
 
 ---@param a strict_value
@@ -1687,7 +1687,7 @@ end
 ---@param ... strict_value
 ---@return strict_value
 local function strict_tuple_desc(...)
-	return strict_tuple_desc_inner(empty:unwrap_strict(), ...)
+	return U.notail(strict_tuple_desc_inner(empty:unwrap_strict(), ...))
 end
 
 local unit_type = strict_value.tuple_type(empty:unwrap_strict())
