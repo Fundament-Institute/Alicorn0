@@ -6440,6 +6440,8 @@ local evaluator = {
 	TupleDescRelation = TupleDescRelation,
 	register_host_srel = register_host_srel,
 	substitute_placeholders_identity = substitute_placeholders_identity,
+	substitute_into_lambda = substitute_into_lambda,
+	substitute_into_closure = substitute_into_closure,
 	verify_placeholder_lite = verify_placeholder_lite,
 }
 internals_interface.evaluator = evaluator

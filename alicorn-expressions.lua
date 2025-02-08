@@ -1373,19 +1373,15 @@ collect_tuple = metalanguage.reducer(
 						env.typechecking_context.runtime_context,
 						env.typechecking_context
 					)
-					local subval = evaluator.substitute_placeholders_identity(
-						flex_value.singleton(next_elem_type, next_val),
-						env.typechecking_context,
-						1
-					)
 					local info = terms.var_debug("#collect-tuple-param", syntax.start_anchor)
 					desc = terms.cons(
 						desc,
-						flex_value.closure(
-							"#collect-tuple-param",
-							subval, --TODO: might need to swap this back
+						evaluator.substitute_into_closure(
+							flex_value.singleton(next_elem_type, next_val),
 							env.typechecking_context.runtime_context,
-							info
+							syntax.start_anchor,
+							info,
+							env.typechecking_context
 						)
 					)
 					collected_info:append(info)
