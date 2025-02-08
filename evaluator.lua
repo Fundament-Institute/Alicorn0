@@ -1791,30 +1791,16 @@ add_comparer(
 			error("No variance specified for user defined host type " .. a_id.name)
 		end
 		local a_value, b_value = flex_value.tuple_value(a_args), flex_value.tuple_value(b_args)
-		return apply_value(
-				flex_value.strict(host_srel_map[a_id].constrain),
-				flex_value.tuple_value(
-					flex_value_array(
-						flex_value.host_value(l_ctx),
-						flex_value.host_value(a_value),
-						flex_value.host_value(r_ctx),
-						flex_value.host_value(b_value),
-						flex_value.host_value(
-							nestcause(
-								"host_user_defined_type compared against host_user_defined_type",
-								cause,
-								a_value,
-								b_value,
-								l_ctx,
-								r_ctx
-							)
-						)
-					)
-				),
-				l_ctx
-			)
-			:unwrap_host_tuple_value()
-			:unpack()
+		local constrain = host_srel_map[a_id].constrain:unwrap_host_value()
+		local newcause = nestcause(
+			"host_user_defined_type compared against host_user_defined_type",
+			cause,
+			a_value,
+			b_value,
+			l_ctx,
+			r_ctx
+		)
+		return constrain(l_ctx, a_value, r_ctx, b_value, newcause)
 	end
 )
 
