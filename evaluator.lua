@@ -685,6 +685,168 @@ local function verify_closure(v, ctx, nested)
 	return true
 end
 
+--- TODO: do we even need context_len or ambient_typechecking_context?
+---@param val flex_value an alicorn value
+---@param usages ArrayValue<integer> the usages array we are filling
+---@param context_len integer number of bindings in the runtime context already used - needed for closures
+---@param ambient_typechecking_context TypecheckingContext
+local function gather_usages(val, usages, context_len, ambient_typechecking_context)
+	-- If this is strict, simply return it inside a literal, since no substitution is necessary no matter what it is.
+	if val:is_strict() then
+		return
+	end
+	if not val:is_stuck() then
+		error("val isn't strict or stuck????????")
+	end
+
+	local val = val:unwrap_stuck()
+	if val:is_pi() then
+		local param_type, param_info, result_type, result_info = val:unwrap_pi()
+		local param_type = gather_usages(param_type, usages, context_len, ambient_typechecking_context)
+		local param_info = gather_usages(param_info, usages, context_len, ambient_typechecking_context)
+		local result_type = gather_usages(result_type, usages, context_len, ambient_typechecking_context)
+		local result_info = gather_usages(result_info, usages, context_len, ambient_typechecking_context)
+	elseif val:is_closure() then
+		local param_name, code, capture, capture_info, param_info = val:unwrap_closure()
+
+		local capture_sub = gather_usages(capture, usages, context_len, ambient_typechecking_context)
+	elseif val:is_operative_value() then
+		local userdata = val:unwrap_operative_value()
+		local userdata = gather_usages(userdata, usages, context_len, ambient_typechecking_context)
+	elseif val:is_operative_type() then
+		local handler, userdata_type = val:unwrap_operative_type()
+		local typed_handler = gather_usages(handler, usages, context_len, ambient_typechecking_context)
+		local typed_userdata_type = gather_usages(userdata_type, usages, context_len, ambient_typechecking_context)
+	elseif val:is_tuple_value() then
+		local elems = val:unwrap_tuple_value()
+		local res = typed_array()
+		for _, v in elems:ipairs() do
+			res:append(gather_usages(v, usages, context_len, ambient_typechecking_context))
+		end
+	elseif val:is_tuple_type() then
+		local desc = val:unwrap_tuple_type()
+		local desc = gather_usages(desc, usages, context_len, ambient_typechecking_context)
+	elseif val:is_tuple_desc_type() then
+		local universe = val:unwrap_tuple_desc_type()
+		local typed_universe = gather_usages(universe, usages, context_len, ambient_typechecking_context)
+	elseif val:is_enum_value() then
+		local constructor, arg = val:unwrap_enum_value()
+		local arg = gather_usages(arg, usages, context_len, ambient_typechecking_context)
+	elseif val:is_enum_type() then
+		local desc = val:unwrap_enum_type()
+		local desc_sub = gather_usages(desc, usages, context_len, ambient_typechecking_context)
+	elseif val:is_enum_desc_type() then
+		local univ = val:unwrap_enum_desc_type()
+		local univ_sub = gather_usages(univ, usages, context_len, ambient_typechecking_context)
+	elseif val:is_enum_desc_value() then
+		local variants = val:unwrap_enum_desc_value()
+		for k, v in variants:pairs() do
+			gather_usages(v, usages, context_len, ambient_typechecking_context)
+		end
+	elseif val:is_record_value() then
+		-- TODO: How to deal with a map?
+		error("Records not yet implemented")
+	elseif val:is_record_type() then
+		local desc = val:unwrap_record_type()
+		-- TODO: Handle desc properly, because it's a value.
+		error("Records not yet implemented")
+	elseif val:is_srel_type() then
+		local target = val:unwrap_srel_type()
+		local target_sub = gather_usages(target, usages, context_len, ambient_typechecking_context)
+	elseif val:is_variance_type() then
+		local target = val:unwrap_variance_type()
+		local target_sub = gather_usages(target, usages, context_len, ambient_typechecking_context)
+	elseif val:is_object_value() then
+		-- TODO: this needs to be evaluated properly because it contains a value
+		error("Not yet implemented")
+	elseif val:is_object_type() then
+		-- local desc = val:unwrap_object_type()
+		-- TODO: this needs to be evaluated properly because it contains a value
+		error("Not yet implemented")
+	elseif val:is_free() then
+		local free = val:unwrap_free()
+		if free:is_placeholder() then
+			local lookup, info = free:unwrap_placeholder()
+			usages[lookup] = (usages[lookup] or 0) + 1
+		end
+	elseif val:is_tuple_element_access() then
+		local subject, index = val:unwrap_tuple_element_access()
+		gather_usages(flex_value.stuck(subject), usages, context_len, ambient_typechecking_context)
+	elseif val:is_host_unwrap() then
+		local boxed = val:unwrap_host_unwrap()
+			gather_usages(flex_value.stuck(boxed), usages, context_len, ambient_typechecking_context)
+	elseif val:is_host_wrap() then
+		local to_wrap = val:unwrap_host_wrap()
+			gather_usages(flex_value.stuck(to_wrap), usages, context_len, ambient_typechecking_context)
+	elseif val:is_host_unwrap() then
+		local to_unwrap = val:unwrap_host_unwrap()
+			gather_usages(flex_value.stuck(to_unwrap), usages, context_len, ambient_typechecking_context)
+	elseif val:is_host_application() then
+		local fn, arg = val:unwrap_host_application()
+			gather_usages(flex_value.stuck(arg), usages, context_len, ambient_typechecking_context)
+	elseif val:is_host_tuple() then
+		local leading, stuck, trailing = val:unwrap_host_tuple()
+		gather_usages(flex_value.stuck(stuck), usages, context_len, ambient_typechecking_context)
+		for _, elem in trailing:ipairs() do
+			gather_usages(elem, usages, context_len, ambient_typechecking_context)
+		end
+	elseif val:is_host_if() then
+		local subject, consequent, alternate = val:unwrap_host_if()
+		gather_usages(flex_value.stuck(subject), usages, context_len, ambient_typechecking_context)
+		gather_usages(consequent, usages, context_len, ambient_typechecking_context)
+		gather_usages(alternate, usages, context_len, ambient_typechecking_context)
+	elseif val:is_application() then
+		local fn, arg = val:unwrap_application()
+			gather_usages(flex_value.stuck(fn), usages, context_len, ambient_typechecking_context),
+			gather_usages(arg, usages, context_len, ambient_typechecking_context)
+	elseif val:is_host_function_type() then
+		local param_type, result_type, res_info = val:unwrap_host_function_type()
+		local param_type = gather_usages(param_type, usages, context_len, ambient_typechecking_context)
+		local result_type = gather_usages(result_type, usages, context_len, ambient_typechecking_context)
+		local res_info = gather_usages(res_info, usages, context_len, ambient_typechecking_context)
+	elseif val:is_host_wrapped_type() then
+		local type = val:unwrap_host_wrapped_type()
+		local type = gather_usages(type, usages, context_len, ambient_typechecking_context)
+	elseif val:is_host_user_defined_type() then
+		local id, family_args = val:unwrap_host_user_defined_type()
+		for _, v in family_args:ipairs() do
+			gather_usages(v, usages, context_len, ambient_typechecking_context)
+		end
+	elseif val:is_host_tuple_type() then
+		local desc = val:unwrap_host_tuple_type()
+		local desc = gather_usages(desc, usages, context_len, ambient_typechecking_context)
+	elseif val:is_range() then
+		local lower_bounds, upper_bounds, relation = val:unwrap_range()
+		for _, v in lower_bounds:ipairs() do
+			local sub = gather_usages(v, usages, context_len, ambient_typechecking_context)
+		end
+		for _, v in upper_bounds:ipairs() do
+			local sub = gather_usages(v, usages, context_len, ambient_typechecking_context)
+		end
+	elseif val:is_singleton() then
+		local supertype, val = val:unwrap_singleton()
+		local supertype_tm = gather_usages(supertype, usages, context_len, ambient_typechecking_context)
+		local val_tm = gather_usages(val, usages, context_len, ambient_typechecking_context)
+	elseif val:is_union_type() then
+		local a, b = val:unwrap_union_type()
+			gather_usages(a, usages, context_len, ambient_typechecking_context),
+			gather_usages(b, usages, context_len, ambient_typechecking_context)
+	elseif val:is_intersection_type() then
+		local a, b = val:unwrap_intersection_type()
+			gather_usages(a, usages, context_len, ambient_typechecking_context),
+			gather_usages(b, usages, context_len, ambient_typechecking_context)
+	elseif val:is_program_type() then
+		local effect, res = val:unwrap_program_type()
+			gather_usages(effect, usages, context_len, ambient_typechecking_context),
+			gather_usages(res, usages, context_len, ambient_typechecking_context)
+	elseif val:is_effect_row_extend() then
+		local row, rest = val:unwrap_effect_row_extend()
+			gather_usages(rest, usages, context_len, ambient_typechecking_context)
+	else
+		error("Unhandled value kind in gather_usages: " .. val.kind)
+	end
+end
+
 ---@source evaluator.lua
 local substitute_inner
 
@@ -3444,7 +3606,7 @@ end
 ---@param typechecking_context TypecheckingContext
 ---@return boolean ok
 ---@return flex_value type
----@return ArrayValue usages
+---@return ArrayValue<integer> usages
 ---@return typed term
 function infer(inferrable_term, typechecking_context)
 	local tracked = inferrable_term.track ~= nil

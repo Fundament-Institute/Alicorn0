@@ -5,19 +5,19 @@
 flex_continuation = {}
 
 ---@return boolean
-function flex_continuation:is_strict() end
----@return strict_continuation strict
-function flex_continuation:unwrap_strict() end
----@return boolean
----@return strict_continuation strict
-function flex_continuation:as_strict() end
----@return boolean
 function flex_continuation:is_stuck() end
 ---@return stuck_continuation stuck
 function flex_continuation:unwrap_stuck() end
 ---@return boolean
 ---@return stuck_continuation stuck
 function flex_continuation:as_stuck() end
+---@return boolean
+function flex_continuation:is_strict() end
+---@return strict_continuation strict
+function flex_continuation:unwrap_strict() end
+---@return boolean
+---@return strict_continuation strict
+function flex_continuation:as_strict() end
 ---@return boolean
 function flex_continuation:is_empty() end
 ---@return nil
@@ -45,8 +45,8 @@ function flex_continuation:as_sequence() end
 
 ---@class (exact) flex_continuationType: EnumType
 ---@field define_enum fun(self: flex_continuationType, name: string, variants: Variants): flex_continuationType
----@field strict fun(strict: strict_continuation): flex_continuation
 ---@field stuck fun(stuck: stuck_continuation): flex_continuation
+---@field strict fun(strict: strict_continuation): flex_continuation
 ---@field empty flex_continuation
 ---@field frame fun(context: FlexRuntimeContext, code: typed): flex_continuation
 ---@field sequence fun(first: flex_continuation, second: flex_continuation): flex_continuation
