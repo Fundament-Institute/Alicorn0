@@ -331,7 +331,8 @@ end
 ---@param types { [string]: UndefinedType }
 ---@param names { [string]: string }
 ---@param variants Variants
-local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_unify, types, names, variants)
+---@param fn_sub fun(types: Type[])?
+local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_unify, types, names, variants, fn_sub)
 	---@type {[string]: Variants }
 	local keyed_variants = {}
 	---@type Variants
@@ -375,6 +376,10 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 
 	for k, v in pairs(types) do
 		v:define_enum(names[k], keyed_variants[k])
+	end
+
+	if fn_sub then
+		fn_sub(types)
 	end
 
 	flex:define_enum(flex_name, flex_variants)

@@ -1097,6 +1097,76 @@ typed_term:define_enum("typed", {
 	} },
 }) 
 
+---@param v table
+---@param ctx TypecheckingContext
+---@return boolean
+local function verify_placeholder_lite(v, ctx, nested)
+	-- If it's not a table we don't care
+	if type(v) ~= "table" then
+		return true
+	end
+
+	-- Special handling for arrays
+	if getmetatable(v) and getmetatable(getmetatable(v)) == gen.array_type_mt then
+		for k, val in ipairs(v) do
+			local ok, i, info, info_mismatch = verify_placeholder_lite(val, ctx, true)
+			if not ok then
+				if not nested then
+					print(v)
+					if info_mismatch ~= nil then
+						print("EXPECTED INFO: " .. info_mismatch)
+					end
+					error("AAAAAAAAAAAAAA found " .. tostring(i))
+				end
+				return false, i, info
+			end
+		end
+		return true
+	end
+	if not v.kind then
+		return true
+	end
+
+	if v.kind == "free.placeholder" then
+		local i, info = v:unwrap_placeholder()
+		if i > ctx:len() or i > ctx.runtime_context.bindings:len() then
+			--os.exit(-1, true)
+			--error("AAAAAAAAAAAAAA found " .. tostring(i) .. " " .. tostring(info))
+			return false, i, info
+		end
+		local info_target = ctx.runtime_context.bindings:get(i).debuginfo
+		if info ~= info_target then
+			return false, i, info, info_target
+		end
+	end
+
+	for k, val in pairs(v) do
+		if k ~= "cause" and k ~= "bindings" and k ~= "provenance" then
+			local ok, i, info, info_mismatch = verify_placeholder_lite(val, ctx, true)
+			if not ok then
+				if not nested then
+					print(v)
+					if info_mismatch ~= nil then
+						print("EXPECTED INFO: " .. info_mismatch)
+					end
+					error("AAAAAAAAAAAAAA found " .. tostring(i) .. " " .. tostring(info))
+				end
+				return false, i, info
+			end
+		end
+	end
+
+	return true
+end
+
+local orig_literal_constructor = typed_term.literal
+local function literal_constructor_check(val)
+	-- FIXME: make sure no placeholders in val
+	verify_placeholder_lite(val, typechecking_context())
+	return orig_literal_constructor(val)
+end
+typed_term.literal = literal_constructor_check
+
 -- stylua: ignore
 free:define_enum("free", {
 	{ "metavariable", { "metavariable", metavariable_type } },
@@ -1293,9 +1363,10 @@ gen.define_multi_enum(flex_continuation, "flex_continuation", replace_flex_value
 -- e.g. it's possible to construct the neutral value "x + 2"; "2" is not neutral, but "x" is.
 -- values must all be finite in size and must not have loops.
 -- i.e. destructuring values always (eventually) terminates.
--- stylua: ignore
 
-gen.define_multi_enum(flex_value,
+-- stylua: ignore
+gen.define_multi_enum(
+	flex_value,
 	"flex_value",
 	replace_flex_values,
 	specify_flex_values,
@@ -1484,7 +1555,31 @@ gen.define_multi_enum(flex_value,
 		} },
 		{ "host_wrap$stuck", { "content", stuck_value } },
 		{ "host_unwrap$stuck", { "container", stuck_value } },
-	}
+	},
+	function(_)
+		local orig_host_value_constructor = strict_value.host_value
+		local function host_value_constructor_check(val)
+			-- Absolutely do not ever put a flex_value or stuck_value into here
+			if stuck_value.value_check(val) or (flex_value.value_check(val) and val.kind == "flex_value.stuck") then
+				error("Tried to put flex or stuck value into strict_value.host_value!" .. tostring(val))
+			end
+			return orig_host_value_constructor(val)
+		end
+		strict_value.host_value = host_value_constructor_check
+		
+		local orig_host_tuple_value_constructor = strict_value.host_tuple_value
+		local function host_tuple_value_constructor_check(val)
+			-- Absolutely do not ever put a flex_value or stuck_value into here
+			for _, v in ipairs(val) do
+				if flex_value.value_check(v) or stuck_value.value_check(v) then
+					error("Tried to put flex or stuck value into strict_value.host_tuple_value!" .. tostring(val))
+				end
+			end
+		
+			return orig_host_tuple_value_constructor(val)
+		end
+		strict_value.host_tuple_value = host_tuple_value_constructor_check
+	end
 )
 
 -- metaprogramming stuff
@@ -1660,6 +1755,7 @@ local terms = {
 	TCState = TCState,
 	lua_prog = lua_prog,
 	verify_placeholders = verify_placeholders,
+	verify_placeholder_lite = verify_placeholder_lite,
 
 	tristate = tristate,
 }

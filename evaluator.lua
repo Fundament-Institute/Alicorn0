@@ -540,76 +540,6 @@ local function get_level(t)
 end
 
 ---@param v table
----@param ctx TypecheckingContext
----@return boolean
-local function verify_placeholder_lite(v, ctx, nested)
-	-- If it's not a table we don't care
-	if type(v) ~= "table" then
-		return true
-	end
-
-	-- Special handling for arrays
-	if getmetatable(v) and getmetatable(getmetatable(v)) == gen.array_type_mt then
-		for k, val in ipairs(v) do
-			local ok, i, info, info_mismatch = verify_placeholder_lite(val, ctx, true)
-			if not ok then
-				if not nested then
-					print(v)
-					if info_mismatch ~= nil then
-						print("EXPECTED INFO: " .. info_mismatch)
-					end
-					error("AAAAAAAAAAAAAA found " .. tostring(i))
-				end
-				return false, i, info
-			end
-		end
-		return true
-	end
-	if not v.kind then
-		return true
-	end
-
-	if v.kind == "free.placeholder" then
-		local i, info = v:unwrap_placeholder()
-		if i > ctx:len() or i > ctx.runtime_context.bindings:len() then
-			--os.exit(-1, true)
-			--error("AAAAAAAAAAAAAA found " .. tostring(i) .. " " .. tostring(info))
-			return false, i, info
-		end
-		local info_target = ctx.runtime_context.bindings:get(i).debuginfo
-		if info ~= info_target then
-			return false, i, info, info_target
-		end
-	end
-
-	for k, val in pairs(v) do
-		if k ~= "cause" and k ~= "bindings" and k ~= "provenance" then
-			local ok, i, info, info_mismatch = verify_placeholder_lite(val, ctx, true)
-			if not ok then
-				if not nested then
-					print(v)
-					if info_mismatch ~= nil then
-						print("EXPECTED INFO: " .. info_mismatch)
-					end
-					error("AAAAAAAAAAAAAA found " .. tostring(i) .. " " .. tostring(info))
-				end
-				return false, i, info
-			end
-		end
-	end
-
-	return true
-end
-
-local orig_literal_constructor = typed_term.literal
-local function literal_constructor_check(val)
-	-- FIXME: make sure no placeholders in val
-	verify_placeholder_lite(val, terms.typechecking_context())
-	return orig_literal_constructor(val)
-end
-typed_term.literal = literal_constructor_check
-
----@param v table
 ---@param ctx FlexRuntimeContext
 ---@return boolean
 local function verify_closure(v, ctx, nested)
@@ -1235,12 +1165,12 @@ function substitute_inner(val, mappings, context_len, ambient_typechecking_conte
 	if tracked then
 		print(string.rep("·", recurse_count) .. "SUB: " .. tostring(val))
 	end
-	print("BBBBBBBB", val)
-	verify_placeholder_lite(val, ambient_typechecking_context)
+
+	terms.verify_placeholder_lite(val, ambient_typechecking_context)
 	recurse_count = recurse_count + 1
 	local r = substitute_inner_impl(val, mappings, context_len, ambient_typechecking_context)
 	recurse_count = recurse_count - 1
-	verify_placeholder_lite(r, ambient_typechecking_context)
+	terms.verify_placeholder_lite(r, ambient_typechecking_context)
 
 	if tracked then
 		print(string.rep("·", recurse_count) .. " → " .. tostring(r))
@@ -3796,7 +3726,7 @@ function infer(inferrable_term, typechecking_context)
 		error("infer didn't return a flex_value!")
 	end
 	recurse_count = recurse_count - 1
-	verify_placeholder_lite(v, typechecking_context)
+
 	if tracked then
 		if not ok then
 			print(v)
@@ -3962,7 +3892,6 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			error("Invalid names or infos length!")
 		end
 		local subject_value = evaluate(subject, runtime_context, ambient_typechecking_context)
-		verify_placeholder_lite(subject_value, ambient_typechecking_context)
 		--[[local subject_value = U.tag(
 			"evaluate",
 			{ subject = subject:pretty_preprint(runtime_context) },
@@ -4276,7 +4205,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			error "evaluate, is_host_unwrap: missing as_host_value on unwrapped host_unwrap"
 		end
 
-		verify_placeholder_lite(unwrap_val, ambient_typechecking_context)
+		terms.verify_placeholder_lite(unwrap_val, ambient_typechecking_context)
 		if unwrap_val:is_host_value() then
 			return flex_value.strict(unwrap_val:unwrap_host_value())
 		elseif unwrap_val:is_stuck() then
@@ -4614,14 +4543,14 @@ function evaluate(typed_term, runtime_context, ambient_typechecking_context)
 		--print(runtime_context:format_names())
 	end
 
-	verify_placeholder_lite(typed_term, ambient_typechecking_context)
+	terms.verify_placeholder_lite(typed_term, ambient_typechecking_context)
 	recurse_count = recurse_count + 1
 	local r = evaluate_impl(typed_term, runtime_context, ambient_typechecking_context)
 	if not flex_value.value_check(r) then
 		error("evaluate didn't return a flex_value after processing: " .. tostring(typed_term))
 	end
 	recurse_count = recurse_count - 1
-	verify_placeholder_lite(r, ambient_typechecking_context)
+	terms.verify_placeholder_lite(r, ambient_typechecking_context)
 
 	if tracked then
 		print(string.rep("·", recurse_count) .. " → " .. r:pretty_print(runtime_context))
@@ -5683,8 +5612,7 @@ function TypeCheckerState:check_value(v, tag, context)
 	if context == nil then
 		error("nil context passed into check_value! " .. debug.traceback())
 	end
-	--terms.verify_placeholders(v, context, self.values)
-	verify_placeholder_lite(v, context)
+	terms.verify_placeholder_lite(v, context)
 
 	if v:is_stuck() and v:unwrap_stuck():is_free() and v:unwrap_stuck():unwrap_free():is_metavariable() then
 		local mv = v:unwrap_stuck():unwrap_free():unwrap_metavariable()
@@ -6542,7 +6470,6 @@ local evaluator = {
 	substitute_placeholders_identity = substitute_placeholders_identity,
 	substitute_into_lambda = substitute_into_lambda,
 	substitute_into_closure = substitute_into_closure,
-	verify_placeholder_lite = verify_placeholder_lite,
 }
 internals_interface.evaluator = evaluator
 
