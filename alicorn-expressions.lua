@@ -616,11 +616,13 @@ local function call_operative(type_of_term, usage_count, term, sargs, goal, env)
 			return terms.tristate.failure, usage_counts
 		end
 		return terms.tristate.success,
-			checkable_term.inferrable(
-				inferrable_term.typed(
-					evaluator.substitute_placeholders_identity(goal_type, env.typechecking_context),
-					usage_counts,
-					term
+			U.notail(
+				checkable_term.inferrable(
+					inferrable_term.typed(
+						evaluator.substitute_placeholders_identity(goal_type, env.typechecking_context),
+						usage_counts,
+						term
+					)
 				)
 			),
 			env
@@ -630,10 +632,12 @@ local function call_operative(type_of_term, usage_count, term, sargs, goal, env)
 			return terms.tristate.failure, resulting_type
 		end
 		return terms.tristate.success,
-			inferrable_term.typed(
-				evaluator.substitute_placeholders_identity(resulting_type, env.typechecking_context),
-				usage_counts,
-				term
+			U.notail(
+				inferrable_term.typed(
+					evaluator.substitute_placeholders_identity(resulting_type, env.typechecking_context),
+					usage_counts,
+					term
+				)
 			),
 			env
 	else
@@ -1034,7 +1038,7 @@ local function expression_symbolhandler(args, name)
 		end
 		---@cast val -string
 		if goal:is_check() then
-			return true, checkable_term.inferrable(val), env
+			return true, U.notail(checkable_term.inferrable(val)), env
 		end
 		return ok, val, env
 	else
@@ -1071,7 +1075,7 @@ local function expression_symbolhandler(args, name)
 			)
 		end
 		if goal:is_check() then
-			return true, checkable_term.inferrable(part), env
+			return true, U.notail(checkable_term.inferrable(part)), env
 		end
 		return ok, part, env
 	end
@@ -1092,7 +1096,7 @@ local function expression_valuehandler(args, val)
 			return false, inf_term, env
 		end
 		---@cast inf_term -checkable
-		return true, checkable_term.inferrable(inf_term), env
+		return true, U.notail(checkable_term.inferrable(inf_term)), env
 	end
 
 	if not goal:is_infer() then
@@ -1102,19 +1106,23 @@ local function expression_valuehandler(args, val)
 	if val.type == "f64" then
 		--p(val)
 		return true,
-			inferrable_term.typed(
-				terms.typed_term.literal(strict_value.host_number_type),
-				usage_array(),
-				typed_term.literal(strict_value.host_value(val.val))
+			U.notail(
+				inferrable_term.typed(
+					terms.typed_term.literal(strict_value.host_number_type),
+					usage_array(),
+					typed_term.literal(strict_value.host_value(val.val))
+				)
 			),
 			env
 	end
 	if val.type == "string" then
 		return true,
-			inferrable_term.typed(
-				terms.typed_term.literal(strict_value.host_string_type),
-				usage_array(),
-				typed_term.literal(strict_value.host_value(val.val))
+			U.notail(
+				inferrable_term.typed(
+					terms.typed_term.literal(strict_value.host_string_type),
+					usage_array(),
+					typed_term.literal(strict_value.host_value(val.val))
+				)
 			),
 			env
 	end
@@ -1291,10 +1299,12 @@ local function host_operative(fn, name)
 	)
 
 	local userdata_type = strict_value.tuple_type(terms.empty:unwrap_strict())
-	return inferrable_term.typed(
-		terms.typed_term.literal(strict_value.operative_type(value_fn, userdata_type)),
-		array(gen.builtin_number)(),
-		typed_term.operative_cons(typed_term.tuple_cons(typed_array()))
+	return U.notail(
+		inferrable_term.typed(
+			terms.typed_term.literal(strict_value.operative_type(value_fn, userdata_type)),
+			array(gen.builtin_number)(),
+			typed_term.operative_cons(typed_term.tuple_cons(typed_array()))
+		)
 	)
 end
 
@@ -1408,7 +1418,7 @@ collect_tuple = metalanguage.reducer(
 		end
 
 		if goal:is_infer() then
-			return true, inferrable_term.tuple_cons(collected_terms, collected_info), env
+			return true, U.notail(inferrable_term.tuple_cons(collected_terms, collected_info)), env
 		elseif goal:is_check() then
 			local ok, err = evaluator.typechecker_state:flow(
 				flex_value.tuple_type(desc),
@@ -1436,7 +1446,7 @@ collect_tuple = metalanguage.reducer(
 				env.typechecking_context,
 				terms.constraintcause.primitive("tuple type in collect_tuple", U.anchor_here())
 			)]]
-			return true, checkable_term.tuple_cons(collected_terms, collected_info), env
+			return true, U.notail(checkable_term.tuple_cons(collected_terms, collected_info)), env
 		else
 			error("NYI: collect_tuple goal case " .. goal.kind)
 		end
@@ -1521,7 +1531,7 @@ collect_host_tuple = metalanguage.reducer(
 		end
 
 		if goal:is_infer() then
-			return true, inferrable_term.host_tuple_cons(collected_terms, collected_debug), env
+			return true, U.notail(inferrable_term.host_tuple_cons(collected_terms, collected_debug)), env
 		elseif goal:is_check() then
 			local ok, err = evaluator.typechecker_state:flow(
 				flex_value.host_tuple_type(desc),
@@ -1533,7 +1543,7 @@ collect_host_tuple = metalanguage.reducer(
 			if not ok then
 				return false, err
 			end
-			return true, checkable_term.host_tuple_cons(collected_terms, collected_debug), env
+			return true, U.notail(checkable_term.host_tuple_cons(collected_terms, collected_debug)), env
 		else
 			error("NYI: collect_host_tuple goal case " .. goal.kind)
 		end
@@ -1733,7 +1743,7 @@ local function build_host_type_tuple(elems)
 		)
 	end
 
-	return terms.strict_value.host_tuple_type(result)
+	return U.notail(terms.strict_value.host_tuple_type(result))
 end
 
 ---@param fn function
@@ -1747,7 +1757,7 @@ local function host_applicative(fn, params, results)
 		build_host_type_tuple(results),
 		result_info_pure
 	)
-	return terms.inferrable_term.typed(terms.typed_term.literal(host_fn_type), usage_array(), literal_host_fn)
+	return U.notail(terms.inferrable_term.typed(terms.typed_term.literal(host_fn_type), usage_array(), literal_host_fn))
 end
 
 ---@param syntax ConstructedSyntax
@@ -1784,7 +1794,7 @@ local function inferred_expression(handler, env)
 	if env == nil or env.get == nil then
 		error("no env")
 	end
-	return expression(handler, ExpressionArgs.new(expression_goal.infer, env))
+	return U.notail(expression(handler, ExpressionArgs.new(expression_goal.infer, env)))
 end
 
 local alicorn_expressions = {

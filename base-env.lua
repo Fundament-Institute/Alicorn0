@@ -32,7 +32,9 @@ local empty_tuple = terms.strict_value.tuple_value(strict_value_array())
 ---@param typ strict_value
 ---@return inferrable
 local function lit_term(val, typ)
-	return terms.inferrable_term.typed(terms.typed_term.literal(typ), usage_array(), terms.typed_term.literal(val))
+	return U.notail(
+		terms.inferrable_term.typed(terms.typed_term.literal(typ), usage_array(), terms.typed_term.literal(val))
+	)
 end
 
 ---@param fn_op fun(bound_variables: typed[]) : integer, typed
@@ -52,12 +54,14 @@ local function gen_base_operator(fn_op, name, ...)
 	end
 
 	local count, res = fn_op(bound_vars)
-	return terms.strict_value.closure(
-		argname,
-		terms.typed_term.tuple_elim(names, debug_names, terms.typed_term.bound_variable(2, debug_arg), count, res),
-		empty_tuple,
-		terms.var_debug("#capture", U.anchor_here()),
-		debug_arg
+	return U.notail(
+		terms.strict_value.closure(
+			argname,
+			terms.typed_term.tuple_elim(names, debug_names, terms.typed_term.bound_variable(2, debug_arg), count, res),
+			empty_tuple,
+			terms.var_debug("#capture", U.anchor_here()),
+			debug_arg
+		)
 	)
 end
 
@@ -139,10 +143,12 @@ local function let_impl(syntax, env)
 	end
 
 	return true,
-		terms.inferrable_term.typed(
-			terms.typed_term.literal(terms.unit_type),
-			gen.declare_array(gen.builtin_number)(),
-			terms.typed_term.literal(terms.unit_val)
+		U.notail(
+			terms.inferrable_term.typed(
+				terms.typed_term.literal(terms.unit_type),
+				gen.declare_array(gen.builtin_number)(),
+				terms.typed_term.literal(terms.unit_val)
+			)
 		),
 		env
 end
@@ -167,7 +173,7 @@ local function mk_impl(syntax, env)
 	if not ok then
 		return ok, tuple
 	end
-	return ok, terms.inferrable_term.enum_cons(name.str, tuple), env
+	return ok, U.notail(terms.inferrable_term.enum_cons(name.str, tuple)), env
 end
 
 ---@type Matcher
@@ -188,7 +194,7 @@ local function unwrap_into_string(...)
 	for i = 1, args.n do
 		args[i] = args[i].str
 	end
-	return table.unpack(args, 1, args.n)
+	return U.notail(table.unpack(args, 1, args.n))
 end
 
 ---@param env Environment
@@ -269,7 +275,7 @@ local function switch_impl(syntax, env)
 		variants:set(tag.str, term)
 		variant_debug:set(tag.str, var_debug(tag.str, tag.start_anchor))
 	end
-	return true, terms.inferrable_term.enum_case(subj, variants, variant_debug), env
+	return true, U.notail(terms.inferrable_term.enum_case(subj, variants, variant_debug)), env
 end
 
 ---@param _ any
@@ -286,11 +292,13 @@ end
 ---@param env Environment
 ---@return Matcher
 local function record_threaded_element(env)
-	return metalanguage.listmatch(
-		record_threaded_element_acceptor,
-		metalanguage.issymbol(metalanguage.accept_handler),
-		metalanguage.symbol_exact(metalanguage.accept_handler, "="),
-		exprs.inferred_expression(utils.accept_with_env, env)
+	return U.notail(
+		metalanguage.listmatch(
+			record_threaded_element_acceptor,
+			metalanguage.issymbol(metalanguage.accept_handler),
+			metalanguage.symbol_exact(metalanguage.accept_handler, "="),
+			exprs.inferred_expression(utils.accept_with_env, env)
+		)
 	)
 end
 
@@ -306,7 +314,7 @@ local function record_build(syntax, env)
 	for _, v in ipairs(defs) do
 		map[v.name] = v.expr
 	end
-	return true, terms.inferrable_term.record_cons(map), env
+	return true, U.notail(terms.inferrable_term.record_cons(map)), env
 end
 
 ---@type lua_operative
@@ -342,7 +350,13 @@ local function intrinsic_impl(syntax, env)
 		error "env nil in base-env.intrinsic"
 	end
 	return true,
-		terms.inferrable_term.host_intrinsic(str, type--[[terms.checkable_term.inferrable(type)]], syntax.start_anchor),
+		U.notail(
+			terms.inferrable_term.host_intrinsic(
+				str,
+				type --[[terms.checkable_term.inferrable(type)]],
+				syntax.start_anchor
+			)
+		),
 		env
 end
 
@@ -350,11 +364,13 @@ end
 ---@param purity purity
 ---@return checkable
 local function make_literal_purity(purity)
-	return terms.checkable_term.inferrable(
-		terms.inferrable_term.typed(
-			typed.literal(terms.host_purity_type),
-			usage_array(),
-			terms.typed_term.literal(terms.strict_value.host_value(purity))
+	return U.notail(
+		terms.checkable_term.inferrable(
+			terms.inferrable_term.typed(
+				typed.literal(terms.host_purity_type),
+				usage_array(),
+				terms.typed_term.literal(terms.strict_value.host_value(purity))
+			)
 		)
 	)
 end
@@ -480,7 +496,7 @@ local curry_segment = metalanguage.reducer(
 				return true, thread.env
 			end, function(thread)
 				--print("type_env: " .. tostring(thread.env))
-				return pure_ascribed_name(function(_, name, type_val, type_env)
+				return U.notail(pure_ascribed_name(function(_, name, type_val, type_env)
 					local ok
 					local str, anchor = name:unwrap_var_debug()
 					ok, type_env = type_env:bind_local(
@@ -499,7 +515,7 @@ local curry_segment = metalanguage.reducer(
 						env = type_env,
 					}
 					return true, { name = name, type = type_val }, newthread
-				end, thread.env)
+				end, thread.env))
 			end, {
 				env = env,
 			}),
@@ -546,20 +562,20 @@ local tuple_desc_of_ascribed_names = metalanguage.reducer(
 	---@return {names: var_debug[], args: inferrable, env: Environment}|string
 	function(syntax, env)
 		local function build_type_term(args)
-			return terms.inferrable_term.tuple_type(args)
+			return U.notail(terms.inferrable_term.tuple_type(args))
 		end
 		local inf_array = gen.declare_array(terms.inferrable_term)
 		local function tup_cons(...)
 			local args = inf_array(...)
-			return terms.inferrable_term.tuple_cons(
+			return U.notail(terms.inferrable_term.tuple_cons(
 				args,
 				args:map(debug_array, function(_)
 					return var_debug("", U.anchor_here())
 				end)
-			)
+			))
 		end
 		local function cons(...)
-			return terms.inferrable_term.enum_cons(terms.DescCons.cons, tup_cons(...))
+			return U.notail(terms.inferrable_term.enum_cons(terms.DescCons.cons, tup_cons(...)))
 		end
 		local empty = terms.inferrable_term.enum_cons(terms.DescCons.empty, tup_cons())
 		local names = gen.declare_array(var_debug)()
@@ -715,20 +731,20 @@ local tuple_desc_wrap_ascribed_name = metalanguage.reducer(
 	---@return {names: string[], args: inferrable, env: Environment}|string
 	function(syntax, env)
 		local function build_type_term(args)
-			return terms.inferrable_term.tuple_type(args)
+			return U.notail(terms.inferrable_term.tuple_type(args))
 		end
 		local inf_array = gen.declare_array(terms.inferrable_term)
 		local function tup_cons(...)
 			local args = inf_array(...)
-			return terms.inferrable_term.tuple_cons(
+			return U.notail(terms.inferrable_term.tuple_cons(
 				args,
 				args:map(debug_array, function(_)
 					return var_debug("", U.anchor_here())
 				end)
-			)
+			))
 		end
 		local function cons(...)
-			return terms.inferrable_term.enum_cons(terms.DescCons.cons, tup_cons(...))
+			return U.notail(terms.inferrable_term.enum_cons(terms.DescCons.cons, tup_cons(...)))
 		end
 		local empty = terms.inferrable_term.enum_cons(terms.DescCons.empty, tup_cons())
 		local names = gen.declare_array(var_debug)()
@@ -1063,7 +1079,7 @@ local function the_operative_impl(syntax, env)
 		print("val", val)
 		error "the operative didn't get a checkable term"
 	end
-	return ok, terms.inferrable_term.annotated(val, type_inferrable_term), env
+	return ok, U.notail(terms.inferrable_term.annotated(val, type_inferrable_term)), env
 end
 
 ---apply(fn, args) calls fn with an existing args tuple
@@ -1131,13 +1147,15 @@ local function apply_operative_impl(syntax, env)
 
 		local inf_term, env = utils.unpack_val_env(args_inferrable_term)
 		return true,
-			terms.inferrable_term.application(
-				terms.inferrable_term.typed(
-					evaluator.substitute_placeholders_identity(spec_type, env.typechecking_context),
-					usages,
-					fn_typed_term
-				),
-				inf_term
+			U.notail(
+				terms.inferrable_term.application(
+					terms.inferrable_term.typed(
+						evaluator.substitute_placeholders_identity(spec_type, env.typechecking_context),
+						usages,
+						fn_typed_term
+					),
+					inf_term
+				)
 			),
 			env
 	end
@@ -1466,17 +1484,19 @@ local function host_term_of(goal, context_len)
 	local teees = gen.declare_array(typed)
 	local names = gen.declare_array(gen.builtin_string)
 	local t = names("#host_term_of-t")
-	return typed.tuple_elim(
-		t,
-		t:map(debug_array, function(n)
-			return var_debug(n, U.anchor_here())
-		end),
-		typed.application(
-			typed.literal(strict_value.host_value(host_term_of_inner)),
-			typed.host_tuple_cons(teees(goal))
-		),
-		1,
-		typed.host_unwrap(typed.bound_variable(context_len + 1, terms.var_debug("", U.anchor_here())))
+	return U.notail(
+		typed.tuple_elim(
+			t,
+			t:map(debug_array, function(n)
+				return var_debug(n, U.anchor_here())
+			end),
+			typed.application(
+				typed.literal(strict_value.host_value(host_term_of_inner)),
+				typed.host_tuple_cons(teees(goal))
+			),
+			1,
+			typed.host_unwrap(typed.bound_variable(context_len + 1, terms.var_debug("", U.anchor_here())))
+		)
 	)
 end
 
@@ -1500,91 +1520,93 @@ local function operative_handler_type(ud_type, anchor)
 	local pnamer0 = terms.var_debug("#operative_handler_type-result-empty", anchor)
 	local pnamer1 = terms.var_debug("#operative_handler_type-result-term", anchor)
 	local capture_dbg = terms.var_debug("#capture", anchor)
-	return strict_value.pi(
-		strict_value.tuple_type(
-			terms.strict_tuple_desc(
-				strict_value.closure(
-					pnamep0.name,
-					typed.literal(terms.host_syntax_type),
-					empty_tuple,
-					terms.var_debug("", U.anchor_here()),
-					pnamep0
-				),
-				strict_value.closure(
-					pnamep1.name,
-					typed.literal(terms.host_environment_type),
-					empty_tuple,
-					terms.var_debug("", U.anchor_here()),
-					pnamep1
-				),
-				strict_value.closure(
-					pnamep2.name,
-					typed.literal(ud_type),
-					empty_tuple,
-					terms.var_debug("", U.anchor_here()),
-					pnamep2
-				),
-				strict_value.closure(
-					pnamep3.name,
-					typed.literal(terms.host_goal_type),
-					empty_tuple,
-					terms.var_debug("", U.anchor_here()),
-					pnamep3
+	return U.notail(
+		strict_value.pi(
+			strict_value.tuple_type(
+				terms.strict_tuple_desc(
+					strict_value.closure(
+						pnamep0.name,
+						typed.literal(terms.host_syntax_type),
+						empty_tuple,
+						terms.var_debug("", U.anchor_here()),
+						pnamep0
+					),
+					strict_value.closure(
+						pnamep1.name,
+						typed.literal(terms.host_environment_type),
+						empty_tuple,
+						terms.var_debug("", U.anchor_here()),
+						pnamep1
+					),
+					strict_value.closure(
+						pnamep2.name,
+						typed.literal(ud_type),
+						empty_tuple,
+						terms.var_debug("", U.anchor_here()),
+						pnamep2
+					),
+					strict_value.closure(
+						pnamep3.name,
+						typed.literal(terms.host_goal_type),
+						empty_tuple,
+						terms.var_debug("", U.anchor_here()),
+						pnamep3
+					)
 				)
-			)
-		),
-		param_info_explicit,
-		strict_value.closure(
-			pnamer.name,
-			typed.tuple_elim(
-				namesp4:map(name_array, function(d)
-					return d.name
-				end),
-				namesp4,
-				typed.bound_variable(2, pnamer),
-				4,
-				typed.tuple_type(
-					typed.enum_cons(
-						terms.DescCons.cons,
-						typed.tuple_cons(
-							teees(
-								typed.enum_cons(
-									terms.DescCons.cons,
-									typed.tuple_cons(
-										teees(
-											typed.enum_cons(terms.DescCons.empty, typed.tuple_cons(teees())),
-											typed.lambda(
-												pnamer0.name,
-												pnamer0,
-												host_term_of(
-													typed.tuple_element_access(typed.bound_variable(1, capture), 1),
-													6
-												),
-												typed.tuple_cons(typed_array(typed.bound_variable(6, pnamer0))),
-												capture_dbg,
-												anchor
+			),
+			param_info_explicit,
+			strict_value.closure(
+				pnamer.name,
+				typed.tuple_elim(
+					namesp4:map(name_array, function(d)
+						return d.name
+					end),
+					namesp4,
+					typed.bound_variable(2, pnamer),
+					4,
+					typed.tuple_type(
+						typed.enum_cons(
+							terms.DescCons.cons,
+							typed.tuple_cons(
+								teees(
+									typed.enum_cons(
+										terms.DescCons.cons,
+										typed.tuple_cons(
+											teees(
+												typed.enum_cons(terms.DescCons.empty, typed.tuple_cons(teees())),
+												typed.lambda(
+													pnamer0.name,
+													pnamer0,
+													host_term_of(
+														typed.tuple_element_access(typed.bound_variable(1, capture), 1),
+														6
+													),
+													typed.tuple_cons(typed_array(typed.bound_variable(6, pnamer0))),
+													capture_dbg,
+													anchor
+												)
 											)
 										)
+									),
+									typed.lambda(
+										pnamer1.name,
+										pnamer1,
+										typed.literal(terms.host_environment_type),
+										typed.tuple_cons(typed_array()),
+										terms.var_debug("", U.anchor_here()),
+										anchor
 									)
-								),
-								typed.lambda(
-									pnamer1.name,
-									pnamer1,
-									typed.literal(terms.host_environment_type),
-									typed.tuple_cons(typed_array()),
-									terms.var_debug("", U.anchor_here()),
-									anchor
 								)
 							)
 						)
 					)
-				)
+				),
+				empty_tuple,
+				terms.var_debug("", U.anchor_here()),
+				pnamer
 			),
-			empty_tuple,
-			terms.var_debug("", U.anchor_here()),
-			pnamer
-		),
-		result_info_pure
+			result_info_pure
+		)
 	)
 end
 
@@ -1655,7 +1677,7 @@ local function into_operative_impl(syntax, env)
 	local op_type = flex_value.operative_type(handler, ud_type)
 	local op_val = flex_value.operative_value(ud)
 
-	return true, terms.inferrable_term.typed(op_type, usage_array(), typed.literal(op_val)), env
+	return true, U.notail(terms.inferrable_term.typed(op_type, usage_array(), typed.literal(op_val))), env
 end
 
 -- eg typed.host_wrap, typed.host_wrapped_type
@@ -1674,66 +1696,68 @@ local function build_wrap(body_fn, type_fn)
 	local args1_dbg = terms.var_debug("#args1", U.anchor_here())
 	local univ_dbg = terms.var_debug("#univ", U.anchor_here())
 	local subj_dbg = terms.var_debug("#subj", U.anchor_here())
-	return lit_term(
-		strict_value.closure(
-			pname_arg,
-			typed.tuple_elim(
-				names2,
-				debug_array(univ_dbg, subj_dbg),
-				typed.bound_variable(2, args_dbg),
-				2,
-				body_fn(typed.bound_variable(4, subj_dbg))
-			),
-			empty_tuple,
-			terms.var_debug("", U.anchor_here()),
-			args_dbg
-		),
-		strict_value.pi(
-			strict_value.tuple_type(
-				terms.strict_tuple_desc(
-					strict_value.closure(
-						pname_type,
-						typed.tuple_elim(
-							names0,
-							debug_array(),
-							typed.bound_variable(2, args0_dbg),
-							0,
-							typed.star(evaluator.OMEGA + 1, 0)
-						),
-						empty_tuple,
-						terms.var_debug("", U.anchor_here()),
-						args0_dbg
-					),
-					strict_value.closure(
-						pname_type,
-						terms.typed_term.tuple_elim(
-							names1,
-							debug_array(univ_dbg),
-							terms.typed_term.bound_variable(2, args1_dbg),
-							1,
-							typed.bound_variable(3, univ_dbg)
-						),
-						empty_tuple,
-						terms.var_debug("", U.anchor_here()),
-						args1_dbg
-					)
-				)
-			),
-			param_info_explicit,
+	return U.notail(
+		lit_term(
 			strict_value.closure(
-				pname_type,
+				pname_arg,
 				typed.tuple_elim(
 					names2,
 					debug_array(univ_dbg, subj_dbg),
 					typed.bound_variable(2, args_dbg),
 					2,
-					type_fn(typed.bound_variable(3, univ_dbg))
+					body_fn(typed.bound_variable(4, subj_dbg))
 				),
 				empty_tuple,
 				terms.var_debug("", U.anchor_here()),
 				args_dbg
 			),
-			result_info_pure
+			strict_value.pi(
+				strict_value.tuple_type(
+					terms.strict_tuple_desc(
+						strict_value.closure(
+							pname_type,
+							typed.tuple_elim(
+								names0,
+								debug_array(),
+								typed.bound_variable(2, args0_dbg),
+								0,
+								typed.star(evaluator.OMEGA + 1, 0)
+							),
+							empty_tuple,
+							terms.var_debug("", U.anchor_here()),
+							args0_dbg
+						),
+						strict_value.closure(
+							pname_type,
+							terms.typed_term.tuple_elim(
+								names1,
+								debug_array(univ_dbg),
+								terms.typed_term.bound_variable(2, args1_dbg),
+								1,
+								typed.bound_variable(3, univ_dbg)
+							),
+							empty_tuple,
+							terms.var_debug("", U.anchor_here()),
+							args1_dbg
+						)
+					)
+				),
+				param_info_explicit,
+				strict_value.closure(
+					pname_type,
+					typed.tuple_elim(
+						names2,
+						debug_array(univ_dbg, subj_dbg),
+						typed.bound_variable(2, args_dbg),
+						2,
+						type_fn(typed.bound_variable(3, univ_dbg))
+					),
+					empty_tuple,
+					terms.var_debug("", U.anchor_here()),
+					args_dbg
+				),
+				result_info_pure
+			)
 		)
 	)
 end
@@ -1754,66 +1778,68 @@ local function build_unwrap(body_fn, type_fn)
 	local args1_dbg = terms.var_debug("#args1", U.anchor_here())
 	local univ_dbg = terms.var_debug("#univ", U.anchor_here())
 	local subj_dbg = terms.var_debug("#subj", U.anchor_here())
-	return lit_term(
-		strict_value.closure(
-			pname_arg,
-			typed.tuple_elim(
-				names2,
-				debug_array(univ_dbg, subj_dbg),
-				typed.bound_variable(2, args_dbg),
-				2,
-				body_fn(typed.bound_variable(4, subj_dbg))
-			),
-			empty_tuple,
-			terms.var_debug("", U.anchor_here()),
-			args_dbg
-		),
-		strict_value.pi(
-			strict_value.tuple_type(
-				terms.strict_tuple_desc(
-					strict_value.closure(
-						pname_type,
-						typed.tuple_elim(
-							names0,
-							debug_array(),
-							typed.bound_variable(2, args0_dbg),
-							0,
-							typed.star(evaluator.OMEGA + 1, 0)
-						),
-						empty_tuple,
-						terms.var_debug("", U.anchor_here()),
-						args0_dbg
-					),
-					strict_value.closure(
-						pname_type,
-						terms.typed_term.tuple_elim(
-							names1,
-							debug_array(univ_dbg),
-							terms.typed_term.bound_variable(2, args1_dbg),
-							1,
-							type_fn(typed.bound_variable(3, univ_dbg))
-						),
-						empty_tuple,
-						terms.var_debug("", U.anchor_here()),
-						args1_dbg
-					)
-				)
-			),
-			param_info_explicit,
+	return U.notail(
+		lit_term(
 			strict_value.closure(
-				pname_type,
+				pname_arg,
 				typed.tuple_elim(
 					names2,
 					debug_array(univ_dbg, subj_dbg),
 					typed.bound_variable(2, args_dbg),
 					2,
-					typed.bound_variable(3, univ_dbg)
+					body_fn(typed.bound_variable(4, subj_dbg))
 				),
 				empty_tuple,
 				terms.var_debug("", U.anchor_here()),
 				args_dbg
 			),
-			result_info_pure
+			strict_value.pi(
+				strict_value.tuple_type(
+					terms.strict_tuple_desc(
+						strict_value.closure(
+							pname_type,
+							typed.tuple_elim(
+								names0,
+								debug_array(),
+								typed.bound_variable(2, args0_dbg),
+								0,
+								typed.star(evaluator.OMEGA + 1, 0)
+							),
+							empty_tuple,
+							terms.var_debug("", U.anchor_here()),
+							args0_dbg
+						),
+						strict_value.closure(
+							pname_type,
+							terms.typed_term.tuple_elim(
+								names1,
+								debug_array(univ_dbg),
+								terms.typed_term.bound_variable(2, args1_dbg),
+								1,
+								type_fn(typed.bound_variable(3, univ_dbg))
+							),
+							empty_tuple,
+							terms.var_debug("", U.anchor_here()),
+							args1_dbg
+						)
+					)
+				),
+				param_info_explicit,
+				strict_value.closure(
+					pname_type,
+					typed.tuple_elim(
+						names2,
+						debug_array(univ_dbg, subj_dbg),
+						typed.bound_variable(2, args_dbg),
+						2,
+						typed.bound_variable(3, univ_dbg)
+					),
+					empty_tuple,
+					terms.var_debug("", U.anchor_here()),
+					args_dbg
+				),
+				result_info_pure
+			)
 		)
 	)
 end
@@ -1830,53 +1856,55 @@ local function build_wrapped(body_fn)
 	local args_dbg = terms.var_debug("#args", U.anchor_here())
 	local args0_dbg = terms.var_debug("#args0", U.anchor_here())
 	local typ_dbg = terms.var_debug("#typ", U.anchor_here())
-	return lit_term(
-		strict_value.closure(
-			pname_arg,
-			typed.tuple_elim(
-				names1,
-				debug_array(typ_dbg),
-				typed.bound_variable(2, args_dbg),
-				1,
-				body_fn(typed.bound_variable(3, typ_dbg))
-			),
-			empty_tuple,
-			terms.var_debug("", U.anchor_here()),
-			args_dbg
-		),
-		strict_value.pi(
-			strict_value.tuple_type(
-				terms.strict_tuple_desc(
-					strict_value.closure(
-						pname_type,
-						typed.tuple_elim(
-							names0,
-							debug_array(),
-							typed.bound_variable(2, args0_dbg),
-							0,
-							typed.star(evaluator.OMEGA + 1, 0)
-						),
-						empty_tuple,
-						terms.var_debug("", U.anchor_here()),
-						args0_dbg
-					)
-				)
-			),
-			param_info_explicit,
+	return U.notail(
+		lit_term(
 			strict_value.closure(
-				pname_type,
+				pname_arg,
 				typed.tuple_elim(
 					names1,
 					debug_array(typ_dbg),
 					typed.bound_variable(2, args_dbg),
 					1,
-					typed.literal(strict_value.host_type_type)
+					body_fn(typed.bound_variable(3, typ_dbg))
 				),
 				empty_tuple,
 				terms.var_debug("", U.anchor_here()),
 				args_dbg
 			),
-			result_info_pure
+			strict_value.pi(
+				strict_value.tuple_type(
+					terms.strict_tuple_desc(
+						strict_value.closure(
+							pname_type,
+							typed.tuple_elim(
+								names0,
+								debug_array(),
+								typed.bound_variable(2, args0_dbg),
+								0,
+								typed.star(evaluator.OMEGA + 1, 0)
+							),
+							empty_tuple,
+							terms.var_debug("", U.anchor_here()),
+							args0_dbg
+						)
+					)
+				),
+				param_info_explicit,
+				strict_value.closure(
+					pname_type,
+					typed.tuple_elim(
+						names1,
+						debug_array(typ_dbg),
+						typed.bound_variable(2, args_dbg),
+						1,
+						typed.literal(strict_value.host_type_type)
+					),
+					empty_tuple,
+					terms.var_debug("", U.anchor_here()),
+					args_dbg
+				),
+				result_info_pure
+			)
 		)
 	)
 end
@@ -1899,7 +1927,7 @@ local enum_variant = metalanguage.reducer(function(syntax, env)
 		return false, "missing enum variant name"
 	end
 
-	return true, tag.name, terms.inferrable_term.tuple_type(tail.args), env
+	return true, tag.name, U.notail(terms.inferrable_term.tuple_type(tail.args)), env
 end, "enum_variant")
 
 ---@type lua_operative
@@ -1920,13 +1948,17 @@ local function enum_impl(syntax, env)
 	end
 
 	return true,
-		terms.inferrable_term.enum_type(
-			terms.inferrable_term.enum_desc_cons(
-				variants,
-				terms.inferrable_term.typed(
-					terms.typed_term.literal(strict_value.enum_desc_type(strict_value.star(0, 0))),
-					usage_array(),
-					typed.literal(strict_value.enum_desc_value(gen.declare_map(gen.builtin_string, terms.flex_value)()))
+		U.notail(
+			terms.inferrable_term.enum_type(
+				terms.inferrable_term.enum_desc_cons(
+					variants,
+					terms.inferrable_term.typed(
+						terms.typed_term.literal(strict_value.enum_desc_type(strict_value.star(0, 0))),
+						usage_array(),
+						typed.literal(
+							strict_value.enum_desc_value(gen.declare_map(gen.builtin_string, terms.flex_value)())
+						)
+					)
 				)
 			)
 		),
@@ -2102,7 +2134,7 @@ local function tuple_desc_elem(desc, elem, head_n, head_names, tail_n, tail_name
 		terms.var_debug("", U.anchor_here()),
 		arg_dbg
 	)
-	return terms.cons(desc, elem_wrap)
+	return U.notail(terms.cons(desc, elem_wrap))
 end
 
 local function tuple_desc_concat(head, tail)
@@ -2146,24 +2178,26 @@ local host_if = (function()
 	local debug_consequent = terms.var_debug("#host-if-consequent", U.anchor_here())
 	local debug_alternate = terms.var_debug("#host-if-alternate", U.anchor_here())
 	local debug_elements = debug_array(debug_subject, debug_consequent, debug_alternate)
-	return terms.flex_value.closure(
-		"#host-if-param",
-		typed.tuple_elim(
-			debug_elements:map(name_array, function(n)
-				return n.name
-			end),
-			debug_elements,
-			typed.bound_variable(2, debug_arg),
-			3,
-			typed.host_if(
-				typed.bound_variable(3, debug_subject),
-				typed.bound_variable(4, debug_consequent),
-				typed.bound_variable(5, debug_alternate)
-			)
-		),
-		flex_value.strict(empty_tuple),
-		var_debug("", U.anchor_here()),
-		debug_arg
+	return U.notail(
+		terms.flex_value.closure(
+			"#host-if-param",
+			typed.tuple_elim(
+				debug_elements:map(name_array, function(n)
+					return n.name
+				end),
+				debug_elements,
+				typed.bound_variable(2, debug_arg),
+				3,
+				typed.host_if(
+					typed.bound_variable(3, debug_subject),
+					typed.bound_variable(4, debug_consequent),
+					typed.bound_variable(5, debug_alternate)
+				)
+			),
+			flex_value.strict(empty_tuple),
+			var_debug("", U.anchor_here()),
+			debug_arg
+		)
 	)
 end)()
 
@@ -2193,9 +2227,11 @@ local function convert_desc(desc)
 			var_debug("#tuple-prefix", U.anchor_here())
 		)
 		terms.verify_placeholder_lite(convert_type_fun, terms.typechecking_context())
-		return terms.flex_value.enum_value(
-			terms.DescCons.cons,
-			terms.flex_value.tuple_value(flex_value_array(convert_next, convert_type_fun))
+		return U.notail(
+			terms.flex_value.enum_value(
+				terms.DescCons.cons,
+				terms.flex_value.tuple_value(flex_value_array(convert_next, convert_type_fun))
+			)
 		)
 	else
 		error "unknown tuple desc constructor"
@@ -2207,7 +2243,7 @@ end
 local function convert_sig(sig)
 	local param_type, _, _, _ = sig:unwrap_pi()
 	local param_desc = param_type:unwrap_tuple_type()
-	return terms.flex_value.tuple_type(convert_desc(param_desc))
+	return U.notail(terms.flex_value.tuple_type(convert_desc(param_desc)))
 end
 
 local function desc_length(desc, len)
@@ -2254,12 +2290,14 @@ local function new_host_type_family(unique_id, sig, variance)
 		nparams,
 		terms.typed_term.host_user_defined_type_cons(unique_id, params)
 	)
-	return terms.flex_value.closure(
-		"#type-family-B",
-		body,
-		flex_value.strict(empty_tuple),
-		var_debug("#capture", U.anchor_here()),
-		info
+	return U.notail(
+		terms.flex_value.closure(
+			"#type-family-B",
+			body,
+			flex_value.strict(empty_tuple),
+			var_debug("#capture", U.anchor_here()),
+			info
+		)
 	)
 end
 
@@ -2283,7 +2321,7 @@ local function get_host_func_res(subject, valid)
 		)
 	)
 	local ctx = terms.flex_runtime_context():append(result_type, "#res_arg", result_dbg)
-	return terms.flex_value.closure("#TEST-1", tuple_build, result_type, result_dbg, arg_dbg)
+	return U.notail(terms.flex_value.closure("#TEST-1", tuple_build, result_type, result_dbg, arg_dbg))
 end
 
 ---@param val flex_value
@@ -2307,9 +2345,9 @@ local function tuple_to_host_tuple_inner(_type, _valid, val)
 		end
 	end
 	if not stuck then
-		return terms.flex_value.host_tuple_value(leading)
+		return U.notail(terms.flex_value.host_tuple_value(leading))
 	else
-		return terms.flex_value.stuck(terms.stuck_value.host_tuple(leading, stuck_elem, trailing))
+		return U.notail(terms.flex_value.stuck(terms.stuck_value.host_tuple(leading, stuck_elem, trailing)))
 	end
 end
 
@@ -2318,23 +2356,25 @@ local core_operative_type = (function()
 	local debug_userdata = terms.var_debug("userdata", U.anchor_here())
 	local debug_handler = terms.var_debug("handler", U.anchor_here())
 	local debug_elements = debug_array(debug_userdata, debug_handler)
-	return terms.flex_value.closure(
-		debug_arg.name,
-		terms.typed_term.tuple_elim(
-			debug_elements:map(name_array, function(n)
-				return n.name
-			end),
-			debug_elements,
-			terms.typed_term.bound_variable(2, debug_arg),
-			2,
-			terms.typed_term.operative_type_cons(
-				terms.typed_term.bound_variable(4, debug_handler),
-				terms.typed_term.bound_variable(3, debug_userdata) --TODO: fix the order on this
-			)
-		),
-		flex_value.strict(empty_tuple),
-		var_debug("#capture", U.anchor_here()),
-		debug_arg
+	return U.notail(
+		terms.flex_value.closure(
+			debug_arg.name,
+			terms.typed_term.tuple_elim(
+				debug_elements:map(name_array, function(n)
+					return n.name
+				end),
+				debug_elements,
+				terms.typed_term.bound_variable(2, debug_arg),
+				2,
+				terms.typed_term.operative_type_cons(
+					terms.typed_term.bound_variable(4, debug_handler),
+					terms.typed_term.bound_variable(3, debug_userdata) --TODO: fix the order on this
+				)
+			),
+			flex_value.strict(empty_tuple),
+			var_debug("#capture", U.anchor_here()),
+			debug_arg
+		)
 	)
 end)()
 
@@ -2343,20 +2383,22 @@ local core_operative = (function()
 	local debug_ud = terms.var_debug("ud", U.anchor_here())
 	local debug_handler = terms.var_debug("handler", U.anchor_here())
 	local debug_elements = debug_array(debug_ud, debug_handler)
-	return terms.flex_value.closure(
-		debug_arg.name,
-		terms.typed_term.tuple_elim(
-			debug_elements:map(name_array, function(n)
-				return n.name
-			end),
-			debug_elements,
-			terms.typed_term.bound_variable(2, debug_arg),
-			2,
-			terms.typed_term.operative_cons(terms.typed_term.bound_variable(3, debug_ud))
-		),
-		flex_value.strict(empty_tuple),
-		var_debug("#capture", U.anchor_here()),
-		debug_arg
+	return U.notail(
+		terms.flex_value.closure(
+			debug_arg.name,
+			terms.typed_term.tuple_elim(
+				debug_elements:map(name_array, function(n)
+					return n.name
+				end),
+				debug_elements,
+				terms.typed_term.bound_variable(2, debug_arg),
+				2,
+				terms.typed_term.operative_cons(terms.typed_term.bound_variable(3, debug_ud))
+			),
+			flex_value.strict(empty_tuple),
+			var_debug("#capture", U.anchor_here()),
+			debug_arg
+		)
 	)
 end)()
 

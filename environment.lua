@@ -13,7 +13,7 @@ local module_mt = {}
 local evaluator = require "evaluator"
 local infer = evaluator.infer
 
----@source environment.lua
+---@type table
 local environment_mt
 
 ---Takes a table resembling an old environment (can be missing fields, it doesn't matter) and turns it into a new environment
@@ -125,11 +125,11 @@ function environment:bind_local(binding)
 		typechecking_context = typechecking_context:append(name, expr_type, evaled, debuginfo)
 		local bindings = self.bindings:append(binding)
 		return true,
-			update_env(self, {
+			U.notail(update_env(self, {
 				locals = locals,
 				bindings = bindings,
 				typechecking_context = typechecking_context,
-			})
+			}))
 	elseif binding:is_tuple_elim() then
 		local names, infos, subject = binding:unwrap_tuple_elim()
 		local ok, subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
@@ -213,11 +213,11 @@ function environment:bind_local(binding)
 			end
 			local bindings = self.bindings:append(binding)
 			return true,
-				update_env(self, {
+				U.notail(update_env(self, {
 					locals = locals,
 					bindings = bindings,
 					typechecking_context = typechecking_context,
-				})
+				}))
 		end
 		local unique = {}
 		local ok, res1, res2
@@ -255,11 +255,11 @@ function environment:bind_local(binding)
 		local locals = self.locals:put(param_name, inferrable_term.bound_variable(typechecking_context:len() + 1, info))
 		local typechecking_context = typechecking_context:append(param_name, evaled, nil, info)
 		return true,
-			update_env(self, {
+			U.notail(update_env(self, {
 				locals = locals,
 				bindings = bindings,
 				typechecking_context = typechecking_context,
-			})
+			}))
 		--error "NYI lambda bindings"
 	elseif binding:is_program_sequence() then
 		if self.purity:is_pure() then
@@ -292,11 +292,11 @@ function environment:bind_local(binding)
 		typechecking_context = typechecking_context:append("#program-sequence", first_result_type, nil, debuginfo)
 		local bindings = self.bindings:append(binding)
 		return true,
-			update_env(self, {
+			U.notail(update_env(self, {
 				locals = locals,
 				bindings = bindings,
 				typechecking_context = typechecking_context,
-			})
+			}))
 	else
 		error("bind_local: unknown kind: " .. binding.kind)
 	end
@@ -315,31 +315,31 @@ end
 ---@param module Module
 ---@return Environment
 function environment:open_module(module)
-	return new_env {
+	return U.notail(new_env({
 		locals = self.locals:extend(module.bindings),
 		nonlocals = self.nonlocals,
 		perms = self.perms,
-	}
+	}))
 end
 
 ---@param module Module
 ---@return Environment
 function environment:use_module(module)
-	return new_env {
+	return U.notail(new_env({
 		locals = self.locals,
 		nonlocals = self.nonlocals:extend(module.bindings),
 		perms = self.perms,
-	}
+	}))
 end
 
 ---@param name string
 ---@return Environment
 function environment:unlet_local(name)
-	return new_env {
+	return U.notail(new_env({
 		locals = self.locals:remove(name),
 		nonlocals = self.nonlocals,
 		perms = self.perms,
-	}
+	}))
 end
 
 ---enter a new block, shadowing the current context and allowing new bindings
@@ -354,13 +354,13 @@ function environment:enter_block(purity)
 	end
 	evaluator.typechecker_state:enter_block()
 	return { shadowed = self },
-		new_env {
+		U.notail(new_env({
 			-- locals = nil,
 			nonlocals = self.in_scope,
 			purity = purity,
 			perms = self.perms,
 			typechecking_context = self.typechecking_context,
-		}
+		}))
 end
 
 ---exit a block, resolving the bindings in that block and restoring the shadowed locals

@@ -18,9 +18,7 @@ function M.concat(...)
 	return res
 end
 
----Exists only to prevent tail call optimizations
----@param ... any
----@return ...
+---@module "_meta/alicorn-utils/notail"
 function M.notail(...)
 	return ...
 end
@@ -190,7 +188,7 @@ function M.shadowtable(obj, userdata)
 		return iter, tbl, nil
 	end
 
-	return setmetatable({}, mt)
+	return M.notail(setmetatable({}, mt))
 end
 
 local function rawpairs(tbl)
@@ -246,7 +244,7 @@ function M.shadowarray(obj, userdata)
 		end, tbl, 0
 	end
 
-	return setmetatable({}, mt)
+	return M.notail(setmetatable({}, mt))
 end
 
 ---Given a shadowed table, flattens its values on to the shadowed table below and returns it
@@ -325,7 +323,7 @@ function M.dumptable(t, spaces)
 		s[#s + 1] = string.rep(" ", spaces) .. "  [shadows]: " .. tostring(M.dumptable(mt.__shadow, spaces + 2))
 	end
 
-	return table.concat(s, "\n")
+	return M.notail(table.concat(s, "\n"))
 end
 
 ---@param t table
@@ -690,7 +688,7 @@ local litprint_mt = {
 ---@param s string
 ---@return table
 function M.litprint(s)
-	return setmetatable({ contents = s }, litprint_mt)
+	return M.notail(setmetatable({ contents = s }, litprint_mt))
 end
 
 DEBUG_ID = 0
@@ -756,7 +754,7 @@ function M.custom_traceback(err, prefix, level)
 		info = debug.getinfo(i, "Sfln")
 	end
 
-	return table.concat(s, "\n" .. prefix)
+	return M.notail(table.concat(s, "\n" .. prefix))
 end
 
 -- this function should be used when calling for a trace directly
