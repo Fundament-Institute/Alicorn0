@@ -7,6 +7,8 @@ local U = require "alicorn-utils"
 
 local _ = require "lua-ext" -- has side-effect of loading fixed table.concat
 
+local s = pretty_printer.s
+
 -- record and enum are nominative types.
 -- this means that two record types, given the same arguments, are distinct.
 -- values constructed from one type are of a different type compared to values
@@ -136,17 +138,25 @@ local function gen_record(self, cons, kind, params_with_types)
 			kind = kind,
 		}
 		for i, v in ipairs(params) do
-			local argi = args[i]
+			local param = args[i]
+			local param_type = params_types[i]
 			-- type-check constructor arguments
-			if params_types[i].value_check(argi) ~= true then
-				print("value of parameter " .. v .. ": (follows)")
-				p(argi)
-				print("expected type of parameter " .. v .. " is :", params_types[i])
+			if param_type.value_check(param) ~= true then
 				error(
-					debug.traceback("wrong argument type passed to constructor " .. kind .. ", parameter '" .. v .. "'")
+					debug.traceback(
+						string.format(
+							"wrong argument type passed to constructor %s, parameter %q\nexpected type of parameter %s is: %s\nvalue of parameter %s: (follows)\n%s",
+							kind,
+							v,
+							v,
+							param_type,
+							v,
+							s(param)
+						)
+					)
 				)
 			end
-			val[v] = argi
+			val[v] = param
 		end
 		if false then
 			-- val["{TRACE}"] = U.bound_here(2)
@@ -382,14 +392,20 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 			flex[k] = function(...)
 				local args = table.pack(...)
 				for i, v in ipairs(params) do
-					if params_types[i].value_check(args[i]) ~= true then
+					local param = args[i]
+					local param_type = params_types[i]
+					if param_type.value_check(param) ~= true then
 						error(
 							debug.traceback(
-								"wrong argument type passed to constructor "
-									.. args[i].kind
-									.. ", parameter '"
-									.. v
-									.. "'"
+								string.format(
+									"wrong argument type passed to constructor %s, parameter %q\nexpected type of parameter %s is: %s\nvalue of parameter %s: (follows)\n%s",
+									param.kind,
+									v,
+									v,
+									param_type,
+									v,
+									s(param)
+								)
 							)
 						)
 					end

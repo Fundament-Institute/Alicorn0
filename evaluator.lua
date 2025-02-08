@@ -1481,6 +1481,32 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 		r_ctx
 	)
 	-- The cons variant takes a prefix description and a next element, represented as a function from the prefix tuple to a type in the specified universe
+	local prefix_desc = evaluate(universe_lambda, r_ctx.runtime_context, r_ctx)
+	local next_element = flex_value.closure(
+		"#prefix",
+		typed_term.tuple_elim(
+			string_array("prefix-desc"),
+			debug_array(prefix_desc_dbg),
+			typed_term.bound_variable(2, arg_name),
+			1,
+			typed_term.pi(
+				typed_term.tuple_type(typed_term.bound_variable(3, prefix_desc_dbg)),
+				typed.literal(strict_value.param_info(strict_value.visibility(terms.visibility.explicit))),
+				typed.lambda(
+					arg_name.name,
+					arg_name,
+					typed_term.bound_variable(1, universe_dbg),
+					typed.literal(empty_tuple),
+					var_debug("#capture", U.anchor_here()),
+					U.anchor_here()
+				),
+				typed.literal(strict_value.result_info(terms.result_info(terms.purity.pure)))
+			)
+		),
+		b_universe,
+		universe_dbg,
+		arg_name
+	)
 	construction_variants:set(
 		terms.DescCons.cons,
 		flex_value.tuple_type(
@@ -1496,37 +1522,11 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 										terms.DescCons.empty,
 										flex_value.tuple_value(flex_value_array())
 									),
-									evaluate(universe_lambda, r_ctx.runtime_context, r_ctx)
+									prefix_desc
 								)
 							)
 						),
-						flex_value.closure(
-							"#prefix",
-							typed_term.tuple_elim(
-								string_array("prefix-desc"),
-								debug_array(prefix_desc_dbg),
-								typed_term.bound_variable(2, arg_name),
-								1,
-								typed_term.pi(
-									typed_term.tuple_type(typed_term.bound_variable(3, prefix_desc_dbg)),
-									typed.literal(
-										strict_value.param_info(strict_value.visibility(terms.visibility.explicit))
-									),
-									typed.lambda(
-										arg_name.name,
-										arg_name,
-										typed_term.bound_variable(1, universe_dbg),
-										typed.literal(empty_tuple),
-										var_debug("#capture", U.anchor_here()),
-										U.anchor_here()
-									),
-									typed.literal(strict_value.result_info(terms.result_info(terms.purity.pure)))
-								)
-							),
-							b_universe,
-							universe_dbg,
-							arg_name
-						)
+						next_element
 					)
 				)
 			)
