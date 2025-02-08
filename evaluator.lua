@@ -1149,6 +1149,10 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 			substitute_inner(rest, mappings, context_len, ambient_typechecking_context)
 		)
 		return res
+	elseif val:is_host_intrinsic() then
+		local source, start_anchor = val:unwrap_host_intrinsic()
+		local source_term = substitute_inner(source, mappings, context_len, ambient_typechecking_context)
+		return typed.host_intrinsic(source_term, start_anchor)
 	else
 		error("Unhandled value kind in substitute_inner: " .. val.kind)
 	end
