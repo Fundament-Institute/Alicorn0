@@ -1083,7 +1083,7 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		return U.notail(typed_term.host_if(subject, consequent, alternate))
 	elseif val:is_application() then
 		local fn, arg = val:unwrap_application()
-		U.notail(
+		return U.notail(
 			typed_term.application(
 				substitute_inner(flex_value.stuck(fn), mappings, context_len, ambient_typechecking_context),
 				substitute_inner(arg, mappings, context_len, ambient_typechecking_context)
