@@ -687,12 +687,106 @@ local function verify_closure(v, ctx, nested)
 	return true
 end
 
+---@enum TypeCheckerTag
+local TypeCheckerTag = {
+	VALUE = { VALUE = "VALUE" },
+	USAGE = { USAGE = "USAGE" },
+	METAVAR = { METAVAR = "METAVAR" },
+	RANGE = { RANGE = "RANGE" },
+}
+
+---@source evaluator.lua
+local gather_usages
+
+---gather usages from a region of a graph based on the block depth around a metavariable
+---@param mv Metavariable
+---@param usages MapValue<integer, integer>
+---@param context_len integer number of bindings in the runtime context already used - needed for closures
+---@param ambient_typechecking_context TypecheckingContext ambient context for resolving placeholders
+---@return typed
+local function gather_constraint_usages(mv, usages, context_len, ambient_typechecking_context)
+	-- Mimics logic in slice_constraints_for but just gathers usages
+	---@param id integer
+	---@return flex_value
+	local function getnode(id)
+		return typechecker_state.values[id][1]
+	end
+	---@param id integer
+	---@return TypecheckingContext
+	local function getctx(id)
+		return typechecker_state.values[id][3]
+	end
+
+	---@generic T
+	---@param edgeset T[]
+	---@param extractor fun(edge: T) : integer
+	---@param callback fun(edge: T)
+	local function slice_edgeset(edgeset, extractor, callback)
+		for _, edge in ipairs(edgeset) do
+			local tag = typechecker_state.values[extractor(edge)][2]
+			if tag == TypeCheckerTag.METAVAR then
+				local mvo = getnode(extractor(edge))
+
+				if
+					mvo:is_stuck()
+					and mvo:unwrap_stuck():is_free()
+					and mvo:unwrap_stuck():unwrap_free():is_metavariable()
+				then
+					local mvo_inner = mvo:unwrap_stuck():unwrap_free():unwrap_metavariable()
+					if mvo_inner.block_level < typechecker_state.block_level then
+						callback(edge)
+					end
+				else
+					error "incorrectly labelled as a metavariable"
+				end
+			elseif tag ~= TypeCheckerTag.RANGE then
+				callback(edge)
+			end
+		end
+	end
+
+	slice_edgeset(typechecker_state.graph.constrain_edges:to(mv.usage), function(edge)
+		return edge.left
+	end, function(edge)
+		gather_usages(getnode(edge.left), usages, context_len, ambient_typechecking_context)
+	end)
+	slice_edgeset(typechecker_state.graph.constrain_edges:from(mv.usage), function(edge)
+		return edge.right
+	end, function(edge)
+		gather_usages(getnode(edge.right), usages, context_len, ambient_typechecking_context)
+	end)
+	slice_edgeset(typechecker_state.graph.leftcall_edges:to(mv.usage), function(edge)
+		return edge.left
+	end, function(edge)
+		gather_usages(getnode(edge.left), usages, context_len, ambient_typechecking_context)
+		gather_usages(edge.arg, usages, context_len, ambient_typechecking_context)
+	end)
+	slice_edgeset(typechecker_state.graph.leftcall_edges:from(mv.usage), function(edge)
+		return edge.right
+	end, function(edge)
+		gather_usages(edge.arg, usages, context_len, ambient_typechecking_context)
+		gather_usages(getnode(edge.right), usages, context_len, ambient_typechecking_context)
+	end)
+	slice_edgeset(typechecker_state.graph.rightcall_edges:to(mv.usage), function(edge)
+		return edge.left
+	end, function(edge)
+		gather_usages(getnode(edge.left), usages, context_len, ambient_typechecking_context)
+		gather_usages(edge.arg, usages, context_len, ambient_typechecking_context)
+	end)
+	slice_edgeset(typechecker_state.graph.rightcall_edges:from(mv.usage), function(edge)
+		return edge.right
+	end, function(edge)
+		gather_usages(getnode(edge.right), usages, context_len, ambient_typechecking_context)
+		gather_usages(edge.arg, usages, context_len, ambient_typechecking_context)
+	end)
+end
+
 --- TODO: do we even need context_len or ambient_typechecking_context?
 ---@param val flex_value an alicorn value
 ---@param usages MapValue<integer, integer> the usages array we are filling
 ---@param context_len integer number of bindings in the runtime context already used - needed for closures
 ---@param ambient_typechecking_context TypecheckingContext
-local function gather_usages(val, usages, context_len, ambient_typechecking_context)
+gather_usages = function(val, usages, context_len, ambient_typechecking_context)
 	-- If this is strict, simply return it inside a literal, since no substitution is necessary no matter what it is.
 	if val:is_strict() then
 		return
@@ -769,6 +863,13 @@ local function gather_usages(val, usages, context_len, ambient_typechecking_cont
 		if free:is_placeholder() then
 			local lookup, info = free:unwrap_placeholder()
 			usages:set(lookup, (usages:get(lookup) or 0) + 1)
+		elseif free:is_metavariable() then
+			local mv = free:unwrap_metavariable()
+
+			if not (mv.block_level < typechecker_state.block_level) then
+				gather_constraint_usages(mv, usages, context_len, ambient_typechecking_context)
+			end
+		else
 		end
 	elseif val:is_tuple_element_access() then
 		local subject, index = val:unwrap_tuple_element_access()
@@ -4894,14 +4995,6 @@ function Reachability:revert()
 	self.rightcall_edges:revert()
 	U.invalidate(self)
 end
-
----@enum TypeCheckerTag
-local TypeCheckerTag = {
-	VALUE = { VALUE = "VALUE" },
-	USAGE = { USAGE = "USAGE" },
-	METAVAR = { METAVAR = "METAVAR" },
-	RANGE = { RANGE = "RANGE" },
-}
 
 ---@alias ReachabilityQueue edgenotif[]
 
