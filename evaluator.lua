@@ -1235,7 +1235,7 @@ function substitute_inner(val, mappings, context_len, ambient_typechecking_conte
 	if tracked then
 		print(string.rep("·", recurse_count) .. "SUB: " .. tostring(val))
 	end
-
+	print("BBBBBBBB", val)
 	verify_placeholder_lite(val, ambient_typechecking_context)
 	recurse_count = recurse_count + 1
 	local r = substitute_inner_impl(val, mappings, context_len, ambient_typechecking_context)

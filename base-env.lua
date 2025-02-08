@@ -26,6 +26,7 @@ local name_array = gen.declare_array(gen.builtin_string)
 local typed_array = gen.declare_array(typed)
 local flex_value_array = gen.declare_array(flex_value)
 local strict_value_array = gen.declare_array(strict_value)
+local empty_tuple = terms.strict_value.tuple_value(strict_value_array())
 
 ---@param val strict_value
 ---@param typ strict_value
@@ -54,13 +55,11 @@ local function gen_base_operator(fn_op, name, ...)
 	return terms.strict_value.closure(
 		argname,
 		terms.typed_term.tuple_elim(names, debug_names, terms.typed_term.bound_variable(1, debug_arg), count, res),
-		terms.strict_value.tuple_value(flex_value_array()),
+		empty_tuple,
 		terms.var_debug("#capture", U.anchor_here()),
 		debug_arg
 	)
 end
-
-local empty_tuple = terms.strict_value.tuple_value(strict_value_array())
 
 --- lua_operative is dependently typed and should produce inferrable vs checkable depending on the goal, and an error as the second return if it failed
 --- | unknown in the second return insufficiently constrains the non-error cases to be inferrable or checkable terms
