@@ -7,9 +7,9 @@ local M = {}
 
 M.default_opts = {
 	capture_filter = function(opts, file, parser, query, id, node, metadata, match)
-    local capture_name = query.captures[id]
-		return capture_name:find('_', 1, true) ~= 1
-	end
+		local capture_name = query.captures[id]
+		return capture_name:find("_", 1, true) ~= 1
+	end,
 }
 
 ---@param file {bufnr?: integer, filename?: string, parser?: vim.treesitter.LanguageTree, str?: string}
@@ -85,7 +85,7 @@ end
 
 function M.quickfix(opts)
 	local qf_table = {}
-	opts = vim.tbl_extend('force', M.default_opts, opts)
+	opts = vim.tbl_extend("force", M.default_opts, opts)
 	local files = opts.files
 	if files == nil then
 		files = { { bufnr = vim.api.nvim_get_current_buf() } }
