@@ -2223,8 +2223,14 @@ local function check(
 		end
 
 		return true, inferred_usages, typed_term
-	elseif checkable_term:is_tuple_cons() then
-		local elements, info = checkable_term:unwrap_tuple_cons()
+	elseif checkable_term:is_tuple_cons() or checkable_term:is_host_tuple_cons() then
+		local elements, info
+		if checkable_term:is_tuple_cons() then
+			elements, info = checkable_term:unwrap_tuple_cons()
+		else
+			elements, info = checkable_term:unwrap_host_tuple_cons()
+		end
+
 		local usages = usage_array()
 		local new_elements = typed_array()
 		local desc = terms.empty
@@ -2254,60 +2260,31 @@ local function check(
 			)
 		end
 
+		local final_type, prim_name
+		if checkable_term:is_tuple_cons() then
+			final_type = flex_value.tuple_type(desc)
+			prim_name = "checkable_term:is_tuple_cons"
+		else
+			final_type = flex_value.host_tuple_type(desc)
+			prim_name = "checkable_term:is_host_tuple_cons"
+		end
+
 		local ok, err = typechecker_state:flow(
-			flex_value.tuple_type(desc),
+			final_type,
 			typechecking_context,
 			goal_type,
 			typechecking_context,
-			terms.constraintcause.primitive("checkable_term:is_tuple_cons", U.anchor_here())
+			terms.constraintcause.primitive(prim_name, U.anchor_here())
 		)
 		if not ok then
 			return false, err
 		end
 
-		return true, usages, typed_term.tuple_cons(new_elements)
-	elseif checkable_term:is_host_tuple_cons() then
-		local elements, info = checkable_term:unwrap_host_tuple_cons()
-		local usages = usage_array()
-		local new_elements = typed_array()
-		local desc = terms.empty
-
-		for i, v in elements:ipairs() do
-			local el_type_metavar = typechecker_state:metavariable(typechecking_context)
-			local el_type = el_type_metavar:as_flex()
-			local ok, el_usages, el_term = check(v, typechecking_context, el_type)
-			if not ok then
-				return false, el_usages
-			end
-
-			add_arrays(usages, el_usages)
-			new_elements:append(el_term)
-
-			local el_val = evaluate(el_term, typechecking_context.runtime_context, typechecking_context)
-
-			desc = terms.cons(
-				desc,
-				flex_value.closure(
-					"#check-tuple-cons-param",
-					substitute_placeholders_identity(flex_value.singleton(el_type, el_val), typechecking_context, 1),
-					typechecking_context.runtime_context,
-					info[i]
-				)
-			)
+		if checkable_term:is_tuple_cons() then
+			return true, usages, typed_term.tuple_cons(new_elements)
+		else
+			return true, usages, typed_term.host_tuple_cons(new_elements)
 		end
-
-		local ok, err = typechecker_state:flow(
-			flex_value.host_tuple_type(desc),
-			typechecking_context,
-			goal_type,
-			typechecking_context,
-			terms.constraintcause.primitive("checkable_term:is_host_tuple_cons", U.anchor_here())
-		)
-		if not ok then
-			return false, err
-		end
-
-		return true, usages, typed_term.host_tuple_cons(new_elements)
 	elseif checkable_term:is_lambda() then
 		local param_name, body = checkable_term:unwrap_lambda()
 		-- assert that goal_type is a pi type
