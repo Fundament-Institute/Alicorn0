@@ -35,6 +35,7 @@ local typed_array = array(typed_term)
 local flex_value_array = array(flex_value)
 local host_array = array(gen.any_lua_type)
 local usage_array = array(gen.builtin_number)
+local usage_map = map(gen.builtin_number, gen.builtin_number)
 local string_array = array(gen.builtin_string)
 local debug_array = array(terms.var_debug)
 
@@ -688,7 +689,7 @@ end
 
 --- TODO: do we even need context_len or ambient_typechecking_context?
 ---@param val flex_value an alicorn value
----@param usages ArrayValue<integer> the usages array we are filling
+---@param usages MapValue<integer, integer> the usages array we are filling
 ---@param context_len integer number of bindings in the runtime context already used - needed for closures
 ---@param ambient_typechecking_context TypecheckingContext
 local function gather_usages(val, usages, context_len, ambient_typechecking_context)
@@ -720,9 +721,8 @@ local function gather_usages(val, usages, context_len, ambient_typechecking_cont
 		local typed_userdata_type = gather_usages(userdata_type, usages, context_len, ambient_typechecking_context)
 	elseif val:is_tuple_value() then
 		local elems = val:unwrap_tuple_value()
-		local res = typed_array()
 		for _, v in elems:ipairs() do
-			res:append(gather_usages(v, usages, context_len, ambient_typechecking_context))
+			gather_usages(v, usages, context_len, ambient_typechecking_context)
 		end
 	elseif val:is_tuple_type() then
 		local desc = val:unwrap_tuple_type()
@@ -768,7 +768,7 @@ local function gather_usages(val, usages, context_len, ambient_typechecking_cont
 		local free = val:unwrap_free()
 		if free:is_placeholder() then
 			local lookup, info = free:unwrap_placeholder()
-			usages[lookup] = (usages[lookup] or 0) + 1
+			usages:set(lookup, (usages:get(lookup) or 0) + 1)
 		end
 	elseif val:is_tuple_element_access() then
 		local subject, index = val:unwrap_tuple_element_access()
@@ -1157,6 +1157,7 @@ end
 ---@param ambient_typechecking_context TypecheckingContext
 ---@return flex_value
 function substitute_type_variables(val, debuginfo, index, param_name, ctx, ambient_typechecking_context)
+	error("don't use this function")
 	param_name = param_name and "#sub-" .. param_name or "#sub-param"
 	--print("value before substituting (val): (value term follows)")
 	--print(val)
@@ -1167,7 +1168,8 @@ function substitute_type_variables(val, debuginfo, index, param_name, ctx, ambie
 	local capture_info = terms.var_debug("#capture", debuginfo.source)
 
 	local elements = typed_array()
-	local body_usages = usage_arrays
+	local body_usages = usage_map()
+	gather_usages(val, body_usages, 1, ambient_typechecking_context)
 
 	for i, v in ipairs(body_usages) do
 		if i <= ambient_typechecking_context:len() and v > 0 then
@@ -1202,7 +1204,7 @@ end
 
 ---@param val flex_value
 ---@param context FlexRuntimeContext
----@param usages ArrayValue<integer>
+---@param usages MapValue<integer, integer>
 ---@param anchor Anchor
 ---@param param_dbg var_debug
 ---@param ambient_typechecking_context TypecheckingContext
@@ -1212,7 +1214,21 @@ local function substitute_usages_into_lambda(val, context, usages, anchor, param
 	local mappings = { [context.bindings:len() + 1] = typed_term.bound_variable(2, param_dbg) }
 	local capture_info = terms.var_debug("#capture", anchor)
 
-	for i, v in ipairs(usages) do
+	local keys = {}
+	if getmetatable(usages) ~= nil and getmetatable(getmetatable(usages)) == gen.array_type_mt then
+		for i, _ in ipairs(usages) do
+			table.insert(keys, i)
+		end
+	else
+		for i, _ in pairs(usages) do
+			table.insert(keys, i)
+		end
+		table.sort(keys)
+	end
+
+	for _, i in ipairs(keys) do
+		local v = usages:get(i)
+
 		if i <= context.bindings:len() and v > 0 then
 			local _, info = context:get(i)
 			elements:append(typed_term.bound_variable(i, info))
@@ -1233,9 +1249,11 @@ end
 ---@param ambient_typechecking_context TypecheckingContext
 ---@return typed lambda_term `typed_term.lambda`
 local function substitute_into_lambda(body_val, context, anchor, param_dbg, ambient_typechecking_context)
-	local usages = usage_array()
+	local usages = usage_map()
 	gather_usages(body_val, usages, context.bindings:len(), ambient_typechecking_context)
-	return U.notail(substitute_usages_into_lambda(body_val, context, usages, anchor, param_dbg))
+	return U.notail(
+		substitute_usages_into_lambda(body_val, context, usages, anchor, param_dbg, ambient_typechecking_context)
+	)
 end
 
 ---@param body_val flex_value
@@ -1245,11 +1263,11 @@ end
 ---@param ambient_typechecking_context TypecheckingContext
 ---@return typed lambda_term `typed_term.lambda`
 local function substitute_into_closure(body_val, context, anchor, param_dbg, ambient_typechecking_context)
-	local usages = usage_array()
+	local usages = usage_map()
 	gather_usages(body_val, usages, context.bindings:len(), ambient_typechecking_context)
 	return U.notail(
 		evaluate(
-			substitute_usages_into_lambda(body_val, context, usages, anchor, param_dbg),
+			substitute_usages_into_lambda(body_val, context, usages, anchor, param_dbg, ambient_typechecking_context),
 			context,
 			ambient_typechecking_context
 		)
@@ -2639,12 +2657,11 @@ local function infer_impl(
 
 		local body_value = evaluate(body_term, inner_context.runtime_context, inner_context)
 
-		local result_type = substitute_type_variables(
+		local result_type = substitute_into_closure(
 			body_type,
+			inner_context.runtime_context,
+			param_debug.source,
 			param_debug,
-			inner_context:len(),
-			param_name,
-			typechecking_context:get_runtime_context(),
 			inner_context
 		)
 		--[[local result_type = U.tag("substitute_type_variables", {
@@ -2671,7 +2688,8 @@ local function infer_impl(
 			typechecking_context.runtime_context,
 			body_usages,
 			start_anchor,
-			param_debug
+			param_debug,
+			typechecking_context
 		)
 
 		return true, lambda_type, lambda_usages, lambda_term

@@ -852,6 +852,7 @@ define_set = U.memoize(define_set)
 ---@field append fun(self: ArrayValue, v: Value)
 ---@field copy fun(self: ArrayValue, integer?, integer?): ArrayValue
 ---@field map fun(self: ArrayValue, target: ArrayType, fn: fun(any) : any): ArrayValue
+---@field get fun(self: MapValue, key: Value): Value?
 ---@field unpack fun(self: ArrayValue): ...
 ---@field pretty_print fun(self: ArrayValue, ...)
 ---@field default_print fun(self: ArrayValue, ...)
@@ -920,6 +921,9 @@ local function gen_array_methods(self, value_type)
 			end
 
 			return to(table.unpack(x, 1, val:len()))
+		end,
+		get = function(val, key)
+			return val.array[key]
 		end,
 		pretty_preprint = pretty_printer.pretty_preprint,
 		pretty_print = pretty_printer.pretty_print,
