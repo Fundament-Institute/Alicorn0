@@ -1167,6 +1167,7 @@ function substitute_type_variables(val, debuginfo, index, param_name, ctx, ambie
 	local capture_info = terms.var_debug("#capture", debuginfo.source)
 
 	local elements = typed_array()
+	local body_usages = usage_arrays
 
 	for i, v in ipairs(body_usages) do
 		if i <= ambient_typechecking_context:len() and v > 0 then
@@ -1498,7 +1499,7 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 					arg_name,
 					typed_term.bound_variable(1, universe_dbg),
 					typed.literal(empty_tuple),
-					var_debug("#capture", U.anchor_here()),
+					terms.var_debug("#capture", U.anchor_here()),
 					U.anchor_here()
 				),
 				typed.literal(strict_value.result_info(terms.result_info(terms.purity.pure)))
@@ -2839,14 +2840,21 @@ local function infer_impl(
 			local el_singleton = flex_value.singleton(el_type, el_val)
 			type_data = terms.cons(
 				type_data,
-				substitute_type_variables(
+				substitute_into_closure(
 					el_singleton,
+					typechecking_context.runtime_context,
+					info[i].source,
 					info[i],
-					typechecking_context:len() + 1,
-					"#tuple-cons-el",
-					typechecking_context:get_runtime_context(),
-					typechecking_context:append("#tuple-cons-el", flex_value.tuple_type(type_data), nil, info[i])
+					typechecking_context
 				)
+				-- substitute_type_variables(
+				-- 	el_singleton,
+				-- 	info[i],
+				-- 	typechecking_context:len() + 1,
+				-- 	"#tuple-cons-el",
+				-- 	typechecking_context:get_runtime_context(),
+				-- 	typechecking_context:append("#tuple-cons-el", flex_value.tuple_type(type_data), nil, info[i])
+				-- )
 			)
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
