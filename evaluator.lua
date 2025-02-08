@@ -1257,7 +1257,7 @@ end
 ---@param ctx FlexRuntimeContext
 ---@param ambient_typechecking_context TypecheckingContext
 ---@return flex_value
-function substitute_type_variables(val, debuginfo, index, param_name, ctx, ambient_typechecking_context)
+local function substitute_type_variables(val, debuginfo, index, param_name, ctx, ambient_typechecking_context)
 	error("don't use this function")
 	param_name = param_name and "#sub-" .. param_name or "#sub-param"
 	--print("value before substituting (val): (value term follows)")
@@ -1439,11 +1439,12 @@ local function tuple_slice(subject, idx)
 end
 
 ---extract a specified element type from a given tuple desc
+---@param ctx TypecheckingContext
 ---@param subject flex_value
 ---@param desc flex_value
 ---@param idx integer
 ---@return flex_value elem_type
-local function extract_desc_nth(subject, desc, idx)
+local function extract_desc_nth(ctx, subject, desc, idx)
 	local slices = {}
 	repeat
 		local variant, args = desc:unwrap_enum_value()
@@ -1465,7 +1466,7 @@ local function extract_desc_nth(subject, desc, idx)
 	end
 	local type_former = slices[#slices - idx + 1]
 	local prefix = tuple_slice(subject, idx)
-	local elem_type = apply_value(type_former, prefix)
+	local elem_type = apply_value(type_former, prefix, ctx)
 	return elem_type
 end
 
@@ -1492,7 +1493,7 @@ local function upcast(ctx, typ, cause)
 				--TODO: speculate on tuple type and reformulate extraction in terms of constraining
 				if boundstype:is_tuple_type() then
 					local desc = boundstype:unwrap_tuple_type()
-					local member = extract_desc_nth(flex_value.stuck(subject), desc, elem)
+					local member = extract_desc_nth(ctx, flex_value.stuck(subject), desc, elem)
 					--TODO: level srel? speculate on member types?
 					if member:is_star() then
 						local level, depth = member:unwrap_star()
@@ -1768,8 +1769,8 @@ add_comparer("flex_value.pi", "flex_value.pi", function(l_ctx, a, r_ctx, b, caus
 		nestcause("pi function parameters", cause, b_param_type, a_param_type, r_ctx, l_ctx)
 	)
 	--local unique_placeholder = flex_value.stuck(terms.stuck_value.free(terms.free.unique({})))
-	--local a_res = apply_value(a_result_type, unique_placeholder)
-	--local b_res = apply_value(b_result_type, unique_placeholder)
+	--local a_res = apply_value(a_result_type, unique_placeholder, l_ctx)
+	--local b_res = apply_value(b_result_type, unique_placeholder, r_ctx)
 	--typechecker_state:queue_constrain(a_res, FunctionRelation(UniverseOmegaRelation), b_res, "pi function results")
 
 	--TODO implement the SA-ALL rule which is slightly more powerful than this rule
@@ -1806,8 +1807,8 @@ add_comparer("flex_value.host_function_type", "flex_value.host_function_type", f
 		nestcause("host function parameters", cause, b_param_type, a_param_type, r_ctx, l_ctx)
 	)
 	--local unique_placeholder = flex_value.stuck(terms.stuck_value.free(terms.free.unique({})))
-	--local a_res = apply_value(a_result_type, unique_placeholder)
-	--local b_res = apply_value(b_result_type, unique_placeholder)
+	--local a_res = apply_value(a_result_type, unique_placeholder, l_ctx)
+	--local b_res = apply_value(b_result_type, unique_placeholder, r_ctx)
 	--typechecker_state:queue_constrain(b_res, FunctionRelation(UniverseOmegaRelation), a_res, "host function parameters")
 
 	--TODO implement the SA-ALL rule which is slightly more powerful than this rule
@@ -2030,7 +2031,7 @@ end)
 
 ---@param kind string
 ---@return string
-function unify_kind(kind)
+local function unify_kind(kind)
 	local r, _ = string.gsub(kind, "([^%.]+)%.([^%.]+)", "flex_value.%2")
 	return r
 end
@@ -2557,31 +2558,32 @@ local function make_tuple_prefix(subject_type, subject_value)
 end
 
 -- TODO: create a typechecking context append variant that merges two
+---@param ctx TypecheckingContext
 ---@param desc flex_value
 ---@param make_prefix fun(i: integer): flex_value
 ---@return flex_value[] tuple_types
 ---@return integer n_elements
 ---@return flex_value[] tuple_vals
-function make_inner_context(desc, make_prefix)
+local function make_inner_context(ctx, desc, make_prefix)
 	-- evaluate the type of the tuple
 	local constructor, arg = desc:unwrap_enum_value()
 	if constructor == terms.DescCons.empty then
 		return flex_value_array(), 0, flex_value_array()
 	elseif constructor == terms.DescCons.cons then
 		local details = arg:unwrap_tuple_value()
-		local tuple_types, n_elements, tuple_vals = make_inner_context(details[1], make_prefix)
+		local tuple_types, n_elements, tuple_vals = make_inner_context(ctx, details[1], make_prefix)
 		local f = details[2]
 		local element_type
 		if tuple_types:len() == tuple_vals:len() then
 			local prefix = flex_value.tuple_value(tuple_vals)
-			element_type = apply_value(f, prefix)
+			element_type = apply_value(f, prefix, ctx)
 			if element_type:is_singleton() then
 				local _, val = element_type:unwrap_singleton()
 				tuple_vals:append(val)
 			end
 		else
 			local prefix = make_prefix(n_elements)
-			element_type = apply_value(f, prefix)
+			element_type = apply_value(f, prefix, ctx)
 		end
 		tuple_types:append(element_type)
 		return tuple_types, n_elements + 1, tuple_vals
@@ -2590,24 +2592,26 @@ function make_inner_context(desc, make_prefix)
 	end
 end
 
+---@param ctx TypecheckingContext
 ---@param subject_type flex_value
 ---@param subject_value flex_value
----@return flex_value[]
----@return integer
----@return flex_value[]
-function infer_tuple_type_unwrapped(subject_type, subject_value)
+---@return flex_value[] tuple_types
+---@return integer n_elements
+---@return flex_value[] tuple_vals
+local function infer_tuple_type_unwrapped(ctx, subject_type, subject_value)
 	local desc, make_prefix = make_tuple_prefix(subject_type, subject_value)
-	return make_inner_context(desc, make_prefix)
+	return make_inner_context(ctx, desc, make_prefix)
 end
 
+---@param ctx TypecheckingContext
 ---@param subject_type flex_value
 ---@param subject_value flex_value
----@return flex_value[]
----@return integer
----@return flex_value[]
-function infer_tuple_type(subject_type, subject_value)
+---@return flex_value[] tuple_types
+---@return integer n_elements
+---@return flex_value[] tuple_vals
+local function infer_tuple_type(ctx, subject_type, subject_value)
 	-- define how the type of each tuple element should be evaluated
-	return infer_tuple_type_unwrapped(subject_type, subject_value)
+	return infer_tuple_type_unwrapped(ctx, subject_type, subject_value)
 end
 
 ---@param desc_a flex_value `flex_value.enum_value`
@@ -2621,7 +2625,7 @@ end
 ---@return ArrayType tuple_types_b array(flex_value)
 ---@return ArrayType tuple_vals array(flex_value)
 ---@return integer n_elements
-function make_inner_context2(desc_a, make_prefix_a, l_ctx, desc_b, make_prefix_b, r_ctx)
+local function make_inner_context2(desc_a, make_prefix_a, l_ctx, desc_b, make_prefix_b, r_ctx)
 	local constructor_a, arg_a = desc_a:unwrap_enum_value()
 	local constructor_b, arg_b = desc_b:unwrap_enum_value()
 	if constructor_a == terms.DescCons.empty and constructor_b == terms.DescCons.empty then
@@ -3046,7 +3050,7 @@ local function infer_impl(
 			if not ok then
 				return false, err
 			end
-			return true, infer_tuple_type(spec_type, subject_value)
+			return true, infer_tuple_type(ctx, spec_type, subject_value)
 		end)
 		--local tupletypes, n_elements = infer_tuple_type(subject_type, subject_value)
 		if not ok then
@@ -3061,7 +3065,7 @@ local function infer_impl(
 				if not ok then
 					return false, err
 				end
-				return true, infer_tuple_type(host_spec_type, subject_value)
+				return true, infer_tuple_type(ctx, host_spec_type, subject_value)
 			end)
 			if ok then
 				tupletypes = htupletypes
@@ -5378,7 +5382,7 @@ function Reachability:constrain_transitivity(edge, edge_id, queue)
 	end
 end
 
-function verify_collection(collection)
+local function verify_collection(collection)
 	for _, v in pairs(collection._index_store) do
 		U.check_locked(v)
 	end
