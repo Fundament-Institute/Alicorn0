@@ -873,6 +873,9 @@ function gather_usages(val, usages, context_len, ambient_typechecking_context)
 	elseif val:is_effect_row_extend() then
 		local row, rest = val:unwrap_effect_row_extend()
 		gather_usages(rest, usages, context_len, ambient_typechecking_context)
+	elseif val:is_host_intrinsic() then
+		local source, anchor = val:unwrap_host_intrinsic()
+		gather_usages(flex_value.stuck(source), usages, context_len, ambient_typechecking_context)
 	else
 		error("Unhandled value kind in gather_usages: " .. val.kind)
 	end
@@ -2790,14 +2793,21 @@ local function infer_impl(
 			result_info
 		)
 		lambda_type.original_name = param_name
-		local lambda_term = substitute_usages_into_lambda(
+		local lambda_term = substitute_into_lambda(
 			body_value,
 			typechecking_context.runtime_context,
-			body_usages,
 			start_anchor,
 			param_debug,
 			inner_context
 		)
+		-- local lambda_term = substitute_usages_into_lambda(
+		-- 	body_value,
+		-- 	typechecking_context.runtime_context,
+		-- 	body_usages,
+		-- 	start_anchor,
+		-- 	param_debug,
+		-- 	inner_context
+		-- )
 
 		return true, lambda_type, lambda_usages, lambda_term
 	elseif inferrable_term:is_pi() then
