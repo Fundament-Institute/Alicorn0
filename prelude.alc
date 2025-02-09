@@ -136,6 +136,19 @@ let tuple-desc-type = lambda_implicit (U : universe)
 			:
 			wrapped (forall ((a-universe : U)) -> (res : U))
 
+let tuple-type-explicit = lambda (U : universe)
+	unwrap
+		intrinsic
+			""""
+				return base_env.gen_base_operator(function(bound_tuple_element_variables)
+					local desc = bound_tuple_element_variables[1]
+					return terms.typed_term.tuple_type(desc)
+				end, "#tuple-type-explicit", "desc")
+			:
+			wrapped (forall ((desc : tuple-desc-type(U))) -> (T : U))
+let tuple-type = lambda_implicit (U : universe)
+	tuple-type-explicit U
+
 let host-family-sig-variances = lambda (signature : type_(1, 0))
 	let inner = intrinsic
 		""""
@@ -704,19 +717,7 @@ let host-if =
 				:
 				wrapped(host-if-type(T))
 		unwrap(inner)
-# TODO convert this to a typed term or something
-let tuple-type-explicit = lambda (U : universe, desc : tuple-desc-type(U))
-	let inner = intrinsic "return terms.value.tuple_type" :
-		host-func-type ((desc : wrapped(tuple-desc-type(U)))) -> ((T : wrapped(U)))
-	let (T) = inner(wrap(desc))
-	unwrap(T)
-# TODO convert this to a typed term or something
-let tuple-type = lambda_implicit (U : universe)
-	lambda (desc : tuple-desc-type(U))
-		let inner = intrinsic "return terms.value.tuple_type" :
-			host-func-type ((desc : wrapped(tuple-desc-type(U)))) -> ((T : wrapped(U)))
-		let (T) = inner(wrap(desc))
-		unwrap(T)
+
 # TODO convert this to a typed term or something
 let host-tuple-type = lambda_implicit (U : universe)
 	lambda (desc : tuple-desc-type(U))
