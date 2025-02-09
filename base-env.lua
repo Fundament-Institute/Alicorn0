@@ -2241,6 +2241,9 @@ end
 ---@param sig flex_value `flex_value.pi`
 ---@return flex_value param_desc `flex_value.tuple_type`
 local function convert_sig(sig)
+	if not flex_value.value_check(sig) then
+		error("expected flex value, did you forget to wrap? " .. tostring(sig))
+	end
 	local param_type, _, _, _ = sig:unwrap_pi()
 	local param_desc = param_type:unwrap_tuple_type()
 	return U.notail(terms.flex_value.tuple_type(convert_desc(param_desc)))
