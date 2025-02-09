@@ -38,6 +38,7 @@ local infer = evaluator.infer
 --local typechecker_state = evaluator.typechecker_state
 
 local U = require "alicorn-utils"
+local format = require "format"
 
 ---@class SemanticErrorData
 ---@field text string
@@ -461,7 +462,7 @@ local function speculate_pi_type(env, metaval)
 				env.typechecking_context,
 				pi,
 				env.typechecking_context,
-				terms.constraintcause.primitive("Speculating on pi type", U.anchor_here())
+				terms.constraintcause.primitive("Speculating on pi type", format.anchor_here())
 			)
 			if not ok then
 				return false, err
@@ -699,7 +700,7 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 			env.typechecking_context,
 			host_func_type,
 			env.typechecking_context,
-			terms.constraintcause.primitive("Speculating on host func type", U.anchor_here())
+			terms.constraintcause.primitive("Speculating on host func type", format.anchor_here())
 		)
 		if not ok then
 			return false, err
@@ -720,7 +721,7 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 				env.typechecking_context,
 				host_func_type,
 				env.typechecking_context,
-				terms.constraintcause.primitive("Speculating on host func type", U.anchor_here())
+				terms.constraintcause.primitive("Speculating on host func type", format.anchor_here())
 			)
 
 			if not ok then
@@ -1309,7 +1310,7 @@ collect_tuple = metalanguage.reducer(
 				env.typechecking_context,
 				goal_type,
 				env.typechecking_context,
-				terms.constraintcause.primitive("tuple type in collect_tuple", U.anchor_here())
+				terms.constraintcause.primitive("tuple type in collect_tuple", format.anchor_here())
 			)
 
 			if not ok then
@@ -1328,7 +1329,7 @@ collect_tuple = metalanguage.reducer(
 				env.typechecking_context,
 				goal_type,
 				env.typechecking_context,
-				terms.constraintcause.primitive("tuple type in collect_tuple", U.anchor_here())
+				terms.constraintcause.primitive("tuple type in collect_tuple", format.anchor_here())
 			)]]
 			return true, checkable_term.tuple_cons(collected_terms), env
 		else
@@ -1414,7 +1415,7 @@ collect_host_tuple = metalanguage.reducer(
 				env.typechecking_context,
 				goal_type,
 				env.typechecking_context,
-				terms.constraintcause.primitive("host tuple type in collect_host_tuple", U.anchor_here())
+				terms.constraintcause.primitive("host tuple type in collect_host_tuple", format.anchor_here())
 			)
 			if not ok then
 				return false, err

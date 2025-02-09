@@ -1,3 +1,5 @@
+local U = require "alicorn-utils"
+
 local lpeg = require "lpeg"
 local P, C, Cg, Cc, Cmt, Ct, Cb, Cp, Cf, Cs, S, V, R =
 	lpeg.P, lpeg.C, lpeg.Cg, lpeg.Cc, lpeg.Cmt, lpeg.Ct, lpeg.Cb, lpeg.Cp, lpeg.Cf, lpeg.Cs, lpeg.S, lpeg.V, lpeg.R
@@ -204,6 +206,12 @@ local function create_anchor(line, char, sourceid)
 	}
 	setmetatable(new_anchor, anchor_mt)
 	return new_anchor
+end
+create_anchor = U.memoize(create_anchor)
+
+local function anchor_here(offset)
+	local info = debug.getinfo((offset or 1) + 1, "Sl")
+	return create_anchor(info.currentline, 0, "SYNTH:" .. info.source)
 end
 
 ---@class LinePosition
@@ -680,4 +688,4 @@ local function parse(input, filename)
 	return ast
 end
 
-return { parse = parse, anchor_mt = anchor_mt, create_anchor = create_anchor }
+return { parse = parse, anchor_mt = anchor_mt, create_anchor = create_anchor, anchor_here = anchor_here }
