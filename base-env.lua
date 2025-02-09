@@ -37,30 +37,36 @@ local function lit_term(val, typ)
 	)
 end
 
----@param fn_op fun(bound_variables: typed[]) : integer, typed
----@param name string
----@param ... string
----@return strict_value
-local function gen_base_operator(fn_op, name, ...)
-	local argname = name .. "-arg"
-	local debug_arg = terms.var_debug(argname, U.anchor_here())
-	local names = name_array(...)
-	local debug_names = names:map(debug_array, function(n)
+---@param fn_op (fun(bound_tuple_element_variables: typed[]) : typed) returns `body`
+---@param tuple_name string
+---@param ... string tuple_element_names
+---@return strict_value closure_value `strict_value.closure`
+local function gen_base_operator(fn_op, tuple_name, ...)
+	local tuple_arg_name = tuple_name .. "-arg"
+	local debug_tuple_arg = terms.var_debug(tuple_arg_name, U.anchor_here())
+	local tuple_element_names = name_array(...)
+	local debug_tuple_element_names = tuple_element_names:map(debug_array, function(n)
 		return terms.var_debug(n, U.anchor_here())
 	end)
-	local bound_vars = {}
-	for i, v in ipairs(debug_names) do
-		table.insert(bound_vars, terms.typed_term.bound_variable(2 + i, v))
+	local bound_tuple_element_variables = {}
+	for i, v in ipairs(debug_tuple_element_names) do
+		table.insert(bound_tuple_element_variables, terms.typed_term.bound_variable(2 + i, v))
 	end
 
-	local count, res = fn_op(bound_vars)
+	local body = fn_op(bound_tuple_element_variables)
 	return U.notail(
 		terms.strict_value.closure(
-			argname,
-			terms.typed_term.tuple_elim(names, debug_names, terms.typed_term.bound_variable(2, debug_arg), count, res),
+			tuple_arg_name,
+			terms.typed_term.tuple_elim(
+				tuple_element_names,
+				debug_tuple_element_names,
+				terms.typed_term.bound_variable(2, debug_tuple_arg),
+				#tuple_element_names,
+				body
+			),
 			empty_tuple,
 			terms.var_debug("#capture", U.anchor_here()),
-			debug_arg
+			debug_tuple_arg
 		)
 	)
 end

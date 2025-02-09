@@ -62,7 +62,7 @@ let srel =
 			intrinsic
 				""""
 					return base_env.gen_base_operator(function(vars)
-						return 1, terms.typed_term.srel_type(vars[1])
+						return terms.typed_term.srel_type(vars[1])
 					end, "#srel", "target")
 				:
 				wrapped (forall ((x : U)) -> (res : U))
@@ -73,7 +73,7 @@ let variance =
 			intrinsic
 				""""
 					return base_env.gen_base_operator(function(vars)
-						return 1, terms.typed_term.variance_type(vars[1])
+						return terms.typed_term.variance_type(vars[1])
 					end, "#variance", "target")
 				:
 				wrapped (forall ((x : U)) -> (res : U))
@@ -88,7 +88,7 @@ let _|_ =
 			intrinsic
 				""""
 					return base_env.gen_base_operator(function(vars)
-						return 2, terms.typed_term.union_type(vars[1], vars[2])
+						return terms.typed_term.union_type(vars[1], vars[2])
 					end, "#union", "left", "right")
 				:
 				wrapped (forall (a : U, b : U) -> (res : U))
@@ -99,7 +99,7 @@ let _&_ =
 			intrinsic
 				""""
 					return base_env.gen_base_operator(function(vars)
-						return 2, terms.typed_term.intersection_type(vars[1], vars[2])
+						return terms.typed_term.intersection_type(vars[1], vars[2])
 					end, "#intersection", "left", "right")
 				:
 				wrapped (forall (a : U, b : U) -> (res : U))
@@ -110,7 +110,7 @@ let covariant =
 			intrinsic
 				""""
 					return base_env.gen_base_operator(function(vars)
-						return 1, terms.typed_term.variance_cons(terms.typed_term.literal(terms.strict_value.host_value(true)), vars[1])
+						return terms.typed_term.variance_cons(terms.typed_term.literal(terms.strict_value.host_value(true)), vars[1])
 					end, "#covariant", "base")
 				:
 				wrapped (forall ((rel : srel(a))) -> (res : variance(a)))
@@ -121,7 +121,7 @@ let contravariant =
 			intrinsic
 				""""
 					return base_env.gen_base_operator(function(vars)
-						return 1, terms.typed_term.variance_cons(terms.typed_term.literal(terms.strict_value.host_value(false)), vars[1])
+						return terms.typed_term.variance_cons(terms.typed_term.literal(terms.strict_value.host_value(false)), vars[1])
 					end, "#contravariant", "base")
 				:
 				wrapped (forall ((rel : srel(a))) -> (res : variance(a)))
