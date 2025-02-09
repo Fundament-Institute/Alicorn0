@@ -6,30 +6,31 @@ let omega = 9
 # FIXME: apparently variables aren't allowed here
 #let universe = type_(omega, 1)
 let universe = type_(9, 1)
-let star-omega+1 = type_(10, 0)
+let type-omega = type_(9, 0)
+let type-omega+1 = type_(10, 0)
 
 # nor expressions
 ####let implicit-wrap = lambda_curry ((T : type_(omega + 1, 0)))
 	lambda (x : T)
 		wrap T x
 
-let implicit-wrap = lambda_curry ((T : star-omega+1))
+let implicit-wrap = lambda_curry ((T : type-omega+1))
 	lambda (x : T)
 		wrap T x
 
-let implicit-unwrap = lambda_implicit (T : star-omega+1)
+let implicit-unwrap = lambda_implicit (T : type-omega+1)
 	lambda (x : wrapped(T))
 		unwrap T x
 
-####let implicit-unstrict-wrap = lambda_curry ((T : star-omega+1))
+####let implicit-unstrict-wrap = lambda_curry ((T : type-omega+1))
 		lambda (x : T)
 			unstrict-wrap T x
 
-	let implicit-unstrict-unwrap = lambda_implicit (T : star-omega+1)
+	let implicit-unstrict-unwrap = lambda_implicit (T : type-omega+1)
 		lambda (x : unstrict-wrapped(T))
 			unstrict-unwrap T x
 
-let tuple-of-implicit = lambda_implicit (T : star-omega+1)
+let tuple-of-implicit = lambda_implicit (T : type-omega+1)
 	lambda_single (xs : T)
 		xs
 
@@ -57,7 +58,7 @@ let host-inferrable-term = unwrap(host-inferrable-term-wrap)
 let host-checkable-term  = unwrap(host-checkable-term-wrap)
 let host-lua-error       = unwrap(host-lua-error-wrap)
 
-let srel = lambda_implicit (U : star-omega+1)
+let srel = lambda_implicit (U : type-omega+1)
 	unwrap
 		intrinsic
 			""""
@@ -67,7 +68,7 @@ let srel = lambda_implicit (U : star-omega+1)
 			:
 			wrapped (forall ((target : U)) -> (rel : U))
 
-let variance = lambda_implicit (U : star-omega+1)
+let variance = lambda_implicit (U : type-omega+1)
 	unwrap
 		intrinsic
 			""""
@@ -77,11 +78,11 @@ let variance = lambda_implicit (U : star-omega+1)
 			:
 			wrapped (forall ((target : U)) -> (res : U))
 
-let subtyping = intrinsic "return evaluator.UniverseOmegaRelation" : srel(type_(9, 0))
+let subtyping = intrinsic "return evaluator.UniverseOmegaRelation" : srel(type-omega)
 
-let tuple-desc-relation = intrinsic "return evaluator.TupleDescRelation" : srel(type_(9, 0))
+let tuple-desc-relation = intrinsic "return evaluator.TupleDescRelation" : srel(type-omega)
 
-let _|_ = lambda_implicit (U : star-omega+1)
+let _|_ = lambda_implicit (U : type-omega+1)
 	unwrap
 		intrinsic
 			""""
@@ -91,7 +92,7 @@ let _|_ = lambda_implicit (U : star-omega+1)
 			:
 			wrapped (forall (left : U, right : U) -> (union : U))
 
-let _&_ = lambda_implicit (U : star-omega+1)
+let _&_ = lambda_implicit (U : type-omega+1)
 	unwrap
 		intrinsic
 			""""
@@ -765,11 +766,11 @@ let func-to-host-func =
 			res #TODO figure out why `unwrap(res) here doesn't make a nice type error but fails
 
 let host-if-type =
-	lambda (T : type_(9, 0))
+	lambda (T : type-omega)
 		forall (subject : host-bool, consequent : T, alternate : T) -> (res : T)
 
 let host-if =
-	lambda_implicit (T : type_(9, 0))
+	lambda_implicit (T : type-omega)
 		let inner =
 			intrinsic
 				""""
@@ -919,7 +920,7 @@ let host-tuple-concat = lambda (
 	unwrap(cat)
 
 # TODO rewrite for new flex_values
-let host-number-fold-indep = lambda_implicit (T : type_(9, 0))
+let host-number-fold-indep = lambda_implicit (T : type-omega)
 	let inner =
 		intrinsic
 			""""
