@@ -2661,7 +2661,9 @@ local function make_inner_context2(desc_a, make_prefix_a, l_ctx, desc_b, make_pr
 		if tuple_types_a:len() == tuple_vals:len() then
 			local prefix = flex_value.tuple_value(tuple_vals)
 			element_type_a = apply_value(f_a, prefix, l_ctx)
-			element_type_b = apply_value(f_b, prefix, l_ctx) -- This looks wrong but it's necessary to fix a missing placeholder problem
+			-- The prefix can pull in placeholders from the value-side context.
+			-- Any placeholders from the usage-side context must be discharged by this point.
+			element_type_b = apply_value(f_b, prefix, l_ctx)
 
 			if element_type_a:is_singleton() then
 				local _, val = element_type_a:unwrap_singleton()
