@@ -2201,8 +2201,8 @@ local host_if = (function()
 	)
 end)()
 
----@param desc flex_value
----@return flex_value desc `flex_value.enum_value(terms.DescCons.…, …)`
+---@param desc strict_value
+---@return strict_value desc `strict_value.enum_value(terms.DescCons.…, …)`
 local function convert_desc(desc)
 	local constructor, arg = desc:unwrap_enum_value()
 	if constructor == terms.DescCons.empty then
@@ -2211,15 +2211,17 @@ local function convert_desc(desc)
 		local elements = arg:unwrap_tuple_value()
 		local next_desc, type_fun = elements[1], elements[2]
 		local convert_next = convert_desc(next_desc)
-		local convert_type = terms.flex_value.variance_type(
-			evaluator.apply_value(
-				type_fun,
-				terms.flex_value.stuck(terms.stuck_value.free(terms.free.unique {})),
-				terms.typechecking_context()
+		local convert_type = terms.flex_value
+			.variance_type(
+				evaluator.apply_value(
+					terms.flex_value.strict(type_fun),
+					terms.flex_value.stuck(terms.stuck_value.free(terms.free.unique {})),
+					terms.typechecking_context()
+				)
 			)
-		)
+			:unwrap_strict()
 		local capture_dbg = var_debug("#capture", U.anchor_here())
-		local convert_type_fun = terms.flex_value.closure(
+		local convert_type_fun = terms.strict_value.closure(
 			"#tuple-prefix",
 			typed.bound_variable(1, capture_dbg),
 			convert_type,
@@ -2228,9 +2230,9 @@ local function convert_desc(desc)
 		)
 		terms.verify_placeholder_lite(convert_type_fun, terms.typechecking_context())
 		return U.notail(
-			terms.flex_value.enum_value(
+			terms.strict_value.enum_value(
 				terms.DescCons.cons,
-				terms.flex_value.tuple_value(flex_value_array(convert_next, convert_type_fun))
+				terms.strict_value.tuple_value(strict_value_array(convert_next, convert_type_fun))
 			)
 		)
 	else
@@ -2241,12 +2243,12 @@ end
 ---@param sig flex_value `flex_value.pi`
 ---@return flex_value param_desc `flex_value.tuple_type`
 local function convert_sig(sig)
-	if not flex_value.value_check(sig) then
-		error("expected flex value, did you forget to wrap? " .. tostring(sig))
+	if not strict_value.value_check(sig) then
+		error("expected strict value, did you forget to wrap? " .. tostring(sig))
 	end
 	local param_type, _, _, _ = sig:unwrap_pi()
 	local param_desc = param_type:unwrap_tuple_type()
-	return U.notail(terms.flex_value.tuple_type(convert_desc(param_desc)))
+	return U.notail(terms.strict_value.tuple_type(convert_desc(param_desc)))
 end
 
 local function desc_length(desc, len)
