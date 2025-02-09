@@ -731,6 +731,30 @@ function M.litprint(s)
 	return M.notail(setmetatable({ contents = s }, litprint_mt))
 end
 
+local GasTank_mt = {}
+
+---@class GasTank
+---@field gas integer
+GasTank_mt.__index = {}
+
+function GasTank_mt.__index:decrement()
+	self.gas = self.gas - 1
+	return self
+end
+
+function GasTank_mt.__index:empty()
+	return self.gas <= 0
+end
+
+M.GasTank = setmetatable(GasTank_mt.__index, {
+	---@param cls GasTank
+	---@param default_gas integer
+	---@return GasTank gas
+	__call = function(cls, default_gas)
+		return setmetatable({ gas = default_gas }, GasTank_mt)
+	end,
+})
+
 function M.debug_break()
 	local ok, debugger
 	do
