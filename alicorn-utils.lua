@@ -23,6 +23,46 @@ function M.notail(...)
 	return ...
 end
 
+---@generic K, V
+---@param tbl table<K, V>
+---@return K[]
+function M.table_keys(tbl)
+	---@type K[]
+	local tbl_keys = {}
+	local tbl_keys_length = 0
+	local key = nil
+	while true do
+		key = next(tbl, key)
+		if key == nil then
+			break
+		end
+		tbl_keys_length = tbl_keys_length + 1
+		tbl_keys[tbl_keys_length] = key
+	end
+	return tbl_keys
+end
+
+---@generic T: table, K, V
+---@param tbl T
+---@param comp? fun(a: K, b: K):boolean
+---@return (fun(tbl: table<K, V>, i?: integer): integer, K, V) next
+---@return {tbl: T, tbl_keys: K[], tbl_keys_length: integer} state
+---@return integer i
+function M.table_stable_pairs(tbl, comp)
+	local function table_stable_next(state, i)
+		if i <= state.tbl_keys_length then
+			local key = state.tbl_keys[i]
+			return i + 1, key, state.tbl[key]
+		end
+	end
+
+	local tbl_keys = M.table_keys(tbl)
+	table.sort(tbl_keys, comp)
+	local state = { tbl = tbl, tbl_keys = tbl_keys, tbl_keys_length = #tbl_keys }
+	-- Return an iterator function, the state, starting point
+	return table_stable_next, state, 1
+end
+
 --- name and info aren't used here because they're inspected by the stacktrace using the debug API if an error occurs
 ---@generic T1, T2, T3, T4, T5, T6, T7, T8
 ---@param name string

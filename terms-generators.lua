@@ -337,7 +337,7 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 	local keyed_variants = {}
 	---@type Variants
 	local flex_variants = {}
-	for k, v in pairs(types) do
+	for _, k, v in U.table_stable_pairs(types) do
 		keyed_variants[k] = {}
 		table.insert(flex_variants, { k, { k, v } })
 	end
@@ -345,7 +345,7 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 	---@type {[string]: string }
 	local flex_tags = {}
 
-	for i, v in ipairs(variants) do
+	for _, v in ipairs(variants) do
 		local vname, vtag = table.unpack(split_delim(v[1], "$"))
 		local vparams_with_types = v[2]
 		if vtag == nil then
@@ -355,7 +355,7 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 		flex_tags[vname] = vtag
 
 		if vtag == "flex" then
-			for k, _ in pairs(types) do
+			for _, k, _ in U.table_stable_pairs(types) do
 				local fix_variants = {}
 				for i, ty in ipairs(vparams_with_types) do
 					if (i % 2) == 0 and fn_replace then
@@ -374,7 +374,7 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 		end
 	end
 
-	for k, v in pairs(types) do
+	for _, k, v in U.table_stable_pairs(types) do
 		v:define_enum(names[k], keyed_variants[k])
 	end
 
@@ -439,7 +439,7 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 			local key = v .. k
 
 			local unwrapper = {}
-			for k, v in pairs(types) do
+			for _, k, v in U.table_stable_pairs(types) do
 				unwrapper[flex_name .. "." .. k] = flex.__index["unwrap_" .. k]
 			end
 
@@ -484,7 +484,7 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 	end
 
 	--[[local lookup = {}
-	for k, v in pairs(types) do
+	for _, k, v in U.table_stable_pairs(types) do
 		lookup[flex_name .. "." .. k] = k
 	end
 

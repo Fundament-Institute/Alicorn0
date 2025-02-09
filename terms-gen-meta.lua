@@ -213,7 +213,7 @@ local gen_type = {
 	end,
 }
 
-for k, v in pairs(terms) do
+for i, k, v in U.table_stable_pairs(terms) do
 	if k and type(v) == "table" and v.derive then
 		---@cast v Type
 		v:derive(gen_type)
@@ -229,7 +229,7 @@ end
 
 local aux = require "evaluator-types"
 
-for k, v in pairs(aux) do
+for i, k, v in U.table_stable_pairs(aux) do
 	if k and type(v) == "table" and v.derive then
 		---@cast v Type
 		v:derive(gen_type)
