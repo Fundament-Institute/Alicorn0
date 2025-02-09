@@ -1277,11 +1277,11 @@ function substitute_inner(val, mappings, mappings_changed, context_len, ambient_
 		print(string.rep("·", recurse_count) .. "SUB: " .. tostring(val))
 	end
 
-	terms.verify_placeholder_lite(val, ambient_typechecking_context)
+	terms.verify_placeholder_lite(val, ambient_typechecking_context, false)
 	recurse_count = recurse_count + 1
 	local r = substitute_inner_impl(val, mappings, mappings_changed, context_len, ambient_typechecking_context)
 	recurse_count = recurse_count - 1
-	terms.verify_placeholder_lite(r, ambient_typechecking_context)
+	terms.verify_placeholder_lite(r, ambient_typechecking_context, false)
 
 	if tracked then
 		print(string.rep("·", recurse_count) .. " → " .. tostring(r))
@@ -4307,7 +4307,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			error "evaluate, is_host_unwrap: missing as_host_value on unwrapped host_unwrap"
 		end
 
-		terms.verify_placeholder_lite(unwrap_val, ambient_typechecking_context)
+		terms.verify_placeholder_lite(unwrap_val, ambient_typechecking_context, false)
 		if unwrap_val:is_host_value() then
 			return U.notail(flex_value.strict(unwrap_val:unwrap_host_value()))
 		elseif unwrap_val:is_stuck() then
@@ -4651,14 +4651,14 @@ function evaluate(typed_term, runtime_context, ambient_typechecking_context)
 		--print(runtime_context:format_names())
 	end
 
-	terms.verify_placeholder_lite(typed_term, ambient_typechecking_context)
+	terms.verify_placeholder_lite(typed_term, ambient_typechecking_context, false)
 	recurse_count = recurse_count + 1
 	local r = evaluate_impl(typed_term, runtime_context, ambient_typechecking_context)
 	if not flex_value.value_check(r) then
 		error("evaluate didn't return a flex_value after processing: " .. tostring(typed_term))
 	end
 	recurse_count = recurse_count - 1
-	terms.verify_placeholder_lite(r, ambient_typechecking_context)
+	terms.verify_placeholder_lite(r, ambient_typechecking_context, false)
 
 	if tracked then
 		print(string.rep("·", recurse_count) .. " → " .. r:pretty_print(runtime_context))
@@ -5720,7 +5720,7 @@ function TypeCheckerState:check_value(v, tag, context)
 	if context == nil then
 		error("nil context passed into check_value! " .. debug.traceback())
 	end
-	terms.verify_placeholder_lite(v, context)
+	terms.verify_placeholder_lite(v, context, false)
 
 	if v:is_stuck() and v:unwrap_stuck():is_free() and v:unwrap_stuck():unwrap_free():is_metavariable() then
 		local mv = v:unwrap_stuck():unwrap_free():unwrap_metavariable()

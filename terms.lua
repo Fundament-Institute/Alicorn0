@@ -1099,6 +1099,7 @@ typed_term:define_enum("typed", {
 
 ---@param v table
 ---@param ctx TypecheckingContext
+---@param nested boolean
 ---@return boolean
 local function verify_placeholder_lite(v, ctx, nested)
 	-- If it's not a table we don't care
@@ -1107,7 +1108,8 @@ local function verify_placeholder_lite(v, ctx, nested)
 	end
 
 	-- Special handling for arrays
-	if getmetatable(v) and getmetatable(getmetatable(v)) == gen.array_type_mt then
+	local v_mt = getmetatable(v)
+	if v_mt and getmetatable(v_mt) == gen.array_type_mt then
 		for k, val in ipairs(v) do
 			local ok, i, info, info_mismatch = verify_placeholder_lite(val, ctx, true)
 			if not ok then
