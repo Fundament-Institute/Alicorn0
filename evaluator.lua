@@ -1494,7 +1494,7 @@ local function extract_desc_nth(ctx, subject, desc, idx)
 		if variant == terms.DescCons.empty then
 			done = true
 		elseif variant == terms.DescCons.cons then
-			local elements = args:unwrap_host_tuple_value()
+			local elements = args:unwrap_tuple_value()
 			local pfx, elem = elements:unpack()
 			slices[#slices + 1] = elem
 			desc = pfx
