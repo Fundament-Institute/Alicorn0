@@ -1110,10 +1110,10 @@ local function apply_operative_impl(syntax, env)
 	--local result_info_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 	local param_type = param_type_mv:as_flex()
 	--local param_info = param_info_type_mv:as_flex()
-	local param_info = param_info_explicit
+	local param_info = flex_value.strict(param_info_explicit)
 	local result_type = result_type_mv:as_flex()
 	--local result_info = result_info_type_mv:as_flex()
-	local result_info = result_info_pure
+	local result_info = flex_value.strict(result_info_pure)
 	local spec_type = flex_value.pi(param_type, param_info, result_type, result_info)
 	local host_spec_type = flex_value.host_function_type(param_type, result_type, result_info)
 
@@ -2319,8 +2319,7 @@ local function get_host_func_res(subject, valid)
 			terms.typed_term.literal(terms.strict_value.host_value(nil))
 		)
 	)
-	local ctx = terms.flex_runtime_context():append(result_type, "#res_arg", result_dbg)
-	return U.notail(terms.flex_value.closure("#TEST-1", tuple_build, result_type, result_dbg, arg_dbg))
+	return U.notail(terms.strict_value.closure("#TEST-1", tuple_build, result_type, result_dbg, arg_dbg))
 end
 
 ---@param val flex_value
