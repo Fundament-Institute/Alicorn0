@@ -2185,7 +2185,7 @@ local host_if = (function()
 	local debug_alternate = terms.var_debug("#host-if-alternate", U.anchor_here())
 	local debug_elements = debug_array(debug_subject, debug_consequent, debug_alternate)
 	return U.notail(
-		terms.flex_value.closure(
+		terms.strict_value.closure(
 			"#host-if-param",
 			typed.tuple_elim(
 				debug_elements:map(name_array, function(n)
@@ -2200,7 +2200,7 @@ local host_if = (function()
 					typed.bound_variable(5, debug_alternate)
 				)
 			),
-			flex_value.strict(empty_tuple),
+			empty_tuple,
 			var_debug("", U.anchor_here()),
 			debug_arg
 		)
