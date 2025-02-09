@@ -145,7 +145,7 @@ local function gen_record(self, cons, kind, params_with_types)
 				error(
 					debug.traceback(
 						string.format(
-							"wrong argument type passed to constructor %s, parameter %q\nexpected type of parameter %s is: %s\nvalue of parameter %s: (follows)\n%s",
+							"wrong argument type passed to constructor %s, parameter %q\nexpected type of parameter %q is: %s\nvalue of parameter %q: (follows)\n%s",
 							kind,
 							v,
 							v,
@@ -403,7 +403,7 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 						error(
 							debug.traceback(
 								string.format(
-									"wrong argument type passed to constructor %s, parameter %q\nexpected type of parameter %s is: %s\nvalue of parameter %s: (follows)\n%s",
+									"wrong argument type passed to constructor %s, parameter %q\nexpected type of parameter %q is: %s\nvalue of parameter %q: (follows)\n%s",
 									param.kind,
 									v,
 									v,
