@@ -4286,7 +4286,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			end
 			return flex_value.stuck(stuck_value.host_wrap(nval))
 		end
-		return flex_value.host_value(content_val)
+		return flex_value.host_value(content_val:unwrap_strict())
 	elseif typed_term:is_host_unstrict_wrap() then
 		local content = typed_term:unwrap_host_unstrict_wrap()
 		local content_val = evaluate(content, runtime_context, ambient_typechecking_context)
