@@ -6,29 +6,30 @@ let omega = 9
 # FIXME: apparently variables aren't allowed here
 #let universe = type_(omega, 1)
 let universe = type_(9, 1)
+let star-omega+1 = type_(10, 0)
 
 # nor expressions
 ####let implicit-wrap = lambda_curry ((T : type_(omega + 1, 0)))
 	lambda (x : T)
 		wrap T x
 
-let implicit-wrap = lambda_curry ((T : type_(10, 0)))
+let implicit-wrap = lambda_curry ((T : star-omega+1))
 	lambda (x : T)
 		wrap T x
 
-let implicit-unwrap = lambda_implicit (T : type_(10, 0))
+let implicit-unwrap = lambda_implicit (T : star-omega+1)
 	lambda (x : wrapped(T))
 		unwrap T x
 
-####let implicit-unstrict-wrap = lambda_curry ((T : type_(10, 0)))
+####let implicit-unstrict-wrap = lambda_curry ((T : star-omega+1))
 		lambda (x : T)
 			unstrict-wrap T x
 	
-	let implicit-unstrict-unwrap = lambda_implicit (T : type_(10, 0))
+	let implicit-unstrict-unwrap = lambda_implicit (T : star-omega+1)
 		lambda (x : unstrict-wrapped(T))
 			unstrict-unwrap T x
 
-let tuple-of-implicit = lambda_implicit (T : type_(10, 0))
+let tuple-of-implicit = lambda_implicit (T : star-omega+1)
 	lambda_single (xs : T)
 		xs
 
@@ -56,7 +57,7 @@ let host-inferrable-term = unwrap(host-inferrable-term-wrap)
 let host-checkable-term  = unwrap(host-checkable-term-wrap)
 let host-lua-error       = unwrap(host-lua-error-wrap)
 
-let srel = lambda_implicit (U : type_(10, 0))
+let srel = lambda_implicit (U : star-omega+1)
 	unwrap
 		intrinsic
 			""""
@@ -66,7 +67,7 @@ let srel = lambda_implicit (U : type_(10, 0))
 			:
 			wrapped (forall ((x : U)) -> (res : U))
 
-let variance = lambda_implicit (U : type_(10, 0))
+let variance = lambda_implicit (U : star-omega+1)
 	unwrap
 		intrinsic
 			""""
@@ -80,7 +81,7 @@ let subtyping = intrinsic "return evaluator.UniverseOmegaRelation" : srel(type_(
 
 let tuple-desc-relation = intrinsic "return evaluator.TupleDescRelation" : srel(type_(9, 0))
 
-let _|_ = lambda_implicit (U : type_(10, 0))
+let _|_ = lambda_implicit (U : star-omega+1)
 	unwrap
 		intrinsic
 			""""
@@ -90,7 +91,7 @@ let _|_ = lambda_implicit (U : type_(10, 0))
 			:
 			wrapped (forall (a : U, b : U) -> (res : U))
 
-let _&_ = lambda_implicit (U : type_(10, 0))
+let _&_ = lambda_implicit (U : star-omega+1)
 	unwrap
 		intrinsic
 			""""
@@ -100,7 +101,7 @@ let _&_ = lambda_implicit (U : type_(10, 0))
 			:
 			wrapped (forall (a : U, b : U) -> (res : U))
 
-let covariant = lambda_curry (U : type_(9, 1), a : U)
+let covariant = lambda_curry (U : universe, a : U)
 	unwrap
 		intrinsic
 			""""
@@ -112,7 +113,7 @@ let covariant = lambda_curry (U : type_(9, 1), a : U)
 			:
 			wrapped (forall ((rel : srel(a))) -> (res : variance(a)))
 
-let contravariant = lambda_curry (U : type_(9, 1), a : U)
+let contravariant = lambda_curry (U : universe, a : U)
 	unwrap
 		intrinsic
 			""""
