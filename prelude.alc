@@ -56,75 +56,73 @@ let host-inferrable-term = unwrap(host-inferrable-term-wrap)
 let host-checkable-term  = unwrap(host-checkable-term-wrap)
 let host-lua-error       = unwrap(host-lua-error-wrap)
 
-let srel =
-	lambda_implicit (U : type_(10, 0))
-		unwrap
-			intrinsic
-				""""
-					return base_env.gen_base_operator(function(vars)
-						return terms.typed_term.srel_type(vars[1])
-					end, "#srel", "target")
-				:
-				wrapped (forall ((x : U)) -> (res : U))
+let srel = lambda_implicit (U : type_(10, 0))
+	unwrap
+		intrinsic
+			""""
+				return base_env.gen_base_operator(function(bound_tuple_element_variables)
+					return terms.typed_term.srel_type(bound_tuple_element_variables[1])
+				end, "#srel", "target")
+			:
+			wrapped (forall ((x : U)) -> (res : U))
 
-let variance =
-	lambda_implicit (U : type_(10, 0))
-		unwrap
-			intrinsic
-				""""
-					return base_env.gen_base_operator(function(vars)
-						return terms.typed_term.variance_type(vars[1])
-					end, "#variance", "target")
-				:
-				wrapped (forall ((x : U)) -> (res : U))
+let variance = lambda_implicit (U : type_(10, 0))
+	unwrap
+		intrinsic
+			""""
+				return base_env.gen_base_operator(function(bound_tuple_element_variables)
+					return terms.typed_term.variance_type(bound_tuple_element_variables[1])
+				end, "#variance", "target")
+			:
+			wrapped (forall ((x : U)) -> (res : U))
 
 let subtyping = intrinsic "return evaluator.UniverseOmegaRelation" : srel(type_(9, 0))
 
 let tuple-desc-relation = intrinsic "return evaluator.TupleDescRelation" : srel(type_(9, 0))
 
-let _|_ =
-	lambda_implicit (U : type_(10, 0))
-		unwrap
-			intrinsic
-				""""
-					return base_env.gen_base_operator(function(vars)
-						return terms.typed_term.union_type(vars[1], vars[2])
-					end, "#union", "left", "right")
-				:
-				wrapped (forall (a : U, b : U) -> (res : U))
+let _|_ = lambda_implicit (U : type_(10, 0))
+	unwrap
+		intrinsic
+			""""
+				return base_env.gen_base_operator(function(bound_tuple_element_variables)
+					return terms.typed_term.union_type(bound_tuple_element_variables[1], bound_tuple_element_variables[2])
+				end, "#union", "left", "right")
+			:
+			wrapped (forall (a : U, b : U) -> (res : U))
 
-let _&_ =
-	lambda_implicit (U : type_(10, 0))
-		unwrap
-			intrinsic
-				""""
-					return base_env.gen_base_operator(function(vars)
-						return terms.typed_term.intersection_type(vars[1], vars[2])
-					end, "#intersection", "left", "right")
-				:
-				wrapped (forall (a : U, b : U) -> (res : U))
+let _&_ = lambda_implicit (U : type_(10, 0))
+	unwrap
+		intrinsic
+			""""
+				return base_env.gen_base_operator(function(bound_tuple_element_variables)
+					return terms.typed_term.intersection_type(bound_tuple_element_variables[1], bound_tuple_element_variables[2])
+				end, "#intersection", "left", "right")
+			:
+			wrapped (forall (a : U, b : U) -> (res : U))
 
-let covariant = 
-	lambda_curry (U : type_(9, 1), a : U)
-		unwrap
-			intrinsic
-				""""
-					return base_env.gen_base_operator(function(vars)
-						return terms.typed_term.variance_cons(terms.typed_term.literal(terms.strict_value.host_value(true)), vars[1])
-					end, "#covariant", "base")
-				:
-				wrapped (forall ((rel : srel(a))) -> (res : variance(a)))
+let covariant = lambda_curry (U : type_(9, 1), a : U)
+	unwrap
+		intrinsic
+			""""
+				return base_env.gen_base_operator(function(bound_tuple_element_variables)
+					local positive = terms.typed_term.literal(terms.strict_value.host_value(true))
+					local srel = bound_tuple_element_variables[1]
+					return terms.typed_term.variance_cons(positive, srel)
+				end, "#covariant", "base")
+			:
+			wrapped (forall ((rel : srel(a))) -> (res : variance(a)))
 
-let contravariant = 
-	lambda_curry (U : type_(9, 1), a : U)
-		unwrap
-			intrinsic
-				""""
-					return base_env.gen_base_operator(function(vars)
-						return terms.typed_term.variance_cons(terms.typed_term.literal(terms.strict_value.host_value(false)), vars[1])
-					end, "#contravariant", "base")
-				:
-				wrapped (forall ((rel : srel(a))) -> (res : variance(a)))
+let contravariant = lambda_curry (U : type_(9, 1), a : U)
+	unwrap
+		intrinsic
+			""""
+				return base_env.gen_base_operator(function(bound_tuple_element_variables)
+					local positive = terms.typed_term.literal(terms.strict_value.host_value(false))
+					local srel = bound_tuple_element_variables[1]
+					return terms.typed_term.variance_cons(positive, srel)
+				end, "#contravariant", "base")
+			:
+			wrapped (forall ((rel : srel(a))) -> (res : variance(a)))
 
 let host-family-sig-variances = lambda (signature : type_(1, 0))
 	let inner = intrinsic
