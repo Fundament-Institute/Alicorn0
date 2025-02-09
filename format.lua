@@ -209,6 +209,11 @@ local function create_anchor(line, char, sourceid)
 end
 create_anchor = U.memoize(create_anchor)
 
+local function anchor_here(offset)
+	local info = debug.getinfo((offset or 1) + 1, "Sl")
+	return create_anchor(info.currentline, 0, "SYNTH:" .. info.source)
+end
+
 ---@class LinePosition
 ---@field line integer
 ---@field pos integer
@@ -683,4 +688,4 @@ local function parse(input, filename)
 	return ast
 end
 
-return { parse = parse, anchor_mt = anchor_mt, create_anchor = create_anchor }
+return { parse = parse, anchor_mt = anchor_mt, create_anchor = create_anchor, anchor_here = anchor_here }

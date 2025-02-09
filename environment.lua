@@ -1,6 +1,7 @@
 local trie = require "lazy-prefix-tree"
 local fibbuf = require "fibonacci-buffer"
 local U = require "alicorn-utils"
+local format = require "format"
 
 local terms = require "terms"
 local inferrable_term = terms.inferrable_term
@@ -145,7 +146,7 @@ function environment:bind_local(binding)
 					self.typechecking_context,
 					spec_type,
 					self.typechecking_context,
-					terms.constraintcause.primitive("environment tuple-elim", U.anchor_here())
+					terms.constraintcause.primitive("environment tuple-elim", format.anchor_here())
 				)
 			end)
 			if not ok then

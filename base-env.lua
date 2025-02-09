@@ -7,6 +7,7 @@ local terms = require "terms"
 local gen = require "terms-generators"
 local evaluator = require "evaluator"
 local U = require "alicorn-utils"
+local format = require "format"
 
 local value = terms.value
 local typed = terms.typed_term
@@ -1031,7 +1032,7 @@ local function apply_operative_impl(syntax, env)
 				env.typechecking_context,
 				spec_type,
 				env.typechecking_context,
-				terms.constraintcause.primitive("apply", U.anchor_here())
+				terms.constraintcause.primitive("apply", format.anchor_here())
 			)
 		end)
 		if not ok then
