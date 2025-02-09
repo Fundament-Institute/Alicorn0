@@ -6256,8 +6256,8 @@ function TypeCheckerState:slice_constraints_for(
 
 	---@generic T
 	---@param edgeset T[]
-	---@param extractor fun(edge: T) : integer
-	---@param callback fun(is_metavar : boolean, edge: T, subbed : typed)
+	---@param extractor (fun(edge: T): integer)
+	---@param callback (fun(is_metavariable: boolean, edge: T, subbed : typed))
 	local function slice_edgeset(edgeset, extractor, callback)
 		for _, edge in ipairs(edgeset) do
 			local tag = self.values[extractor(edge)][2]
@@ -6292,17 +6292,17 @@ function TypeCheckerState:slice_constraints_for(
 
 	slice_edgeset(self.graph.constrain_edges:to(mv.usage), function(edge)
 		return edge.left
-	end, function(mv, edge, sub)
+	end, function(is_metavariable, edge, sub)
 		constraints:append(terms.constraintelem.constrain_sliced(sub, getctx(edge.left), edge.rel, edge.cause))
 	end)
 	slice_edgeset(self.graph.constrain_edges:from(mv.usage), function(edge)
 		return edge.right
-	end, function(mv, edge, sub)
+	end, function(is_metavariable, edge, sub)
 		constraints:append(terms.constraintelem.sliced_constrain(edge.rel, sub, getctx(edge.right), edge.cause))
 	end)
 	slice_edgeset(self.graph.leftcall_edges:to(mv.usage), function(edge)
 		return edge.left
-	end, function(mv, edge, sub)
+	end, function(is_metavariable, edge, sub)
 		constraints:append(
 			terms.constraintelem.leftcall_sliced(
 				sub,
@@ -6315,7 +6315,7 @@ function TypeCheckerState:slice_constraints_for(
 	end)
 	slice_edgeset(self.graph.leftcall_edges:from(mv.usage), function(edge)
 		return edge.right
-	end, function(mv, edge, sub)
+	end, function(is_metavariable, edge, sub)
 		constraints:append(
 			terms.constraintelem.sliced_leftcall(
 				substitute_inner(edge.arg, mappings, mappings_changed, context_len, ambient_typechecking_context),
@@ -6328,7 +6328,7 @@ function TypeCheckerState:slice_constraints_for(
 	end)
 	slice_edgeset(self.graph.rightcall_edges:to(mv.usage), function(edge)
 		return edge.left
-	end, function(mv, edge, sub)
+	end, function(is_metavariable, edge, sub)
 		constraints:append(
 			terms.constraintelem.rightcall_sliced(
 				sub,
@@ -6341,7 +6341,7 @@ function TypeCheckerState:slice_constraints_for(
 	end)
 	slice_edgeset(self.graph.rightcall_edges:from(mv.usage), function(edge)
 		return edge.right
-	end, function(mv, edge, sub)
+	end, function(is_metavariable, edge, sub)
 		constraints:append(
 			terms.constraintelem.sliced_rightcall(
 				edge.rel,
