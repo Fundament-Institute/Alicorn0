@@ -2178,34 +2178,34 @@ local function tuple_desc_concat(head, tail)
 	return desc
 end
 
-local host_if = (function()
-	local debug_arg = terms.var_debug("#host-if-param", U.anchor_here())
+---@diagnostic disable-next-line: no-unknown
+local host_if
+do
+	local debug_param = terms.var_debug("#host-if-param", U.anchor_here())
 	local debug_subject = terms.var_debug("#host-if-subject", U.anchor_here())
 	local debug_consequent = terms.var_debug("#host-if-consequent", U.anchor_here())
 	local debug_alternate = terms.var_debug("#host-if-alternate", U.anchor_here())
 	local debug_elements = debug_array(debug_subject, debug_consequent, debug_alternate)
-	return U.notail(
-		terms.strict_value.closure(
-			"#host-if-param",
-			typed.tuple_elim(
-				debug_elements:map(name_array, function(n)
-					return n.name
-				end),
-				debug_elements,
-				typed.bound_variable(2, debug_arg),
-				3,
-				typed.host_if(
-					typed.bound_variable(3, debug_subject),
-					typed.bound_variable(4, debug_consequent),
-					typed.bound_variable(5, debug_alternate)
-				)
-			),
-			empty_tuple,
-			var_debug("", U.anchor_here()),
-			debug_arg
-		)
+	host_if = terms.strict_value.closure(
+		debug_param.name,
+		typed.tuple_elim(
+			debug_elements:map(name_array, function(n)
+				return n.name
+			end),
+			debug_elements,
+			typed.bound_variable(2, debug_param),
+			3,
+			typed.host_if(
+				typed.bound_variable(3, debug_subject),
+				typed.bound_variable(4, debug_consequent),
+				typed.bound_variable(5, debug_alternate)
+			)
+		),
+		empty_tuple,
+		var_debug("#host-if-capture", U.anchor_here()),
+		debug_param
 	)
-end)()
+end
 
 ---@param desc strict_value
 ---@return strict_value desc `strict_value.enum_value(terms.DescCons.…, …)`
@@ -2355,56 +2355,56 @@ local function tuple_to_host_tuple_inner(_type, _valid, val)
 	end
 end
 
-local core_operative_type = (function()
-	local debug_arg = terms.var_debug("#args", U.anchor_here())
-	local debug_userdata = terms.var_debug("userdata", U.anchor_here())
-	local debug_handler = terms.var_debug("handler", U.anchor_here())
+---@diagnostic disable-next-line: no-unknown
+local core_operative_type
+do
+	local debug_param = terms.var_debug("#core-operative-type-param", U.anchor_here())
+	local debug_userdata = terms.var_debug("#core-operative-type-userdata", U.anchor_here())
+	local debug_handler = terms.var_debug("#core-operative-type-handler", U.anchor_here())
 	local debug_elements = debug_array(debug_userdata, debug_handler)
-	return U.notail(
-		terms.flex_value.closure(
-			debug_arg.name,
-			terms.typed_term.tuple_elim(
-				debug_elements:map(name_array, function(n)
-					return n.name
-				end),
-				debug_elements,
-				terms.typed_term.bound_variable(2, debug_arg),
-				2,
-				terms.typed_term.operative_type_cons(
-					terms.typed_term.bound_variable(4, debug_handler),
-					terms.typed_term.bound_variable(3, debug_userdata) --TODO: fix the order on this
-				)
-			),
-			flex_value.strict(empty_tuple),
-			var_debug("#capture", U.anchor_here()),
-			debug_arg
-		)
+	core_operative_type = terms.flex_value.closure(
+		debug_param.name,
+		terms.typed_term.tuple_elim(
+			debug_elements:map(name_array, function(n)
+				return n.name
+			end),
+			debug_elements,
+			terms.typed_term.bound_variable(2, debug_param),
+			2,
+			terms.typed_term.operative_type_cons(
+				terms.typed_term.bound_variable(4, debug_handler),
+				terms.typed_term.bound_variable(3, debug_userdata) --TODO: fix the order on this
+			)
+		),
+		flex_value.strict(empty_tuple),
+		var_debug("#core-operative-type-capture", U.anchor_here()),
+		debug_param
 	)
-end)()
+end
 
-local core_operative = (function()
-	local debug_arg = terms.var_debug("#args", U.anchor_here())
-	local debug_ud = terms.var_debug("ud", U.anchor_here())
-	local debug_handler = terms.var_debug("handler", U.anchor_here())
+---@diagnostic disable-next-line: no-unknown
+local core_operative
+do
+	local debug_param = terms.var_debug("#core-operative-param", U.anchor_here())
+	local debug_ud = terms.var_debug("#core-operative-ud", U.anchor_here())
+	local debug_handler = terms.var_debug("#core-operative-handler", U.anchor_here())
 	local debug_elements = debug_array(debug_ud, debug_handler)
-	return U.notail(
-		terms.flex_value.closure(
-			debug_arg.name,
-			terms.typed_term.tuple_elim(
-				debug_elements:map(name_array, function(n)
-					return n.name
-				end),
-				debug_elements,
-				terms.typed_term.bound_variable(2, debug_arg),
-				2,
-				terms.typed_term.operative_cons(terms.typed_term.bound_variable(3, debug_ud))
-			),
-			flex_value.strict(empty_tuple),
-			var_debug("#capture", U.anchor_here()),
-			debug_arg
-		)
+	core_operative = terms.flex_value.closure(
+		debug_param.name,
+		terms.typed_term.tuple_elim(
+			debug_elements:map(name_array, function(n)
+				return n.name
+			end),
+			debug_elements,
+			terms.typed_term.bound_variable(2, debug_param),
+			2,
+			terms.typed_term.operative_cons(terms.typed_term.bound_variable(3, debug_ud))
+		),
+		flex_value.strict(empty_tuple),
+		var_debug("#core-operative-capture", U.anchor_here()),
+		debug_param
 	)
-end)()
+end
 
 local base_env = {
 	ascribed_segment_tuple_desc = ascribed_segment_tuple_desc,
