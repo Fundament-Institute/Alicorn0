@@ -728,10 +728,19 @@ local GasTank_mt = {}
 
 ---@class GasTank
 ---@field gas integer
+---@field on_empty (fun(gas: GasTank))?
+---@field _id integer
 GasTank_mt.__index = {}
 
+GasTank_mt._new_id = 1
+
+---@return GasTank self
 function GasTank_mt.__index:decrement()
-	self.gas = self.gas - 1
+	local gas = self.gas - 1
+	self.gas = gas
+	if gas == 0 and self.on_empty ~= nil then
+		return self, self:on_empty()
+	end
 	return self
 end
 
@@ -739,12 +748,23 @@ function GasTank_mt.__index:empty()
 	return self.gas <= 0
 end
 
+function GasTank_mt:__tostring()
+	return string.format("GasTank<%d>(%s)", self._id, tostring(self.gas))
+end
+
 M.GasTank = setmetatable(GasTank_mt.__index, {
 	---@param cls GasTank
 	---@param default_gas integer
-	---@return GasTank gas
-	__call = function(cls, default_gas)
-		return setmetatable({ gas = default_gas }, GasTank_mt)
+	---@param on_empty (fun(gas: GasTank))?
+	---@return GasTank self
+	__call = function(cls, default_gas, on_empty)
+		local id = GasTank_mt._new_id
+		GasTank_mt._new_id = id + 1
+		return setmetatable({
+			gas = default_gas,
+			on_empty = on_empty,
+			_id = id,
+		}, GasTank_mt)
 	end,
 })
 
