@@ -132,9 +132,9 @@ let tuple-desc-type = lambda_implicit (U : universe)
 				return base_env.gen_base_operator(function(bound_tuple_element_variables)
 					local a_universe = bound_tuple_element_variables[1]
 					return terms.typed_term.tuple_desc_type(a_universe)
-				end, "#srel", "a-universe")
+				end, "#tuple-desc-type", "a-universe")
 			:
-			wrapped (forall ((x : U)) -> (res : U))
+			wrapped (forall ((a-universe : U)) -> (res : U))
 
 let host-family-sig-variances = lambda (signature : type_(1, 0))
 	let inner = intrinsic
