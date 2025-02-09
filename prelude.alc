@@ -375,29 +375,50 @@ let rebuild-prog-type =
 		let (res) = rebuild-prog-type-inner(wrap(t), valid, wrap(b))
 		unwrap(res)
 
-let host-tuple-to-tuple-inner =
-	intrinsic
-		""""
-			return function(_type, _valid, val)
-				local elems = val:unwrap_host_tuple_value()
-				local vals = terms_gen.declare_array(terms.strict_value)()
-				for _, v in ipairs(elems) do
-					vals:append(terms.strict_value.host_value(v))
+####let host-tuple-to-tuple-inner =
+		intrinsic
+			""""
+				return function(_type, _valid, val)
+					local elems = val:unwrap_host_tuple_value()
+					local vals = terms_gen.declare_array(terms.strict_value)()
+					for _, v in ipairs(elems) do
+						vals:append(terms.strict_value.host_value(v))
+					end
+					return terms.strict_value.tuple_value(vals)
 				end
-				return terms.strict_value.tuple_value(vals)
-			end
-		:
-		host-func-type (
-				t     : wrapped(type),
-				valid : only-accept-host-tuples(t),
-				val   : wrapped(unwrap(t)))
-			->
-			((res : wrapped(host-tuple-type-to-tuple-type(unwrap(t), valid))))
-
+			:
+			host-func-type (
+					t     : wrapped(type),
+					valid : only-accept-host-tuples(t),
+					val   : wrapped(unwrap(t)))
+				->
+				((res : wrapped(host-tuple-type-to-tuple-type(unwrap(t), valid))))
+	
+	let host-tuple-to-tuple =
+		lambda (t : wrapped(type), valid : only-accept-host-tuples(t), val : unwrap(t))
+			let (res) = host-tuple-to-tuple-inner(t, valid, wrap(val))
+			unwrap(res)
+	
 let host-tuple-to-tuple =
-	lambda (t : wrapped(type), valid : only-accept-host-tuples(t), val : unwrap(t))
-		let (res) = host-tuple-to-tuple-inner(t, valid, wrap(val))
-		unwrap(res)
+	lambda_implicit (desc : tuple-desc-type(host-type))
+		lambda (xs : host-tuple-type(desc))
+			let inner = intrinsic
+				""""
+					return function(val)
+						local elems = val:unwrap_host_tuple_value()
+						local vals = terms_gen.declare_array(terms.strict_value)()
+						for _, v in ipairs(elems) do
+							vals:append(terms.strict_value.host_value(v))
+						end
+						return terms.strict_value.tuple_value(vals)
+					end
+				:
+				host-func-type ((
+						val   : wrapped(host-tuple-type(desc))))
+					->
+					((res : wrapped(tuple-type(desc))))
+			let (res) = inner(wrap(xs))
+			the tuple-type(desc) unwrap(res)
 
 let tuple-to-host-tuple-inner =
 	intrinsic
@@ -615,103 +636,133 @@ let get-host-funcprog-res =
 		let (res) = inner(wrap(subject), valid)
 		unwrap(res)
 
-let host-func-type-to-func-type =
-	lambda (T : type, valid : only-accept-host-funcs(wrap(T)))
-		let (oldargs oldargs-valid) = get-host-func-arg(T, valid)
-		let newargs = host-tuple-type-to-tuple-type(oldargs, oldargs-valid)
-		let orig-results = get-host-func-res(T, valid)
-		let orig-result-info = get-host-func-result-info(T, valid)
-		
-		let new-results =
-			lambda (args : newargs)
-				let ptuple = tuple-to-host-tuple(oldargs, oldargs-valid, args)
-				let (oldres oldres-valid) = apply(orig-results, ptuple)
-				let newres = host-tuple-type-to-tuple-type(oldres, oldres-valid)
-				newres
-
-		let new-func-type = forall (x : newargs) -> (y : new-results(x))
-		let final-func-type = set-func-result-info(new-func-type, host-nil, orig-result-info)
-		final-func-type
-
-let host-funcprog-type-to-funcprog-type =
-	lambda (T : type, valid : only-accept-host-funcprogs(wrap(T)))
-		let (oldargs oldargs-valid) = get-host-funcprog-arg(T, valid)
-		let newargs = host-tuple-type-to-tuple-type(oldargs, oldargs-valid)
-		let orig-results = get-host-funcprog-res(T, valid)
-		let orig-result-info = get-host-func-result-info(T, valid)
-		
-		let new-results =
-			lambda (args : newargs)
-				let ptuple = tuple-to-host-tuple(oldargs, oldargs-valid, args)
-				let (oldres oldres-valid) = apply(orig-results, ptuple)
-				let (extractres extractres-valid) = extract-prog-host-tuple-type(oldres, oldres-valid)
-				let newres = host-tuple-type-to-tuple-type(extractres, extractres-valid)
-				rebuild-prog-type(oldres, oldres-valid, newres)
-
-		let new-func-type = forall (x : newargs) -> (y : new-results(x))
-		let final-func-type = set-func-result-info(new-func-type, host-nil, orig-result-info)
-		final-func-type
-
-let func-to-host-func-inner =
-	intrinsic
-		""""
-			return function(_type, _valid, afn)
-				return function(...)
-					local args = table.pack(...)
-					local conv_args = terms_gen.declare_array(terms.strict_value)()
-					for i = 1, args.n do
-						conv_args:append(terms.strict_value.host_value(args[i]))
-					end
-					local res = evaluator.apply_value(afn, terms.strict_value.tuple_value(conv_args), terms.typechecking_context())
-					if not res:is_tuple_value() then
-						error "alicorn function converted to native function has failed to create a real value"
-					end
-					local elems = {}
-					for i, v in res:unwrap_tuple_value():ipairs() do
-						elems[i] = v:unwrap_host_value()
-					end
-					return table.unpack(elems)
-				end
-			end
-		:
-		host-func-type (T : wrapped(host-type), valid : only-accept-host-funcs(T), fn : wrapped(host-func-type-to-func-type(unwrap(T), valid))) -> ((res-fn : unwrap(T)))
-
 let func-to-host-func =
-	lambda (T : host-type, valid : only-accept-host-funcs(wrap(T)), fn : host-func-type-to-func-type(T, valid))
-		let (res) = func-to-host-func-inner(wrap(T), valid, wrap(fn))
-		res #TODO figure out why `unwrap(res) here doesn't make a nice type error but fails
+	lambda_curry (arg-desc : tuple-desc-type(host-type), res-desc : (forall (x : tuple-type(arg-desc)) -> (r : tuple-desc-type(host-type))))
+		let ft = forall (args : tuple-type(arg-desc)) -> (res : tuple-type(apply(res-desc, args)))
+		let hft = host-func-type (args : host-tuple-type(arg-desc)) -> (res : host-tuple-type(apply(res-desc, host-tuple-to-tuple(args))))
+		lambda (f : ft)
+			let inner = intrinsic
+				""""
+					return function(_type, _valid, afn)
+						return function(...)
+							local args = table.pack(...)
+							local conv_args = terms_gen.declare_array(terms.strict_value)()
+							for i = 1, args.n do
+								conv_args:append(terms.strict_value.host_value(args[i]))
+							end
+							local res = evaluator.apply_value(afn, terms.strict_value.tuple_value(conv_args), terms.typechecking_context())
+							if not res:is_tuple_value() then
+								error "alicorn function converted to native function has failed to create a real value"
+							end
+							local elems = {}
+							for i, v in res:unwrap_tuple_value():ipairs() do
+								elems[i] = v:unwrap_host_value()
+							end
+							return table.unpack(elems)
+						end
+					end
+				:
+				host-func-type ((arg : wrapped(ft))) -> ((res : hft))
+			let (res) = inner(wrap(f))
+			the hft res
 
-# TODO rewrite to handle new flex values
-let funcprog-to-host-funcprog-inner =
-	intrinsic
-		""""
-			return function(_type, _valid, afn)
-				return function(...)
-					local args = {...}
-					local nargs = select("#", ...)
-					local conv_args = terms_gen.declare_array(terms.flex_value)()
-					for i = 1, nargs do
-						conv_args:append(terms.flex_value.host_value(args[i]))
+####let host-func-type-to-func-type =
+		lambda (T : type, valid : only-accept-host-funcs(wrap(T)))
+			let (oldargs oldargs-valid) = get-host-func-arg(T, valid)
+			let newargs = host-tuple-type-to-tuple-type(oldargs, oldargs-valid)
+			let orig-results = get-host-func-res(T, valid)
+			let orig-result-info = get-host-func-result-info(T, valid)
+			
+			let new-results =
+				lambda (args : newargs)
+					let ptuple = tuple-to-host-tuple(oldargs, oldargs-valid, args)
+					let (oldres oldres-valid) = apply(orig-results, ptuple)
+					let newres = host-tuple-type-to-tuple-type(oldres, oldres-valid)
+					newres
+	
+			let new-func-type = forall (x : newargs) -> (y : new-results(x))
+			let final-func-type = set-func-result-info(new-func-type, host-nil, orig-result-info)
+			final-func-type
+
+####let host-funcprog-type-to-funcprog-type =
+		lambda (T : type, valid : only-accept-host-funcprogs(wrap(T)))
+			let (oldargs oldargs-valid) = get-host-funcprog-arg(T, valid)
+			let newargs = host-tuple-type-to-tuple-type(oldargs, oldargs-valid)
+			let orig-results = get-host-funcprog-res(T, valid)
+			let orig-result-info = get-host-func-result-info(T, valid)
+			
+			let new-results =
+				lambda (args : newargs)
+					let ptuple = tuple-to-host-tuple(oldargs, oldargs-valid, args)
+					let (oldres oldres-valid) = apply(orig-results, ptuple)
+					let (extractres extractres-valid) = extract-prog-host-tuple-type(oldres, oldres-valid)
+					let newres = host-tuple-type-to-tuple-type(extractres, extractres-valid)
+					rebuild-prog-type(oldres, oldres-valid, newres)
+	
+			let new-func-type = forall (x : newargs) -> (y : new-results(x))
+			let final-func-type = set-func-result-info(new-func-type, host-nil, orig-result-info)
+			final-func-type
+
+####let func-to-host-func-inner =
+		intrinsic
+			""""
+				return function(_type, _valid, afn)
+					return function(...)
+						local args = table.pack(...)
+						local conv_args = terms_gen.declare_array(terms.strict_value)()
+						for i = 1, args.n do
+							conv_args:append(terms.strict_value.host_value(args[i]))
+						end
+						local res = evaluator.apply_value(afn, terms.strict_value.tuple_value(conv_args), terms.typechecking_context())
+						if not res:is_tuple_value() then
+							error "alicorn function converted to native function has failed to create a real value"
+						end
+						local elems = {}
+						for i, v in res:unwrap_tuple_value():ipairs() do
+							elems[i] = v:unwrap_host_value()
+						end
+						return table.unpack(elems)
 					end
-					local res = evaluator.execute_program(evaluator.apply_value(afn, terms.flex_value.tuple_value(conv_args), terms.typechecking_context()))
-					if not res:is_tuple_value() then
-						print(res)
-						error  "alicorn function converted to native function has failed to create a real value"
-					end
-					local elems = {}
-					for i, v in res:unwrap_tuple_value():ipairs() do
-						elems[i] = v:unwrap_host_value()
-					end
-					return table.unpack(elems)
 				end
-			end
-		:
-		host-func-type (T : wrapped(host-type), valid : only-accept-host-funcprogs(T), fn : wrapped(host-funcprog-type-to-funcprog-type(unwrap(T), valid))) -> ((res-fn : unwrap(T)))
+			:
+			host-func-type (T : wrapped(host-type), valid : only-accept-host-funcs(T), fn : wrapped(host-func-type-to-func-type(unwrap(T), valid))) -> ((res-fn : unwrap(T)))
+	
+####let func-to-host-func =
+		lambda (T : host-type, valid : only-accept-host-funcs(wrap(T)), fn : host-func-type-to-func-type(T, valid))
+			let (res) = func-to-host-func-inner(wrap(T), valid, wrap(fn))
+			res #TODO figure out why `unwrap(res) here doesn't make a nice type error but fails
+	
+# TODO rewrite to handle new flex values
+####let funcprog-to-host-funcprog-inner =
+		intrinsic
+			""""
+				return function(_type, _valid, afn)
+					return function(...)
+						local args = {...}
+						local nargs = select("#", ...)
+						local conv_args = terms_gen.declare_array(terms.flex_value)()
+						for i = 1, nargs do
+							conv_args:append(terms.flex_value.host_value(args[i]))
+						end
+						local res = evaluator.execute_program(evaluator.apply_value(afn, terms.flex_value.tuple_value(conv_args), terms.typechecking_context()))
+						if not res:is_tuple_value() then
+							print(res)
+							error  "alicorn function converted to native function has failed to create a real value"
+						end
+						local elems = {}
+						for i, v in res:unwrap_tuple_value():ipairs() do
+							elems[i] = v:unwrap_host_value()
+						end
+						return table.unpack(elems)
+					end
+				end
+			:
+			host-func-type (T : wrapped(host-type), valid : only-accept-host-funcprogs(T), fn : wrapped(host-funcprog-type-to-funcprog-type(unwrap(T), valid))) -> ((res-fn : unwrap(T)))
 
-let funcprog-to-host-funcprog =
-	lambda (T : host-type, valid : only-accept-host-funcprogs(wrap(T)), fn : host-funcprog-type-to-funcprog-type(T, valid))
-		let (res) = funcprog-to-host-funcprog-inner(wrap(T), valid, wrap(fn))
-		res #TODO figure out why `unwrap(res) here doesn't make a nice type error but fails
+####let funcprog-to-host-funcprog =
+		lambda (T : host-type, valid : only-accept-host-funcprogs(wrap(T)), fn : host-funcprog-type-to-funcprog-type(T, valid))
+			let (res) = funcprog-to-host-funcprog-inner(wrap(T), valid, wrap(fn))
+			res #TODO figure out why `unwrap(res) here doesn't make a nice type error but fails
 
 let host-if-type = 
 	lambda (T : type_(9, 0))
