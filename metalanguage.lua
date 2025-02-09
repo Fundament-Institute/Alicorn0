@@ -239,6 +239,9 @@ local pdump = require "pretty-printer".s
 ---@field wrapper fun(syntax: ConstructedSyntax, matcher: Matcher) : ...
 ---@field create_reducible fun(handler: ReducibleFunc, ...) : Matcher
 
+--- This _should_ be `true`.
+local protect_reducer_func_calls = true
+
 --[[
 reducer : forall
 	implicit storage : tuple-desc
@@ -256,7 +259,11 @@ local function reducer(func, name)
 	---@param matcher Matcher
 	---@return ...
 	local function funcwrapper(syntax, matcher)
-		return augment_error(syntax, name, xpcall(func, U.custom_traceback, syntax, table.unpack(matcher.reducible)))
+		if protect_reducer_func_calls then
+			return augment_error(syntax, name, xpcall(func, U.custom_traceback, syntax, table.unpack(matcher.reducible)))
+		else
+			return func(syntax, table.unpack(matcher.reducible))
+		end
 	end
 
 	local reducer = {

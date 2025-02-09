@@ -7,6 +7,7 @@
 ---@param usages MapValue<integer, integer> the usages array we are filling
 ---@param context_len integer number of bindings in the runtime context already used - needed for closures
 ---@param ambient_typechecking_context TypecheckingContext
-local function gather_usages(val, usages, context_len, ambient_typechecking_context) end
+---@param gas integer? tracks recursive calls
+local function gather_usages(val, usages, context_len, ambient_typechecking_context, gas) end
 
 return gather_usages
