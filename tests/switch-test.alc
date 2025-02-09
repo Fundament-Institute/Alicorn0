@@ -29,4 +29,3 @@ let switchtest_ascribed = lambda (x : Result(host-number, host-number))
 
 switchtest_ascribed(mk Ok(5))
 switchtest_ascribed(mk Err(3))
-	

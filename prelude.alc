@@ -24,7 +24,7 @@ let implicit-unwrap = lambda_implicit (T : star-omega+1)
 ####let implicit-unstrict-wrap = lambda_curry ((T : star-omega+1))
 		lambda (x : T)
 			unstrict-wrap T x
-	
+
 	let implicit-unstrict-unwrap = lambda_implicit (T : star-omega+1)
 		lambda (x : unstrict-wrapped(T))
 			unstrict-unwrap T x
@@ -393,12 +393,12 @@ let rebuild-prog-type =
 					val   : wrapped(unwrap(t)))
 				->
 				((res : wrapped(host-tuple-type-to-tuple-type(unwrap(t), valid))))
-	
+
 	let host-tuple-to-tuple =
 		lambda (t : wrapped(type), valid : only-accept-host-tuples(t), val : unwrap(t))
 			let (res) = host-tuple-to-tuple-inner(t, valid, wrap(val))
 			unwrap(res)
-	
+
 let host-tuple-to-tuple =
 	lambda_implicit (desc : tuple-desc-type(host-type))
 		lambda (xs : host-tuple-type(desc))
@@ -544,7 +544,7 @@ let only-accept-funcs =
 
 let get-host-func-arg =
 	lambda (subject : type, valid : only-accept-host-funcs(wrap(subject)))
-		let inner = 
+		let inner =
 			intrinsic
 				""""
 					local function get_host_func_arg(subject, valid)
@@ -608,10 +608,10 @@ let set-func-result-info =
 		let (res) = inner(wrap(subject), valid, wrap(resinf))
 		unwrap(res)
 
-let func-conv-res-type = 
+let func-conv-res-type =
 	lambda (argtype : type)
 		forall (arg : argtype) -> (res : type, valid : only-accept-host-tuples(wrap(res)))
-let funcprog-conv-res-type = 
+let funcprog-conv-res-type =
 	lambda (argtype : type)
 		forall (arg : argtype) -> (res : type, valid : only-accept-prog-host-tuples(wrap(res)))
 
@@ -672,14 +672,14 @@ let func-to-host-func =
 			let newargs = host-tuple-type-to-tuple-type(oldargs, oldargs-valid)
 			let orig-results = get-host-func-res(T, valid)
 			let orig-result-info = get-host-func-result-info(T, valid)
-			
+
 			let new-results =
 				lambda (args : newargs)
 					let ptuple = tuple-to-host-tuple(oldargs, oldargs-valid, args)
 					let (oldres oldres-valid) = apply(orig-results, ptuple)
 					let newres = host-tuple-type-to-tuple-type(oldres, oldres-valid)
 					newres
-	
+
 			let new-func-type = forall (x : newargs) -> (y : new-results(x))
 			let final-func-type = set-func-result-info(new-func-type, host-nil, orig-result-info)
 			final-func-type
@@ -690,7 +690,7 @@ let func-to-host-func =
 			let newargs = host-tuple-type-to-tuple-type(oldargs, oldargs-valid)
 			let orig-results = get-host-funcprog-res(T, valid)
 			let orig-result-info = get-host-func-result-info(T, valid)
-			
+
 			let new-results =
 				lambda (args : newargs)
 					let ptuple = tuple-to-host-tuple(oldargs, oldargs-valid, args)
@@ -698,7 +698,7 @@ let func-to-host-func =
 					let (extractres extractres-valid) = extract-prog-host-tuple-type(oldres, oldres-valid)
 					let newres = host-tuple-type-to-tuple-type(extractres, extractres-valid)
 					rebuild-prog-type(oldres, oldres-valid, newres)
-	
+
 			let new-func-type = forall (x : newargs) -> (y : new-results(x))
 			let final-func-type = set-func-result-info(new-func-type, host-nil, orig-result-info)
 			final-func-type
@@ -726,12 +726,12 @@ let func-to-host-func =
 				end
 			:
 			host-func-type (T : wrapped(host-type), valid : only-accept-host-funcs(T), fn : wrapped(host-func-type-to-func-type(unwrap(T), valid))) -> ((res-fn : unwrap(T)))
-	
+
 ####let func-to-host-func =
 		lambda (T : host-type, valid : only-accept-host-funcs(wrap(T)), fn : host-func-type-to-func-type(T, valid))
 			let (res) = func-to-host-func-inner(wrap(T), valid, wrap(fn))
 			res #TODO figure out why `unwrap(res) here doesn't make a nice type error but fails
-	
+
 # TODO rewrite to handle new flex values
 ####let funcprog-to-host-funcprog-inner =
 		intrinsic
@@ -764,7 +764,7 @@ let func-to-host-func =
 			let (res) = funcprog-to-host-funcprog-inner(wrap(T), valid, wrap(fn))
 			res #TODO figure out why `unwrap(res) here doesn't make a nice type error but fails
 
-let host-if-type = 
+let host-if-type =
 	lambda (T : type_(9, 0))
 		forall (subject : host-bool, consequent : T, alternate : T) -> (res : T)
 
@@ -954,7 +954,7 @@ let duplicate-tuple-desc = lambda_implicit (U : universe)
 
 let host-array-from-tuple = lambda_implicit (T : host-type)
 	lambda (size : host-number, tuple : host-tuple-type(duplicate-tuple-desc(size, T)))
-		let inner = 
+		let inner =
 			intrinsic
 				""""
 					return function(tuple)
@@ -968,7 +968,7 @@ let host-array-from-tuple = lambda_implicit (T : host-type)
 let make-host-array = lambda_implicit (T : host-type)
 	lambda (size : host-number)
 		let input-type = host-tuple-type(duplicate-tuple-desc(size, T))
-		let inner = 
+		let inner =
 			intrinsic
 				""""
 					return function(tuple)
@@ -1080,7 +1080,7 @@ let get-reducible-constructor = lambda (
 	let (c) = inner(red)
 	c
 
-let host-matcher-reducible = 
+let host-matcher-reducible =
 	lambda_implicit (userdata       : host-type)
 		lambda (
 				storage        : tuple-desc-type(host-type),
