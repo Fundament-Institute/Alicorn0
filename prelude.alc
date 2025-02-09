@@ -136,7 +136,7 @@ let tuple-desc-type = lambda_implicit (U : universe)
 			:
 			wrapped (forall ((a-universe : U)) -> (res : U))
 
-let tuple-type-explicit = lambda (U : universe)
+let tuple-type = lambda_implicit (U : universe)
 	unwrap
 		intrinsic
 			""""
@@ -146,8 +146,6 @@ let tuple-type-explicit = lambda (U : universe)
 				end, "#tuple-type-explicit", "desc")
 			:
 			wrapped (forall ((desc : tuple-desc-type(U))) -> (T : U))
-let tuple-type = lambda_implicit (U : universe)
-	tuple-type-explicit U
 
 let host-family-sig-variances = lambda (signature : type_(1, 0))
 	let inner = intrinsic
