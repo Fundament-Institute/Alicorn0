@@ -2367,33 +2367,6 @@ local function tuple_to_host_tuple_inner(_type, _valid, val)
 end
 
 ---@diagnostic disable-next-line: no-unknown
-local core_operative_type
-do
-	local debug_param = var_debug("#core-operative-type-param", format.anchor_here())
-	local debug_userdata = var_debug("#core-operative-type-userdata", format.anchor_here())
-	local debug_handler = var_debug("#core-operative-type-handler", format.anchor_here())
-	local debug_elements = var_debug_array(debug_userdata, debug_handler)
-	core_operative_type = strict_value.closure(
-		debug_param.name,
-		typed_term.tuple_elim(
-			debug_elements:map(name_array, function(n)
-				return n.name
-			end),
-			debug_elements,
-			typed_term.bound_variable(2, debug_param),
-			2,
-			typed_term.operative_type_cons(
-				typed_term.bound_variable(4, debug_handler),
-				typed_term.bound_variable(3, debug_userdata) --TODO: fix the order on this
-			)
-		),
-		empty_tuple,
-		var_debug("#core-operative-type-capture", format.anchor_here()),
-		debug_param
-	)
-end
-
----@diagnostic disable-next-line: no-unknown
 local core_operative
 do
 	local debug_param = var_debug("#core-operative-param", format.anchor_here())

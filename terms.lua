@@ -752,8 +752,8 @@ unanchored_inferrable_term:define_enum("unanchored_inferrable", {
 		"userdata",       anchored_inferrable_term,
 	} },
 	{ "operative_type_cons", {
-		"handler",       checkable_term,
 		"userdata_type", anchored_inferrable_term,
+		"handler",       checkable_term,
 	} },
 	{ "level_type" },
 	{ "level0" },
@@ -1044,8 +1044,8 @@ typed_term:define_enum("typed", {
 	} },
 	{ "operative_cons", { "userdata", typed_term } },
 	{ "operative_type_cons", {
-		"handler",       typed_term,
 		"userdata_type", typed_term,
+		"handler",       typed_term,
 	} },
 	{ "host_tuple_cons", { "elements", array(typed_term) } }, -- host_value
 	{ "host_user_defined_type_cons", {

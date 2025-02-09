@@ -967,7 +967,7 @@ local function substitute_inner_impl(val, mappings, mappings_changed, context_le
 			substitute_inner(handler, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		local typed_userdata_type =
 			substitute_inner(userdata_type, mappings, mappings_changed, context_len, ambient_typechecking_context)
-		return U.notail(typed_term.operative_type_cons(typed_handler, typed_userdata_type))
+		return U.notail(typed_term.operative_type_cons(typed_userdata_type, typed_handler))
 	elseif val:is_tuple_value() then
 		local elems = val:unwrap_tuple_value()
 		local res = typed_term_array()
@@ -3443,7 +3443,7 @@ local function infer_impl(
 		add_arrays(operative_usages, userdata_usages)
 		return true, operative_type_value, operative_usages, U.notail(typed_term.operative_cons(userdata_term))
 	elseif inferrable_term:is_operative_type_cons() then
-		local handler, userdata_type = inferrable_term:unwrap_operative_type_cons()
+		local userdata_type, handler = inferrable_term:unwrap_operative_type_cons()
 		-- TODO: strict_value / flex_value mismatches
 		local goal_type = flex_value.pi(
 			flex_value.tuple_type(
@@ -3485,7 +3485,7 @@ local function infer_impl(
 		return true,
 			U.notail(flex_value.star(operative_type_level, 0)),
 			operative_type_usages,
-			U.notail(typed_term.operative_type_cons(handler_term, userdata_type_term))
+			U.notail(typed_term.operative_type_cons(userdata_type_term, handler_term))
 	elseif inferrable_term:is_host_user_defined_type_cons() then
 		local id, family_args = inferrable_term:unwrap_host_user_defined_type_cons()
 		local new_family_args = typed_term_array()
@@ -4474,7 +4474,7 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		local userdata_value = evaluate(userdata, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.operative_value(userdata_value))
 	elseif typed:is_operative_type_cons() then
-		local handler, userdata_type = typed:unwrap_operative_type_cons()
+		local userdata_type, handler = typed:unwrap_operative_type_cons()
 		local handler_value = evaluate(handler, runtime_context, ambient_typechecking_context)
 		local userdata_type_value = evaluate(userdata_type, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.operative_type(handler_value, userdata_type_value))

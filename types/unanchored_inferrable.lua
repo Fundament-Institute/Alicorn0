@@ -204,12 +204,12 @@ function unanchored_inferrable:unwrap_operative_cons() end
 function unanchored_inferrable:as_operative_cons() end
 ---@return boolean
 function unanchored_inferrable:is_operative_type_cons() end
----@return checkable handler
 ---@return anchored_inferrable userdata_type
+---@return checkable handler
 function unanchored_inferrable:unwrap_operative_type_cons() end
 ---@return boolean
----@return checkable handler
 ---@return anchored_inferrable userdata_type
+---@return checkable handler
 function unanchored_inferrable:as_operative_type_cons() end
 ---@return boolean
 function unanchored_inferrable:is_level_type() end
@@ -400,7 +400,7 @@ function unanchored_inferrable:as_program_type() end
 ---@field object_elim fun(subject: anchored_inferrable, mechanism: anchored_inferrable): unanchored_inferrable
 ---@field let fun(name: string, debug: var_debug, expr: anchored_inferrable, body: anchored_inferrable): unanchored_inferrable
 ---@field operative_cons fun(operative_type: anchored_inferrable, userdata: anchored_inferrable): unanchored_inferrable
----@field operative_type_cons fun(handler: checkable, userdata_type: anchored_inferrable): unanchored_inferrable
+---@field operative_type_cons fun(userdata_type: anchored_inferrable, handler: checkable): unanchored_inferrable
 ---@field level_type unanchored_inferrable
 ---@field level0 unanchored_inferrable
 ---@field level_suc fun(previous_level: anchored_inferrable): unanchored_inferrable

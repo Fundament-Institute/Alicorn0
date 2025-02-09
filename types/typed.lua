@@ -317,12 +317,12 @@ function typed:unwrap_operative_cons() end
 function typed:as_operative_cons() end
 ---@return boolean
 function typed:is_operative_type_cons() end
----@return typed handler
 ---@return typed userdata_type
+---@return typed handler
 function typed:unwrap_operative_type_cons() end
 ---@return boolean
----@return typed handler
 ---@return typed userdata_type
+---@return typed handler
 function typed:as_operative_type_cons() end
 ---@return boolean
 function typed:is_host_tuple_cons() end
@@ -611,7 +611,7 @@ function typed:as_constrained_type() end
 ---@field object_corec_cons fun(methods: MapValue<string,typed>): typed
 ---@field object_elim fun(subject: typed, mechanism: typed): typed
 ---@field operative_cons fun(userdata: typed): typed
----@field operative_type_cons fun(handler: typed, userdata_type: typed): typed
+---@field operative_type_cons fun(userdata_type: typed, handler: typed): typed
 ---@field host_tuple_cons fun(elements: ArrayValue<typed>): typed
 ---@field host_user_defined_type_cons fun(id: { name: string }, family_args: ArrayValue<typed>): typed
 ---@field host_tuple_type fun(desc: typed): typed
