@@ -4,6 +4,7 @@ local terms = require "terms"
 local derivers = require "derivers"
 local traits = require "traits"
 local acg = require "libs.abstract-codegen"
+local U = require "alicorn-utils"
 
 -- minimal example:
 -- ---@meta "purity.lua"
