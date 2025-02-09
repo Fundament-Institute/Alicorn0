@@ -889,9 +889,8 @@ let tuple-concat = lambda (
 	let (cat) = inner(wrap(hd), wrap(tl))
 	unwrap(cat)
 let host-tuple-concat = lambda (
-		U    : universe,
-		head : tuple-desc-type(U),
-		tail : tuple-desc-type(U),
+		head : tuple-desc-type(host-type),
+		tail : tuple-desc-type(host-type),
 		hd   : host-tuple-type(head),
 		tl   : host-tuple-type(tail))
 	let inner = intrinsic
@@ -915,7 +914,7 @@ let host-tuple-concat = lambda (
 				hd : wrapped(host-tuple-type(head)),
 				tl : wrapped(host-tuple-type(tail)))
 			->
-			((cat : wrapped(host-tuple-type(tuple-desc-concat(U, head, tail)))))
+			((cat : wrapped(host-tuple-type(tuple-desc-concat(host-type, head, tail)))))
 	let (cat) = inner(wrap(hd), wrap(tl))
 	unwrap(cat)
 
