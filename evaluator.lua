@@ -667,9 +667,9 @@ local function gather_constraint_usages(mv, usages, context_len, ambient_typeche
 					and mvo:unwrap_stuck():unwrap_free():is_metavariable()
 				then
 					local mvo_inner = mvo:unwrap_stuck():unwrap_free():unwrap_metavariable()
-					if mvo_inner.block_level < typechecker_state.block_level then
-						callback(gas, edge)
-					end
+					-- if mvo_inner.block_level < typechecker_state.block_level then
+					-- 	callback(gas, edge)
+					-- end
 				else
 					error "incorrectly labelled as a metavariable"
 				end
@@ -6257,7 +6257,7 @@ function TypeCheckerState:slice_constraints_for(
 	---@generic T
 	---@param edgeset T[]
 	---@param extractor fun(edge: T) : integer
-	---@param callback fun(edge: T)
+	---@param callback fun(is_metavar : boolean, edge: T, subbed : typed)
 	local function slice_edgeset(edgeset, extractor, callback)
 		for _, edge in ipairs(edgeset) do
 			local tag = self.values[extractor(edge)][2]
@@ -6271,65 +6271,41 @@ function TypeCheckerState:slice_constraints_for(
 				then
 					local mvo_inner = mvo:unwrap_stuck():unwrap_free():unwrap_metavariable()
 					if mvo_inner.block_level < self.block_level then
-						callback(edge)
+						local sub = typed.metavariable(mvo_inner)
+						callback(true, edge, sub)
 					end
 				else
 					error "incorrectly labelled as a metavariable"
 				end
 			elseif tag ~= TypeCheckerTag.RANGE then
-				callback(edge)
+				local sub = substitute_inner(
+					getnode(extractor(edge)),
+					mappings,
+					mappings_changed,
+					context_len,
+					ambient_typechecking_context
+				)
+				callback(false, edge, sub)
 			end
 		end
 	end
 
 	slice_edgeset(self.graph.constrain_edges:to(mv.usage), function(edge)
 		return edge.left
-	end, function(edge)
-		constraints:append(
-			terms.constraintelem.constrain_sliced(
-				substitute_inner(
-					getnode(edge.left),
-					mappings,
-					mappings_changed,
-					context_len,
-					ambient_typechecking_context
-				),
-				getctx(edge.left),
-				edge.rel,
-				edge.cause
-			)
-		)
+	end, function(mv, edge, sub)
+		constraints:append(terms.constraintelem.constrain_sliced(sub, getctx(edge.left), edge.rel, edge.cause))
 	end)
 	slice_edgeset(self.graph.constrain_edges:from(mv.usage), function(edge)
 		return edge.right
-	end, function(edge)
-		constraints:append(
-			terms.constraintelem.sliced_constrain(
-				edge.rel,
-				substitute_inner(
-					getnode(edge.right),
-					mappings,
-					mappings_changed,
-					context_len,
-					ambient_typechecking_context
-				),
-				getctx(edge.right),
-				edge.cause
-			)
-		)
+	end, function(mv, edge, sub)
+		constraints:append(terms.constraintelem.sliced_constrain(edge.rel, sub, getctx(edge.right), edge.cause))
 	end)
 	slice_edgeset(self.graph.leftcall_edges:to(mv.usage), function(edge)
 		return edge.left
-	end, function(edge)
+	end, function(mv, edge, sub)
 		constraints:append(
 			terms.constraintelem.leftcall_sliced(
-				substitute_inner(
-					getnode(edge.left),
-					mappings,
-					mappings_changed,
-					context_len,
-					ambient_typechecking_context
-				),
+				sub,
 				getctx(edge.left),
 				substitute_inner(edge.arg, mappings, mappings_changed, context_len, ambient_typechecking_context),
 				edge.rel,
@@ -6339,18 +6315,12 @@ function TypeCheckerState:slice_constraints_for(
 	end)
 	slice_edgeset(self.graph.leftcall_edges:from(mv.usage), function(edge)
 		return edge.right
-	end, function(edge)
+	end, function(mv, edge, sub)
 		constraints:append(
 			terms.constraintelem.sliced_leftcall(
 				substitute_inner(edge.arg, mappings, mappings_changed, context_len, ambient_typechecking_context),
 				edge.rel,
-				substitute_inner(
-					getnode(edge.right),
-					mappings,
-					mappings_changed,
-					context_len,
-					ambient_typechecking_context
-				),
+				sub,
 				getctx(edge.right),
 				edge.cause
 			)
@@ -6358,16 +6328,10 @@ function TypeCheckerState:slice_constraints_for(
 	end)
 	slice_edgeset(self.graph.rightcall_edges:to(mv.usage), function(edge)
 		return edge.left
-	end, function(edge)
+	end, function(mv, edge, sub)
 		constraints:append(
 			terms.constraintelem.rightcall_sliced(
-				substitute_inner(
-					getnode(edge.left),
-					mappings,
-					mappings_changed,
-					context_len,
-					ambient_typechecking_context
-				),
+				sub,
 				getctx(edge.left),
 				edge.rel,
 				substitute_inner(edge.arg, mappings, mappings_changed, context_len, ambient_typechecking_context),
@@ -6377,17 +6341,11 @@ function TypeCheckerState:slice_constraints_for(
 	end)
 	slice_edgeset(self.graph.rightcall_edges:from(mv.usage), function(edge)
 		return edge.right
-	end, function(edge)
+	end, function(mv, edge, sub)
 		constraints:append(
 			terms.constraintelem.sliced_rightcall(
 				edge.rel,
-				substitute_inner(
-					getnode(edge.right),
-					mappings,
-					mappings_changed,
-					context_len,
-					ambient_typechecking_context
-				),
+				sub,
 				getctx(edge.right),
 				substitute_inner(edge.arg, mappings, mappings_changed, context_len, ambient_typechecking_context),
 				edge.cause
