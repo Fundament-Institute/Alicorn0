@@ -53,8 +53,6 @@ local typechecker_state
 local name_array = string_array
 local typed = terms.typed_term
 
-local default_gas = 500
-
 ---@module "_meta/evaluator/apply_value"
 local apply_value
 
@@ -728,10 +726,10 @@ function gather_usages(val, usages, context_len, ambient_typechecking_context, g
 		error("val isn't strict or stuck????????")
 	end
 	if gas == nil then
-		gas = default_gas
+		gas = 15
 	end
 	if gas <= 0 then
-		error("out of gas!")
+		error("gather_usages is out of gas")
 	end
 
 	local val = val:unwrap_stuck()
