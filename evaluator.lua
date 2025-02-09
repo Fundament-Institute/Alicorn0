@@ -751,7 +751,8 @@ function gather_usages(val, usages, context_len, ambient_typechecking_context, g
 	elseif val:is_operative_type() then
 		local handler, userdata_type = val:unwrap_operative_type()
 		local typed_handler = gather_usages(handler, usages, context_len, ambient_typechecking_context, gas - 1)
-		local typed_userdata_type = gather_usages(userdata_type, usages, context_len, ambient_typechecking_context, gas - 1)
+		local typed_userdata_type =
+			gather_usages(userdata_type, usages, context_len, ambient_typechecking_context, gas - 1)
 	elseif val:is_tuple_value() then
 		local elems = val:unwrap_tuple_value()
 		for _, v in elems:ipairs() do
@@ -6229,7 +6230,7 @@ end
 function TypeCheckerState:slice_constraints_for(
 	mv,
 	mappings,
-	mapppings_changed,
+	mappings_changed,
 	context_len,
 	ambient_typechecking_context
 )
