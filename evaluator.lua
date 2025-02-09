@@ -2200,7 +2200,7 @@ function check_concrete(l_ctx, val, r_ctx, use, cause)
 		--TODO: downcast and test
 
 		if val:is_stuck() then
-			diff:get(flex_value).diff(val, use)
+			-- diff:get(flex_value).diff(val, use)
 			return false,
 				U.notail(
 					ConstraintError.new(
