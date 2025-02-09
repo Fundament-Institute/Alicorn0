@@ -124,6 +124,17 @@ let contravariant = lambda_curry (U : type_(9, 1), a : U)
 			:
 			wrapped (forall ((rel : srel(a))) -> (res : variance(a)))
 
+let tuple-desc-type = lambda_implicit (U : universe)
+	unwrap
+		intrinsic
+			""""
+				return base_env.gen_base_operator(function(bound_tuple_element_variables)
+					local a_universe = bound_tuple_element_variables[1]
+					return terms.typed_term.tuple_desc_type(a_universe)
+				end, "#srel", "a-universe")
+			:
+			wrapped (forall ((x : U)) -> (res : U))
+
 let host-family-sig-variances = lambda (signature : type_(1, 0))
 	let inner = intrinsic
 		""""
@@ -692,12 +703,6 @@ let host-if =
 				:
 				wrapped(host-if-type(T))
 		unwrap(inner)
-# TODO convert this to a typed term or something
-let tuple-desc-type-inner = intrinsic "return terms.value.tuple_desc_type" :
-	host-func-type ((U : unstrict-wrapped(universe))) -> ((T : unstrict-wrapped(host-type)))
-let tuple-desc-type = lambda (U : universe)
-	let (T) = tuple-desc-type-inner(unstrict-wrap(U))
-	unstrict-unwrap(T)
 # TODO convert this to a typed term or something
 let tuple-type-explicit = lambda (U : universe, desc : tuple-desc-type(U))
 	let inner = intrinsic "return terms.value.tuple_type" :
