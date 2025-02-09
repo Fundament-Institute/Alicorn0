@@ -1928,11 +1928,11 @@ add_comparer("flex_value.srel_type", "flex_value.srel_type", function(l_ctx, a, 
 	local a_target = a:unwrap_srel_type()
 	local b_target = b:unwrap_srel_type()
 	typechecker_state:queue_subtype(
-		l_ctx,
-		a_target,
 		r_ctx,
 		b_target,
-		nestcause("srel target", cause, a_target, b_target, l_ctx, r_ctx)
+		l_ctx,
+		a_target,
+		nestcause("srel target", cause, b_target, a_target, r_ctx, l_ctx)
 	)
 	return true
 end)
