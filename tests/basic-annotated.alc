@@ -1,0 +1,3 @@
+let host-string-wrap          = intrinsic "return terms.value.host_string_type"    : wrapped(host-type)
+
+let host-string          = unwrap(host-string-wrap)

@@ -1,9 +1,9 @@
 local terms = require "terms"
 local metalanguage = require "metalanguage"
 local U = require "alicorn-utils"
-local utils = require "alicorn-utils"
 local runtime_context = terms.runtime_context
-local s = require "pretty-printer".s
+local pretty_printer = require "pretty-printer"
+local s = pretty_printer.s
 --local new_typechecking_context = terms.typechecking_context
 --local checkable_term = terms.checkable_term
 --local inferrable_term = terms.inferrable_term
@@ -48,6 +48,50 @@ local evaluate, infer, check, apply_value
 local name_array = string_array
 local typed = terms.typed_term
 
+---@class ConstraintError
+---@field desc string
+---@field left value
+---@field lctx any
+---@field op string
+---@field right value
+---@field rctx any
+---@field cause any
+local ConstraintError = {}
+
+local constraint_error_mt = {
+	__tostring = function(self)
+		local s = self.desc .. " " .. self.left:pretty_print(self.lctx) .. " "
+		if self.right then
+			s = s .. self.op .. " " .. self.right:pretty_print(self.rctx)
+		end
+		if self.cause then
+			s = s .. " caused by " .. tostring(self.cause)
+		end
+		return s
+	end,
+	__index = ConstraintError,
+}
+
+---@param desc string
+---@param left value
+---@param lctx any
+---@param op string?
+---@param right value?
+---@param rctx any?
+---@param cause any?
+---@return ConstraintError
+function ConstraintError.new(desc, left, lctx, op, right, rctx, cause)
+	return setmetatable({
+		desc = desc,
+		left = left,
+		lctx = lctx,
+		op = op,
+		right = right,
+		rctx = rctx,
+		cause = cause,
+	}, constraint_error_mt)
+end
+
 ---@param luafunc function
 ---@return value
 local function luatovalue(luafunc)
@@ -58,17 +102,52 @@ local function luatovalue(luafunc)
 
 	for i = 1, len do
 		parameters:append(debug.getlocal(luafunc, i))
-		new_body:append(typed.bound_variable(i + 1))
+		new_body:append(typed.bound_variable(i + 1, U.bound_here()))
 	end
 
 	return value.closure(
 		"#luatovalue-args",
 		typed.application(
 			typed.literal(value.host_value(luafunc)),
-			typed.tuple_elim(parameters, typed.bound_variable(1), len, typed.host_tuple_cons(new_body))
+			typed.tuple_elim(parameters, typed.bound_variable(1, U.bound_here()), len, typed.host_tuple_cons(new_body))
 		),
-		runtime_context()
+		runtime_context(),
+		U.bound_here()
 	)
+end
+
+---builds a nested cause and propagates track
+---@param desc string
+---@param cause constraintcause
+---@param val value
+---@param use value
+---@return constraintcause
+local function nestcause(desc, cause, val, use, valctx, usectx)
+	local r = terms.constraintcause.nested(desc, cause)
+	r.track = cause.track
+	--if r.track then
+	r.val = val
+	r.valctx = valctx
+	r.use = use
+	r.usectx = usectx
+	--end
+	return r
+end
+
+---builds a composite cause and propagates track
+---@param kind string
+---@param l_index number
+---@param l edge
+---@param r_index number
+---@param r edge
+---@param anchor Anchor
+---@return constraintcause
+local function compositecause(kind, l_index, l, r_index, r, anchor)
+	local cause = terms.constraintcause[kind](l_index, r_index, anchor)
+	if l.track or r.track then
+		cause.track = true
+	end
+	return cause
 end
 
 ---@param srel SubtypeRelation
@@ -86,17 +165,42 @@ local function FunctionRelation(srel)
 		antisym = luatovalue(function(a, b, r1, r2)
 			error("nyi")
 		end),
-		constrain = luatovalue(function(lctx, val, rctx, use)
-			local u = value.neutral(
-				neutral_value.free(
-					free.unique({ debug = "FunctionRelation(" .. srel.debug_name .. ").constrain " .. utils.here() })
-				)
+		constrain = luatovalue(function(lctx, val, rctx, use, cause)
+			local inner_info = {
+				debug = "FunctionRelation(" .. srel.debug_name .. ").constrain " .. U.here(),
+				--.. " caused by: "
+				--.. U.strip_ansi(tostring(cause)),
+			}
+			local u = value.neutral(neutral_value.free(free.unique(inner_info)))
+
+			local applied_val = apply_value(val, u, lctx)
+			local applied_use = apply_value(use, u, rctx)
+
+			--[[local applied_val = U.tag(
+				"apply_value",
+				{ val = val:pretty_preprint(lctx), use = use:pretty_preprint(rctx) },
+				apply_value,
+				val,
+				u
+			)
+			local applied_use = U.tag(
+				"apply_value",
+				{ val = val:pretty_preprint(lctx), use = use:pretty_preprint(rctx) },
+				apply_value,
+				use,
+				u
+			)]]
+
+			typechecker_state:queue_constrain(
+				lctx,
+				applied_val,
+				srel,
+				rctx,
+				applied_use,
+				nestcause("FunctionRelation inner", cause, applied_val, applied_use, lctx, rctx)
 			)
 
-			local applied_val = U.tag("apply_value", { val = val, use = use }, apply_value, val, u)
-			local applied_use = U.tag("apply_value", { val = val, use = use }, apply_value, use, u)
-
-			typechecker_state:queue_constrain(lctx, applied_val, srel, rctx, applied_use, "FunctionRelation inner")
+			return true
 		end),
 	}, subtype_relation_mt)
 end
@@ -128,7 +232,8 @@ local function IndepTupleRelation(...)
 			---@param val value
 			---@param rctx TypecheckingContext
 			---@param use value
-			function(lctx, val, rctx, use)
+			---@param cause constraintcause
+			function(lctx, val, rctx, use, cause)
 				local val_elems = val:unwrap_tuple_value()
 				local use_elems = use:unwrap_tuple_value()
 				for i = 1, val_elems:len() do
@@ -139,7 +244,14 @@ local function IndepTupleRelation(...)
 							args[i].srel,
 							rctx,
 							use_elems[i],
-							"tuple element constraint"
+							nestcause(
+								"positive tuple element constraint",
+								cause,
+								val_elems[i],
+								use_elems[i],
+								lctx,
+								rctx
+							)
 						)
 					else
 						typechecker_state:queue_constrain(
@@ -148,10 +260,19 @@ local function IndepTupleRelation(...)
 							args[i].srel,
 							lctx,
 							val_elems[i],
-							"tuple element constraint"
+							nestcause(
+								"negative tuple element constraint",
+								cause,
+								use_elems[i],
+								val_elems[i],
+								lctx,
+								rctx
+							)
 						)
 					end
 				end
+
+				return true
 			end
 		),
 	}, subtype_relation_mt)
@@ -177,21 +298,23 @@ effect_row_srel = setmetatable({
 		---@param val value
 		---@param rctx TypecheckingContext
 		---@param use value
-		function(lctx, val, rctx, use)
+		---@param cause constraintcause
+		---@return boolean, string?
+		function(lctx, val, rctx, use, cause)
 			if val:is_effect_empty() then
 				return true
 			end
 			if val:is_effect_row() then
 				local val_components, val_rest = val:unwrap_effect_row()
 				if use:is_effect_empty() then
-					error "production has effect requirements that the consumption doesn't fulfill"
+					return false, "production has effect requirements that the consumption doesn't fulfill"
 				end
 				if not use:is_effect_row() then
-					error "consumption of effect row constraint isn't an effect row?"
+					return false, "consumption of effect row constraint isn't an effect row?"
 				end
 				local use_components, use_rest = use:unwrap_effect_row()
 				if not use_components:superset(val_components) then
-					error "consumption of effect row doesn't satisfy all components of production"
+					return false, "consumption of effect row doesn't satisfy all components of production"
 				end
 				--TODO allow polymorphism
 				if val_rest:is_effect_empty() and use_rest:is_effect_empty() then
@@ -199,6 +322,8 @@ effect_row_srel = setmetatable({
 				end
 				error "NYI effect polymorphism"
 			end
+
+			return true
 		end
 	),
 }, subtype_relation_mt)
@@ -225,7 +350,9 @@ enum_desc_srel = setmetatable({
 		---@param val value
 		---@param rctx TypecheckingContext
 		---@param use value
-		function(lctx, val, rctx, use)
+		---@param cause constraintcause
+		---@return boolean, string?
+		function(lctx, val, rctx, use, cause)
 			if not val:is_enum_desc_value() then
 				error "production is not an enum description"
 			end
@@ -235,19 +362,38 @@ enum_desc_srel = setmetatable({
 			end
 			local use_variants = use:unwrap_enum_desc_value()
 			for name, val_type in val_variants:pairs() do
+				local use_variant = use_variants:get(name)
+				if use_variant == nil then
+					local smallest = 99999999999
+					local suggest = "[enum has no variants!]"
+					for n, _ in use_variants:pairs() do
+						local d = U.levenshtein(name, n)
+						if d < smallest then
+							smallest, suggest = d, n
+						end
+					end
+					error(name .. " is not a valid enum variant! Did you mean " .. suggest .. "?")
+				end
 				typechecker_state:queue_subtype(
 					lctx,
 					val_type,
 					rctx,
-					use_variants:get(name) --[[@as value -- please find a better approach]],
-					"enum variant"
+					use_variant --[[@as value -- please find a better approach]],
+					nestcause("enum variant", cause, val_type, use_variant, lctx, rctx)
 				)
 			end
+			return true
 		end
 	),
 }, subtype_relation_mt)
 
-local infer_tuple_type_unwrapped2, substitute_type_variables
+---@type fun(subject_type_a : value, lctx : TypecheckingContext, subject_type_b : value, rctx : TypecheckingContext, subject_value : value) : value[], value[], value[], integer
+local infer_tuple_type_unwrapped2
+
+---@type fun(val : value, index : integer, param_name : string?) : value
+local substitute_type_variables
+
+local Error
 ---@type SubtypeRelation
 local TupleDescRelation = setmetatable({
 	debug_name = "TupleDescRelation",
@@ -265,10 +411,12 @@ local TupleDescRelation = setmetatable({
 		---@param val value
 		---@param rctx TypecheckingContext
 		---@param use value
-		function(lctx, val, rctx, use)
+		---@param cause constraintcause
+		---@return boolean
+		function(lctx, val, rctx, use, cause)
 			-- FIXME: this should probably be handled elsewhere
 			if val:is_neutral() and val == use then
-				return
+				return true
 			end
 			-- FIXME: this is quick'n'dirty copypaste, slightly edited to jankily call existing code
 			-- this HAPPENS to work
@@ -276,19 +424,46 @@ local TupleDescRelation = setmetatable({
 			-- i have considered exploiting the linked-list structure of tuple desc for recursive
 			-- checking, but doing it naively won't work because the unique (representing the tuple
 			-- value) should be the same across the whole desc
-			local unique = { debug = "TupleDescRelation.constrain" .. utils.here() }
+			local unique = { debug = "TupleDescRelation.constrain" .. U.here() }
 			local placeholder = value.neutral(neutral_value.free(free.unique(unique)))
-			local tuple_types_val, tuple_types_use, tuple_vals, n =
-				infer_tuple_type_unwrapped2(value.tuple_type(val), value.tuple_type(use), placeholder)
+			local ok, tuple_types_val, tuple_types_use, tuple_vals, n =
+				infer_tuple_type_unwrapped2(value.tuple_type(val), lctx, value.tuple_type(use), rctx, placeholder)
+
+			if not ok then
+				if tuple_types_val == "length-mismatch" then
+					error(
+						ConstraintError.new(
+							"Tuple lengths do not match: ",
+							value.tuple_type(val),
+							lctx,
+							"!=",
+							value.tuple_type(use),
+							rctx
+						)
+					)
+				else
+					error(tuple_types_val)
+				end
+			end
+
 			for i = 1, n do
 				typechecker_state:queue_subtype(
 					lctx,
 					tuple_types_val[i],
 					rctx,
 					tuple_types_use[i],
-					"TupleDescRelation.constrain"
+					nestcause(
+						"TupleDescRelation.constrain " .. tostring(i),
+						cause,
+						tuple_types_val[i],
+						tuple_types_use[i],
+						lctx,
+						rctx
+					)
 				)
 			end
+
+			return true
 		end
 	),
 }, subtype_relation_mt)
@@ -312,7 +487,12 @@ end
 ---@param v value
 ---@return value
 local function const_combinator(v)
-	return value.closure("#CONST_PARAM", typed_term.bound_variable(1), runtime_context():append(v))
+	return value.closure(
+		"#CONST_PARAM",
+		typed_term.bound_variable(1, U.bound_here()),
+		runtime_context():append(v),
+		U.bound_here()
+	)
 end
 
 ---@param t value
@@ -323,13 +503,16 @@ local function get_level(t)
 	return 0
 end
 
+local substitute_inner
+
 ---@param val value an alicorn value
----@param mappings {[integer]: typed} the placeholder we are trying to get rid of by substituting
+---@param mappings {[integer|value]: typed} the placeholder we are trying to get rid of by substituting
 ---@param context_len integer number of bindings in the runtime context already used - needed for closures
+---@param ambient_typechecking_context TypecheckingContext
 ---@return typed a typed term
-local function substitute_inner(val, mappings, context_len)
+local function substitute_inner_impl(val, mappings, context_len, ambient_typechecking_context)
 	if val:is_visibility_type() then
-		return typed_term.literal(val)
+		return mark_track(val.track, typed_term.literal(val))
 	elseif val:is_visibility() then
 		return typed_term.literal(val)
 	elseif val:is_param_info_type() then
@@ -344,62 +527,79 @@ local function substitute_inner(val, mappings, context_len)
 		return typed_term.literal(val)
 	elseif val:is_pi() then
 		local param_type, param_info, result_type, result_info = val:unwrap_pi()
-		local param_type = substitute_inner(param_type, mappings, context_len)
-		local param_info = substitute_inner(param_info, mappings, context_len)
-		local result_type = substitute_inner(result_type, mappings, context_len)
-		local result_info = substitute_inner(result_info, mappings, context_len)
-		return typed_term.pi(param_type, param_info, result_type, result_info)
+		local param_type = substitute_inner(param_type, mappings, context_len, ambient_typechecking_context)
+		local param_info = substitute_inner(param_info, mappings, context_len, ambient_typechecking_context)
+		local result_type = substitute_inner(result_type, mappings, context_len, ambient_typechecking_context)
+		local result_info = substitute_inner(result_info, mappings, context_len, ambient_typechecking_context)
+		local res = typed_term.pi(param_type, param_info, result_type, result_info)
+		res.original_name = val.original_name
+		return res
 	elseif val:is_closure() then
 		local param_name, code, capture = val:unwrap_closure()
-		local unique = { debug = "substitute_inner, val:is_closure" .. utils.here() }
+		local unique = { debug = "substitute_inner, val:is_closure" .. U.here() }
 		local arg = value.neutral(neutral_value.free(free.unique(unique)))
-		val = apply_value(val, arg)
+		local resval = apply_value(val, arg, ambient_typechecking_context)
 		--print("applied closure during substitution: (value term follows)")
 		--print(val)
 
 		-- Here we need to add the new arg placeholder to a map of things to substitute
 		-- otherwise it would be left as a free.unique in the result
-		mappings[unique] = typed_term.bound_variable(context_len + 1)
-		local val_typed = substitute_inner(val, mappings, context_len + 1)
+		local new_mappings = U.shallow_copy(mappings)
+		new_mappings[unique] = typed_term.bound_variable(context_len + 1, U.bound_here())
+		local val_typed = substitute_inner(resval, new_mappings, context_len + 1, ambient_typechecking_context)
 
 		-- FIXME: this results in more captures every time we substitute a closure ->
 		--   can cause non-obvious memory leaks
 		--   since we don't yet remove unused captures from closure value
-		return typed_term.lambda(param_name, val_typed)
+		return typed_term.lambda(param_name .. "*", val_typed, U.anchor_here())
 	elseif val:is_name_type() then
 		return typed_term.literal(val)
 	elseif val:is_name() then
 		return typed_term.literal(val)
 	elseif val:is_operative_value() then
 		local userdata = val:unwrap_operative_value()
-		local userdata = substitute_inner(userdata, mappings, context_len)
+		local userdata = substitute_inner(userdata, mappings, context_len, ambient_typechecking_context)
 		return typed_term.operative_cons(userdata)
 	elseif val:is_operative_type() then
 		local handler, userdata_type = val:unwrap_operative_type()
-		local typed_handler = substitute_inner(handler, mappings, context_len)
-		local typed_userdata_type = substitute_inner(userdata_type, mappings, context_len)
+		local typed_handler = substitute_inner(handler, mappings, context_len, ambient_typechecking_context)
+		local typed_userdata_type = substitute_inner(userdata_type, mappings, context_len, ambient_typechecking_context)
 		return typed_term.operative_type_cons(typed_handler, typed_userdata_type)
 	elseif val:is_tuple_value() then
 		local elems = val:unwrap_tuple_value()
 		local res = typed_array()
 		for _, v in elems:ipairs() do
-			res:append(substitute_inner(v, mappings, context_len))
+			res:append(substitute_inner(v, mappings, context_len, ambient_typechecking_context))
 		end
 		return typed_term.tuple_cons(res)
 	elseif val:is_tuple_type() then
 		local desc = val:unwrap_tuple_type()
-		local desc = substitute_inner(desc, mappings, context_len)
+		local desc = substitute_inner(desc, mappings, context_len, ambient_typechecking_context)
 		return typed_term.tuple_type(desc)
 	elseif val:is_tuple_desc_type() then
-		return typed_term.literal(val)
+		local universe = val:unwrap_tuple_desc_type()
+		local typed_universe = substitute_inner(universe, mappings, context_len, ambient_typechecking_context)
+		return typed_term.tuple_desc_type(typed_universe)
 	elseif val:is_enum_value() then
 		local constructor, arg = val:unwrap_enum_value()
-		local arg = substitute_inner(arg, mappings, context_len)
+		local arg = substitute_inner(arg, mappings, context_len, ambient_typechecking_context)
 		return typed_term.enum_cons(constructor, arg)
 	elseif val:is_enum_type() then
 		local desc = val:unwrap_enum_type()
-		-- TODO: Handle desc properly, because it's a value.
-		return typed_term.literal(val)
+		local desc_sub = substitute_inner(desc, mappings, context_len, ambient_typechecking_context)
+		return typed_term.enum_type(desc_sub)
+	elseif val:is_enum_desc_type() then
+		local univ = val:unwrap_enum_desc_type()
+		local univ_sub = substitute_inner(univ, mappings, context_len, ambient_typechecking_context)
+		return typed_term.enum_desc_type(univ_sub)
+	elseif val:is_enum_desc_value() then
+		local variants = val:unwrap_enum_desc_value()
+		---@type MapValue
+		local variants_sub = string_typed_map()
+		for k, v in variants:pairs() do
+			variants_sub:set(k, substitute_inner(v, mappings, context_len, ambient_typechecking_context))
+		end
+		return typed_term.enum_desc_cons(variants_sub, typed_term.literal(value.enum_desc_value(string_value_map())))
 	elseif val:is_record_value() then
 		-- TODO: How to deal with a map?
 		error("Records not yet implemented")
@@ -408,15 +608,15 @@ local function substitute_inner(val, mappings, context_len)
 		-- TODO: Handle desc properly, because it's a value.
 		error("Records not yet implemented")
 	elseif val:is_record_extend_stuck() then
-		-- Needs to handle the nuetral value and map of values
+		-- Needs to handle the neutral value and map of values
 		error("Records not yet implemented")
 	elseif val:is_srel_type() then
 		local target = val:unwrap_srel_type()
-		local target_sub = substitute_inner(target, mappings, context_len)
+		local target_sub = substitute_inner(target, mappings, context_len, ambient_typechecking_context)
 		return typed_term.srel_type(target_sub)
 	elseif val:is_variance_type() then
 		local target = val:unwrap_variance_type()
-		local target_sub = substitute_inner(target, mappings, context_len)
+		local target_sub = substitute_inner(target, mappings, context_len, ambient_typechecking_context)
 		return typed_term.variance_type(target_sub)
 	elseif val:is_object_value() then
 		return typed_term.literal(val)
@@ -462,35 +662,45 @@ local function substitute_inner(val, mappings, context_len)
 			if mapping then
 				return mapping
 			end
+			--if free:is_placeholder() then
+			--	print "found one"
+			--end
 			return typed_term.literal(val)
 		end
 
 		if nval:is_tuple_element_access_stuck() then
 			local subject, index = nval:unwrap_tuple_element_access_stuck()
-			local subject_term = substitute_inner(value.neutral(subject), mappings, context_len)
+			local subject_term =
+				substitute_inner(value.neutral(subject), mappings, context_len, ambient_typechecking_context)
 			return typed_term.tuple_element_access(subject_term, index)
 		end
 
 		if nval:is_host_unwrap_stuck() then
 			local boxed = nval:unwrap_host_unwrap_stuck()
-			return typed_term.host_unwrap(substitute_inner(value.neutral(boxed), mappings, context_len))
+			return typed_term.host_unwrap(
+				substitute_inner(value.neutral(boxed), mappings, context_len, ambient_typechecking_context)
+			)
 		end
 
 		if nval:is_host_wrap_stuck() then
 			local to_wrap = nval:unwrap_host_wrap_stuck()
-			return typed_term.host_wrap(substitute_inner(value.neutral(to_wrap), mappings, context_len))
+			return typed_term.host_wrap(
+				substitute_inner(value.neutral(to_wrap), mappings, context_len, ambient_typechecking_context)
+			)
 		end
 
 		if nval:is_host_unwrap_stuck() then
 			local to_unwrap = nval:unwrap_host_unwrap_stuck()
-			return typed_term.host_unwrap(substitute_inner(value.neutral(to_unwrap), mappings, context_len))
+			return typed_term.host_unwrap(
+				substitute_inner(value.neutral(to_unwrap), mappings, context_len, ambient_typechecking_context)
+			)
 		end
 
 		if nval:is_host_application_stuck() then
 			local fn, arg = nval:unwrap_host_application_stuck()
 			return typed_term.application(
 				typed_term.literal(value.host_value(fn)),
-				substitute_inner(value.neutral(arg), mappings, context_len)
+				substitute_inner(value.neutral(arg), mappings, context_len, ambient_typechecking_context)
 			)
 		end
 
@@ -502,9 +712,9 @@ local function substitute_inner(val, mappings, context_len)
 				local elem_value = typed_term.literal(value.host_value(elem))
 				elems:append(elem_value)
 			end
-			elems:append(substitute_inner(value.neutral(stuck), mappings, context_len))
+			elems:append(substitute_inner(value.neutral(stuck), mappings, context_len, ambient_typechecking_context))
 			for _, elem in trailing:ipairs() do
-				elems:append(substitute_inner(elem, mappings, context_len))
+				elems:append(substitute_inner(elem, mappings, context_len, ambient_typechecking_context))
 			end
 			-- print("host_tuple_stuck nval", nval)
 			local result = typed_term.host_tuple_cons(elems)
@@ -514,21 +724,22 @@ local function substitute_inner(val, mappings, context_len)
 
 		if nval:is_host_if_stuck() then
 			local subject, consequent, alternate = nval:unwrap_host_if_stuck()
-			local subject = substitute_inner(value.neutral(subject), mappings, context_len)
-			local consequent = substitute_inner(consequent, mappings, context_len)
-			local alternate = substitute_inner(alternate, mappings, context_len)
+			local subject =
+				substitute_inner(value.neutral(subject), mappings, context_len, ambient_typechecking_context)
+			local consequent = substitute_inner(consequent, mappings, context_len, ambient_typechecking_context)
+			local alternate = substitute_inner(alternate, mappings, context_len, ambient_typechecking_context)
 			return typed_term.host_if(subject, consequent, alternate)
 		end
 
 		if nval:is_application_stuck() then
 			local fn, arg = nval:unwrap_application_stuck()
 			return typed_term.application(
-				substitute_inner(value.neutral(fn), mappings, context_len),
-				substitute_inner(arg, mappings, context_len)
+				substitute_inner(value.neutral(fn), mappings, context_len, ambient_typechecking_context),
+				substitute_inner(arg, mappings, context_len, ambient_typechecking_context)
 			)
 		end
 
-		-- TODO: deconstruct nuetral value or something
+		-- TODO: deconstruct neutral value or something
 		error("substitute_inner not implemented yet val:is_neutral - " .. tostring(nval))
 	elseif val:is_host_value() then
 		return typed_term.literal(val)
@@ -542,19 +753,19 @@ local function substitute_inner(val, mappings, context_len)
 		return typed_term.literal(val)
 	elseif val:is_host_function_type() then
 		local param_type, result_type, resinfo = val:unwrap_host_function_type()
-		local param_type = substitute_inner(param_type, mappings, context_len)
-		local result_type = substitute_inner(result_type, mappings, context_len)
-		local resinfo = substitute_inner(resinfo, mappings, context_len)
+		local param_type = substitute_inner(param_type, mappings, context_len, ambient_typechecking_context)
+		local result_type = substitute_inner(result_type, mappings, context_len, ambient_typechecking_context)
+		local resinfo = substitute_inner(resinfo, mappings, context_len, ambient_typechecking_context)
 		return typed_term.host_function_type(param_type, result_type, resinfo)
 	elseif val:is_host_wrapped_type() then
 		local type = val:unwrap_host_wrapped_type()
-		local type = substitute_inner(type, mappings, context_len)
+		local type = substitute_inner(type, mappings, context_len, ambient_typechecking_context)
 		return typed_term.host_wrapped_type(type)
 	elseif val:is_host_user_defined_type() then
 		local id, family_args = val:unwrap_host_user_defined_type()
 		local res = typed_array()
 		for _, v in family_args:ipairs() do
-			res:append(substitute_inner(v, mappings, context_len))
+			res:append(substitute_inner(v, mappings, context_len, ambient_typechecking_context))
 		end
 		return typed_term.host_user_defined_type_cons(id, res)
 	elseif val:is_host_nil_type() then
@@ -563,47 +774,50 @@ local function substitute_inner(val, mappings, context_len)
 		return typed_term.literal(val)
 	elseif val:is_host_tuple_type() then
 		local desc = val:unwrap_host_tuple_type()
-		local desc = substitute_inner(desc, mappings, context_len)
+		local desc = substitute_inner(desc, mappings, context_len, ambient_typechecking_context)
 		return typed_term.host_tuple_type(desc)
 	elseif val:is_range() then
 		local lower_bounds, upper_bounds, relation = val:unwrap_range()
 		local sub_lower_bounds = typed_array()
 		local sub_upper_bounds = typed_array()
 		for _, v in lower_bounds:ipairs() do
-			local sub = substitute_inner(v, mappings, context_len)
+			local sub = substitute_inner(v, mappings, context_len, ambient_typechecking_context)
 			sub_lower_bounds:append(sub)
 		end
 		for _, v in upper_bounds:ipairs() do
-			local sub = substitute_inner(v, mappings, context_len)
+			local sub = substitute_inner(v, mappings, context_len, ambient_typechecking_context)
 			sub_upper_bounds:append(sub)
 		end
-		local sub_relation = substitute_inner(relation, mappings, context_len)
+		local sub_relation = substitute_inner(relation, mappings, context_len, ambient_typechecking_context)
 		return typed_term.range(sub_lower_bounds, sub_upper_bounds, sub_relation)
 	elseif val:is_singleton() then
 		local supertype, val = val:unwrap_singleton()
-		local supertype = substitute_inner(supertype, mappings, context_len)
+		local supertype = substitute_inner(supertype, mappings, context_len, ambient_typechecking_context)
 		return typed_term.singleton(supertype, val)
 	elseif val:is_union_type() then
 		local a, b = val:unwrap_union_type()
 		return typed_term.union_type(
-			substitute_inner(a, mappings, context_len),
-			substitute_inner(b, mappings, context_len)
+			substitute_inner(a, mappings, context_len, ambient_typechecking_context),
+			substitute_inner(b, mappings, context_len, ambient_typechecking_context)
 		)
 	elseif val:is_intersection_type() then
 		local a, b = val:unwrap_intersection_type()
 		return typed_term.intersection_type(
-			substitute_inner(a, mappings, context_len),
-			substitute_inner(b, mappings, context_len)
+			substitute_inner(a, mappings, context_len, ambient_typechecking_context),
+			substitute_inner(b, mappings, context_len, ambient_typechecking_context)
 		)
 	elseif val:is_program_type() then
 		local effect, res = val:unwrap_program_type()
 		return typed_term.program_type(
-			substitute_inner(effect, mappings, context_len),
-			substitute_inner(res, mappings, context_len)
+			substitute_inner(effect, mappings, context_len, ambient_typechecking_context),
+			substitute_inner(res, mappings, context_len, ambient_typechecking_context)
 		)
 	elseif val:is_effect_row() then
 		local row, rest = val:unwrap_effect_row()
-		return typed_term.effect_row_resolve(row, substitute_inner(rest, mappings, context_len))
+		return typed_term.effect_row_resolve(
+			row,
+			substitute_inner(rest, mappings, context_len, ambient_typechecking_context)
+		)
 	elseif val:is_effect_empty() then
 		return typed_term.literal(val) -- Singleton constructor can't be substituted further
 	else
@@ -611,21 +825,46 @@ local function substitute_inner(val, mappings, context_len)
 	end
 end
 
+local recurse_count = 0
+---@param val value an alicorn value
+---@param mappings {[integer]: typed} the placeholder we are trying to get rid of by substituting
+---@param context_len integer number of bindings in the runtime context already used - needed for closures
+---@param ambient_typechecking_context TypecheckingContext
+---@return typed a typed term
+substitute_inner = function(val, mappings, context_len, ambient_typechecking_context)
+	local tracked = val.track ~= nil
+	if tracked then
+		print(string.rep("·", recurse_count) .. "SUB: " .. tostring(val))
+	end
+
+	recurse_count = recurse_count + 1
+	local r = substitute_inner_impl(val, mappings, context_len, ambient_typechecking_context)
+	recurse_count = recurse_count - 1
+
+	if tracked then
+		print(string.rep("·", recurse_count) .. " → " .. tostring(r))
+		r.track = {}
+	end
+	return r
+end
+
 --for substituting a single var at index
 ---@param val value
 ---@param index integer
 ---@param param_name string?
+---@param ctx RuntimeContext
+---@param ambient_typechecking_context TypecheckingContext
 ---@return value
-function substitute_type_variables(val, index, param_name)
+function substitute_type_variables(val, index, param_name, ctx, ambient_typechecking_context)
 	param_name = param_name and "#sub-" .. param_name or "#sub-param"
 	--print("value before substituting (val): (value term follows)")
 	--print(val)
 	local substituted = substitute_inner(val, {
-		[index] = typed_term.bound_variable(1),
-	}, 1)
+		[index] = typed_term.bound_variable(index, U.bound_here()),
+	}, index, ambient_typechecking_context)
 	--print("typed term after substitution (substituted): (typed term follows)")
 	--print(substituted:pretty_print(typechecking_context))
-	return value.closure(param_name, substituted, runtime_context())
+	return value.closure(param_name, substituted, ctx, U.bound_here())
 end
 
 ---@param val value
@@ -633,11 +872,6 @@ end
 local function is_type_of_types(val)
 	return val:is_star() or val:is_prop() or val:is_host_type_type()
 end
-
-local make_inner_context
-local infer_tuple_type, infer_tuple_type_unwrapped
-local make_inner_context2
-local infer_tuple_type2
 
 local check_concrete
 -- indexed by kind x kind
@@ -648,7 +882,7 @@ local concrete_comparers = {}
 ---@param ctx TypecheckingContext
 ---@param typ value
 ---@return TypecheckingContext, value
-local function revealing(ctx, typ)
+local function revealing(ctx, typ, cause)
 	if not typ:is_neutral() then
 		return ctx, typ
 	end
@@ -656,6 +890,7 @@ local function revealing(ctx, typ)
 	local nv = typ:unwrap_neutral()
 
 	if nv:is_tuple_element_access_stuck() then
+		error("nyi")
 		local subject, elem = nv:unwrap_tuple_element_access_stuck()
 		if subject:is_free() then
 			local var = subject:unwrap_free()
@@ -667,10 +902,17 @@ local function revealing(ctx, typ)
 				error "FINISH THIS"
 			end
 		else
-			error "NYI, revealing a tuple access that isn't on a variable"
+			error("NYI, revealing a tuple access that isn't on a variable" .. subject:pretty_print(ctx))
 		end
 	end
-	error "NYI, revealing something that isn't a tuple access"
+	error(
+		"NYI, revealing something that isn't a tuple access "
+			.. nv:pretty_print(ctx)
+			.. "\ncontext: "
+			.. ctx:format_names()
+			.. "\ncaused by: "
+			.. tostring(cause)
+	)
 end
 
 ---take apart a symbolic tuple value to produce a (simplified? hopefully?) prefix suitable for use in upcasting and downcasting
@@ -720,7 +962,7 @@ end
 ---@param ctx TypecheckingContext
 ---@param typ value
 ---@return TypecheckingContext, value
-local function upcast(ctx, typ)
+local function upcast(ctx, typ, cause)
 	if not typ:is_neutral() then
 		return ctx, typ
 	end
@@ -735,7 +977,7 @@ local function upcast(ctx, typ)
 				local idx, dbg = var:unwrap_placeholder()
 				local inner = ctx:get_type(idx)
 				--local inner_bound = value.tuple_type(typechecker_state:metavariable(ctx, false):as_value())
-				local context2, boundstype = revealing(ctx, inner)
+				local context2, boundstype = revealing(ctx, inner, cause)
 				--TODO: speculate for bottom
 				--TODO: speculate on tuple type and reformulate extraction in terms of constraining
 				if boundstype:is_tuple_type() then
@@ -755,7 +997,7 @@ local function upcast(ctx, typ)
 	error "NYI upcast something or other"
 end
 
----@alias value_comparer fun(lctx: TypecheckingContext, a: value, rctx: TypecheckingContext, b: value): boolean, (string|ConcreteFail)?
+---@alias value_comparer fun(lctx: TypecheckingContext, a: value, rctx: TypecheckingContext, b: value, cause: constraintcause): boolean, (string|ConstraintError)?
 
 ---@param ka string
 ---@param kb string
@@ -765,35 +1007,8 @@ local function add_comparer(ka, kb, comparer)
 	concrete_comparers[ka][kb] = comparer
 end
 
----@class ConcreteFail
-
-local concrete_fail_mt = {
-	__tostring = function(self)
-		local message = self.message
-		if type(message) == "table" then
-			message = table.concat(message, "")
-		end
-		if self.cause then
-			return message .. " because:\n" .. tostring(self.cause)
-		end
-		return message
-	end,
-}
-local function concrete_fail(message, cause)
-	if not cause and type(message) == "string" then
-		if not message then
-			error "missing error message for concrete_fail"
-		end
-		return message
-	end
-	return setmetatable({
-		message = message,
-		cause = cause,
-	}, concrete_fail_mt)
-end
-
 ---@type value_comparer
-local function always_fits_comparer(lctx, a, rctx, b)
+local function always_fits_comparer(lctx, a, rctx, b, cause)
 	return true
 end
 
@@ -809,31 +1024,58 @@ end
 
 -- types of types
 add_comparer(value.host_type_type.kind, value.host_type_type.kind, always_fits_comparer)
-add_comparer("value.tuple_type", "value.tuple_type", function(lctx, a, rctx, b)
+add_comparer("value.tuple_type", "value.tuple_type", function(lctx, a, rctx, b, cause)
 	local desc_a = a:unwrap_tuple_type()
 	local desc_b = b:unwrap_tuple_type()
-	typechecker_state:queue_constrain(lctx, desc_a, TupleDescRelation, rctx, desc_b, "tuple type")
+	typechecker_state:queue_constrain(
+		lctx,
+		desc_a,
+		TupleDescRelation,
+		rctx,
+		desc_b,
+		nestcause("tuple type", cause, desc_a, desc_b, lctx, rctx)
+	)
 	return true
 end)
-add_comparer("value.host_tuple_type", "value.host_tuple_type", function(lctx, a, rctx, b)
+add_comparer("value.host_tuple_type", "value.host_tuple_type", function(lctx, a, rctx, b, cause)
 	local desc_a = a:unwrap_host_tuple_type()
 	local desc_b = b:unwrap_host_tuple_type()
-	typechecker_state:queue_constrain(lctx, desc_a, TupleDescRelation, rctx, desc_b, "host tuple type")
+	typechecker_state:queue_constrain(
+		lctx,
+		desc_a,
+		TupleDescRelation,
+		rctx,
+		desc_b,
+		nestcause("host tuple type", cause, desc_a, desc_b, lctx, rctx)
+	)
 	return true
 end)
-add_comparer("value.enum_desc_type", "value.enum_desc_type", function(lctx, a, rctx, b)
+add_comparer("value.enum_desc_type", "value.enum_desc_type", function(lctx, a, rctx, b, cause)
 	local a_univ = a:unwrap_enum_desc_type()
 	local b_univ = b:unwrap_enum_desc_type()
-	typechecker_state:queue_subtype(lctx, a_univ, rctx, b_univ, "enum desc universe covariance")
+	typechecker_state:queue_subtype(
+		lctx,
+		a_univ,
+		rctx,
+		b_univ,
+		nestcause("enum desc universe covariance", cause, a_univ, b_univ, lctx, rctx)
+	)
 	return true
 end)
-add_comparer("value.enum_type", "value.enum_type", function(lctx, a, rctx, b)
+add_comparer("value.enum_type", "value.enum_type", function(lctx, a, rctx, b, cause)
 	local a_desc = a:unwrap_enum_type()
 	local b_desc = b:unwrap_enum_type()
-	typechecker_state:queue_constrain(lctx, a_desc, enum_desc_srel, rctx, b_desc, "enum type description")
+	typechecker_state:queue_constrain(
+		lctx,
+		a_desc,
+		enum_desc_srel,
+		rctx,
+		b_desc,
+		nestcause("enum type description", cause, a_desc, b_desc, lctx, rctx)
+	)
 	return true
 end)
-add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx, b)
+add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx, b, cause)
 	local a_desc = a:unwrap_enum_type()
 	local b_univ = b:unwrap_tuple_desc_type()
 	local construction_variants = string_value_map()
@@ -855,7 +1097,12 @@ add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx,
 							value.tuple_value(
 								value_array(
 									value.enum_value(terms.DescCons.empty, value.tuple_value(value_array())),
-									value.closure("#prefix", typed_term.literal(b), rctx.runtime_context)
+									value.closure(
+										"#prefix",
+										typed_term.literal(b),
+										rctx.runtime_context,
+										U.bound_here()
+									)
 								)
 							)
 						),
@@ -863,33 +1110,39 @@ add_comparer("value.enum_type", "value.tuple_desc_type", function(lctx, a, rctx,
 							"#prefix",
 							typed_term.tuple_elim(
 								string_array("prefix-desc"),
-								typed_term.bound_variable(#rctx + 2),
+								typed_term.bound_variable(#rctx + 2, U.bound_here()),
 								1,
 								typed_term.pi(
-									typed_term.tuple_type(typed_term.bound_variable(#rctx + 3)),
+									typed_term.tuple_type(typed_term.bound_variable(#rctx + 3, U.bound_here())),
 									typed.literal(value.param_info(value.visibility(terms.visibility.explicit))),
-									typed.lambda("#arg", typed_term.bound_variable(#rctx + 1)),
+									typed.lambda(
+										"#arg" .. tostring(#rctx + 1),
+										typed_term.bound_variable(#rctx + 1, U.bound_here()),
+										U.anchor_here()
+									),
 									typed.literal(value.result_info(terms.result_info(terms.purity.pure)))
 								)
 							),
-							rctx.runtime_context:append(b_univ)
+							rctx.runtime_context:append(b_univ),
+							U.bound_here()
 						)
 					)
 				)
 			)
 		)
 	)
+	local enum_desc_val = value.enum_desc_value(construction_variants)
 	typechecker_state:queue_constrain(
 		lctx,
 		a_desc,
 		enum_desc_srel,
 		rctx,
-		value.enum_desc_value(construction_variants),
-		"use enum construction as tuple desc"
+		enum_desc_val,
+		nestcause("use enum construction as tuple desc", cause, a_desc, enum_desc_val, lctx, rctx)
 	)
 	return true
 end)
-add_comparer("value.tuple_desc_type", "value.enum_type", function(lctx, a, rctx, b)
+add_comparer("value.tuple_desc_type", "value.enum_type", function(lctx, a, rctx, b, cause)
 	local a_univ = a:unwrap_tuple_desc_type()
 	local b_desc = b:unwrap_enum_type()
 	local construction_variants = string_value_map()
@@ -911,7 +1164,12 @@ add_comparer("value.tuple_desc_type", "value.enum_type", function(lctx, a, rctx,
 							value.tuple_value(
 								value_array(
 									value.enum_value(terms.DescCons.empty, value.tuple_value(value_array())),
-									value.closure("#prefix", typed_term.literal(a), rctx.runtime_context)
+									value.closure(
+										"#prefix",
+										typed_term.literal(a),
+										rctx.runtime_context,
+										U.bound_here()
+									)
 								)
 							)
 						),
@@ -919,33 +1177,39 @@ add_comparer("value.tuple_desc_type", "value.enum_type", function(lctx, a, rctx,
 							"#prefix",
 							typed_term.tuple_elim(
 								string_array("prefix-desc"),
-								typed_term.bound_variable(#rctx + 2),
+								typed_term.bound_variable(#rctx + 2, U.bound_here()),
 								1,
 								typed_term.pi(
-									typed_term.tuple_type(typed_term.bound_variable(#rctx + 3)),
+									typed_term.tuple_type(typed_term.bound_variable(#rctx + 3, U.bound_here())),
 									typed.literal(value.param_info(value.visibility(terms.visibility.explicit))),
-									typed.lambda("#arg", typed_term.bound_variable(#rctx + 1)),
+									typed.lambda(
+										"#arg" .. tostring(#rctx + 1),
+										typed_term.bound_variable(#rctx + 1, U.bound_here()),
+										U.anchor_here()
+									),
 									typed.literal(value.result_info(terms.result_info(terms.purity.pure)))
 								)
 							),
-							rctx.runtime_context:append(a_univ)
+							rctx.runtime_context:append(a_univ),
+							U.bound_here()
 						)
 					)
 				)
 			)
 		)
 	)
+	local enum_desc_val = value.enum_desc_value(construction_variants)
 	typechecker_state:queue_constrain(
 		lctx,
-		value.enum_desc_value(construction_variants),
+		enum_desc_val,
 		enum_desc_srel,
 		rctx,
 		b_desc,
-		"use tuple description as enum"
+		nestcause("use tuple description as enum", cause, enum_desc_val, b_desc, lctx, rctx)
 	)
 	return true
 end)
-add_comparer("value.pi", "value.pi", function(lctx, a, rctx, b)
+add_comparer("value.pi", "value.pi", function(lctx, a, rctx, b, cause)
 	if a == b then
 		return true
 	end
@@ -956,16 +1220,22 @@ add_comparer("value.pi", "value.pi", function(lctx, a, rctx, b)
 	local avis = a_param_info:unwrap_param_info():unwrap_visibility()
 	local bvis = b_param_info:unwrap_param_info():unwrap_visibility()
 	if avis ~= bvis and not avis:is_implicit() then
-		return false, concrete_fail("pi param_info")
+		return false, ConstraintError.new("pi param_info: ", avis, lctx, "~=", bvis, rctx)
 	end
 
 	local apurity = a_result_info:unwrap_result_info():unwrap_result_info()
 	local bpurity = b_result_info:unwrap_result_info():unwrap_result_info()
 	if apurity ~= bpurity then
-		return false, concrete_fail("pi result_info")
+		return false, ConstraintError.new("pi result_info: ", apurity, lctx, "~=", bpurity, rctx)
 	end
 
-	typechecker_state:queue_subtype(rctx, b_param_type, lctx, a_param_type, "pi function parameters")
+	typechecker_state:queue_subtype(
+		rctx,
+		b_param_type,
+		lctx,
+		a_param_type,
+		nestcause("pi function parameters", cause, b_param_type, a_param_type, rctx, lctx)
+	)
 	--local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
 	--local a_res = apply_value(a_result_type, unique_placeholder)
 	--local b_res = apply_value(b_result_type, unique_placeholder)
@@ -978,12 +1248,12 @@ add_comparer("value.pi", "value.pi", function(lctx, a, rctx, b)
 		FunctionRelation(UniverseOmegaRelation),
 		rctx,
 		b_result_type,
-		"pi function results"
+		nestcause("pi function results", cause, a_result_type, b_result_type, lctx, rctx)
 	)
 
 	return true
 end)
-add_comparer("value.host_function_type", "value.host_function_type", function(lctx, a, rctx, b)
+add_comparer("value.host_function_type", "value.host_function_type", function(lctx, a, rctx, b, cause)
 	if a == b then
 		return true
 	end
@@ -994,10 +1264,16 @@ add_comparer("value.host_function_type", "value.host_function_type", function(lc
 	local apurity = a_result_info:unwrap_result_info():unwrap_result_info()
 	local bpurity = b_result_info:unwrap_result_info():unwrap_result_info()
 	if apurity ~= bpurity then
-		return false, concrete_fail("host function result_info")
+		return false, ConstraintError.new("host function result_info: ", apurity, lctx, "~=", bpurity, rctx)
 	end
 
-	typechecker_state:queue_subtype(rctx, b_param_type, lctx, a_param_type, "host function parameters")
+	typechecker_state:queue_subtype(
+		rctx,
+		b_param_type,
+		lctx,
+		a_param_type,
+		nestcause("host function parameters", cause, b_param_type, a_param_type, rctx, lctx)
+	)
 	--local unique_placeholder = terms.value.neutral(terms.neutral_value.free(terms.free.unique({})))
 	--local a_res = apply_value(a_result_type, unique_placeholder)
 	--local b_res = apply_value(b_result_type, unique_placeholder)
@@ -1010,45 +1286,56 @@ add_comparer("value.host_function_type", "value.host_function_type", function(lc
 		FunctionRelation(UniverseOmegaRelation),
 		rctx,
 		b_result_type,
-		"host function results"
+		nestcause("host function results", cause, a_result_type, b_result_type, lctx, rctx)
 	)
 	return true
 end)
 
 ---@type {[table] : SubtypeRelation}
 local host_srel_map = {}
-add_comparer("value.host_user_defined_type", "value.host_user_defined_type", function(lctx, a, rctx, b)
+add_comparer("value.host_user_defined_type", "value.host_user_defined_type", function(lctx, a, rctx, b, cause)
 	local a_id, a_args = a:unwrap_host_user_defined_type()
 	local b_id, b_args = b:unwrap_host_user_defined_type()
 
 	if not a_id == b_id then
 		error(
-			"ids do not match in host user defined types: "
-				.. a_id.name
-				.. "("
-				.. tostring(a_id)
-				.. ") ~= "
-				.. b_id.name
-				.. "("
-				.. tostring(b_id)
-				.. ")"
+			ConstraintError(
+				"ids do not match in host user defined types: " .. a_id.name .. " ",
+				a_id,
+				lctx,
+				" ~= " .. b_id.name .. " ",
+				b_id,
+				rctx
+			)
 		)
 	end
 	if not host_srel_map[a_id] then
 		error("No variance specified for user defined host type " .. a_id.name)
 	end
-	apply_value(
-		host_srel_map[a_id].constrain,
-		value.tuple_value(
-			value_array(
-				value.host_value(lctx),
-				value.host_value(value.tuple_value(a_args)),
-				value.host_value(rctx),
-				value.host_value(value.tuple_value(b_args))
+	local a_value, b_value = value.tuple_value(a_args), value.tuple_value(b_args)
+	return apply_value(
+			host_srel_map[a_id].constrain,
+			value.tuple_value(
+				value_array(
+					value.host_value(lctx),
+					value.host_value(a_value),
+					value.host_value(rctx),
+					value.host_value(b_value),
+					value.host_value(
+						nestcause(
+							"host_user_defined_type compared against host_user_defined_type",
+							cause,
+							a_value,
+							b_value,
+							lctx,
+							rctx
+						)
+					)
+				)
 			)
 		)
-	)
-	return true
+		:unwrap_host_tuple_value()
+		:unpack()
 end)
 
 ---define subtyping for a user defined host type
@@ -1071,21 +1358,33 @@ for i, host_type in ipairs {
 	register_host_srel(id, IndepTupleRelation())
 end
 
-add_comparer("value.srel_type", "value.srel_type", function(lctx, a, rctx, b)
+add_comparer("value.srel_type", "value.srel_type", function(lctx, a, rctx, b, cause)
 	local a_target = a:unwrap_srel_type()
 	local b_target = b:unwrap_srel_type()
-	typechecker_state:queue_subtype(lctx, a_target, rctx, b_target, "srel target")
+	typechecker_state:queue_subtype(
+		lctx,
+		a_target,
+		rctx,
+		b_target,
+		nestcause("srel target", cause, a_target, b_target, lctx, rctx)
+	)
 	return true
 end)
 
-add_comparer("value.variance_type", "value.variance_type", function(lctx, a, rctx, b)
+add_comparer("value.variance_type", "value.variance_type", function(lctx, a, rctx, b, cause)
 	local a_target = a:unwrap_variance_type()
 	local b_target = b:unwrap_variance_type()
-	typechecker_state:queue_subtype(lctx, a_target, rctx, b_target, "variance target")
+	typechecker_state:queue_subtype(
+		rctx,
+		b_target,
+		lctx,
+		a_target,
+		nestcause("variance target", cause, b_target, a_target, rctx, lctx)
+	)
 	return true
 end)
 
-add_comparer("value.host_type_type", "value.star", function(lctx, a, rctx, b)
+add_comparer("value.host_type_type", "value.star", function(lctx, a, rctx, b, cause)
 	local level, depth = b:unwrap_star()
 	if depth == 0 then
 		return true
@@ -1094,7 +1393,7 @@ add_comparer("value.host_type_type", "value.star", function(lctx, a, rctx, b)
 	end
 end)
 
-add_comparer(value.star(0, 0).kind, value.star(0, 0).kind, function(lctx, a, rctx, b)
+add_comparer(value.star(0, 0).kind, value.star(0, 0).kind, function(lctx, a, rctx, b, cause)
 	local alevel, adepth = a:unwrap_star()
 	local blevel, bdepth = b:unwrap_star()
 	if alevel > blevel then
@@ -1112,17 +1411,23 @@ add_comparer(value.star(0, 0).kind, value.star(0, 0).kind, function(lctx, a, rct
 	return true
 end)
 
-add_comparer("value.host_wrapped_type", "value.host_wrapped_type", function(lctx, a, rctx, b)
+add_comparer("value.host_wrapped_type", "value.host_wrapped_type", function(lctx, a, rctx, b, cause)
 	local ua, ub = a:unwrap_host_wrapped_type(), b:unwrap_host_wrapped_type()
-	typechecker_state:queue_subtype(lctx, ua, rctx, ub, "wrapped type target")
+	typechecker_state:queue_subtype(lctx, ua, rctx, ub, nestcause("wrapped type target", cause, ua, ub, lctx, rctx))
 	--U.tag("check_concrete", { ua, ub }, check_concrete, ua, ub)
 	return true
 end)
 
-add_comparer("value.singleton", "value.singleton", function(lctx, a, rctx, b)
+add_comparer("value.singleton", "value.singleton", function(lctx, a, rctx, b, cause)
 	local a_supertype, a_value = a:unwrap_singleton()
 	local b_supertype, b_value = b:unwrap_singleton()
-	typechecker_state:queue_subtype(lctx, a_supertype, rctx, b_supertype, "singleton supertypes")
+	typechecker_state:queue_subtype(
+		lctx,
+		a_supertype,
+		rctx,
+		b_supertype,
+		nestcause("singleton supertypes", cause, a_supertype, b_supertype, lctx, rctx)
+	)
 
 	if a_value == b_value then
 		return true
@@ -1131,35 +1436,63 @@ add_comparer("value.singleton", "value.singleton", function(lctx, a, rctx, b)
 	end
 end)
 
-add_comparer("value.tuple_desc_type", "value.tuple_desc_type", function(lctx, a, rctx, b)
+add_comparer("value.tuple_desc_type", "value.tuple_desc_type", function(lctx, a, rctx, b, cause)
 	local a_universe = a:unwrap_tuple_desc_type()
 	local b_universe = b:unwrap_tuple_desc_type()
-	typechecker_state:queue_subtype(lctx, a_universe, rctx, b_universe, "tuple_desc_type universes")
+	typechecker_state:queue_subtype(
+		lctx,
+		a_universe,
+		rctx,
+		b_universe,
+		nestcause("tuple_desc_type universes", cause, a_universe, b_universe, lctx, rctx)
+	)
 	return true
 end)
 
-add_comparer("value.program_type", "value.program_type", function(lctx, a, rctx, b)
+add_comparer("value.program_type", "value.program_type", function(lctx, a, rctx, b, cause)
 	local a_eff, a_base = a:unwrap_program_type()
 	local b_eff, b_base = b:unwrap_program_type()
-	typechecker_state:queue_subtype(lctx, a_base, rctx, b_base, "program result")
-	typechecker_state:queue_constrain(lctx, a_eff, effect_row_srel, rctx, b_eff, "program effects")
+	typechecker_state:queue_subtype(
+		lctx,
+		a_base,
+		rctx,
+		b_base,
+		terms.constraintcause.primitive("program result", U.anchor_here())
+	)
+	typechecker_state:queue_constrain(
+		lctx,
+		a_eff,
+		effect_row_srel,
+		rctx,
+		b_eff,
+		nestcause("program effects", cause, a_eff, b_eff, lctx, rctx)
+	)
 	return true
 end)
 
-add_comparer("value.effect_row_type", "value.effect_row_type", function(lctx, a, rctx, b)
+add_comparer("value.effect_row_type", "value.effect_row_type", function(lctx, a, rctx, b, cause)
 	return true
 end)
-add_comparer("value.effect_type", "value.effect_type", function(lctx, a, rctx, b)
+add_comparer("value.effect_type", "value.effect_type", function(lctx, a, rctx, b, cause)
 	return true
 end)
 
 -- Compares any non-metavariables, or defers any metavariable comparisons to the work queue
+---@param lctx TypecheckingContext
 ---@param val value
+---@param rctx TypecheckingContext
 ---@param use value
+---@param cause constraintcause
 ---@return boolean
----@return (string|ConcreteFail)?
-function check_concrete(lctx, val, rctx, use)
-	assert(val and use, "nil value or usage passed into check_concrete!")
+---@return (string|ConstraintError)?
+function check_concrete(lctx, val, rctx, use, cause)
+	-- Note: in general, val must be a more specific type than use
+	if val == nil then
+		error("nil value passed into check_concrete!")
+	end
+	if use == nil then
+		error("nil usage passed into check_concrete!")
+	end
 
 	if val:is_neutral() then
 		if use:is_neutral() then
@@ -1169,9 +1502,33 @@ function check_concrete(lctx, val, rctx, use)
 		end
 		local vnv = val:unwrap_neutral()
 		if vnv:is_tuple_element_access_stuck() then
-			local innerctx, bound = upcast(lctx, val)
-			typechecker_state:queue_subtype(innerctx, bound, rctx, use)
+			local innerctx, bound = upcast(lctx, val, cause)
+			typechecker_state:queue_subtype(
+				innerctx,
+				bound,
+				rctx,
+				use,
+				nestcause("concrete upcast", cause, bound, use, innerctx, rctx)
+			)
 			return true
+		end
+		if vnv:is_free() then
+			local free = vnv:unwrap_free()
+			if free:is_placeholder() then
+				local idx, dbg = free:unwrap_placeholder()
+				local inner = lctx:get_type(idx)
+				--local inner_bound = value.tuple_type(typechecker_state:metavariable(ctx, false):as_value())
+				local innerctx, boundstype = revealing(lctx, inner)
+
+				typechecker_state:queue_subtype(
+					innerctx,
+					boundstype,
+					rctx,
+					use,
+					nestcause("concrete reveal placeholder", cause, boundstype, use, innerctx, rctx)
+				)
+				return true
+			end
 		end
 	end
 
@@ -1181,47 +1538,88 @@ function check_concrete(lctx, val, rctx, use)
 		if val:is_neutral() then
 			diff:get(value).diff(val, use)
 			return false,
-				"both values are neutral, but they aren't equal: "
-					.. tostring(val)
-					.. " ~= "
-					.. tostring(use)
-					.. " (printed diff)"
+				ConstraintError.new(
+					"both values are neutral, but they aren't equal: ",
+					val,
+					lctx,
+					"~=",
+					use,
+					rctx,
+					cause
+				)
 		end
 	end
 
 	if val:is_singleton() and not use:is_singleton() then
 		local val_supertype, _ = val:unwrap_singleton()
-		typechecker_state:queue_subtype(lctx, val_supertype, rctx, use, "singleton subtype")
+		typechecker_state:queue_subtype(
+			lctx,
+			val_supertype,
+			rctx,
+			use,
+			nestcause("singleton subtype", cause, val_supertype, use, lctx, rctx)
+		)
 		return true
 	end
 
 	if val:is_union_type() then
 		local vala, valb = val:unwrap_union_type()
-		typechecker_state:queue_subtype(lctx, vala, rctx, use, "union dissasembly")
-		typechecker_state:queue_subtype(lctx, valb, rctx, use, "union dissasembly")
+		typechecker_state:queue_subtype(
+			lctx,
+			vala,
+			rctx,
+			use,
+			nestcause("union dissasembly", cause, vala, use, lctx, rctx)
+		)
+		typechecker_state:queue_subtype(
+			lctx,
+			valb,
+			rctx,
+			use,
+			nestcause("union dissasembly", cause, valb, use, lctx, rctx)
+		)
 		return true
 	end
 
 	if use:is_intersection_type() then
 		local usea, useb = use:unwrap_intersection_type()
-		typechecker_state:queue_subtype(lctx, val, rctx, usea, "intersection dissasembly")
-		typechecker_state:queue_subtype(lctx, val, rctx, useb, "intersection dissasembly")
+		typechecker_state:queue_subtype(
+			lctx,
+			val,
+			rctx,
+			usea,
+			nestcause("intersection dissasembly", cause, val, usea, lctx, rctx)
+		)
+		typechecker_state:queue_subtype(
+			lctx,
+			val,
+			rctx,
+			useb,
+			nestcause("intersection dissasembly", cause, val, useb, lctx, rctx)
+		)
 		return true
 	end
 
 	if not concrete_comparers[val.kind] then
-		error("No valid concrete type comparer found for value " .. val.kind .. ": " .. tostring(val))
+		error(ConstraintError.new("No valid concrete type comparer found for value ", val, lctx, nil, nil, nil, cause))
 	end
 
 	local comparer = (concrete_comparers[val.kind] or {})[use.kind]
 	if not comparer then
+		--print("kind:", val.kind, " use:", use.kind)
 		return false,
-			"no valid concerete comparer between value " .. val.kind .. " and usage " .. use.kind .. ": " .. tostring(
-				val
-			) .. " compared against " .. tostring(use)
+			ConstraintError.new(
+				"no valid concrete comparer between value " .. val.kind .. " and usage " .. use.kind,
+				val,
+				lctx,
+				"compared against",
+				use,
+				rctx,
+				cause
+			)
 	end
 
-	return comparer(lctx, val, rctx, use)
+	return comparer(lctx, val, rctx, use, cause)
 end
 
 ---@param enum_val value
@@ -1253,7 +1651,7 @@ end
 ---@param checkable_term checkable
 ---@param typechecking_context TypecheckingContext
 ---@param goal_type value
----@return ArrayValue, typed
+---@return boolean, ArrayValue, typed
 function check(
 	checkable_term, -- constructed from checkable_term
 	typechecking_context, -- todo
@@ -1273,15 +1671,29 @@ function check(
 
 	if checkable_term:is_inferrable() then
 		local inferrable_term = checkable_term:unwrap_inferrable()
-		local inferred_type, inferred_usages, typed_term = infer(inferrable_term, typechecking_context)
-		-- TODO: unify!!!!
+		local ok, inferred_type, inferred_usages, typed_term = infer(inferrable_term, typechecking_context)
+		if not ok then
+			return false, inferred_type
+		end
+
+		-- TODO: unify!!!! (instead of the below equality check)
 		if inferred_type ~= goal_type then
 			-- FIXME: needs context to avoid bugs where inferred and goal are the same neutral structurally
 			-- but come from different context thus are different
 			-- but erroneously compare equal
-			typechecker_state:flow(inferred_type, typechecking_context, goal_type, typechecking_context)
+			local ok, err = typechecker_state:flow(
+				inferred_type,
+				typechecking_context,
+				goal_type,
+				typechecking_context,
+				terms.constraintcause.primitive("inferrable", U.anchor_here())
+			)
+			if not ok then
+				return false, err
+			end
 		end
-		return inferred_usages, typed_term
+
+		return true, inferred_usages, typed_term
 	elseif checkable_term:is_tuple_cons() then
 		local elements = checkable_term:unwrap_tuple_cons()
 		local usages = usage_array()
@@ -1291,32 +1703,39 @@ function check(
 		for _, v in elements:ipairs() do
 			local el_type_metavar = typechecker_state:metavariable(typechecking_context)
 			local el_type = el_type_metavar:as_value()
-			local el_usages, el_term = check(v, typechecking_context, el_type)
+			local ok, el_usages, el_term = check(v, typechecking_context, el_type)
+			if not ok then
+				return false, el_usages
+			end
 
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
 
-			local el_val = evaluate(el_term, typechecking_context.runtime_context)
+			local el_val = evaluate(el_term, typechecking_context.runtime_context, typechecking_context)
 
 			desc = terms.cons(
 				desc,
 				value.closure(
 					"#check-tuple-cons-param",
 					typed_term.literal(value.singleton(el_type, el_val)),
-					typechecking_context.runtime_context
+					typechecking_context.runtime_context,
+					U.bound_here()
 				)
 			)
 		end
 
-		typechecker_state:flow(
+		local ok, err = typechecker_state:flow(
 			value.tuple_type(desc),
 			typechecking_context,
 			goal_type,
 			typechecking_context,
-			"checkable_term:is_tuple_cons"
+			terms.constraintcause.primitive("checkable_term:is_tuple_cons", U.anchor_here())
 		)
+		if not ok then
+			return false, err
+		end
 
-		return usages, typed_term.tuple_cons(new_elements)
+		return true, usages, typed_term.tuple_cons(new_elements)
 	elseif checkable_term:is_host_tuple_cons() then
 		local elements = checkable_term:unwrap_host_tuple_cons()
 		local usages = usage_array()
@@ -1326,32 +1745,39 @@ function check(
 		for _, v in elements:ipairs() do
 			local el_type_metavar = typechecker_state:metavariable(typechecking_context)
 			local el_type = el_type_metavar:as_value()
-			local el_usages, el_term = check(v, typechecking_context, el_type)
+			local ok, el_usages, el_term = check(v, typechecking_context, el_type)
+			if not ok then
+				return false, el_usages
+			end
 
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
 
-			local el_val = evaluate(el_term, typechecking_context.runtime_context)
+			local el_val = evaluate(el_term, typechecking_context.runtime_context, typechecking_context)
 
 			desc = terms.cons(
 				desc,
 				value.closure(
 					"#check-tuple-cons-param",
 					typed_term.literal(value.singleton(el_type, el_val)),
-					typechecking_context.runtime_context
+					typechecking_context.runtime_context,
+					U.bound_here()
 				)
 			)
 		end
 
-		typechecker_state:flow(
+		local ok, err = typechecker_state:flow(
 			value.host_tuple_type(desc),
 			typechecking_context,
 			goal_type,
 			typechecking_context,
-			"checkable_term:is_host_tuple_cons"
+			terms.constraintcause.primitive("checkable_term:is_host_tuple_cons", U.anchor_here())
 		)
+		if not ok then
+			return false, err
+		end
 
-		return usages, typed_term.host_tuple_cons(new_elements)
+		return true, usages, typed_term.host_tuple_cons(new_elements)
 	elseif checkable_term:is_lambda() then
 		local param_name, body = checkable_term:unwrap_lambda()
 		-- assert that goal_type is a pi type
@@ -1367,8 +1793,9 @@ end
 ---apply an alicorn function to an alicorn value
 ---@param f value
 ---@param arg value
+---@param ambient_typechecking_context TypecheckingContext
 ---@return value
-function apply_value(f, arg)
+function apply_value(f, arg, ambient_typechecking_context)
 	if terms.value.value_check(f) ~= true then
 		error("apply_value, f: expected an alicorn value")
 	end
@@ -1379,7 +1806,7 @@ function apply_value(f, arg)
 	if f:is_closure() then
 		local param_name, code, capture = f:unwrap_closure()
 		--return U.notail(U.tag("evaluate", { code = code }, evaluate, code, capture:append(arg)))
-		return evaluate(code, capture:append(arg))
+		return evaluate(code, capture:append(arg), ambient_typechecking_context)
 	elseif f:is_neutral() then
 		return value.neutral(neutral_value.application_stuck(f:unwrap_neutral(), arg))
 	elseif f:is_host_value() then
@@ -1396,7 +1823,13 @@ function apply_value(f, arg)
 			error("apply_value, is_host_value, arg: expected a host tuple argument")
 		end
 	else
-		error("apply_value, f: expected a function/closure, but got " .. tostring(f))
+		error(
+			ConstraintError.new(
+				"apply_value, f: expected a function/closure, but got ",
+				f,
+				ambient_typechecking_context
+			)
+		)
 	end
 
 	error("unreachable!?")
@@ -1432,6 +1865,7 @@ local function index_tuple_value(subject, index)
 		end
 		return value.neutral(neutral_value.tuple_element_access_stuck(inner, index))
 	end
+	print(index, subject)
 	error("Should be unreachable???")
 end
 
@@ -1473,8 +1907,10 @@ local function make_tuple_prefix(subject_type, subject_value)
 			end
 		else
 			error(
-				"make_tuple_prefix, is_tuple_type, subject_value: expected a tuple, instead got "
-					.. subject_value:pretty_print()
+				ConstraintError.new(
+					"make_tuple_prefix, is_tuple_type, subject_value: expected a tuple, instead got ",
+					subject_value
+				)
 			)
 		end
 	elseif subject_type:is_host_tuple_type() then
@@ -1495,12 +1931,13 @@ local function make_tuple_prefix(subject_type, subject_value)
 			make_prefix = host_tuple_make_prefix(subject_neutral) --[[@as fun(i: any) : value]]
 		else
 			error(
-				"make_tuple_prefix, is_host_tuple_type, subject_value: expected a host tuple, instead got "
-					.. subject_value:pretty_print()
+				ConstraintError.new(
+					"make_tuple_prefix, is_host_tuple_type, subject_value: expected a host tuple, instead got ",
+					subject_value
+				)
 			)
 		end
 	else
-		print(subject_type:pretty_print())
 		error("make_tuple_prefix, subject_type: expected a term with a tuple type, but got " .. subject_type.kind)
 	end
 
@@ -1563,32 +2000,39 @@ end
 
 ---@param desc_a value
 ---@param make_prefix_a fun(i: integer): value
+---@param lctx TypecheckingContext
 ---@param desc_b value
 ---@param make_prefix_b fun(i: integer): value
----@return value[]
+---@param rctx TypecheckingContext
+---@return boolean
+---@return value[]|string
 ---@return value[]
 ---@return value[]
 ---@return integer
-function make_inner_context2(desc_a, make_prefix_a, desc_b, make_prefix_b)
+function make_inner_context2(desc_a, make_prefix_a, lctx, desc_b, make_prefix_b, rctx)
 	local constructor_a, arg_a = desc_a:unwrap_enum_value()
 	local constructor_b, arg_b = desc_b:unwrap_enum_value()
 	if constructor_a == terms.DescCons.empty and constructor_b == terms.DescCons.empty then
-		return value_array(), value_array(), value_array(), 0
+		return true, value_array(), value_array(), value_array(), 0
 	elseif constructor_a == terms.DescCons.empty or constructor_b == terms.DescCons.empty then
-		error("tuple desc lengths must be equal")
+		return false, "length-mismatch"
 	elseif constructor_a == terms.DescCons.cons and constructor_b == terms.DescCons.cons then
 		local details_a = arg_a:unwrap_tuple_value()
 		local details_b = arg_b:unwrap_tuple_value()
-		local tupletypes_a, tupletypes_b, tuplevals, n_elements =
-			make_inner_context2(details_a[1], make_prefix_a, details_b[1], make_prefix_b)
+		local ok, tupletypes_a, tupletypes_b, tuplevals, n_elements =
+			make_inner_context2(details_a[1], make_prefix_a, lctx, details_b[1], make_prefix_b, rctx)
+		if not ok then
+			return ok, tupletypes_a
+		end
 		local f_a = details_a[2]
 		local f_b = details_b[2]
 		local element_type_a
 		local element_type_b
 		if tupletypes_a:len() == tuplevals:len() then
 			local prefix = value.tuple_value(tuplevals)
-			element_type_a = apply_value(f_a, prefix)
-			element_type_b = apply_value(f_b, prefix)
+			element_type_a = apply_value(f_a, prefix, lctx)
+			element_type_b = apply_value(f_b, prefix, rctx)
+
 			if element_type_a:is_singleton() then
 				local _, val = element_type_a:unwrap_singleton()
 				tuplevals:append(val)
@@ -1599,34 +2043,37 @@ function make_inner_context2(desc_a, make_prefix_a, desc_b, make_prefix_b)
 		else
 			local prefix_a = make_prefix_a(n_elements)
 			local prefix_b = make_prefix_b(n_elements)
-			element_type_a = apply_value(f_a, prefix_a)
-			element_type_b = apply_value(f_b, prefix_b)
+			element_type_a = apply_value(f_a, prefix_a, lctx)
+			element_type_b = apply_value(f_b, prefix_b, rctx)
 		end
 		tupletypes_a:append(element_type_a)
 		tupletypes_b:append(element_type_b)
-		return tupletypes_a, tupletypes_b, tuplevals, n_elements + 1
+		return true, tupletypes_a, tupletypes_b, tuplevals, n_elements + 1
 	else
-		error("infer: unknown tuple type data constructor")
+		return false, "infer: unknown tuple type data constructor"
 	end
 end
 
 ---@param subject_type_a value
+---@param lctx TypecheckingContext
 ---@param subject_type_b value
+---@param rctx TypecheckingContext
 ---@param subject_value value
----@return value[]
+---@return boolean
+---@return value[]|string
 ---@return value[]
 ---@return value[]
 ---@return integer
-function infer_tuple_type_unwrapped2(subject_type_a, subject_type_b, subject_value)
+function infer_tuple_type_unwrapped2(subject_type_a, lctx, subject_type_b, rctx, subject_value)
 	local desc_a, make_prefix_a = make_tuple_prefix(subject_type_a, subject_value)
 	local desc_b, make_prefix_b = make_tuple_prefix(subject_type_b, subject_value)
-	return make_inner_context2(desc_a, make_prefix_a, desc_b, make_prefix_b)
+	return make_inner_context2(desc_a, make_prefix_a, lctx, desc_b, make_prefix_b, rctx)
 end
 
 ---@param inferrable_term inferrable
 ---@param typechecking_context TypecheckingContext
 ---@return value, ArrayValue, typed
-function infer(
+function infer_impl(
 	inferrable_term, -- constructed from inferrable
 	typechecking_context -- todo
 )
@@ -1639,7 +2086,7 @@ function infer(
 	end
 
 	if inferrable_term:is_bound_variable() then
-		local index = inferrable_term:unwrap_bound_variable()
+		local index, debug = inferrable_term:unwrap_bound_variable()
 		local typeof_bound = typechecking_context:get_type(index)
 		local usage_counts = usage_array()
 		local context_size = typechecking_context:len()
@@ -1647,50 +2094,84 @@ function infer(
 			usage_counts:append(0)
 		end
 		usage_counts[index] = 1
-		local bound = typed_term.bound_variable(index)
-		return typeof_bound, usage_counts, bound
+		local bound = typed_term.bound_variable(index, debug .. "^")
+		return true, typeof_bound, usage_counts, bound
 	elseif inferrable_term:is_annotated() then
 		local checkable_term, inferrable_goal_type = inferrable_term:unwrap_annotated()
-		local type_of_type, usages, goal_typed_term = infer(inferrable_goal_type, typechecking_context)
-		local goal_type = evaluate(goal_typed_term, typechecking_context.runtime_context)
-		return goal_type, check(checkable_term, typechecking_context, goal_type)
+		local ok, type_of_type, usages, goal_typed_term = infer(inferrable_goal_type, typechecking_context)
+		if not ok then
+			return false, type_of_type
+		end
+		local goal_type = evaluate(goal_typed_term, typechecking_context.runtime_context, typechecking_context)
+		local ok, el_usages, el_term = check(checkable_term, typechecking_context, goal_type)
+		if not ok then
+			return false, el_usages
+		end
+		return true, goal_type, el_usages, el_term
 	elseif inferrable_term:is_typed() then
-		return inferrable_term:unwrap_typed()
+		return true, inferrable_term:unwrap_typed()
 	elseif inferrable_term:is_annotated_lambda() then
 		local param_name, param_annotation, body, start_anchor, param_visibility, purity =
 			inferrable_term:unwrap_annotated_lambda()
-		local _, _, param_term = infer(param_annotation, typechecking_context)
-		local param_type = evaluate(param_term, typechecking_context:get_runtime_context())
-		local inner_context = typechecking_context:append(param_name, param_type, nil, start_anchor)
-		local _, purity_term = check(purity, inner_context, terms.host_purity_type)
-		local body_type, body_usages, body_term = infer(body, inner_context)
+		local ok, param_type_of_term, _, param_term = infer(param_annotation, typechecking_context)
+		if not ok then
+			return false, param_type_of_term
+		end
 
-		local result_type = U.tag(
-			"substitute_type_variables",
-			{ body_type = body_type, index = inner_context:len(), block_level = typechecker_state.block_level },
-			substitute_type_variables,
+		local param_type = evaluate(param_term, typechecking_context:get_runtime_context(), typechecking_context)
+		local inner_context = typechecking_context:append(param_name, param_type, nil, start_anchor)
+		local ok, purity_usages, purity_term = check(purity, inner_context, terms.host_purity_type)
+		if not ok then
+			return false, purity_usages
+		end
+		local ok, body_type, body_usages, body_term = infer(body, inner_context)
+		if not ok then
+			return false, body_type
+		end
+
+		local result_type = substitute_type_variables(
 			body_type,
 			inner_context:len(),
-			param_name
+			param_name,
+			typechecking_context:get_runtime_context(),
+			typechecking_context
 		)
-		--print("INFER ANNOTATED LAMBDA")
-		--print("result_type")
-		--print(result_type:pretty_print(typechecking_context))
+		--[[local result_type = U.tag("substitute_type_variables", {
+			body_type = body_type:pretty_preprint(typechecking_context),
+			index = inner_context:len(),
+			block_level = typechecker_state.block_level,
+		}, substitute_type_variables, body_type, inner_context:len(), param_name)]]
 		local result_info = value.result_info(
-			result_info(evaluate(purity_term, typechecking_context:get_runtime_context()):unwrap_host_value())
+			result_info(
+				evaluate(purity_term, typechecking_context:get_runtime_context(), typechecking_context):unwrap_host_value()
+			)
 		) --TODO make more flexible
 		local body_usages_param = body_usages[body_usages:len()]
 		local lambda_usages = body_usages:copy(1, body_usages:len() - 1)
 		local lambda_type =
 			value.pi(param_type, value.param_info(value.visibility(param_visibility)), result_type, result_info)
-		local lambda_term = typed_term.lambda(param_name, body_term)
-		return lambda_type, lambda_usages, lambda_term
+		lambda_type.original_name = param_name
+		local lambda_term = typed_term.lambda(param_name .. "^", body_term, start_anchor)
+		return true, lambda_type, lambda_usages, lambda_term
 	elseif inferrable_term:is_pi() then
 		local param_type, param_info, result_type, result_info = inferrable_term:unwrap_pi()
-		local param_type_type, param_type_usages, param_type_term = infer(param_type, typechecking_context)
-		local param_info_usages, param_info_term = check(param_info, typechecking_context, value.param_info_type)
-		local result_type_type, result_type_usages, result_type_term = infer(result_type, typechecking_context)
-		local result_info_usages, result_info_term = check(result_info, typechecking_context, value.result_info_type)
+		local ok, param_type_type, param_type_usages, param_type_term = infer(param_type, typechecking_context)
+		if not ok then
+			return false, param_type_type
+		end
+		local ok, param_info_usages, param_info_term = check(param_info, typechecking_context, value.param_info_type)
+		if not ok then
+			return false, param_info_usages
+		end
+		local ok, result_type_type, result_type_usages, result_type_term = infer(result_type, typechecking_context)
+		if not ok then
+			return false, result_type_type
+		end
+		local ok, result_info_usages, result_info_term =
+			check(result_info, typechecking_context, value.result_info_type)
+		if not ok then
+			return false, result_info_usages
+		end
 		if not result_type_type:is_pi() then
 			error "result type of a pi term must infer to a pi because it must be callable"
 			-- TODO: switch to using a mechanism term system
@@ -1702,15 +2183,20 @@ function infer(
 			error "result type computation must be pure for now"
 		end
 
-		typechecker_state:flow(
-			evaluate(param_type_term, typechecking_context.runtime_context),
+		local ok, err = typechecker_state:flow(
+			evaluate(param_type_term, typechecking_context.runtime_context, typechecking_context),
 			typechecking_context,
 			result_type_param_type,
 			typechecking_context,
-			"inferrable pi term"
+			terms.constraintcause.primitive("inferrable pi term", U.anchor_here())
 		)
+		if not ok then
+			return false, err
+		end
+		local sort_arg_unique =
+			value.neutral(neutral_value.free(free.unique({ debug = "pi infer result type type arg" })))
 		local result_type_result_type_result =
-			apply_value(result_type_result_type, evaluate(param_type_term, typechecking_context.runtime_context))
+			apply_value(result_type_result_type, sort_arg_unique, typechecking_context)
 		local sort =
 			value.union_type(param_type_type, value.union_type(result_type_result_type_result, value.star(0, 0)))
 		-- local sort = value.star(
@@ -1718,6 +2204,7 @@ function infer(
 		-- )
 
 		local term = typed_term.pi(param_type_term, param_info_term, result_type_term, result_info_term)
+		term.original_name = inferrable_term.original_name -- TODO: If this is an inferrable with an anchor, use the anchor information instead
 
 		local usages = usage_array()
 		add_arrays(usages, param_type_usages)
@@ -1725,27 +2212,44 @@ function infer(
 		add_arrays(usages, result_type_usages)
 		add_arrays(usages, result_info_usages)
 
-		return sort, usages, term
+		return true, sort, usages, term
 	elseif inferrable_term:is_application() then
 		local f, arg = inferrable_term:unwrap_application()
-		local f_type, f_usages, f_term = infer(f, typechecking_context)
+		local ok, f_type, f_usages, f_term = infer(f, typechecking_context)
+		if not ok then
+			return false, f_type
+		end
 
 		if f_type:is_pi() then
 			local f_param_type, f_param_info, f_result_type, f_result_info = f_type:unwrap_pi()
+			local overflow = 0
 			while f_param_info:unwrap_param_info():unwrap_visibility():is_implicit() do
+				overflow = overflow + 1
+				if overflow > 1024 then
+					error(
+						"Either you have a parameter with more than 1024 implicit parameters or this is an infinite loop!"
+					)
+				end
+
 				local metavar = typechecker_state:metavariable(typechecking_context)
-				local metaresult = apply_value(f_result_type, metavar:as_value())
+				local metaresult = apply_value(f_result_type, metavar:as_value(), typechecking_context)
 				if not metaresult:is_pi() then
 					error(
-						"calling function with implicit args, result type applied on implicit args must be a function type: "
-							.. metaresult:pretty_print()
+						ConstraintError.new(
+							"calling function with implicit args, result type applied on implicit args must be a function type: ",
+							metaresult,
+							typechecking_context
+						)
 					)
 				end
 				f_term = typed_term.application(f_term, typed_term.literal(metavar:as_value()))
 				f_param_type, f_param_info, f_result_type, f_result_info = metaresult:unwrap_pi()
 			end
 
-			local arg_usages, arg_term = check(arg, typechecking_context, f_param_type)
+			local ok, arg_usages, arg_term = check(arg, typechecking_context, f_param_type)
+			if not ok then
+				return false, arg_usages
+			end
 
 			local application_usages = usage_array()
 			add_arrays(application_usages, f_usages)
@@ -1753,21 +2257,27 @@ function infer(
 			local application = typed_term.application(f_term, arg_term)
 
 			-- check already checked for us so no check_concrete
-			local arg_value = evaluate(arg_term, typechecking_context:get_runtime_context())
-			local application_result_type = apply_value(f_result_type, arg_value)
+			local arg_value = evaluate(arg_term, typechecking_context:get_runtime_context(), typechecking_context)
+			local application_result_type = apply_value(f_result_type, arg_value, typechecking_context)
 
 			if value.value_check(application_result_type) ~= true then
 				local bindings = typechecking_context:get_runtime_context().bindings
 				error(
-					"calling function with implicit args, result type applied on implicit args must be a function type: "
-						.. application_result_type:pretty_print()
+					ConstraintError.new(
+						"calling function with implicit args, result type applied on implicit args must be a function type: ",
+						application_result_type,
+						typechecking_context
+					)
 				)
 			end
-			return application_result_type, application_usages, application
+			return true, application_result_type, application_usages, application
 		elseif f_type:is_host_function_type() then
 			local f_param_type, f_result_type_closure, f_result_info = f_type:unwrap_host_function_type()
 
-			local arg_usages, arg_term = check(arg, typechecking_context, f_param_type)
+			local ok, arg_usages, arg_term = check(arg, typechecking_context, f_param_type)
+			if not ok then
+				return false, arg_usages
+			end
 
 			local application_usages = usage_array()
 			add_arrays(application_usages, f_usages)
@@ -1775,12 +2285,15 @@ function infer(
 			local application = typed_term.application(f_term, arg_term)
 
 			-- check already checked for us so no check_concrete
-			local f_result_type =
-				apply_value(f_result_type_closure, evaluate(arg_term, typechecking_context:get_runtime_context()))
+			local f_result_type = apply_value(
+				f_result_type_closure,
+				evaluate(arg_term, typechecking_context:get_runtime_context(), typechecking_context),
+				typechecking_context
+			)
 			if value.value_check(f_result_type) ~= true then
 				error("application_result_type isn't a value inferring application of host_function_type")
 			end
-			return f_result_type, application_usages, application
+			return true, f_result_type, application_usages, application
 		else
 			p(f_type)
 			error("infer, is_application, f_type: expected a term with a function type")
@@ -1794,15 +2307,28 @@ function infer(
 		local usages = usage_array()
 		local new_elements = typed_array()
 		for _, v in elements:ipairs() do
-			local el_type, el_usages, el_term = infer(v, typechecking_context)
-			local el_val = evaluate(el_term, typechecking_context.runtime_context)
+			local ok, el_type, el_usages, el_term = infer(v, typechecking_context)
+			if not ok then
+				return false, el_type
+			end
+			local el_val = evaluate(el_term, typechecking_context.runtime_context, typechecking_context)
 			local el_singleton = value.singleton(el_type, el_val)
-			type_data = terms.cons(type_data, substitute_type_variables(el_singleton, typechecking_context:len() + 1))
+			type_data = terms.cons(
+				type_data,
+				substitute_type_variables(
+					el_singleton,
+					typechecking_context:len() + 1,
+					"#tuple-cons-el",
+					typechecking_context:get_runtime_context(),
+					typechecking_context
+				)
+			)
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
 		end
-		return value.tuple_type(type_data), usages, typed_term.tuple_cons(new_elements)
+		return true, value.tuple_type(type_data), usages, typed_term.tuple_cons(new_elements)
 	elseif inferrable_term:is_host_tuple_cons() then
+		error("this code is probably rot")
 		--print "inferring tuple construction"
 		--print(inferrable_term:pretty_print())
 		--print "environment_names"
@@ -1818,22 +2344,33 @@ function infer(
 		local usages = usage_array()
 		local new_elements = typed_array()
 		for _, v in elements:ipairs() do
-			local el_type, el_usages, el_term = infer(v, typechecking_context)
+			local ok, el_type, el_usages, el_term = infer(v, typechecking_context)
+			if not ok then
+				return false, el_type
+			end
 			--print "inferring element of tuple construction"
 			--print(el_type:pretty_print())
-			local el_val = evaluate(el_term, typechecking_context.runtime_context)
+			local el_val = evaluate(el_term, typechecking_context.runtime_context, typechecking_context)
 			local el_singleton = value.singleton(el_type, el_val)
-			type_data = terms.cons(type_data, substitute_type_variables(el_singleton, typechecking_context:len() + 1))
+			type_data = terms.cons(
+				type_data,
+				substitute_type_variables(el_singleton, typechecking_context:len() + 1),
+				"#host-tuple-cons-el",
+				typechecking_context:get_runtime_context()
+			)
 			add_arrays(usages, el_usages)
 			new_elements:append(el_term)
 		end
-		return value.host_tuple_type(type_data), usages, typed_term.host_tuple_cons(new_elements)
+		return true, value.host_tuple_type(type_data), usages, typed_term.host_tuple_cons(new_elements)
 	elseif inferrable_term:is_tuple_elim() then
 		local names, subject, body = inferrable_term:unwrap_tuple_elim()
-		local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
+		local ok, subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
+		if not ok then
+			return false, subject_type
+		end
 
 		-- evaluating the subject is necessary for inferring the type of the body
-		local subject_value = evaluate(subject_term, typechecking_context:get_runtime_context())
+		local subject_value = evaluate(subject_term, typechecking_context:get_runtime_context(), typechecking_context)
 
 		local desc = terms.empty
 		for _ in names:ipairs() do
@@ -1843,21 +2380,49 @@ function infer(
 		end
 		local spec_type = terms.value.tuple_type(desc)
 		local host_spec_type = terms.value.host_tuple_type(desc)
+		local ok, n_elements
+		local tupletypes, htupletypes
 
-		local ok, tupletypes, n_elements = typechecker_state:speculate(function()
-			typechecker_state:flow(subject_type, typechecking_context, spec_type, typechecking_context)
-			return infer_tuple_type(spec_type, subject_value)
+		ok, tupletypes, n_elements = typechecker_state:speculate(function()
+			local ok, err = typechecker_state:flow(
+				subject_type,
+				typechecking_context,
+				spec_type,
+				typechecking_context,
+				terms.constraintcause.primitive("tuple elimination", U.anchor_here())
+			)
+			if not ok then
+				return false, err
+			end
+			return true, infer_tuple_type(spec_type, subject_value)
 		end)
 		--local tupletypes, n_elements = infer_tuple_type(subject_type, subject_value)
 		if not ok then
-			ok, tupletypes, n_elements = typechecker_state:speculate(function()
-				typechecker_state:flow(subject_type, typechecking_context, host_spec_type, typechecking_context)
-				return infer_tuple_type(host_spec_type, subject_value)
+			ok, htupletypes, n_elements = typechecker_state:speculate(function()
+				local ok, err = typechecker_state:flow(
+					subject_type,
+					typechecking_context,
+					host_spec_type,
+					typechecking_context,
+					terms.constraintcause.primitive("host tuple elimination", U.anchor_here())
+				)
+				if not ok then
+					return false, err
+				end
+				return true, infer_tuple_type(host_spec_type, subject_value)
 			end)
+			if ok then
+				tupletypes = htupletypes
+			end
 		end
 
 		if not ok then
-			error(tupletypes)
+			--error(tupletypes)
+			--error(htupletypes)
+			-- try uncommenting one of the error prints above
+			-- you need to figure out which one is relevant for your problem
+			-- after you're finished, please comment it out so that, next time, the message below can be found again
+			error("(infer) tuple elim speculation failed! debugging this is left as an exercise to the maintainer")
 		end
 
 		local inner_context = typechecking_context
@@ -1867,24 +2432,36 @@ function infer(
 		end
 
 		-- infer the type of the body, now knowing the type of the tuple
-		local body_type, body_usages, body_term = infer(body, inner_context)
+		local ok, body_type, body_usages, body_term = infer(body, inner_context)
+		if not ok then
+			return false, body_type
+		end
 
 		local result_usages = usage_array()
 		add_arrays(result_usages, subject_usages)
 		add_arrays(result_usages, body_usages)
-		return body_type, result_usages, typed_term.tuple_elim(names, subject_term, n_elements, body_term)
+		return true, body_type, result_usages, typed_term.tuple_elim(names, subject_term, n_elements, body_term)
 	elseif inferrable_term:is_tuple_type() then
 		local desc = inferrable_term:unwrap_tuple_type()
-		local desc_type, desc_usages, desc_term = infer(desc, typechecking_context)
+		local ok, desc_type, desc_usages, desc_term = infer(desc, typechecking_context)
+		if not ok then
+			return false, desc_type
+		end
 		local univ_var = typechecker_state:metavariable(typechecking_context, false):as_value()
-		typechecker_state:flow(
+		local ok, err = typechecker_state:flow(
 			desc_type,
 			typechecking_context,
 			value.tuple_desc_type(univ_var),
 			typechecking_context,
-			"tuple type construction"
+			terms.constraintcause.primitive("tuple type construction", U.anchor_here())
 		)
-		return value.union_type(terms.value.star(0, 0), univ_var), desc_usages, terms.typed_term.tuple_type(desc_term)
+		if not ok then
+			return false, err
+		end
+		return true,
+			value.union_type(terms.value.star(0, 0), univ_var),
+			desc_usages,
+			terms.typed_term.tuple_type(desc_term)
 	elseif inferrable_term:is_record_cons() then
 		local fields = inferrable_term:unwrap_record_cons()
 		-- type_data is either "empty", an empty tuple,
@@ -1894,25 +2471,37 @@ function infer(
 		local usages = usage_array()
 		local new_fields = string_typed_map()
 		for k, v in pairs(fields) do
-			local field_type, field_usages, field_term = infer(v, typechecking_context)
+			local ok, field_type, field_usages, field_term = infer(v, typechecking_context)
+			if not ok then
+				return false, field_type
+			end
 			type_data = terms.cons(
 				type_data,
 				value.name(k),
-				substitute_type_variables(field_type, typechecking_context:len() + 1)
+				substitute_type_variables(
+					field_type,
+					typechecking_context:len() + 1,
+					"#record-cons-el",
+					typechecking_context:get_runtime_context(),
+					typechecking_context
+				)
 			)
 			add_arrays(usages, field_usages)
 			new_fields[k] = field_term
 		end
-		return value.record_type(type_data), usages, typed_term.record_cons(new_fields)
+		return true, value.record_type(type_data), usages, typed_term.record_cons(new_fields)
 	elseif inferrable_term:is_record_elim() then
 		local subject, field_names, body = inferrable_term:unwrap_record_elim()
-		local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
+		local ok, subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
+		if not ok then
+			return false, subject_type
+		end
 		local ok, desc = subject_type:as_record_type()
 		if not ok then
 			error("infer, is_record_elim, subject_type: expected a term with a record type")
 		end
 		-- evaluating the subject is necessary for inferring the type of the body
-		local subject_value = evaluate(subject_term, typechecking_context:get_runtime_context())
+		local subject_value = evaluate(subject_term, typechecking_context:get_runtime_context(), typechecking_context)
 
 		-- define how the type of each record field should be evaluated
 		local make_prefix
@@ -1923,7 +2512,7 @@ function infer(
 				for _, v in field_names:ipairs() do
 					prefix_fields[v] = subject_fields[v]
 				end
-				return value.record_value(prefix_fields)
+				return true, value.record_value(prefix_fields)
 			end
 		elseif subject_value:is_neutral() then
 			local subject_neutral = subject_value:unwrap_neutral()
@@ -1932,7 +2521,7 @@ function infer(
 				for _, v in field_names:ipairs() do
 					prefix_fields[v] = value.neutral(neutral_value.record_field_access_stuck(subject_neutral, v))
 				end
-				return value.record_value(prefix_fields)
+				return true, value.record_value(prefix_fields)
 			end
 		else
 			error("infer, is_record_elim, subject_value: expected a record")
@@ -1942,17 +2531,17 @@ function infer(
 		local function make_type(desc)
 			local constructor, arg = desc:unwrap_enum_value()
 			if constructor == terms.DescCons.empty then
-				return string_array(), string_value_map()
+				return true, string_array(), string_value_map()
 			elseif constructor == terms.DescCons.cons then
 				local details = arg:unwrap_tuple_value()
 				local field_names, field_types = make_type(details[1])
 				local name = details[2]:unwrap_name()
 				local f = details[3]
 				local prefix = make_prefix(field_names)
-				local field_type = apply_value(f, prefix)
+				local field_type = apply_value(f, prefix, typechecking_context)
 				field_names:append(name)
 				field_types[name] = field_type
-				return field_names, field_types
+				return true, field_names, field_types
 			else
 				error("infer: unknown tuple type data constructor")
 			end
@@ -1970,48 +2559,70 @@ function infer(
 		end
 
 		-- infer the type of the body, now knowing the type of the record
-		local body_type, body_usages, body_term = infer(body, inner_context)
+		local ok, body_type, body_usages, body_term = infer(body, inner_context)
+		if not ok then
+			return false, body_type
+		end
 
 		local result_usages = usage_array()
 		add_arrays(result_usages, subject_usages)
 		add_arrays(result_usages, body_usages)
-		return body_type, result_usages, typed_term.record_elim(subject_term, field_names, body_term)
+		return true, body_type, result_usages, typed_term.record_elim(subject_term, field_names, body_term)
 	elseif inferrable_term:is_enum_cons() then
 		local constructor, arg = inferrable_term:unwrap_enum_cons()
-		local arg_type, arg_usages, arg_term = infer(arg, typechecking_context)
+		local ok, arg_type, arg_usages, arg_term = infer(arg, typechecking_context)
+		if not ok then
+			return false, arg_type
+		end
 		local variants = string_value_map()
 		variants:set(constructor, arg_type)
 		local enum_type = value.enum_type(value.enum_desc_value(variants))
-		return enum_type, arg_usages, typed_term.enum_cons(constructor, arg_term)
+		return true, enum_type, arg_usages, typed_term.enum_cons(constructor, arg_term)
 	elseif inferrable_term:is_enum_elim() then
 		local subject, mechanism = inferrable_term:unwrap_enum_elim()
-		local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
+		local ok, subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
+		if not ok then
+			return false, subject_type
+		end
 		-- local ok, desc = subject_type:as_enum_type()
 		-- if not ok then
 		--   error("infer, is_enum_elim, subject_type: expected a term with an enum type")
 		-- end
-		local mechanism_type, mechanism_usages, mechanism_term = infer(mechanism, typechecking_context)
+		local ok, mechanism_type, mechanism_usages, mechanism_term = infer(mechanism, typechecking_context)
+		if not ok then
+			return false, mechanism_type
+		end
 		-- TODO: check subject desc against mechanism desc
 		error("nyi")
 	elseif inferrable_term:is_enum_case() then
 		local subject, variants, default = inferrable_term:unwrap_enum_case()
-		local subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
+		local ok, subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
+		if not ok then
+			return false, subject_type
+		end
 		local constrain_variants = string_value_map()
 		for k, v in variants:pairs() do
-			constrain_variants[k] = typechecker_state:metavariable(typechecking_context, false):as_value()
+			constrain_variants:set(k, typechecker_state:metavariable(typechecking_context, false):as_value())
 		end
-		typechecker_state:flow(
+		local ok, err = typechecker_state:flow(
 			subject_type,
 			typechecking_context,
 			value.enum_type(value.enum_desc_value(constrain_variants)),
 			typechecking_context,
-			"enum case matching"
+			terms.constraintcause.primitive("enum case matching", U.anchor_here())
 		)
+		if not ok then
+			return false, err
+		end
 		local term_variants = string_typed_map()
 		local result_types = {}
 		for k, v in variants:pairs() do
-			local variant_type, variant_usages, variant_term =
-				infer(v, typechecking_context:append("#variant", constrain_variants:get(k), nil, nil)) --TODO improve
+			--TODO figure out where to store/retrieve the anchors correctly
+			local ok, variant_type, variant_usages, variant_term =
+				infer(v, typechecking_context:append("#variant", constrain_variants:get(k), nil, v.start_anchor)) --TODO improve
+			if not ok then
+				return false, variant_type
+			end
 			term_variants:set(k, variant_term)
 			result_types[#result_types + 1] = variant_type
 		end
@@ -2019,47 +2630,110 @@ function infer(
 		for i = 2, #result_types do
 			result_type = value.union_type(result_type, result_types[i])
 		end
-		return result_type,
+		return true,
+			result_type,
 			subject_usages,
 			typed_term.enum_case(
 				subject_term,
 				term_variants,
 				typed_term.enum_absurd(
-					typed_term.bound_variable(typechecking_context:len() + 1),
+					typed_term.bound_variable(typechecking_context:len() + 1, U.bound_here()),
 					"unacceptable enum variant"
 				)
 			)
+	elseif inferrable_term:is_enum_desc_cons() then
+		local variants, rest = inferrable_term:unwrap_enum_desc_cons()
+		local result_types = {}
+		local term_variants = string_typed_map()
+		for k, v in variants:pairs() do
+			local ok, variant_type, variant_usages, variant_term = infer(v, typechecking_context) --TODO improve
+			if not ok then
+				return false, variant_type
+			end
+			term_variants:set(k, variant_term)
+			result_types[#result_types + 1] = variant_type
+		end
+		local result_type = result_types[1]
+		for i = 2, #result_types do
+			result_type = value.union_type(result_type, result_types[i])
+		end
+		local ok, rest_type_of_term, rest_usages, rest_term = infer(rest, typechecking_context) --TODO improve
+		if not ok then
+			return false, rest_type_of_term
+		end
+		return true, value.enum_desc_type(result_type), rest_usages, typed_term.enum_desc_cons(term_variants, rest_term)
+	elseif inferrable_term:is_enum_type() then
+		local desc = inferrable_term:unwrap_enum_type()
+		local ok, desc_type, desc_usages, desc_term = infer(desc, typechecking_context)
+		if not ok then
+			return false, desc_type
+		end
+		local univ_var = typechecker_state:metavariable(typechecking_context, false):as_value()
+		local ok, err = typechecker_state:flow(
+			desc_type,
+			typechecking_context,
+			value.enum_desc_type(univ_var),
+			typechecking_context,
+			terms.constraintcause.primitive("enum type construction", U.anchor_here())
+		)
+		if not ok then
+			return false, err
+		end
+		return true,
+			value.union_type(terms.value.star(0, 0), univ_var),
+			desc_usages,
+			terms.typed_term.enum_type(desc_term)
 	elseif inferrable_term:is_object_cons() then
 		local methods = inferrable_term:unwrap_object_cons()
 		local type_data = terms.empty
 		local new_methods = string_typed_map()
 		for k, v in pairs(methods) do
-			local method_type, method_usages, method_term = infer(v, typechecking_context)
+			local ok, method_type, method_usages, method_term = infer(v, typechecking_context)
+			if not ok then
+				return false, method_type
+			end
+
 			type_data = terms.cons(type_data, value.name(k), method_type)
 			new_methods[k] = method_term
 		end
 		-- TODO: usages
-		return value.object_type(type_data), usage_array(), typed_term.object_cons(new_methods)
+		return true, value.object_type(type_data), usage_array(), typed_term.object_cons(new_methods)
 	elseif inferrable_term:is_object_elim() then
 		local subject, mechanism = inferrable_term:unwrap_object_elim()
 		error("nyi")
 	elseif inferrable_term:is_operative_cons() then
 		local operative_type, userdata = inferrable_term:unwrap_operative_cons()
-		local operative_type_type, operative_type_usages, operative_type_term =
+		local ok, operative_type_type, operative_type_usages, operative_type_term =
 			infer(operative_type, typechecking_context)
-		local operative_type_value = evaluate(operative_type_term, typechecking_context:get_runtime_context())
-		local userdata_type, userdata_usages, userdata_term = infer(userdata, typechecking_context)
+		if not ok then
+			return false, operative_type_type
+		end
+		local operative_type_value =
+			evaluate(operative_type_term, typechecking_context:get_runtime_context(), typechecking_context)
+		local ok, userdata_type, userdata_usages, userdata_term = infer(userdata, typechecking_context)
+		if not ok then
+			return false, userdata_type
+		end
 		local ok, op_handler, op_userdata_type = operative_type_value:as_operative_type()
 		if not ok then
 			error("infer, is_operative_cons, operative_type_value: expected a term with an operative type")
 		end
 		if userdata_type ~= op_userdata_type then
-			typechecker_state:flow(userdata_type, typechecking_context, op_userdata_type, typechecking_context)
+			local ok, err = typechecker_state:flow(
+				userdata_type,
+				typechecking_context,
+				op_userdata_type,
+				typechecking_context,
+				terms.constraintcause.primitive("operative userdata", U.anchor_here())
+			)
+			if not ok then
+				return false, err
+			end
 		end
 		local operative_usages = usage_array()
 		add_arrays(operative_usages, operative_type_usages)
 		add_arrays(operative_usages, userdata_usages)
-		return operative_type_value, operative_usages, typed_term.operative_cons(userdata_term)
+		return true, operative_type_value, operative_usages, typed_term.operative_cons(userdata_term)
 	elseif inferrable_term:is_operative_type_cons() then
 		local handler, userdata_type = inferrable_term:unwrap_operative_type_cons()
 		local goal_type = value.pi(
@@ -2084,15 +2758,23 @@ function infer(
 			--unrestricted(tup_val(unrestricted(host_inferrable_term_type), unrestricted(host_environment_type))),
 			result_info_pure
 		)
-		local handler_usages, handler_term = check(handler, typechecking_context, goal_type)
-		local userdata_type_type, userdata_type_usages, userdata_type_term = infer(userdata_type, typechecking_context)
+		local ok, handler_usages, handler_term = check(handler, typechecking_context, goal_type)
+		if not ok then
+			return false, handler_usages
+		end
+		local ok, userdata_type_type, userdata_type_usages, userdata_type_term =
+			infer(userdata_type, typechecking_context)
+		if not ok then
+			return false, userdata_type_type
+		end
 		local operative_type_usages = usage_array()
 		add_arrays(operative_type_usages, handler_usages)
 		add_arrays(operative_type_usages, userdata_type_usages)
 		local handler_level = get_level(goal_type)
 		local userdata_type_level = get_level(userdata_type_type)
 		local operative_type_level = math.max(handler_level, userdata_type_level)
-		return value.star(operative_type_level, 0),
+		return true,
+			value.star(operative_type_level, 0),
 			operative_type_usages,
 			typed_term.operative_type_cons(handler_term, userdata_type_term)
 	elseif inferrable_term:is_host_user_defined_type_cons() then
@@ -2100,81 +2782,136 @@ function infer(
 		local new_family_args = typed_array()
 		local result_usages = usage_array()
 		for _, v in family_args:ipairs() do
-			local e_type, e_usages, e_term = infer(v, typechecking_context)
+			local ok, e_type, e_usages, e_term = infer(v, typechecking_context)
+			if not ok then
+				return false, e_type
+			end
 			-- FIXME: use e_type?
 			add_arrays(result_usages, e_usages)
 			new_family_args:append(e_term)
 		end
-		return value.host_type_type, result_usages, typed_term.host_user_defined_type_cons(id, new_family_args)
+		return true, value.host_type_type, result_usages, typed_term.host_user_defined_type_cons(id, new_family_args)
 	elseif inferrable_term:is_host_wrapped_type() then
 		local type_inf = inferrable_term:unwrap_host_wrapped_type()
-		local content_type_type, content_type_usages, content_type_term = infer(type_inf, typechecking_context)
+		local ok, content_type_type, content_type_usages, content_type_term = infer(type_inf, typechecking_context)
+		if not ok then
+			return false, content_type_type
+		end
 		if not is_type_of_types(content_type_type) then
 			error "infer: type being boxed must be a type"
 		end
-		return value.host_type_type, content_type_usages, typed_term.host_wrapped_type(content_type_term)
+		return true, value.host_type_type, content_type_usages, typed_term.host_wrapped_type(content_type_term)
 	elseif inferrable_term:is_host_wrap() then
 		local content = inferrable_term:unwrap_host_wrap()
-		local content_type, content_usages, content_term = infer(content, typechecking_context)
-		return value.host_wrapped_type(content_type), content_usages, typed_term.host_wrap(content_term)
+		local ok, content_type, content_usages, content_term = infer(content, typechecking_context)
+		if not ok then
+			return false, content_type
+		end
+		return true, value.host_wrapped_type(content_type), content_usages, typed_term.host_wrap(content_term)
 	elseif inferrable_term:is_host_unstrict_wrap() then
 		local content = inferrable_term:unwrap_host_wrap()
-		local content_type, content_usages, content_term = infer(content, typechecking_context)
-		return value.host_unstrict_wrapped_type(content_type),
+		local ok, content_type, content_usages, content_term = infer(content, typechecking_context)
+		if not ok then
+			return false, content_type
+		end
+		return true,
+			value.host_unstrict_wrapped_type(content_type),
 			content_usages,
 			typed_term.host_unstrict_wrap(content_term)
 	elseif inferrable_term:is_host_unwrap() then
 		local container = inferrable_term:unwrap_host_unwrap()
-		local container_type, container_usages, container_term = infer(container, typechecking_context)
+		local ok, container_type, container_usages, container_term = infer(container, typechecking_context)
+		if not ok then
+			return false, container_type
+		end
 		local content_type = container_type:unwrap_host_wrapped_type()
-		return content_type, container_usages, typed_term.host_unwrap(container_term)
+		return true, content_type, container_usages, typed_term.host_unwrap(container_term)
 	elseif inferrable_term:is_host_unstrict_unwrap() then
 		local container = inferrable_term:unwrap_host_unwrap()
-		local container_type, container_usages, container_term = infer(container, typechecking_context)
+		local ok, container_type, container_usages, container_term = infer(container, typechecking_context)
+		if not ok then
+			return false, container_type
+		end
 		local content_type = container_type:unwrap_host_unstrict_wrapped_type()
-		return content_type, container_usages, typed_term.host_unstrict_unwrap(container_term)
+		return true, content_type, container_usages, typed_term.host_unstrict_unwrap(container_term)
 	elseif inferrable_term:is_host_if() then
 		local subject, consequent, alternate = inferrable_term:unwrap_host_if()
 		-- for each thing in typechecking context check if it == the subject, replace with literal true
 		-- same for alternate but literal false
 
 		-- TODO: Replace this with a metavariable that both branches are put into
-		local susages, sterm = check(subject, typechecking_context, terms.value.host_bool_type)
-		local ctype, cusages, cterm = infer(consequent, typechecking_context)
-		local atype, ausages, aterm = infer(alternate, typechecking_context)
+		local ok, susages, sterm = check(subject, typechecking_context, terms.value.host_bool_type)
+		if not ok then
+			return false, susages
+		end
+		local ok, ctype, cusages, cterm = infer(consequent, typechecking_context)
+		if not ok then
+			return false, ctype
+		end
+		local ok, atype, ausages, aterm = infer(alternate, typechecking_context)
+		if not ok then
+			return false, ctype
+		end
 		local restype = typechecker_state:metavariable(typechecking_context):as_value()
-		typechecker_state:flow(
+		local ok, err = typechecker_state:flow(
 			ctype,
 			typechecking_context,
 			restype,
 			typechecking_context,
-			"inferred host if consequent"
+			terms.constraintcause.primitive("inferred host if consequent", U.anchor_here())
 		)
-		typechecker_state:flow(atype, typechecking_context, restype, typechecking_context, "inferred host if alternate")
+		if not ok then
+			return false, err
+		end
+		local ok, err = typechecker_state:flow(
+			atype,
+			typechecking_context,
+			restype,
+			typechecking_context,
+			terms.constraintcause.primitive("inferred host if alternate", U.anchor_here())
+		)
+		if not ok then
+			return false, err
+		end
 
 		local result_usages = usage_array()
 		add_arrays(result_usages, susages)
 		-- FIXME: max of cusages and ausages rather than adding?
 		add_arrays(result_usages, cusages)
 		add_arrays(result_usages, ausages)
-		return restype, result_usages, typed_term.host_if(sterm, cterm, aterm)
+		return true, restype, result_usages, typed_term.host_if(sterm, cterm, aterm)
 	elseif inferrable_term:is_let() then
 		-- print(inferrable_term:pretty_print())
 		local name, expr, body = inferrable_term:unwrap_let()
-		local exprtype, exprusages, exprterm = infer(expr, typechecking_context)
-		typechecking_context =
-			typechecking_context:append(name, exprtype, evaluate(exprterm, typechecking_context.runtime_context))
-		local bodytype, bodyusages, bodyterm = infer(body, typechecking_context)
+		local ok, exprtype, exprusages, exprterm = infer(expr, typechecking_context)
+		if not ok then
+			return false, exprtype
+		end
+		typechecking_context = typechecking_context:append(
+			name,
+			exprtype,
+			evaluate(exprterm, typechecking_context.runtime_context, typechecking_context)
+		)
+		local ok, bodytype, bodyusages, bodyterm = infer(body, typechecking_context)
+		if not ok then
+			return false, bodytype
+		end
 
 		local result_usages = usage_array()
 		-- NYI usages are fucky, should remove ones not used in body
 		add_arrays(result_usages, exprusages)
 		add_arrays(result_usages, bodyusages)
-		return bodytype, result_usages, terms.typed_term.let(name, exprterm, bodyterm)
+		return true, bodytype, result_usages, terms.typed_term.let(name, exprterm, bodyterm)
 	elseif inferrable_term:is_host_intrinsic() then
 		local source, type, start_anchor = inferrable_term:unwrap_host_intrinsic()
-		local source_usages, source_term = check(source, typechecking_context, value.host_string_type)
-		local type_type, type_usages, type_term = infer(type, typechecking_context) --check(type, typechecking_context, value.qtype_type(0))
+		local ok, source_usages, source_term = check(source, typechecking_context, value.host_string_type)
+		if not ok then
+			return false, source_usages
+		end
+		local ok, type_type, type_usages, type_term = infer(type, typechecking_context) --check(type, typechecking_context, value.qtype_type(0))
+		if not ok then
+			return false, type_type
+		end
 
 		--print("host intrinsic is inferring: (inferrable term follows)")
 		--print(type:pretty_print(typechecking_context))
@@ -2182,57 +2919,106 @@ function infer(
 		--print(type_term:pretty_print(typechecking_context))
 		--error "weird type"
 		-- FIXME: type_type, source_type are ignored, need checked?
-		local type_val = evaluate(type_term, typechecking_context.runtime_context)
-		return type_val, source_usages, typed_term.host_intrinsic(source_term, start_anchor)
+		local type_val = evaluate(type_term, typechecking_context.runtime_context, typechecking_context)
+		return true, type_val, source_usages, typed_term.host_intrinsic(source_term, start_anchor)
 	elseif inferrable_term:is_level_max() then
 		local level_a, level_b = inferrable_term:unwrap_level_max()
-		local arg_type_a, arg_usages_a, arg_term_a = infer(level_a, typechecking_context)
-		local arg_type_b, arg_usages_b, arg_term_b = infer(level_b, typechecking_context)
-		return value.level_type, usage_array(), typed_term.level_max(arg_term_a, arg_term_b)
+		local ok, arg_type_a, arg_usages_a, arg_term_a = infer(level_a, typechecking_context)
+		if not ok then
+			return false, arg_type_a
+		end
+		local ok, arg_type_b, arg_usages_b, arg_term_b = infer(level_b, typechecking_context)
+		if not ok then
+			return false, arg_type_b
+		end
+		return true, value.level_type, usage_array(), typed_term.level_max(arg_term_a, arg_term_b)
 	elseif inferrable_term:is_level_suc() then
 		local previous_level = inferrable_term:unwrap_level_suc()
-		local arg_type, arg_usages, arg_term = infer(previous_level, typechecking_context)
-		return value.level_type, usage_array(), typed_term.level_suc(arg_term)
+		local ok, arg_type, arg_usages, arg_term = infer(previous_level, typechecking_context)
+		if not ok then
+			return false, arg_type
+		end
+		return true, value.level_type, usage_array(), typed_term.level_suc(arg_term)
 	elseif inferrable_term:is_level0() then
-		return value.level_type, usage_array(), typed_term.level0
+		return true, value.level_type, usage_array(), typed_term.level0
 	elseif inferrable_term:is_host_function_type() then
 		local args, returns, resinfo = inferrable_term:unwrap_host_function_type()
-		local arg_type, arg_usages, arg_term = infer(args, typechecking_context)
-		local return_type, return_usages, return_term = infer(returns, typechecking_context)
-		local resinfo_usages, resinfo_term = check(resinfo, typechecking_context, value.result_info_type)
+		local ok, arg_type, arg_usages, arg_term = infer(args, typechecking_context)
+		if not ok then
+			return false, arg_type
+		end
+		local ok, return_type, return_usages, return_term = infer(returns, typechecking_context)
+		if not ok then
+			return false, return_type
+		end
+		local ok, resinfo_usages, resinfo_term = check(resinfo, typechecking_context, value.result_info_type)
+		if not ok then
+			return false, resinfo_usages
+		end
 		local res_usages = usage_array()
 		add_arrays(res_usages, arg_usages)
 		add_arrays(res_usages, return_usages)
 		add_arrays(res_usages, resinfo_usages)
-		return value.host_type_type, res_usages, typed_term.host_function_type(arg_term, return_term, resinfo_term)
+		return true,
+			value.host_type_type,
+			res_usages,
+			typed_term.host_function_type(arg_term, return_term, resinfo_term)
 	elseif inferrable_term:is_host_tuple_type() then
 		local desc = inferrable_term:unwrap_host_tuple_type()
-		local desc_type, desc_usages, desc_term = infer(desc, typechecking_context)
-		typechecker_state:flow(
+		local ok, desc_type, desc_usages, desc_term = infer(desc, typechecking_context)
+		if not ok then
+			return false, desc_type
+		end
+		local ok, err = typechecker_state:flow(
 			desc_type,
 			typechecking_context,
 			value.tuple_desc_type(value.host_type_type),
 			typechecking_context,
-			"tuple type construction"
+			terms.constraintcause.primitive("host tuple type construction", U.anchor_here())
 		)
-		return terms.value.star(0, 0), desc_usages, terms.typed_term.host_tuple_type(desc_term)
+		if not ok then
+			return false, err
+		end
+		return true, terms.value.star(0, 0), desc_usages, terms.typed_term.host_tuple_type(desc_term)
 	elseif inferrable_term:is_program_sequence() then
 		local first, start_anchor, continue = inferrable_term:unwrap_program_sequence()
-		local first_type, first_usages, first_term = infer(first, typechecking_context)
-		if not first_type:is_program_type() then
-			error("program sequence must infer to a program type")
+		local ok, first_type, first_usages, first_term = infer(first, typechecking_context)
+		if not ok then
+			return false, first_type
 		end
-		local first_effect_sig, first_base_type = first_type:unwrap_program_type()
+
+		--local first_effect_sig, first_base_type = first_type:unwrap_program_type()
+		local first_effect_sig = typechecker_state:metavariable(typechecking_context):as_value()
+		local first_base_type = typechecker_state:metavariable(typechecking_context):as_value()
+		local ok, err = typechecker_state:flow(
+			first_type,
+			typechecking_context,
+			terms.value.program_type(first_effect_sig, first_base_type),
+			typechecking_context,
+			terms.constraintcause.primitive("Inferring on program type ", start_anchor)
+		)
+		if not ok then
+			return false, err
+		end
+
 		local inner_context = typechecking_context:append("#program-sequence", first_base_type, nil, start_anchor)
-		local continue_type, continue_usages, continue_term = infer(continue, inner_context)
+		local ok, continue_type, continue_usages, continue_term = infer(continue, inner_context)
+		if not ok then
+			return false, continue_type
+		end
 		if not continue_type:is_program_type() then
 			error(
-				"rest of the program sequence must infer to a program type: "
-					.. continue:pretty_print(inner_context)
-					.. "\nbut it infers to "
-					.. continue_type:pretty_print()
+				ConstraintError.new(
+					"rest of the program sequence must infer to a program type: ",
+					continue,
+					inner_context,
+					"\nbut it infers to ",
+					continue_type,
+					inner_context
+				)
 			)
 		end
+
 		local continue_effect_sig, continue_base_type = continue_type:unwrap_program_type()
 		local first_is_row, first_components, first_rest = first_effect_sig:as_effect_row()
 		local continue_is_row, continue_components, continue_rest = continue_effect_sig:as_effect_row()
@@ -2254,36 +3040,91 @@ function infer(
 			result_effect_sig = continue_effect_sig
 		else
 			if not first_effect_sig:is_effect_empty() or not continue_effect_sig:is_effect_empty() then
-				error("unknown effect sig")
+				error(
+					ConstraintError.new(
+						"unknown effect sig",
+						first_effect_sig,
+						inner_context,
+						" vs ",
+						continue_effect_sig,
+						inner_context
+					)
+				)
 			end
 			result_effect_sig = value.effect_empty
 		end
 		local result_usages = usage_array()
 		add_arrays(result_usages, first_usages)
 		add_arrays(result_usages, continue_usages)
-		return value.program_type(result_effect_sig, continue_base_type),
+		return true,
+			value.program_type(result_effect_sig, continue_base_type),
 			result_usages,
 			typed_term.program_sequence(first_term, continue_term)
 	elseif inferrable_term:is_program_end() then
 		local result = inferrable_term:unwrap_program_end()
-		local program_type, program_usages, program_term = infer(result, typechecking_context)
-		return value.program_type(value.effect_empty, program_type),
+		local ok, program_type, program_usages, program_term = infer(result, typechecking_context)
+		if not ok then
+			return false, program_type
+		end
+		return true,
+			value.program_type(value.effect_empty, program_type),
 			program_usages,
 			typed_term.program_end(program_term)
 	elseif inferrable_term:is_program_type() then
 		local effect_type, result_type = inferrable_term:unwrap_program_type()
-		local effect_type_type, effect_type_usages, effect_type_term = infer(effect_type, typechecking_context)
-		local result_type_type, result_type_usages, result_type_term = infer(result_type, typechecking_context)
+		local ok, effect_type_type, effect_type_usages, effect_type_term = infer(effect_type, typechecking_context)
+		if not ok then
+			return false, effect_type_type
+		end
+		local ok, result_type_type, result_type_usages, result_type_term = infer(result_type, typechecking_context)
+		if not ok then
+			return false, result_type_type
+		end
 		local res_usages = usage_array()
 		add_arrays(res_usages, effect_type_usages)
 		add_arrays(res_usages, result_type_usages)
 		-- TODO: use biunification constraints for start level
-		return value.star(0, 0), res_usages, typed_term.program_type(effect_type_term, result_type_term)
+		return true, value.star(0, 0), res_usages, typed_term.program_type(effect_type_term, result_type_term)
 	else
 		error("infer: unknown kind: " .. inferrable_term.kind)
 	end
 
 	error("unreachable!?")
+end
+
+---@param inferrable_term inferrable
+---@param typechecking_context TypecheckingContext
+---@return boolean, value, ArrayValue, typed
+infer = function(inferrable_term, typechecking_context)
+	local tracked = inferrable_term.track ~= nil
+	if tracked then
+		print(
+			"\n" .. string.rep("·", recurse_count) .. "INFER: " .. inferrable_term:pretty_print(typechecking_context)
+		)
+		--print(typechecking_context:format_names())
+	end
+
+	recurse_count = recurse_count + 1
+	local ok, v, usages, term = infer_impl(inferrable_term, typechecking_context)
+	recurse_count = recurse_count - 1
+
+	if tracked then
+		if not ok then
+			print(v)
+		end
+
+		print(
+			string.rep("·", recurse_count)
+				.. " → "
+				.. term:pretty_print(typechecking_context)
+				.. " : "
+				.. v:pretty_print(typechecking_context)
+		)
+		--print(typechecking_context:format_names())
+		--v.track = {}
+		term.track = {}
+	end
+	return ok, v, usages, term
 end
 
 ---Replace stuck sections in a value with a more concrete form, possibly causing cascading evaluation
@@ -2304,8 +3145,9 @@ local intrinsic_memo = setmetatable({}, { __mode = "v" })
 ---evaluate a typed term in a contextual
 ---@param typed_term typed
 ---@param runtime_context RuntimeContext
+---@param ambient_typechecking_context TypecheckingContext
 ---@return value
-function evaluate(typed_term, runtime_context)
+function evaluate_impl(typed_term, runtime_context, ambient_typechecking_context)
 	-- -> an alicorn value
 	-- TODO: typecheck typed_term and runtime_context?
 	if terms.typed_term.value_check(typed_term) ~= true then
@@ -2326,21 +3168,53 @@ function evaluate(typed_term, runtime_context)
 		return typed_term:unwrap_literal()
 	elseif typed_term:is_lambda() then
 		local param_name, body = typed_term:unwrap_lambda()
-		return value.closure(param_name, body, runtime_context)
+		return value.closure(param_name, body, runtime_context, U.bound_here())
 	elseif typed_term:is_pi() then
 		local param_type, param_info, result_type, result_info = typed_term:unwrap_pi()
-		local param_type_value = U.tag("evaluate", { param_type = param_type }, evaluate, param_type, runtime_context)
-		local param_info_value = U.tag("evaluate", { param_info = param_info }, evaluate, param_info, runtime_context)
-		local result_type_value =
-			U.tag("evaluate", { result_type = result_type }, evaluate, result_type, runtime_context)
-		local result_info_value =
-			U.tag("evaluate", { result_info = result_info }, evaluate, result_info, runtime_context)
-		return value.pi(param_type_value, param_info_value, result_type_value, result_info_value)
+		local param_type_value = evaluate(param_type, runtime_context, ambient_typechecking_context)
+		local param_info_value = evaluate(param_info, runtime_context, ambient_typechecking_context)
+		local result_type_value = evaluate(result_type, runtime_context, ambient_typechecking_context)
+		local result_info_value = evaluate(result_info, runtime_context, ambient_typechecking_context)
+
+		--[[local param_type_value = U.tag(
+			"evaluate",
+			{ param_type = param_type:pretty_preprint(runtime_context) },
+			evaluate,
+			param_type,
+			runtime_context
+		)
+		local param_info_value = U.tag(
+			"evaluate",
+			{ param_info = param_info:pretty_preprint(runtime_context) },
+			evaluate,
+			param_info,
+			runtime_context
+		)
+		local result_type_value = U.tag(
+			"evaluate",
+			{ result_type = result_type:pretty_preprint(runtime_context) },
+			evaluate,
+			result_type,
+			runtime_context
+		)
+		local result_info_value = U.tag(
+			"evaluate",
+			{ result_info = result_info:pretty_preprint(runtime_context) },
+			evaluate,
+			result_info,
+			runtime_context
+		)]]
+		local res = value.pi(param_type_value, param_info_value, result_type_value, result_info_value)
+		res.original_name = typed_term.original_name
+		return res
 	elseif typed_term:is_application() then
 		local f, arg = typed_term:unwrap_application()
-		local f_value = U.tag("evaluate", { f = f }, evaluate, f, runtime_context)
-		local arg_value = U.tag("evaluate", { arg = arg }, evaluate, arg, runtime_context)
-		return U.notail(apply_value(f_value, arg_value))
+
+		local f_value = evaluate(f, runtime_context, ambient_typechecking_context)
+		--local f_value = U.tag("evaluate", { f = f:pretty_preprint(runtime_context) }, evaluate, f, runtime_context)
+		local arg_value = evaluate(arg, runtime_context, ambient_typechecking_context)
+		--local arg_value =	U.tag("evaluate", { arg = arg:pretty_preprint(runtime_context) }, evaluate, arg, runtime_context)
+		return U.notail(apply_value(f_value, arg_value, ambient_typechecking_context))
 		-- if you want to debug things that go through this call, you may comment above and uncomment below
 		-- but beware that this single change has caused tremendous performance degradation
 		-- on the order of 20x slower
@@ -2351,7 +3225,8 @@ function evaluate(typed_term, runtime_context)
 		local elements = typed_term:unwrap_tuple_cons()
 		local new_elements = value_array()
 		for i, v in elements:ipairs() do
-			new_elements:append(U.tag("evaluate", { ["element_" .. tostring(i)] = v }, evaluate, v, runtime_context))
+			new_elements:append(evaluate(v, runtime_context, ambient_typechecking_context))
+			--new_elements:append(U.tag("evaluate", { ["element_" .. tostring(i)] = v }, evaluate, v, runtime_context))
 		end
 		return value.tuple_value(new_elements)
 	elseif typed_term:is_host_tuple_cons() then
@@ -2361,7 +3236,8 @@ function evaluate(typed_term, runtime_context)
 		local stuck_element
 		local trailing_values
 		for i, v in elements:ipairs() do
-			local element_value = U.tag("evaluate", { ["element_" .. tostring(i)] = v }, evaluate, v, runtime_context)
+			local element_value = evaluate(v, runtime_context, ambient_typechecking_context)
+			--local element_value = U.tag("evaluate", { ["element_" .. tostring(i)] = v }, evaluate, v, runtime_context)
 			if element_value == nil then
 				p("wtf", v.kind)
 			end
@@ -2387,7 +3263,14 @@ function evaluate(typed_term, runtime_context)
 		end
 	elseif typed_term:is_tuple_elim() then
 		local names, subject, length, body = typed_term:unwrap_tuple_elim()
-		local subject_value = U.tag("evaluate", { subject = subject }, evaluate, subject, runtime_context)
+		local subject_value = evaluate(subject, runtime_context, ambient_typechecking_context)
+		--[[local subject_value = U.tag(
+			"evaluate",
+			{ subject = subject:pretty_preprint(runtime_context) },
+			evaluate,
+			subject,
+			runtime_context
+		)]]
 		local inner_context = runtime_context
 		if subject_value:is_tuple_value() then
 			local subject_elements = subject_value:unwrap_tuple_value()
@@ -2433,29 +3316,52 @@ function evaluate(typed_term, runtime_context)
 			p(subject_value)
 			error("evaluate, is_tuple_elim, subject_value: expected a tuple")
 		end
-		return U.tag("evaluate", { body = body }, evaluate, body, inner_context)
+		return evaluate(body, inner_context, ambient_typechecking_context)
+		--return U.tag("evaluate", { body = body:pretty_preprint(runtime_context) }, evaluate, body, inner_context)
 	elseif typed_term:is_tuple_element_access() then
 		local tuple_term, index = typed_term:unwrap_tuple_element_access()
-		--print("tuple_element_access tuple_term: (typed term follows)")
-		--print(tuple_term:pretty_print(runtime_context))
-		local tuple = U.tag("evaluate", { tuple_term = tuple_term }, evaluate, tuple_term, runtime_context)
-		--print("tuple_element_access tuple: (value term follows)")
-		--print(tuple)
+		local tuple = evaluate(tuple_term, runtime_context, ambient_typechecking_context)
+		--[[local tuple = U.tag(
+			"evaluate",
+			{ tuple_term = tuple_term:pretty_preprint(runtime_context) },
+			evaluate,
+			tuple_term,
+			runtime_context
+		)]]
 		return index_tuple_value(tuple, index)
 	elseif typed_term:is_tuple_type() then
 		local desc_term = typed_term:unwrap_tuple_type()
-		local desc = U.tag("evaluate", { desc_term = desc_term }, evaluate, desc_term, runtime_context)
+		local desc = evaluate(desc_term, runtime_context, ambient_typechecking_context)
+		--[[local desc = U.tag(
+			"evaluate",
+			{ desc_term = desc_term:pretty_preprint(runtime_context) },
+			evaluate,
+			desc_term,
+			runtime_context
+		)]]
 		return terms.value.tuple_type(desc)
+	elseif typed_term:is_tuple_desc_type() then
+		local universe_term = typed_term:unwrap_tuple_desc_type()
+		local universe = evaluate(universe_term, runtime_context, ambient_typechecking_context)
+		return terms.value.tuple_desc_type(universe)
 	elseif typed_term:is_record_cons() then
 		local fields = typed_term:unwrap_record_cons()
 		local new_fields = string_value_map()
 		for k, v in pairs(fields) do
-			new_fields[k] = U.tag("evaluate", { ["record_field_" .. tostring(k)] = v }, evaluate, v, runtime_context)
+			new_fields[k] = evaluate(v, runtime_context, ambient_typechecking_context)
+			--new_fields[k] = U.tag("evaluate", { ["record_field_" .. tostring(k)] = v }, evaluate, v, runtime_context)
 		end
 		return value.record_value(new_fields)
 	elseif typed_term:is_record_elim() then
 		local subject, field_names, body = typed_term:unwrap_record_elim()
-		local subject_value = U.tag("evaluate", { subject = subject }, evaluate, subject, runtime_context)
+		local subject_value = evaluate(subject, runtime_context, ambient_typechecking_context)
+		--[[local subject_value = U.tag(
+			"evaluate",
+			{ subject = subject:pretty_preprint(runtime_context) },
+			evaluate,
+			subject,
+			runtime_context
+		)]]
 		local inner_context = runtime_context
 		if subject_value:is_record_value() then
 			local subject_fields = subject_value:unwrap_record_value()
@@ -2471,21 +3377,37 @@ function evaluate(typed_term, runtime_context)
 		else
 			error("evaluate, is_record_elim, subject_value: expected a record")
 		end
-		return U.tag("evaluate", { body = body }, evaluate, body, inner_context)
+		return evaluate(body, inner_context, ambient_typechecking_context)
+		--return U.tag("evaluate", { body = body:pretty_preprint(runtime_context) }, evaluate, body, inner_context)
 	elseif typed_term:is_enum_cons() then
 		local constructor, arg = typed_term:unwrap_enum_cons()
-		local arg_value = U.tag("evaluate", { arg = arg }, evaluate, arg, runtime_context)
+		local arg_value = evaluate(arg, runtime_context, ambient_typechecking_context)
+		--local arg_value = U.tag("evaluate", { arg = arg:pretty_preprint(runtime_context) }, evaluate, arg, runtime_context)
 		return value.enum_value(constructor, arg_value)
 	elseif typed_term:is_enum_elim() then
 		local subject, mechanism = typed_term:unwrap_enum_elim()
-		local subject_value = U.tag("evaluate", { subject = subject }, evaluate, subject, runtime_context)
-		local mechanism_value = U.tag("evaluate", { mechanism = mechanism }, evaluate, mechanism, runtime_context)
+		local subject_value = evaluate(subject, runtime_context, ambient_typechecking_context)
+		local mechanism_value = evaluate(mechanism, runtime_context, ambient_typechecking_context)
+		--[[local subject_value = U.tag(
+			"evaluate",
+			{ subject = subject:pretty_preprint(runtime_context) },
+			evaluate,
+			subject,
+			runtime_context
+		)
+		local mechanism_value = U.tag(
+			"evaluate",
+			{ mechanism = mechanism:pretty_preprint(runtime_context) },
+			evaluate,
+			mechanism,
+			runtime_context
+		)]]
 		if subject_value:is_enum_value() then
 			if mechanism_value:is_object_value() then
 				local constructor, arg = subject_value:unwrap_enum_value()
 				local methods, capture = mechanism_value:unwrap_object_value()
-				local this_method = value.closure("#ENUM_PARAM", methods[constructor], capture)
-				return apply_value(this_method, arg)
+				local this_method = value.closure("#ENUM_PARAM", methods[constructor], capture, U.bound_here())
+				return apply_value(this_method, arg, ambient_typechecking_context)
 			elseif mechanism_value:is_neutral() then
 				-- objects and enums are categorical duals
 				local mechanism_neutral = mechanism_value:unwrap_neutral()
@@ -2503,10 +3425,10 @@ function evaluate(typed_term, runtime_context)
 		local variants, rest = typed_term:unwrap_enum_desc_cons()
 		local result = string_value_map()
 		for k, v in variants:pairs() do
-			local v_res = evaluate(v, runtime_context)
+			local v_res = evaluate(v, runtime_context, ambient_typechecking_context)
 			result:set(k, v_res)
 		end
-		local res_rest = evaluate(rest, runtime_context)
+		local res_rest = evaluate(rest, runtime_context, ambient_typechecking_context)
 		if res_rest:is_enum_desc_value() then
 			local variants_rest = res_rest:unwrap_enum_desc_value()
 			return value.enum_desc_value(result:union(variants_rest, function(a, b)
@@ -2517,17 +3439,21 @@ function evaluate(typed_term, runtime_context)
 		end
 	elseif typed_term:is_enum_type() then
 		local desc = typed_term:unwrap_enum_type()
-		local desc_val = evaluate(desc, runtime_context)
+		local desc_val = evaluate(desc, runtime_context, ambient_typechecking_context)
 		return value.enum_type(desc_val)
+	elseif typed_term:is_enum_desc_type() then
+		local universe_term = typed_term:unwrap_enum_desc_type()
+		local universe = evaluate(universe_term, runtime_context, ambient_typechecking_context)
+		return terms.value.enum_desc_type(universe)
 	elseif typed_term:is_enum_case() then
 		local target, variants, default = typed_term:unwrap_enum_case()
-		local target_val = evaluate(target, runtime_context)
+		local target_val = evaluate(target, runtime_context, ambient_typechecking_context)
 		if target_val:is_enum_value() then
 			local variant, arg = target_val:unwrap_enum_value()
-			if variants[variant] then
-				return evaluate(variants[variant], runtime_context:append(arg))
+			if variants:get(variant) then
+				return evaluate(variants:get(variant), runtime_context:append(arg), ambient_typechecking_context)
 			else
-				return evaluate(default, runtime_context:append(target_val))
+				return evaluate(default, runtime_context:append(target_val), ambient_typechecking_context)
 			end
 		else
 			error "enum case expression didn't evaluate to an enum_value"
@@ -2537,26 +3463,38 @@ function evaluate(typed_term, runtime_context)
 		error("ENUM ABSURD OCCURRED: " .. debug)
 	elseif typed_term:is_variance_cons() then
 		local positive, srel = typed_term:unwrap_variance_cons()
-		local positive_value = U.tag("evaluate", { positive = positive }, evaluate, positive, runtime_context)
-		local srel_value = U.tag("evaluate", { srel = srel }, evaluate, srel, runtime_context)
+		local positive_value = evaluate(positive, runtime_context, ambient_typechecking_context)
+		--[[local positive_value = U.tag(
+			"evaluate",
+			{ positive = positive:pretty_preprint(runtime_context) },
+			evaluate,
+			positive,
+			runtime_context
+		)]]
+		local srel_value = evaluate(srel, runtime_context, ambient_typechecking_context)
+		-- local srel_value = U.tag("evaluate", { srel = srel:pretty_preprint(runtime_context) }, evaluate, srel, runtime_context)
 		---@type Variance
 		local variance = {
 			positive = positive_value:unwrap_host_value(),
 			srel = srel_value:unwrap_host_value(),
 		}
 		return value.host_value(variance)
+	elseif typed_term:is_variance_type() then
+		return value.variance_type(
+			evaluate(typed_term:unwrap_variance_type(), runtime_context, ambient_typechecking_context)
+		)
 	elseif typed_term:is_object_cons() then
 		return value.object_value(typed_term:unwrap_object_cons(), runtime_context)
 	elseif typed_term:is_object_elim() then
 		local subject, mechanism = typed_term:unwrap_object_elim()
-		local subject_value = evaluate(subject, runtime_context)
-		local mechanism_value = evaluate(mechanism, runtime_context)
+		local subject_value = evaluate(subject, runtime_context, ambient_typechecking_context)
+		local mechanism_value = evaluate(mechanism, runtime_context, ambient_typechecking_context)
 		if subject_value:is_object_value() then
 			if mechanism_value:is_enum_value() then
 				local methods, capture = subject_value:unwrap_object_value()
 				local constructor, arg = mechanism_value:unwrap_enum_value()
-				local this_method = value.closure("#OBJECT_PARAM", methods[constructor], capture)
-				return apply_value(this_method, arg)
+				local this_method = value.closure("#OBJECT_PARAM", methods[constructor], capture, U.bound_here())
+				return apply_value(this_method, arg, ambient_typechecking_context)
 			elseif mechanism_value:is_neutral() then
 				-- objects and enums are categorical duals
 				local mechanism_neutral = mechanism_value:unwrap_neutral()
@@ -2572,31 +3510,31 @@ function evaluate(typed_term, runtime_context)
 		end
 	elseif typed_term:is_operative_cons() then
 		local userdata = typed_term:unwrap_operative_cons()
-		local userdata_value = evaluate(userdata, runtime_context)
+		local userdata_value = evaluate(userdata, runtime_context, ambient_typechecking_context)
 		return value.operative_value(userdata_value)
 	elseif typed_term:is_operative_type_cons() then
 		local handler, userdata_type = typed_term:unwrap_operative_type_cons()
-		local handler_value = evaluate(handler, runtime_context)
-		local userdata_type_value = evaluate(userdata_type, runtime_context)
+		local handler_value = evaluate(handler, runtime_context, ambient_typechecking_context)
+		local userdata_type_value = evaluate(userdata_type, runtime_context, ambient_typechecking_context)
 		return value.operative_type(handler_value, userdata_type_value)
 	elseif typed_term:is_host_user_defined_type_cons() then
 		local id, family_args = typed_term:unwrap_host_user_defined_type_cons()
 		local new_family_args = value_array()
 		for _, v in family_args:ipairs() do
-			new_family_args:append(evaluate(v, runtime_context))
+			new_family_args:append(evaluate(v, runtime_context, ambient_typechecking_context))
 		end
 		return value.host_user_defined_type(id, new_family_args)
 	elseif typed_term:is_host_wrapped_type() then
 		local type_term = typed_term:unwrap_host_wrapped_type()
-		local type_value = evaluate(type_term, runtime_context)
+		local type_value = evaluate(type_term, runtime_context, ambient_typechecking_context)
 		return value.host_wrapped_type(type_value)
 	elseif typed_term:is_host_unstrict_wrapped_type() then
 		local type_term = typed_term:unwrap_host_unstrict_wrapped_type()
-		local type_value = evaluate(type_term, runtime_context)
+		local type_value = evaluate(type_term, runtime_context, ambient_typechecking_context)
 		return value.host_wrapped_type(type_value)
 	elseif typed_term:is_host_wrap() then
 		local content = typed_term:unwrap_host_wrap()
-		local content_val = evaluate(content, runtime_context)
+		local content_val = evaluate(content, runtime_context, ambient_typechecking_context)
 		if content_val:is_neutral() then
 			local nval = content_val:unwrap_neutral()
 			return value.neutral(neutral_value.host_wrap_stuck(nval))
@@ -2604,11 +3542,11 @@ function evaluate(typed_term, runtime_context)
 		return value.host_value(content_val)
 	elseif typed_term:is_host_unstrict_wrap() then
 		local content = typed_term:unwrap_host_unstrict_wrap()
-		local content_val = evaluate(content, runtime_context)
+		local content_val = evaluate(content, runtime_context, ambient_typechecking_context)
 		return value.host_value(content_val)
 	elseif typed_term:is_host_unwrap() then
 		local unwrapped = typed_term:unwrap_host_unwrap()
-		local unwrap_val = evaluate(unwrapped, runtime_context)
+		local unwrap_val = evaluate(unwrapped, runtime_context, ambient_typechecking_context)
 		if not unwrap_val.as_host_value then
 			print("unwrapped", unwrapped, unwrap_val)
 			error "evaluate, is_host_unwrap: missing as_host_value on unwrapped host_unwrap"
@@ -2628,7 +3566,7 @@ function evaluate(typed_term, runtime_context)
 		end
 	elseif typed_term:is_host_unstrict_unwrap() then
 		local unwrapped = typed_term:unwrap_host_unstrict_unwrap()
-		local unwrap_val = evaluate(unwrapped, runtime_context)
+		local unwrap_val = evaluate(unwrapped, runtime_context, ambient_typechecking_context)
 		if not unwrap_val.as_host_value then
 			print("unwrapped", unwrapped, unwrap_val)
 			error "evaluate, is_host_unwrap: missing as_host_value on unwrapped host_unwrap"
@@ -2644,16 +3582,16 @@ function evaluate(typed_term, runtime_context)
 		end
 	elseif typed_term:is_host_if() then
 		local subject, consequent, alternate = typed_term:unwrap_host_if()
-		local sval = evaluate(subject, runtime_context)
+		local sval = evaluate(subject, runtime_context, ambient_typechecking_context)
 		if sval:is_host_value() then
 			local sbool = sval:unwrap_host_value()
 			if type(sbool) ~= "boolean" then
 				error("subject of host_if must be a host bool")
 			end
 			if sbool then
-				return evaluate(consequent, runtime_context)
+				return evaluate(consequent, runtime_context, ambient_typechecking_context)
 			else
-				return evaluate(alternate, runtime_context)
+				return evaluate(alternate, runtime_context, ambient_typechecking_context)
 			end
 		elseif sval:is_neutral() then
 			local sval_neutral = sval:unwrap_neutral()
@@ -2663,19 +3601,19 @@ function evaluate(typed_term, runtime_context)
 				inner_context_c = inner_context_c:set(index, value.host_value(true))
 				inner_context_a = inner_context_a:set(index, value.host_value(false))
 			end
-			local cval = evaluate(consequent, inner_context_c)
-			local aval = evaluate(alternate, inner_context_a)
+			local cval = evaluate(consequent, inner_context_c, ambient_typechecking_context)
+			local aval = evaluate(alternate, inner_context_a, ambient_typechecking_context)
 			return value.neutral(neutral_value.host_if_stuck(sval_neutral, cval, aval))
 		else
 			error("subject of host_if must be host_value or neutral")
 		end
 	elseif typed_term:is_let() then
 		local name, expr, body = typed_term:unwrap_let()
-		local expr_value = evaluate(expr, runtime_context)
-		return evaluate(body, runtime_context:append(expr_value))
+		local expr_value = evaluate(expr, runtime_context, ambient_typechecking_context)
+		return evaluate(body, runtime_context:append(expr_value), ambient_typechecking_context)
 	elseif typed_term:is_host_intrinsic() then
 		local source, start_anchor = typed_term:unwrap_host_intrinsic()
-		local source_val = evaluate(source, runtime_context)
+		local source_val = evaluate(source, runtime_context, ambient_typechecking_context)
 		if source_val:is_host_value() then
 			local source_str = source_val:unwrap_host_value()
 			if intrinsic_memo[source_str] then
@@ -2703,15 +3641,15 @@ function evaluate(typed_term, runtime_context)
 		end
 	elseif typed_term:is_host_function_type() then
 		local args, returns, resinfo = typed_term:unwrap_host_function_type()
-		local args_val = evaluate(args, runtime_context)
-		local returns_val = evaluate(returns, runtime_context)
-		local resinfo_val = evaluate(resinfo, runtime_context)
+		local args_val = evaluate(args, runtime_context, ambient_typechecking_context)
+		local returns_val = evaluate(returns, runtime_context, ambient_typechecking_context)
+		local resinfo_val = evaluate(resinfo, runtime_context, ambient_typechecking_context)
 		return value.host_function_type(args_val, returns_val, resinfo_val)
 	elseif typed_term:is_level0() then
 		return value.level(0)
 	elseif typed_term:is_level_suc() then
 		local previous_level = typed_term:unwrap_level_suc()
-		local previous_level_value = evaluate(previous_level, runtime_context)
+		local previous_level_value = evaluate(previous_level, runtime_context, ambient_typechecking_context)
 		local ok, level = previous_level_value:as_level()
 		if not ok then
 			p(previous_level_value)
@@ -2723,8 +3661,8 @@ function evaluate(typed_term, runtime_context)
 		return value.level(level + 1)
 	elseif typed_term:is_level_max() then
 		local level_a, level_b = typed_term:unwrap_level_max()
-		local level_a_value = evaluate(level_a, runtime_context)
-		local level_b_value = evaluate(level_b, runtime_context)
+		local level_a_value = evaluate(level_a, runtime_context, ambient_typechecking_context)
+		local level_b_value = evaluate(level_b, runtime_context, ambient_typechecking_context)
 		local oka, level_a_level = level_a_value:as_level()
 		local okb, level_b_level = level_b_value:as_level()
 		if not oka or not okb then
@@ -2741,50 +3679,54 @@ function evaluate(typed_term, runtime_context)
 		return value.prop(level)
 	elseif typed_term:is_host_tuple_type() then
 		local desc = typed_term:unwrap_host_tuple_type()
-		local desc_val = evaluate(desc, runtime_context)
+		local desc_val = evaluate(desc, runtime_context, ambient_typechecking_context)
 		return value.host_tuple_type(desc_val)
 	elseif typed_term:is_range() then
 		local lower_bounds, upper_bounds, relation = typed_term:unwrap_range()
 		local lower_acc, upper_acc = value_array(), value_array()
 
 		for _, v in lower_bounds:ipairs() do
-			lower_acc:append(evaluate(v, runtime_context))
+			lower_acc:append(evaluate(v, runtime_context, ambient_typechecking_context))
 		end
 
 		for _, v in upper_bounds:ipairs() do
-			upper_acc:append(evaluate(v, runtime_context))
+			upper_acc:append(evaluate(v, runtime_context, ambient_typechecking_context))
 		end
 
-		local reln = evaluate(relation, runtime_context)
+		local reln = evaluate(relation, runtime_context, ambient_typechecking_context)
 
 		return value.range(lower_acc, upper_acc, reln)
 	elseif typed_term:is_singleton() then
 		local supertype, val = typed_term:unwrap_singleton()
-		local supertype_val = evaluate(supertype, runtime_context)
+		local supertype_val = evaluate(supertype, runtime_context, ambient_typechecking_context)
 		return value.singleton(supertype_val, val)
 	elseif typed_term:is_program_sequence() then
 		local first, rest = typed_term:unwrap_program_sequence()
-		local startprog = evaluate(first, runtime_context)
+		local startprog = evaluate(first, runtime_context, ambient_typechecking_context)
 		if startprog:is_program_end() then
 			local first_res = startprog:unwrap_program_end()
-			return evaluate(rest, runtime_context:append(first_res))
+			return evaluate(rest, runtime_context:append(first_res), ambient_typechecking_context)
 		elseif startprog:is_program_cont() then
 			local effect_id, effect_arg, cont = startprog:unwrap_program_cont()
 			local restframe = terms.continuation.frame(runtime_context, rest)
 			return value.program_cont(effect_id, effect_arg, terms.continuation.sequence(cont, restframe))
 		else
 			error(
-				"unrecognized program variant: expected program_end or program_cont, got " .. startprog:pretty_print()
+				ConstraintError.new(
+					"unrecognized program variant: expected program_end or program_cont, got ",
+					startprog,
+					ambient_typechecking_context
+				)
 			)
 		end
 	elseif typed_term:is_program_end() then
 		local result = typed_term:unwrap_program_end()
 
-		return value.program_end(evaluate(result, runtime_context))
+		return value.program_end(evaluate(result, runtime_context, ambient_typechecking_context))
 	elseif typed_term:is_program_invoke() then
 		local effect_term, arg_term = typed_term:unwrap_program_invoke()
-		local effect_val = evaluate(effect_term, runtime_context)
-		local arg_val = evaluate(arg_term, runtime_context)
+		local effect_val = evaluate(effect_term, runtime_context, ambient_typechecking_context)
+		local arg_val = evaluate(arg_term, runtime_context, ambient_typechecking_context)
 		if effect_val:is_effect_elem() then
 			local effect_id = effect_val:unwrap_effect_elem()
 			return value.program_cont(effect_id, arg_val, terms.continuation.empty)
@@ -2792,63 +3734,113 @@ function evaluate(typed_term, runtime_context)
 		error "NYI stuck program invoke"
 	elseif typed_term:is_program_type() then
 		local effect_type, result_type = typed_term:unwrap_program_type()
-		local effect_type_val = evaluate(effect_type, runtime_context)
-		local result_type_val = evaluate(result_type, runtime_context)
+		local effect_type_val = evaluate(effect_type, runtime_context, ambient_typechecking_context)
+		local result_type_val = evaluate(result_type, runtime_context, ambient_typechecking_context)
 		return value.program_type(effect_type_val, result_type_val)
 	elseif typed_term:is_srel_type() then
 		local target = typed_term:unwrap_srel_type()
-		return value.srel_type(evaluate(target, runtime_context))
+		return value.srel_type(evaluate(target, runtime_context, ambient_typechecking_context))
 	elseif typed_term:is_constrained_type() then
-		local constraints = typed_term:unwrap_constrained_type()
-		local mv = typechecker_state:metavariable(nil, false)
+		local mv_ctx = ambient_typechecking_context
+		local ctx = ambient_typechecking_context
+		local constraints, ignored_mv_ctx = typed_term:unwrap_constrained_type()
+		local mv = typechecker_state:metavariable(mv_ctx, false)
 		for i, constraint in constraints:ipairs() do
 			---@cast constraint constraintelem
 			if constraint:is_sliced_constrain() then
-				local rel, right, ctx, cause = constraint:unwrap_sliced_constrain()
-				typechecker_state:send_constrain(ctx, mv:as_value(), rel, ctx, evaluate(right, runtime_context), cause)
+				local rel, right, ignored_ctx, cause = constraint:unwrap_sliced_constrain()
+				local ok, err = typechecker_state:send_constrain(
+					mv_ctx,
+					mv:as_value(),
+					rel,
+					ctx,
+					evaluate(right, runtime_context, ambient_typechecking_context),
+					cause
+				)
+				if not ok then
+					error(err)
+				end
 			elseif constraint:is_constrain_sliced() then
-				local left, ctx, rel, cause = constraint:unwrap_constrain_sliced()
-				typechecker_state:send_constrain(ctx, evaluate(left, runtime_context), rel, ctx, mv:as_value(), cause)
+				local left, ignored_ctx, rel, cause = constraint:unwrap_constrain_sliced()
+				local ok, err = typechecker_state:send_constrain(
+					ctx,
+					evaluate(left, runtime_context, ambient_typechecking_context),
+					rel,
+					mv_ctx,
+					mv:as_value(),
+					cause
+				)
+				if not ok then
+					error(err)
+				end
 			elseif constraint:is_sliced_leftcall() then
-				local arg, rel, right, ctx, cause = constraint:unwrap_sliced_leftcall()
-				typechecker_state:send_constrain(
-					ctx,
-					apply_value(mv:as_value(), evaluate(arg, runtime_context)),
+				local arg, rel, right, ignored_ctx, cause = constraint:unwrap_sliced_leftcall()
+				local ok, err = typechecker_state:send_constrain(
+					mv_ctx,
+					apply_value(
+						mv:as_value(),
+						evaluate(arg, runtime_context, ambient_typechecking_context),
+						ambient_typechecking_context
+					),
 					rel,
 					ctx,
-					evaluate(right, runtime_context),
+					evaluate(right, runtime_context, ambient_typechecking_context),
 					cause
 				)
+				if not ok then
+					error(err)
+				end
 			elseif constraint:is_leftcall_sliced() then
-				local left, ctx, arg, rel, cause = constraint:unwrap_leftcall_sliced()
-				typechecker_state:send_constrain(
+				local left, ignored_ctx, arg, rel, cause = constraint:unwrap_leftcall_sliced()
+				local ok, err = typechecker_state:send_constrain(
 					ctx,
-					apply_value(evaluate(left, runtime_context), evaluate(arg, runtime_context)),
+					apply_value(
+						evaluate(left, runtime_context, ambient_typechecking_context),
+						evaluate(arg, runtime_context, ambient_typechecking_context),
+						ambient_typechecking_context
+					),
 					rel,
-					ctx,
+					mv_ctx,
 					mv:as_value(),
 					cause
 				)
+				if not ok then
+					error(err)
+				end
 			elseif constraint:is_sliced_rightcall() then
-				local rel, right, ctx, arg, cause = constraint:unwrap_sliced_rightcall()
-				typechecker_state:send_constrain(
-					ctx,
+				local rel, right, ignored_ctx, arg, cause = constraint:unwrap_sliced_rightcall()
+				local ok, err = typechecker_state:send_constrain(
+					mv_ctx,
 					mv:as_value(),
 					rel,
 					ctx,
-					apply_value(evaluate(right, runtime_context), evaluate(arg, runtime_context)),
+					apply_value(
+						evaluate(right, runtime_context, ambient_typechecking_context),
+						evaluate(arg, runtime_context, ambient_typechecking_context),
+						ambient_typechecking_context
+					),
 					cause
 				)
+				if not ok then
+					error(err)
+				end
 			elseif constraint:is_rightcall_sliced() then
-				local left, ctx, rel, arg, cause = constraint:unwrap_rightcall_sliced()
-				typechecker_state:send_constrain(
+				local left, ignored_ctx, rel, arg, cause = constraint:unwrap_rightcall_sliced()
+				local ok, err = typechecker_state:send_constrain(
 					ctx,
-					evaluate(left, runtime_context),
+					evaluate(left, runtime_context, ambient_typechecking_context),
 					rel,
-					ctx,
-					apply_value(mv:as_value(), evaluate(arg, runtime_context)),
+					mv_ctx,
+					apply_value(
+						mv:as_value(),
+						evaluate(arg, runtime_context, ambient_typechecking_context),
+						ambient_typechecking_context
+					),
 					cause
 				)
+				if not ok then
+					error(err)
+				end
 			else
 				error "unrecognized constraint kind"
 			end
@@ -2856,18 +3848,51 @@ function evaluate(typed_term, runtime_context)
 		return mv:as_value()
 	elseif typed_term:is_union_type() then
 		local a, b = typed_term:unwrap_union_type()
-		return value.union_type(evaluate(a, runtime_context), evaluate(b, runtime_context))
+		return value.union_type(
+			evaluate(a, runtime_context, ambient_typechecking_context),
+			evaluate(b, runtime_context, ambient_typechecking_context)
+		)
 	elseif typed_term:is_intersection_type() then
 		local a, b = typed_term:unwrap_intersection_type()
-		return value.intersection_type(evaluate(a, runtime_context), evaluate(b, runtime_context))
+		return value.intersection_type(
+			evaluate(a, runtime_context, ambient_typechecking_context),
+			evaluate(b, runtime_context, ambient_typechecking_context)
+		)
 	elseif typed_term:is_effect_row_resolve() then
 		local ids, rest = typed_term:unwrap_effect_row_resolve()
-		return value.effect_row(ids, evaluate(rest, runtime_context))
+		return value.effect_row(ids, evaluate(rest, runtime_context, ambient_typechecking_context))
 	else
 		error("evaluate: unknown kind: " .. typed_term.kind)
 	end
 
 	error("unreachable!?")
+end
+
+local recurse_count = 0
+
+---evaluate a typed term in a contextual
+---@param typed_term typed
+---@param runtime_context RuntimeContext
+---@param ambient_typechecking_context TypecheckingContext
+---@return value
+evaluate = function(typed_term, runtime_context, ambient_typechecking_context)
+	local tracked = typed_term.track ~= nil
+	if tracked then
+		local input = typed_term:pretty_print(runtime_context)
+		print(string.rep("·", recurse_count) .. "EVAL: " .. input)
+		--print(runtime_context:format_names())
+	end
+
+	recurse_count = recurse_count + 1
+	local r = evaluate_impl(typed_term, runtime_context, ambient_typechecking_context)
+	recurse_count = recurse_count - 1
+
+	if tracked then
+		print(string.rep("·", recurse_count) .. " → " .. r:pretty_print(runtime_context))
+		--print(runtime_context:format_names())
+		r.track = {}
+	end
+	return r
 end
 
 ---@alias effect_handler fun(arg: value, cont: continuation): value
@@ -2950,19 +3975,8 @@ UniverseOmegaRelation = setmetatable({
 	antisym = luatovalue(function(a, b, r1, r2)
 		error("nyi")
 	end),
-	constrain = luatovalue(function(lctx, val, rctx, use)
-		local ok, err = U.tag(
-			"check_concrete",
-			{ val = val, use = use, block_level = typechecker_state.block_level },
-			check_concrete,
-			lctx,
-			val,
-			rctx,
-			use
-		)
-		if not ok then
-			error(err)
-		end
+	constrain = luatovalue(function(lctx, val, rctx, use, cause)
+		return check_concrete(lctx, val, rctx, use, cause)
 	end),
 }, subtype_relation_mt)
 
@@ -3014,21 +4028,11 @@ local function IndexedCollection(indices)
 	for k, v in pairs(indices) do
 		res._index_store[k] = {}
 		res[k] = function(self, ...)
-			if rawget(self, "__lock") then
-				error(
-					"Modifying a shadowed object! This should never happen!\n"
-						.. "@@@@@@@@@@@@@@@\n"
-						.. "@@@ STACK 1 @@@\n"
-						.. "@@@@@@@@@@@@@@@\n"
-						.. rawget(self, "__locktrace")
-						.. "\n@@@@@@@@@@@@@@@\n"
-						.. "@@@ STACK 2 @@@\n"
-						.. "@@@@@@@@@@@@@@@\n"
-						.. "modify attempted here"
-				)
-			end
+			U.check_locked(self)
 			local args = { ... }
-			assert(#args == #v, "Must have one argument per key extractor")
+			if #args ~= #v then
+				error("Must have one argument per key extractor")
+			end
 
 			local store = self._index_store[k]
 			for i = 1, #v do
@@ -3047,70 +4051,20 @@ local function IndexedCollection(indices)
 		end
 	end
 
-	---This function is made easier because we know we're ALWAYS inserting a new item, so we ALWAYS shadow any tables we
-	---encounter that aren't shadowed yet (and also aren't new insertions on this layer).
-	---@generic T
-	---@param obj any
-	---@param store T
-	---@param i integer
-	---@param extractors any[]
-	---@param level integer
-	---@return T
-	local function insert_tree(obj, store, i, extractors, level)
-		if store == nil then
-			store = {}
-			level = -1
-		end
-		local curlevel = U.getshadowdepth(store)
-		if i > #extractors then
-			if level > 0 then
-				for j = curlevel + 1, level do
-					store = U.shadowarray(store)
-				end
-				assert(U.getshadowdepth(store) == level, "Improper shadowing happened!")
-			end
-			U.append(store, obj)
-			return store
-		end
-		local kx = extractors[i]
-		local key = kx(obj)
-		if level > 0 then
-			-- shadow the node enough times so that the levels match
-			for j = curlevel + 1, level do
-				store = U.shadowtable(store)
-			end
-			assert(U.getshadowdepth(store) == level, "Improper shadowing happened!")
-		end
-		-- Note: it might be *slightly* more efficient to only reassign if the returned table is different, but the commit
-		-- only copies completely new keys anyway so it doesn't really matter.
-		local oldlevel = 0
-		if store[key] then
-			oldlevel = U.getshadowdepth(store[key])
-		end
-		store[key] = insert_tree(obj, store[key], i + 1, extractors, level)
-
-		-- Any time we shadow something more than once, we have some "skipped" levels in-between that must be assigned
-		local parent = store
-		local child = store[key]
-		local newlevel = U.getshadowdepth(child)
-		for j = oldlevel + 1, newlevel - 1 do
-			parent = rawget(parent, "__shadow")
-			child = rawget(child, "__shadow")
-			rawset(parent, key, child)
-		end
-
-		return store
-	end
-
 	function res:add(obj)
-		if rawget(self, "__lock") then
-			error("Modifying a shadowed object! This should never happen!")
-		end
+		U.check_locked(self)
 		U.append(self._collection, obj)
+		local id = #self._collection
 		for name, extractors in pairs(indices) do
-			self._index_store[name] =
-				insert_tree(obj, self._index_store[name], 1, extractors, U.getshadowdepth(self._index_store))
+			self._index_store[name] = U.insert_tree_node(
+				obj,
+				self._index_store[name],
+				1,
+				extractors,
+				U.getshadowdepth(self._index_store[name])
+			)
 		end
+		return id
 	end
 
 	local function store_copy_inner(n, store)
@@ -3140,68 +4094,43 @@ local function IndexedCollection(indices)
 	function res:shadow()
 		local n = U.shallow_copy(self) -- Copy all the functions into a new table
 		n._collection = U.shadowarray(self._collection) -- Shadow collection
-		n._index_store = U.shadowtable(self._index_store)
-		rawset(self, "__lock", true) --  This has to be down here or we'll accidentally copy it
-		rawset(self, "__locktrace", metalanguage.stack_trace("shadow occurred here"))
-		rawset(n, "__shadow", self)
+		for name, extractors in pairs(indices) do
+			n._index_store[name] = U.shadowtable(self._index_store[name])
+		end
+		U.lock_table(self) --  This has to be down here or we'll accidentally copy it
+
+		setmetatable(n, { __shadow = self, __depth = U.getshadowdepth(self) + 1 })
 		return n
-	end
-
-	---To commit all the tree nodes, we only copy keys that do not exist at all in the shadowed table
-	---@param n table
-	local function commit_tree_node(n)
-		setmetatable(n, nil)
-		assert(type(n) == "table")
-		local base = rawget(n, "__shadow")
-		if base then
-			for k, v in pairs(n) do
-				-- skip internal keys
-				if type(k) == "string" and string.sub(k, 1, 2) == "__" then
-					goto continue
-				end
-				if base[k] == nil then
-					rawset(base, k, v)
-				end
-				-- The base of the tree is actually an array, so we don't recurse into it
-				if type(k) ~= "integer" then
-					commit_tree_node(v)
-				end
-				::continue::
-			end
-			rawset(n, "__shadow", nil)
-			rawset(base, "__lock", nil)
-		end
-	end
-
-	local function revert_tree_node(n)
-		setmetatable(n, nil)
-		assert(type(n) == "table")
-		local base = rawget(n, "__shadow")
-		if base then
-			rawset(n, "__shadow", nil)
-			rawset(base, "__lock", nil)
-			rawset(base, "__locktrace", nil)
-		end
 	end
 
 	function res:commit()
 		U.commit(self._collection)
+		for name, extractors in pairs(indices) do
+			self._index_store[name] = U.commit_tree_node(self._index_store[name], U.getshadowdepth(self))
+		end
 
-		commit_tree_node(self._index_store)
-		local orig = rawget(self, "__shadow")
-		rawset(orig, "__lock", nil)
-		rawset(orig, "__locktrace", nil)
-		rawset(self, "__shadow", nil)
+		local orig = getmetatable(self).__shadow
+		U.unlock_table(orig)
+		setmetatable(self, nil)
+		U.invalidate(self)
 	end
 
 	function res:revert()
 		U.revert(self._collection)
 
-		revert_tree_node(self._index_store)
-		local orig = rawget(self, "__shadow")
-		rawset(orig, "__lock", nil)
-		rawset(orig, "__locktrace", nil)
-		rawset(self, "__shadow", nil)
+		for name, extractors in pairs(indices) do
+			self._index_store[name] = U.revert_tree_node(self._index_store[name], U.getshadowdepth(self))
+			-- It's legal for our top-level node to be below our actual shadow level due to skipped shadows, so we restore those shadow layers here
+			-- A commit would have fixed this, but a commit doesn't always happen.
+			while U.getshadowdepth(self._index_store[name]) < U.getshadowdepth(self) do
+				self._index_store[name] = U.shadowtable(self._index_store[name])
+			end
+		end
+
+		local orig = getmetatable(self).__shadow
+		U.unlock_table(orig)
+		setmetatable(self, nil)
+		U.invalidate(self)
 	end
 
 	return res
@@ -3218,10 +4147,12 @@ end
 
 function TraitRegistry:commit()
 	U.commit(self.traits)
+	U.invalidate(self)
 end
 
 function TraitRegistry:revert()
 	U.revert(self.traits)
+	U.invalidate(self)
 end
 
 trait_registry_mt = { __index = TraitRegistry }
@@ -3232,49 +4163,22 @@ end
 ---@class TypeCheckerState
 ---@field pending ReachabilityQueue
 ---@field graph Reachability
----@field values [value, TypeCheckerTag, TypecheckingContext|nil][]
+---@field values [value, TypeCheckerTag, TypecheckingContext][]
 ---@field block_level integer
 ---@field valcheck { [value]: integer }
 ---@field usecheck { [value]: integer }
 ---@field trait_registry TraitRegistry
 local TypeCheckerState = {}
---@field values { val: value, tag: TypeCheckerTag, context: TypecheckingContext|nil }
+--@field values { val: value, tag: TypeCheckerTag, context: TypecheckingContext }
 
 ---@alias NodeID integer the ID of a node in the graph
 
----@module "evaluator.edge"
-local CEdge = gen.declare_type()
-
--- stylua: ignore
-CEdge:define_enum("edge", {
-	{ "ConstrainEdge", {
-		"left",  gen.builtin_number,
-		"rel",  SubtypeRelation,
-		"shallowest_block", gen.builtin_number,
-		"right", gen.builtin_number,
-	} },
-	{ "LeftCallEdge", {
-		"left",  gen.builtin_number,
-		"arg",  value,
-		"rel",  SubtypeRelation,
-		"shallowest_block", gen.builtin_number,
-		"right", gen.builtin_number,
-	} },
-	{ "RightCallEdge", {
-		"left",  gen.builtin_number,
-		"rel",  SubtypeRelation,
-		"shallowest_block", gen.builtin_number,
-		"right", gen.builtin_number,
-		"arg",  value,
-	} },
-}
-)
-
 ---@class ConstrainEdge
----@field left NodeID
+---@field left NodeID -- value
 ---@field rel SubtypeRelation
 ---@field shallowest_block integer
----@field right NodeID
+---@field right NodeID -- use
+---@field cause constraintcause
 
 ---@class LeftCallEdge
 ---@field left NodeID
@@ -3282,6 +4186,7 @@ CEdge:define_enum("edge", {
 ---@field rel SubtypeRelation
 ---@field shallowest_block integer
 ---@field right NodeID
+---@field cause constraintcause
 
 ---@class RightCallEdge
 ---@field left NodeID
@@ -3289,6 +4194,7 @@ CEdge:define_enum("edge", {
 ---@field shallowest_block integer
 ---@field right NodeID
 ---@field arg value
+---@field cause constraintcause
 
 -- I wish I had generics in LuaCATS
 
@@ -3344,22 +4250,373 @@ function Reachability:commit()
 	self.constrain_edges:commit()
 	self.leftcall_edges:commit()
 	self.rightcall_edges:commit()
+	U.invalidate(self)
 end
 
 function Reachability:revert()
 	self.constrain_edges:revert()
 	self.leftcall_edges:revert()
 	self.rightcall_edges:revert()
+	U.invalidate(self)
 end
+
+---@enum TypeCheckerTag
+local TypeCheckerTag = {
+	VALUE = { VALUE = "VALUE" },
+	USAGE = { USAGE = "USAGE" },
+	METAVAR = { METAVAR = "METAVAR" },
+	RANGE = { RANGE = "RANGE" },
+}
 
 ---@alias ReachabilityQueue edgenotif[]
 
+local function verify_tree(store, k1, k2)
+	if type(store) == "table" then
+		if U.is_invalid(store) then
+			print("INVALID KEY: " .. tostring(k1) .. "\n parent: " .. tostring(k2))
+			os.exit(-1, true)
+			return false
+		end
+
+		if U.is_locked(store) then
+			print(debug.traceback("LOCKED KEY: " .. tostring(k1) .. "\n parent: " .. tostring(k2)))
+			os.exit(-1, true)
+			return false
+		end
+
+		if getmetatable(store) and getmetatable(store).__length then
+			if store[1] == nil then
+				print("ARRAY DOESNT START AT 1: " .. tostring(k1))
+				os.exit(-1, true)
+			end
+		end
+		for k, v in pairs(store) do
+			if k ~= "bindings" then
+				if not verify_tree(v, k, k1) then
+					return false
+				end
+			end
+		end
+	end
+
+	return true
+end
+
+function TypeCheckerState:Snapshot()
+	return {
+		values = U.shallow_copy(self.values),
+		constrain_edges = U.shallow_copy(self.graph.constrain_edges:all()),
+		leftcall_edges = U.shallow_copy(self.graph.leftcall_edges:all()),
+		rightcall_edges = U.shallow_copy(self.graph.rightcall_edges:all()),
+	}
+end
+
+function TypeCheckerState:Visualize(diff1, diff2, restrict)
+	local prev, cur
+	if diff2 ~= nil then
+		prev = diff1
+		cur = diff2
+	else
+		prev = diff1
+		cur = {
+			values = self.values,
+			constrain_edges = self.graph.constrain_edges:all(),
+			leftcall_edges = self.graph.leftcall_edges:all(),
+			rightcall_edges = self.graph.rightcall_edges:all(),
+		}
+	end
+
+	local node_check = nil
+	if restrict ~= nil then
+		node_check = U.shallow_copy(restrict)
+
+		local function propagate_edges(cur_edges, prev_edges)
+			for i, e in ipairs(cur_edges) do
+				if restrict[e.left] ~= nil or restrict[e.right] ~= nil then
+					if
+						not prev_edges
+						or (prev_edges[i] and prev_edges[i].left == e.left and prev_edges[i].right == e.right)
+					then
+						node_check[e.left] = e.left
+						node_check[e.right] = e.right
+					end
+				end
+			end
+		end
+
+		if prev then
+			propagate_edges(cur.constrain_edges, prev.constrain_edges)
+			propagate_edges(cur.leftcall_edges, prev.leftcall_edges)
+			propagate_edges(cur.rightcall_edges, prev.rightcall_edges)
+		else
+			propagate_edges(cur.constrain_edges, nil)
+			propagate_edges(cur.leftcall_edges, nil)
+			propagate_edges(cur.rightcall_edges, nil)
+		end
+	end
+
+	local additions = {}
+	local g = "digraph State {"
+
+	for i, v in ipairs(cur.values) do
+		local changed = true
+
+		if prev and prev.values[i] then
+			if node_check ~= nil and node_check[i] == nil then
+				goto continue
+			end
+
+			changed = false
+		else
+			U.append(additions, i)
+		end
+
+		local label = U.strip_ansi(v[1]:pretty_print(v[3]))
+		if #label > 800 then
+			local i = 800
+			-- Don't slice a unicode character in half
+			while string.byte(label, i) > 127 do
+				i = i + 1
+			end
+			label = label:sub(1, i)
+		end
+
+		--local s = label .. "\\n"
+		--label = {}
+		--for m in s:gmatch("(.-)\\n") do
+		--[[while #m > 50 do
+				local i = 50
+				-- Don't slice a unicode character in half
+				while string.byte(m, i) > 127 do
+					i = i + 1
+				end
+				label = label .. m:sub(1, i) .. "\\n"
+				m = m:sub(i + 1)
+			end]]
+		--U.append(label, m)
+		--end
+		--label = table.concat(label, "\\l")
+		--label = label .. "\nCTX: " .. v[3]:format_names()
+		label = label:gsub("\n", "\\n"):gsub('"', "'"):gsub("\\", "\\\\"):gsub("\\\\n", "\\l")
+		local line = "\n" .. i .. " ["
+
+		if not changed then
+			line = line .. 'fontcolor="#cccccc", color="#cccccc", '
+		end
+
+		if v[1]:is_enum_value() and v[1]:unwrap_enum_value() == "empty" then
+			line = line .. "shape=doubleoctagon]"
+			g = g .. line
+			goto continue
+		elseif
+			v[1]:is_neutral()
+			and v[1]:unwrap_neutral():is_free()
+			and v[1]:unwrap_neutral():unwrap_free():is_metavariable()
+		then
+			line = line .. "shape=doublecircle]"
+			g = g .. line
+			goto continue
+		elseif v[1]:is_star() then
+			line = line .. "shape=egg, "
+		else
+			line = line .. "shape=rect, "
+		end
+
+		g = g .. line .. 'label = "#' .. i .. " " .. label .. '"]'
+		-- load-bearing no-op
+		if true then
+		end
+		::continue::
+	end
+
+	for i, e in ipairs(cur.constrain_edges) do
+		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowtail=inv,arrowhead=normal,dir=both"
+
+		if
+			prev
+			and prev.constrain_edges[i]
+			and prev.constrain_edges[i].left == e.left
+			and prev.constrain_edges[i].right == e.right
+		then
+			if restrict ~= nil and restrict[e.left] == nil and restrict[e.right] == nil then
+				goto continue2
+			end
+			line = line .. ', fontcolor="#cccccc", color="#cccccc"'
+		end
+
+		if e.rel.debug_name then
+			local name = e.rel.debug_name
+			if e.rel.debug_name == "UniverseOmegaRelation" then
+				name = "< Ω :"
+			end
+
+			line = line .. ', label="' .. name .. '"'
+		end
+
+		g = g .. line .. "]"
+		-- load-bearing no-op
+		if true then
+		end
+		::continue2::
+	end
+
+	for i, e in ipairs(cur.leftcall_edges) do
+		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowtail=invempty,arrowhead=normal,dir=both"
+
+		if
+			prev
+			and prev.leftcall_edges[i]
+			and prev.leftcall_edges[i].left == e.left
+			and prev.leftcall_edges[i].right == e.right
+		then
+			if restrict ~= nil and restrict[e.left] == nil and restrict[e.right] == nil then
+				goto continue3
+			end
+			line = line .. ', color="#cccccc"'
+		end
+		g = g .. line .. "]"
+		-- load-bearing no-op
+		if true then
+		end
+		::continue3::
+	end
+
+	for i, e in ipairs(cur.rightcall_edges) do
+		local line = "\n" .. e.left .. " -> " .. e.right .. " [arrowtail=inv,arrowhead=empty,dir=both"
+
+		if
+			prev
+			and prev.rightcall_edges[i]
+			and prev.rightcall_edges[i].left == e.left
+			and prev.rightcall_edges[i].right == e.right
+		then
+			if restrict ~= nil and restrict[e.left] == nil and restrict[e.right] == nil then
+				goto continue4
+			end
+			line = line .. ', color="#cccccc"'
+		end
+		g = g .. line .. "]"
+		-- load-bearing no-op
+		if true then
+		end
+		::continue4::
+	end
+
+	return g .. "\n}", additions
+end
+
+function TypeCheckerState:DEBUG_VERIFY_TREE()
+	return verify_tree(self.graph.constrain_edges._index_store)
+end
+
+function TypeCheckerState:DEBUG_VERIFY()
+	self:DEBUG_VERIFY_TREE()
+	self:DEBUG_VERIFY_VALUES()
+
+	-- all nodes must be unique (no two nodes can have the same value, using the basic equality comparison on that value via ==)
+	local unique = {}
+	local transitive = {}
+
+	for _, v in ipairs(self.graph.constrain_edges:all()) do
+		if v.left == v.right then
+			debug.traceback("INVALID CONSTRAINT!")
+			os.exit(-1, true)
+		end
+		transitive[v.left + bit.lshift(v.right, 24)] = v -- bitshift by 24 via multiplication
+	end
+
+	for _, v in ipairs(self.pending) do
+		if v:is_Constrain() then
+			local left, rel, right, shallowest_block, item_cause = v:unwrap_Constrain()
+			transitive[left + bit.lshift(right, 24)] = v
+		end
+	end
+
+	for i, v in ipairs(self.values) do
+		if v[2] == TypeCheckerTag.METAVAR then
+			if
+				v[1]:is_neutral()
+				and v[1]:unwrap_neutral():is_free()
+				and v[1]:unwrap_neutral():unwrap_free():is_metavariable()
+			then
+				if unique[v[1]] then
+					print(
+						debug.traceback(
+							tostring(i)
+								.. ": "
+								.. tostring(self.values[i][1])
+								.. " is a duplicate of "
+								.. tostring(unique[v[1]])
+								.. ": "
+								.. tostring(v[1])
+						)
+					)
+					os.exit(-1, true)
+					return false
+				end
+
+				-- transitivity across metavariables (for every node that is a metavariable, there must exist some ConstraintEdge where .left is equal to the constraint to mv.value and .right is equal to the constraint for mv.usage)
+				--    At all times, this must true across the graph, or constraints that would satisfy it must exist in the pending queue.
+				local mv = v[1]:unwrap_neutral():unwrap_free():unwrap_metavariable()
+
+				local from = self.graph.constrain_edges:to(mv.value) -- This looks at all constrains going "to" mv.value, but we begin our search here, so for us it is "from"
+				local to = self.graph.constrain_edges:from(mv.usage) -- and vice-versa for here
+
+				for _, f in ipairs(from) do
+					for _, t in ipairs(to) do
+						-- Find a constraint from f.left to t.right
+						local l = f.left
+						local r = t.right
+
+						if transitive[l + bit.lshift(r, 24)] == nil then
+							print(
+								debug.traceback(
+									tostring(i)
+										.. " IS NOT TRANSITIVE! No constraint edge has left "
+										.. tostring(l)
+										.. " and right "
+										.. tostring(r)
+										.. " while looking at "
+										.. tostring(f.left)
+										.. ", "
+										.. tostring(f.right)
+										.. ", "
+										.. tostring(t.left)
+										.. ", "
+										.. tostring(t.right)
+										.. ", "
+								)
+							)
+							os.exit(-1, true)
+							return false
+						end
+					end
+				end
+
+				unique[v[1]] = i
+			else
+				print(
+					debug.traceback(tostring(i) .. " is marked as a metavariable, but instead found " .. tostring(v[1]))
+				)
+				os.exit(-1, true)
+				return false
+			end
+		end
+	end
+
+	if #self.pending == 0 then
+		-- once the graph is settled, if a concrete_head to concrete_head path exists, then after completing flow(), it must have been discharged (this requires adding a "discharged" tracker that is set to true if the edge is passed to check_concrete or has the "constrain transitivity rule" applied to it. If at any time the graph has 0 pending operations, ALL edges must have a discharged value of true.)
+	end
+
+	return true
+end
+
 ---check for combinations of constrain edges that induce new constraints in response to a constrain edges
 ---@param edge ConstrainEdge
+---@param edge_id integer
 ---@param queue ReachabilityQueue
----@param cause any
-function Reachability:constrain_transitivity(edge, queue, cause)
-	for _, l2 in ipairs(self.constrain_edges:to(edge.left)) do
+function Reachability:constrain_transitivity(edge, edge_id, queue)
+	for i, l2 in ipairs(self.constrain_edges:to(edge.left)) do
 		---@cast l2 ConstrainEdge
 		if l2.rel ~= edge.rel then
 			error("Relations do not match! " .. l2.rel.debug_name .. " is not " .. edge.rel.debug_name)
@@ -3371,11 +4628,11 @@ function Reachability:constrain_transitivity(edge, queue, cause)
 				edge.rel,
 				edge.right,
 				math.min(edge.shallowest_block, l2.shallowest_block),
-				cause
+				compositecause("composition", i, l2, edge_id, edge, U.anchor_here())
 			)
 		)
 	end
-	for _, r2 in ipairs(self.constrain_edges:from(edge.right)) do
+	for i, r2 in ipairs(self.constrain_edges:from(edge.right)) do
 		---@cast r2 ConstrainEdge
 		if r2.rel ~= edge.rel then
 			error("Relations do not match! " .. r2.rel.debug_name .. " is not " .. edge.rel.debug_name)
@@ -3387,9 +4644,15 @@ function Reachability:constrain_transitivity(edge, queue, cause)
 				edge.rel,
 				r2.right,
 				math.min(edge.shallowest_block, r2.shallowest_block),
-				cause
+				compositecause("composition", edge_id, edge, i, r2, U.anchor_here())
 			)
 		)
+	end
+end
+
+function verify_collection(collection)
+	for _, v in pairs(collection._index_store) do
+		U.check_locked(v)
 	end
 end
 
@@ -3397,10 +4660,15 @@ end
 ---@param right integer
 ---@param rel SubtypeRelation
 ---@param shallowest_block integer
----@return boolean
-function Reachability:add_constrain_edge(left, right, rel, shallowest_block)
-	assert(type(left) == "number", "left isn't an integer!")
-	assert(type(right) == "number", "right isn't an integer!")
+---@param cause constraintcause
+---@return integer?
+function Reachability:add_constrain_edge(left, right, rel, shallowest_block, cause)
+	if type(left) ~= "number" then
+		error("left isn't an integer!")
+	end
+	if type(right) ~= "number" then
+		error("right isn't an integer!")
+	end
 
 	for _, edge in ipairs(self.constrain_edges:between(left, right)) do
 		if edge.rel ~= rel then
@@ -3412,15 +4680,12 @@ function Reachability:add_constrain_edge(left, right, rel, shallowest_block)
 			)
 			--TODO: maybe allow between concrete heads
 		end
-		return false
+		return nil
 	end
 
 	---@type ConstrainEdge
-	local edge = { left = left, right = right, rel = rel, shallowest_block = shallowest_block }
-
-	self.constrain_edges:add(edge)
-
-	return true
+	local edge = { left = left, right = right, rel = rel, shallowest_block = shallowest_block, cause = cause }
+	return self.constrain_edges:add(edge)
 end
 
 ---@param left integer
@@ -3428,14 +4693,19 @@ end
 ---@param rel SubtypeRelation
 ---@param right integer
 ---@param shallowest_block integer
----@return boolean
-function Reachability:add_call_left_edge(left, arg, rel, right, shallowest_block)
-	assert(type(left) == "number", "left isn't an integer!")
-	assert(type(right) == "number", "right isn't an integer!")
+---@param cause constraintcause
+---@return integer?
+function Reachability:add_call_left_edge(left, arg, rel, right, shallowest_block, cause)
+	if type(left) ~= "number" then
+		error("left isn't an integer!")
+	end
+	if type(right) ~= "number" then
+		error("right isn't an integer!")
+	end
 
 	for _, edge in ipairs(self.leftcall_edges:between(left, right)) do
 		if rel == edge.rel and arg == edge.arg then
-			return false
+			return nil
 		end
 	end
 	---@type LeftCallEdge
@@ -3445,11 +4715,10 @@ function Reachability:add_call_left_edge(left, arg, rel, right, shallowest_block
 		rel = rel,
 		right = right,
 		shallowest_block = shallowest_block,
+		cause = cause,
 	}
 
-	self.leftcall_edges:add(edge)
-
-	return true
+	return self.leftcall_edges:add(edge)
 end
 
 ---@param left integer
@@ -3457,14 +4726,19 @@ end
 ---@param right integer
 ---@param arg value
 ---@param shallowest_block integer
----@return boolean
-function Reachability:add_call_right_edge(left, rel, right, arg, shallowest_block)
-	assert(type(left) == "number", "left isn't an integer!")
-	assert(type(right) == "number", "right isn't an integer!")
+---@param cause constraintcause
+---@return integer?
+function Reachability:add_call_right_edge(left, rel, right, arg, shallowest_block, cause)
+	if type(left) ~= "number" then
+		error("left isn't an integer!")
+	end
+	if type(right) ~= "number" then
+		error("right isn't an integer!")
+	end
 
 	for _, edge in ipairs(self.rightcall_edges:between(left, right)) do
 		if rel == edge.rel and arg == edge.arg then
-			return false
+			return nil
 		end
 	end
 	---@type RightCallEdge
@@ -3474,10 +4748,10 @@ function Reachability:add_call_right_edge(left, rel, right, arg, shallowest_bloc
 		rel = rel,
 		right = right,
 		shallowest_block = shallowest_block,
+		cause = cause,
 	}
 
-	self.rightcall_edges:add(edge)
-	return true
+	return self.rightcall_edges:add(edge)
 end
 
 reachability_mt = { __index = Reachability }
@@ -3573,23 +4847,38 @@ local function reachability()
 	}, reachability_mt)
 end
 
----@enum TypeCheckerTag
-local TypeCheckerTag = {
-	VALUE = { VALUE = "VALUE" },
-	USAGE = { USAGE = "USAGE" },
-	METAVAR = { METAVAR = "METAVAR" },
-	RANGE = { RANGE = "RANGE" },
-}
 ---@param lctx TypecheckingContext
 ---@param val value
 ---@param use value
 ---@param rctx TypecheckingContext
 ---@param cause any
 function TypeCheckerState:queue_subtype(lctx, val, rctx, use, cause)
-	local l = U.tag("check_value", { val = val, use = use }, self.check_value, self, val, TypeCheckerTag.VALUE, lctx)
-	local r = U.tag("check_value", { val = val, use = use }, self.check_value, self, use, TypeCheckerTag.USAGE, rctx)
-	assert(type(l) == "number", "l isn't number, instead found " .. tostring(l))
-	assert(type(r) == "number", "r isn't number, instead found " .. tostring(r))
+	local l = self:check_value(val, TypeCheckerTag.VALUE, lctx)
+	local r = self:check_value(use, TypeCheckerTag.USAGE, rctx)
+	--[[local l = U.tag(
+		"check_value",
+		{ val = val:pretty_preprint(lctx), use = use:pretty_preprint(rctx) },
+		self.check_value,
+		self,
+		val,
+		TypeCheckerTag.VALUE,
+		lctx
+	)
+	local r = U.tag(
+		"check_value",
+		{ val = val:pretty_preprint(lctx), use = use:pretty_preprint(rctx) },
+		self.check_value,
+		self,
+		use,
+		TypeCheckerTag.USAGE,
+		rctx
+	)]]
+	if type(l) ~= "number" then
+		error("l isn't number, instead found " .. tostring(l))
+	end
+	if type(r) ~= "number" then
+		error("r isn't number, instead found " .. tostring(r))
+	end
 	U.append(self.pending, EdgeNotif.Constrain(l, UniverseOmegaRelation, r, self.block_level, cause))
 end
 
@@ -3600,10 +4889,32 @@ end
 ---@param use value
 ---@param cause any
 function TypeCheckerState:queue_constrain(lctx, val, rel, rctx, use, cause)
-	local l = U.tag("check_value", { val = val, use = use }, self.check_value, self, val, TypeCheckerTag.VALUE, lctx)
-	local r = U.tag("check_value", { val = val, use = use }, self.check_value, self, use, TypeCheckerTag.USAGE, rctx)
-	assert(type(l) == "number", "l isn't number, instead found " .. tostring(l))
-	assert(type(r) == "number", "r isn't number, instead found " .. tostring(r))
+	local l = self:check_value(val, TypeCheckerTag.VALUE, lctx)
+	local r = self:check_value(use, TypeCheckerTag.USAGE, rctx)
+	--[[local l = U.tag(
+		"check_value",
+		{ val = val:pretty_preprint(lctx), use = use:pretty_preprint(rctx) },
+		self.check_value,
+		self,
+		val,
+		TypeCheckerTag.VALUE,
+		lctx
+	)
+	local r = U.tag(
+		"check_value",
+		{ val = val:pretty_preprint(lctx), use = use:pretty_preprint(rctx) },
+		self.check_value,
+		self,
+		use,
+		TypeCheckerTag.USAGE,
+		rctx
+	)]]
+	if type(l) ~= "number" then
+		error("l isn't number, instead found " .. tostring(l))
+	end
+	if type(r) ~= "number" then
+		error("r isn't number, instead found " .. tostring(r))
+	end
 	U.append(self.pending, EdgeNotif.Constrain(l, rel, r, self.block_level, cause))
 end
 
@@ -3613,11 +4924,13 @@ end
 ---@param rctx TypecheckingContext
 ---@param use value
 ---@param cause any
+---@return boolean, any
 function TypeCheckerState:send_constrain(lctx, val, rel, rctx, use, cause)
 	if #self.pending == 0 then
-		self:constrain(val, lctx, use, rctx, rel, cause)
+		return self:constrain(val, lctx, use, rctx, rel, cause)
 	else
 		self:queue_constrain(lctx, val, rel, rctx, use, cause)
+		return true
 	end
 end
 
@@ -3626,15 +4939,25 @@ end
 ---@param context TypecheckingContext
 ---@return NodeID
 function TypeCheckerState:check_value(v, tag, context)
-	assert(v, "nil passed into check_value!")
+	if not v then
+		error("nil passed into check_value!")
+	end
+	if context == nil then
+		error("nil context passed into check_value! " .. debug.traceback())
+	end
+	--terms.verify_placeholders(v, context, self.values)
 
 	if v:is_neutral() and v:unwrap_neutral():is_free() and v:unwrap_neutral():unwrap_free():is_metavariable() then
 		local mv = v:unwrap_neutral():unwrap_free():unwrap_metavariable()
 		if tag == TypeCheckerTag.VALUE then
-			assert(mv.value ~= nil)
+			if mv.value == nil then
+				error("wtf")
+			end
 			return mv.value
 		else
-			assert(mv.usage ~= nil)
+			if mv.usage == nil then
+				error("wtf")
+			end
 			return mv.usage
 		end
 	end
@@ -3657,11 +4980,27 @@ function TypeCheckerState:check_value(v, tag, context)
 		local lower_bounds, upper_bounds, relation = v:unwrap_range()
 
 		for _, bound in ipairs(lower_bounds) do
-			self:queue_constrain(context, bound, relation:unwrap_host_value(), context, v, "range unpacking")
+			print("LOST CONSTRAINT")
+			self:queue_constrain(
+				context,
+				bound,
+				relation:unwrap_host_value(),
+				context,
+				v,
+				terms.constraintcause.lost("range unpacking", U.strip_ansi(debug.traceback()))
+			)
 		end
 
 		for _, bound in ipairs(upper_bounds) do
-			self:queue_constrain(context, v, relation:unwrap_host_value(), context, bound, "range_unpacking")
+			print("LOST CONSTRAINT")
+			self:queue_constrain(
+				context,
+				v,
+				relation:unwrap_host_value(),
+				context,
+				bound,
+				terms.constraintcause.lost("range_unpacking", U.strip_ansi(debug.traceback()))
+			)
 		end
 
 		return v_id
@@ -3676,84 +5015,110 @@ end
 ---@param context TypecheckingContext
 ---@param trait boolean?
 function TypeCheckerState:metavariable(context, trait)
+	if context == nil then
+		error("nil context passed into metavariable! You can't do that anymore!!!")
+	end
 	local i = #self.values + 1
 	local mv = setmetatable(
 		-- block level here should probably be inside the context and not inside the metavariable
-		{ value = i, usage = i, trait = trait or false, block_level = self.block_level },
+		{ value = i, usage = i, trait = trait or false, block_level = self.block_level, trace = U.bound_here(2) },
 		terms.metavariable_mt
 	)
-	U.append(self.values, { mv:as_value(), TypeCheckerTag.METAVAR })
+	U.append(self.values, { mv:as_value(), TypeCheckerTag.METAVAR, context })
 	return mv
 end
 
 ---@param val value
+---@param val_context TypecheckingContext
 ---@param use value
----@param cause any
+---@param use_context TypecheckingContext
+---@param cause constraintcause
 ---@return boolean
 ---@return ...
 function TypeCheckerState:flow(val, val_context, use, use_context, cause)
-	return self:constrain(val, val_context, use, use_context, UniverseOmegaRelation, cause)
+	--terms.verify_placeholders(val, val_context, self.values)
+	--terms.verify_placeholders(use, use_context, self.values)
+	local r = { self:constrain(val, val_context, use, use_context, UniverseOmegaRelation, cause) }
+
+	if self.snapshot_count ~= nil then
+		self.snapshot_index = ((self.snapshot_index or -1) + 1) % self.snapshot_count
+		self.snapshot_buffer[self.snapshot_index + 1] = self:Snapshot()
+	end
+
+	return table.unpack(r)
 end
 
 ---@param left integer
 ---@param right integer
 ---@param rel SubtypeRelation
-function TypeCheckerState:check_heads(left, right, rel)
+---@param cause constraintcause
+---@return boolean, string?
+function TypeCheckerState:check_heads(left, right, rel, cause, ambient_typechecking_context)
 	local lvalue, ltag, lctx = table.unpack(self.values[left])
 	local rvalue, rtag, rctx = table.unpack(self.values[right])
 
 	if ltag == TypeCheckerTag.VALUE and rtag == TypeCheckerTag.USAGE then
 		if lvalue:is_neutral() and lvalue:unwrap_neutral():is_application_stuck() then
-			return
+			return true
 		end
 		if rvalue:is_neutral() and rvalue:unwrap_neutral():is_application_stuck() then
-			return
+			return true
 		end
 		-- Unpacking tuples hasn't been fixed in VSCode yet (despite the issue being closed???) so we have to override the types: https://github.com/LuaLS/lua-language-server/issues/1816
 		local tuple_params = value_array(
 			value.host_value(lctx),
 			value.host_value(lvalue),
 			value.host_value(rctx),
-			value.host_value(rvalue)
+			value.host_value(rvalue),
+			value.host_value(cause)
 		)
-		-- TODO: how do we pass in the type contexts???
-		U.tag(
-			"apply_value",
-			{ lvalue = lvalue, rvalue = rvalue, block_level = typechecker_state.block_level, rel = rel.debug_name },
-			apply_value,
-			rel.constrain,
-			value.tuple_value(tuple_params)
-		)
-		-- local ok, err = U.tag(
-		-- 	"check_concrete",
-		-- 	{ lvalue, rvalue },
-		-- 	check_concrete,
-		-- 	lvalue --[[@as value]],
-		-- 	rvalue --[[@as value]]
-		-- )
-		-- if not ok then
-		-- 	error(err)
-		-- end
+
+		return apply_value(rel.constrain, value.tuple_value(tuple_params), ambient_typechecking_context)
+			:unwrap_host_tuple_value()
+			:unpack()
+
+		--[[U.tag("apply_value", {
+			lvalue = lvalue:pretty_preprint(lctx),
+			rvalue = rvalue:pretty_preprint(rctx),
+			block_level = typechecker_state.block_level,
+			rel = rel.debug_name,
+			cause = cause,
+		}, apply_value, rel.constrain, value.tuple_value(tuple_params))]]
 	end
+
+	return true
 end
 
----@param left integer
----@param right integer
+---@param edge ConstrainEdge
 ---@param rel SubtypeRelation
-function TypeCheckerState:constrain_induce_call(left, right, rel)
+function TypeCheckerState:constrain_induce_call(edge, rel)
 	---@type value, TypeCheckerTag, TypecheckingContext
-	local lvalue, ltag, lctx = table.unpack(self.values[left])
+	local lvalue, ltag, lctx = table.unpack(self.values[edge.left])
 	---@type value, TypeCheckerTag, TypecheckingContext
-	local rvalue, rtag, rctx = table.unpack(self.values[right])
+	local rvalue, rtag, rctx = table.unpack(self.values[edge.right])
 
 	if --[[ltag == TypeCheckerTag.METAVAR and]]
 		lvalue:is_neutral() and lvalue:unwrap_neutral():is_application_stuck()
 	then
 		local f, arg = lvalue:unwrap_neutral():unwrap_application_stuck()
-		local l = self:check_value(value.neutral(f), TypeCheckerTag.VALUE, nil)
+		local l = self:check_value(value.neutral(f), TypeCheckerTag.VALUE, lctx)
 		U.append(
 			self.pending,
-			EdgeNotif.CallLeft(l, arg, rel, right, self.block_level, "Inside constrain_induce_call ltag")
+			EdgeNotif.CallLeft(
+				l,
+				arg,
+				rel,
+				edge.right,
+				self.block_level,
+				nestcause(
+					"Inside constrain_induce_call ltag (maybe wrong constrain type?)",
+					edge.cause,
+					value.neutral(f),
+					rvalue,
+					lctx,
+					rctx
+				)
+			)
 		)
 	end
 
@@ -3761,33 +5126,101 @@ function TypeCheckerState:constrain_induce_call(left, right, rel)
 		rvalue:is_neutral() and rvalue:unwrap_neutral():is_application_stuck()
 	then
 		local f, arg = rvalue:unwrap_neutral():unwrap_application_stuck()
-		local r = self:check_value(value.neutral(f), TypeCheckerTag.USAGE, nil)
+		local r = self:check_value(value.neutral(f), TypeCheckerTag.USAGE, rctx)
 		U.append(
 			self.pending,
-			EdgeNotif.CallRight(left, rel, r, arg, self.block_level, "Inside constrain_induce_call rtag")
+			EdgeNotif.CallRight(
+				edge.left,
+				rel,
+				r,
+				arg,
+				self.block_level,
+				nestcause(
+					"Inside constrain_induce_call rtag (maybe wrong constrain type?)",
+					edge.cause,
+					lvalue,
+					value.neutral(f),
+					lctx,
+					rctx
+				)
+			)
 		)
 	end
 end
 
 ---check for compositions of a constrain edge and a left call edge in response to a new constrain edge
 ---@param edge ConstrainEdge
-function TypeCheckerState:constrain_leftcall_compose_1(edge)
+---@param edge_id integer
+function TypeCheckerState:constrain_leftcall_compose_1(edge, edge_id)
 	local mvalue, mtag, mctx = table.unpack(self.values[edge.right])
 	if mtag == TypeCheckerTag.METAVAR then
-		for _, r2 in ipairs(self.graph.leftcall_edges:from(edge.right)) do
+		for i, r2 in ipairs(self.graph.leftcall_edges:from(edge.right)) do
 			if FunctionRelation(r2.rel) ~= edge.rel then
 				error(
 					"Relations do not match! " .. tostring(FunctionRelation(r2.rel)) .. " is not " .. tostring(edge.rel)
 				)
 			end
+
+			local lvalue, _, lctx = table.unpack(self.values[edge.left])
+			local l = self:check_value(apply_value(lvalue, r2.arg, lctx), TypeCheckerTag.VALUE, lctx)
 			U.append(
 				self.pending,
-				EdgeNotif.CallLeft(
-					edge.left,
-					r2.arg,
+				EdgeNotif.Constrain(
+					l,
 					r2.rel,
 					r2.right,
-					math.min(edge.shallowest_block, r2.shallowest_block) "constrain leftcall composition induced by constrain"
+					math.min(edge.shallowest_block, r2.shallowest_block),
+					compositecause("leftcall_discharge", i, r2, edge_id, edge, U.anchor_here())
+				)
+			)
+		end
+	end
+end
+
+--- Check for a meet between a left call and a right call - if they have the same argument, induce a constraint between them
+---@param edge LeftCallEdge
+---@param edge_id integer
+function TypeCheckerState:constrain_on_left_meet(edge, edge_id)
+	for i, r in ipairs(self.graph.rightcall_edges:to(edge.left)) do
+		if r.arg == edge.arg then
+			-- Add constraint
+			if r.rel ~= edge.rel then
+				error("Relations do not match! " .. tostring(r.rel.Rel) .. " is not " .. tostring(edge.rel.Rel))
+			end
+
+			U.append(
+				self.pending,
+				EdgeNotif.Constrain(
+					r.left,
+					edge.rel,
+					edge.right,
+					math.min(edge.shallowest_block, r.shallowest_block),
+					compositecause("composition", i, r, edge_id, edge, U.anchor_here())
+				)
+			)
+		end
+	end
+end
+
+--- Check for a meet between a right call and a left call - if they have the same argument, induce a constraint between them
+---@param edge RightCallEdge
+---@param edge_id integer
+function TypeCheckerState:constrain_on_right_meet(edge, edge_id)
+	for i, l in ipairs(self.graph.leftcall_edges:from(edge.right)) do
+		if l.arg == edge.arg then
+			-- Add constraint
+			if l.rel ~= edge.rel then
+				error("Relations do not match! " .. tostring(l.rel.Rel) .. " is not " .. tostring(edge.rel.Rel))
+			end
+
+			U.append(
+				self.pending,
+				EdgeNotif.Constrain(
+					edge.left,
+					edge.rel,
+					l.right,
+					math.min(edge.shallowest_block, l.shallowest_block),
+					compositecause("composition", edge_id, edge, i, l, U.anchor_here())
 				)
 			)
 		end
@@ -3796,24 +5229,28 @@ end
 
 ---check for compositions of a constrain edge and a left call edge in response to a new left call edge
 ---@param edge LeftCallEdge
-function TypeCheckerState:constrain_leftcall_compose_2(edge)
+---@param edge_id integer
+function TypeCheckerState:constrain_leftcall_compose_2(edge, edge_id)
 	local mvalue, mtag, mctx = table.unpack(self.values[edge.left])
 	if mtag == TypeCheckerTag.METAVAR then
-		for _, l2 in ipairs(self.graph.constrain_edges:to(edge.left)) do
+		for i, l2 in ipairs(self.graph.constrain_edges:to(edge.left)) do
 			if l2.rel ~= FunctionRelation(edge.rel) then
 				error(
 					"Relations do not match! " .. tostring(l2.rel) .. " is not " .. tostring(FunctionRelation(edge.rel))
 				)
 			end
+			local lvalue, _, lctx = table.unpack(self.values[l2.left])
+			local new_value = apply_value(lvalue, edge.arg, lctx)
+
+			local l = self:check_value(new_value, TypeCheckerTag.VALUE, lctx)
 			U.append(
 				self.pending,
-				EdgeNotif.CallLeft(
-					edge.left,
-					edge.arg,
+				EdgeNotif.Constrain(
+					l,
 					edge.rel,
-					l2.right,
+					edge.right,
 					math.min(edge.shallowest_block, l2.shallowest_block),
-					"constrain leftcall composition induced by leftcall"
+					compositecause("composition", i, l2, edge_id, edge, U.anchor_here())
 				)
 			)
 		end
@@ -3822,24 +5259,26 @@ end
 
 ---check for compositions of a right call edge and a constrain edge in response to a new constrain edge
 ---@param edge ConstrainEdge
-function TypeCheckerState:rightcall_constrain_compose_2(edge)
+---@param edge_id integer
+function TypeCheckerState:rightcall_constrain_compose_2(edge, edge_id)
 	local mvalue, mtag, mctx = table.unpack(self.values[edge.left])
 	if mtag == TypeCheckerTag.METAVAR then
-		for _, l2 in ipairs(self.graph.rightcall_edges:to(edge.left)) do
+		for i, l2 in ipairs(self.graph.rightcall_edges:to(edge.left)) do
 			if FunctionRelation(l2.rel) ~= edge.rel then
 				error(
 					"Relations do not match! " .. tostring(FunctionRelation(l2.rel)) .. " is not " .. tostring(edge.rel)
 				)
 			end
+			local rvalue, _, rctx = table.unpack(self.values[l2.left])
+			local r = self:check_value(apply_value(rvalue, l2.arg, rctx), TypeCheckerTag.VALUE, rctx)
 			U.append(
 				self.pending,
-				EdgeNotif.CallRight(
+				EdgeNotif.Constrain(
 					edge.left,
 					l2.rel,
-					l2.right,
-					l2.arg,
+					r,
 					math.min(edge.shallowest_block, l2.shallowest_block),
-					"rightcall constrain composition induced by constrain"
+					compositecause("rightcall_discharge", edge_id, edge, i, l2, U.anchor_here())
 				)
 			)
 		end
@@ -3848,27 +5287,35 @@ end
 
 ---check for compositions of a right call edge and a constrain edge in response to a new right call edge
 ---@param edge RightCallEdge
-function TypeCheckerState:rightcall_constrain_compose_1(edge)
+---@param edge_id integer
+function TypeCheckerState:rightcall_constrain_compose_1(edge, edge_id)
 	local mvalue, mtag, mctx = table.unpack(self.values[edge.right])
 	if mtag == TypeCheckerTag.METAVAR then
-		for _, r2 in ipairs(self.graph.constrain_edges:from(edge.right)) do
+		for i, r2 in ipairs(self.graph.constrain_edges:from(edge.right)) do
 			if r2.rel ~= FunctionRelation(edge.rel) then
 				error(
 					"Relations do not match! " .. tostring(r2.rel) .. " is not " .. tostring(FunctionRelation(edge.rel))
 				)
 			end
+			local rvalue, _, rctx = table.unpack(self.values[edge.left])
+			local r = self:check_value(apply_value(rvalue, edge.arg, rctx), TypeCheckerTag.VALUE, rctx)
 			U.append(
 				self.pending,
-				EdgeNotif.CallRight(
+				EdgeNotif.Constrain(
 					edge.left,
 					edge.rel,
-					r2.right,
-					edge.arg,
+					r,
 					math.min(edge.shallowest_block, r2.shallowest_block),
-					"constrain leftcall composition induced by leftcall"
+					compositecause("rightcall_discharge", i, r2, edge_id, edge, U.anchor_here())
 				)
 			)
 		end
+	end
+end
+
+function TypeCheckerState:DEBUG_VERIFY_VALUES()
+	for i, v in ipairs(self.values) do
+		terms.verify_placeholders(v[1], v[3], self.values)
 	end
 end
 
@@ -3877,61 +5324,105 @@ end
 ---@param use value
 ---@param use_context TypecheckingContext
 ---@param rel SubtypeRelation
----@param cause any
+---@param cause constraintcause
 ---@return boolean
 ---@return ...
 function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cause)
-	assert(val and use, "empty val or use passed into constrain!")
-	assert(#self.pending == 0, "pending not empty at start of constrain!")
+	if not val then
+		error("empty val passed into constrain!")
+	end
+	if not use then
+		error("empty use passed into constrain!")
+	end
+	if #self.pending ~= 0 then
+		error("pending not empty at start of constrain!")
+	end
 	--TODO: add contexts to queue_work if appropriate
 	--self:queue_work(val, val_context, use, use_context, cause)
+
 	self:queue_constrain(val_context, val, rel, use_context, use, cause)
 
 	while #self.pending > 0 do
+		--assert(self:DEBUG_VERIFY(), "VERIFICATION FAILED")
 		local item = U.pop(self.pending)
 
 		if item:is_Constrain() then
-			local left, rel, right, shallowest_block, cause = item:unwrap_Constrain()
+			local left, rel, right, shallowest_block, item_cause = item:unwrap_Constrain()
+			local edge_id = self.graph:add_constrain_edge(left, right, rel, self.block_level, item_cause)
 
-			if self.graph:add_constrain_edge(left, right, rel, self.block_level) then
+			if edge_id ~= nil then
 				---@type ConstrainEdge
-				local edge = { left = left, rel = rel, right = right, shallowest_block = self.block_level }
-				self.graph:constrain_transitivity(edge, self.pending, cause)
-				U.tag(
+				local edge =
+					{ left = left, rel = rel, right = right, shallowest_block = self.block_level, cause = item_cause }
+				self.graph:constrain_transitivity(edge, edge_id, self.pending)
+				local ok, err = self:check_heads(left, right, rel, item_cause, val_context)
+				if not ok then
+					if ok == nil then
+						error(
+							"check_head returned nil! Did you remember to return true from this relation? "
+								.. tostring(rel)
+						)
+					end
+					return ok, err
+				end
+				--[[U.tag(
 					"check_heads",
 					{ left = left, right = right, rel = rel.debug_name },
 					self.check_heads,
 					self,
 					left,
 					right,
-					rel
-				)
-				self:constrain_induce_call(left, right, rel)
-				self:constrain_leftcall_compose_1(edge)
-				self:rightcall_constrain_compose_2(edge)
+					rel,
+					item_cause
+				)]]
+				self:constrain_induce_call(edge, rel)
+				self:constrain_leftcall_compose_1(edge, edge_id)
+				self:rightcall_constrain_compose_2(edge, edge_id)
 			end
 		elseif item:is_CallLeft() then
-			local left, arg, rel, right, shallowest_block, cause = item:unwrap_CallLeft()
+			local left, arg, rel, right, shallowest_block, item_cause = item:unwrap_CallLeft()
 
-			if self.graph:add_call_left_edge(left, arg, rel, right, self.block_level) then
+			local edge_id = self.graph:add_call_left_edge(left, arg, rel, right, self.block_level, item_cause)
+
+			if edge_id ~= nil then
 				---@type LeftCallEdge
-				local edge = { left = left, arg = arg, rel = rel, right = right, shallowest_block = self.block_level }
-				self:constrain_leftcall_compose_2(edge)
+				local edge = {
+					left = left,
+					arg = arg,
+					rel = rel,
+					right = right,
+					shallowest_block = self.block_level,
+					cause = item_cause,
+				}
+				self:constrain_leftcall_compose_2(edge, edge_id)
+				self:constrain_on_left_meet(edge, edge_id)
 			end
 		elseif item:is_CallRight() then
-			local left, rel, right, arg, shallowest_block, cause = item:unwrap_CallRight()
+			local left, rel, right, arg, shallowest_block, item_cause = item:unwrap_CallRight()
 
-			if self.graph:add_call_right_edge(left, rel, right, arg, self.block_level) then
+			local edge_id = self.graph:add_call_right_edge(left, rel, right, arg, self.block_level, item_cause)
+			if edge_id ~= nil then
 				---@type RightCallEdge
-				local edge = { left = left, rel = rel, right = right, arg = arg, shallowest_block = self.block_level }
-				self:rightcall_constrain_compose_1(edge)
+				local edge = {
+					left = left,
+					rel = rel,
+					right = right,
+					arg = arg,
+					shallowest_block = self.block_level,
+					cause = item_cause,
+				}
+				self:rightcall_constrain_compose_1(edge, edge_id)
+				self:constrain_on_right_meet(edge, edge_id) -- This just duplicates constrain_on_left_meet
 			end
 		else
 			error("Unknown edge kind!")
 		end
 	end
 
-	assert(#self.pending == 0, "pending was not drained!")
+	--assert(self:DEBUG_VERIFY(), "VERIFICATION FAILED")
+	if #self.pending ~= 0 then
+		error("pending was not drained!")
+	end
 	return true
 end
 
@@ -3952,16 +5443,26 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len)
 
 	local constraints = array(terms.constraintelem)()
 
+	---@param id integer
+	---@return value
 	local function getnode(id)
 		return self.values[id][1]
 	end
+	---@param id integer
+	---@return TypecheckingContext
 	local function getctx(id)
-		return self.values[id][3] or terms.typechecking_context() --FIXME
+		return self.values[id][3]
 	end
+
+	---@generic T
+	---@param edgeset T[]
+	---@param extractor fun(edge: T) : integer
+	---@param callback fun(edge: T)
 	local function slice_edgeset(edgeset, extractor, callback)
 		for _, edge in ipairs(edgeset) do
-			if self.values[extractor(edge)][2] == TypeCheckerTag.METAVAR then
-				local mvo = self.values[extractor(edge)][1]
+			local tag = self.values[extractor(edge)][2]
+			if tag == TypeCheckerTag.METAVAR then
+				local mvo = getnode(extractor(edge))
 
 				if
 					mvo:is_neutral()
@@ -3975,10 +5476,8 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len)
 				else
 					error "incorrectly labelled as a metavariable"
 				end
-			else
-				if not (self.values[extractor(edge)][2] == TypeCheckerTag.RANGE) then
-					callback(edge)
-				end
+			elseif tag ~= TypeCheckerTag.RANGE then
+				callback(edge)
 			end
 		end
 	end
@@ -3988,7 +5487,7 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len)
 	end, function(edge)
 		constraints:append(
 			terms.constraintelem.constrain_sliced(
-				substitute_inner(getnode(edge.left), mappings, context_len),
+				substitute_inner(getnode(edge.left), mappings, context_len, getctx(edge.left)),
 				getctx(edge.left),
 				edge.rel,
 				edge.cause
@@ -4001,7 +5500,7 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len)
 		constraints:append(
 			terms.constraintelem.sliced_constrain(
 				edge.rel,
-				substitute_inner(getnode(edge.right), mappings, context_len),
+				substitute_inner(getnode(edge.right), mappings, context_len, getctx(edge.right)),
 				getctx(edge.right),
 				edge.cause
 			)
@@ -4012,9 +5511,9 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len)
 	end, function(edge)
 		constraints:append(
 			terms.constraintelem.leftcall_sliced(
-				substitute_inner(getnode(edge.left), mappings, context_len),
+				substitute_inner(getnode(edge.left), mappings, context_len, getctx(edge.left)),
 				getctx(edge.left),
-				substitute_inner(edge.arg, mappings, context_len),
+				substitute_inner(edge.arg, mappings, context_len, getctx(edge.left)),
 				edge.rel,
 				edge.cause
 			)
@@ -4025,9 +5524,9 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len)
 	end, function(edge)
 		constraints:append(
 			terms.constraintelem.sliced_leftcall(
-				substitute_inner(edge.arg, mappings, context_len),
+				substitute_inner(edge.arg, mappings, context_len, getctx(edge.right)),
 				edge.rel,
-				substitute_inner(getnode(edge.right), mappings, context_len),
+				substitute_inner(getnode(edge.right), mappings, context_len, getctx(edge.right)),
 				getctx(edge.right),
 				edge.cause
 			)
@@ -4038,10 +5537,10 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len)
 	end, function(edge)
 		constraints:append(
 			terms.constraintelem.rightcall_sliced(
-				substitute_inner(getnode(edge.left), mappings, context_len),
+				substitute_inner(getnode(edge.left), mappings, context_len, getctx(edge.left)),
 				getctx(edge.left),
 				edge.rel,
-				substitute_inner(edge.arg, mappings, context_len),
+				substitute_inner(edge.arg, mappings, context_len, getctx(edge.left)),
 				edge.cause
 			)
 		)
@@ -4052,15 +5551,15 @@ function TypeCheckerState:slice_constraints_for(mv, mappings, context_len)
 		constraints:append(
 			terms.constraintelem.sliced_rightcall(
 				edge.rel,
-				substitute_inner(getnode(edge.right), mappings, context_len),
+				substitute_inner(getnode(edge.right), mappings, context_len, getctx(edge.right)),
 				getctx(edge.right),
-				substitute_inner(edge.arg, mappings, context_len),
+				substitute_inner(edge.arg, mappings, context_len, getctx(edge.right)),
 				edge.cause
 			)
 		)
 	end)
 
-	return typed.constrained_type(constraints)
+	return typed.constrained_type(constraints, self.values[mv.usage][3])
 end
 
 local typechecker_state_mt = { __index = TypeCheckerState }
@@ -4075,19 +5574,18 @@ function TypeCheckerState:shadow()
 		valcheck = U.shadowtable(self.valcheck),
 		usecheck = U.shadowtable(self.usecheck),
 		trait_registry = self.trait_registry:shadow(),
-		__shadow = self,
-	}, typechecker_state_mt)
+	}, { __index = TypeCheckerState, __shadow = self, __depth = U.getshadowdepth(self) + 1 })
 end
 
 function TypeCheckerState:commit()
 	U.commit(self.pending)
 	self.graph:commit()
-	self.__shadow.block_level = self.block_level
+	getmetatable(self).__shadow.block_level = self.block_level
 	U.commit(self.values)
 	U.commit(self.valcheck)
 	U.commit(self.usecheck)
 	self.trait_registry:commit()
-	rawset(self, "__shadow", nil)
+	U.invalidate(self)
 end
 
 function TypeCheckerState:revert()
@@ -4097,7 +5595,7 @@ function TypeCheckerState:revert()
 	U.revert(self.valcheck)
 	U.revert(self.usecheck)
 	self.trait_registry:revert()
-	rawset(self, "__shadow", nil)
+	U.invalidate(self)
 end
 
 function TypeCheckerState:enter_block()
@@ -4121,6 +5619,156 @@ local function new_typechecker_state()
 end
 
 typechecker_state = new_typechecker_state()
+
+---@param cause constraintcause
+---@return string[]
+local function assemble_causal_chain(cause)
+	---@param left constraintcause
+	---@param right constraintcause
+	---@return string[]
+	local function merge_causal_chain(left, right)
+		local chain = assemble_causal_chain(left)
+		for _, v in ipairs(assemble_causal_chain(right)) do
+			U.append(chain, v)
+		end
+		return chain
+	end
+
+	local g = typechecker_state.graph
+	if cause:is_composition() then
+		local left, right, pos = cause:unwrap_composition()
+		return merge_causal_chain(g.constrain_edges:all()[left].cause, g.constrain_edges:all()[right].cause)
+	elseif cause:is_leftcall_discharge() then
+		local call, constraint, pos = cause:unwrap_leftcall_discharge()
+		return merge_causal_chain(g.leftcall_edges:all()[call].cause, g.constrain_edges:all()[constraint].cause)
+	elseif cause:is_rightcall_discharge() then
+		local constraint, call, pos = cause:unwrap_rightcall_discharge()
+		return merge_causal_chain(g.constrain_edges:all()[constraint].cause, g.rightcall_edges:all()[call].cause)
+	elseif cause:is_nested() then
+		local desc, inner = cause:unwrap_nested()
+		local chain = assemble_causal_chain(inner)
+		U.append(chain, desc)
+		return chain
+	elseif cause:is_primitive() then
+		local desc, pos = cause:unwrap_primitive()
+		return { desc }
+	elseif cause:is_lost() then
+		local desc, stacktrace, pos = cause:unwrap_lost()
+		return { desc }
+	end
+end
+
+---@param cause constraintcause
+---@param side boolean
+---@param list table[]
+local function assemble_side_chain(cause, side, list)
+	local g = typechecker_state.graph
+
+	---@param left constraintcause
+	---@param right constraintcause
+	---@param desc string
+	---@return string[]
+	local function split_causal_chain(left, right, desc)
+		if side then
+			local l = g.constrain_edges:all()[left]
+			assemble_side_chain(l.cause, side, list)
+			U.append(
+				list,
+				{ desc = desc, val = typechecker_state.values[l.left][1], lctx = typechecker_state.values[l.left][3] }
+			)
+		else
+			local r = g.constrain_edges:all()[right]
+			U.append(
+				list,
+				{ desc = desc, use = typechecker_state.values[r.right][1], rctx = typechecker_state.values[r.right][3] }
+			)
+			assemble_side_chain(r.cause, side, list)
+		end
+	end
+
+	if cause:is_composition() then
+		local left, right, pos = cause:unwrap_composition()
+		split_causal_chain(left, right, "composition")
+	elseif cause:is_leftcall_discharge() then
+		local call, constraint, pos = cause:unwrap_leftcall_discharge()
+		split_causal_chain(call, constraint, "leftcall discharge")
+	elseif cause:is_rightcall_discharge() then
+		local constraint, call, pos = cause:unwrap_rightcall_discharge()
+		split_causal_chain(constraint, call, "rightcall discharge")
+	elseif cause:is_nested() then
+		local desc, inner = cause:unwrap_nested()
+		if side then
+			assemble_side_chain(inner, side, list)
+			U.append(list, { desc = desc, val = cause.val, lctx = cause.lctx })
+			if cause.val == nil then
+				print("NIL VAL!")
+			end
+		else
+			U.append(list, { desc = desc, use = cause.use, rctx = cause.rctx })
+			assemble_side_chain(inner, side, list)
+		end
+	elseif cause:is_primitive() then
+		local desc, pos = cause:unwrap_primitive()
+		if side then
+			U.append(list, { desc = desc, val = cause.val or "[<PRIMITIVE VAL>]", lctx = cause.lctx })
+		else
+			U.append(list, { desc = desc, use = cause.val or "[<PRIMITIVE USE>]", rctx = cause.rctx })
+		end
+	elseif cause:is_lost() then
+		local desc, stacktrace, pos = cause:unwrap_lost()
+		if side then
+			U.append(list, { desc = desc, val = "[<LOST>]" })
+		else
+			U.append(list, { desc = desc, use = "[<LOST>]" })
+		end
+	end
+end
+
+terms.constraintcause.__tostring = function(self)
+	--if self.track then
+	local vals = {}
+	local uses = {}
+	assemble_side_chain(self, true, vals)
+	assemble_side_chain(self, false, uses)
+	local output = ""
+	for _, v in ipairs(vals) do
+		if v.desc then
+			-- Note that ⟞↦ works better here but doesn't render well in the windows terminal, so we use ⊣→
+			output = output .. "\n ⊣ " .. v.desc .. " → \n"
+		else
+			output = output .. "\n → \n"
+		end
+		if type(v.val) == "table" then
+			output = output .. v.val:pretty_print(v.lctx)
+			--if v.lctx then
+			--	output = output .. "\nCONTEXT: " .. v.lctx:format_names()
+			--end
+		else
+			output = output .. v.val
+		end
+	end
+	output = output .. "\n : VAL → USE : \n"
+	for _, v in ipairs(uses) do
+		if type(v.use) == "table" then
+			output = output .. v.use:pretty_print(v.rctx)
+			--if v.rctx then
+			--	output = output .. "\nCONTEXT: " .. v.rctx:format_names()
+			--end
+		else
+			output = output .. v.use
+		end
+		if v.desc then
+			output = output .. "\n ⊣ " .. v.desc .. " → \n"
+		else
+			output = output .. "\n → \n"
+		end
+	end
+	return output
+	--else
+	--	local chain = assemble_causal_chain(self)
+	--	return table.concat(chain, " → ")
+	--end
+end
 
 local evaluator = {
 	typechecker_state = typechecker_state,
@@ -4147,25 +5795,24 @@ local evaluator = {
 }
 internals_interface.evaluator = evaluator
 
----@param fn fun() : ...
+---@param fn fun() : boolean, ...
 ---@return boolean
 ---@return ...
 function TypeCheckerState:speculate(fn)
-	local function capture(ok, ...)
-		if ok then
-			-- flattens all our changes back on to self
-			typechecker_state:commit()
-		else
-			typechecker_state:revert()
-		end
-		typechecker_state = self
-		evaluator.typechecker_state = self
-		return ok, ...
-	end
 	typechecker_state = self:shadow()
 	evaluator.typechecker_state = typechecker_state
-	return capture(xpcall(fn, metalanguage.custom_traceback))
-	--return capture(pcall(fn))
+	local r = { fn() }
+	if r[1] then
+		-- flattens all our changes back on to self
+		typechecker_state:commit()
+	else
+		--print("REVERTING DUE TO: ", ...)
+		typechecker_state:revert()
+	end
+
+	typechecker_state = self
+	evaluator.typechecker_state = self
+	return table.unpack(r)
 end
 
 return evaluator

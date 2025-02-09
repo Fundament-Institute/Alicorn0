@@ -6,27 +6,33 @@ checkable = {}
 
 ---@return boolean
 function checkable:is_inferrable() end
----@return inferrable
+---@return inferrable inferrable_term
 function checkable:unwrap_inferrable() end
----@return boolean, inferrable
+---@return boolean
+---@return inferrable inferrable_term
 function checkable:as_inferrable() end
 ---@return boolean
 function checkable:is_tuple_cons() end
----@return ArrayValue
+---@return ArrayValue elements
 function checkable:unwrap_tuple_cons() end
----@return boolean, ArrayValue
+---@return boolean
+---@return ArrayValue elements
 function checkable:as_tuple_cons() end
 ---@return boolean
 function checkable:is_host_tuple_cons() end
----@return ArrayValue
+---@return ArrayValue elements
 function checkable:unwrap_host_tuple_cons() end
----@return boolean, ArrayValue
+---@return boolean
+---@return ArrayValue elements
 function checkable:as_host_tuple_cons() end
 ---@return boolean
 function checkable:is_lambda() end
----@return string, checkable
+---@return string param_name
+---@return checkable body
 function checkable:unwrap_lambda() end
----@return boolean, string, checkable
+---@return boolean
+---@return string param_name
+---@return checkable body
 function checkable:as_lambda() end
 
 ---@class (exact) checkableType: EnumType

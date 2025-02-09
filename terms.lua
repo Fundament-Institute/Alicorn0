@@ -13,6 +13,7 @@ local fibbuf = require "fibonacci-buffer"
 local gen = require "terms-generators"
 local derivers = require "derivers"
 local traits = require "traits"
+local U = require "alicorn-utils"
 
 local format = require "format"
 
@@ -64,15 +65,48 @@ local anchor_type = gen.declare_foreign(gen.metatable_equality(format.anchor_mt)
 ---@class RuntimeContext
 ---@field bindings FibonacciBuffer
 local RuntimeContext = {}
-function RuntimeContext:get(index)
-	return self.bindings:get(index)
+
+function RuntimeContext:dump_names()
+	for i = 1, self.bindings:len() do
+		print(i, self.bindings:get(i).name)
+	end
 end
 
+---@return string
+function RuntimeContext:format_names()
+	local msg = ""
+	for i = 1, self.bindings:len() do
+		msg = msg .. tostring(i) .. "\t" .. self.bindings:get(i).name .. "\n"
+	end
+	return msg
+end
+
+---@param index integer
+---@return value
+function RuntimeContext:get(index)
+	return self.bindings:get(index).val
+end
+
+-- without this, some value.closure comparisons fail erroneously
+local RuntimeContextBinding = {
+	__eq = function(l, r)
+		return l.name == r.name and l.val == r.val
+	end,
+}
+
 ---@param v value
+---@param name string?
 ---@return RuntimeContext
-function RuntimeContext:append(v)
-	-- TODO: typecheck
-	local copy = { bindings = self.bindings:append(v) }
+function RuntimeContext:append(v, name)
+	if value.value_check(v) ~= true then
+		error("RuntimeContext:append v must be a value")
+	end
+	-- TODO: add caller line number to this fake name?
+	name = name or ("#rctx%d"):format(self.bindings:len() + 1)
+	local copy = {
+		provenance = self,
+		bindings = self.bindings:append(setmetatable({ name = name, val = v }, RuntimeContextBinding)),
+	}
 	return setmetatable(copy, runtime_context_mt)
 end
 
@@ -80,7 +114,12 @@ end
 ---@param v value
 ---@return RuntimeContext
 function RuntimeContext:set(index, v)
-	local copy = { bindings = self.bindings:set(index, v) }
+	if value.value_check(v) ~= true then
+		error("RuntimeContext:set v must be a value")
+	end
+	local old = self.bindings:get(index)
+	local new = setmetatable({ name = old.name, val = v }, RuntimeContextBinding)
+	local copy = { provenance = self, bindings = self.bindings:set(index, new) }
 	return setmetatable(copy, runtime_context_mt)
 end
 
@@ -97,11 +136,60 @@ end
 runtime_context_mt = {
 	__index = RuntimeContext,
 	__eq = RuntimeContext.eq,
+	__tostring = function(t)
+		return "RuntimeContext with " .. t.bindings:len() .. " bindings."
+	end,
 }
 
 ---@return RuntimeContext
 local function runtime_context()
 	return setmetatable({ bindings = fibbuf() }, runtime_context_mt)
+end
+
+local function runtime_context_diff_fn(left, right)
+	print("diffing runtime context...")
+	local rt = getmetatable(right)
+	if runtime_context_mt ~= rt then
+		print("unequal types!")
+		print(runtime_context_mt)
+		print(rt)
+		print("stopping diff")
+		return
+	end
+	if left.bindings:len() ~= right.bindings:len() then
+		print("unequal lengths!")
+		print(left.bindings:len())
+		print(right.bindings:len())
+		print("stopping diff")
+		return
+	end
+	local n = 0
+	local diff_elems = {}
+	for i = 1, left.bindings:len() do
+		if left:get(i) ~= right:get(i) then
+			n = n + 1
+			diff_elems[n] = i
+		end
+	end
+	if n == 0 then
+		print("no difference")
+		print("stopping diff")
+		return
+	elseif n == 1 then
+		local d = diff_elems[1]
+		print("difference in element: " .. tostring(d))
+		local diff_impl = traits.diff:get(value)
+		-- tail call
+		return diff_impl.diff(left:get(d), right:get(d))
+	else
+		print("difference in multiple elements:")
+		for i = 1, n do
+			print("left " .. tostring(diff_elems[i]) .. ": " .. tostring(left:get(diff_elems[i])))
+			print("right " .. tostring(diff_elems[i]) .. ": " .. tostring(right:get(diff_elems[i])))
+		end
+		print("stopping diff")
+		return
+	end
 end
 
 local typechecking_context_mt
@@ -111,12 +199,140 @@ local typechecking_context_mt
 ---@field bindings FibonacciBuffer
 local TypecheckingContext = {}
 
+---@param ctx RuntimeContext|TypecheckingContext
+---@return RuntimeContext
+function to_runtime_context(ctx)
+	if getmetatable(ctx) == typechecking_context_mt then
+		return ctx.runtime_context
+	end
+	return ctx
+end
+
+---@param v table
+---@param ctx RuntimeContext|TypecheckingContext
+---@param values value[]
+---@return boolean
+local function verify_placeholders(v, ctx, values)
+	-- If it's not a table we don't care
+	if type(v) ~= "table" then
+		return true
+	end
+
+	ctx = to_runtime_context(ctx)
+
+	-- Special handling for arrays
+	if getmetatable(v) and getmetatable(getmetatable(v)) == gen.array_type_mt then
+		for k, val in ipairs(v) do
+			if not verify_placeholders(val, ctx, values) then
+				return false
+			end
+		end
+		return true
+	end
+	if not v.kind then
+		return true
+	end
+
+	if v.kind == "free.placeholder" then
+		local i, info = v:unwrap_placeholder()
+		if info then
+			local source_ctx = ctx
+
+			while source_ctx do
+				if source_ctx == info.ctx then
+					return true
+				end
+
+				source_ctx = source_ctx.provenance
+			end
+
+			print(
+				debug.traceback(
+					"INVALID PROVENANCE: "
+						.. tostring(info)
+						.. "\nORIGINAL CTX: "
+						.. info.ctx:format_names()
+						.. "\nASSOCIATED CTX: "
+						.. ctx:format_names()
+				)
+			)
+			--error("")
+			os.exit(-1, true)
+
+			return false
+		end
+	elseif v.kind == "free.metavariable" then
+		if not values then
+			error(debug.traceback("FORGOT values PARAMETER!"))
+		end
+		---@type Metavariable
+		local mv = v:unwrap_metavariable()
+
+		local source_ctx = ctx
+
+		local mv_ctx = to_runtime_context(values[mv.value][3])
+		while source_ctx do
+			if source_ctx == mv_ctx then
+				return true
+			end
+
+			source_ctx = source_ctx.provenance
+		end
+
+		-- for now we just check to see if the first two parts are valid
+		if ctx:get(1) == mv_ctx:get(1) then
+			return true
+		end
+		print("dumping metavariable paths")
+		source_ctx = ctx
+		while source_ctx do
+			print(source_ctx)
+			source_ctx = source_ctx.provenance
+		end
+
+		print("----")
+		source_ctx = mv_ctx
+		while source_ctx do
+			print(source_ctx)
+			source_ctx = source_ctx.provenance
+		end
+		print(
+			debug.traceback(
+				"INVALID METAVARIABLE PROVENANCE: "
+					.. tostring(v)
+					.. "\nORIGINAL CTX: "
+					.. tostring(values[mv.value][3])
+					.. "\n"
+					.. values[mv.value][3]:format_names()
+					.. "\nASSOCIATED CTX: "
+					.. tostring(ctx)
+					.. "\n"
+					.. ctx:format_names()
+			)
+		)
+		--error("")
+		os.exit(-1, true)
+		return false
+	end
+
+	for k, val in pairs(v) do
+		if k ~= "cause" then
+			if not verify_placeholders(val, ctx, values) then
+				return false
+			end
+		end
+	end
+
+	return true
+end
+
 ---get the name of a binding in a TypecheckingContext
 ---@param index integer
 ---@return string
 function TypecheckingContext:get_name(index)
 	return self.bindings:get(index).name
 end
+
 function TypecheckingContext:dump_names()
 	for i = 1, self:len() do
 		print(i, self:get_name(i))
@@ -132,10 +348,25 @@ function TypecheckingContext:format_names()
 	return msg
 end
 
+---@return string
+function TypecheckingContext:format_names_and_types()
+	local msg = ""
+	for i = 1, self:len() do
+		msg = msg .. tostring(i) .. "\t" .. self:get_name(i) .. "\t:\t" .. self:get_type(i):pretty_print(self) .. "\n"
+	end
+	return msg
+end
+
 ---@param index integer
----@return any
+---@return value
 function TypecheckingContext:get_type(index)
 	return self.bindings:get(index).type
+end
+
+function TypecheckingContext:DEBUG_VERIFY_VALUES(state)
+	for i = 1, self:len() do
+		verify_placeholders(self:get_type(i), self, state.values)
+	end
 end
 
 ---@return RuntimeContext
@@ -173,15 +404,20 @@ function TypecheckingContext:append(name, type, val, start_anchor)
 	if (val and start_anchor) or (not val and not start_anchor) then
 		error("TypecheckingContext:append expected either val or start_anchor")
 	end
+	local info
+	if not val then
+		info = placeholder_debug(name, start_anchor)
+		info["{TRACE}"] = U.bound_here(2)
+		val = value.neutral(neutral_value.free(free.placeholder(self:len() + 1, info)))
+	end
+
 	local copy = {
 		bindings = self.bindings:append({ name = name, type = type }),
-		runtime_context = self.runtime_context:append(
-			val
-				or value.neutral(
-					neutral_value.free(free.placeholder(self:len() + 1, placeholder_debug(name, start_anchor)))
-				)
-		),
+		runtime_context = self.runtime_context:append(val, name),
 	}
+	if info then
+		info.ctx = copy.runtime_context
+	end
 	return setmetatable(copy, typechecking_context_mt)
 end
 
@@ -193,6 +429,9 @@ end
 typechecking_context_mt = {
 	__index = TypecheckingContext,
 	__len = TypecheckingContext.len,
+	__tostring = function(t)
+		return "TypecheckingContext with " .. t.bindings:len() .. " bindings. " .. tostring(t.runtime_context)
+	end,
 }
 
 ---@return TypecheckingContext
@@ -209,6 +448,8 @@ local typechecking_context_type =
 local host_user_defined_id = gen.declare_foreign(function(val)
 	return type(val) == "table" and type(val.name) == "string"
 end, "{ name: string }")
+
+traits.diff:implement_on(runtime_context_type, { diff = runtime_context_diff_fn })
 
 -- implicit arguments are filled in through unification
 -- e.g. fn append(t : star(0), n : nat, xs : Array(t, n), val : t) -> Array(t, n+1)
@@ -284,7 +525,7 @@ checkable_term:define_enum("checkable", {
 -- inferrable terms can have their type inferred / don't need a goal type
 -- stylua: ignore
 inferrable_term:define_enum("inferrable", {
-	{ "bound_variable", { "index", gen.builtin_number } },
+	{ "bound_variable", { "index", gen.builtin_number, "debug", gen.any_lua_type } },
 	{ "typed", {
 		"type",         value,
 		"usage_counts", array(gen.builtin_number),
@@ -325,6 +566,10 @@ inferrable_term:define_enum("inferrable", {
 		"constructor", gen.builtin_string,
 		"arg",         inferrable_term,
 	} },
+	{ "enum_desc_cons", {
+		"variants", map(gen.builtin_string, inferrable_term),
+		"rest",     inferrable_term,
+} },
 	{ "enum_elim", {
 		"subject",   inferrable_term,
 		"mechanism", inferrable_term,
@@ -339,6 +584,7 @@ inferrable_term:define_enum("inferrable", {
 		"target", inferrable_term,
 		"debug",  gen.builtin_string,
 	} },
+	
 	{ "object_cons", { "methods", map(gen.builtin_string, inferrable_term) } },
 	{ "object_elim", {
 		"subject",   inferrable_term,
@@ -416,106 +662,93 @@ inferrable_term:define_enum("inferrable", {
 ---@field Rel value -- : (a:T,b:T) -> Prop__
 ---@field refl value -- : (a:T) -> Rel(a,a)
 ---@field antisym value -- : (a:T, B:T, Rel(a,b), Rel(b,a)) -> a == b
----@field constrain value -- : (Node(T), Node(T)) -> [TCState] ()
+---@field constrain value -- : (Node(T), Node(T)) -> [TCState] (Error)
 local subtype_relation_mt = {}
 
 local SubtypeRelation = gen.declare_foreign(gen.metatable_equality(subtype_relation_mt), "SubtypeRelation")
 
+subtype_relation_mt.__tostring = function(self)
+	return "«" .. self.debug_name .. "»"
+end
+
 ---@module 'types.constraintcause'
 local constraintcause = gen.declare_type()
 
+-- stylua: ignore
 constraintcause:define_enum("constraintcause", {
 	{ "primitive", {
-		"description",
-		gen.builtin_string,
-		"position",
-		anchor_type,
+		"description", gen.builtin_string,
+		"position",    anchor_type,
+		"track", gen.any_lua_type,
 	} },
 	{ "composition", {
-		"left",
-		constraintcause,
-		"right",
-		constraintcause,
-		"position",
-		anchor_type,
+		"left",     gen.builtin_number,
+		"right",    gen.builtin_number,
+		"position", anchor_type,
 	} },
-	{
-		"leftcall_discharge",
-		{
-			"call",
-			constraintcause,
-			"constraint",
-			constraintcause,
-			"position",
-			anchor_type,
-		},
-	},
-	{
-		"rightcall_discharge",
-		{
-			"constraint",
-			constraintcause,
-			"call",
-			constraintcause,
-			"position",
-			anchor_type,
-		},
-	},
-	{
-		"lost",
-		{ --Information has been lost, please generate any information you can to help someone debug the lost information in the future
-			"unique_string",
-			gen.builtin_string,
-			"stacktrace",
-			gen.builtin_string,
-			"auxiliary",
-			gen.any_lua_type,
-		},
-	},
+	{ "nested", {
+		"description", gen.builtin_string,
+		"inner",     constraintcause,
+	} },
+	{ "leftcall_discharge", {
+		"call",       gen.builtin_number,
+		"constraint", gen.builtin_number,
+		"position",   anchor_type,
+	} },
+	{ "rightcall_discharge", {
+		"constraint", gen.builtin_number,
+		"call",       gen.builtin_number,
+		"position",   anchor_type,
+	} },
+	{ "lost", { --Information has been lost, please generate any information you can to help someone debug the lost information in the future
+		"unique_string", gen.builtin_string,
+		"stacktrace",    gen.builtin_string,
+		"auxiliary",     gen.any_lua_type,
+	} },
 })
 
 ---@module 'types.constraintelem'
 -- stylua: ignore
 local constraintelem = gen.declare_enum("constraintelem", {
 	{ "sliced_constrain", {
-		"rel",   SubtypeRelation,
-		"right", typed_term,
+		"rel",      SubtypeRelation,
+		"right",    typed_term,
 		"rightctx", typechecking_context_type,
-		"cause", gen.any_lua_type,
+		"cause",    constraintcause,
 	} },
 	{ "constrain_sliced", {
-		"left",  typed_term,
+		"left",    typed_term,
 		"leftctx", typechecking_context_type,
-		"rel",   SubtypeRelation,
-		"cause", gen.any_lua_type,
+		"rel",     SubtypeRelation,
+		"cause",   constraintcause,
 	} },
 	{ "sliced_leftcall", {
-		"arg",   typed_term,
-		"rel",   SubtypeRelation,
-		"right", typed_term,
+		"arg",      typed_term,
+		"rel",      SubtypeRelation,
+		"right",    typed_term,
 		"rightctx", typechecking_context_type,
-		"cause", gen.any_lua_type,
+		"cause",    constraintcause,
 	} },
 	{ "leftcall_sliced", {
-		"left",  typed_term,
+		"left",    typed_term,
 		"leftctx", typechecking_context_type,
-		"arg",   typed_term,
-		"rel",   SubtypeRelation,
-		"cause", gen.any_lua_type,
+		"arg",     typed_term,
+		"rel",     SubtypeRelation,
+		"cause",   constraintcause,
 	} },
 	{ "sliced_rightcall", {
-		"rel",   SubtypeRelation,
-		"right", typed_term,
+		"rel",      SubtypeRelation,
+		"right",    typed_term,
 		"rightctx", typechecking_context_type,
-		"arg",   typed_term,
-		"cause", gen.any_lua_type,
+		"arg",      typed_term,
+		"cause",    constraintcause,
 	} },
 	{ "rightcall_sliced", {
-		"left",  typed_term,
+		"left",    typed_term,
 		"leftctx", typechecking_context_type,
-		"rel",   SubtypeRelation,
-		"arg",   typed_term,
-		"cause", gen.any_lua_type,
+		"rel",     SubtypeRelation,
+		"arg",     typed_term,
+		"cause",   constraintcause,
 	} },
 })
 
@@ -524,11 +757,12 @@ local unique_id = gen.builtin_table
 -- typed terms have been typechecked but do not store their type internally
 -- stylua: ignore
 typed_term:define_enum("typed", {
-	{ "bound_variable", { "index", gen.builtin_number } },
+	{ "bound_variable", { "index", gen.builtin_number, "debug", gen.any_lua_type  } },
 	{ "literal", { "literal_value", value } },
 	{ "lambda", {
 		"param_name", gen.builtin_string,
 		"body",       typed_term,
+		"start_anchor",     anchor_type,
 	} },
 	{ "pi", {
 		"param_type",  typed_term,
@@ -567,6 +801,7 @@ typed_term:define_enum("typed", {
 		"index",   gen.builtin_number,
 	} },
 	{ "tuple_type", { "desc", typed_term } },
+	{ "tuple_desc_type", { "universe", typed_term } },
 	{ "record_cons", { "fields", map(gen.builtin_string, typed_term) } },
 	{ "record_extend", {
 		"base",   typed_term,
@@ -593,6 +828,9 @@ typed_term:define_enum("typed", {
 	{ "enum_desc_cons", {
 		"variants", map(gen.builtin_string, typed_term),
 		"rest",     typed_term,
+	} },
+	{ "enum_desc_type", {
+		"univ", typed_term
 	} },
 	{ "enum_type", { "desc", typed_term } },
 	{ "enum_case", {
@@ -698,7 +936,10 @@ typed_term:define_enum("typed", {
 		"left",  typed_term,
 		"right", typed_term,
 	} },
-	{ "constrained_type", { "constraints", array(constraintelem) } },
+	{ "constrained_type", { 
+		"constraints", array(constraintelem),
+		"ctx", typechecking_context_type,
+	} },
 }) 
 
 -- stylua: ignore
@@ -812,6 +1053,7 @@ value:define_enum("value", {
 		"param_name", gen.builtin_string,
 		"code",       typed_term,
 		"capture",    runtime_context_type,
+		"debug", 			gen.any_lua_type,
 	} },
 
 	-- a list of upper and lower bounds, and a relation being bound with respect to
@@ -1064,6 +1306,13 @@ local function tuple_desc_inner(a, e, ...)
 	end
 end
 
+---@module "types.tristate"
+local tristate = gen.declare_enum("tristate", {
+	{ "success" },
+	{ "continue" },
+	{ "failure" },
+})
+
 ---@param ... value
 ---@return value
 local function tuple_desc(...)
@@ -1123,6 +1372,9 @@ local terms = {
 	effect_registry = effect_registry,
 	TCState = TCState,
 	lua_prog = lua_prog,
+	verify_placeholders = verify_placeholders,
+
+	tristate = tristate,
 }
 
 local override_prettys = require "terms-pretty"(terms)
@@ -1130,6 +1382,7 @@ local checkable_term_override_pretty = override_prettys.checkable_term_override_
 local inferrable_term_override_pretty = override_prettys.inferrable_term_override_pretty
 local typed_term_override_pretty = override_prettys.typed_term_override_pretty
 local value_override_pretty = override_prettys.value_override_pretty
+local neutral_value_override_pretty = override_prettys.neutral_value_override_pretty
 local binding_override_pretty = override_prettys.binding_override_pretty
 
 checkable_term:derive(derivers.pretty_print, checkable_term_override_pretty)
@@ -1138,12 +1391,13 @@ typed_term:derive(derivers.pretty_print, typed_term_override_pretty)
 visibility:derive(derivers.pretty_print)
 free:derive(derivers.pretty_print)
 value:derive(derivers.pretty_print, value_override_pretty)
-neutral_value:derive(derivers.pretty_print)
+neutral_value:derive(derivers.pretty_print, neutral_value_override_pretty)
 binding:derive(derivers.pretty_print, binding_override_pretty)
 expression_goal:derive(derivers.pretty_print)
 placeholder_debug:derive(derivers.pretty_print)
 purity:derive(derivers.pretty_print)
 result_info:derive(derivers.pretty_print)
+constraintcause:derive(derivers.pretty_print)
 
 local internals_interface = require "internals-interface"
 internals_interface.terms = terms

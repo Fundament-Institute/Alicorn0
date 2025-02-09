@@ -1,0 +1,29 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lua-local",
+            "request": "launch",
+            "name": "Debug (LuaJIT): runtest.lua",
+            "program": {
+                "command": "luajit"
+            },
+            "verbose": true,
+            "args": [
+                "runtest.lua"
+            ]
+        },
+        {
+            "type": "lua-local",
+            "request": "launch",
+            "name": "Debug (Luvit): runtest.lua",
+            "program": {
+                "command": "luvit"
+            },
+            "verbose": true,
+            "args": [
+                "runtest.lua"
+            ]
+        }
+    ]
+}

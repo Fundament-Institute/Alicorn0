@@ -3,6 +3,8 @@ local pretty_printer = require "pretty-printer"
 local traits = require "traits"
 local U = require "alicorn-utils"
 
+local _ = require "lua-ext" -- has side-effect of loading fixed table.concat
+
 -- record and enum are nominative types.
 -- this means that two record types, given the same arguments, are distinct.
 -- values constructed from one type are of a different type compared to values
@@ -136,6 +138,7 @@ local function gen_record(self, cons, kind, params_with_types)
 			end
 			val[v] = argi
 		end
+		val["{TRACE}"] = U.bound_here(2)
 		setmetatable(val, self)
 		return val
 	end
@@ -200,6 +203,7 @@ local function define_record(self, kind, params_with_types)
 	end
 	self._kind = kind
 	self.__index = {
+		pretty_preprint = pretty_printer.pretty_preprint,
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
 	}
@@ -239,7 +243,7 @@ end
 ---@field __tostring function(EnumValue): string
 
 ---@class EnumValue: Value
----@field pretty_print fun(EnumValue, ...)
+---@field pretty_print fun(EnumValue, ...) : string
 ---@field default_print fun(EnumValue, ...)
 
 local enum_type_mt = {
@@ -294,6 +298,7 @@ local function define_enum(self, name, variants)
 	end
 	self._name = name
 	self.__index = {
+		pretty_preprint = pretty_printer.pretty_preprint,
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
 	}
@@ -473,6 +478,7 @@ local function gen_map_methods(self, key_type, value_type)
 			right:copy(new, conflict)
 			return new
 		end,
+		pretty_preprint = pretty_printer.pretty_preprint,
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
 	}
@@ -581,13 +587,16 @@ define_map = U.memoize(define_map)
 ---@field default_print fun(SetValue, ...)
 
 local set_type_mt = {
-	-- FIXME: move put loop from freeze helper 2 to here after alicorn is fixed
-	__call = function(self)
+	__call = function(self, ...)
 		local val = {
 			_set = {},
 			is_frozen = false,
 		}
 		setmetatable(val, self)
+		local args = table.pack(...)
+		for i = 1, args.n do
+			val:put(args[i])
+		end
 		return val
 	end,
 	__eq = function(left, right)
@@ -692,6 +701,7 @@ local function gen_set_methods(self, key_type)
 			end
 			return true
 		end,
+		pretty_preprint = pretty_printer.pretty_preprint,
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
 	}
@@ -702,11 +712,7 @@ local function set_pretty_print(self, pp, ...)
 end
 
 local function set_freeze_helper_2(t, ...)
-	local frozenval = t()
-	local args = table.pack(...)
-	for i = 1, args.n do
-		frozenval:put(args[i])
-	end
+	local frozenval = t(...)
 	frozenval.is_frozen = true
 	return frozenval
 end
@@ -772,13 +778,13 @@ define_set = U.memoize(define_set)
 
 ---@class ArrayType: Type
 ---@field value_type Type
----@field methods table
----@field __eq function(ArrayValue, ArrayValue): boolean
----@field __index function
----@field __newindex function
----@field __ipairs function(ArrayValue): function, ArrayValue, integer
----@field __len function(ArrayValue): integer
----@field __tostring function(ArrayValue): string
+---@field methods { [string]: function }
+---@field __eq fun(ArrayValue, ArrayValue): boolean
+---@field __index fun(self: ArrayValue, key: integer | string) : Value | function
+---@field __newindex fun(self: ArrayValue, key: integer, value: Value)
+---@field __ipairs fun(ArrayValue): function, ArrayValue, integer
+---@field __len fun(ArrayValue): integer
+---@field __tostring fun(ArrayValue): string
 
 ---@class ArrayValue: Value
 ---@field n integer
@@ -814,6 +820,10 @@ local array_type_mt = {
 	end,
 }
 
+---@param state ArrayValue
+---@param control integer
+---@return integer?
+---@return Value?
 local function array_next(state, control)
 	local i = control + 1
 	if i > state:len() then
@@ -849,6 +859,7 @@ local function gen_array_methods(self, value_type)
 		unpack = function(val)
 			return table.unpack(val.array, 1, val.n)
 		end,
+		pretty_preprint = pretty_printer.pretty_preprint,
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
 	}
@@ -869,7 +880,15 @@ local function array_eq_fn(left, right)
 	return true
 end
 
+---@generic V : Type
+---@param self ArrayType
+---@param value_type `V`
+---@return fun(self: ArrayValue, key: integer | string) : V | function
+---@return fun(self: ArrayValue, key: integer, value: V)
 local function gen_array_index_fns(self, value_type)
+	---@param val ArrayValue
+	---@param key integer | string
+	---@return Value | function
 	local function index(val, key)
 		local method = self.methods[key]
 		if method then
@@ -896,10 +915,19 @@ local function gen_array_index_fns(self, value_type)
 		-- so we should make sure to use the :ipairs() method instead
 		if key < 1 or key > val.n then
 			p(key, val.n)
-			error("key passed to array indexing is out of bounds (read code comment above)")
+			error(
+				"key passed to array indexing is out of bounds (read code comment above): "
+					.. tostring(key)
+					.. "is not within [1,"
+					.. tostring(val.n)
+					.. "]"
+			)
 		end
 		return val.array[key]
 	end
+	---@param val ArrayValue
+	---@param key integer
+	---@param value Value
 	local function newindex(val, key, value)
 		if val.is_frozen then
 			error("trying to modify a frozen array")
@@ -950,8 +978,7 @@ end
 
 local function gen_array_diff_fn(self, value_type)
 	local function diff_fn(left, right)
-		print("diffing array...")
-		print("value_type: " .. tostring(value_type))
+		print("diffing array with value_type: " .. tostring(value_type))
 		local rt = getmetatable(right)
 		if self ~= rt then
 			print("unequal types!")
@@ -988,6 +1015,7 @@ local function gen_array_diff_fn(self, value_type)
 				return diff_impl.diff(left[d], right[d])
 			else
 				print("stopping diff (missing diff impl)")
+				print("value_type:", value_type)
 				return
 			end
 		else
@@ -1019,7 +1047,7 @@ end
 
 ---@param self table
 ---@param value_type Type
----@return ArrayType self
+---@return ArrayType
 local function define_array(self, value_type)
 	if type(value_type) ~= "table" or type(value_type.value_check) ~= "function" then
 		error("trying to set the value type to something that isn't a type (possible typo?)")
@@ -1116,6 +1144,7 @@ local terms_gen = {
 	builtin_string = gen_builtin("string"),
 	builtin_function = gen_builtin("function"),
 	builtin_table = gen_builtin("table"),
+	array_type_mt = array_type_mt,
 	any_lua_type = define_foreign({}, function()
 		return true
 	end, "any"),
@@ -1140,6 +1169,158 @@ end
 for _, t in ipairs { terms_gen.builtin_table, terms_gen.any_lua_type } do
 	traits.freeze:implement_on(t, { freeze = freeze_trivial })
 end
+
+local function any_lua_type_diff_fn(left, right)
+	if type(left) ~= type(right) then
+		print("different primitive lua types!")
+		print(type(left))
+		print(type(right))
+		print("stopping diff")
+		return
+	end
+	local dispatch = {
+		["nil"] = function()
+			print("diffing lua nils")
+			print("no difference")
+			print("stopping diff")
+			return
+		end,
+		["number"] = function()
+			print("diffing lua numbers")
+			if left ~= right then
+				print("different numbers")
+				print(left)
+				print(right)
+				print("stopping diff")
+				return
+			end
+			print("no difference")
+			print("stopping diff")
+			return
+		end,
+		["string"] = function()
+			print("diffing lua strings")
+			if left ~= right then
+				print("different strings")
+				print(left)
+				print(right)
+				print("stopping diff")
+				return
+			end
+			print("no difference")
+			print("stopping diff")
+			return
+		end,
+		["boolean"] = function()
+			print("diffing lua booleans")
+			if left ~= right then
+				print("different booleans")
+				print(left)
+				print(right)
+				print("stopping diff")
+				return
+			end
+			print("no difference")
+			print("stopping diff")
+			return
+		end,
+		["table"] = function()
+			print("diffing lua tables")
+			if left == right then
+				print("physically equal")
+				print("stopping diff")
+				return
+			end
+			local n = 0
+			local diff_elems = {}
+			for k, lval in pairs(left) do
+				rval = right[k]
+				if lval ~= rval then
+					n = n + 1
+					diff_elems[n] = k
+				end
+			end
+			for k, rval in pairs(right) do
+				lval = left[k]
+				if not lval then
+					n = n + 1
+					diff_elems[n] = k
+				end
+			end
+			if n == 0 then
+				print("no elements different")
+				print("stopping diff")
+				return
+			elseif n == 1 then
+				local d = diff_elems[1]
+				print("difference in element: " .. tostring(d))
+				local mtl = getmetatable(left[d])
+				local mtr = getmetatable(right[d])
+				if mtl ~= mtr then
+					print("stopping diff (different metatables)")
+					return
+				end
+				local diff_impl = traits.diff:get(mtl)
+				if diff_impl then
+					-- tail call
+					return diff_impl.diff(left[d], right[d])
+				else
+					print("stopping diff (missing diff impl)")
+					print("mt:", mtl)
+					return
+				end
+			else
+				print("difference in multiple elements:")
+				for i = 1, n do
+					print(diff_elems[i])
+				end
+				print("stopping diff")
+				return
+			end
+		end,
+		["function"] = function()
+			print("diffing lua functions")
+			if left ~= right then
+				print("different functions")
+				print(left)
+				print(right)
+				print("stopping diff")
+				return
+			end
+			print("no difference")
+			print("stopping diff")
+			return
+		end,
+		["thread"] = function()
+			print("diffing lua threads")
+			if left ~= right then
+				print("different threads")
+				print(left)
+				print(right)
+				print("stopping diff")
+				return
+			end
+			print("no difference")
+			print("stopping diff")
+			return
+		end,
+		["userdata"] = function()
+			print("diffing lua userdatas")
+			if left ~= right then
+				print("different userdata")
+				print(left)
+				print(right)
+				print("stopping diff")
+				return
+			end
+			print("no difference")
+			print("stopping diff")
+			return
+		end,
+	}
+	dispatch[type(left)]()
+end
+traits.diff:implement_on(terms_gen.any_lua_type, { diff = any_lua_type_diff_fn })
 
 local internals_interface = require "internals-interface"
 internals_interface.terms_gen = terms_gen

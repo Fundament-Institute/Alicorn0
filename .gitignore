@@ -5,6 +5,7 @@
 /.pre-commit-config.yaml
 /deps/
 /luaunit.lua
-/.vscode/
+/.vscode/*
+!/.vscode/launch.json
 /target/
 Cargo.lock

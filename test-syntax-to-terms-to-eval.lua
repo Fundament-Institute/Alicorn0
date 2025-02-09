@@ -80,7 +80,10 @@ if not ok then
 	return
 end
 
-local inferred_type, usage_counts, inferred_term = evaluator.infer(expr, env.typechecking_context)
+local ok, inferred_type, usage_counts, inferred_term = evaluator.infer(expr, env.typechecking_context)
+if not ok then
+	error(tostring(inferred_type))
+end
 p("infer", usage_counts)
 print(inferred_type:pretty_print())
 print(inferred_term:pretty_print())

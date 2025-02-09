@@ -1,5 +1,3 @@
-use std::{ffi::c_void, ptr::null};
-
 use mlua::prelude::*;
 
 const ALICORN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/alicorn.lua"));
@@ -125,12 +123,12 @@ end
 
         alc_parse_file.call(path.as_ref().as_os_str().to_string_lossy())
     }
-    pub fn process<'a>(&'a self, parsed: mlua::Value<'a>) -> Result<mlua::Value, mlua::Error> {
+    pub fn process<'a>(&'a self, parsed: mlua::Value<'a>) -> Result<mlua::Value<'a>, mlua::Error> {
         let alc_process: LuaFunction = self.lua.load("alc_process").eval()?;
         alc_process.call(parsed)
     }
 
-    pub fn evaluate<'a>(&'a self, terms: mlua::Value<'a>) -> Result<mlua::Value, mlua::Error> {
+    pub fn evaluate<'a>(&'a self, terms: mlua::Value<'a>) -> Result<mlua::Value<'a>, mlua::Error> {
         let alc_evaluate: LuaFunction = self.lua.load("alc_evaluate").eval()?;
         alc_evaluate.call(terms)
     }

@@ -12,24 +12,38 @@ local function syntax_convert(tree)
 		end
 		return res
 	elseif tree.kind == "symbol" then
-		return metalanguage.symbol(tree.start_anchor, tree.end_anchor, tree.str)
+		assert(tree["kind"])
+		return metalanguage.symbol(tree.start_anchor, tree.end_anchor, tree)
 	elseif tree.kind == "literal" then
-		return metalanguage.value(tree.start_anchor, tree.end_anchor, { type = tree.literaltype, val = tree.val })
+		return metalanguage.value(
+			tree.start_anchor,
+			tree.end_anchor,
+			{ type = tree.literaltype, val = tree.val, start_anchor = tree.start_anchor, end_anchor = tree.end_anchor }
+		)
 	elseif tree.kind == "string" then
 		if type(tree.elements) == "string" then
-			return metalanguage.value(tree.start_anchor, tree.end_anchor, { type = "string", val = tree.elements })
+			return metalanguage.value(
+				tree.start_anchor,
+				tree.end_anchor,
+				{ type = "string", val = tree.elements, start_anchor = tree.start_anchor, end_anchor = tree.end_anchor }
+			)
 		end
 		if #tree.elements ~= 1 or tree.elements[1].literaltype ~= "bytes" then
 			error "NYI: strings with splices / not exactly one literal"
 		end
 
 		-- converting this to a string here is a temporary simplification, remove when NYI above is fixed.
+		---@type [string]
 		local chars = {}
 		for i, byte in ipairs(tree.elements[1].val) do
 			chars[i] = string.char(byte)
 		end
 		local val = table.concat(chars)
-		return metalanguage.value(tree.start_anchor, tree.end_anchor, { type = "string", val = val })
+		return metalanguage.value(
+			tree.start_anchor,
+			tree.end_anchor,
+			{ type = "string", val = val, start_anchor = tree.start_anchor, end_anchor = tree.end_anchor }
+		)
 	elseif tree.kind == "comment" then
 		--do nothing
 	else
@@ -105,7 +119,7 @@ local function lispy_print(code, d)
 		end
 	elseif code.accepters.Symbol then
 		local name = code[1]
-		return start_anchor_pfx .. name .. end_anchor_sfx
+		return start_anchor_pfx .. name.str .. end_anchor_sfx
 	elseif code.accepters.Value then
 		local val = code[1]
 		local sval = string.gsub(tostring(val.val), "%c", "")

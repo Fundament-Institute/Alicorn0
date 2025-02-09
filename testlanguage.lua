@@ -9,6 +9,10 @@ end
 
 local eval
 
+---@param syntax ConstructedSyntax
+---@param matcher Matcher
+---@param environment Env
+---@return ...
 local function Eval(syntax, matcher, environment)
 	return eval(syntax, environment)
 end
@@ -28,6 +32,10 @@ local function eval_pairhandler(env, a, b)
 	return ok, val, newenv
 end
 
+---@param env Env
+---@param name string
+---@return boolean
+---@return any | string
 local function symbolenvhandler(env, name)
 	--print("symbolenvhandler(", name, env, ")")
 	local res = env:get(name)
@@ -47,6 +55,9 @@ end
 
 local symbol_in_environment = metalanguage.reducer(SymbolInEnvironment, "symbol in env")
 
+---@param syntax ConstructedSyntax
+---@param environment Env
+---@return ...
 function eval(syntax, environment)
 	return syntax:match({
 		symbol_in_environment(eval_passhandler, environment),
@@ -55,6 +66,10 @@ function eval(syntax, environment)
 	}, metalanguage.failure_handler, environment)
 end
 
+---@generic T
+---@param val T
+---@param newenv Env
+---@return boolean, T, Env
 local function syntax_args_val_handler(_, val, newenv)
 	return true, val, newenv
 end
@@ -63,6 +78,14 @@ local function syntax_args_nil_handler(data)
 	return true, false
 end
 
+---@generic T
+---@param env Env
+---@param a ConstructedSyntax
+---@param b T
+---@return boolean
+---@return boolean
+---@return any
+---@return T
 local function syntax_args_pair_handler(env, a, b)
 	local ok, val, _ = a:match({
 		evaluates(syntax_args_val_handler, env),
@@ -71,6 +94,11 @@ local function syntax_args_pair_handler(env, a, b)
 	return true, true, val, b
 end
 
+---@param syntax ConstructedSyntax
+---@param matcher Matcher
+---@param environment Env
+---@return boolean
+---@return any[]
 local function EvalArgs(syntax, matcher, environment)
 	local args = {}
 	local ok, ispair, val, tail = true, true, nil, nil

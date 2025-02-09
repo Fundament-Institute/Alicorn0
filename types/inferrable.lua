@@ -6,123 +6,202 @@ inferrable = {}
 
 ---@return boolean
 function inferrable:is_bound_variable() end
----@return number
+---@return number index
+---@return any debug
 function inferrable:unwrap_bound_variable() end
----@return boolean, number
+---@return boolean
+---@return number index
+---@return any debug
 function inferrable:as_bound_variable() end
 ---@return boolean
 function inferrable:is_typed() end
----@return value, ArrayValue, typed
+---@return value type
+---@return ArrayValue usage_counts
+---@return typed typed_term
 function inferrable:unwrap_typed() end
----@return boolean, value, ArrayValue, typed
+---@return boolean
+---@return value type
+---@return ArrayValue usage_counts
+---@return typed typed_term
 function inferrable:as_typed() end
 ---@return boolean
 function inferrable:is_annotated_lambda() end
----@return string, inferrable, inferrable, Anchor, visibility, checkable
+---@return string param_name
+---@return inferrable param_annotation
+---@return inferrable body
+---@return Anchor start_anchor
+---@return visibility visible
+---@return checkable pure
 function inferrable:unwrap_annotated_lambda() end
----@return boolean, string, inferrable, inferrable, Anchor, visibility, checkable
+---@return boolean
+---@return string param_name
+---@return inferrable param_annotation
+---@return inferrable body
+---@return Anchor start_anchor
+---@return visibility visible
+---@return checkable pure
 function inferrable:as_annotated_lambda() end
 ---@return boolean
 function inferrable:is_pi() end
----@return inferrable, checkable, inferrable, checkable
+---@return inferrable param_type
+---@return checkable param_info
+---@return inferrable result_type
+---@return checkable result_info
 function inferrable:unwrap_pi() end
----@return boolean, inferrable, checkable, inferrable, checkable
+---@return boolean
+---@return inferrable param_type
+---@return checkable param_info
+---@return inferrable result_type
+---@return checkable result_info
 function inferrable:as_pi() end
 ---@return boolean
 function inferrable:is_application() end
----@return inferrable, checkable
+---@return inferrable f
+---@return checkable arg
 function inferrable:unwrap_application() end
----@return boolean, inferrable, checkable
+---@return boolean
+---@return inferrable f
+---@return checkable arg
 function inferrable:as_application() end
 ---@return boolean
 function inferrable:is_tuple_cons() end
----@return ArrayValue
+---@return ArrayValue elements
 function inferrable:unwrap_tuple_cons() end
----@return boolean, ArrayValue
+---@return boolean
+---@return ArrayValue elements
 function inferrable:as_tuple_cons() end
 ---@return boolean
 function inferrable:is_tuple_elim() end
----@return ArrayValue, inferrable, inferrable
+---@return ArrayValue names
+---@return inferrable subject
+---@return inferrable body
 function inferrable:unwrap_tuple_elim() end
----@return boolean, ArrayValue, inferrable, inferrable
+---@return boolean
+---@return ArrayValue names
+---@return inferrable subject
+---@return inferrable body
 function inferrable:as_tuple_elim() end
 ---@return boolean
 function inferrable:is_tuple_type() end
----@return inferrable
+---@return inferrable desc
 function inferrable:unwrap_tuple_type() end
----@return boolean, inferrable
+---@return boolean
+---@return inferrable desc
 function inferrable:as_tuple_type() end
 ---@return boolean
 function inferrable:is_record_cons() end
----@return MapValue
+---@return MapValue fields
 function inferrable:unwrap_record_cons() end
----@return boolean, MapValue
+---@return boolean
+---@return MapValue fields
 function inferrable:as_record_cons() end
 ---@return boolean
 function inferrable:is_record_elim() end
----@return inferrable, ArrayValue, inferrable
+---@return inferrable subject
+---@return ArrayValue field_names
+---@return inferrable body
 function inferrable:unwrap_record_elim() end
----@return boolean, inferrable, ArrayValue, inferrable
+---@return boolean
+---@return inferrable subject
+---@return ArrayValue field_names
+---@return inferrable body
 function inferrable:as_record_elim() end
 ---@return boolean
 function inferrable:is_enum_cons() end
----@return string, inferrable
+---@return string constructor
+---@return inferrable arg
 function inferrable:unwrap_enum_cons() end
----@return boolean, string, inferrable
+---@return boolean
+---@return string constructor
+---@return inferrable arg
 function inferrable:as_enum_cons() end
 ---@return boolean
+function inferrable:is_enum_desc_cons() end
+---@return MapValue variants
+---@return inferrable rest
+function inferrable:unwrap_enum_desc_cons() end
+---@return boolean
+---@return MapValue variants
+---@return inferrable rest
+function inferrable:as_enum_desc_cons() end
+---@return boolean
 function inferrable:is_enum_elim() end
----@return inferrable, inferrable
+---@return inferrable subject
+---@return inferrable mechanism
 function inferrable:unwrap_enum_elim() end
----@return boolean, inferrable, inferrable
+---@return boolean
+---@return inferrable subject
+---@return inferrable mechanism
 function inferrable:as_enum_elim() end
 ---@return boolean
 function inferrable:is_enum_type() end
----@return inferrable
+---@return inferrable desc
 function inferrable:unwrap_enum_type() end
----@return boolean, inferrable
+---@return boolean
+---@return inferrable desc
 function inferrable:as_enum_type() end
 ---@return boolean
 function inferrable:is_enum_case() end
----@return inferrable, MapValue
+---@return inferrable target
+---@return MapValue variants
 function inferrable:unwrap_enum_case() end
----@return boolean, inferrable, MapValue
+---@return boolean
+---@return inferrable target
+---@return MapValue variants
 function inferrable:as_enum_case() end
 ---@return boolean
 function inferrable:is_enum_absurd() end
----@return inferrable, string
+---@return inferrable target
+---@return string debug
 function inferrable:unwrap_enum_absurd() end
----@return boolean, inferrable, string
+---@return boolean
+---@return inferrable target
+---@return string debug
 function inferrable:as_enum_absurd() end
 ---@return boolean
 function inferrable:is_object_cons() end
----@return MapValue
+---@return MapValue methods
 function inferrable:unwrap_object_cons() end
----@return boolean, MapValue
+---@return boolean
+---@return MapValue methods
 function inferrable:as_object_cons() end
 ---@return boolean
 function inferrable:is_object_elim() end
----@return inferrable, inferrable
+---@return inferrable subject
+---@return inferrable mechanism
 function inferrable:unwrap_object_elim() end
----@return boolean, inferrable, inferrable
+---@return boolean
+---@return inferrable subject
+---@return inferrable mechanism
 function inferrable:as_object_elim() end
 ---@return boolean
 function inferrable:is_let() end
----@return string, inferrable, inferrable
+---@return string name
+---@return inferrable expr
+---@return inferrable body
 function inferrable:unwrap_let() end
----@return boolean, string, inferrable, inferrable
+---@return boolean
+---@return string name
+---@return inferrable expr
+---@return inferrable body
 function inferrable:as_let() end
 ---@return boolean
 function inferrable:is_operative_cons() end
----@return inferrable, inferrable
+---@return inferrable operative_type
+---@return inferrable userdata
 function inferrable:unwrap_operative_cons() end
----@return boolean, inferrable, inferrable
+---@return boolean
+---@return inferrable operative_type
+---@return inferrable userdata
 function inferrable:as_operative_cons() end
 ---@return boolean
 function inferrable:is_operative_type_cons() end
----@return checkable, inferrable
+---@return checkable handler
+---@return inferrable userdata_type
 function inferrable:unwrap_operative_type_cons() end
----@return boolean, checkable, inferrable
+---@return boolean
+---@return checkable handler
+---@return inferrable userdata_type
 function inferrable:as_operative_type_cons() end
 ---@return boolean
 function inferrable:is_level_type() end
@@ -138,118 +217,160 @@ function inferrable:unwrap_level0() end
 function inferrable:as_level0() end
 ---@return boolean
 function inferrable:is_level_suc() end
----@return inferrable
+---@return inferrable previous_level
 function inferrable:unwrap_level_suc() end
----@return boolean, inferrable
+---@return boolean
+---@return inferrable previous_level
 function inferrable:as_level_suc() end
 ---@return boolean
 function inferrable:is_level_max() end
----@return inferrable, inferrable
+---@return inferrable level_a
+---@return inferrable level_b
 function inferrable:unwrap_level_max() end
----@return boolean, inferrable, inferrable
+---@return boolean
+---@return inferrable level_a
+---@return inferrable level_b
 function inferrable:as_level_max() end
 ---@return boolean
 function inferrable:is_annotated() end
----@return checkable, inferrable
+---@return checkable annotated_term
+---@return inferrable annotated_type
 function inferrable:unwrap_annotated() end
----@return boolean, checkable, inferrable
+---@return boolean
+---@return checkable annotated_term
+---@return inferrable annotated_type
 function inferrable:as_annotated() end
 ---@return boolean
 function inferrable:is_host_tuple_cons() end
----@return ArrayValue
+---@return ArrayValue elements
 function inferrable:unwrap_host_tuple_cons() end
----@return boolean, ArrayValue
+---@return boolean
+---@return ArrayValue elements
 function inferrable:as_host_tuple_cons() end
 ---@return boolean
 function inferrable:is_host_user_defined_type_cons() end
----@return { name: string }, ArrayValue
+---@return { name: string } id
+---@return ArrayValue family_args
 function inferrable:unwrap_host_user_defined_type_cons() end
----@return boolean, { name: string }, ArrayValue
+---@return boolean
+---@return { name: string } id
+---@return ArrayValue family_args
 function inferrable:as_host_user_defined_type_cons() end
 ---@return boolean
 function inferrable:is_host_tuple_type() end
----@return inferrable
+---@return inferrable desc
 function inferrable:unwrap_host_tuple_type() end
----@return boolean, inferrable
+---@return boolean
+---@return inferrable desc
 function inferrable:as_host_tuple_type() end
 ---@return boolean
 function inferrable:is_host_function_type() end
----@return inferrable, inferrable, checkable
+---@return inferrable param_type
+---@return inferrable result_type
+---@return checkable result_info
 function inferrable:unwrap_host_function_type() end
----@return boolean, inferrable, inferrable, checkable
+---@return boolean
+---@return inferrable param_type
+---@return inferrable result_type
+---@return checkable result_info
 function inferrable:as_host_function_type() end
 ---@return boolean
 function inferrable:is_host_wrapped_type() end
----@return inferrable
+---@return inferrable type
 function inferrable:unwrap_host_wrapped_type() end
----@return boolean, inferrable
+---@return boolean
+---@return inferrable type
 function inferrable:as_host_wrapped_type() end
 ---@return boolean
 function inferrable:is_host_unstrict_wrapped_type() end
----@return inferrable
+---@return inferrable type
 function inferrable:unwrap_host_unstrict_wrapped_type() end
----@return boolean, inferrable
+---@return boolean
+---@return inferrable type
 function inferrable:as_host_unstrict_wrapped_type() end
 ---@return boolean
 function inferrable:is_host_wrap() end
----@return inferrable
+---@return inferrable content
 function inferrable:unwrap_host_wrap() end
----@return boolean, inferrable
+---@return boolean
+---@return inferrable content
 function inferrable:as_host_wrap() end
 ---@return boolean
 function inferrable:is_host_unstrict_wrap() end
----@return inferrable
+---@return inferrable content
 function inferrable:unwrap_host_unstrict_wrap() end
----@return boolean, inferrable
+---@return boolean
+---@return inferrable content
 function inferrable:as_host_unstrict_wrap() end
 ---@return boolean
 function inferrable:is_host_unwrap() end
----@return inferrable
+---@return inferrable container
 function inferrable:unwrap_host_unwrap() end
----@return boolean, inferrable
+---@return boolean
+---@return inferrable container
 function inferrable:as_host_unwrap() end
 ---@return boolean
 function inferrable:is_host_unstrict_unwrap() end
----@return inferrable
+---@return inferrable container
 function inferrable:unwrap_host_unstrict_unwrap() end
----@return boolean, inferrable
+---@return boolean
+---@return inferrable container
 function inferrable:as_host_unstrict_unwrap() end
 ---@return boolean
 function inferrable:is_host_if() end
----@return checkable, inferrable, inferrable
+---@return checkable subject
+---@return inferrable consequent
+---@return inferrable alternate
 function inferrable:unwrap_host_if() end
----@return boolean, checkable, inferrable, inferrable
+---@return boolean
+---@return checkable subject
+---@return inferrable consequent
+---@return inferrable alternate
 function inferrable:as_host_if() end
 ---@return boolean
 function inferrable:is_host_intrinsic() end
----@return checkable, inferrable, Anchor
+---@return checkable source
+---@return inferrable type
+---@return Anchor start_anchor
 function inferrable:unwrap_host_intrinsic() end
----@return boolean, checkable, inferrable, Anchor
+---@return boolean
+---@return checkable source
+---@return inferrable type
+---@return Anchor start_anchor
 function inferrable:as_host_intrinsic() end
 ---@return boolean
 function inferrable:is_program_sequence() end
----@return inferrable, Anchor, inferrable
+---@return inferrable first
+---@return Anchor start_anchor
+---@return inferrable continue
 function inferrable:unwrap_program_sequence() end
----@return boolean, inferrable, Anchor, inferrable
+---@return boolean
+---@return inferrable first
+---@return Anchor start_anchor
+---@return inferrable continue
 function inferrable:as_program_sequence() end
 ---@return boolean
 function inferrable:is_program_end() end
----@return inferrable
+---@return inferrable result
 function inferrable:unwrap_program_end() end
----@return boolean, inferrable
+---@return boolean
+---@return inferrable result
 function inferrable:as_program_end() end
 ---@return boolean
 function inferrable:is_program_type() end
----@return inferrable, inferrable
+---@return inferrable effect_type
+---@return inferrable result_type
 function inferrable:unwrap_program_type() end
----@return boolean, inferrable, inferrable
+---@return boolean
+---@return inferrable effect_type
+---@return inferrable result_type
 function inferrable:as_program_type() end
 
 ---@class (exact) inferrableType: EnumType
 ---@field define_enum fun(self: inferrableType, name: string, variants: Variants): inferrableType
----@field bound_variable fun(index: number): inferrable
+---@field bound_variable fun(index: number, debug: any): inferrable
 ---@field typed fun(type: value, usage_counts: ArrayValue, typed_term: typed): inferrable
----@field annotated_lambda fun(param_name: string, param_annotation: inferrable, body: inferrable, anchor: Anchor, visible: visibility, pure: checkable): inferrable
+---@field annotated_lambda fun(param_name: string, param_annotation: inferrable, body: inferrable, start_anchor: Anchor, visible: visibility, pure: checkable): inferrable
 ---@field pi fun(param_type: inferrable, param_info: checkable, result_type: inferrable, result_info: checkable): inferrable
 ---@field application fun(f: inferrable, arg: checkable): inferrable
 ---@field tuple_cons fun(elements: ArrayValue): inferrable
@@ -258,6 +379,7 @@ function inferrable:as_program_type() end
 ---@field record_cons fun(fields: MapValue): inferrable
 ---@field record_elim fun(subject: inferrable, field_names: ArrayValue, body: inferrable): inferrable
 ---@field enum_cons fun(constructor: string, arg: inferrable): inferrable
+---@field enum_desc_cons fun(variants: MapValue, rest: inferrable): inferrable
 ---@field enum_elim fun(subject: inferrable, mechanism: inferrable): inferrable
 ---@field enum_type fun(desc: inferrable): inferrable
 ---@field enum_case fun(target: inferrable, variants: MapValue): inferrable
@@ -283,8 +405,8 @@ function inferrable:as_program_type() end
 ---@field host_unwrap fun(container: inferrable): inferrable
 ---@field host_unstrict_unwrap fun(container: inferrable): inferrable
 ---@field host_if fun(subject: checkable, consequent: inferrable, alternate: inferrable): inferrable
----@field host_intrinsic fun(source: checkable, type: inferrable, anchor: Anchor): inferrable
----@field program_sequence fun(first: inferrable, anchor: Anchor, continue: inferrable): inferrable
+---@field host_intrinsic fun(source: checkable, type: inferrable, start_anchor: Anchor): inferrable
+---@field program_sequence fun(first: inferrable, start_anchor: Anchor, continue: inferrable): inferrable
 ---@field program_end fun(result: inferrable): inferrable
 ---@field program_type fun(effect_type: inferrable, result_type: inferrable): inferrable
 return {}

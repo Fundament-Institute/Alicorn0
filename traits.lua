@@ -12,7 +12,9 @@ local trait_type_mt = {
 			self.methods[methodname] = true
 		end,
 		implement_on = function(self, ty, methods)
-			assert(type(ty) == "table")
+			if type(ty) ~= "table" then
+				error("trying to implement on something that isn't a type")
+			end
 			if self.impls[ty] then
 				error("trait " .. self.name .. " already implemented on type " .. tostring(ty))
 			end

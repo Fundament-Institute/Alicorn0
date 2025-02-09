@@ -3,7 +3,7 @@
     "An experimental language for high performance safe convenient metaprogramming";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-23.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
     luvitpkgs = {
       url = "github:aiverson/luvit-nix";
       # inputs.nixpkgs.follows = "nixpkgs";
@@ -74,7 +74,7 @@
               statix.enable = true;
               nixpkgs-fmt.enable = true;
               stylua.enable = true;
-              stylua.excludes = [ "vendor/" ];
+              stylua.excludes = [ "libs/" "vendor/" ];
               deadnix.enable = true;
             };
           };
@@ -97,17 +97,7 @@
               luvitpkgs.packages.${system}.luvit
               pkgs.stylua
               pkgs.inferno
-              (pkgs.lua-language-server.overrideAttrs {
-                version = "unstable";
-                src = pkgs.fetchFromGitHub {
-                  owner = "LuaLS";
-                  repo = "lua-language-server";
-                  rev = "db667f6db7ea6852d38460a1ed046eb85bb9e5ff";
-                  hash = "sha256-ZYaiSBSnO9lPb/5pYa0OiL0KParuMb4/jIBtE3S/Ruo=";
-                  fetchSubmodules = true;
-                };
-
-              })
+              pkgs.lua-language-server
 
               (luajit.withPackages
                 (ps: with ps; [ luasocket lpeg inspect luaunit tl lqc ]))

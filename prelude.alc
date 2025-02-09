@@ -1,10 +1,3 @@
-let host-arith-binop = (host-func-type (a : host-number, b : host-number) -> ((c : host-number)))
-let host-sub = (intrinsic "return function(a, b) return a - b end" : host-arith-binop)
-
-#let host-sub = (intrinsic "return function(a, b) return a - b end" : (host-func-type (a : host-number, b : host-number) -> ((c : host-number))))
-
-#let foo = (record (bar = 5) (baz = 6))
-#let subbed = host-sub foo.bar y
 
 # FIXME: type of universe
 # we need to wrap this, and wrap takes a type in star-10
@@ -27,9 +20,23 @@ let implicit-unwrap = lambda_implicit (T : type_(10, 0))
 	lambda (x : wrapped(T))
 		unwrap T x
 
+let implicit-unstrict-wrap = lambda_curry ((T : type_(10, 0)))
+	lambda (x : T)
+		unstrict-wrap T x
+
+let implicit-unstrict-unwrap = lambda_implicit (T : type_(10, 0))
+	lambda (x : unstrict-wrapped(T))
+		unstrict-unwrap T x
+
+let tuple-of-implicit = lambda_implicit(T : type_(10, 0))
+	lambda_single (xs : T)
+		xs
+
 let explicit-unwrap = unwrap
 let wrap = implicit-wrap
 let unwrap = implicit-unwrap
+let unstrict-wrap = implicit-unstrict-wrap
+let unstrict-unwrap = implicit-unstrict-unwrap
 
 let host-bool-wrap            = intrinsic "return terms.value.host_bool_type"      : wrapped(host-type)
 let host-string-wrap          = intrinsic "return terms.value.host_string_type"    : wrapped(host-type)
@@ -49,10 +56,7 @@ let host-inferrable-term = unwrap(host-inferrable-term-wrap)
 let host-checkable-term  = unwrap(host-checkable-term-wrap)
 let host-lua-error       = unwrap(host-lua-error-wrap)
 
-let host-string-concat = intrinsic "return function(a, b) return a .. b end" :
-	host-func-type (a : host-string, b : host-string) -> ((c : host-string))
-
-let host-srel-type =
+let srel =
 	lambda_implicit (U : type_(10, 0))
 		unwrap
 			intrinsic
@@ -73,9 +77,30 @@ let host-srel-type =
 				:
 				wrapped (forall ((x : U)) -> (res : U))
 
-let subtyping = intrinsic "return evaluator.UniverseOmegaRelation" : host-srel-type(type_(9, 0))
+let variance =
+	lambda_implicit (U : type_(10, 0))
+		unwrap
+			intrinsic
+				""""
+					local string_array = terms_gen.declare_array(terms_gen.builtin_string)
+					return terms.value.closure(
+						"#srel-arg",
+						terms.typed_term.tuple_elim(
+							string_array("target"),
+							terms.typed_term.bound_variable(1),
+							1,
+							terms.typed_term.variance_type(
+								terms.typed_term.bound_variable(2)
+							)
+						),
+						terms.runtime_context()
+					)
+				:
+				wrapped (forall ((x : U)) -> (res : U))
 
-let tuple-desc-relation = intrinsic "return evaluator.TupleDescRelation" : host-srel-type(type_(9, 0))
+let subtyping = intrinsic "return evaluator.UniverseOmegaRelation" : srel(type_(9, 0))
+
+let tuple-desc-relation = intrinsic "return evaluator.TupleDescRelation" : srel(type_(9, 0))
 
 let _|_ =
 	lambda_implicit (U : type_(10, 0))
@@ -122,7 +147,7 @@ let _&_ =
 				wrapped (forall (a : U, b : U) -> (res : U))
 
 let covariant = 
-	lambda_implicit (U : type_(10, 0))
+	lambda_curry (U : type_(9, 1), a : U)
 		unwrap
 			intrinsic
 				""""
@@ -130,7 +155,7 @@ let covariant =
 					return terms.value.closure(
 						"#covariant-args",
 						terms.typed_term.tuple_elim(
-							string_array("left", "right"),
+							string_array("base"),
 							terms.typed_term.bound_variable(1),
 							1,
 							terms.typed_term.variance_cons(
@@ -143,10 +168,10 @@ let covariant =
 						terms.runtime_context()
 					)
 				:
-				wrapped (forall ((a : U)) -> (res : U))
+				wrapped (forall ((rel : srel(a))) -> (res : variance(a)))
 
 let contravariant = 
-	lambda_implicit (U : type_(10, 0))
+	lambda_curry (U : type_(9, 1), a : U)
 		unwrap
 			intrinsic
 				""""
@@ -154,7 +179,7 @@ let contravariant =
 					return terms.value.closure(
 						"#contravariant-args",
 						terms.typed_term.tuple_elim(
-							string_array("left", "right"),
+							string_array("base"),
 							terms.typed_term.bound_variable(1),
 							1,
 							terms.typed_term.variance_cons(
@@ -167,29 +192,9 @@ let contravariant =
 						terms.runtime_context()
 					)
 				:
-				wrapped (forall ((a : U)) -> (res : U))
+				wrapped (forall ((rel : srel(a))) -> (res : variance(a)))
 
-let tuple-of-implicit = lambda_implicit(T : type_(10, 0))
-	lambda_single (xs : T)
-		xs
-
-# TODO: now that we have effectful programs, work to switch this into using an effect to serialize the operations
-# lmao bootstrapping problem
-let host-unique-id-wrap = intrinsic
-	""""
-		local id = { name = "unique_id" }
-		evaluator.register_host_srel(id, evaluator.IndepTupleRelation())
-		return terms.value.host_user_defined_type(id, terms_gen.declare_array(terms.value)())
-	:
-	wrapped(host-type)
-let host-unique-id = unwrap(host-unique-id-wrap)
-let new-host-unique-id = lambda (name : host-string)
-	let source0 = "return { name = \""
-	let (source1) = host-string-concat(source0, name)
-	let (source2) = host-string-concat(source1, "\" }")
-	intrinsic source2 : host-unique-id
-
-let host-family-sig-srels = lambda (signature : type_(1, 0))
+let host-family-sig-variances = lambda (signature : type_(1, 0))
 	let inner = intrinsic
 		""""
 			local typed_array = terms_gen.declare_array(terms.typed_term)
@@ -204,7 +209,7 @@ let host-family-sig-srels = lambda (signature : type_(1, 0))
 					local next_desc, type_fun = elements[1], elements[2]
 					local convert_next = convert_desc(next_desc)
 					local convert_type =
-						terms.value.srel_type(
+						terms.value.variance_type(
 							evaluator.apply_value(
 								type_fun,
 								terms.value.neutral(
@@ -239,8 +244,26 @@ let host-family-sig-srels = lambda (signature : type_(1, 0))
 	let (srels-t) = inner(wrap(signature))
 	unwrap(srels-t)
 
+let host-string-concat = intrinsic "return function(a, b) return a .. b end" :
+	host-func-type (a : host-string, b : host-string) -> ((c : host-string))
 
-let new-host-type-family = lambda (unique-id : host-unique-id, signature : type_(1, 0), variance : host-family-sig-srels(signature))
+# TODO: now that we have effectful programs, work to switch this into using an effect to serialize the operations
+# lmao bootstrapping problem
+let host-unique-id-wrap = intrinsic
+	""""
+		local id = { name = "unique_id" }
+		evaluator.register_host_srel(id, evaluator.IndepTupleRelation())
+		return terms.value.host_user_defined_type(id, terms_gen.declare_array(terms.value)())
+	:
+	wrapped(host-type)
+let host-unique-id = unwrap(host-unique-id-wrap)
+let new-host-unique-id = lambda (name : host-string)
+	let source0 = "return { name = \""
+	let (source1) = host-string-concat(source0, name)
+	let (source2) = host-string-concat(source1, "\" }")
+	intrinsic source2 : host-unique-id
+
+let new-host-type-family = lambda (unique-id : host-unique-id, signature : type_(1, 0), variance : host-family-sig-variances(signature))
 	let inner = intrinsic
 		""""
 			local typed_array = terms_gen.declare_array(terms.typed_term)
@@ -269,8 +292,7 @@ let new-host-type-family = lambda (unique-id : host-unique-id, signature : type_
 					variances[i] = v:unwrap_host_value()
 				end
 
-				local tunpack = table.unpack or unpack
-				local srel = evaluator.IndepTupleRelation(tunpack(variances))
+				local srel = evaluator.IndepTupleRelation(table.unpack(variances))
 				evaluator.register_host_srel(unique_id, srel)
 
 				local params = typed_array()
@@ -295,9 +317,9 @@ let new-host-type-family = lambda (unique-id : host-unique-id, signature : type_
 		host-func-type (
 				unique-id  : host-unique-id,
 				signature_ : wrapped(type_(1, 0)),
-				variance_  : wrapped(host-family-sig-srels(unwrap(signature_))))
+				variance_  : wrapped(host-family-sig-variances(unwrap(signature_))))
 			->
-			((family : wrapped(signature)))
+			((family : wrapped(unwrap(signature_))))
 	let (family) = inner(unique-id, wrap(signature), wrap(variance))
 	unwrap(family)
 let new-host-type = lambda (unique-id : host-unique-id)
@@ -353,21 +375,6 @@ let host-array-get = lambda_implicit (T : host-type)
 		let (elem) = inner(arr, index)
 		elem
 
-let host-file-read =
-	intrinsic
-		""""
-			local function file_read(fname)
-				local file, err = io.open(fname)
-				if not file then
-					error(err)
-				end
-				local content = file:read("a")
-				return content
-			end
-			return file_read
-		:
-		host-func-type ((fname : host-string)) -> ((content : host-string))
-
 let terms-gen-array = new-host-type(new-host-unique-id("terms-gen-array"))
 
 let void =
@@ -412,6 +419,39 @@ let only-accept-host-tuples =
 			host-unit
 			wrapped void
 
+let only-accept-prog-host-tuples-inner-host =
+	intrinsic
+		""""
+			local function check_prog_host_tuple(subject, consequent, alternate)
+				if not subject:is_program_type() then
+					return alternate
+				end
+				local effects, base = subject:unwrap_program_type()
+				if base:is_host_tuple_type() then
+					return consequent
+				else
+					return alternate
+				end
+			end
+			return check_prog_host_tuple
+		:
+		host-func-type (subject : wrapped(type), consequent : wrapped(host-type), alternate : wrapped(host-type)) -> ((result : wrapped(host-type)))
+
+let only-accept-prog-host-tuples-inner =
+	lambda (subject : wrapped(type), consequent : host-type, alternate : host-type)
+		let (res) =
+			only-accept-prog-host-tuples-inner-host
+				subject
+				wrap consequent
+				wrap alternate
+		unwrap res
+let only-accept-prog-host-tuples =
+	lambda (subject : wrapped(type))
+		only-accept-host-tuples-inner
+			subject
+			host-unit
+			wrapped void
+
 let host-tuple-type-to-tuple-type-inner =
 	intrinsic
 		""""
@@ -429,6 +469,26 @@ let host-tuple-type-to-tuple-type =
 	lambda (t : wrapped(type), valid : only-accept-host-tuples(t))
 		let (res) = host-tuple-type-to-tuple-type-inner(t, valid)
 		res
+
+let extract-prog-host-tuple-type-inner =
+	intrinsic
+		""""
+			return function(prog_type)
+				local effect, base = prog_type:unwrap_program_type()
+				return base
+			end
+		:
+		host-func-type (t : wrapped(type), valid : only-accept-prog-host-tuples(t)) -> (res : wrapped(type), valid : only-accept-host-tuples(res))
+
+let rebuild-prog-type =
+	intrinsic
+		""""
+			return function(prog_type, valid, new_base)
+				local effect, base = prog_type:unwrap_program_type()
+				return terms.value.program_type(effect, new_base)
+			end
+		:
+		host-func-type (t : wrapped(type), valid : only-accept-prog-host-tuples(t), b : wrapped(type)) -> ((res : wrapped(type)))
 
 let host-tuple-to-tuple-inner =
 	intrinsic
@@ -498,7 +558,16 @@ let only-accept-host-funcs-inner-host =
 		""""
 			local function check_host_func(subject, consequent, alternate)
 				if subject:is_host_function_type() then
-					return consequent
+					local param, result, info = subject:unwrap_host_function_type()
+					if not info:is_result_info() then
+						error "stuck result info? broken function type?"
+					end
+					local info_inner = info:unwrap_result_info()
+					if info_inner.purity:is_pure() then
+						return consequent
+					else
+						return alternate
+					end
 				else
 					return alternate
 				end
@@ -518,6 +587,44 @@ let only-accept-host-funcs-inner =
 let only-accept-host-funcs =
 	lambda (subject : wrapped(type))
 		only-accept-host-funcs-inner
+			subject
+			host-unit
+			wrapped void
+
+let only-accept-host-funcprogs-inner-host =
+	intrinsic
+		""""
+			local function check_host_func(subject, consequent, alternate)
+				if subject:is_host_function_type() then
+					local param, result, info = subject:unwrap_host_function_type()
+					if not info:is_result_info() then
+						error "stuck result info? broken function type?"
+					end
+					local info_inner = info:unwrap_result_info()
+					if info_inner.purity:is_effectful() then
+						return consequent
+					else
+						return alternate
+					end
+				else
+					return alternate
+				end
+			end
+			return check_host_func
+		:
+		host-func-type (subject : wrapped(type), consequent : wrapped(host-type), alternate : wrapped(host-type)) -> ((result : wrapped(host-type)))
+
+let only-accept-host-funcprogs-inner =
+	lambda (subject : wrapped(type), consequent : host-type, alternate : host-type)
+		let (res) =
+			only-accept-host-funcprogs-inner-host
+				subject
+				wrap consequent
+				wrap alternate
+		unwrap res
+let only-accept-host-funcprogs =
+	lambda (subject : wrapped(type))
+		only-accept-host-funcprogs-inner
 			subject
 			host-unit
 			wrapped void
@@ -562,6 +669,17 @@ let get-host-func-arg-inner =
 		:
 		host-func-type (subject : wrapped(type), valid : only-accept-host-funcs(subject)) -> (result : wrapped(type), valid : only-accept-host-tuples(result))
 
+let get-host-funcprog-arg-inner =
+	intrinsic
+		""""
+			local function get_host_func_arg(subject, valid)
+				local param_type, result_type, result_info = subject:unwrap_host_function_type()
+				return param_type, nil
+			end
+			return get_host_func_arg
+		:
+		host-func-type (subject : wrapped(type), valid : only-accept-host-funcprogs(subject)) -> (result : wrapped(type), valid : only-accept-host-tuples(result))
+
 let just-args =
 	lambda (subject : wrapped(type), valid : only-accept-host-funcs(subject))
 		let (result, valid) = get-host-func-arg-inner(subject, valid)
@@ -594,6 +712,9 @@ let set-func-result-info-inner =
 let func-conv-res-type = 
 	lambda (argtype : wrapped(type))
 		forall (arg : unwrap(argtype)) -> (res : wrapped(type), valid : only-accept-host-tuples(res))
+let funcprog-conv-res-type = 
+	lambda (argtype : wrapped(type))
+		forall (arg : unwrap(argtype)) -> (res : wrapped(type), valid : only-accept-prog-host-tuples(res))
 
 let get-host-func-res-inner =
 	intrinsic
@@ -619,39 +740,29 @@ let get-host-func-res-inner =
 		:
 		host-func-type (subject : wrapped(type), valid : only-accept-host-funcs(subject)) -> ((results : wrapped(func-conv-res-type(just-args(subject, valid)))))
 						
-
-let foo =
-	host-func-type (x : host-number, y : host-number) -> ((res : host-number))
-
-foo
-
-let (oldargs oldargs-valid) = get-host-func-arg-inner(wrap(foo), host-nil)
-let (newargs) = host-tuple-type-to-tuple-type-inner(oldargs, oldargs-valid)
-newargs
-
-let id_type = forall (name : host-number) -> (name : host-number)
-
-let id_num = lambda_single (T : host-number)
-	T
-
-(the id_type id_num)
-
-let sub = lambda (x : host-number, y : host-number)
-	let (res) = host-sub(x, y)
-	res
-
-let sub_type = forall (x : host-number, y : host-number) -> (res : host-number)
-
-(the sub_type sub)
-
-let (orig-results) = get-host-func-res-inner(wrap(foo), host-nil)
-let orig-results = unwrap(orig-results)
-let new-results =
-	lambda (args : unwrap(newargs))
-		let ptuple = tuple-to-host-tuple(oldargs, oldargs-valid, args)
-		let orig-results-res = apply(orig-results, ptuple)
-		let (newres valid) = orig-results-res
-		newres
+let get-host-funcprog-res-inner =
+	intrinsic
+		""""
+			local function get_host_func_res(subject, valid)
+				local param_type, result_type, result_info = subject:unwrap_host_function_type()
+				local typed_array = terms_gen.declare_array(terms.typed_term)
+				local tuple_build = terms.typed_term.tuple_cons(
+					typed_array(
+						terms.typed_term.host_wrap(
+							terms.typed_term.application(
+								terms.typed_term.bound_variable(1),
+								terms.typed_term.bound_variable(2)
+							)
+						),
+						terms.typed_term.literal(terms.value.host_value(nil))
+					)
+				)
+				local ctx = terms.runtime_context():append(result_type)
+				return terms.value.closure("#TEST-1", tuple_build, ctx)
+			end
+			return get_host_func_res
+		:
+		host-func-type (subject : wrapped(type), valid : only-accept-host-funcprogs(subject)) -> ((results : wrapped(funcprog-conv-res-type(just-args(subject, valid)))))
 
 let host-func-type-to-func-type =
 	lambda (T : type, valid : only-accept-host-funcs(wrap(T)))
@@ -672,9 +783,28 @@ let host-func-type-to-func-type =
 		let (final-func-type-wrapped) = set-func-result-info-inner(wrap(new-func-type), host-nil, orig-result-info-wrapped)
 		unwrap(final-func-type-wrapped)
 
-host-func-type-to-func-type foo host-nil
+let host-funcprog-type-to-funcprog-type =
+	lambda (T : type, valid : only-accept-host-funcprogs(wrap(T)))
+		let (oldargs oldargs-valid) = get-host-funcprog-arg-inner(wrap(T), valid)
+		let (newargs) = host-tuple-type-to-tuple-type-inner(oldargs, oldargs-valid)
+		let (orig-results-wrapped) = get-host-funcprog-res-inner(wrap(T), valid)
+		let orig-results = unwrap(orig-results-wrapped)
+		let (orig-result-info-wrapped) = get-host-func-result-info-inner(wrap(T), valid)
+		
+		let new-results =
+			lambda (args : unwrap(newargs))
+				let ptuple = tuple-to-host-tuple(oldargs, oldargs-valid, args)
+				let (oldres oldres-valid) = apply(orig-results, ptuple)
+				let (extractres extractres-valid) = extract-prog-host-tuple-type-inner(oldres, oldres-valid)
+				let (newres) = host-tuple-type-to-tuple-type-inner(extractres, extractres-valid)
+				let (rebuilt) = rebuild-prog-type(oldres, oldres-valid, newres)
+				rebuilt
 
-let func-to-host-func =
+		let new-func-type = forall (x : unwrap(newargs)) -> (y : unwrap(new-results(x)))
+		let (final-func-type-wrapped) = set-func-result-info-inner(wrap(new-func-type), host-nil, orig-result-info-wrapped)
+		unwrap(final-func-type-wrapped)
+
+let func-to-host-func-inner =
 	intrinsic
 		""""
 			return function(_type, _valid, afn)
@@ -685,52 +815,93 @@ let func-to-host-func =
 						conv_args:append(terms.value.host_value(args[i]))
 					end
 					local res = evaluator.apply_value(afn, terms.value.tuple_value(conv_args))
-					if not res:is_host_value() then
+					if not res:is_tuple_value() then
 						error "alicorn function converted to native function has failed to create a real value"
 					end
-					return res:unwrap_host_value()
+					local elems = {}
+					for i, v in res:unwrap_tuple_value():ipairs() do
+						elems[i] = v:unwrap_host_value()
+					end
+					return table.unpack(elems)
 				end
 			end
 		:
 		host-func-type (T : wrapped(host-type), valid : only-accept-host-funcs(T), fn : wrapped(host-func-type-to-func-type(unwrap(T), valid))) -> ((res-fn : unwrap(T)))
 
+let func-to-host-func =
+	lambda (T : host-type, valid : only-accept-host-funcs(wrap(T)), fn : host-func-type-to-func-type(T, valid))
+		let (res) = func-to-host-func-inner(wrap(T), valid, wrap(fn))
+		res #TODO figure out why `unwrap(res) here doesn't make a nice type error but fails
 
+let funcprog-to-host-funcprog-inner =
+	intrinsic
+		""""
+			return function(_type, _valid, afn)
+				return function(...)
+					local args = {...}
+					local nargs = select("#", ...)
+					local conv_args = terms_gen.declare_array(terms.value)()
+					for i = 1, nargs do
+						conv_args:append(terms.value.host_value(args[i]))
+					end
+					local res = evaluator.execute_program(evaluator.apply_value(afn, terms.value.tuple_value(conv_args)))
+					if not res:is_tuple_value() then
+						print(res)
+						error  "alicorn function converted to native function has failed to create a real value"
+					end
+					local elems = {}
+					for i, v in res:unwrap_tuple_value():ipairs() do
+						elems[i] = v:unwrap_host_value()
+					end
+					return table.unpack(elems)
+				end
+			end
+		:
+		host-func-type (T : wrapped(host-type), valid : only-accept-host-funcprogs(T), fn : wrapped(host-funcprog-type-to-funcprog-type(unwrap(T), valid))) -> ((res-fn : unwrap(T)))
 
+let funcprog-to-host-funcprog =
+	lambda (T : host-type, valid : only-accept-host-funcprogs(wrap(T)), fn : host-funcprog-type-to-funcprog-type(T, valid))
+		let (res) = funcprog-to-host-funcprog-inner(wrap(T), valid, wrap(fn))
+		res #TODO figure out why `unwrap(res) here doesn't make a nice type error but fails
 
+let host-if-type = 
+	lambda (T : type_(9, 0))
+		forall (subject : host-bool, consequent : T, alternate : T) -> (res : T)
 
-let host-if-type = forall (subject : host-bool, consequent : host-type, alternate : host-type) -> (T : host-type)
-
-let host-if-wrap = intrinsic
-	""""
-		local typed = terms.typed_term
-		local string_array = terms_gen.declare_array(terms_gen.builtin_string)
-		return terms.value.closure(
-			"#host-if-param",
-			typed.tuple_elim(
-				string_array(
-					"#host-if-subject",
-					"#host-if-consequent",
-					"#host-if-alternate"
-				),
-				typed.bound_variable(1),
-				3,
-				typed.host_if(
-					typed.bound_variable(2),
-					typed.bound_variable(3),
-					typed.bound_variable(4)
-				)
-			),
-			terms.runtime_context()
-		)
-	:
-	wrapped(host-if-type)
-let host-if = unwrap(host-if-wrap)
+let host-if =
+	lambda_implicit (T : type_(9, 0))
+		let inner =
+			intrinsic
+				""""
+					local typed = terms.typed_term
+					local string_array = terms_gen.declare_array(terms_gen.builtin_string)
+					return terms.value.closure(
+						"#host-if-param",
+						typed.tuple_elim(
+							string_array(
+								"#host-if-subject",
+								"#host-if-consequent",
+								"#host-if-alternate"
+							),
+							typed.bound_variable(1),
+							3,
+							typed.host_if(
+								typed.bound_variable(2),
+								typed.bound_variable(3),
+								typed.bound_variable(4)
+							)
+						),
+						terms.runtime_context()
+					)
+				:
+				wrapped(host-if-type(T))
+		unwrap(inner)
 
 let tuple-desc-type-inner = intrinsic "return terms.value.tuple_desc_type" :
-	host-func-type ((U : wrapped(universe))) -> ((T : wrapped(host-type)))
+	host-func-type ((U : unstrict-wrapped(universe))) -> ((T : unstrict-wrapped(host-type)))
 let tuple-desc-type = lambda (U : universe)
-	let (T) = tuple-desc-type-inner(wrap(U))
-	unwrap(T)
+	let (T) = tuple-desc-type-inner(unstrict-wrap(U))
+	unstrict-unwrap(T)
 let tuple-type-explicit = lambda (U : universe, desc : tuple-desc-type(U))
 	let inner = intrinsic "return terms.value.tuple_type" :
 		host-func-type ((desc : wrapped(tuple-desc-type(U)))) -> ((T : wrapped(U)))
@@ -767,6 +938,8 @@ let tuple-desc-elem-explicit = lambda (
 			wrap(desc)
 			wrap(elem)
 	unwrap(T)
+
+
 let tuple-desc-elem-implicit = lambda_curry ((U : universe))
 	lambda (desc : tuple-desc-type(U), elem : (forall (rest : tuple-type(desc)) -> (next : U)))
 		let inner = intrinsic "return terms.cons" :
@@ -878,13 +1051,29 @@ let tuple-desc-concat = lambda (U : universe, head : tuple-desc-type(U), tail : 
 				local tail_n, tail_elems = traverse(tail)
 				local head_last = head_elems[1]
 				local _, head_code, _ = head_last:unwrap_closure()
-				local head_names, _, _, _ = head_code:unwrap_tuple_elim()
+				local head_names
+				if head_code:is_tuple_elim() then
+					head_names, _, _, _ = head_code:unwrap_tuple_elim()
+				else
+					head_names = string_array()
+					for i = 1, head_n do
+						head_names[i] = "head_unk_"..tostring(i)
+					end
+				end
 				local desc = head
 				for i = tail_n, 1, -1 do
 					local tail_n_now = tail_n - i
 					local elem = tail_elems[i]
 					local _, tail_code, _ = elem:unwrap_closure()
-					local tail_names, _, _, _ = tail_code:unwrap_tuple_elim()
+					local tail_names
+					if tail_code:is_tuple_elim() then
+						tail_names, _, _, _ = tail_code:unwrap_tuple_elim()
+					else
+						tail_names = string_array()
+						for i = 1, tail_n do
+							tail_names[i] = "tail_unk_"..tostring(i)
+						end
+					end
 					desc = tuple_desc_elem(desc, elem, head_n, head_names, tail_n_now, tail_names)
 				end
 				return desc
@@ -950,6 +1139,69 @@ let host-tuple-concat = lambda (
 			((cat : wrapped(host-tuple-type(tuple-desc-concat(U, head, tail)))))
 	let (cat) = inner(wrap(hd), wrap(tl))
 	unwrap(cat)
+
+let host-number-fold-indep = lambda_implicit (T : type_(9, 0))
+	let inner =
+		intrinsic
+			""""
+				local value_array = terms_gen.declare_array(terms.value)
+				return function(n, f, acc)
+					for i = n, 1, -1 do
+						acc = evaluator.apply_value(f, terms.value.tuple_value(value_array(terms.value.host_value(i), acc)))
+					end
+					return acc
+				end
+			:
+			host-func-type  (
+					n : host-number,
+					f : (wrapped (forall (i : host-number, acc : T) -> (resacc : T)) ),
+					acc : wrapped(T))
+				->
+				((fold  : wrapped(T)))
+	lambda (n : host-number, f : (forall (i  : host-number, acc  : T) -> (resacc  : T)), acc  : T)
+		let  (fold) = inner(n, wrap(f), wrap(acc))
+		unwrap(fold)
+
+let duplicate-tuple-desc = lambda_implicit (U : universe)
+	lambda (n : host-number, T : U)
+		host-number-fold-indep
+			n
+			lambda (i : host-number, acc : tuple-desc-type(U))
+				tuple-desc-concat
+					U
+					tuple-desc-singleton U T
+					acc
+			tuple-desc-empty U
+
+let host-array-from-tuple = lambda_implicit (T : host-type)
+	lambda (size : host-number, tuple : host-tuple-type(duplicate-tuple-desc(size, T)))
+		let inner = 
+			intrinsic
+				""""
+					return function(tuple)
+						return {tuple:unwrap_host_tuple_value(tuple):unpack()}
+					end
+				:
+				host-func-type ((tuple : wrapped(host-tuple-type(duplicate-tuple-desc(size, T))))) -> ((res : host-array-type(T)))
+		let (array) = inner(wrap(tuple))
+		array
+
+let make-host-array = lambda_implicit (T : host-type)
+	lambda (size : host-number)
+		let input-type = host-tuple-type(duplicate-tuple-desc(size, T))
+		let inner = 
+			intrinsic
+				""""
+					return function(tuple)
+						return {tuple:unwrap_host_tuple_value(tuple):unpack()}
+					end
+				:
+				host-func-type ((tuple : wrapped(input-type))) -> ((res : host-array-type(T)))
+		lambda_single (elems : input-type)
+			let (array) = inner(wrap(elems))
+			array
+
+## syntax matcher and operative stuff
 
 let host-literal = new-host-type(new-host-unique-id("literal"))
 
@@ -1021,7 +1273,7 @@ let host-matcher-is-value = lambda (userdata : host-type, result : tuple-desc-ty
 
 let reducer-type = new-host-type-family new-host-unique-id("host-reducer")
 	forall (storage : tuple-desc-type(host-type), result2 : tuple-desc-type(host-type)) -> (T : host-type)
-	tuple-of-implicit covariant(tuple-desc-relation) contravariant(tuple-desc-relation)
+	tuple-of-implicit contravariant(tuple-desc-relation) covariant(tuple-desc-relation)
 
 let reducible-handler-type = lambda (userdata : host-type, result2 : tuple-desc-type(host-type), result : tuple-desc-type(host-type))
 	# prepend userdata to result2
@@ -1057,12 +1309,16 @@ let host-matcher-reducible = lambda (
 		red            : reducer-type(storage, result2),
 		s              : host-tuple-type(storage),
 		accept-handler : reducible-handler-type(userdata, result2, result))
-	let c = get-reducible-constructor(userdata, storage, result2, result, red)
+	# FIXME: this function resolution breaks alicorn, which is extremely very super bad
+	# let c = get-reducible-constructor(userdata, storage, result2, result, red)
+	let inner = intrinsic "return function(r) return r end" :
+		host-func-type ((r : reducer-type(storage, result2))) -> ((c : reducible-constructor-type(userdata, storage, result2, result)))
+	let (c) = inner(red)
 
 	let accept-handler-type = reducible-handler-type(userdata, result2, result)
 	let accept-handler-desc = tuple-desc-singleton(host-type, accept-handler-type)
-	let red-param-desc = tuple-desc-concat(host-type, accept-handler-desc, storage)
-	let red-result-desc = tuple-desc-singleton(host-type, host-matcher(userdata, result))
+	# let red-param-desc = tuple-desc-concat(host-type, accept-handler-desc, storage)
+	# let red-result-desc = tuple-desc-singleton(host-type, host-matcher(userdata, result))
 
 	let accept-handler-tuple = host-tuple-of(host-type, accept-handler-desc)(accept-handler)
 	let red-param = host-tuple-concat(host-type, accept-handler-desc, storage, accept-handler-tuple, s)
@@ -1082,8 +1338,8 @@ let host-matcher-reducible = lambda (
 			accept-handler : reducible-handler-type(userdata, result2, result))
 		let accept-handler-type = reducible-handler-type(userdata, result2, result)
 		let accept-handler-desc = tuple-desc-singleton(host-type, accept-handler-type)
-		let red-param-desc = tuple-desc-concat(host-type, accept-handler-desc, storage)
-		let red-result-desc = tuple-desc-singleton(host-type, host-matcher(userdata, result))
+		# let red-param-desc = tuple-desc-concat(host-type, accept-handler-desc, storage)
+		# let red-result-desc = tuple-desc-singleton(host-type, host-matcher(userdata, result))
 
 		let accept-handler-tuple = host-tuple-of(host-type, accept-handler-desc)(accept-handler)
 		let red-param = host-tuple-concat(host-type, accept-handler-desc, storage, accept-handler-tuple, s)
@@ -1141,21 +1397,21 @@ let match-syntax-implicit = lambda_implicit (userdata        : host-type)
 				(r : host-tuple-type(result))
 		inner(matchers, failure-handler, syn, wrap(ud))
 
-#let host-term-of-inner = intrinsic
-#	""""
-#		local function host_term_of(goal)
-#			if goal:is_infer() then
-#				return terms.host_inferrable_term_type
-#			elseif goal:is_check() then
-#				return terms.host_checkable_term_type
-#			else
-#				error("host-term-of: unknown goal")
-#			end
-#		end
-#		return host_term_of
-#	:
-#	host-func-type ((goal : host-goal)) -> ((t : wrapped(host-type)))
-let host-term-of-inner = hackhack-host-term-of-inner
+let host-term-of-inner = intrinsic
+	""""
+		local function host_term_of(goal)
+			if goal:is_infer() then
+				return terms.host_inferrable_term_type
+			elseif goal:is_check() then
+				return terms.host_checkable_term_type
+			else
+				error("host-term-of: unknown goal")
+			end
+		end
+		return host_term_of
+	:
+	host-func-type ((goal : host-goal)) -> ((t : wrapped(host-type)))
+#let host-term-of-inner = hackhack-host-term-of-inner
 let host-term-of = lambda (goal : host-goal)
 	let (t) = host-term-of-inner(goal)
 	unwrap(t)
@@ -1296,6 +1552,8 @@ let core-operative = lambda_implicit(userdata : host-type)
 			:
 			wrapped(forall (ud : userdata, handler : operative-handler-type(userdata)) -> (res : core-operative-type(userdata, handler)))
 
+## do operative
+
 let block-reducer-storage-desc = tuple-desc-singleton(host-type, host-expression-args)
 
 let block-reducer-result2-desc = operative-result-desc # incidentally the same
@@ -1364,6 +1622,7 @@ let goal-infer = intrinsic "return terms.expression_goal.infer" : host-goal
 
 let do-impl-type = operative-handler-type(host-unit)
 
+
 let do-impl = lambda (syn : host-syntax, env : host-environment, ud : host-unit, goal : host-goal)
 	let (shadowed, inner_env) = enter-block(env)
 
@@ -1387,6 +1646,8 @@ let do-impl = lambda (syn : host-syntax, env : host-environment, ud : host-unit,
 			1
 			matcher
 
+	#let matchers = (make-host-array(1) matcher)
+
 	let (ok, term, inner_env) =
 		match-syntax
 			host-unit
@@ -1406,51 +1667,45 @@ let do-impl = lambda (syn : host-syntax, env : host-environment, ud : host-unit,
 	tuple-of(host-type, operative-result-desc(goal))(wrapped, env)
 
 #	let (do-type, do) = new-operative(host-unit, host-nil, do-impl)
-#let do = core-operative(host-nil, do-impl)
-let do = into-operative(host-unit, host-nil, do-impl)
+let do = core-operative(host-nil, do-impl)
+#let do = into-operative(host-unit, host-nil, do-impl)
 
-let foo = "baz"
-let x = do
-	let foo = "foo"
-	let (foobar) = host-string-concat(foo, "bar")
-	foobar
-let (foobarbaz) = host-string-concat(x, foo)
-foobarbaz
+## tuple-desc operative
 
-let tupleof-ascribed-names-reducer-thread-type = new-host-type(new-host-unique-id("tupleof-ascribed-names-reducer-thread"))
-let tupleof-ascribed-names-reducer-thread-type-get-names = intrinsic
+let ascribed-segment-tuple-desc-reducer-thread-type = new-host-type(new-host-unique-id("ascribed-segment-tuple-desc-reducer-thread"))
+let ascribed-segment-tuple-desc-reducer-thread-type-get-names = intrinsic
 	""""
 		local function get_names(thread)
 			return thread.names
 		end
 		return get_names
 	:
-	host-func-type ((thread : tupleof-ascribed-names-reducer-thread-type)) -> ((names : terms-gen-array))
-let tupleof-ascribed-names-reducer-thread-type-get-args = intrinsic
+	host-func-type ((thread : ascribed-segment-tuple-desc-reducer-thread-type)) -> ((names : terms-gen-array))
+let ascribed-segment-tuple-desc-reducer-thread-type-get-args = intrinsic
 	""""
 		local function get_args(thread)
 			return thread.args
 		end
 		return get_args
 	:
-	host-func-type ((thread : tupleof-ascribed-names-reducer-thread-type)) -> ((args : host-inferrable-term))
-let tupleof-ascribed-names-reducer-thread-type-get-env = intrinsic
+	host-func-type ((thread : ascribed-segment-tuple-desc-reducer-thread-type)) -> ((args : host-inferrable-term))
+let ascribed-segment-tuple-desc-reducer-thread-type-get-env = intrinsic
 	""""
 		local function get_env(thread)
 			return thread.env
 		end
 		return get_env
 	:
-	host-func-type ((thread : tupleof-ascribed-names-reducer-thread-type)) -> ((env : host-environment))
+	host-func-type ((thread : ascribed-segment-tuple-desc-reducer-thread-type)) -> ((env : host-environment))
 
-let tupleof-ascribed-names-reducer-storage-desc = tuple-desc-singleton(host-type, host-environment)
+let ascribed-segment-tuple-desc-reducer-storage-desc = tuple-desc-singleton(host-type, host-environment)
 
-let tupleof-ascribed-names-reducer-result2-desc = tuple-desc-singleton(host-type, tupleof-ascribed-names-reducer-thread-type)
+let ascribed-segment-tuple-desc-reducer-result2-desc = tuple-desc-singleton(host-type, ascribed-segment-tuple-desc-reducer-thread-type)
 
-let tupleof-ascribed-names-match-result-desc =
-	# read as: (ok : host-bool, _ : host-if(ok, tupleof-ascribed-names-reducer-thread-type, host-lua-error))
+let ascribed-segment-tuple-desc-match-result-desc =
+	# read as: (ok : host-bool, _ : host-if(ok, ascribed-segment-tuple-desc-reducer-thread-type, host-lua-error))
 	# or, more logically: (ok : host-bool, ...) where:
-	# - ok == true:  `...` is tupleof-ascribed-names-reducer-thread-type
+	# - ok == true:  `...` is ascribed-segment-tuple-desc-reducer-thread-type
 	# - ok == false: `...` is host-lua-error
 	# technically this should have a third element in the ok == true case, containing host-syntax
 	# but the syntax will always be nil, and the errors are annoying
@@ -1460,32 +1715,32 @@ let tupleof-ascribed-names-match-result-desc =
 			lambda ()
 				host-bool
 		lambda (ok : host-bool)
-			host-if(ok, tupleof-ascribed-names-reducer-thread-type, host-lua-error)
+			host-if(ok, ascribed-segment-tuple-desc-reducer-thread-type, host-lua-error)
 
-# FIXME: tupleof_ascribed_names_inner can only produce tuple descs in star-0
-let tupleof-ascribed-names-reducer = intrinsic "return base_env.tupleof_ascribed_names_inner" :
-	reducer-type(tupleof-ascribed-names-reducer-storage-desc, tupleof-ascribed-names-reducer-result2-desc)
+# FIXME: ascribed_segment_tuple_desc can only produce tuple descs in star-0
+let ascribed-segment-tuple-desc-reducer = intrinsic "return base_env.ascribed_segment_tuple_desc" :
+	reducer-type(ascribed-segment-tuple-desc-reducer-storage-desc, ascribed-segment-tuple-desc-reducer-result2-desc)
 
-let tupleof-ascribed-names-match-accept-handler = intrinsic "return metalanguage.accept_handler" :
-	reducible-handler-type(host-unit, tupleof-ascribed-names-reducer-result2-desc, tupleof-ascribed-names-match-result-desc)
-let tupleof-ascribed-names-match-failure-handler = intrinsic "return metalanguage.failure_handler" :
-	failure-handler-type(host-unit, tupleof-ascribed-names-match-result-desc)
+let ascribed-segment-tuple-desc-match-accept-handler = intrinsic "return metalanguage.accept_handler" :
+	reducible-handler-type(host-unit, ascribed-segment-tuple-desc-reducer-result2-desc, ascribed-segment-tuple-desc-match-result-desc)
+let ascribed-segment-tuple-desc-match-failure-handler = intrinsic "return metalanguage.failure_handler" :
+	failure-handler-type(host-unit, ascribed-segment-tuple-desc-match-result-desc)
 
 let tuple-desc-impl-type = operative-handler-type(host-unit)
 
 let tuple-desc-impl = lambda (syn : host-syntax, env : host-environment, ud : host-unit, goal : host-goal)
-	let s = host-tuple-of(host-type, tupleof-ascribed-names-reducer-storage-desc)(env)
+	let s = host-tuple-of(host-type, ascribed-segment-tuple-desc-reducer-storage-desc)(env)
 
-	let matcher-t = host-matcher(host-unit, tupleof-ascribed-names-match-result-desc)
+	let matcher-t = host-matcher(host-unit, ascribed-segment-tuple-desc-match-result-desc)
 	let matcher =
 		host-matcher-reducible
 			host-unit
-			tupleof-ascribed-names-reducer-storage-desc
-			tupleof-ascribed-names-reducer-result2-desc
-			tupleof-ascribed-names-match-result-desc
-			tupleof-ascribed-names-reducer
+			ascribed-segment-tuple-desc-reducer-storage-desc
+			ascribed-segment-tuple-desc-reducer-result2-desc
+			ascribed-segment-tuple-desc-match-result-desc
+			ascribed-segment-tuple-desc-reducer
 			s
-			tupleof-ascribed-names-match-accept-handler
+			ascribed-segment-tuple-desc-match-accept-handler
 
 	let matchers =
 		host-array-set
@@ -1496,119 +1751,25 @@ let tuple-desc-impl = lambda (syn : host-syntax, env : host-environment, ud : ho
 	let (ok, thread) =
 		match-syntax
 			host-unit
-			tupleof-ascribed-names-match-result-desc
+			ascribed-segment-tuple-desc-match-result-desc
 			matchers
-			tupleof-ascribed-names-match-failure-handler
+			ascribed-segment-tuple-desc-match-failure-handler
 			syn
 			host-nil
 
-	let thread = error-filter(tupleof-ascribed-names-reducer-thread-type, host-lua-error, ok, thread)
+	let thread = error-filter(ascribed-segment-tuple-desc-reducer-thread-type, host-lua-error, ok, thread)
 
-	let (args) = tupleof-ascribed-names-reducer-thread-type-get-args(thread)
-	let (env) = tupleof-ascribed-names-reducer-thread-type-get-env(thread)
+	let (args) = ascribed-segment-tuple-desc-reducer-thread-type-get-args(thread)
+	let (env) = ascribed-segment-tuple-desc-reducer-thread-type-get-env(thread)
 
 	let (args) = goalify-inferrable(goal, args)
 
 	tuple-of(host-type, operative-result-desc(goal))(args, env)
 
-#let (tuple-desc-op-type, tuple-desc-op) = new-operative(host-unit, host-nil, tuple-desc-impl)
-let tuple-desc-op = into-operative(host-unit, host-nil, tuple-desc-impl)
-
-let my-tuple-desc = tuple-desc-op(x : host-number, y : host-number)
-let my-tuple-type = tuple-type-explicit(type_(0, 0), my-tuple-desc)
-my-tuple-type
-
-let host-if-2-type = forall (
-		result     : host-type,
-		c2         : host-type,
-		a1         : host-type,
-		subject    : host-bool,
-		consequent : host-if(subject, result, c2),
-		alternate  : host-if(subject, a1, result))
-	->
-	(r : result)
-
-let host-if-2-wrap = intrinsic
-	""""
-		local typed = terms.typed_term
-		local string_array = terms_gen.declare_array(terms_gen.builtin_string)
-		return terms.value.closure(
-			"#host-if-param",
-			typed.tuple_elim(
-				string_array(
-					"#host-if-result",
-					"#host-if-c2",
-					"#host-if-a1",
-					"#host-if-subject",
-					"#host-if-consequent",
-					"#host-if-alternate"
-				),
-				typed.bound_variable(1),
-				6,
-				typed.host_if(
-					typed.bound_variable(5),
-					typed.bound_variable(6),
-					typed.bound_variable(7)
-				)
-			),
-			terms.runtime_context()
-		)
-	:
-	wrapped(host-if-2-type)
-let host-if-2 = explicit-unwrap(host-if-2-type, host-if-2-wrap)
-
-let host-true = intrinsic "return true" : host-bool
-let host-false = intrinsic "return false" : host-bool
-
-let host-if-test = lambda (
-		b : host-bool,
-		x : host-if(b, host-string, host-unit))
-	let default = intrinsic "return 'default'" : host-if(b, host-string, host-string)
-	let foo = host-if-2(host-string, host-unit, host-string, b, x, default)
-	the host-string foo
-
-host-if-test(host-true, "foobar")
-host-if-test(host-false, host-nil)
-
-let id = lambda_implicit (T : type_(10, 0))
-	lambda (x : T)
-		x
-
-
-# TODO: test this when tuple-desc-op can do more than just star-0
-#let point = lambda_implicit (U : type_(10))
-#	lambda (T : U)
-#		tuple-type(tuple-desc-op(x : T, y : T))
-#
-#let mkpoint = lambda_implicit (U : type_(10), T : U)
-#	lambda (x : T, y : T)
-#		the point(T) tuple-of(x, y)
-#
-#let mul = intrinsic "return function(a, b) return a * b end" : host-arith-binop
-#let add = intrinsic "return function(a, b) return a "+" b end" : host-arith-binop
-#let sqmag = lambda (r : tuple-type(tuple-desc(x : host-number, y : host-number)))
-#	let (x y) = r
-#	add (mul x x) (mul y y)
-
-#let test = sqmag(mkpoint(id(3), id(4)))
-
-let _-_ = sub
-12 - 3 - 5
-
-let mutable-number = new-host-type(new-host-unique-id("mutable-number"))
-let new-mutable-number = intrinsic "return function(x) return { x = x } end" :
-	host-prog-type ((num : host-number)) -> ((res : mutable-number))
-let get-mutable-number = intrinsic "return function(num) return num.x end" :
-	host-prog-type ((num : mutable-number)) -> ((x : host-number))
-let mutate-number = intrinsic "return function(num, m, c) num.x = num.x * m + c end" :
-	host-prog-type (num : mutable-number, m : host-number, c : host-number) -> ()
-
-let (my-mutable-number) = new-mutable-number(0)
-let (x) = get-mutable-number(my-mutable-number)
-let () = mutate-number(my-mutable-number, 3, 1)
-mutate-number(my-mutable-number, 3, 1)
-let (y) = get-mutable-number(my-mutable-number)
-y
+#let (tuple-desc-op-type, tuple-desc) = new-operative(host-unit, host-nil, tuple-desc-impl)
+let tuple-desc = core-operative(host-nil, tuple-desc-impl)
+# tuple-desc for single-element tuples currently require an extra pair of parens, like lambdas used to.
+# This should eventually be fixed the same way lambdas were fixed.
 
 let terms-gen-map = new-host-type(new-host-unique-id("terms-gen-map"))
 
@@ -1621,225 +1782,6 @@ let listtail-reducer =
 			lambda (( matcher : host-matcher(userdata, result) ))
 				intrinsic "return metalanguage.listtail" :
 					reducer-type((tuple-desc-empty host-type), result)
-
-
-####
-	#	---@alias URect userdata
-	let URect = new-host-type(new-host-unique-id("URect"))
-
-	#	---@alias Component userdata
-	let Component = new-host-type(new-host-unique-id("Component"))
-
-	#	---@alias EventHandler userdata
-	let EventHandler = new-host-type(new-host-unique-id("EventHandler"))
-
-	####
-		---@param left number
-		---@param top number
-		---@param right number
-		---@param bottom number
-		---@param rel_left number
-		---@param rel_top number
-		---@param rel_right number
-		---@param rel_bottom number
-		---@return URect
-		function create_urect(left, top, right, bottom, rel_left, rel_top, rel_right, rel_bottom)
-		end
-	let create-urect-bind =
-		intrinsic
-			"return create_urect"
-			:
-			host-func-type
-				(
-					left : host-number,
-					top : host-number,
-					right : host-number,
-					bottom : host-number,
-					rel_left : host-number,
-					rel_top : host-number,
-					rel_right : host-number,
-					rel_bottom : host-number
-				)
-				->
-				((res : URect))
-	let create-urect =
-		lambda
-			(
-				left : host-number,
-				top : host-number,
-				right : host-number,
-				bottom : host-number,
-				rel_left : host-number,
-				rel_top : host-number,
-				rel_right : host-number,
-				rel_bottom : host-number
-			)
-			let (res) = create-urect-bind(left, top, right, bottom, rel_left, rel_top, rel_right, rel_bottom)
-			res
-	####
-		---@param name string
-		---@param child Component
-		---@return Component
-		function create_window(name, child) end
-	let create-window-bind =
-		intrinsic
-			"return create_window"
-			:
-			host-func-type (name : string, child : Component) -> (res : Component)
-	let create-window =
-		lambda (name : string, child : Component)
-			let (res) = create-window-bind(name, child)
-			res
-	####
-		---@param area URect
-		---@param ... Component
-		---@return Component
-		function create_region(area, ...) end
-	let create-region-bind =
-		intrinsic
-			"return function(area, components) return create_region(area, table.unpack(components)) end"
-			:
-			host-func-type (area : URect, components : host-array-type(Component)) -> (res : Component)
-
-	let create-region =
-		lambda (area : URect, components : host-array-type(Component))
-			let (res) = create-region-bind(area, components)
-			res
-
-	####
-		---@param area URect
-		---@param text string
-		---@param onclick EventHandler
-		---@param background Component
-		---@return Component
-		function create_button(area, text, onclick, background) end
-	let create-button-bind =
-		intrinsic
-			"return create_button"
-			:
-			host-func-type (area : URect, text : string, onclick : EventHandler, background : Component) -> (res : Component)
-	let create-button =
-		lambda (area : URect, text : string, onclick : EventHandler, background : Component)
-			let (res) = create-button-bind(area, text, onclick, background)
-			res
-	####
-		---@param area URect
-		---@param text string
-		---@return Component
-		function create_label(area, text) end
-	let create-label-bind =
-		intrinsic "return create_label" : host-func-type (area : URect, text : string) -> (res : Component)
-
-	let create-label =
-		lambda (area : URect, text : string)
-			let (res) = create-label-bind(area, text)
-			res
-
-	####
-		---Colors here are 32-bit RGBA integers (for now): 0xFF00FFFF
-		---@param area URect
-		---@param color integer
-		---@param radius number
-		---@param border number
-		---@param bordercolor integer
-		---@return Component
-		function create_round_rect(area, color, radius, border, bordercolor) end
-	let create-round-rect-bind =
-		intrinsic
-			"return create_round_rect"
-			:
-			host-func-type (area : URect, color : host-number, radius : host-number, border : host-number, bordercolor : host-number) -> (res : Component)
-	let create-round-rect =
-		lambda (area : URect, color : host-number, radius : host-number, border : host-number, bordercolor : host-number)
-			let (res) = create-round-rect-bind(area, color, radius, border, bordercolor)
-			res
-
-	####
-		---@param f fun(userdata, userdata, any): typed
-		---@return EventHandler
-		function create_event_handler(f) end
-	let create-event-handler =
-		lambda_implicit (AppData : host-type)
-			let cb-type = host-func-type (userdata : UserData, userdata : UserData, appdata : AppData) -> (res : EventHandler)
-			let inner =
-				intrinsic
-					"return function(f) return create_event_handler(f) end"
-					:
-					host-func-type (f : cb-type) -> (res : EventHandler)
-			lambda (f : host-func-type-to-func-type(cb-type, host-nil))
-				let (cb) = func-to-host-func(cb-type, host-nil, wrap(f))
-				let (res) = inner(f)
-				res
-
-#let HTTPServer = new-host-type(new-host-unique-id("HTTPServer"))
-#let HTTPRequest = new-host-type(new-host-unique-id("HTTPRequest"))
-#let HTTPResponse = new-host-type(new-host-unique-id("HTTPResponse"))
-#
-#let HTTPHandler = host-prog-type (req : HTTPRequest, res : HTTPResponse) -> ()
-#
-#let string = host-string
-#
-#let create-http-server =
-#	lambda-prog ((callback : host-func-type-to-func-type(HTTPHandler, host-nil)))
-#		let inner =
-#			intrinsic
-#				""""
-#					local http = require "http"
-#					return http.createServer
-#				:
-#				host-prog-type ((handler : HTTPHandler)) -> ((res : HTTPServer))
-#		let (host-cb) = func-to-host-func(wrap(HTTPHandler), host-nil, wrap(callback))
-#		let (res) = inner(host-cb)
-#		res
-#
-#let http-server-listen =
-#	intrinsic
-#		"return function(server, host, port) server:listen(host, port) end"
-#		:
-#		host-prog-type (server : HTTPServer, host : string, port : host-number) -> ()
-#
-#let response-set-header =
-#	intrinsic
-#		"return function(res, name, val) res:setHeader(name, val) end"
-#		:
-#		host-prog-type (res : HTTPResponse, name : string, value : string) -> ()
-#
-#let response-send-body =
-#	intrinsic
-#		"return function(res, body) res:finish(body) end"
-#		:
-#		host-prog-type (res : HTTPResponse, body : string) -> ()
-#
-#let strlen =
-#	do
-#		let inner = intrinsic "return function(str) return #str end" : (host-func-type ((str : string)) -> ((len : host-number)))
-#		lambda ((str : string))
-#			let (res) = inner(str)
-#			res
-#
-#let num-to-str =
-#	do
-#		let inner = intrinsic "return tostring" : (host-func-type ((num : host-number)) -> ((str : string)))
-#		lambda ((num : host-number))
-#			let (res) = inner(num)
-#			res
-#
-#let print =
-#	do
-#		let inner = intrinsic "return print" : (host-prog-type ((str : string)) -> ())
-#		lambda-prog ((str : string))
-#			let () = inner(str)
-#
-#let my-request-handler = lambda-prog (req : HTTPRequest, res : HTTPResponse)
-#	print "got a request!"
-#	let body = "Hello World!\n"
-#	response-set-header res "Content-Type" "text/plain"
-#	response-set-header res "Content-Length" num-to-str(strlen(body))
-#	response-send-body res body
-#
-#let server = create-http-server(my-request-handler)
-#http-server-listen server "0.0.0.0" 8080
-#print "server started on localhost:8080"
 
 # let enum-desc-impl = lambda (syn : host-syntax, env : host-environment, ud : host-unit, goal : host-goal)
 # 	let matcher-t = host-matcher(host-unit, enum-desc-match-result-desc)
@@ -1873,16 +1815,9 @@ let listtail-reducer =
 # 	aa
 #     a
 
+let host-arith-binop = (host-func-type (a : host-number, b : host-number) -> ((c : host-number)))
 let host-mul = (intrinsic "return function(a, b) return a * b end" : host-arith-binop)
 let mul = lambda (a : host-number, b : host-number)
 	let (c) = host-mul(a, b)
 	c
 let _*_ = mul
-
-let sqr = lambda (x)
-	x * x
-sqr 6
-# FIXME: this super duper should be failing
-let sqr_overcomplicated = lambda_annotated (t, x : t) : host-string
-	x * x
-sqr_overcomplicated(host-number, 6)

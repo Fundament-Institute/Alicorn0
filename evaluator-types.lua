@@ -4,7 +4,7 @@ local terms = require "terms"
 
 local value = terms.value
 
----@module "evaluator.edgenotif"
+---@module "types.edgenotif"
 local EdgeNotif = gen.declare_type()
 
 local SubtypeRelation = terms.SubtypeRelation
@@ -16,7 +16,7 @@ EdgeNotif:define_enum("edgenotif", {
 		"rel",  SubtypeRelation,
 		"right", gen.builtin_number,
 		"shallowest_block", gen.builtin_number,
-		"cause",  gen.any_lua_type,
+		"cause",  terms.constraintcause,
 	} },
 	{ "CallLeft", {
 		"left",  gen.builtin_number,
@@ -24,7 +24,7 @@ EdgeNotif:define_enum("edgenotif", {
 		"rel",  SubtypeRelation,
 		"right", gen.builtin_number,
 		"shallowest_block", gen.builtin_number,
-		"cause",  gen.any_lua_type,
+		"cause",  terms.constraintcause,
 	} },
 	{ "CallRight", {
 		"left",  gen.builtin_number,
@@ -32,7 +32,7 @@ EdgeNotif:define_enum("edgenotif", {
 		"right", gen.builtin_number,
 		"arg",  value,
 		"shallowest_block", gen.builtin_number,
-		"cause",  gen.any_lua_type,
+		"cause",  terms.constraintcause,
 	} },
 }
 )

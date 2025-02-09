@@ -18,9 +18,10 @@ function block_purity:unwrap_pure() end
 function block_purity:as_pure() end
 ---@return boolean
 function block_purity:is_dependent() end
----@return value
+---@return value val
 function block_purity:unwrap_dependent() end
----@return boolean, value
+---@return boolean
+---@return value val
 function block_purity:as_dependent() end
 ---@return boolean
 function block_purity:is_inherit() end

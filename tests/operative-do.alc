@@ -1,0 +1,7 @@
+let foo = "baz"
+let x = do
+	let foo = "foo"
+	let (foobar) = host-string-concat(foo, "bar")
+	foobar
+let (foobarbaz) = host-string-concat(x, foo)
+foobarbaz

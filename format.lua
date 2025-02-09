@@ -23,6 +23,23 @@ end
 ---@field sourceid string
 local Anchor = {}
 
+---comment
+---@param stop Anchor?
+---@return string
+function Anchor:display(stop)
+	if stop == nil then
+		return tostring(self)
+	end
+
+	return tostring(self.sourceid)
+		.. ":"
+		.. tostring(self.line)
+		.. ":"
+		.. tostring(self.char)
+		.. "-"
+		.. tostring(stop.char)
+end
+
 local anchor_mt = {
 	__lt = function(fst, snd)
 		return snd.line > fst.line or (snd.line == fst.line and snd.char > fst.char)
@@ -34,12 +51,7 @@ local anchor_mt = {
 		return (snd.line == fst.line and snd.char == fst.char)
 	end,
 	__tostring = function(self)
-		return "file "
-			.. tostring(self.sourceid)
-			.. ", line "
-			.. tostring(self.line)
-			.. " character "
-			.. tostring(self.char)
+		return tostring(self.sourceid) .. ":" .. tostring(self.line) .. ":" .. tostring(self.char)
 	end,
 	__index = Anchor,
 }
@@ -62,10 +74,6 @@ end
 -- Incrementally Fold Repetitions at Match Time
 -- incrementally fold the stack into actual tables to prevent stack overflows
 local function IFRmt(pattern, numtimes)
-	if _VERSION == "Lua 5.1" then
-		table.unpack = unpack
-	end
-
 	local repetition
 
 	if numtimes == 0 then
@@ -99,16 +107,17 @@ local function IFRmt(pattern, numtimes)
 	return repetition
 end
 
+local function create_list(start_anchor, elements, end_anchor)
+	return {
+		kind = "list",
+		start_anchor = start_anchor,
+		end_anchor = end_anchor,
+		elements = elements,
+	}
+end
+
 local function list(pattern)
-	return (V "anchor" * Ct(pattern) * V "anchor")
-		/ function(start_anchor, elements, end_anchor)
-			return {
-				start_anchor = start_anchor,
-				elements = elements,
-				end_anchor = end_anchor,
-				kind = "list",
-			}
-		end
+	return (V "anchor" * Ct(pattern) * V "anchor") / create_list
 end
 
 ---@class Literal
@@ -120,6 +129,26 @@ end
 ---@alias LiteralKind "list" | "symbol" | "string" | "literal"
 ---@alias LiteralType "u8" | "u16" | "u32" | "u64" | "i8" | "i16" | "i32" | "i64"  | "f32" | "f64" | "bytes" | "unit"
 
+local function set_ffp_ctx(name, furthest_forward_ctx, start_anchor)
+	if furthest_forward_ctx.start_anchor then
+		if furthest_forward_ctx.start_anchor == start_anchor then
+			local acc = true
+			for i, v in ipairs(furthest_forward_ctx.expected) do
+				acc = acc and not (v == name)
+			end
+			if acc then
+				table.insert(furthest_forward_ctx.expected, name)
+			end
+		elseif furthest_forward_ctx.start_anchor < start_anchor then
+			furthest_forward_ctx.start_anchor = start_anchor
+			furthest_forward_ctx.expected = { name }
+		end
+	else
+		furthest_forward_ctx.start_anchor = start_anchor
+		furthest_forward_ctx.expected = { name }
+	end
+end
+
 local function update_ffp(name, patt)
 	-- stage the error
 	-- if the pattern matches, erase the stage
@@ -130,23 +159,7 @@ local function update_ffp(name, patt)
 	return patt
 		+ (
 			Cmt(lpeg.Carg(2) * V "anchor", function(_, _, furthest_forward_ctx, start_anchor)
-				if furthest_forward_ctx.start_anchor then
-					if furthest_forward_ctx.start_anchor == start_anchor then
-						local acc = true
-						for i, v in ipairs(furthest_forward_ctx.expected) do
-							acc = acc and not (v == name)
-						end
-						if acc then
-							table.insert(furthest_forward_ctx.expected, name)
-						end
-					elseif furthest_forward_ctx.start_anchor < start_anchor then
-						furthest_forward_ctx.start_anchor = start_anchor
-						furthest_forward_ctx.expected = { name }
-					end
-				else
-					furthest_forward_ctx.start_anchor = start_anchor
-					furthest_forward_ctx.expected = { name }
-				end
+				set_ffp_ctx(name, furthest_forward_ctx, start_anchor)
 
 				return false
 			end) * P(1) -- this segment always fails, so P(1) is to assure lpeg that this isn't an empty loop
@@ -367,10 +380,10 @@ local grammar = P {
 	),
 
 	semicolon = update_ffp(";", space_tokens(P ";") * (V "comment" * #(V "newline" + V "eof")) ^ -1),
+
 	naked_list = V "empty_line"
-		+ (V "tokens" * V "comment" ^ -1 * #(V "superior_indent" + V "eof"))
-		+ (V "comment" * #(V "superior_indent" + V "eof"))
-		+ (V "block_comment") --
+		+ V "block_comment"
+		+ (((V "tokens" * V "comment" ^ -1) + V "comment") * (V "empty_line" + (V "indent" * V "blockline" * V "block_comment" * V "dedent")) ^ 0 * #(V "superior_indent" + V "eof"))
 		+ (list(V "tokens" ^ 0 * V "semicolon") * #(V "blockline" + V "eof"))
 		+ list(
 			(((list(V "tokens" ^ 1 * V "semicolon") + V "semicolon") ^ 1 * V "tokens" ^ 0) + V "tokens" ^ 1)
@@ -394,9 +407,6 @@ local grammar = P {
 		) * V "paren_spacers"
 	),
 
-	psemicolon = update_ffp(";", P ";" * V "paren_spacers"),
-	semicolon_body = list(IFRmt(V "paren_tokens", 1) * V "psemicolon") ^ 1 * IFRmt(V "paren_tokens", 0),
-
 	comma = update_ffp('","', P "," * V "paren_spacers"),
 	comma_paren_body = ((list(IFRmt(V "paren_tokens", 2)) + V "paren_tokens") * V "comma") ^ 1
 		* (list(IFRmt(V "paren_tokens", 2)) + V "paren_tokens"),
@@ -409,7 +419,7 @@ local grammar = P {
 				) * V "infix_braceclose_accumulator")
 				^ 1
 	) / function(list)
-		assert(list.elements["braceacc"])
+		--assert(list.elements["braceacc"])
 
 		table.insert(list.elements, 1, {
 			kind = "symbol",
@@ -434,9 +444,9 @@ local grammar = P {
 	open_paren = Cg(C(P "("), "bracetype"),
 	open_bracket = Cg(C(P "["), "bracetype"),
 	open_curly = Cg(C(P "{"), "bracetype"),
-	open_brace = V "open_paren" + (V "open_bracket" * symbol(Cc("braced_list"))) + (V "open_curly" * symbol(
-		Cc("curly-list")
-	)),
+	open_brace = (V "open_paren" * symbol(Cc("paren-list")))
+		+ (V "open_bracket" * symbol(Cc("square-list")))
+		+ (V "open_curly" * symbol(Cc("curly-list"))),
 	close_brace = update_ffp(
 		"matching close brace",
 		Cmt(Cb("bracetype") * C(S "])}"), function(_, _, bracetype, brace)
@@ -448,12 +458,103 @@ local grammar = P {
 			return matches[bracetype] == brace
 		end)
 	),
-	paren_list = list(
-		V "open_brace"
+
+	inner_comma = element("comma", P "," * V "paren_spacers" * Cg(V "anchor", "end_anchor")),
+	inner_semicolon = element("semicolon", P ";" * V "paren_spacers" * Cg(V "anchor", "end_anchor")),
+
+	-- the original parenlist was more idiomatic but took quadratic time, so it has been bodged
+	paren_list = Cmt(
+		lpeg.Carg(2)
+			* V "anchor"
+			* V "open_brace"
 			* V "indent"
 			* V "paren_spacers"
-			* (V "comma_paren_body" + V "semicolon_body" + V "paren_tokens" ^ 1) ^ -1
+			* Ct((V "paren_tokens" + V "inner_semicolon" + V "inner_comma") ^ 0)
 			* ((V "dedent" * V "blockline") ^ -1 * V "close_brace")
+			* V "anchor",
+		function(_, _, ctx, list_start_anchor, brace, elements, list_end_anchor)
+			local found_semicolons = false
+			local found_commas = false
+
+			local acc = {}
+
+			for _, v in ipairs(elements) do
+				if v["kind"] and (v["kind"] == "semicolon") then
+					if found_commas == true then
+						set_ffp_ctx("comma", ctx, v["start_anchor"])
+						return false
+					end
+					found_semicolons = true
+				elseif v["kind"] and (v["kind"] == "comma") then
+					if found_semicolons == true then
+						set_ffp_ctx("semicolon", ctx, v["start_anchor"])
+						return false
+					end
+					found_commas = true
+				end
+			end
+
+			if found_semicolons then
+				local semicolon_outer_acc = {}
+				local semicolon_acc = {}
+
+				for _, v in ipairs(elements) do
+					if v["kind"] == "semicolon" then
+						table.insert(
+							semicolon_outer_acc,
+							create_list(semicolon_acc[1].start_anchor, semicolon_acc, v.end_anchor)
+						)
+						semicolon_acc = {}
+					else
+						table.insert(semicolon_acc, v)
+					end
+				end
+
+				for _, v in ipairs(semicolon_acc) do
+					table.insert(semicolon_outer_acc, v)
+				end
+
+				acc = semicolon_outer_acc
+			elseif found_commas then
+				local comma_outer_acc = {}
+				local comma_acc = {}
+
+				for _, v in ipairs(elements) do
+					if v["kind"] == "comma" then
+						if #comma_acc > 1 then
+							table.insert(
+								comma_outer_acc,
+								create_list(comma_acc[1].start_anchor, comma_acc, v.end_anchor)
+							)
+						else
+							table.insert(comma_outer_acc, comma_acc[1])
+						end
+						comma_acc = {}
+					else
+						table.insert(comma_acc, v)
+					end
+				end
+
+				if #comma_acc > 1 then
+					table.insert(comma_outer_acc, create_list(comma_acc[1].start_anchor, comma_acc, list_end_anchor))
+				elseif #comma_acc == 1 then
+					table.insert(comma_outer_acc, comma_acc[1])
+				end
+
+				acc = comma_outer_acc
+			else
+				acc = elements
+			end
+
+			if brace["kind"] ~= "symbol" then
+				error("kind not a symbol??")
+			end
+			if (brace["str"] == "square-list") or (brace["str"] == "curly-list") then
+				table.insert(acc, 1, brace)
+			end
+
+			return true, create_list(list_start_anchor, acc, list_end_anchor)
+		end
 	),
 
 	function_call = V "symbol" * Ct(
@@ -553,7 +654,9 @@ end
 ---@param filename string
 ---@return FormatList?
 local function parse(input, filename)
-	assert(filename)
+	if not filename then
+		error("filename is required")
+	end
 
 	if not (string.len(input) > 0) then
 		print("empty file")
@@ -574,10 +677,10 @@ local function parse(input, filename)
 		end
 		expected = expected .. "}"
 
-		assert(false, span_error(furthest_forward_ctx.start_anchor, input, "expected " .. expected))
+		error(span_error(furthest_forward_ctx.start_anchor, input, "expected " .. expected))
 	end
 
 	return ast
 end
 
-return { parse = parse, anchor_mt = anchor_mt }
+return { parse = parse, anchor_mt = anchor_mt, create_anchor = create_anchor }
