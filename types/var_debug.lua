@@ -8,7 +8,7 @@ var_debug = {}
 ---@return Anchor
 function var_debug:unwrap_var_debug() end
 
--- TODO: constructor annotation
 ---@class (exact) var_debugType: RecordType
+---@overload fun(name: string, source: Anchor): var_debug
 ---@field define_record fun(self: var_debugType, kind: string, params_with_types: ParamsWithTypes): var_debugType
 return {}

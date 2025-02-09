@@ -7,7 +7,7 @@ result_info = {}
 ---@return purity
 function result_info:unwrap_result_info() end
 
--- TODO: constructor annotation
 ---@class (exact) result_infoType: RecordType
+---@overload fun(purity: purity): result_info
 ---@field define_record fun(self: result_infoType, kind: string, params_with_types: ParamsWithTypes): result_infoType
 return {}

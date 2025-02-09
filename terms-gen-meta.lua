@@ -46,8 +46,8 @@ $typename = {}
 $(
 )methods
 
--- TODO: constructor annotation
 ---@class (exact) $moduletypename: RecordType
+---@overload fun($(, )params): $typename
 ---@field define_record fun(self: $moduletypename, kind: string, params_with_types: ParamsWithTypes): $moduletypename
 return {}]],
 
@@ -119,6 +119,7 @@ local function build_meta_file_for_record(info)
 			moduletypename = kind .. "Type",
 			methods = methods,
 			constructor = constructor,
+			params = params_ascribed,
 		},
 	}))
 end
