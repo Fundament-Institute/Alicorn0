@@ -551,11 +551,11 @@ end
 ---@param type_of_term flex_value
 ---@param usage_count ArrayValue<integer>
 ---@param term typed
----@param sargs ConstructedSyntax
+---@param sargs ConstructedSyntax syntax arguments
 ---@param goal expression_goal
 ---@param env Environment
 ---@return tristate
----@return string|checkable|inferrable|flex_value
+---@return (string|checkable|inferrable|flex_value)
 ---@return Environment?
 local function call_operative(type_of_term, usage_count, term, sargs, goal, env)
 	-- TODO: speculate operative type

@@ -2178,35 +2178,6 @@ local function tuple_desc_concat(head, tail)
 	return desc
 end
 
----@diagnostic disable-next-line: no-unknown
-local host_if
-do
-	local debug_param = terms.var_debug("#host-if-param", U.anchor_here())
-	local debug_subject = terms.var_debug("#host-if-subject", U.anchor_here())
-	local debug_consequent = terms.var_debug("#host-if-consequent", U.anchor_here())
-	local debug_alternate = terms.var_debug("#host-if-alternate", U.anchor_here())
-	local debug_elements = debug_array(debug_subject, debug_consequent, debug_alternate)
-	host_if = terms.strict_value.closure(
-		debug_param.name,
-		typed.tuple_elim(
-			debug_elements:map(name_array, function(n)
-				return n.name
-			end),
-			debug_elements,
-			typed.bound_variable(2, debug_param),
-			3,
-			typed.host_if(
-				typed.bound_variable(3, debug_subject),
-				typed.bound_variable(4, debug_consequent),
-				typed.bound_variable(5, debug_alternate)
-			)
-		),
-		empty_tuple,
-		var_debug("#host-if-capture", U.anchor_here()),
-		debug_param
-	)
-end
-
 ---@param desc strict_value
 ---@return strict_value desc `strict_value.enum_value(terms.DescCons.…, …)`
 local function convert_desc(desc)

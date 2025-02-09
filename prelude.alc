@@ -765,19 +765,18 @@ let func-to-host-func =
 			let (res) = funcprog-to-host-funcprog-inner(wrap(T), valid, wrap(fn))
 			res #TODO figure out why `unwrap(res) here doesn't make a nice type error but fails
 
-let host-if-type =
-	lambda (T : type-omega)
-		forall (subject : host-bool, consequent : T, alternate : T) -> (res : T)
-
-let host-if =
-	lambda_implicit (T : type-omega)
-		let inner =
-			intrinsic
-				""""
-					return base_env.host_if
-				:
-				wrapped(host-if-type(T))
-		unwrap(inner)
+let host-if = lambda_implicit (T : type-omega)
+	unwrap
+		intrinsic
+			""""
+				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
+					local subject = bound_tuple_element_variables[1]
+					local consequent = bound_tuple_element_variables[2]
+					local alternate = bound_tuple_element_variables[3]
+					return U.notail(terms.typed_term.host_if(subject, consequent, alternate))
+				end, "#host-if", "subject", "consequent", "alternate"))
+			:
+			wrapped(forall (subject : host-bool, consequent : T, alternate : T) -> (res : T))
 
 let tuple-desc-empty = lambda (U : universe)
 	let T = tuple-desc-type(U)
