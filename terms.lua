@@ -1571,8 +1571,8 @@ gen.define_multi_enum(
 		local function host_tuple_value_constructor_check(val)
 			-- Absolutely do not ever put a flex_value or stuck_value into here
 			for _, v in ipairs(val) do
-				if flex_value.value_check(v) or stuck_value.value_check(v) then
-					error("Tried to put flex or stuck value into strict_value.host_tuple_value!" .. tostring(val))
+				if stuck_value.value_check(v) or (flex_value.value_check(v) and v.kind == "flex_value.stuck") then
+					error("Tried to put flex or stuck value into strict_value.host_tuple_value!" .. tostring(v))
 				end
 			end
 		
