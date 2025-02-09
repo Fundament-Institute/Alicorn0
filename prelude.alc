@@ -62,9 +62,9 @@ let srel = lambda_implicit (U : type-omega+1)
 	unwrap
 		intrinsic
 			""""
-				return base_env.gen_base_operator(function(bound_tuple_element_variables)
-					return terms.typed_term.srel_type(bound_tuple_element_variables[1])
-				end, "#srel", "target")
+				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
+					return U.notail(terms.typed_term.srel_type(bound_tuple_element_variables[1]))
+				end, "#srel", "target"))
 			:
 			wrapped (forall ((target : U)) -> (rel : U))
 
@@ -72,9 +72,9 @@ let variance = lambda_implicit (U : type-omega+1)
 	unwrap
 		intrinsic
 			""""
-				return base_env.gen_base_operator(function(bound_tuple_element_variables)
-					return terms.typed_term.variance_type(bound_tuple_element_variables[1])
-				end, "#variance", "target")
+				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
+					return U.notail(terms.typed_term.variance_type(bound_tuple_element_variables[1]))
+				end, "#variance", "target"))
 			:
 			wrapped (forall ((target : U)) -> (res : U))
 
@@ -86,9 +86,9 @@ let _|_ = lambda_implicit (U : type-omega+1)
 	unwrap
 		intrinsic
 			""""
-				return base_env.gen_base_operator(function(bound_tuple_element_variables)
-					return terms.typed_term.union_type(bound_tuple_element_variables[1], bound_tuple_element_variables[2])
-				end, "#union", "left", "right")
+				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
+					return U.notail(terms.typed_term.union_type(bound_tuple_element_variables[1], bound_tuple_element_variables[2]))
+				end, "#union", "left", "right"))
 			:
 			wrapped (forall (left : U, right : U) -> (union : U))
 
@@ -96,9 +96,9 @@ let _&_ = lambda_implicit (U : type-omega+1)
 	unwrap
 		intrinsic
 			""""
-				return base_env.gen_base_operator(function(bound_tuple_element_variables)
-					return terms.typed_term.intersection_type(bound_tuple_element_variables[1], bound_tuple_element_variables[2])
-				end, "#intersection", "left", "right")
+				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
+					return U.notail(terms.typed_term.intersection_type(bound_tuple_element_variables[1], bound_tuple_element_variables[2]))
+				end, "#intersection", "left", "right"))
 			:
 			wrapped (forall (left : U, right : U) -> (intersection : U))
 
@@ -106,11 +106,11 @@ let covariant = lambda_curry (U : universe, a : U)
 	unwrap
 		intrinsic
 			""""
-				return base_env.gen_base_operator(function(bound_tuple_element_variables)
+				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
 					local positive = terms.typed_term.literal(terms.strict_value.host_value(true))
 					local srel = bound_tuple_element_variables[1]
-					return terms.typed_term.variance_cons(positive, srel)
-				end, "#covariant", "rel")
+					return U.notail(terms.typed_term.variance_cons(positive, srel))
+				end, "#covariant", "rel"))
 			:
 			wrapped (forall ((rel : srel(a))) -> (covariant-rel : variance(a)))
 
@@ -118,11 +118,11 @@ let contravariant = lambda_curry (U : universe, a : U)
 	unwrap
 		intrinsic
 			""""
-				return base_env.gen_base_operator(function(bound_tuple_element_variables)
+				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
 					local positive = terms.typed_term.literal(terms.strict_value.host_value(false))
 					local srel = bound_tuple_element_variables[1]
-					return terms.typed_term.variance_cons(positive, srel)
-				end, "#contravariant", "rel")
+					return U.notail(terms.typed_term.variance_cons(positive, srel))
+				end, "#contravariant", "rel"))
 			:
 			wrapped (forall ((rel : srel(a))) -> (contravariant-rel : variance(a)))
 
@@ -130,10 +130,10 @@ let tuple-desc-type = lambda_implicit (U : universe)
 	unwrap
 		intrinsic
 			""""
-				return base_env.gen_base_operator(function(bound_tuple_element_variables)
+				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
 					local a_universe = bound_tuple_element_variables[1]
-					return terms.typed_term.tuple_desc_type(a_universe)
-				end, "#tuple-desc-type", "a-universe")
+					return U.notail(terms.typed_term.tuple_desc_type(a_universe))
+				end, "#tuple-desc-type", "a-universe"))
 			:
 			wrapped (forall ((a-universe : U)) -> (desc : U))
 
@@ -141,10 +141,10 @@ let tuple-type = lambda_implicit (U : universe)
 	unwrap
 		intrinsic
 			""""
-				return base_env.gen_base_operator(function(bound_tuple_element_variables)
+				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
 					local desc = bound_tuple_element_variables[1]
-					return terms.typed_term.tuple_type(desc)
-				end, "#tuple-type", "desc")
+					return U.notail(terms.typed_term.tuple_type(desc))
+				end, "#tuple-type", "desc"))
 			:
 			wrapped (forall ((desc : tuple-desc-type(U))) -> (T : U))
 
@@ -152,10 +152,10 @@ let host-tuple-type =
 	unwrap
 		intrinsic
 			""""
-				return base_env.gen_base_operator(function(bound_tuple_element_variables)
+				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
 					local desc = bound_tuple_element_variables[1]
-					return terms.typed_term.host_tuple_type(desc)
-				end, "#host-tuple-type", "desc")
+					return U.notail(terms.typed_term.host_tuple_type(desc))
+				end, "#host-tuple-type", "desc"))
 			:
 			wrapped (forall ((desc : tuple-desc-type(host-type))) -> (T : host-type))
 
@@ -168,7 +168,7 @@ let host-family-sig-variances = lambda (signature : type_(1, 0))
 	let (srels-t) = inner(wrap(signature))
 	unwrap(srels-t)
 
-let host-string-concat = intrinsic "return function(a, b) return a .. b end" :
+let host-string-concat = intrinsic "return function(a, b) return U.notail(a .. b) end" :
 	host-func-type (a : host-string, b : host-string) -> ((c : host-string))
 
 # TODO: now that we have effectful programs, work to switch this into using an effect to serialize the operations
@@ -177,7 +177,7 @@ let host-unique-id-wrap = intrinsic
 	""""
 		local id = { name = "unique_id" }
 		evaluator.register_host_srel(id, evaluator.IndepTupleRelation())
-		return terms.strict_value.host_user_defined_type(id, terms_gen.declare_array(terms.strict_value)())
+		return U.notail(terms.strict_value.host_user_defined_type(id, terms_gen.declare_array(terms.strict_value)()))
 	:
 	wrapped(host-type)
 let host-unique-id = unwrap(host-unique-id-wrap)
@@ -245,7 +245,7 @@ let host-array-get = lambda_implicit (T : host-type)
 		let inner = intrinsic
 			""""
 				local function array_get(array, index)
-					return array[index]
+					return U.notail(array[index])
 				end
 				return array_get
 			:
@@ -336,8 +336,8 @@ let host-tuple-type-to-tuple-type-inner =
 			local function host_tuple_to_tuple(host_tuple_type)
 				local desc = host_tuple_type:unwrap_host_tuple_type()
 				-- this conversion happens to work since the eliminator for host tuples and tuples is the same term
-				local newbasetype = terms.strict_value.tuple_type(desc)
-				return newbasetype
+				local new_base_type = terms.strict_value.tuple_type(desc)
+				return new_base_type
 			end
 			return host_tuple_to_tuple
 		:
@@ -367,7 +367,7 @@ let rebuild-prog-type-inner =
 		""""
 			return function(prog_type, valid, new_base)
 				local effect, base = prog_type:unwrap_program_type()
-				return terms.strict_value.program_type(effect, new_base)
+				return U.notail(terms.strict_value.program_type(effect, new_base))
 			end
 		:
 		host-func-type (t : wrapped(type), valid : only-accept-prog-host-tuples(t), b : wrapped(type)) -> ((res : wrapped(type)))
@@ -385,7 +385,7 @@ let rebuild-prog-type =
 					for _, v in ipairs(elems) do
 						vals:append(terms.strict_value.host_value(v))
 					end
-					return terms.strict_value.tuple_value(vals)
+					return U.notail(terms.strict_value.tuple_value(vals))
 				end
 			:
 			host-func-type (
@@ -411,7 +411,7 @@ let host-tuple-to-tuple =
 						for _, v in ipairs(elems) do
 							vals:append(terms.strict_value.host_value(v))
 						end
-						return terms.strict_value.tuple_value(vals)
+						return U.notail(terms.strict_value.tuple_value(vals))
 					end
 				:
 				host-func-type ((
@@ -601,7 +601,7 @@ let set-func-result-info =
 			""""
 				local function get_host_func_arg(subject, valid, new_result_info)
 					local param_type, param_info, result_type, result_info = subject:unwrap_pi()
-					return terms.strict_value.pi(param_type, param_info, result_type, new_result_info)
+					return U.notail(terms.strict_value.pi(param_type, param_info, result_type, new_result_info))
 				end
 				return get_host_func_arg
 			:
@@ -881,7 +881,7 @@ let tuple-concat = lambda (
 				for _, e in tail_elements:ipairs() do
 					new_elements:append(e)
 				end
-				return terms.strict_value.tuple_value(new_elements)
+				return U.notail(terms.strict_value.tuple_value(new_elements))
 			end
 			return tuple_concat
 		:
@@ -907,7 +907,7 @@ let host-tuple-concat = lambda (
 				for _, e in tail_elements:ipairs() do
 					new_elements:append(e)
 				end
-				return terms.strict_value.host_tuple_value(new_elements)
+				return U.notail(terms.strict_value.host_tuple_value(new_elements))
 			end
 			return host_tuple_concat
 		:
@@ -959,7 +959,8 @@ let host-array-from-tuple = lambda_implicit (T : host-type)
 			intrinsic
 				""""
 					return function(tuple)
-						return {tuple:unwrap_host_tuple_value(tuple):unpack()}
+						local elements = tuple:unwrap_host_tuple_value(tuple)
+						return {elements:unpack()}
 					end
 				:
 				host-func-type ((tuple : wrapped(host-tuple-type(duplicate-tuple-desc(size, T))))) -> ((res : host-array-type(T)))
@@ -973,7 +974,8 @@ let make-host-array = lambda_implicit (T : host-type)
 			intrinsic
 				""""
 					return function(tuple)
-						return {tuple:unwrap_host_tuple_value(tuple):unpack()}
+						local elements = tuple:unwrap_host_tuple_value(tuple)
+						return {elements:unpack()}
 					end
 				:
 				host-func-type ((tuple : wrapped(input-type))) -> ((res : host-array-type(T)))
@@ -995,7 +997,7 @@ let enter-block = intrinsic
 	""""
 		-- wish environment.enter_block was accessible from internals
 		local function enter_block(env)
-			return env:enter_block(terms.block_purity.pure)
+			return U.notail(env:enter_block(terms.block_purity.pure))
 		end
 		return enter_block
 	:
@@ -1004,7 +1006,7 @@ let exit-block = intrinsic
 	""""
 		-- wish environment.exit_block was accessible from internals
 		local function exit_block(inner, term, shadowed)
-			return inner:exit_block(term, shadowed)
+			return U.notail(inner:exit_block(term, shadowed))
 		end
 		return exit_block
 	:
@@ -1142,7 +1144,7 @@ let match-syntax = lambda (
 	let inner = intrinsic
 		""""
 			local function match_syntax(matchers, failure_handler, syn, ud)
-				return syn:match(matchers, failure_handler, ud)
+				return U.notail(syn:match(matchers, failure_handler, ud))
 			end
 			return match_syntax
 		:
@@ -1165,7 +1167,7 @@ let match-syntax-implicit = lambda_implicit (userdata        : host-type)
 		let inner = intrinsic
 			""""
 				local function match_syntax(matchers, failure_handler, syn, ud)
-					return syn:match(matchers, failure_handler, ud)
+					return U.notail(syn:match(matchers, failure_handler, ud))
 				end
 				return match_syntax
 			:
@@ -1202,7 +1204,7 @@ let goalify-inferrable = intrinsic
 			if goal:is_infer() then
 				return inferrable
 			elseif goal:is_check() then
-				return terms.checkable_term.inferrable(inferrable)
+				return U.notail(terms.checkable_term.inferrable(inferrable))
 			else
 				error("goalify-inferrable: unknown goal")
 			end
@@ -1225,8 +1227,8 @@ let new-operative = lambda (userdata : host-type, ud : userdata, handler : opera
 		""""
 			local function new_operative(userdata, ud, handler)
 				return
-					terms.strict_value.operative_type(handler, userdata),
-					terms.strict_value.operative_value(ud)
+					U.notail(terms.strict_value.operative_type(handler, userdata)),
+					U.notail(terms.strict_value.operative_value(ud))
 			end
 			return new_operative
 		:
@@ -1263,8 +1265,8 @@ let new-operative-implicit = lambda_implicit (userdata : host-type)
 			""""
 				local function new_operative(userdata, ud, handler)
 					return
-						terms.strict_value.operative_type(handler, userdata),
-						terms.strict_value.operative_value(ud)
+						U.notail(terms.strict_value.operative_type(handler, userdata)),
+						U.notail(terms.strict_value.operative_value(ud))
 				end
 				return new_operative
 			:
@@ -1589,7 +1591,7 @@ let listtail-reducer =
 #     a
 
 let host-arith-binop = (host-func-type (a : host-number, b : host-number) -> ((c : host-number)))
-let host-mul = (intrinsic "return function(a, b) return a * b end" : host-arith-binop)
+let host-mul = (intrinsic "return function(a, b) return U.notail(a * b) end" : host-arith-binop)
 let mul = lambda (a : host-number, b : host-number)
 	let (c) = host-mul(a, b)
 	c

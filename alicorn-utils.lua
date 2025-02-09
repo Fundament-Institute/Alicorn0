@@ -768,5 +768,5 @@ function M.stack_trace(err)
 end
 
 local internals_interface = require "internals-interface"
-internals_interface.utils = M
+internals_interface.U = M
 return M
