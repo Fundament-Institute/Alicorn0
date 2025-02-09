@@ -2240,8 +2240,8 @@ local function convert_desc(desc)
 	end
 end
 
----@param sig flex_value `flex_value.pi`
----@return flex_value param_desc `flex_value.tuple_type`
+---@param sig strict_value `flex_value.pi`
+---@return strict_value param_desc `flex_value.tuple_type`
 local function convert_sig(sig)
 	if not strict_value.value_check(sig) then
 		error("expected strict value, did you forget to wrap? " .. tostring(sig))
@@ -2296,13 +2296,7 @@ local function new_host_type_family(unique_id, sig, variance)
 		terms.typed_term.host_user_defined_type_cons(unique_id, params)
 	)
 	return U.notail(
-		terms.flex_value.closure(
-			"#type-family-B",
-			body,
-			flex_value.strict(empty_tuple),
-			var_debug("#capture", U.anchor_here()),
-			info
-		)
+		terms.strict_value.closure("#type-family-B", body, empty_tuple, var_debug("#capture", U.anchor_here()), info)
 	)
 end
 
