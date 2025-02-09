@@ -63,7 +63,8 @@ let srel = lambda_implicit (U : type-omega+1)
 		intrinsic
 			""""
 				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
-					return U.notail(terms.typed_term.srel_type(bound_tuple_element_variables[1]))
+					local target_type = bound_tuple_element_variables[1]
+					return U.notail(terms.typed_term.srel_type(target_type))
 				end, "#srel", "target"))
 			:
 			wrapped (forall ((target : U)) -> (rel : U))
@@ -73,7 +74,8 @@ let variance = lambda_implicit (U : type-omega+1)
 		intrinsic
 			""""
 				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
-					return U.notail(terms.typed_term.variance_type(bound_tuple_element_variables[1]))
+					local target_type = bound_tuple_element_variables[1]
+					return U.notail(terms.typed_term.variance_type(target_type))
 				end, "#variance", "target"))
 			:
 			wrapped (forall ((target : U)) -> (res : U))
@@ -87,7 +89,8 @@ let _|_ = lambda_implicit (U : type-omega+1)
 		intrinsic
 			""""
 				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
-					return U.notail(terms.typed_term.union_type(bound_tuple_element_variables[1], bound_tuple_element_variables[2]))
+					local left, right = bound_tuple_element_variables[1], bound_tuple_element_variables[2]
+					return U.notail(terms.typed_term.union_type(left, right))
 				end, "#union", "left", "right"))
 			:
 			wrapped (forall (left : U, right : U) -> (union : U))
@@ -97,7 +100,8 @@ let _&_ = lambda_implicit (U : type-omega+1)
 		intrinsic
 			""""
 				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
-					return U.notail(terms.typed_term.intersection_type(bound_tuple_element_variables[1], bound_tuple_element_variables[2]))
+					local left, right = bound_tuple_element_variables[1], bound_tuple_element_variables[2]
+					return U.notail(terms.typed_term.intersection_type(left, right))
 				end, "#intersection", "left", "right"))
 			:
 			wrapped (forall (left : U, right : U) -> (intersection : U))
@@ -107,8 +111,8 @@ let covariant = lambda_curry (U : universe, a : U)
 		intrinsic
 			""""
 				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
-					local positive = terms.typed_term.literal(terms.strict_value.host_value(true))
 					local srel = bound_tuple_element_variables[1]
+					local positive = terms.typed_term.literal(terms.strict_value.host_value(true))
 					return U.notail(terms.typed_term.variance_cons(positive, srel))
 				end, "#covariant", "rel"))
 			:
@@ -119,8 +123,8 @@ let contravariant = lambda_curry (U : universe, a : U)
 		intrinsic
 			""""
 				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
-					local positive = terms.typed_term.literal(terms.strict_value.host_value(false))
 					local srel = bound_tuple_element_variables[1]
+					local positive = terms.typed_term.literal(terms.strict_value.host_value(false))
 					return U.notail(terms.typed_term.variance_cons(positive, srel))
 				end, "#contravariant", "rel"))
 			:
@@ -770,9 +774,7 @@ let host-if = lambda_implicit (T : type-omega)
 		intrinsic
 			""""
 				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
-					local subject = bound_tuple_element_variables[1]
-					local consequent = bound_tuple_element_variables[2]
-					local alternate = bound_tuple_element_variables[3]
+					local subject, consequent, alternate = bound_tuple_element_variables[1], bound_tuple_element_variables[2], bound_tuple_element_variables[3]
 					return U.notail(terms.typed_term.host_if(subject, consequent, alternate))
 				end, "#host-if", "subject", "consequent", "alternate"))
 			:
