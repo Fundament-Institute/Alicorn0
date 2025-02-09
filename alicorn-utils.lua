@@ -731,16 +731,23 @@ function M.litprint(s)
 	return M.notail(setmetatable({ contents = s }, litprint_mt))
 end
 
+function M.debug_break()
+	local ok, debugger
+	do
+		ok, debugger = pcall(require, "lldebuger")
+		if ok then
+			return debugger.requestBreak()
+		end
+	end
+end
+
 DEBUG_ID = 0
 function M.debug_id()
 	DEBUG_ID = DEBUG_ID + 1
 
 	-- Use this to reliably breakpoint at the moment a term of interest is created
 	--if DEBUG_ID == 115726 then
-	--	local ok, lldebugger = pcall(require, "lldebugger")
-	--	if ok then
-	--		lldebugger.requestBreak()
-	--	end
+	--	M.debug_break()
 	--end
 
 	return DEBUG_ID
