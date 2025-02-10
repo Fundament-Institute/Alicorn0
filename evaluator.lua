@@ -827,7 +827,7 @@ function gather_usages(val, usages, context_len, ambient_typechecking_context)
 		end
 	elseif val:is_host_int_fold() then
 		local num, fun, acc = val:unwrap_host_int_fold()
-		gather_usages(num, usages, context_len, ambient_typechecking_context)
+		gather_usages(flex_value.stuck(num), usages, context_len, ambient_typechecking_context)
 		gather_usages(fun, usages, context_len, ambient_typechecking_context)
 		gather_usages(acc, usages, context_len, ambient_typechecking_context)
 	elseif val:is_host_if() then
@@ -1166,10 +1166,16 @@ local function substitute_inner_impl(val, mappings, mappings_changed, context_le
 		return result
 	elseif val:is_host_int_fold() then
 		local num, fun, acc = val:unwrap_host_int_fold()
-		local num_sub = substitute_inner(num, mappings, mappings_changed, context_len, ambient_typechecking_context)
+		local num_sub = substitute_inner(
+			flex_value.stuck(num),
+			mappings,
+			mappings_changed,
+			context_len,
+			ambient_typechecking_context
+		)
 		local fun_sub = substitute_inner(fun, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		local acc_sub = substitute_inner(acc, mappings, mappings_changed, context_len, ambient_typechecking_context)
-		return typed_term.host_int_fold(num, fun, acc)
+		return typed_term.host_int_fold(num_sub, fun_sub, acc_sub)
 	elseif val:is_host_if() then
 		local subject, consequent, alternate = val:unwrap_host_if()
 		local subject = substitute_inner(
@@ -4435,8 +4441,8 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		local n_v = evaluate(num, runtime_context, ambient_typechecking_context)
 		local f = evaluate(fun, runtime_context, ambient_typechecking_context)
 		local acc = evaluate(init, runtime_context, ambient_typechecking_context)
-		if not n:is_host_value() then
-			return flex_value.host_int_fold(n, f, acc)
+		if not n_v:is_host_value() then
+			return flex_value.host_int_fold(n_v:unwrap_stuck(), f, acc)
 		end
 		---@type integer
 		local n = n_v:unwrap_host_value()

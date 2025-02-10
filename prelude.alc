@@ -872,7 +872,7 @@ let tuple-desc-concat-indep = lambda_implicit (U : universe)
 					return terms.typed_term.tuple_desc_concat_indep(args[1], args[2])
 				end, "#tuple-desc-concat", "prefix", "suffix")
 			:
-			wrapped (forall (pfx : tuple-desc-type(U), sfx : tuple-desc-type(U)) -> tuple-desc-type(U))
+			wrapped (forall (pfx : tuple-desc-type(U), sfx : tuple-desc-type(U)) -> (res : tuple-desc-type(U)))
 ####let tuple-concat = lambda (
 			U    : universe,
 			head : tuple-desc-type(U),
