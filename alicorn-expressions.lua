@@ -677,7 +677,7 @@ local function call_pi(type_of_term, usage_count, term, sargs, goal, env)
 				"calling function with implicit args, result type applied on implicit args must be a function type: "
 					.. metaresult:pretty_print(env.typechecking_context)
 					.. "\n\n@@@tb1@@@\n\n"
-					.. inner_pi
+					.. tostring(inner_pi)
 					.. "\n\n@@@tb2@@@"
 			)
 		end

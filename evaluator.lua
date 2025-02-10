@@ -1406,7 +1406,7 @@ end
 ---@param anchor Anchor
 ---@param param_dbg var_debug
 ---@param ambient_typechecking_context TypecheckingContext
----@return typed lambda_term `typed_term.lambda`
+---@return flex_value lambda_term `typed_term.lambda`
 local function substitute_into_closure(body_val, context, anchor, param_dbg, ambient_typechecking_context)
 	local usages = usage_map()
 	gather_usages(body_val, usages, context.bindings:len(), ambient_typechecking_context)
@@ -2728,7 +2728,9 @@ local function infer_impl(
 		return true, typeof_bound, usage_counts, bound
 	elseif inferrable_term:is_annotated() then
 		local checkable_term, inferrable_goal_type = inferrable_term:unwrap_annotated()
-		local ok, type_of_type, usages, goal_typed_term = infer(inferrable_goal_type, typechecking_context)
+		local ok, type_of_type, type_usages, goal_typed_term = infer(inferrable_goal_type, typechecking_context)
+		local usages = usage_array()
+		add_arrays(usages, type_usages)
 		if not ok then
 			return false, type_of_type
 		end
@@ -2739,12 +2741,13 @@ local function infer_impl(
 			return false, el_usages
 		end
 		---@cast el_usages -string
-		return true, goal_type, el_usages, el_term
+		add_arrays(usages, el_usages)
+		return true, goal_type, usages, el_term
 	elseif inferrable_term:is_typed() then
-		local type, usage, term = inferrable_term:unwrap_typed()
+		local type, usages, term = inferrable_term:unwrap_typed()
 		return true,
 			U.notail(evaluate(type, typechecking_context:get_runtime_context(), typechecking_context)),
-			usage,
+			usages,
 			term
 	elseif inferrable_term:is_annotated_lambda() then
 		local param_name, param_annotation, body, start_anchor, param_visibility, purity =
@@ -2783,6 +2786,7 @@ local function infer_impl(
 				evaluate(purity_term, typechecking_context:get_runtime_context(), typechecking_context):unwrap_host_value()
 			)
 		) --TODO make more flexible
+		-- TODO: This will crash if body_usages is completely empty. The usages usually shouldn't be empty, but this might change in the future.
 		local body_usages_param = body_usages[body_usages:len()]
 		local lambda_usages = body_usages:copy(1, body_usages:len() - 1)
 		local lambda_type = flex_value.pi(
@@ -3276,7 +3280,9 @@ local function infer_impl(
 		error("nyi")
 	elseif inferrable_term:is_enum_case() then
 		local subject, variants, variant_debug, default = inferrable_term:unwrap_enum_case()
+		local usages = usage_array()
 		local ok, subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
+		add_arrays(usages, subject_usages)
 		if not ok then
 			return false, subject_type
 		end
@@ -3304,6 +3310,7 @@ local function infer_impl(
 			if not ok then
 				return false, variant_type
 			end
+			add_arrays(usages, variant_usages)
 			term_variants:set(k, variant_term)
 			result_types[#result_types + 1] = variant_type
 		end
@@ -3314,7 +3321,7 @@ local function infer_impl(
 		local absurd_info = terms.var_debug("#absurd", format.anchor_here())
 		return true,
 			result_type,
-			subject_usages,
+			usages,
 			U.notail(
 				typed_term.enum_case(
 					subject_term,
@@ -3331,11 +3338,13 @@ local function infer_impl(
 		local variants, rest = inferrable_term:unwrap_enum_desc_cons()
 		local result_types = {}
 		local term_variants = string_typed_map()
+		local usages = usage_array()
 		for k, v in variants:pairs() do
 			local ok, variant_type, variant_usages, variant_term = infer(v, typechecking_context) --TODO improve
 			if not ok then
 				return false, variant_type
 			end
+			add_arrays(usages, variant_usages)
 			term_variants:set(k, variant_term)
 			result_types[#result_types + 1] = variant_type
 		end
@@ -3344,12 +3353,13 @@ local function infer_impl(
 			result_type = flex_value.union_type(result_type, result_types[i])
 		end
 		local ok, rest_type_of_term, rest_usages, rest_term = infer(rest, typechecking_context) --TODO improve
+		add_arrays(usages, rest_usages)
 		if not ok then
 			return false, rest_type_of_term
 		end
 		return true,
 			U.notail(flex_value.enum_desc_type(result_type)),
-			rest_usages,
+			usages,
 			U.notail(typed_term.enum_desc_cons(term_variants, rest_term))
 	elseif inferrable_term:is_enum_type() then
 		local desc = inferrable_term:unwrap_enum_type()
@@ -3375,21 +3385,18 @@ local function infer_impl(
 	elseif inferrable_term:is_object_cons() then
 		local methods = inferrable_term:unwrap_object_cons()
 		local type_data = terms.empty
+		local usages = usage_array()
 		local new_methods = string_typed_map()
 		for k, v in pairs(methods) do
 			local ok, method_type, method_usages, method_term = infer(v, typechecking_context)
 			if not ok then
 				return false, method_type
 			end
-
+			add_arrays(usages, method_usages)
 			type_data = terms.cons(type_data, strict_value.name(k), method_type)
 			new_methods[k] = method_term
 		end
-		-- TODO: usages
-		return true,
-			U.notail(flex_value.object_type(type_data)),
-			usage_array(),
-			U.notail(typed_term.object_cons(new_methods))
+		return true, U.notail(flex_value.object_type(type_data)), usages, U.notail(typed_term.object_cons(new_methods))
 	elseif inferrable_term:is_object_elim() then
 		local subject, mechanism = inferrable_term:unwrap_object_elim()
 		error("nyi")
@@ -3606,6 +3613,7 @@ local function infer_impl(
 		return true, bodytype, result_usages, U.notail(terms.typed_term.let(name, debuginfo, exprterm, bodyterm))
 	elseif inferrable_term:is_host_intrinsic() then
 		local source, type, start_anchor = inferrable_term:unwrap_host_intrinsic()
+		local usages = usage_array()
 		local ok, source_usages, source_term =
 			check(source, typechecking_context, flex_value.strict(strict_value.host_string_type))
 		if not ok then
@@ -3622,10 +3630,13 @@ local function infer_impl(
 		--print(type_term:pretty_print(typechecking_context))
 		--error "weird type"
 		-- FIXME: type_type, source_type are ignored, need checked?
+		add_arrays(usages, source_usages)
+		add_arrays(usages, type_usages)
 		local type_val = evaluate(type_term, typechecking_context.runtime_context, typechecking_context)
-		return true, type_val, source_usages, U.notail(typed_term.host_intrinsic(source_term, start_anchor))
+		return true, type_val, usages, U.notail(typed_term.host_intrinsic(source_term, start_anchor))
 	elseif inferrable_term:is_level_max() then
 		local level_a, level_b = inferrable_term:unwrap_level_max()
+		local usages = usage_array()
 		local ok, arg_type_a, arg_usages_a, arg_term_a = infer(level_a, typechecking_context)
 		if not ok then
 			return false, arg_type_a
@@ -3634,14 +3645,16 @@ local function infer_impl(
 		if not ok then
 			return false, arg_type_b
 		end
-		return true, flex_value.level_type, usage_array(), U.notail(typed_term.level_max(arg_term_a, arg_term_b))
+		add_arrays(usages, arg_usages_a)
+		add_arrays(usages, arg_usages_b)
+		return true, flex_value.level_type, usages, U.notail(typed_term.level_max(arg_term_a, arg_term_b))
 	elseif inferrable_term:is_level_suc() then
 		local previous_level = inferrable_term:unwrap_level_suc()
 		local ok, arg_type, arg_usages, arg_term = infer(previous_level, typechecking_context)
 		if not ok then
 			return false, arg_type
 		end
-		return true, flex_value.level_type, usage_array(), U.notail(typed_term.level_suc(arg_term))
+		return true, flex_value.level_type, arg_usages, U.notail(typed_term.level_suc(arg_term))
 	elseif inferrable_term:is_level0() then
 		return true, flex_value.level_type, usage_array(), typed_term.level0
 	elseif inferrable_term:is_host_function_type() then
