@@ -467,9 +467,6 @@ local function speculate_pi_type(env, metaval)
 				terms.flex_value.stuck(result_mv:as_stuck()),
 				flex_value.strict(pairs[i].result_info)
 			)
-			--pi.original_name = "#spec-" .. U.strip_ansi(tostring(metaval.original_name or metaval))
-			--param_mv.source = "param_mv for " .. pi.original_name
-			--result_mv.source = "result_mv for " .. pi.original_name
 
 			local ok, err = evaluator.typechecker_state:flow(
 				metaval,

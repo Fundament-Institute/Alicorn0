@@ -179,7 +179,7 @@ local function gen_record(self, cons, kind, params_with_types)
 			if freeze_impl then
 				argi = freeze_impl.freeze(params_types[i], argi)
 			else
-				print(
+				--[[print(
 					"WARNING: while constructing "
 						.. kind
 						.. ", can't freeze param "
@@ -188,7 +188,7 @@ local function gen_record(self, cons, kind, params_with_types)
 						.. tostring(params_types[i])
 						.. ")"
 				)
-				print("this may lead to suboptimal hash-consing")
+				print("this may lead to suboptimal hash-consing")]]
 			end
 			args[i] = argi
 		end
@@ -198,8 +198,7 @@ local function gen_record(self, cons, kind, params_with_types)
 	end
 	setmetatable(cons, {
 		__call = function(_, ...)
-			return build_record(...)
-			--return build_record_freeze_wrapper(...)
+			return build_record_freeze_wrapper(...)
 		end,
 	})
 	---@type RecordDeriveInfo
@@ -233,6 +232,9 @@ local function define_record(self, kind, params_with_types)
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
 	}
+	self.__newindex = function()
+		error("records are immutable!")
+	end
 	traits.value_name:implement_on(self, {
 		value_name = function()
 			return kind
@@ -329,6 +331,9 @@ local function define_enum(self, name, variants)
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
 	}
+	self.__newindex = function()
+		error("enums are immutable!")
+	end
 	traits.value_name:implement_on(self, {
 		value_name = function()
 			return name
@@ -781,7 +786,7 @@ local function define_map(self, key_type, value_type)
 				.. ">"
 		end,
 	})
-	--traits.freeze:implement_on(self, { freeze = map_freeze })
+	traits.freeze:implement_on(self, { freeze = map_freeze })
 	return self
 end
 define_map = U.memoize(define_map)
@@ -991,7 +996,7 @@ local function define_set(self, key_type)
 			return "SetValue<" .. traits.value_name:get(key_type).value_name() .. ">"
 		end,
 	})
-	--traits.freeze:implement_on(self, { freeze = set_freeze })
+	traits.freeze:implement_on(self, { freeze = set_freeze })
 	return self
 end
 define_set = U.memoize(define_set)
@@ -1313,7 +1318,7 @@ local function define_array(self, value_type)
 			return "ArrayValue<" .. traits.value_name:get(value_type).value_name() .. ">"
 		end,
 	})
-	--traits.freeze:implement_on(self, { freeze = array_freeze })
+	traits.freeze:implement_on(self, { freeze = array_freeze })
 	return self
 end
 define_array = U.memoize(define_array)
@@ -1399,12 +1404,12 @@ local function compare_trivial(left, right)
 	return left < right
 end
 for _, t in ipairs { terms_gen.builtin_number, terms_gen.builtin_string } do
-	--traits.freeze:implement_on(t, { freeze = freeze_trivial })
-	--traits.order:implement_on(t, { compare = compare_trivial })
+	traits.freeze:implement_on(t, { freeze = freeze_trivial })
+	traits.order:implement_on(t, { compare = compare_trivial })
 end
 -- lua tables are often used as unique ids
 for _, t in ipairs { terms_gen.builtin_table, terms_gen.any_lua_type } do
-	--traits.freeze:implement_on(t, { freeze = freeze_trivial })
+	traits.freeze:implement_on(t, { freeze = freeze_trivial })
 end
 
 local function any_lua_type_diff_fn(left, right)

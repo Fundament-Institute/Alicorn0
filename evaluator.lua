@@ -156,13 +156,13 @@ end
 ---@return constraintcause
 local function nestcause(desc, cause, val, use, val_ctx, use_ctx)
 	local r = terms.constraintcause.nested(desc, cause)
-	r.track = cause.track
-	--if r.track then
+	--[[r.track = cause.track
+	if r.track then
 	r.val = val
 	r.val_ctx = val_ctx
 	r.use = use
 	r.use_ctx = use_ctx
-	--end
+  end]]
 	return r
 end
 
@@ -924,7 +924,7 @@ local function substitute_inner_impl(val, mappings, mappings_changed, context_le
 		local result_info =
 			substitute_inner(result_info, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		local res = typed_term.pi(param_type, param_info, result_type, result_info)
-		res.original_name = val.original_name
+		--res.original_name = val.original_name
 		return res
 	elseif val:is_closure() then
 		local param_name, code, capture, capture_info, param_info = val:unwrap_closure()
@@ -2795,7 +2795,7 @@ local function infer_impl(
 			result_type,
 			result_info
 		)
-		lambda_type.original_name = param_name
+		--lambda_type.original_name = param_name
 		local lambda_term = substitute_into_lambda(
 			body_value,
 			typechecking_context.runtime_context,
@@ -2867,7 +2867,7 @@ local function infer_impl(
 		-- )
 
 		local term = typed_term.pi(param_type_term, param_info_term, result_type_term, result_info_term)
-		term.original_name = inferrable_term.original_name -- TODO: If this is an inferrable with an anchor, use the anchor information instead
+		--term.original_name = inferrable_term.original_name -- TODO: If this is an inferrable with an anchor, use the anchor information instead
 
 		local usages = usage_array()
 		add_arrays(usages, param_type_usages)
@@ -3926,7 +3926,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			runtime_context
 		)]]
 		local res = flex_value.pi(param_type_value, param_info_value, result_type_value, result_info_value)
-		res.original_name = typed_term.original_name
+		--res.original_name = typed_term.original_name
 		return res
 	elseif typed_term:is_application() then
 		local f, arg = typed_term:unwrap_application()

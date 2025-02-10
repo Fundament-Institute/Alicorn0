@@ -511,7 +511,7 @@ function TypecheckingContext:append(name, type, val, debuginfo)
 		error("TypecheckingContext:append expected either val or debuginfo")
 	end
 	if not val then
-		debuginfo["{TRACE}"] = U.bound_here(2)
+		--debuginfo["{TRACE}"] = U.bound_here(2)
 		val = flex_value.stuck(stuck_value.free(free.placeholder(self:len() + 1, debuginfo)))
 	end
 
@@ -1607,7 +1607,7 @@ gen.define_multi_enum(
 -- host user defined ids are unique (identified by identity, not by name)
 -- subtype relations are unique (all instances are either individual
 -- or constructed from FunctionRelation, which is already memoized)
---[[for _, t in ipairs {
+for _, t in ipairs {
 	metavariable_type,
 	anchor_type,
 	flex_runtime_context_type,
@@ -1621,7 +1621,7 @@ gen.define_multi_enum(
 			return val
 		end,
 	})
-end]]
+end
 
 local host_syntax_type = strict_value.host_user_defined_type({ name = "syntax" }, array(strict_value)())
 local host_environment_type = strict_value.host_user_defined_type({ name = "environment" }, array(strict_value)())

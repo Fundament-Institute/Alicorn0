@@ -1035,9 +1035,6 @@ local function forall_impl(syntax, env)
 			)
 		)
 	)
-	fn_type_term.original_name = inner_name
-	params_args.original_name = "param_type for " .. fn_type_term.original_name
-	fn_res_term.original_name = "result_type for " .. fn_type_term.original_name
 
 	--print("reached end of function type construction")
 	if not env.enter_block then
