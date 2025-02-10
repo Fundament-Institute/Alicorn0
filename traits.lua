@@ -55,9 +55,21 @@ diff:declare_method("diff")
 local value_name = declare_trait("value_name")
 value_name:declare_method("value_name")
 
+-- this method not only represents freezing from subsequent mutation, but also
+-- returns an existing instance of the argument (if necessary, and structure
+-- permitting) to enable efficient hash-consing
+local freeze = declare_trait("freeze")
+freeze:declare_method("freeze")
+
+-- strict weak order, suitable for table.sort
+local order = declare_trait("order")
+order:declare_method("compare")
+
 return {
 	declare_trait = declare_trait,
 	pretty_print = pretty_print,
 	diff = diff,
 	value_name = value_name,
+	freeze = freeze,
+	order = order,
 }

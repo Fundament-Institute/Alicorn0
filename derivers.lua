@@ -555,6 +555,29 @@ local diff = {
 	end,
 }
 
+---@type Deriver
+local freeze = {
+	-- freezing a record value or enum value does nothing because these
+	-- values are already intended to be immutable
+	-- however, their current implementation doesn't lend itself easily to
+	-- actually preventing modification of existing fields
+	-- (this is fixable)
+	record = function(t, info)
+		local function freeze_fn(t, val)
+			return val
+		end
+
+		traits.freeze:implement_on(t, { freeze = freeze_fn })
+	end,
+	enum = function(t, info)
+		local function freeze_fn(t, val)
+			return val
+		end
+
+		traits.freeze:implement_on(t, { freeze = freeze_fn })
+	end,
+}
+
 -- build_record_function = (trait, info) -> function that implements the trait method
 -- specializations - optional specialized implementations for particular variants
 local function trait_method(trait, method, build_record_function, specializations)
@@ -623,5 +646,6 @@ return {
 	as = as,
 	pretty_print = pretty_print,
 	diff = diff,
+	freeze = freeze,
 	trait_method = trait_method,
 }

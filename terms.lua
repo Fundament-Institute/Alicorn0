@@ -1601,6 +1601,28 @@ gen.define_multi_enum(
 --{"typechecker_monad_value", }, -- TODO
 --{"typechecker_monad_type", {"wrapped_type", value}},
 
+-- metavariables are unique (typechecker state increments after each mv constructed)
+-- anchors are unique (their constructor is already memoized)
+-- runtime and typechecking contexts are immutable (or at least not intended to be mutated)
+-- host user defined ids are unique (identified by identity, not by name)
+-- subtype relations are unique (all instances are either individual
+-- or constructed from FunctionRelation, which is already memoized)
+--[[for _, t in ipairs {
+	metavariable_type,
+	anchor_type,
+	flex_runtime_context_type,
+	strict_runtime_context_type,
+	typechecking_context_type,
+	host_user_defined_id,
+	SubtypeRelation,
+} do
+	traits.freeze:implement_on(t, {
+		freeze = function(_, val)
+			return val
+		end,
+	})
+end]]
+
 local host_syntax_type = strict_value.host_user_defined_type({ name = "syntax" }, array(strict_value)())
 local host_environment_type = strict_value.host_user_defined_type({ name = "environment" }, array(strict_value)())
 local host_typed_term_type = strict_value.host_user_defined_type({ name = "typed_term" }, array(strict_value)())

@@ -1,5 +1,6 @@
 -- SPDX-License-Identifier: Apache-2.0
 -- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
+local U = require "alicorn-utils"
 
 local lpeg = require "lpeg"
 local P, C, Cg, Cc, Cmt, Ct, Cb, Cp, Cf, Cs, S, V, R =
@@ -208,6 +209,7 @@ local function create_anchor(line, char, sourceid)
 	setmetatable(new_anchor, anchor_mt)
 	return new_anchor
 end
+create_anchor = U.memoize(create_anchor)
 
 local function anchor_here(offset)
 	local info = debug.getinfo((offset or 1) + 1, "Sl")
