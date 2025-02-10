@@ -753,6 +753,10 @@ function gather_usages(val, usages, context_len, ambient_typechecking_context)
 	elseif val:is_tuple_desc_type() then
 		local universe = val:unwrap_tuple_desc_type()
 		local typed_universe = gather_usages(universe, usages, context_len, ambient_typechecking_context)
+	elseif val:is_tuple_desc_concat_indep() then
+		local pfx, sfx = val:unwrap_tuple_desc_concat_indep()
+		gather_usages(pfx, usages, context_len, ambient_typechecking_context)
+		gather_usages(sfx, usages, context_len, ambient_typechecking_context)
 	elseif val:is_enum_value() then
 		local constructor, arg = val:unwrap_enum_value()
 		local arg = gather_usages(arg, usages, context_len, ambient_typechecking_context)
@@ -960,6 +964,11 @@ local function substitute_inner_impl(val, mappings, mappings_changed, context_le
 		local typed_universe =
 			substitute_inner(universe, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		return U.notail(typed_term.tuple_desc_type(typed_universe))
+	elseif val:is_tuple_desc_concat_indep() then
+		local pfx, sfx = val:unwrap_tuple_desc_concat_indep()
+		local pfx_sub = substitute_inner(pfx, mappings, mappings_changed, context_len, ambient_typechecking_context)
+		local sfx_sub = substitute_inner(sfx, mappings, mappings_changed, context_len, ambient_typechecking_context)
+		return U.notail(typed_term.tuple_desc_concat_indep(pfx_sub, sfx_sub))
 	elseif val:is_enum_value() then
 		local constructor, arg = val:unwrap_enum_value()
 		local arg = substitute_inner(arg, mappings, mappings_changed, context_len, ambient_typechecking_context)
@@ -4080,7 +4089,14 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		local universe = evaluate(universe_term, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.tuple_desc_type(universe))
 	elseif typed_term:is_tuple_desc_concat_indep() then
-		local head, tail = typed_term:unwrap_tuple_desc_concat_indep()
+		local head_tm, tail_tm = typed_term:unwrap_tuple_desc_concat_indep()
+
+		local head = evaluate(head_tm, runtime_context, ambient_typechecking_context)
+		local tail = evaluate(tail_tm, runtime_context, ambient_typechecking_context)
+
+		if not head:is_enum_value() or not tail:is_enum_value() then
+			return flex_value.tuple_desc_concat_indep(head, tail)
+		end
 
 		---@param desc flex_value
 		---@param len integer?
