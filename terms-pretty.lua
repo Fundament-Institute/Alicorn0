@@ -138,6 +138,7 @@ local function ensure_context(context)
 		return PrettyprintingContext.from_flex_runtime_context(context)
 	elseif
 		context ~= nil
+		and context._record == nil
 		and context.as_strict ~= nil
 		and strict_runtime_context_type.value_check(context:as_strict()) == true
 	then
@@ -145,6 +146,7 @@ local function ensure_context(context)
 		return PrettyprintingContext.from_strict_runtime_context(context)
 	elseif
 		context ~= nil
+		and context._record == nil
 		and context.as_strict ~= nil
 		and flex_runtime_context_type.value_check(context:as_strict()) == true
 	then
@@ -152,6 +154,7 @@ local function ensure_context(context)
 		return PrettyprintingContext.from_flex_runtime_context(context)
 	elseif
 		context ~= nil
+		and context._record == nil
 		and context.as_flex ~= nil
 		and flex_runtime_context_type.value_check(context:as_flex()) == true
 	then

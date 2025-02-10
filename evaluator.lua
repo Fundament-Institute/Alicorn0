@@ -6522,7 +6522,7 @@ local function assemble_side_chain(cause, side, list)
 end
 
 terms.constraintcause.__tostring = function(self)
-	--if self.track then
+	--[[
 	local vals = {}
 	local uses = {}
 	assemble_side_chain(self, true, vals)
@@ -6560,10 +6560,10 @@ terms.constraintcause.__tostring = function(self)
 			output = output .. "\n → \n"
 		end
 	end
-	return output
+	return output]]
 	--else
-	--	local chain = assemble_causal_chain(self)
-	--	return table.concat(chain, " → ")
+	local chain = assemble_causal_chain(self)
+	return table.concat(chain, " → ")
 	--end
 end
 
