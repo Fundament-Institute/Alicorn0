@@ -215,7 +215,7 @@ local gen_type = {
 }
 
 for i, k, v in U.table_stable_pairs(terms) do
-	if k and type(v) == "table" and v.derive then
+	if k and type(v) == "table" and v._record == nil and v.derive then
 		---@cast v Type
 		v:derive(gen_type)
 		-- print(k)

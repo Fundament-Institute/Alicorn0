@@ -176,9 +176,9 @@ end
 ---@return constraintcause
 local function compositecause(kind, l_index, l, r_index, r, anchor)
 	local cause = terms.constraintcause[kind](l_index, r_index, anchor)
-	if l.track or r.track then
-		cause.track = true
-	end
+	--if l.track or r.track then
+	--	cause.track = true
+	--end
 	return cause
 end
 
@@ -1273,7 +1273,7 @@ end
 local recurse_count = 0
 ---@module "_meta/evaluator/substitute_inner"
 function substitute_inner(val, mappings, mappings_changed, context_len, ambient_typechecking_context)
-	local tracked = val.track ~= nil
+	local tracked = false --val.track ~= nil
 	if tracked then
 		print(string.rep("·", recurse_count) .. "SUB: " .. tostring(val))
 	end
@@ -3809,7 +3809,7 @@ end
 
 ---@module "_meta/evaluator/infer"
 function infer(inferrable_term, typechecking_context)
-	local tracked = inferrable_term.track ~= nil
+	local tracked = false --inferrable_term.track ~= nil
 	if tracked then
 		print(
 			"\n" .. string.rep("·", recurse_count) .. "INFER: " .. inferrable_term:pretty_print(typechecking_context)
@@ -4645,7 +4645,7 @@ local recurse_count = 0
 
 ---@module "_meta/evaluator/evaluate"
 function evaluate(typed_term, runtime_context, ambient_typechecking_context)
-	local tracked = typed_term.track ~= nil
+	local tracked = false --typed_term.track ~= nil
 	if tracked then
 		local input = typed_term:pretty_print(runtime_context)
 		print(string.rep("·", recurse_count) .. "EVAL: " .. input)

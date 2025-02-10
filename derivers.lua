@@ -59,7 +59,7 @@ local eq = {
 
 		local checks = {}
 		for i, param in ipairs(params) do
-			checks[i] = string.format("left[%q] == right[%q]", param, param)
+			checks[i] = string.format("left._record[%q] == right._record[%q]", param, param)
 		end
 		local all_checks = table.concat(checks, " and ")
 
@@ -107,7 +107,7 @@ end]]
 				local vparams = vinfo.params
 				local checks = {}
 				for i, param in ipairs(vparams) do
-					checks[i] = string.format("left[%q] == right[%q]", param, param)
+					checks[i] = string.format("left._record[%q] == right._record[%q]", param, param)
 				end
 				all_checks = table.concat(checks, " and ")
 			elseif vtype == EnumDeriveInfoVariantKind.Unit then
@@ -159,8 +159,8 @@ local is = {
 		error("can't derive :is() for a record type")
 	end,
 	enum = function(t, info)
-		local idx = t.__index or {}
-		t.__index = idx
+		local idx = t.methods or {}
+		t.methods = idx
 		local name = info.name
 		local variants = info.variants
 
@@ -185,14 +185,14 @@ local is = {
 ---@type Deriver
 local unwrap = {
 	record = function(t, info)
-		local idx = t.__index or {}
-		t.__index = idx
+		local idx = t.methods or {}
+		t.methods = idx
 		local kind = info.kind
 		local params = info.params
 
 		local returns = {}
 		for i, param in ipairs(params) do
-			returns[i] = string.format("self[%q]", param)
+			returns[i] = string.format("self._record[%q]", param)
 		end
 		local all_returns = table.concat(returns, ", ")
 
@@ -210,8 +210,8 @@ local unwrap = {
 		idx["unwrap_" .. kind] = compiled()
 	end,
 	enum = function(t, info)
-		local idx = t.__index or {}
-		t.__index = idx
+		local idx = t.methods or {}
+		t.methods = idx
 		local name = info.name
 		local variants = info.variants
 
@@ -225,7 +225,7 @@ local unwrap = {
 				local vparams = vinfo.params
 				local returns = {}
 				for i, param in ipairs(vparams) do
-					returns[i] = string.format("self[%q]", param)
+					returns[i] = string.format("self._record[%q]", param)
 				end
 				all_returns = table.concat(returns, ", ")
 			elseif vtype == EnumDeriveInfoVariantKind.Unit then
@@ -264,8 +264,8 @@ local as = {
 		error("can't derive :as() for a record type")
 	end,
 	enum = function(t, info)
-		local idx = t.__index or {}
-		t.__index = idx
+		local idx = t.methods or {}
+		t.methods = idx
 		local name = info.name
 		local variants = info.variants
 
@@ -279,7 +279,7 @@ local as = {
 				local vparams = vinfo.params
 				local returns = { "true" }
 				for i, param in ipairs(vparams) do
-					returns[i + 1] = string.format("self[%q]", param)
+					returns[i + 1] = string.format("self._record[%q]", param)
 				end
 				all_returns = table.concat(returns, ", ")
 			elseif vtype == EnumDeriveInfoVariantKind.Unit then
@@ -321,7 +321,7 @@ local function record_pretty_printable_trait(info)
 	---@type string[]
 	local fields = {}
 	for i, param in ipairs(params) do
-		fields[i] = string.format("{ %q, self[%q] }", param, param)
+		fields[i] = string.format("{ %q, self._record[%q] }", param, param)
 	end
 	local all_fields = "		" .. table.concat(fields, ",\n		") .. "\n"
 

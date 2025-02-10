@@ -136,6 +136,7 @@ local function gen_record(self, cons, kind, params_with_types)
 		local args = table.pack(...)
 		local val = {
 			kind = kind,
+			_record = {},
 		}
 		for i, v in ipairs(params) do
 			local param = args[i]
@@ -156,7 +157,7 @@ local function gen_record(self, cons, kind, params_with_types)
 					)
 				)
 			end
-			val[v] = param
+			val._record[v] = param
 		end
 		if false then
 			-- val["{TRACE}"] = U.bound_here(2)
@@ -227,7 +228,20 @@ local function define_record(self, kind, params_with_types)
 		return deriver.record(self, derive_info, ...)
 	end
 	self._kind = kind
-	self.__index = {
+	self.__index = function(t, key)
+		local method = self.methods[key]
+		if method then
+			return method
+		end
+
+		--error(debug.traceback("use unwrap instead for: " .. key))
+		if t._record[key] then
+			return t._record[key]
+		end
+
+		error("Tried to access nonexistent key: " .. key)
+	end
+	self.methods = {
 		pretty_preprint = pretty_printer.pretty_preprint,
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
@@ -326,7 +340,19 @@ local function define_enum(self, name, variants)
 		return deriver.enum(self, derive_info, ...)
 	end
 	self._name = name
-	self.__index = {
+	self.__index = function(t, key)
+		local method = self.methods[key]
+		if method then
+			return method
+		end
+
+		if t._record[key] then
+			return t._record[key]
+		end
+
+		error("Tried to access nonexistent key: " .. key)
+	end
+	self.methods = {
 		pretty_preprint = pretty_printer.pretty_preprint,
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
@@ -477,42 +503,42 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 
 			local unwrapper = {}
 			for _, k, v in U.table_stable_pairs(types) do
-				unwrapper[flex_name .. "." .. k] = flex.__index["unwrap_" .. k]
+				unwrapper[flex_name .. "." .. k] = flex.methods["unwrap_" .. k]
 			end
 
 			if tag == "flex" then
 				if v == "is_" then
-					flex.__index[key] = function(self, ...)
+					flex.methods[key] = function(self, ...)
 						local inner = unwrapper[self.kind](self)
 						return inner[key](inner, ...)
 					end
 				elseif v == "unwrap_" then
-					flex.__index[key] = function(self, ...)
+					flex.methods[key] = function(self, ...)
 						local inner = unwrapper[self.kind](self)
 						return table.unpack(fn_unify(table.pack(inner[key](inner, ...))))
 					end
 				elseif v == "as_" then
-					flex.__index[key] = function(self, ...)
+					flex.methods[key] = function(self, ...)
 						local inner = unwrapper[self.kind](self)
 						return unify_passthrough(inner[key](inner, ...))
 					end
 				end
 			elseif tag ~= nil then
-				local base = flex.__index[key]
+				local base = flex.methods[key]
 				if not base then
 					error("Trying to override nonexistent function " .. key)
 				end
 				if v == "is_" or v == "as_" then
-					flex.__index[key] = function(self, ...)
-						local ok, inner = flex.__index["as_" .. tag](self)
+					flex.methods[key] = function(self, ...)
+						local ok, inner = flex.methods["as_" .. tag](self)
 						if not ok then
 							return false
 						end
 						return inner[key](inner, ...)
 					end
 				elseif v == "unwrap_" then
-					flex.__index[key] = function(self, ...)
-						local inner = flex.__index[v .. tag](self)
+					flex.methods[key] = function(self, ...)
+						local inner = flex.methods[v .. tag](self)
 						return inner[key](inner, ...)
 					end
 				end

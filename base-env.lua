@@ -1984,7 +1984,7 @@ local function debug_trace_impl(syntax, env)
 	end
 	local term, env = utils.unpack_bundle(term_env)
 
-	term.track = true
+	--term.track = true
 	return ok, term, env
 end
 
