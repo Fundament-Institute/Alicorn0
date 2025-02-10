@@ -32,7 +32,7 @@ local flex_value
 local stuck_value
 
 pretty_printer.hidden_fields.capture = function(capture)
-	if capture.bindings and capture.bindings.len then
+	if capture._record == nil and capture.bindings and capture.bindings.len then
 		local prefix = ""
 		if strict_runtime_context_type.value_check(capture) then
 			prefix = "strict "

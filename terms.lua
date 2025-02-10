@@ -504,14 +504,15 @@ function TypecheckingContext:append(name, type, val, debuginfo)
 	if val ~= nil and flex_value.value_check(val) ~= true then
 		error("TypecheckingContext:append parameter 'val' must be a flex_value (or nil if given start_anchor)")
 	end
-	if debuginfo.source ~= nil and anchor_type.value_check(debuginfo.source) ~= true then
+	local _, source = debuginfo:unwrap_var_debug()
+	if source ~= nil and anchor_type.value_check(source) ~= true then
 		error("TypecheckingContext:append parameter 'start_anchor' must be an start_anchor (or nil if given val)")
 	end
 	if not val and not debuginfo then
 		error("TypecheckingContext:append expected either val or debuginfo")
 	end
 	if not val then
-		debuginfo["{TRACE}"] = U.bound_here(2)
+		--debuginfo["{TRACE}"] = U.bound_here(2)
 		val = flex_value.stuck(stuck_value.free(free.placeholder(self:len() + 1, debuginfo)))
 	end
 
@@ -1600,6 +1601,28 @@ gen.define_multi_enum(
 --{"typed_term", {"typed_term", typed_term}},
 --{"typechecker_monad_value", }, -- TODO
 --{"typechecker_monad_type", {"wrapped_type", value}},
+
+-- metavariables are unique (typechecker state increments after each mv constructed)
+-- anchors are unique (their constructor is already memoized)
+-- runtime and typechecking contexts are immutable (or at least not intended to be mutated)
+-- host user defined ids are unique (identified by identity, not by name)
+-- subtype relations are unique (all instances are either individual
+-- or constructed from FunctionRelation, which is already memoized)
+for _, t in ipairs {
+	metavariable_type,
+	anchor_type,
+	flex_runtime_context_type,
+	strict_runtime_context_type,
+	typechecking_context_type,
+	host_user_defined_id,
+	SubtypeRelation,
+} do
+	traits.freeze:implement_on(t, {
+		freeze = function(_, val)
+			return val
+		end,
+	})
+end
 
 local host_syntax_type = strict_value.host_user_defined_type({ name = "syntax" }, array(strict_value)())
 local host_environment_type = strict_value.host_user_defined_type({ name = "environment" }, array(strict_value)())

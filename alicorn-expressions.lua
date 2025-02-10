@@ -44,6 +44,7 @@ local infer = evaluator.infer
 --local typechecker_state = evaluator.typechecker_state
 
 local U = require "alicorn-utils"
+local format = require "format"
 
 ---@class SemanticErrorData
 ---@field text string
@@ -466,16 +467,13 @@ local function speculate_pi_type(env, metaval)
 				terms.flex_value.stuck(result_mv:as_stuck()),
 				flex_value.strict(pairs[i].result_info)
 			)
-			--pi.original_name = "#spec-" .. U.strip_ansi(tostring(metaval.original_name or metaval))
-			--param_mv.source = "param_mv for " .. pi.original_name
-			--result_mv.source = "result_mv for " .. pi.original_name
 
 			local ok, err = evaluator.typechecker_state:flow(
 				metaval,
 				env.typechecking_context,
 				pi,
 				env.typechecking_context,
-				terms.constraintcause.primitive("Speculating on pi type", U.anchor_here())
+				terms.constraintcause.primitive("Speculating on pi type", format.anchor_here())
 			)
 			if not ok then
 				---@cast err -nil
@@ -750,7 +748,7 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 			env.typechecking_context,
 			host_func_type,
 			env.typechecking_context,
-			terms.constraintcause.primitive("Speculating on host func type", U.anchor_here())
+			terms.constraintcause.primitive("Speculating on host func type", format.anchor_here())
 		)
 		if not ok then
 			return false, err
@@ -774,7 +772,7 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 				env.typechecking_context,
 				host_func_type,
 				env.typechecking_context,
-				terms.constraintcause.primitive("Speculating on host func type", U.anchor_here())
+				terms.constraintcause.primitive("Speculating on host func type", format.anchor_here())
 			)
 
 			if not ok then
@@ -1246,15 +1244,15 @@ local function host_operative(fn, name)
 	--   goal one of inferable, mechanism, checkable
 
 	local var_debug = terms.var_debug
-	local args_dbg = var_debug("#args", U.anchor_here())
+	local args_dbg = var_debug("#args", format.anchor_here())
 	local arg_unpack_dbg = debug_array(
-		var_debug("#syn", U.anchor_here()),
-		var_debug("#env", U.anchor_here()),
-		var_debug("#ud", U.anchor_here()),
-		var_debug("#goal", U.anchor_here())
+		var_debug("#syn", format.anchor_here()),
+		var_debug("#env", format.anchor_here()),
+		var_debug("#ud", format.anchor_here()),
+		var_debug("#goal", format.anchor_here())
 	)
 	local result_unpack_dbg =
-		debug_array(var_debug("#res-term", U.anchor_here()), var_debug("#res-env", U.anchor_here()))
+		debug_array(var_debug("#res-term", format.anchor_here()), var_debug("#res-env", format.anchor_here()))
 
 	-- 1: wrap fn as a typed host_value
 	-- this way it can take a host tuple and return a host tuple
@@ -1294,7 +1292,7 @@ local function host_operative(fn, name)
 		"#" .. name .. "_PARAM",
 		tuple_to_tuple_fn,
 		empty_tuple,
-		var_debug("#capture", U.anchor_here()),
+		var_debug("#capture", format.anchor_here()),
 		args_dbg
 	)
 
@@ -1425,7 +1423,7 @@ collect_tuple = metalanguage.reducer(
 				env.typechecking_context,
 				goal_type,
 				env.typechecking_context,
-				terms.constraintcause.primitive("tuple type in collect_tuple", U.anchor_here())
+				terms.constraintcause.primitive("tuple type in collect_tuple", format.anchor_here())
 			)
 
 			if not ok then
@@ -1444,7 +1442,7 @@ collect_tuple = metalanguage.reducer(
 				env.typechecking_context,
 				goal_type,
 				env.typechecking_context,
-				terms.constraintcause.primitive("tuple type in collect_tuple", U.anchor_here())
+				terms.constraintcause.primitive("tuple type in collect_tuple", format.anchor_here())
 			)]]
 			return true, U.notail(checkable_term.tuple_cons(collected_terms, collected_info)), env
 		else
@@ -1538,7 +1536,7 @@ collect_host_tuple = metalanguage.reducer(
 				env.typechecking_context,
 				goal_type,
 				env.typechecking_context,
-				terms.constraintcause.primitive("host tuple type in collect_host_tuple", U.anchor_here())
+				terms.constraintcause.primitive("host tuple type in collect_host_tuple", format.anchor_here())
 			)
 			if not ok then
 				return false, err

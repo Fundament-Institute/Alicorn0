@@ -32,6 +32,7 @@ local checkpointTime2 = startTime
 local metalanguage = require "metalanguage"
 local evaluator = require "evaluator"
 local format = require "format-adapter"
+local format_ = require "format"
 local base_env = require "base-env"
 local terms = require "terms"
 local exprs = require "alicorn-expressions"
@@ -301,7 +302,7 @@ local function execute_alc_file(bound_expr, log, env)
 				evaluator.typechecker_state:metavariable(env.typechecking_context):as_flex()
 			),
 			env.typechecking_context,
-			terms.constraintcause.primitive("final flow check", U.anchor_here())
+			terms.constraintcause.primitive("final flow check", format_.anchor_here())
 		)
 
 		if not ok then
