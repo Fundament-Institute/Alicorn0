@@ -260,7 +260,11 @@ local function reducer(func, name)
 	---@return ...
 	local function funcwrapper(syntax, matcher)
 		if protect_reducer_func_calls then
-			return augment_error(syntax, name, xpcall(func, U.custom_traceback, syntax, table.unpack(matcher.reducible)))
+			return augment_error(
+				syntax,
+				name,
+				xpcall(func, U.custom_traceback, syntax, table.unpack(matcher.reducible))
+			)
 		else
 			return func(syntax, table.unpack(matcher.reducible))
 		end

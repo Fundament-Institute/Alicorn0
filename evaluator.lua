@@ -1178,7 +1178,7 @@ local function substitute_inner_impl(val, mappings, mappings_changed, context_le
 		)
 		local fun_sub = substitute_inner(fun, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		local acc_sub = substitute_inner(acc, mappings, mappings_changed, context_len, ambient_typechecking_context)
-		return typed_term.host_int_fold(num_sub, fun_sub, acc_sub)
+		return U.notail(typed_term.host_int_fold(num_sub, fun_sub, acc_sub))
 	elseif val:is_host_if() then
 		local subject, consequent, alternate = val:unwrap_host_if()
 		local subject = substitute_inner(
@@ -4115,7 +4115,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		local tail = evaluate(tail_tm, runtime_context, ambient_typechecking_context)
 
 		if not head:is_enum_value() or not tail:is_enum_value() then
-			return flex_value.tuple_desc_concat_indep(head, tail)
+			return U.notail(flex_value.tuple_desc_concat_indep(head, tail))
 		end
 
 		---@param desc flex_value
@@ -4445,7 +4445,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		local f = evaluate(fun, runtime_context, ambient_typechecking_context)
 		local acc = evaluate(init, runtime_context, ambient_typechecking_context)
 		if not n_v:is_host_value() then
-			return flex_value.host_int_fold(n_v:unwrap_stuck(), f, acc)
+			return U.notail(flex_value.host_int_fold(n_v:unwrap_stuck(), f, acc))
 		end
 		---@type integer
 		local n = n_v:unwrap_host_value()

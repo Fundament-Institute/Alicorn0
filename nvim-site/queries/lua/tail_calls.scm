@@ -20,6 +20,7 @@
 					"notail"
 					"pack"
 					"setmetatable"
+					"tostring"
 					"unpack"
 					"var_debug"
 				)
