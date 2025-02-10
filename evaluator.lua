@@ -825,6 +825,11 @@ function gather_usages(val, usages, context_len, ambient_typechecking_context)
 		for _, elem in trailing:ipairs() do
 			gather_usages(elem, usages, context_len, ambient_typechecking_context)
 		end
+	elseif val:is_host_int_fold() then
+		local num, fun, acc = val:unwrap_host_int_fold()
+		gather_usages(num, usages, context_len, ambient_typechecking_context)
+		gather_usages(fun, usages, context_len, ambient_typechecking_context)
+		gather_usages(acc, usages, context_len, ambient_typechecking_context)
 	elseif val:is_host_if() then
 		local subject, consequent, alternate = val:unwrap_host_if()
 		gather_usages(flex_value.stuck(subject), usages, context_len, ambient_typechecking_context)
@@ -1159,6 +1164,12 @@ local function substitute_inner_impl(val, mappings, mappings_changed, context_le
 		local result = typed_term.host_tuple_cons(elems)
 		-- print("host_tuple_stuck result", result)
 		return result
+	elseif val:is_host_int_fold() then
+		local num, fun, acc = val:unwrap_host_int_fold()
+		local num_sub = substitute_inner(num, mappings, mappings_changed, context_len, ambient_typechecking_context)
+		local fun_sub = substitute_inner(fun, mappings, mappings_changed, context_len, ambient_typechecking_context)
+		local acc_sub = substitute_inner(acc, mappings, mappings_changed, context_len, ambient_typechecking_context)
+		return typed_term.host_int_fold(num, fun, acc)
 	elseif val:is_host_if() then
 		local subject, consequent, alternate = val:unwrap_host_if()
 		local subject = substitute_inner(
@@ -4419,6 +4430,20 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			print("unrecognized value in unbox", unwrap_val)
 			error "invalid value in unbox, must be host_value or neutral"
 		end
+	elseif typed_term:is_host_int_fold() then
+		local num, fun, init = typed_term:unwrap_host_int_fold()
+		local n_v = evaluate(num, runtime_context, ambient_typechecking_context)
+		local f = evaluate(fun, runtime_context, ambient_typechecking_context)
+		local acc = evaluate(init, runtime_context, ambient_typechecking_context)
+		if not n:is_host_value() then
+			return flex_value.host_int_fold(n, f, acc)
+		end
+		---@type integer
+		local n = n_v:unwrap_host_value()
+		for i = n, 1, -1 do
+			acc = apply_value(f, acc, ambient_typechecking_context)
+		end
+		return acc
 	elseif typed_term:is_host_if() then
 		local subject, consequent, alternate = typed_term:unwrap_host_if()
 		local sval = evaluate(subject, runtime_context, ambient_typechecking_context)
