@@ -504,7 +504,8 @@ function TypecheckingContext:append(name, type, val, debuginfo)
 	if val ~= nil and flex_value.value_check(val) ~= true then
 		error("TypecheckingContext:append parameter 'val' must be a flex_value (or nil if given start_anchor)")
 	end
-	if debuginfo.source ~= nil and anchor_type.value_check(debuginfo.source) ~= true then
+	local _, source = debuginfo:unwrap_var_debug()
+	if source ~= nil and anchor_type.value_check(source) ~= true then
 		error("TypecheckingContext:append parameter 'start_anchor' must be an start_anchor (or nil if given val)")
 	end
 	if not val and not debuginfo then

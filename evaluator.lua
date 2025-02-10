@@ -529,9 +529,8 @@ end
 local function const_combinator(v)
 	local arg_info = terms.var_debug("#CONST_PARAM", format.anchor_here())
 	local data_info = terms.var_debug("#CONST_CAPTURE", format.anchor_here())
-	return U.notail(
-		strict_value.closure(arg_info.name, typed_term.bound_variable(1, data_info), v, data_info, arg_info)
-	)
+	local name, _ = arg_info:unwrap_var_debug()
+	return U.notail(strict_value.closure(name, typed_term.bound_variable(1, data_info), v, data_info, arg_info))
 end
 
 ---@param t flex_value
@@ -927,11 +926,12 @@ local function substitute_inner_impl(val, mappings, mappings_changed, context_le
 		--res.original_name = val.original_name
 		return res
 	elseif val:is_closure() then
-		local param_name, code, capture, capture_info, param_info = val:unwrap_closure()
+		local param_name, code, capture, capture_info, p_info = val:unwrap_closure()
 
 		local capture_sub =
 			substitute_inner(capture, mappings, mappings_changed, context_len, ambient_typechecking_context)
-		return U.notail(typed_term.lambda(param_name, param_info, code, capture_sub, capture_info, param_info.source))
+		local _, source = p_info:unwrap_var_debug()
+		return U.notail(typed_term.lambda(param_name, p_info, code, capture_sub, capture_info, source))
 	elseif val:is_operative_value() then
 		local userdata = val:unwrap_operative_value()
 		local userdata =
@@ -1308,7 +1308,8 @@ local function substitute_type_variables(val, debuginfo, index, param_name, ctx,
 		[index] = typed_term.bound_variable(index, debuginfo),
 	}
 
-	local capture_info = terms.var_debug("#capture", debuginfo.source)
+	local _, source = debuginfo:unwrap_var_debug()
+	local capture_info = terms.var_debug("#capture", source)
 
 	local elements = typed_array()
 	local body_usages = usage_map()
@@ -2769,14 +2770,9 @@ local function infer_impl(
 		end
 
 		local body_value = evaluate(body_term, inner_context.runtime_context, inner_context)
-
-		local result_type = substitute_into_closure(
-			body_type,
-			typechecking_context.runtime_context,
-			param_debug.source,
-			param_debug,
-			inner_context
-		)
+		local _, source = param_debug:unwrap_var_debug()
+		local result_type =
+			substitute_into_closure(body_type, typechecking_context.runtime_context, source, param_debug, inner_context)
 		--[[local result_type = U.tag("substitute_type_variables", {
 			body_type = body_type:pretty_preprint(typechecking_context),
 			index = inner_context:len(),
@@ -2976,12 +2972,13 @@ local function infer_impl(
 			end
 			local el_val = evaluate(el_term, typechecking_context.runtime_context, typechecking_context)
 			local el_singleton = flex_value.singleton(el_type, el_val)
+			local _, source = info[i]:unwrap_var_debug()
 			type_data = terms.cons(
 				type_data,
 				substitute_into_closure(
 					el_singleton,
 					typechecking_context.runtime_context,
-					info[i].source,
+					source,
 					info[i],
 					typechecking_context
 				)

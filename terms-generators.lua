@@ -168,7 +168,7 @@ local function gen_record(self, cons, kind, params_with_types)
 		setmetatable(val, self)
 		return val
 	end
-	--build_record = U.memoize(build_record)
+	build_record = U.memoize(build_record)
 	-- freeze args before entering memoized function
 	-- because freeze may produce a hash-consed instance of the given arg
 	-- which allows hash-consing to work with arrays etc
@@ -234,7 +234,12 @@ local function define_record(self, kind, params_with_types)
 			return method
 		end
 
-		--error(debug.traceback("use unwrap instead for: " .. key))
+		if key == "{TRACE}" or key == "{ID}" then
+			return t._record[key]
+		end
+		if key ~= "name" then
+			error(debug.traceback("use unwrap instead for: " .. key))
+		end
 		if t._record[key] then
 			return t._record[key]
 		end
@@ -346,6 +351,10 @@ local function define_enum(self, name, variants)
 			return method
 		end
 
+		if key == "{TRACE}" or key == "{ID}" then
+			return t._record[key]
+		end
+		error(debug.traceback("use unwrap instead for: " .. key))
 		if t._record[key] then
 			return t._record[key]
 		end
