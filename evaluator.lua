@@ -2787,7 +2787,7 @@ local function infer_impl(
 			)
 		) --TODO make more flexible
 		-- TODO: This will crash if body_usages is completely empty. The usages usually shouldn't be empty, but this might change in the future.
-		local body_usages_param = body_usages[body_usages:len()]
+		--local body_usages_param = body_usages[body_usages:len()] -- fix this when we actually use it for something
 		local lambda_usages = body_usages:copy(1, body_usages:len() - 1)
 		local lambda_type = flex_value.pi(
 			param_type,
@@ -4079,6 +4079,61 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		local universe_term = typed_term:unwrap_tuple_desc_type()
 		local universe = evaluate(universe_term, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.tuple_desc_type(universe))
+	elseif typed_term:is_tuple_desc_concat_indep() then
+		local head, tail = typed_term:unwrap_tuple_desc_concat_indep()
+
+		---@param desc flex_value
+		---@param len integer?
+		---@param elems flex_value[]?
+		---@return integer, flex_value[]
+		local function traverse(desc, len, elems)
+			len = len or 0
+			elems = elems or {}
+			local constructor, arg = desc:unwrap_enum_value()
+			if constructor == terms.DescCons.empty then
+				return len, elems
+			elseif constructor == terms.DescCons.cons then
+				local elements = arg:unwrap_tuple_value()
+				local next_desc = elements[1]
+				len = len + 1
+				elems[len] = elements[2]
+				return traverse(next_desc, len, elems)
+			else
+				error("unknown tuple desc constructor")
+			end
+		end
+		local head_n, head_elems = traverse(head)
+		local tail_n, tail_elems = traverse(tail)
+		---@type flex_value
+		local head_last = head_elems[1]
+		local _, head_code, _, _ = head_last:unwrap_closure()
+		local head_names
+		if head_code:is_tuple_elim() then
+			_, head_names, _, _, _ = head_code:unwrap_tuple_elim()
+		else
+			head_names = debug_array()
+			for i = 1, head_n do
+				head_names[i] = var_debug("head_unk_" .. tostring(i), format.anchor_here())
+			end
+		end
+		local desc = head
+		for i = tail_n, 1, -1 do
+			local tail_n_now = tail_n - i
+			---@type flex_value
+			local elem = tail_elems[i]
+			local _, tail_code, _, _ = elem:unwrap_closure()
+			local tail_names
+			if tail_code:is_tuple_elim() then
+				_, tail_names, _, _, _ = tail_code:unwrap_tuple_elim()
+			else
+				tail_names = debug_array()
+				for i = 1, tail_n do
+					tail_names[i] = var_debug("tail_unk_" .. tostring(i), format.anchor_here())
+				end
+			end
+			desc = tuple_desc_elem(desc, elem, head_n, head_names, tail_n_now, tail_names)
+		end
+		return desc
 	elseif typed_term:is_record_cons() then
 		local fields = typed_term:unwrap_record_cons()
 		local new_fields = string_value_map()

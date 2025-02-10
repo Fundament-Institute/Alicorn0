@@ -176,14 +176,14 @@ function typed:unwrap_tuple_desc_type() end
 ---@return typed universe
 function typed:as_tuple_desc_type() end
 ---@return boolean
-function typed:is_tuple_desc_concat() end
+function typed:is_tuple_desc_concat_indep() end
 ---@return typed prefix
 ---@return typed suffix
-function typed:unwrap_tuple_desc_concat() end
+function typed:unwrap_tuple_desc_concat_indep() end
 ---@return boolean
 ---@return typed prefix
 ---@return typed suffix
-function typed:as_tuple_desc_concat() end
+function typed:as_tuple_desc_concat_indep() end
 ---@return boolean
 function typed:is_record_cons() end
 ---@return MapValue<string,typed> fields
@@ -593,7 +593,7 @@ function typed:as_constrained_type() end
 ---@field tuple_element_access fun(subject: typed, index: number): typed
 ---@field tuple_type fun(desc: typed): typed
 ---@field tuple_desc_type fun(universe: typed): typed
----@field tuple_desc_concat fun(prefix: typed, suffix: typed): typed
+---@field tuple_desc_concat_indep fun(prefix: typed, suffix: typed): typed
 ---@field record_cons fun(fields: MapValue<string,typed>): typed
 ---@field record_extend fun(base: typed, fields: MapValue<string,typed>): typed
 ---@field record_elim fun(subject: typed, field_names: ArrayValue<string>, body: typed): typed

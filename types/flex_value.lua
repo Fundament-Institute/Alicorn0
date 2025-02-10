@@ -147,14 +147,14 @@ function flex_value:unwrap_tuple_desc_type() end
 ---@return flex_value universe
 function flex_value:as_tuple_desc_type() end
 ---@return boolean
-function flex_value:is_tuple_desc_concat() end
+function flex_value:is_tuple_desc_concat_indep() end
 ---@return flex_value prefix
 ---@return flex_value suffix
-function flex_value:unwrap_tuple_desc_concat() end
+function flex_value:unwrap_tuple_desc_concat_indep() end
 ---@return boolean
 ---@return flex_value prefix
 ---@return flex_value suffix
-function flex_value:as_tuple_desc_concat() end
+function flex_value:as_tuple_desc_concat_indep() end
 ---@return boolean
 function flex_value:is_enum_value() end
 ---@return string constructor
@@ -561,7 +561,7 @@ function flex_value:as_host_unwrap() end
 ---@field tuple_value fun(elements: ArrayValue<flex_value>): flex_value
 ---@field tuple_type fun(desc: flex_value): flex_value
 ---@field tuple_desc_type fun(universe: flex_value): flex_value
----@field tuple_desc_concat fun(prefix: flex_value, suffix: flex_value): flex_value
+---@field tuple_desc_concat_indep fun(prefix: flex_value, suffix: flex_value): flex_value
 ---@field enum_value fun(constructor: string, arg: flex_value): flex_value
 ---@field enum_type fun(desc: flex_value): flex_value
 ---@field enum_desc_type fun(universe: flex_value): flex_value

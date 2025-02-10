@@ -864,69 +864,70 @@ let tuple-desc-singleton = lambda (U : universe, T : U)
 		let (cat) = inner(wrap(head), wrap(tail))
 		unwrap(cat)
 
-let tuple-desc-concat = lambda_implicit (U : universe)
-	intrinsic
-		""""
-			return base_env.gen_base_operator(function(args)
-				return terms.typed_term.tuple_desc_concat(args[1], args[2])
-			end, "#tuple-desc-concat", "prefix", "suffix-fn")
-		:
-		wrapped (forall (pfx : tuple-desc-type(U), sfx-fn : (forall (args : tuple-type(pfx)) -> (res : tuple-desc-type(U)))) -> tuple-desc-type(U))
-let tuple-concat = lambda (
-		U    : universe,
-		head : tuple-desc-type(U),
-		tail : tuple-desc-type(U),
-		hd   : tuple-type(head),
-		tl   : tuple-type(tail))
-	let inner = intrinsic
-		""""
-			local value_array = terms_gen.declare_array(terms.strict_value)
-			local function tuple_concat(head, tail)
-				local head_elements = head:unwrap_tuple_value()
-				local tail_elements = tail:unwrap_tuple_value()
-				local new_elements = value_array()
-				for _, e in head_elements:ipairs() do
-					new_elements:append(e)
+let tuple-desc-concat-indep = lambda_implicit (U : universe)
+	unwrap
+		intrinsic
+			""""
+				return base_env.gen_base_operator(function(args)
+					return terms.typed_term.tuple_desc_concat_indep(args[1], args[2])
+				end, "#tuple-desc-concat", "prefix", "suffix")
+			:
+			wrapped (forall (pfx : tuple-desc-type(U), sfx : tuple-desc-type(U)) -> tuple-desc-type(U))
+####let tuple-concat = lambda (
+			U    : universe,
+			head : tuple-desc-type(U),
+			tail : tuple-desc-type(U),
+			hd   : tuple-type(head),
+			tl   : tuple-type(tail))
+		let inner = intrinsic
+			""""
+				local value_array = terms_gen.declare_array(terms.strict_value)
+				local function tuple_concat(head, tail)
+					local head_elements = head:unwrap_tuple_value()
+					local tail_elements = tail:unwrap_tuple_value()
+					local new_elements = value_array()
+					for _, e in head_elements:ipairs() do
+						new_elements:append(e)
+					end
+					for _, e in tail_elements:ipairs() do
+						new_elements:append(e)
+					end
+					return U.notail(terms.strict_value.tuple_value(new_elements))
 				end
-				for _, e in tail_elements:ipairs() do
-					new_elements:append(e)
+				return tuple_concat
+			:
+			host-func-type (hd : wrapped(tuple-type(head)), tl : wrapped(tuple-type(tail))) -> ((cat : wrapped(tuple-type(tuple-desc-concat(head, lambda_single (arg : tuple-type(unwrap(head))) tail)))))
+		let (cat) = inner(wrap(hd), wrap(tl))
+		unwrap(cat)
+	let host-tuple-concat = lambda (
+			head : tuple-desc-type(host-type),
+			tail : tuple-desc-type(host-type),
+			hd   : host-tuple-type(head),
+			tl   : host-tuple-type(tail))
+		let inner = intrinsic
+			""""
+				local value_array = terms_gen.declare_array(terms_gen.any_lua_type)
+				local function host_tuple_concat(head, tail)
+					local head_elements = head:unwrap_host_tuple_value()
+					local tail_elements = tail:unwrap_host_tuple_value()
+					local new_elements = value_array()
+					for _, e in head_elements:ipairs() do
+						new_elements:append(e)
+					end
+					for _, e in tail_elements:ipairs() do
+						new_elements:append(e)
+					end
+					return U.notail(terms.strict_value.host_tuple_value(new_elements))
 				end
-				return U.notail(terms.strict_value.tuple_value(new_elements))
-			end
-			return tuple_concat
-		:
-		host-func-type (hd : wrapped(tuple-type(head)), tl : wrapped(tuple-type(tail))) -> ((cat : wrapped(tuple-type(tuple-desc-concat(U, head, tail)))))
-	let (cat) = inner(wrap(hd), wrap(tl))
-	unwrap(cat)
-let host-tuple-concat = lambda (
-		head : tuple-desc-type(host-type),
-		tail : tuple-desc-type(host-type),
-		hd   : host-tuple-type(head),
-		tl   : host-tuple-type(tail))
-	let inner = intrinsic
-		""""
-			local value_array = terms_gen.declare_array(terms_gen.any_lua_type)
-			local function host_tuple_concat(head, tail)
-				local head_elements = head:unwrap_host_tuple_value()
-				local tail_elements = tail:unwrap_host_tuple_value()
-				local new_elements = value_array()
-				for _, e in head_elements:ipairs() do
-					new_elements:append(e)
-				end
-				for _, e in tail_elements:ipairs() do
-					new_elements:append(e)
-				end
-				return U.notail(terms.strict_value.host_tuple_value(new_elements))
-			end
-			return host_tuple_concat
-		:
-		host-func-type (
-				hd : wrapped(host-tuple-type(head)),
-				tl : wrapped(host-tuple-type(tail)))
-			->
-			((cat : wrapped(host-tuple-type(tuple-desc-concat(host-type, head, tail)))))
-	let (cat) = inner(wrap(hd), wrap(tl))
-	unwrap(cat)
+				return host_tuple_concat
+			:
+			host-func-type (
+					hd : wrapped(host-tuple-type(head)),
+					tl : wrapped(host-tuple-type(tail)))
+				->
+				((cat : wrapped(host-tuple-type(tuple-desc-concat(host-type, head, tail)))))
+		let (cat) = inner(wrap(hd), wrap(tl))
+		unwrap(cat)
 
 # TODO rewrite for new flex_values
 ####let host-number-fold-indep = lambda_implicit (T : type-omega)
@@ -952,24 +953,23 @@ let host-tuple-concat = lambda (
 			unwrap(fold)
 
 let host-number-fold-indep = lambda_implicit (T : type-omega)
-	let inner =
+	unwrap
 		intrinsic
 			""""
 				return base_env.gen_base_operator(function(args)
 					return terms.typed_term.host_int_fold(args[1], args[2], args[3])
 				end, "#int-fold", "num", "func", "acc")
 			:
-			wrapped((forall (n : host-number, f: (forall (i  : host-number, acc  : T) -> (resacc  : T)), acc  : T)))
+			wrapped((forall (n : host-number, f : (forall (i  : host-number, acc  : T) -> (resacc  : T)), acc  : T) -> (res : T)))
 
 let duplicate-tuple-desc = lambda_implicit (U : universe)
 	lambda (n : host-number, T : U)
 		host-number-fold-indep
 			n
 			lambda (i : host-number, acc : tuple-desc-type(U))
-				tuple-desc-concat
-					U
-					tuple-desc-singleton U T
+				tuple-desc-concat-indep
 					acc
+					tuple-desc-singleton U T
 			tuple-desc-empty U
 
 let host-array-from-tuple = lambda_implicit (T : host-type)
