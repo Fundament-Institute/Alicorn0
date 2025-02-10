@@ -854,15 +854,24 @@ let tuple-desc-singleton = lambda (U : universe, T : U)
 		tuple-desc-empty U
 		lambda ()
 			T
-let tuple-desc-concat = lambda (U : universe, head : tuple-desc-type(U), tail : tuple-desc-type(U))
-	# woah huge intrinsic
-	let inner = intrinsic
+####let tuple-desc-concat = lambda (U : universe, head : tuple-desc-type(U), tail : tuple-desc-type(U))
+		# woah huge intrinsic
+		let inner = intrinsic
+			""""
+				return base_env.tuple_desc_concat
+			:
+			host-func-type (head : wrapped(tuple-desc-type(U)), tail : wrapped(tuple-desc-type(U))) -> ((cat : wrapped(tuple-desc-type(U))))
+		let (cat) = inner(wrap(head), wrap(tail))
+		unwrap(cat)
+
+let tuple-desc-concat = lambda_implicit (U : universe)
+	intrinsic
 		""""
-			return base_env.tuple_desc_concat
+			return base_env.gen_base_operator(function(args)
+				return terms.typed_term.tuple_desc_concat(args[1], args[2])
+			end, "#tuple-desc-concat", "prefix", "suffix-fn")
 		:
-		host-func-type (head : wrapped(tuple-desc-type(U)), tail : wrapped(tuple-desc-type(U))) -> ((cat : wrapped(tuple-desc-type(U))))
-	let (cat) = inner(wrap(head), wrap(tail))
-	unwrap(cat)
+		wrapped (forall (pfx : tuple-desc-type(U), sfx-fn : (forall (args : tuple-type(pfx)) -> (res : tuple-desc-type(U)))) -> tuple-desc-type(U))
 let tuple-concat = lambda (
 		U    : universe,
 		head : tuple-desc-type(U),
@@ -920,27 +929,37 @@ let host-tuple-concat = lambda (
 	unwrap(cat)
 
 # TODO rewrite for new flex_values
+####let host-number-fold-indep = lambda_implicit (T : type-omega)
+		let inner =
+			intrinsic
+				""""
+					local value_array = terms_gen.declare_array(terms.flex_value)
+					return function(n, f, acc)
+						for i = n, 1, -1 do
+							acc = evaluator.apply_value(f, terms.flex_value.tuple_value(value_array(terms.flex_value.host_value(i), acc)), terms.typechecking_context())
+						end
+						return acc
+					end
+				:
+				host-func-type  (
+						n : host-number,
+						f : (wrapped (forall (i : host-number, acc : T) -> (resacc : T)) ),
+						acc : wrapped(T))
+					->
+					((fold  : wrapped(T)))
+		lambda (n : host-number, f : (forall (i  : host-number, acc  : T) -> (resacc  : T)), acc  : T)
+			let  (fold) = inner(n, wrap(f), wrap(acc))
+			unwrap(fold)
+
 let host-number-fold-indep = lambda_implicit (T : type-omega)
 	let inner =
 		intrinsic
 			""""
-				local value_array = terms_gen.declare_array(terms.flex_value)
-				return function(n, f, acc)
-					for i = n, 1, -1 do
-						acc = evaluator.apply_value(f, terms.flex_value.tuple_value(value_array(terms.flex_value.host_value(i), acc)), terms.typechecking_context())
-					end
-					return acc
-				end
+				return base_env.gen_base_operator(function(args)
+					return terms.typed_term.host_int_fold(args[1], args[2], args[3])
+				end, "#int-fold", "num", "func", "acc")
 			:
-			host-func-type  (
-					n : host-number,
-					f : (wrapped (forall (i : host-number, acc : T) -> (resacc : T)) ),
-					acc : wrapped(T))
-				->
-				((fold  : wrapped(T)))
-	lambda (n : host-number, f : (forall (i  : host-number, acc  : T) -> (resacc  : T)), acc  : T)
-		let  (fold) = inner(n, wrap(f), wrap(acc))
-		unwrap(fold)
+			wrapped((forall (n : host-number, f: (forall (i  : host-number, acc  : T) -> (resacc  : T)), acc  : T)))
 
 let duplicate-tuple-desc = lambda_implicit (U : universe)
 	lambda (n : host-number, T : U)

@@ -147,6 +147,15 @@ function flex_value:unwrap_tuple_desc_type() end
 ---@return flex_value universe
 function flex_value:as_tuple_desc_type() end
 ---@return boolean
+function flex_value:is_tuple_desc_concat() end
+---@return flex_value prefix
+---@return flex_value suffix
+function flex_value:unwrap_tuple_desc_concat() end
+---@return boolean
+---@return flex_value prefix
+---@return flex_value suffix
+function flex_value:as_tuple_desc_concat() end
+---@return boolean
 function flex_value:is_enum_value() end
 ---@return string constructor
 ---@return flex_value arg
@@ -257,6 +266,17 @@ function flex_value:is_host_number_type() end
 function flex_value:unwrap_host_number_type() end
 ---@return boolean
 function flex_value:as_host_number_type() end
+---@return boolean
+function flex_value:is_host_int_fold() end
+---@return stuck_value num
+---@return flex_value f
+---@return flex_value acc
+function flex_value:unwrap_host_int_fold() end
+---@return boolean
+---@return stuck_value num
+---@return flex_value f
+---@return flex_value acc
+function flex_value:as_host_int_fold() end
 ---@return boolean
 function flex_value:is_host_bool_type() end
 ---@return nil
@@ -541,6 +561,7 @@ function flex_value:as_host_unwrap() end
 ---@field tuple_value fun(elements: ArrayValue<flex_value>): flex_value
 ---@field tuple_type fun(desc: flex_value): flex_value
 ---@field tuple_desc_type fun(universe: flex_value): flex_value
+---@field tuple_desc_concat fun(prefix: flex_value, suffix: flex_value): flex_value
 ---@field enum_value fun(constructor: string, arg: flex_value): flex_value
 ---@field enum_type fun(desc: flex_value): flex_value
 ---@field enum_desc_type fun(universe: flex_value): flex_value
@@ -556,6 +577,7 @@ function flex_value:as_host_unwrap() end
 ---@field host_value fun(host_value: any): flex_value
 ---@field host_type_type flex_value
 ---@field host_number_type flex_value
+---@field host_int_fold fun(num: stuck_value, f: flex_value, acc: flex_value): flex_value
 ---@field host_bool_type flex_value
 ---@field host_string_type flex_value
 ---@field host_function_type fun(param_type: flex_value, result_type: flex_value, result_info: flex_value): flex_value

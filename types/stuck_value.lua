@@ -88,6 +88,15 @@ function stuck_value:unwrap_tuple_desc_type() end
 ---@return flex_value universe
 function stuck_value:as_tuple_desc_type() end
 ---@return boolean
+function stuck_value:is_tuple_desc_concat() end
+---@return flex_value prefix
+---@return flex_value suffix
+function stuck_value:unwrap_tuple_desc_concat() end
+---@return boolean
+---@return flex_value prefix
+---@return flex_value suffix
+function stuck_value:as_tuple_desc_concat() end
+---@return boolean
 function stuck_value:is_enum_value() end
 ---@return string constructor
 ---@return flex_value arg
@@ -163,6 +172,17 @@ function stuck_value:unwrap_object_type() end
 ---@return boolean
 ---@return flex_value desc
 function stuck_value:as_object_type() end
+---@return boolean
+function stuck_value:is_host_int_fold() end
+---@return stuck_value num
+---@return flex_value f
+---@return flex_value acc
+function stuck_value:unwrap_host_int_fold() end
+---@return boolean
+---@return stuck_value num
+---@return flex_value f
+---@return flex_value acc
+function stuck_value:as_host_int_fold() end
 ---@return boolean
 function stuck_value:is_host_function_type() end
 ---@return flex_value param_type
@@ -381,6 +401,7 @@ function stuck_value:as_host_unwrap() end
 ---@field tuple_value fun(elements: ArrayValue<flex_value>): stuck_value
 ---@field tuple_type fun(desc: flex_value): stuck_value
 ---@field tuple_desc_type fun(universe: flex_value): stuck_value
+---@field tuple_desc_concat fun(prefix: flex_value, suffix: flex_value): stuck_value
 ---@field enum_value fun(constructor: string, arg: flex_value): stuck_value
 ---@field enum_type fun(desc: flex_value): stuck_value
 ---@field enum_desc_type fun(universe: flex_value): stuck_value
@@ -391,6 +412,7 @@ function stuck_value:as_host_unwrap() end
 ---@field record_extend fun(base: stuck_value, extension: MapValue<string,flex_value>): stuck_value
 ---@field object_value fun(methods: MapValue<string,typed>, capture: FlexRuntimeContext): stuck_value
 ---@field object_type fun(desc: flex_value): stuck_value
+---@field host_int_fold fun(num: stuck_value, f: flex_value, acc: flex_value): stuck_value
 ---@field host_function_type fun(param_type: flex_value, result_type: flex_value, result_info: flex_value): stuck_value
 ---@field host_wrapped_type fun(type: flex_value): stuck_value
 ---@field host_unstrict_wrapped_type fun(type: flex_value): stuck_value

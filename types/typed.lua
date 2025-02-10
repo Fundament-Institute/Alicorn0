@@ -176,6 +176,15 @@ function typed:unwrap_tuple_desc_type() end
 ---@return typed universe
 function typed:as_tuple_desc_type() end
 ---@return boolean
+function typed:is_tuple_desc_concat() end
+---@return typed prefix
+---@return typed suffix
+function typed:unwrap_tuple_desc_concat() end
+---@return boolean
+---@return typed prefix
+---@return typed suffix
+function typed:as_tuple_desc_concat() end
+---@return boolean
 function typed:is_record_cons() end
 ---@return MapValue<string,typed> fields
 function typed:unwrap_record_cons() end
@@ -392,6 +401,17 @@ function typed:unwrap_host_unstrict_unwrap() end
 ---@return typed container
 function typed:as_host_unstrict_unwrap() end
 ---@return boolean
+function typed:is_host_int_fold() end
+---@return typed n
+---@return typed f
+---@return typed acc
+function typed:unwrap_host_int_fold() end
+---@return boolean
+---@return typed n
+---@return typed f
+---@return typed acc
+function typed:as_host_int_fold() end
+---@return boolean
 function typed:is_host_user_defined_type() end
 ---@return { name: string } id
 ---@return ArrayValue<typed> family_args
@@ -573,6 +593,7 @@ function typed:as_constrained_type() end
 ---@field tuple_element_access fun(subject: typed, index: number): typed
 ---@field tuple_type fun(desc: typed): typed
 ---@field tuple_desc_type fun(universe: typed): typed
+---@field tuple_desc_concat fun(prefix: typed, suffix: typed): typed
 ---@field record_cons fun(fields: MapValue<string,typed>): typed
 ---@field record_extend fun(base: typed, fields: MapValue<string,typed>): typed
 ---@field record_elim fun(subject: typed, field_names: ArrayValue<string>, body: typed): typed
@@ -599,6 +620,7 @@ function typed:as_constrained_type() end
 ---@field host_unwrap fun(container: typed): typed
 ---@field host_unstrict_wrap fun(content: typed): typed
 ---@field host_unstrict_unwrap fun(container: typed): typed
+---@field host_int_fold fun(n: typed, f: typed, acc: typed): typed
 ---@field host_user_defined_type fun(id: { name: string }, family_args: ArrayValue<typed>): typed
 ---@field host_if fun(subject: typed, consequent: typed, alternate: typed): typed
 ---@field host_intrinsic fun(source: typed, start_anchor: Anchor): typed

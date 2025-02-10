@@ -956,6 +956,7 @@ typed_term:define_enum("typed", {
 	} },
 	{ "tuple_type", { "desc", typed_term } },
 	{ "tuple_desc_type", { "universe", typed_term } },
+	{ "tuple_desc_concat", { "prefix", typed_term, "suffix", typed_term }},
 	{ "record_cons", { "fields", map(gen.builtin_string, typed_term) } },
 	{ "record_extend", {
 		"base",   typed_term,
@@ -1027,6 +1028,7 @@ typed_term:define_enum("typed", {
 	{ "host_unwrap", { "container", typed_term } },
 	{ "host_unstrict_wrap", { "content", typed_term } },
 	{ "host_unstrict_unwrap", { "container", typed_term } },
+	{ "host_int_fold", {"n", typed_term, "f", typed_term, "acc", typed_term}},
 	{ "host_user_defined_type", {
 		"id",          host_user_defined_id,
 		"family_args", array(typed_term),
@@ -1420,6 +1422,7 @@ gen.define_multi_enum(
 		{ "tuple_value$flex", { "elements", array(flex_value) } },
 		{ "tuple_type$flex", { "desc", flex_value } },
 		{ "tuple_desc_type$flex", { "universe", flex_value } },
+		{ "tuple_desc_concat$stuck", { "prefix", flex_value, "suffix", flex_value}},
 		{ "enum_value$flex", {
 			"constructor", gen.builtin_string,
 			"arg",         flex_value,
@@ -1448,6 +1451,7 @@ gen.define_multi_enum(
 		-- foreign data
 		{ "host_type_type$strict" },
 		{ "host_number_type$strict" },
+		{ "host_int_fold$stuck", { "num", stuck_value, "f", flex_value, "acc", flex_value}},
 		{ "host_bool_type$strict" },
 		{ "host_string_type$strict" },
 		{ "host_function_type$flex", {
