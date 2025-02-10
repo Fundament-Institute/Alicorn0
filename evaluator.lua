@@ -452,6 +452,9 @@ local TupleDescRelation = setmetatable({
 			if val:is_stuck() and val == use then
 				return true
 			end
+			if not val:is_enum_value() then
+				diff:get(flex_value).diff(val, use)
+			end
 			-- FIXME: this is quick'n'dirty copypaste, slightly edited to jankily call existing code
 			-- this HAPPENS to work
 			-- this WILL need to be refactored
