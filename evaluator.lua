@@ -4,6 +4,7 @@
 local terms = require "terms"
 local metalanguage = require "metalanguage"
 local U = require "alicorn-utils"
+local format = require "format"
 local flex_runtime_context = terms.flex_runtime_context
 local pretty_printer = require "pretty-printer"
 local s = pretty_printer.s
@@ -118,10 +119,10 @@ local function luatovalue(luafunc)
 	local len = luafunc_debug.nparams
 	local new_body = typed_array()
 
-	local arg_dbg = terms.var_debug("#host-arg", U.anchor_here())
+	local arg_dbg = terms.var_debug("#host-arg", format.anchor_here())
 	for i = 1, len do
 		local param_name = debug.getlocal(luafunc, i)
-		local param_dbg = terms.var_debug(param_name, U.anchor_here())
+		local param_dbg = terms.var_debug(param_name, format.anchor_here())
 		parameters:append(param_name)
 		params_dbg:append(param_dbg)
 		new_body:append(typed.bound_variable(i + 2, param_dbg))
@@ -141,7 +142,7 @@ local function luatovalue(luafunc)
 				)
 			),
 			empty_tuple,
-			terms.var_debug("#capture", U.anchor_here()),
+			terms.var_debug("#capture", format.anchor_here()),
 			arg_dbg
 		)
 	)
@@ -526,8 +527,8 @@ end
 ---@param v strict_value
 ---@return strict_value
 local function const_combinator(v)
-	local arg_info = terms.var_debug("#CONST_PARAM", U.anchor_here())
-	local data_info = terms.var_debug("#CONST_CAPTURE", U.anchor_here())
+	local arg_info = terms.var_debug("#CONST_PARAM", format.anchor_here())
+	local data_info = terms.var_debug("#CONST_CAPTURE", format.anchor_here())
 	return U.notail(
 		strict_value.closure(arg_info.name, typed_term.bound_variable(1, data_info), v, data_info, arg_info)
 	)
@@ -729,10 +730,8 @@ function gather_usages(val, usages, context_len, ambient_typechecking_context)
 		local param_type, param_info, result_type, result_info = val:unwrap_pi()
 		local param_type = gather_usages(param_type, usages, context_len, ambient_typechecking_context)
 		local param_info = gather_usages(param_info, usages, context_len, ambient_typechecking_context)
-		local result_type =
-			gather_usages(result_type, usages, context_len, ambient_typechecking_context)
-		local result_info =
-			gather_usages(result_info, usages, context_len, ambient_typechecking_context)
+		local result_type = gather_usages(result_type, usages, context_len, ambient_typechecking_context)
+		local result_info = gather_usages(result_info, usages, context_len, ambient_typechecking_context)
 	elseif val:is_closure() then
 		local param_name, code, capture, capture_info, param_info = val:unwrap_closure()
 
@@ -743,8 +742,7 @@ function gather_usages(val, usages, context_len, ambient_typechecking_context)
 	elseif val:is_operative_type() then
 		local handler, userdata_type = val:unwrap_operative_type()
 		local typed_handler = gather_usages(handler, usages, context_len, ambient_typechecking_context)
-		local typed_userdata_type =
-			gather_usages(userdata_type, usages, context_len, ambient_typechecking_context)
+		local typed_userdata_type = gather_usages(userdata_type, usages, context_len, ambient_typechecking_context)
 	elseif val:is_tuple_value() then
 		local elems = val:unwrap_tuple_value()
 		for _, v in elems:ipairs() do
@@ -755,8 +753,7 @@ function gather_usages(val, usages, context_len, ambient_typechecking_context)
 		local desc = gather_usages(desc, usages, context_len, ambient_typechecking_context)
 	elseif val:is_tuple_desc_type() then
 		local universe = val:unwrap_tuple_desc_type()
-		local typed_universe =
-			gather_usages(universe, usages, context_len, ambient_typechecking_context)
+		local typed_universe = gather_usages(universe, usages, context_len, ambient_typechecking_context)
 	elseif val:is_enum_value() then
 		local constructor, arg = val:unwrap_enum_value()
 		local arg = gather_usages(arg, usages, context_len, ambient_typechecking_context)
@@ -837,8 +834,7 @@ function gather_usages(val, usages, context_len, ambient_typechecking_context)
 	elseif val:is_host_function_type() then
 		local param_type, result_type, res_info = val:unwrap_host_function_type()
 		local param_type = gather_usages(param_type, usages, context_len, ambient_typechecking_context)
-		local result_type =
-			gather_usages(result_type, usages, context_len, ambient_typechecking_context)
+		local result_type = gather_usages(result_type, usages, context_len, ambient_typechecking_context)
 		local res_info = gather_usages(res_info, usages, context_len, ambient_typechecking_context)
 	elseif val:is_host_wrapped_type() then
 		local type = val:unwrap_host_wrapped_type()
@@ -861,8 +857,7 @@ function gather_usages(val, usages, context_len, ambient_typechecking_context)
 		end
 	elseif val:is_singleton() then
 		local supertype, val = val:unwrap_singleton()
-		local supertype_tm =
-			gather_usages(supertype, usages, context_len, ambient_typechecking_context)
+		local supertype_tm = gather_usages(supertype, usages, context_len, ambient_typechecking_context)
 		local val_tm = gather_usages(val, usages, context_len, ambient_typechecking_context)
 	elseif val:is_union_type() then
 		local a, b = val:unwrap_union_type()
@@ -1639,15 +1634,15 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 		terms.DescCons.empty,
 		flex_value.tuple_type(flex_value.enum_value(terms.DescCons.empty, flex_value.tuple_value(flex_value_array())))
 	)
-	local arg_name = terms.var_debug("#arg" .. tostring(#r_ctx + 1), U.anchor_here())
-	local universe_dbg = terms.var_debug("#univ", U.anchor_here())
-	local prefix_desc_dbg = terms.var_debug("#prefix-desc", U.anchor_here())
+	local arg_name = terms.var_debug("#arg" .. tostring(#r_ctx + 1), format.anchor_here())
+	local universe_dbg = terms.var_debug("#univ", format.anchor_here())
+	local prefix_desc_dbg = terms.var_debug("#prefix-desc", format.anchor_here())
 	-- The tuple descriptor's universe can depend on it's context.
 	local universe_lambda = substitute_into_lambda(
 		b,
 		r_ctx.runtime_context,
-		U.anchor_here(),
-		terms.var_debug("#prefix", U.anchor_here()),
+		format.anchor_here(),
+		terms.var_debug("#prefix", format.anchor_here()),
 		r_ctx
 	)
 	-- The cons variant takes a prefix description and a next element, represented as a function from the prefix tuple to a type in the specified universe
@@ -1668,7 +1663,7 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 					typed_term.bound_variable(1, universe_dbg),
 					typed_term.bound_variable(1, universe_dbg),
 					universe_dbg,
-					U.anchor_here()
+					format.anchor_here()
 				),
 				typed.literal(strict_value.result_info(terms.result_info(terms.purity.pure)))
 			)
@@ -1742,7 +1737,7 @@ add_comparer("flex_value.tuple_desc_type", "flex_value.enum_type", function(l_ct
 										"#prefix",
 										typed_term.literal(a),
 										r_ctx.runtime_context,
-										terms.var_debug("", U.anchor_here())
+										terms.var_debug("", format.anchor_here())
 									)
 								)
 							)
@@ -1751,27 +1746,27 @@ add_comparer("flex_value.tuple_desc_type", "flex_value.enum_type", function(l_ct
 							"#prefix",
 							typed_term.tuple_elim(
 								string_array("prefix-desc"),
-								debug_array(terms.var_debug("prefix-desc", U.anchor_here())),
-								typed_term.bound_variable(#r_ctx + 2, terms.var_debug("", U.anchor_here())),
+								debug_array(terms.var_debug("prefix-desc", format.anchor_here())),
+								typed_term.bound_variable(#r_ctx + 2, terms.var_debug("", format.anchor_here())),
 								1,
 								typed_term.pi(
 									typed_term.tuple_type(
-										typed_term.bound_variable(#r_ctx + 3, terms.var_debug("", U.anchor_here()))
+										typed_term.bound_variable(#r_ctx + 3, terms.var_debug("", format.anchor_here()))
 									),
 									typed.literal(
 										strict_value.param_info(strict_value.visibility(terms.visibility.explicit))
 									),
 									typed.lambda(
 										"#arg" .. tostring(#r_ctx + 1),
-										terms.var_debug("", U.anchor_here()),
-										typed_term.bound_variable(#r_ctx + 1, terms.var_debug("", U.anchor_here())),
-										U.anchor_here()
+										terms.var_debug("", format.anchor_here()),
+										typed_term.bound_variable(#r_ctx + 1, terms.var_debug("", format.anchor_here())),
+										format.anchor_here()
 									),
 									typed.literal(strict_value.result_info(terms.result_info(terms.purity.pure)))
 								)
 							),
-							r_ctx.runtime_context:append(a_univ, "a_univ", terms.var_debug("", U.anchor_here())),
-							terms.var_debug("", U.anchor_here())
+							r_ctx.runtime_context:append(a_univ, "a_univ", terms.var_debug("", format.anchor_here())),
+							terms.var_debug("", format.anchor_here())
 						)
 					)
 				)
@@ -2046,7 +2041,7 @@ add_comparer("flex_value.program_type", "flex_value.program_type", function(l_ct
 		a_base,
 		r_ctx,
 		b_base,
-		terms.constraintcause.primitive("program result", U.anchor_here())
+		terms.constraintcause.primitive("program result", format.anchor_here())
 	)
 	typechecker_state:queue_constrain(
 		l_ctx,
@@ -2325,7 +2320,7 @@ local function check(
 				typechecking_context,
 				goal_type,
 				typechecking_context,
-				terms.constraintcause.primitive("inferrable", U.anchor_here())
+				terms.constraintcause.primitive("inferrable", format.anchor_here())
 			)
 			if not ok then
 				---@cast err -nil
@@ -2364,7 +2359,7 @@ local function check(
 				substitute_into_closure(
 					flex_value.singleton(el_type, el_val),
 					typechecking_context.runtime_context,
-					U.anchor_here(),
+					format.anchor_here(),
 					info[i],
 					typechecking_context
 				)
@@ -2385,7 +2380,7 @@ local function check(
 			typechecking_context,
 			goal_type,
 			typechecking_context,
-			terms.constraintcause.primitive(prim_name, U.anchor_here())
+			terms.constraintcause.primitive(prim_name, format.anchor_here())
 		)
 		if not ok then
 			return false, err
@@ -2854,7 +2849,7 @@ local function infer_impl(
 			typechecking_context,
 			result_type_param_type,
 			typechecking_context,
-			terms.constraintcause.primitive("inferrable pi term", U.anchor_here())
+			terms.constraintcause.primitive("inferrable pi term", format.anchor_here())
 		)
 		if not ok then
 			return false, err
@@ -3068,7 +3063,7 @@ local function infer_impl(
 				typechecking_context,
 				spec_type,
 				typechecking_context,
-				terms.constraintcause.primitive("tuple elimination", U.anchor_here())
+				terms.constraintcause.primitive("tuple elimination", format.anchor_here())
 			)
 			if not ok then
 				return false, err
@@ -3083,7 +3078,7 @@ local function infer_impl(
 					typechecking_context,
 					host_spec_type,
 					typechecking_context,
-					terms.constraintcause.primitive("host tuple elimination", U.anchor_here())
+					terms.constraintcause.primitive("host tuple elimination", format.anchor_here())
 				)
 				if not ok then
 					return false, err
@@ -3140,7 +3135,7 @@ local function infer_impl(
 			typechecking_context,
 			flex_value.tuple_desc_type(univ_var),
 			typechecking_context,
-			terms.constraintcause.primitive("tuple type construction", U.anchor_here())
+			terms.constraintcause.primitive("tuple type construction", format.anchor_here())
 		)
 		if not ok then
 			return false, err
@@ -3167,7 +3162,7 @@ local function infer_impl(
 				strict_value.name(k),
 				substitute_type_variables(
 					field_type,
-					terms.var_debug("#record-cons-el", U.anchor_here()),
+					terms.var_debug("#record-cons-el", format.anchor_here()),
 					typechecking_context:len() + 1,
 					"#record-cons-el",
 					typechecking_context:get_runtime_context(),
@@ -3243,7 +3238,7 @@ local function infer_impl(
 			if t == nil then
 				error("infer: trying to access a nonexistent record field")
 			end
-			inner_context = inner_context:append(v, t, nil, terms.var_debug(v, U.anchor_here()))
+			inner_context = inner_context:append(v, t, nil, terms.var_debug(v, format.anchor_here()))
 		end
 
 		-- infer the type of the body, now knowing the type of the record
@@ -3297,7 +3292,7 @@ local function infer_impl(
 			typechecking_context,
 			flex_value.enum_type(flex_value.enum_desc_value(constrain_variants)),
 			typechecking_context,
-			terms.constraintcause.primitive("enum case matching", U.anchor_here())
+			terms.constraintcause.primitive("enum case matching", format.anchor_here())
 		)
 		if not ok then
 			return false, err
@@ -3319,7 +3314,7 @@ local function infer_impl(
 		for i = 2, #result_types do
 			result_type = flex_value.union_type(result_type, result_types[i])
 		end
-		local absurd_info = terms.var_debug("#absurd", U.anchor_here())
+		local absurd_info = terms.var_debug("#absurd", format.anchor_here())
 		return true,
 			result_type,
 			subject_usages,
@@ -3371,7 +3366,7 @@ local function infer_impl(
 			typechecking_context,
 			flex_value.enum_desc_type(univ_var),
 			typechecking_context,
-			terms.constraintcause.primitive("enum type construction", U.anchor_here())
+			terms.constraintcause.primitive("enum type construction", format.anchor_here())
 		)
 		if not ok then
 			return false, err
@@ -3424,7 +3419,7 @@ local function infer_impl(
 				typechecking_context,
 				op_userdata_type,
 				typechecking_context,
-				terms.constraintcause.primitive("operative userdata", U.anchor_here())
+				terms.constraintcause.primitive("operative userdata", format.anchor_here())
 			)
 			if not ok then
 				return false, err
@@ -3568,7 +3563,7 @@ local function infer_impl(
 			typechecking_context,
 			restype,
 			typechecking_context,
-			terms.constraintcause.primitive("inferred host if consequent", U.anchor_here())
+			terms.constraintcause.primitive("inferred host if consequent", format.anchor_here())
 		)
 		if not ok then
 			return false, err
@@ -3578,7 +3573,7 @@ local function infer_impl(
 			typechecking_context,
 			restype,
 			typechecking_context,
-			terms.constraintcause.primitive("inferred host if alternate", U.anchor_here())
+			terms.constraintcause.primitive("inferred host if alternate", format.anchor_here())
 		)
 		if not ok then
 			return false, err
@@ -3685,7 +3680,7 @@ local function infer_impl(
 			typechecking_context,
 			flex_value.tuple_desc_type(flex_value.host_type_type),
 			typechecking_context,
-			terms.constraintcause.primitive("host tuple type construction", U.anchor_here())
+			terms.constraintcause.primitive("host tuple type construction", format.anchor_here())
 		)
 		if not ok then
 			return false, err
@@ -4096,7 +4091,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		if subject_value:is_record_value() then
 			local subject_fields = subject_value:unwrap_record_value()
 			for _, v in field_names:ipairs() do
-				inner_context = inner_context:append(subject_fields[v], v, var_debug(v, U.anchor_here()))
+				inner_context = inner_context:append(subject_fields[v], v, var_debug(v, format.anchor_here()))
 			end
 		elseif subject_value:is_stuck() then
 			local subject_stuck_value = subject_value:unwrap_stuck()
@@ -4104,7 +4099,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 				inner_context = inner_context:append(
 					flex_value.stuck(stuck_value.record_field_access(subject_stuck_value, v)),
 					v,
-					var_debug(v, U.anchor_here())
+					var_debug(v, format.anchor_here())
 				)
 			end
 		else
@@ -4143,7 +4138,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 					"#ENUM_PARAM",
 					methods[constructor],
 					capture,
-					terms.var_debug("", U.anchor_here())
+					terms.var_debug("", format.anchor_here())
 				)
 				return U.notail(apply_value(this_method, arg, ambient_typechecking_context))
 			elseif mechanism_value:is_stuck() then
@@ -4249,7 +4244,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 					"#OBJECT_PARAM",
 					methods[constructor],
 					capture,
-					terms.var_debug("", U.anchor_here())
+					terms.var_debug("", format.anchor_here())
 				)
 				return U.notail(apply_value(this_method, arg, ambient_typechecking_context))
 			elseif mechanism_value:is_stuck() then
@@ -4473,7 +4468,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			local first_res = startprog:unwrap_program_end()
 			return evaluate(
 				rest,
-				runtime_context:append(first_res, "program_end", var_debug("", U.anchor_here())),
+				runtime_context:append(first_res, "program_end", var_debug("", format.anchor_here())),
 				ambient_typechecking_context
 			)
 		elseif startprog:is_program_cont() then
@@ -5406,7 +5401,7 @@ function Reachability:constrain_transitivity(edge, edge_id, queue)
 				edge.rel,
 				edge.right,
 				math.min(edge.shallowest_block, l2.shallowest_block),
-				compositecause("composition", i, l2, edge_id, edge, U.anchor_here())
+				compositecause("composition", i, l2, edge_id, edge, format.anchor_here())
 			)
 		)
 	end
@@ -5422,7 +5417,7 @@ function Reachability:constrain_transitivity(edge, edge_id, queue)
 				edge.rel,
 				r2.right,
 				math.min(edge.shallowest_block, r2.shallowest_block),
-				compositecause("composition", edge_id, edge, i, r2, U.anchor_here())
+				compositecause("composition", edge_id, edge, i, r2, format.anchor_here())
 			)
 		)
 	end
@@ -5959,7 +5954,7 @@ function TypeCheckerState:constrain_leftcall_compose_1(edge, edge_id)
 					r2.rel,
 					r2.right,
 					math.min(edge.shallowest_block, r2.shallowest_block),
-					compositecause("leftcall_discharge", i, r2, edge_id, edge, U.anchor_here())
+					compositecause("leftcall_discharge", i, r2, edge_id, edge, format.anchor_here())
 				)
 			)
 		end
@@ -5984,7 +5979,7 @@ function TypeCheckerState:constrain_on_left_meet(edge, edge_id)
 					edge.rel,
 					edge.right,
 					math.min(edge.shallowest_block, r.shallowest_block),
-					compositecause("composition", i, r, edge_id, edge, U.anchor_here())
+					compositecause("composition", i, r, edge_id, edge, format.anchor_here())
 				)
 			)
 		end
@@ -6009,7 +6004,7 @@ function TypeCheckerState:constrain_on_right_meet(edge, edge_id)
 					edge.rel,
 					l.right,
 					math.min(edge.shallowest_block, l.shallowest_block),
-					compositecause("composition", edge_id, edge, i, l, U.anchor_here())
+					compositecause("composition", edge_id, edge, i, l, format.anchor_here())
 				)
 			)
 		end
@@ -6039,7 +6034,7 @@ function TypeCheckerState:constrain_leftcall_compose_2(edge, edge_id)
 					edge.rel,
 					edge.right,
 					math.min(edge.shallowest_block, l2.shallowest_block),
-					compositecause("composition", i, l2, edge_id, edge, U.anchor_here())
+					compositecause("composition", i, l2, edge_id, edge, format.anchor_here())
 				)
 			)
 		end
@@ -6067,7 +6062,7 @@ function TypeCheckerState:rightcall_constrain_compose_2(edge, edge_id)
 					l2.rel,
 					r,
 					math.min(edge.shallowest_block, l2.shallowest_block),
-					compositecause("rightcall_discharge", edge_id, edge, i, l2, U.anchor_here())
+					compositecause("rightcall_discharge", edge_id, edge, i, l2, format.anchor_here())
 				)
 			)
 		end
@@ -6095,7 +6090,7 @@ function TypeCheckerState:rightcall_constrain_compose_1(edge, edge_id)
 					edge.rel,
 					r,
 					math.min(edge.shallowest_block, r2.shallowest_block),
-					compositecause("rightcall_discharge", i, r2, edge_id, edge, U.anchor_here())
+					compositecause("rightcall_discharge", i, r2, edge_id, edge, format.anchor_here())
 				)
 			)
 		end
