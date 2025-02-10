@@ -180,7 +180,7 @@ local function gen_record(self, cons, kind, params_with_types)
 			if freeze_impl then
 				argi = freeze_impl.freeze(params_types[i], argi)
 			else
-				--[[print(
+				print(
 					"WARNING: while constructing "
 						.. kind
 						.. ", can't freeze param "
@@ -189,7 +189,7 @@ local function gen_record(self, cons, kind, params_with_types)
 						.. tostring(params_types[i])
 						.. ")"
 				)
-				print("this may lead to suboptimal hash-consing")]]
+				print("this may lead to suboptimal hash-consing")
 			end
 			args[i] = argi
 		end
@@ -660,27 +660,27 @@ local function gen_map_methods(self, key_type, value_type)
 			if freeze_impl_key then
 				key = freeze_impl_key.freeze(key_type, key)
 			else
-				--[[print(
+				print(
 					"WARNING: while setting "
 						.. tostring(self)
 						.. ", can't freeze key (type "
 						.. tostring(key_type)
 						.. ")"
 				)
-				print("this may lead to suboptimal hash-consing")]]
+				print("this may lead to suboptimal hash-consing")
 			end
 			local freeze_impl_value = traits.freeze:get(value_type)
 			if freeze_impl_value then
 				value = freeze_impl_value.freeze(value_type, value)
 			else
-				--[[print(
+				print(
 					"WARNING: while setting "
 						.. tostring(self)
 						.. ", can't freeze value (type "
 						.. tostring(value_type)
 						.. ")"
 				)
-				print("this may lead to suboptimal hash-consing")]]
+				print("this may lead to suboptimal hash-consing")
 			end
 			val._map[key] = value
 		end,
@@ -883,14 +883,14 @@ local function gen_set_methods(self, key_type)
 			if freeze_impl_key then
 				key = freeze_impl_key.freeze(key_type, key)
 			else
-				--[[print(
+				print(
 					"WARNING: while putting "
 						.. tostring(self)
 						.. ", can't freeze key (type "
 						.. tostring(key_type)
 						.. ")"
 				)
-				print("this may lead to suboptimal hash-consing")]]
+				print("this may lead to suboptimal hash-consing")
 			end
 			val._set[key] = true
 		end,
@@ -1229,14 +1229,14 @@ local function gen_array_index_fns(self, value_type)
 		if freeze_impl_value then
 			value = freeze_impl_value.freeze(value_type, value)
 		else
-			--[[print(
+			print(
 				"WARNING: while setting "
 					.. tostring(self)
 					.. ", can't freeze value (type "
 					.. tostring(value_type)
 					.. ")"
 			)
-			print("this may lead to suboptimal hash-consing")]]
+			print("this may lead to suboptimal hash-consing")
 		end
 		val.array[key] = value
 		if key > val.n then

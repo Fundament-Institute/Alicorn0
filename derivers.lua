@@ -431,7 +431,7 @@ local diff = {
 			local diff_params = {}
 			local diff_params_types = {}
 			for i, param in ipairs(params) do
-				if left[param] ~= right[param] then
+				if left._record[param] ~= right._record[param] then
 					n = n + 1
 					diff_params[n] = param
 					diff_params_types[n] = param_types[i]
@@ -448,7 +448,7 @@ local diff = {
 				local diff_impl = traits.diff:get(dt)
 				if diff_impl then
 					-- tail call
-					return diff_impl.diff(left[d], right[d])
+					return diff_impl.diff(left._record[d], right._record[d])
 				else
 					print("stopping diff (missing diff impl)")
 					print("type:", dt)
@@ -488,7 +488,7 @@ local diff = {
 					local diff_params = {}
 					local diff_params_types = {}
 					for i, param in ipairs(vparams) do
-						if left[param] ~= right[param] then
+						if left._record[param] ~= right._record[param] then
 							n = n + 1
 							diff_params[n] = param
 							diff_params_types[n] = vparams_types[i]
@@ -505,7 +505,7 @@ local diff = {
 						local diff_impl = traits.diff:get(dt)
 						if diff_impl then
 							-- tail call
-							return diff_impl.diff(left[d], right[d])
+							return diff_impl.diff(left._record[d], right._record[d])
 						else
 							print("stopping diff (missing diff impl)")
 							print("type:", dt)
