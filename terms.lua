@@ -1671,6 +1671,7 @@ local DescCons = --[[@enum DescCons]]
 		empty = "empty",
 	}
 
+local typed_term_array = array(typed_term)
 local flex_value_array = array(flex_value)
 local strict_value_array = array(strict_value)
 
@@ -1687,6 +1688,15 @@ local function cons(...)
 end
 
 local empty = flex_value.enum_value(DescCons.empty, tup_val())
+
+---@param prefix typed
+---@param next_elem typed
+---@return typed `typed_term.enum_cons(DescCons.cons, typed_term.tuple_cons(…))`
+local function typed_cons(prefix, next_elem)
+	return U.notail(typed_term.enum_cons(DescCons.cons, typed_term.tuple_cons(typed_term_array(prefix, next_elem))))
+end
+
+local typed_empty = typed_term.enum_cons(DescCons.empty, typed_term.tuple_cons(typed_term_array()))
 
 ---@param a flex_value
 ---@param e flex_value
@@ -1794,7 +1804,9 @@ local terms = {
 	strict_tup_val = strict_tup_val,
 	cons = cons,
 	strict_cons = strict_cons,
+	typed_cons = typed_cons,
 	empty = empty,
+	typed_empty = typed_empty,
 	tuple_desc = tuple_desc,
 	strict_tuple_desc = strict_tuple_desc,
 	unit_type = unit_type,

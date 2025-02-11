@@ -782,39 +782,23 @@ let host-if = lambda_implicit (T : type-omega)
 			wrapped(forall (subject : host-bool, consequent : T, alternate : T) -> (res : T))
 
 let tuple-desc-empty = lambda (U : universe)
-	let T = tuple-desc-type(U)
-	let empty = intrinsic "return terms.empty:unwrap_strict()" : wrapped(T)
+	let empty = intrinsic "return terms.empty:unwrap_strict()" : wrapped(tuple-desc-type(U))
 	unwrap(empty)
-let tuple-desc-elem-explicit = lambda (
-		U    : universe,
-		desc : tuple-desc-type(U),
-		elem : (forall (rest : tuple-type(desc)) -> (next : U)))
-	let inner = intrinsic "return terms.cons" :
-		host-func-type (
-			desc_ : wrapped(tuple-desc-type(U)), # aaaa shadowing
-			elem  : (wrapped (forall (rest : tuple-type(desc)) -> (next : U))))
-			->
-			((T : wrapped(tuple-desc-type(U))))
-	let (T) =
-		inner
-			wrap(desc)
-			wrap(elem)
-	unwrap(T)
+let tuple-desc-elem-explicit = lambda (U : universe)
+	let U-tuple-desc-type = tuple-desc-type(U)
+	unwrap
+		intrinsic
+			""""
+				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
+					local desc, elem = bound_tuple_element_variables[1], bound_tuple_element_variables[2]
+					return U.notail(terms.typed_cons(desc, elem))
+				end, "#tuple-desc-elem-explicit", "desc", "elem"))
+			:
+			wrapped(forall (desc : U-tuple-desc-type, elem : (forall (rest : tuple-type(desc)) -> (next : U))) -> (res : U-tuple-desc-type))
 
 
-let tuple-desc-elem-implicit = lambda_curry ((U : universe))
-	lambda (desc : tuple-desc-type(U), elem : (forall (rest : tuple-type(desc)) -> (next : U)))
-		let inner = intrinsic "return terms.cons" :
-			host-func-type (
-				desc_ : wrapped(tuple-desc-type(U)), # aaaa shadowing
-				elem  : (wrapped (forall (rest : tuple-type(desc)) -> (next : U))))
-				->
-				((T : wrapped(tuple-desc-type(U))))
-		let (T) =
-			inner
-				wrap(desc)
-				wrap(elem)
-		unwrap(T)
+let tuple-desc-elem-implicit = lambda_implicit (U : universe)
+	tuple-desc-elem-explicit U
 # FIXME: we're comparing metavariables against placeholders AGAIN AAAA
 # let tuple-desc-elem-implicit2 = lambda_curry (U : universe, desc : tuple-desc-type(U))
 # 	lambda (elem : (forall (rest : tuple-type(desc)) -> (next : U)))
@@ -836,7 +820,7 @@ let host-tuple-of = lambda (desc : tuple-desc-type(host-type))
 	intrinsic "return function(...) return ... end" :
 		host-func-type (t : host-tuple-type(desc)) -> (t : host-tuple-type(desc))
 let tuple-desc-singleton = lambda (U : universe, T : U)
-	tuple-desc-elem-explicit U
+	tuple-desc-elem-explicit(U)
 		tuple-desc-empty U
 		lambda ()
 			T
@@ -851,7 +835,7 @@ let tuple-desc-singleton = lambda (U : universe, T : U)
 # 		intrinsic "return function(...) return ... end" :
 # 			host-func-type (t : host-tuple-type(desc)) -> (t : host-tuple-type(desc))
 let tuple-desc-singleton = lambda (U : universe, T : U)
-	tuple-desc-elem-explicit U
+	tuple-desc-elem-explicit(U)
 		tuple-desc-empty U
 		lambda ()
 			T
@@ -1270,8 +1254,8 @@ let new-operative = lambda (userdata : host-type, ud : userdata, handler : opera
 	# lol look how horrible tuple types are
 	# read as: (op-type : host-type, op : op-type)
 	let result-desc =
-		tuple-desc-elem-explicit type_(1, 0)
-			tuple-desc-elem-explicit type_(1, 0)
+		tuple-desc-elem-explicit(type_(1, 0))
+			tuple-desc-elem-explicit(type_(1, 0))
 				tuple-desc-empty type_(1, 0)
 				lambda ()
 					host-type
@@ -1308,8 +1292,8 @@ let new-operative-implicit = lambda_implicit (userdata : host-type)
 		# lol look how horrible tuple types are
 		# read as: (op-type : host-type, op : op-type)
 		let result-desc =
-			tuple-desc-elem-explicit type_(1, 0)
-				tuple-desc-elem-explicit type_(1, 0)
+			tuple-desc-elem-explicit(type_(1, 0))
+				tuple-desc-elem-explicit(type_(1, 0))
 					tuple-desc-empty type_(1, 0)
 					lambda ()
 						host-type
@@ -1347,7 +1331,7 @@ let block-match-result-desc = lambda (goal : host-goal)
 	# - ok == false: `...` is host-lua-error
 	tuple-desc-elem-implicit
 		tuple-desc-elem-implicit
-			tuple-desc-elem-explicit host-type
+			tuple-desc-elem-explicit(host-type)
 				tuple-desc-empty host-type
 				lambda ()
 					host-bool
@@ -1505,7 +1489,7 @@ let ascribed-segment-tuple-desc-match-result-desc =
 	# technically this should have a third element in the ok == true case, containing host-syntax
 	# but the syntax will always be nil, and the errors are annoying
 	tuple-desc-elem-implicit
-		tuple-desc-elem-explicit host-type
+		tuple-desc-elem-explicit(host-type)
 			tuple-desc-empty host-type
 			lambda ()
 				host-bool
