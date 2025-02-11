@@ -755,7 +755,7 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 	end)
 	if not ok then
 		-- FIXME: Do this correctly instead of just guessing the other purity option
-		local ok, type_of_term = evaluator.typechecker_state:speculate(function()
+		ok, type_of_term = evaluator.typechecker_state:speculate(function()
 			local param_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			local result_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			local host_func_type = flex_value.host_function_type(
@@ -812,9 +812,9 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 			---@cast tuple_usages string
 			return terms.tristate.failure, tuple_usages
 		end
-		local result_final = evaluator.evaluate(
-			typed_term.application(typed_term.literal(result_type), tuple_term),
-			env.typechecking_context.runtime_context,
+		local result_final = evaluator.apply_value(
+			result_type,
+			evaluator.evaluate(tuple_term, env.typechecking_context.runtime_context, env.typechecking_context),
 			env.typechecking_context
 		)
 		local app = inferrable_term.typed(
