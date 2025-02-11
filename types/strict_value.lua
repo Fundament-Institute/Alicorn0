@@ -157,17 +157,17 @@ function strict_value:unwrap_enum_desc_type() end
 function strict_value:as_enum_desc_type() end
 ---@return boolean
 function strict_value:is_enum_desc_value() end
----@return MapValue<string,flex_value> variants
+---@return MapValue<string, flex_value> variants
 function strict_value:unwrap_enum_desc_value() end
 ---@return boolean
----@return MapValue<string,flex_value> variants
+---@return MapValue<string, flex_value> variants
 function strict_value:as_enum_desc_value() end
 ---@return boolean
 function strict_value:is_record_value() end
----@return MapValue<string,flex_value> fields
+---@return MapValue<string, flex_value> fields
 function strict_value:unwrap_record_value() end
 ---@return boolean
----@return MapValue<string,flex_value> fields
+---@return MapValue<string, flex_value> fields
 function strict_value:as_record_value() end
 ---@return boolean
 function strict_value:is_record_type() end
@@ -185,11 +185,11 @@ function strict_value:unwrap_record_desc_type() end
 function strict_value:as_record_desc_type() end
 ---@return boolean
 function strict_value:is_object_value() end
----@return MapValue<string,typed> methods
+---@return MapValue<string, typed> methods
 ---@return StrictRuntimeContext capture
 function strict_value:unwrap_object_value() end
 ---@return boolean
----@return MapValue<string,typed> methods
+---@return MapValue<string, typed> methods
 ---@return StrictRuntimeContext capture
 function strict_value:as_object_value() end
 ---@return boolean
@@ -416,11 +416,11 @@ function strict_value:as_union_type() end
 ---@field enum_value fun(constructor: string, arg: strict_value): strict_value
 ---@field enum_type fun(desc: strict_value): strict_value
 ---@field enum_desc_type fun(universe: strict_value): strict_value
----@field enum_desc_value fun(variants: MapValue<string,flex_value>): strict_value
----@field record_value fun(fields: MapValue<string,flex_value>): strict_value
+---@field enum_desc_value fun(variants: MapValue<string, flex_value>): strict_value
+---@field record_value fun(fields: MapValue<string, flex_value>): strict_value
 ---@field record_type fun(desc: strict_value): strict_value
 ---@field record_desc_type fun(universe: strict_value): strict_value
----@field object_value fun(methods: MapValue<string,typed>, capture: StrictRuntimeContext): strict_value
+---@field object_value fun(methods: MapValue<string, typed>, capture: StrictRuntimeContext): strict_value
 ---@field object_type fun(desc: strict_value): strict_value
 ---@field star fun(level: number, depth: number): strict_value
 ---@field prop fun(level: number): strict_value
