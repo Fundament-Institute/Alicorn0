@@ -29,46 +29,14 @@ local flex_value_array = gen.declare_array(flex_value)
 local strict_value_array = gen.declare_array(strict_value)
 local empty_tuple = terms.strict_value.tuple_value(strict_value_array())
 
+local gen_base_operator = evaluator.gen_base_operator
+
 ---@param val strict_value
 ---@param typ strict_value
 ---@return inferrable
 local function lit_term(val, typ)
 	return U.notail(
 		terms.inferrable_term.typed(terms.typed_term.literal(typ), usage_array(), terms.typed_term.literal(val))
-	)
-end
-
----@param fn_op (fun(bound_tuple_element_variables: typed[]) : typed) returns `body`
----@param tuple_name string
----@param ... string tuple_element_names
----@return strict_value closure_value `strict_value.closure`
-local function gen_base_operator(fn_op, tuple_name, ...)
-	local tuple_arg_name = tuple_name .. "-arg"
-	local debug_tuple_arg = terms.var_debug(tuple_arg_name, format.anchor_here())
-	local tuple_element_names = name_array(...)
-	local debug_tuple_element_names = tuple_element_names:map(debug_array, function(n)
-		return terms.var_debug(n, format.anchor_here())
-	end)
-	local bound_tuple_element_variables = {}
-	for i, v in ipairs(debug_tuple_element_names) do
-		table.insert(bound_tuple_element_variables, terms.typed_term.bound_variable(2 + i, v))
-	end
-
-	local body = fn_op(bound_tuple_element_variables)
-	return U.notail(
-		terms.strict_value.closure(
-			tuple_arg_name,
-			terms.typed_term.tuple_elim(
-				tuple_element_names,
-				debug_tuple_element_names,
-				terms.typed_term.bound_variable(2, debug_tuple_arg),
-				#tuple_element_names,
-				body
-			),
-			empty_tuple,
-			terms.var_debug("#capture", format.anchor_here()),
-			debug_tuple_arg
-		)
 	)
 end
 
