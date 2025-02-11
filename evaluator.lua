@@ -4931,6 +4931,7 @@ function evaluate(typed_term, runtime_context, ambient_typechecking_context)
 	end
 	return r
 end
+evaluate = U.memoize(evaluate)
 
 -- evaluate = evaluate_impl
 
