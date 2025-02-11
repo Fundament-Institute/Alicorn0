@@ -3962,38 +3962,30 @@ end
 
 -- desc is head + (gradually) parts of tail
 -- elem expects only parts of tail, need to wrap to handle head
--- head_n and tail_n are the lengths of the head and tail component of desc
-local function tuple_desc_elem(desc, elem, head_n, head_names, tail_n, tail_names)
-	-- in theory the only placeholder name will be in reference to the last
-	-- element of head, which is always lost (and sometimes not even asked for)
-	local names = debug_array()
-	for _, name in head_names:ipairs() do
-		names:append(name)
+---@param desc flex_value
+---@param elem flex_value
+---@param head_names ArrayValue<var_debug>
+---@param tail_names ArrayValue<var_debug>
+---@return flex_value `terms.cons(desc, elem_wrap)`
+local function tuple_desc_elem(desc, elem, head_names, tail_names)
+	local debug_tuple_element_names = head_names:copy()
+	for _, tail_name in tail_names:ipairs() do
+		debug_tuple_element_names:append(tail_name)
 	end
-	--names:append(terms.var_debug("#_", format.anchor_here()))
-	for _, name in tail_names:ipairs() do
-		names:append(name)
-	end
-	local arg_dbg = terms.var_debug("#tuple-desc-concat", format.anchor_here())
-	-- convert to just tuple of tail
-	local tail_args = typed_array()
-	for i = 1, tail_n do
-		-- 2 for closure argument and capture (passed to tuple_elim)
-		-- head_n for head
-		tail_args:append(typed.bound_variable(2 + head_n + i, names[head_n + i]))
-	end
-	local capture_dbg = terms.var_debug("#capture", format.anchor_here())
-	local body = typed.tuple_elim(
-		names:map(name_array, function(n)
-			return n.name
-		end),
-		names,
-		typed.bound_variable(2, arg_dbg),
-		head_n + tail_n,
-		typed.application(typed.bound_variable(1, capture_dbg), typed.tuple_cons(tail_args))
-	)
-	local elem_wrap = terms.flex_value.closure("#tuple-desc-concat", body, elem, capture_dbg, arg_dbg)
-	return U.notail(terms.cons(desc, elem_wrap))
+	local elem_wrap = gen_base_operator_aux(function(bound_tuple_element_variables, capture)
+		-- in theory the only placeholder name will be in reference to the last
+		-- element of head, which is always lost (and sometimes not even asked for)
+		local head_names_length, tail_names_length = #head_names, #tail_names
+		-- convert to just tuple of tail
+		local tail_args = typed_array()
+		for i = 1, tail_names_length do
+			-- 2 for closure argument and capture (passed to tuple_elim)
+			-- head_n for head
+			tail_args:append(bound_tuple_element_variables[head_names_length + i])
+		end
+		return U.notail(typed.application(capture, typed.tuple_cons(tail_args)))
+	end, "#tuple-desc-elem", debug_tuple_element_names)
+	return U.notail(terms.cons(desc, flex_value.strict(elem_wrap)))
 end
 
 local intrinsic_memo = setmetatable({}, { __mode = "v" })
@@ -4281,7 +4273,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 					tail_names[i] = terms.var_debug("tail_unk_" .. tostring(i), format.anchor_here())
 				end
 			end
-			desc = tuple_desc_elem(desc, elem, head_n, head_names, tail_n_now, tail_names)
+			desc = tuple_desc_elem(desc, elem, head_names, tail_names)
 		end
 		return desc
 	elseif typed_term:is_record_cons() then
