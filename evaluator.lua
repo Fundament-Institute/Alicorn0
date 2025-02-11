@@ -3912,12 +3912,12 @@ function infer(inferrable_term, typechecking_context)
 	return ok, v, usages, term
 end
 
----@param fn_op (fun(bound_tuple_element_variables: typed[], capture: typed): typed) returns `body`
 ---@param tuple_name string
----@param debug_tuple_element_names ArrayValue<var_debug>
 ---@param capture flex_value
+---@param debug_tuple_element_names ArrayValue<var_debug>
+---@param fn_op (fun(capture: typed, bound_tuple_element_variables: typed[]): typed) returns `body`
 ---@return flex_value closure_value `flex_value.closure`
-local function gen_base_operator_aux(fn_op, tuple_name, debug_tuple_element_names, capture)
+local function gen_base_operator_aux(tuple_name, capture, debug_tuple_element_names, fn_op)
 	local tuple_arg_name = tuple_name .. "-arg"
 	local tuple_element_names = debug_tuple_element_names:map(name_array, function(debug_tuple_element_name)
 		---@cast debug_tuple_element_name var_debug
@@ -3931,7 +3931,7 @@ local function gen_base_operator_aux(fn_op, tuple_name, debug_tuple_element_name
 
 	local debug_capture = terms.var_debug("#capture", format.anchor_here())
 	local typed_capture = typed.bound_variable(1, debug_capture)
-	local body = fn_op(bound_tuple_element_variables, typed_capture)
+	local body = fn_op(typed_capture, bound_tuple_element_variables)
 	return U.notail(
 		terms.flex_value.closure(
 			tuple_arg_name,
@@ -3949,16 +3949,49 @@ local function gen_base_operator_aux(fn_op, tuple_name, debug_tuple_element_name
 	)
 end
 
----@param fn_op (fun(bound_tuple_element_variables: typed[], capture: typed): typed) returns `body`
 ---@param tuple_name string
----@param ... string tuple_element_names
+---@param fn_op (fun(...: typed): typed) returns `body`. must not use variadic arguments.
 ---@return strict_value closure_value `strict_value.closure`
-local function gen_base_operator(fn_op, tuple_name, ...)
+local function gen_base_operator(tuple_name, fn_op)
 	local debug_tuple_element_names = debug_array()
-	for i = 1, select('#', ...) do
-		debug_tuple_element_names:append(terms.var_debug(select(i, ...), format.anchor_here()))
+	if type(fn_op) ~= "function" then
+		error(string.format("gen_base_operator: fn_op is not a function: %s", s(fn_op)))
 	end
-	return U.notail(gen_base_operator_aux(fn_op, tuple_name, debug_tuple_element_names, flex_value.strict(empty_tuple)):unwrap_strict())
+	local fn_op_debug_info = debug.getinfo(fn_op, "uS")
+	if fn_op_debug_info.isvararg then
+		local fn_op_source = fn_op_debug_info.source
+		if fn_op_source:match("^@") then
+			error(
+				string.format(
+					"gen_base_operator: fn_op %s:%s-%s cannot be vararg",
+					s(fn_op),
+					s(fn_op_source),
+					s(fn_op_debug_info.linedefined),
+					s(fn_op_debug_info.lastlinedefined)
+				)
+			)
+		elseif fn_op_source:match("^host_intrinsic<") then
+			error(string.format("gen_base_operator: fn_op %s cannot be vararg", s(fn_op)))
+		else
+			error(string.format("gen_base_operator: fn_op %s cannot be vararg:\n%s", s(fn_op), fn_op_debug_info.source))
+		end
+	end
+	local debug_tuple_element_names_length = fn_op_debug_info.nparams
+	for i = 1, debug_tuple_element_names_length do
+		local tuple_element_name = debug.getlocal(fn_op, i)
+		tuple_element_name = tuple_element_name:gsub("_", "-")
+		debug_tuple_element_names:append(terms.var_debug(tuple_element_name, format.anchor_here()))
+	end
+	return U.notail(
+		gen_base_operator_aux(
+			tuple_name,
+			flex_value.strict(empty_tuple),
+			debug_tuple_element_names,
+			function(capture, bound_tuple_element_variables)
+				return fn_op(table.unpack(bound_tuple_element_variables))
+			end
+		):unwrap_strict()
+	)
 end
 
 -- desc is head + (gradually) parts of tail
@@ -3973,19 +4006,24 @@ local function tuple_desc_elem(desc, elem, head_names, tail_names)
 	for _, tail_name in tail_names:ipairs() do
 		debug_tuple_element_names:append(tail_name)
 	end
-	local elem_wrap = gen_base_operator_aux(function(bound_tuple_element_variables, capture)
-		-- in theory the only placeholder name will be in reference to the last
-		-- element of head, which is always lost (and sometimes not even asked for)
-		local head_names_length, tail_names_length = #head_names, #tail_names
-		-- convert to just tuple of tail
-		local tail_args = typed_array()
-		for i = 1, tail_names_length do
-			-- 2 for closure argument and capture (passed to tuple_elim)
-			-- head_n for head
-			tail_args:append(bound_tuple_element_variables[head_names_length + i])
+	local elem_wrap = gen_base_operator_aux(
+		"#tuple-desc-elem",
+		elem,
+		debug_tuple_element_names,
+		function(capture, bound_tuple_element_variables)
+			-- in theory the only placeholder name will be in reference to the last
+			-- element of head, which is always lost (and sometimes not even asked for)
+			local head_names_length, tail_names_length = #head_names, #tail_names
+			-- convert to just tuple of tail
+			local tail_args = typed_array()
+			for i = 1, tail_names_length do
+				-- 2 for closure argument and capture (passed to tuple_elim)
+				-- head_n for head
+				tail_args:append(bound_tuple_element_variables[head_names_length + i])
+			end
+			return U.notail(typed.application(capture, typed.tuple_cons(tail_args)))
 		end
-		return U.notail(typed.application(capture, typed.tuple_cons(tail_args)))
-	end, "#tuple-desc-elem", debug_tuple_element_names, elem)
+	)
 	return U.notail(terms.cons(desc, elem_wrap))
 end
 

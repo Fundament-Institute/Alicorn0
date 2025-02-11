@@ -62,10 +62,9 @@ let srel = lambda_implicit (U : type-omega+1)
 	unwrap
 		intrinsic
 			""""
-				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
-					local target_type = bound_tuple_element_variables[1]
-					return U.notail(terms.typed_term.srel_type(target_type))
-				end, "#srel", "target"))
+				return U.notail(evaluator.gen_base_operator("#srel", function(target)
+					return U.notail(terms.typed_term.srel_type(target))
+				end))
 			:
 			wrapped (forall ((target : U)) -> (rel : U))
 
@@ -73,10 +72,9 @@ let variance = lambda_implicit (U : type-omega+1)
 	unwrap
 		intrinsic
 			""""
-				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
-					local target_type = bound_tuple_element_variables[1]
-					return U.notail(terms.typed_term.variance_type(target_type))
-				end, "#variance", "target"))
+				return U.notail(evaluator.gen_base_operator("#variance", function(target)
+					return U.notail(terms.typed_term.variance_type(target))
+				end))
 			:
 			wrapped (forall ((target : U)) -> (res : U))
 
@@ -86,10 +84,9 @@ let tuple-desc-type = lambda_implicit (U : universe)
 	unwrap
 		intrinsic
 			""""
-				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
-					local a_universe = bound_tuple_element_variables[1]
+				return U.notail(evaluator.gen_base_operator("#tuple-desc-type", function(a_universe)
 					return U.notail(terms.typed_term.tuple_desc_type(a_universe))
-				end, "#tuple-desc-type", "a-universe"))
+				end))
 			:
 			wrapped (forall ((a-universe : U)) -> (desc : U))
 
@@ -99,10 +96,9 @@ let _|_ = lambda_implicit (U : type-omega+1)
 	unwrap
 		intrinsic
 			""""
-				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
-					local left, right = bound_tuple_element_variables[1], bound_tuple_element_variables[2]
+				return U.notail(evaluator.gen_base_operator("#union", function(left, right)
 					return U.notail(terms.typed_term.union_type(left, right))
-				end, "#union", "left", "right"))
+				end))
 			:
 			wrapped (forall (left : U, right : U) -> (union : U))
 
@@ -110,10 +106,9 @@ let _&_ = lambda_implicit (U : type-omega+1)
 	unwrap
 		intrinsic
 			""""
-				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
-					local left, right = bound_tuple_element_variables[1], bound_tuple_element_variables[2]
+				return U.notail(evaluator.gen_base_operator("#intersection", function(left, right)
 					return U.notail(terms.typed_term.intersection_type(left, right))
-				end, "#intersection", "left", "right"))
+				end))
 			:
 			wrapped (forall (left : U, right : U) -> (intersection : U))
 
@@ -121,11 +116,10 @@ let covariant = lambda_curry (U : universe, a : U)
 	unwrap
 		intrinsic
 			""""
-				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
-					local srel = bound_tuple_element_variables[1]
+				return U.notail(evaluator.gen_base_operator("#covariant", function(rel)
 					local positive = terms.typed_term.literal(terms.strict_value.host_value(true))
-					return U.notail(terms.typed_term.variance_cons(positive, srel))
-				end, "#covariant", "rel"))
+					return U.notail(terms.typed_term.variance_cons(positive, rel))
+				end))
 			:
 			wrapped (forall ((rel : srel(a))) -> (covariant-rel : variance(a)))
 
@@ -133,11 +127,10 @@ let contravariant = lambda_curry (U : universe, a : U)
 	unwrap
 		intrinsic
 			""""
-				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
-					local srel = bound_tuple_element_variables[1]
+				return U.notail(evaluator.gen_base_operator("#contravariant", function(rel)
 					local positive = terms.typed_term.literal(terms.strict_value.host_value(false))
-					return U.notail(terms.typed_term.variance_cons(positive, srel))
-				end, "#contravariant", "rel"))
+					return U.notail(terms.typed_term.variance_cons(positive, rel))
+				end, "rel"))
 			:
 			wrapped (forall ((rel : srel(a))) -> (contravariant-rel : variance(a)))
 
@@ -146,10 +139,9 @@ let tuple-type = lambda_implicit (U : universe)
 	unwrap
 		intrinsic
 			""""
-				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
-					local desc = bound_tuple_element_variables[1]
+				return U.notail(evaluator.gen_base_operator("#tuple-type", function(desc)
 					return U.notail(terms.typed_term.tuple_type(desc))
-				end, "#tuple-type", "desc"))
+				end, "desc"))
 			:
 			wrapped (forall ((desc : tuple-desc-type(U))) -> (T : U))
 
@@ -157,10 +149,9 @@ let host-tuple-type =
 	unwrap
 		intrinsic
 			""""
-				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
-					local desc = bound_tuple_element_variables[1]
+				return U.notail(evaluator.gen_base_operator("#host-tuple-type", function(desc)
 					return U.notail(terms.typed_term.host_tuple_type(desc))
-				end, "#host-tuple-type", "desc"))
+				end, "desc"))
 			:
 			wrapped (forall ((desc : tuple-desc-type(host-type))) -> (T : host-type))
 
@@ -774,10 +765,9 @@ let host-if = lambda_implicit (T : type-omega)
 	unwrap
 		intrinsic
 			""""
-				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
-					local subject, consequent, alternate = bound_tuple_element_variables[1], bound_tuple_element_variables[2], bound_tuple_element_variables[3]
+				return U.notail(evaluator.gen_base_operator("#host-if", function(subject, consequent, alternate)
 					return U.notail(terms.typed_term.host_if(subject, consequent, alternate))
-				end, "#host-if", "subject", "consequent", "alternate"))
+				end))
 			:
 			wrapped(forall (subject : host-bool, consequent : T, alternate : T) -> (res : T))
 
@@ -789,10 +779,9 @@ let tuple-desc-elem-explicit = lambda (U : universe)
 	unwrap
 		intrinsic
 			""""
-				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
-					local desc, elem = bound_tuple_element_variables[1], bound_tuple_element_variables[2]
+				return U.notail(evaluator.gen_base_operator("#tuple-desc-elem-explicit", function(desc, elem)
 					return U.notail(terms.typed_cons(desc, elem))
-				end, "#tuple-desc-elem-explicit", "desc", "elem"))
+				end))
 			:
 			wrapped(forall (desc : U-tuple-desc-type, elem : (forall (rest : tuple-type(desc)) -> (next : U))) -> (res : U-tuple-desc-type))
 
@@ -853,9 +842,9 @@ let tuple-desc-concat-indep = lambda_implicit (U : universe)
 	unwrap
 		intrinsic
 			""""
-				return base_env.gen_base_operator(function(args)
-					return terms.typed_term.tuple_desc_concat_indep(args[1], args[2])
-				end, "#tuple-desc-concat", "prefix", "suffix")
+				return U.notail(evaluator.gen_base_operator("#tuple-desc-concat", function(prefix, suffix)
+					return U.notail(terms.typed_term.tuple_desc_concat_indep(prefix, suffix))
+				end))
 			:
 			wrapped (forall (pfx : tuple-desc-type(U), sfx : tuple-desc-type(U)) -> (res : tuple-desc-type(U)))
 let tuple-concat = lambda (
@@ -941,9 +930,9 @@ let host-number-fold-indep = lambda_implicit (T : type-omega)
 	unwrap
 		intrinsic
 			""""
-				return base_env.gen_base_operator(function(args)
-					return terms.typed_term.host_int_fold(args[1], args[2], args[3])
-				end, "#int-fold", "num", "func", "acc")
+				return U.notail(evaluator.gen_base_operator("#int-fold", function(num, func, acc)
+					return U.notail(terms.typed_term.host_int_fold(num, func, acc))
+				end))
 			:
 			wrapped((forall (n : host-number, f : (forall (i  : host-number, acc  : T) -> (resacc  : T)), acc  : T) -> (res : T)))
 

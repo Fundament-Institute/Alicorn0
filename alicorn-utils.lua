@@ -771,7 +771,7 @@ M.GasTank = setmetatable(GasTank_mt.__index, {
 function M.debug_break()
 	local ok, debugger
 	do
-		ok, debugger = pcall(require, "lldebuger")
+		ok, debugger = pcall(require, "lldebugger")
 		if ok then
 			return debugger.requestBreak()
 		end
