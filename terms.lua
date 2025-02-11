@@ -70,6 +70,30 @@ local metavariable_type = gen.declare_foreign(gen.metatable_equality(metavariabl
 
 local anchor_type = gen.declare_foreign(gen.metatable_equality(format.anchor_mt), "Anchor")
 
+traits.diff:implement_on(metavariable_type, {
+	---@param left Metavariable
+	---@param right Metavariable
+	diff = function(left, right)
+		print("diffing metavariables:")
+		if left.value ~= right.value then
+			print("left value ~= right value: " .. left.value .. " ~= " .. right.value)
+		end
+		if left.usage ~= right.usage then
+			print("left usage ~= right usage: " .. left.usage .. " ~= " .. right.usage)
+		end
+		if left.block_level ~= right.block_level then
+			print("left block_level ~= right block_level: " .. left.block_level .. " ~= " .. right.block_level)
+		end
+		if left.trait ~= right.trait then
+			if left.trait then
+				print("left metavariable is a trait, but right isn't!")
+			else
+				print("right metavariable is a trait, but left isn't!")
+			end
+		end
+	end,
+})
+
 ---@module "types.var_debug"
 local var_debug = gen.declare_record("var_debug", {
 	"name",
