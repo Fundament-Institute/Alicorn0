@@ -3800,15 +3800,18 @@ local function infer_impl(
 		end
 
 		local continue_effect_sig, continue_base_type = continue_type:unwrap_program_type()
-		local first_is_row, first_components, first_rest = first_effect_sig:as_effect_row_extend()
-		local continue_is_row, continue_components, continue_rest = continue_effect_sig:as_effect_row_extend()
+
+		local first_is_row, first_components = first_effect_sig:as_effect_row()
+		local continue_is_row, continue_components = continue_effect_sig:as_effect_row()
+
+		-- local first_is_row, first_components, first_rest = first_effect_sig:as_effect_row_extend()
+		-- local continue_is_row, continue_components, continue_rest = continue_effect_sig:as_effect_row_extend()
 		local result_effect_sig
 		if first_is_row and continue_is_row then
-			if not first_rest:is_effect_empty() or not continue_rest:is_effect_empty() then
-				error("nyi polymorphic effects")
-			end
-			result_effect_sig =
-				flex_value.effect_row_extend(first_components:union(continue_components), flex_value.effect_empty)
+			-- if not first_rest:is_effect_empty() or not continue_rest:is_effect_empty() then
+			-- 	error("nyi polymorphic effects")
+			-- end
+			result_effect_sig = flex_value.effect_row(first_components:union(continue_components))
 		elseif first_is_row then
 			if not continue_effect_sig:is_effect_empty() then
 				error("unknown effect sig")
