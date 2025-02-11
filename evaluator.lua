@@ -3915,8 +3915,9 @@ end
 ---@param fn_op (fun(bound_tuple_element_variables: typed[], capture: typed): typed) returns `body`
 ---@param tuple_name string
 ---@param debug_tuple_element_names ArrayValue<var_debug>
----@return strict_value closure_value `strict_value.closure`
-local function gen_base_operator_aux(fn_op, tuple_name, debug_tuple_element_names)
+---@param capture flex_value
+---@return flex_value closure_value `flex_value.closure`
+local function gen_base_operator_aux(fn_op, tuple_name, debug_tuple_element_names, capture)
 	local tuple_arg_name = tuple_name .. "-arg"
 	local tuple_element_names = debug_tuple_element_names:map(name_array, function(debug_tuple_element_name)
 		---@cast debug_tuple_element_name var_debug
@@ -3929,10 +3930,10 @@ local function gen_base_operator_aux(fn_op, tuple_name, debug_tuple_element_name
 	end
 
 	local debug_capture = terms.var_debug("#capture", format.anchor_here())
-	local capture = typed.bound_variable(1, debug_capture)
-	local body = fn_op(bound_tuple_element_variables, capture)
+	local typed_capture = typed.bound_variable(1, debug_capture)
+	local body = fn_op(bound_tuple_element_variables, typed_capture)
 	return U.notail(
-		terms.strict_value.closure(
+		terms.flex_value.closure(
 			tuple_arg_name,
 			terms.typed_term.tuple_elim(
 				tuple_element_names,
@@ -3941,7 +3942,7 @@ local function gen_base_operator_aux(fn_op, tuple_name, debug_tuple_element_name
 				#tuple_element_names,
 				body
 			),
-			empty_tuple,
+			capture,
 			debug_capture,
 			debug_tuple_arg
 		)
@@ -3953,11 +3954,11 @@ end
 ---@param ... string tuple_element_names
 ---@return strict_value closure_value `strict_value.closure`
 local function gen_base_operator(fn_op, tuple_name, ...)
-	debug_tuple_element_names = debug_array()
+	local debug_tuple_element_names = debug_array()
 	for i = 1, select('#', ...) do
 		debug_tuple_element_names:append(terms.var_debug(select(i, ...), format.anchor_here()))
 	end
-	return gen_base_operator_aux(fn_op, tuple_name, debug_tuple_element_names)
+	return U.notail(gen_base_operator_aux(fn_op, tuple_name, debug_tuple_element_names, flex_value.strict(empty_tuple)):unwrap_strict())
 end
 
 -- desc is head + (gradually) parts of tail
@@ -3984,8 +3985,8 @@ local function tuple_desc_elem(desc, elem, head_names, tail_names)
 			tail_args:append(bound_tuple_element_variables[head_names_length + i])
 		end
 		return U.notail(typed.application(capture, typed.tuple_cons(tail_args)))
-	end, "#tuple-desc-elem", debug_tuple_element_names)
-	return U.notail(terms.cons(desc, flex_value.strict(elem_wrap)))
+	end, "#tuple-desc-elem", debug_tuple_element_names, elem)
+	return U.notail(terms.cons(desc, elem_wrap))
 end
 
 local intrinsic_memo = setmetatable({}, { __mode = "v" })
