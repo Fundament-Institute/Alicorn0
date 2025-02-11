@@ -3914,6 +3914,7 @@ function infer(inferrable_term, typechecking_context)
 	end
 	return ok, v, usages, term
 end
+infer = U.memoize(infer)
 
 ---@param tuple_name string
 ---@param capture flex_value
