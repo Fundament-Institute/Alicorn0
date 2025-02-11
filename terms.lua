@@ -800,6 +800,7 @@ inferrable_term:define_enum("inferrable", {
 		"first",        inferrable_term,
 		"start_anchor", anchor_type,
 		"continue",     inferrable_term,
+		"debug_info",	var_debug,
 	} },
 	{ "program_end", { "result", inferrable_term } },
 	{ "program_type", {
@@ -1082,6 +1083,7 @@ typed_term:define_enum("typed", {
 	{ "program_sequence", {
 		"first",    typed_term,
 		"continue", typed_term,
+		"debug_info", var_debug,
 	} },
 	{ "program_end", { "result", typed_term } },
 	{ "program_invoke", {

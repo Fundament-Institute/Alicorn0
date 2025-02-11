@@ -3789,7 +3789,7 @@ local function infer_impl(
 		end
 		return true, U.notail(flex_value.star(0, 0)), desc_usages, U.notail(typed_term.host_tuple_type(desc_term))
 	elseif inferrable_term:is_program_sequence() then
-		local first, start_anchor, continue = inferrable_term:unwrap_program_sequence()
+		local first, start_anchor, continue, dbg = inferrable_term:unwrap_program_sequence()
 		local ok, first_type, first_usages, first_term = infer(first, typechecking_context)
 		if not ok then
 			return false, first_type
@@ -3809,12 +3809,7 @@ local function infer_impl(
 			return false, err
 		end
 
-		local inner_context = typechecking_context:append(
-			"#program-sequence",
-			first_base_type,
-			nil,
-			var_debug("#program-sequence", start_anchor)
-		)
+		local inner_context = typechecking_context:append("#program-sequence", first_base_type, nil, dbg)
 		local ok, continue_type, continue_usages, continue_term = infer(continue, inner_context)
 		if not ok then
 			return false, continue_type
@@ -3864,7 +3859,7 @@ local function infer_impl(
 		return true,
 			U.notail(flex_value.program_type(result_effect_sig, continue_base_type)),
 			result_usages,
-			U.notail(typed_term.program_sequence(first_term, continue_term))
+			U.notail(typed_term.program_sequence(first_term, continue_term, dbg))
 	elseif inferrable_term:is_program_end() then
 		local result = inferrable_term:unwrap_program_end()
 		local ok, program_type, program_usages, program_term = infer(result, typechecking_context)
@@ -4747,15 +4742,11 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		local val_val = evaluate(val, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.singleton(supertype_val, val_val))
 	elseif typed:is_program_sequence() then
-		local first, rest = typed:unwrap_program_sequence()
+		local first, rest, dbg = typed:unwrap_program_sequence()
 		local startprog = evaluate(first, runtime_context, ambient_typechecking_context)
 		if startprog:is_program_end() then
 			local first_res = startprog:unwrap_program_end()
-			return evaluate(
-				rest,
-				runtime_context:append(first_res, "program_end", var_debug("", format.anchor_here())),
-				ambient_typechecking_context
-			)
+			return evaluate(rest, runtime_context:append(first_res, "program_end", dbg), ambient_typechecking_context)
 		elseif startprog:is_program_cont() then
 			local effect_id, effect_arg, cont = startprog:unwrap_program_cont()
 			local restframe = terms.continuation.frame(runtime_context, rest)

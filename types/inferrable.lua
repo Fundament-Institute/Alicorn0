@@ -353,11 +353,13 @@ function inferrable:is_program_sequence() end
 ---@return inferrable first
 ---@return Anchor start_anchor
 ---@return inferrable continue
+---@return var_debug debug_info
 function inferrable:unwrap_program_sequence() end
 ---@return boolean
 ---@return inferrable first
 ---@return Anchor start_anchor
 ---@return inferrable continue
+---@return var_debug debug_info
 function inferrable:as_program_sequence() end
 ---@return boolean
 function inferrable:is_program_end() end
@@ -416,7 +418,7 @@ function inferrable:as_program_type() end
 ---@field host_unstrict_unwrap fun(container: inferrable): inferrable
 ---@field host_if fun(subject: checkable, consequent: inferrable, alternate: inferrable): inferrable
 ---@field host_intrinsic fun(source: checkable, type: inferrable, start_anchor: Anchor): inferrable
----@field program_sequence fun(first: inferrable, start_anchor: Anchor, continue: inferrable): inferrable
+---@field program_sequence fun(first: inferrable, start_anchor: Anchor, continue: inferrable, debug_info: var_debug): inferrable
 ---@field program_end fun(result: inferrable): inferrable
 ---@field program_type fun(effect_type: inferrable, result_type: inferrable): inferrable
 return {}

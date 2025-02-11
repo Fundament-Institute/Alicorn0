@@ -417,7 +417,12 @@ function environment:exit_block(term, shadowed)
 			wrapped = terms.inferrable_term.annotated_lambda(name, annotation, wrapped, start_anchor, visible, purity)
 		elseif binding:is_program_sequence() then
 			local first, start_anchor = binding:unwrap_program_sequence()
-			wrapped = terms.inferrable_term.program_sequence(first, start_anchor, wrapped)
+			wrapped = terms.inferrable_term.program_sequence(
+				first,
+				start_anchor,
+				wrapped,
+				terms.var_debug("#program-sequence", start_anchor)
+			)
 		else
 			error("exit_block: unknown kind: " .. binding.kind)
 		end
