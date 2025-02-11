@@ -3922,7 +3922,7 @@ local function tuple_desc_elem(desc, elem, head_n, head_names, tail_n, tail_name
 	for _, name in head_names:ipairs() do
 		names:append(name)
 	end
-	names:append(terms.var_debug("#_", format.anchor_here()))
+	--names:append(terms.var_debug("#_", format.anchor_here()))
 	for _, name in tail_names:ipairs() do
 		names:append(name)
 	end
@@ -3932,7 +3932,7 @@ local function tuple_desc_elem(desc, elem, head_n, head_names, tail_n, tail_name
 	for i = 1, tail_n do
 		-- 2 for closure argument and capture (passed to tuple_elim)
 		-- head_n for head
-		tail_args:append(typed.bound_variable(2 + head_n + i, names[1 + head_n + i]))
+		tail_args:append(typed.bound_variable(2 + head_n + i, names[head_n + i]))
 	end
 	local capture_dbg = terms.var_debug("#capture", format.anchor_here())
 	local body = typed.tuple_elim(
@@ -4229,7 +4229,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 				_, tail_names, _, _, _ = tail_code:unwrap_tuple_elim()
 			else
 				tail_names = debug_array()
-				for i = 1, tail_n do
+				for i = 1, tail_n_now do
 					tail_names[i] = terms.var_debug("tail_unk_" .. tostring(i), format.anchor_here())
 				end
 			end

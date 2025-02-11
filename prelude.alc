@@ -1508,12 +1508,11 @@ let ascribed-segment-tuple-desc-match-failure-handler = intrinsic "return metala
 let tuple-desc-impl-type = operative-handler-type(host-unit)
 
 let tuple-desc-impl = lambda (syn : host-syntax, env : host-environment, ud : host-unit, goal : host-goal)
-	let s = host-tuple-of(host-type, ascribed-segment-tuple-desc-reducer-storage-desc)(env)
+	let s = host-tuple-of(ascribed-segment-tuple-desc-reducer-storage-desc)(env)
 
 	let matcher-t = host-matcher(host-unit, ascribed-segment-tuple-desc-match-result-desc)
 	let matcher =
 		host-matcher-reducible
-			host-unit
 			ascribed-segment-tuple-desc-reducer-storage-desc
 			ascribed-segment-tuple-desc-reducer-result2-desc
 			ascribed-segment-tuple-desc-match-result-desc
@@ -1553,7 +1552,7 @@ let tuple-desc = core-operative(host-nil, tuple-desc-impl)
 let terms-gen-map = new-host-type(new-host-unique-id("terms-gen-map"))
 
 let listtail-accepter-result = lambda (( result : tuple-desc-type(host-type) ))
-	tuple-desc-concat(host-type, result, tuple-desc-singleton(host-type, host-syntax))
+	tuple-desc-concat-indep(result, tuple-desc-singleton(host-type, host-syntax))
 
 let listtail-reducer =
 	lambda_implicit ( userdata : host-type )
