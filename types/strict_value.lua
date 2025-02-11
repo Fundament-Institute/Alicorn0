@@ -328,12 +328,6 @@ function strict_value:unwrap_program_cont() end
 ---@return strict_continuation continuation
 function strict_value:as_program_cont() end
 ---@return boolean
-function strict_value:is_effect_empty() end
----@return nil
-function strict_value:unwrap_effect_empty() end
----@return boolean
-function strict_value:as_effect_empty() end
----@return boolean
 function strict_value:is_effect_elem() end
 ---@return effect_id tag
 function strict_value:unwrap_effect_elem() end
@@ -445,7 +439,6 @@ function strict_value:as_union_type() end
 ---@field singleton fun(supertype: strict_value, value: strict_value): strict_value
 ---@field program_end fun(result: strict_value): strict_value
 ---@field program_cont fun(action: table, argument: strict_value, continuation: strict_continuation): strict_value
----@field effect_empty strict_value
 ---@field effect_elem fun(tag: effect_id): strict_value
 ---@field effect_type strict_value
 ---@field effect_row fun(components: SetValue<table>): strict_value

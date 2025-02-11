@@ -295,10 +295,7 @@ local function execute_alc_file(bound_expr, log, env)
 			type,
 			env.typechecking_context,
 			terms.flex_value.program_type(
-				terms.flex_value.effect_row_extend(
-					set(unique_id)(terms.TCState, terms.lua_prog),
-					terms.flex_value.effect_empty
-				),
+				terms.flex_value.effect_row(terms.unique_id_set(terms.TCState, terms.lua_prog)),
 				evaluator.typechecker_state:metavariable(env.typechecking_context):as_flex()
 			),
 			env.typechecking_context,

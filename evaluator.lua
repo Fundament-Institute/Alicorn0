@@ -20,6 +20,7 @@ local flex_value, flex_value_array = terms.flex_value, terms.flex_value_array
 local strict_value, strict_value_array = terms.strict_value, terms.strict_value_array
 local stuck_value = terms.stuck_value
 local var_debug, var_debug_array = terms.var_debug, terms.var_debug_array
+local unique_id_set = terms.unique_id_set
 local host_syntax_type = terms.host_syntax_type
 local host_environment_type = terms.host_environment_type
 local host_typed_term_type = terms.host_typed_term_type
@@ -336,14 +337,8 @@ local EffectRowRelation = setmetatable({
 		---@param cause constraintcause
 		---@return boolean, string?
 		function(l_ctx, val, r_ctx, use, cause)
-			if val:is_effect_empty() then
-				return true
-			end
 			if val:is_effect_row_extend() then
 				local val_components, val_rest = val:unwrap_effect_row_extend()
-				if use:is_effect_empty() then
-					return false, "production has effect requirements that the consumption doesn't fulfill"
-				end
 				if not use:is_effect_row_extend() then
 					return false, "consumption of effect row constraint isn't an effect row?"
 				end
@@ -352,9 +347,6 @@ local EffectRowRelation = setmetatable({
 					return false, "consumption of effect row doesn't satisfy all components of production"
 				end
 				--TODO allow polymorphism
-				if val_rest:is_effect_empty() and use_rest:is_effect_empty() then
-					return true
-				end
 				error "NYI effect polymorphism"
 			end
 
@@ -3849,34 +3841,22 @@ local function infer_impl(
 		-- local continue_is_row, continue_components, continue_rest = continue_effect_sig:as_effect_row_extend()
 		local result_effect_sig
 		if first_is_row and continue_is_row then
-			-- if not first_rest:is_effect_empty() or not continue_rest:is_effect_empty() then
-			-- 	error("nyi polymorphic effects")
-			-- end
 			result_effect_sig = flex_value.effect_row(first_components:union(continue_components))
 		elseif first_is_row then
-			if not continue_effect_sig:is_effect_empty() then
-				error("unknown effect sig")
-			end
 			result_effect_sig = first_effect_sig
 		elseif continue_is_row then
-			if not first_effect_sig:is_effect_empty() then
-				error("unknown effect sig")
-			end
 			result_effect_sig = continue_effect_sig
 		else
-			if not first_effect_sig:is_effect_empty() or not continue_effect_sig:is_effect_empty() then
-				error(
-					ConstraintError.new(
-						"unknown effect sig",
-						first_effect_sig,
-						inner_context,
-						" vs ",
-						continue_effect_sig,
-						inner_context
-					)
+			error(
+				ConstraintError.new(
+					"unknown effect sig",
+					first_effect_sig,
+					inner_context,
+					" vs ",
+					continue_effect_sig,
+					inner_context
 				)
-			end
-			result_effect_sig = flex_value.effect_empty
+			)
 		end
 		local result_usages = usage_array()
 		add_arrays(result_usages, first_usages)
@@ -3892,7 +3872,7 @@ local function infer_impl(
 			return false, program_type
 		end
 		return true,
-			U.notail(flex_value.program_type(flex_value.effect_empty, program_type)),
+			U.notail(flex_value.program_type(flex_value.strict(strict_value.effect_row(unique_id_set())), program_type)),
 			program_usages,
 			U.notail(typed_term.program_end(program_term))
 	elseif inferrable_term:is_program_type() then

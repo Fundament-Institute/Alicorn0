@@ -1514,7 +1514,6 @@ gen.define_multi_enum(
 			"continuation", flex_continuation,
 		}, },
 
-		{ "effect_empty$strict" },
 		{ "effect_elem$strict", { "tag", effect_id } },
 		{ "effect_type$strict" },
 		{ "effect_row$strict", {
@@ -1820,12 +1819,14 @@ local tristate = gen.declare_enum("tristate", {
 	{ "failure" },
 })
 
+local unique_id_set = set(unique_id)
+
 local unit_type = strict_value.tuple_type(empty:unwrap_strict())
 local unit_val = strict_tup_val()
 local effect_registry = new_registry("effect")
 local TCState =
-	effect_id(effect_registry:register("TCState", "effects that manipulate the typechecker state"), set(unique_id)())
-local lua_prog = effect_id(effect_registry:register("lua_prog", "running effectful lua code"), set(unique_id)())
+	effect_id(effect_registry:register("TCState", "effects that manipulate the typechecker state"), unique_id_set())
+local lua_prog = effect_id(effect_registry:register("lua_prog", "running effectful lua code"), unique_id_set())
 
 local terms = {
 	metavariable_mt = metavariable_mt,
@@ -1857,6 +1858,7 @@ local terms = {
 	host_block_purity_type = host_block_purity_type,
 	host_lua_error_type = host_lua_error_type,
 	unique_id = unique_id,
+	unique_id_set = unique_id_set,
 	var_debug = var_debug,
 	var_debug_array = var_debug_array,
 

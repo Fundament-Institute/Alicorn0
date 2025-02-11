@@ -371,12 +371,6 @@ function flex_value:unwrap_program_cont() end
 ---@return flex_continuation continuation
 function flex_value:as_program_cont() end
 ---@return boolean
-function flex_value:is_effect_empty() end
----@return nil
-function flex_value:unwrap_effect_empty() end
----@return boolean
-function flex_value:as_effect_empty() end
----@return boolean
 function flex_value:is_effect_elem() end
 ---@return effect_id tag
 function flex_value:unwrap_effect_elem() end
@@ -590,7 +584,6 @@ function flex_value:as_host_unwrap() end
 ---@field singleton fun(supertype: flex_value, value: flex_value): flex_value
 ---@field program_end fun(result: flex_value): flex_value
 ---@field program_cont fun(action: table, argument: flex_value, continuation: flex_continuation): flex_value
----@field effect_empty flex_value
 ---@field effect_elem fun(tag: effect_id): flex_value
 ---@field effect_type flex_value
 ---@field effect_row fun(components: SetValue<table>): flex_value
