@@ -69,6 +69,7 @@ local profile_flame = false
 local profile_file = ""
 -- "match", "infer" are currently implemented
 local profile_what = ""
+local reload_mode = false
 local test_single = false
 local test_name = ""
 local print_usage = false
@@ -87,6 +88,13 @@ local opttab = {
 	end,
 	["v"] = function(_)
 		print_evaluated = true
+	end,
+	["r:"] = function(_, arg)
+		if not arg then
+			error("-r requires a file argument")
+		end
+		reload_mode = true
+		test_name = arg
 	end,
 	["p:"] = function(_, arg)
 		if not arg then
@@ -497,6 +505,31 @@ local function perform_test(file, completion, env)
 				"\n\n"
 			)
 			return false, log
+		end
+	end
+end
+
+if reload_mode then
+	while true do
+		print("Loading " .. test_name)
+		evaluator.typechecker_state:speculate(function()
+			local shadowed, test_env = env:enter_block(terms.block_purity.effectful)
+			local ok, test_expr, test_env = load_alc_file(test_name, test_env, print)
+
+			if ok then
+				---@cast test_expr inferrable
+				---@cast test_env Environment
+				local test_env, test_expr, _ = test_env:exit_block(test_expr, shadowed)
+
+				local ok = execute_alc_file(test_expr, print, test_env)
+			end
+
+			return false
+		end)
+
+		print("Continue? y/n: ")
+		if io.read(1) == "n" then
+			return
 		end
 	end
 end
