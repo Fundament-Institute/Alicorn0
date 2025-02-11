@@ -649,7 +649,7 @@ let func-to-host-func =
 		lambda (f : ft)
 			let inner = intrinsic
 				""""
-					return function(_type, _valid, afn)
+					return function(afn)
 						return function(...)
 							local args = table.pack(...)
 							local conv_args = terms_gen.declare_array(terms.strict_value)()
