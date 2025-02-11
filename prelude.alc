@@ -1407,7 +1407,7 @@ let do-impl = lambda (syn : host-syntax, env : host-environment, ud : host-unit,
 	let (shadowed, inner_env) = enter-block(env)
 
 	let (args) = expression-args-new(goal-infer, inner_env)
-	let s = host-tuple-of(host-type, block-reducer-storage-desc)(args)
+	let s = host-tuple-of(block-reducer-storage-desc)(args)
 
 	let matcher-t = host-matcher(host-unit, block-match-result-desc(goal-infer))
 	let matcher =

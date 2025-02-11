@@ -2342,7 +2342,7 @@ do
 	local debug_userdata = terms.var_debug("#core-operative-type-userdata", format.anchor_here())
 	local debug_handler = terms.var_debug("#core-operative-type-handler", format.anchor_here())
 	local debug_elements = debug_array(debug_userdata, debug_handler)
-	core_operative_type = terms.flex_value.closure(
+	core_operative_type = terms.strict_value.closure(
 		debug_param.name,
 		terms.typed_term.tuple_elim(
 			debug_elements:map(name_array, function(n)
@@ -2356,7 +2356,7 @@ do
 				terms.typed_term.bound_variable(3, debug_userdata) --TODO: fix the order on this
 			)
 		),
-		flex_value.strict(empty_tuple),
+		empty_tuple,
 		var_debug("#core-operative-type-capture", format.anchor_here()),
 		debug_param
 	)
@@ -2369,7 +2369,7 @@ do
 	local debug_ud = terms.var_debug("#core-operative-ud", format.anchor_here())
 	local debug_handler = terms.var_debug("#core-operative-handler", format.anchor_here())
 	local debug_elements = debug_array(debug_ud, debug_handler)
-	core_operative = terms.flex_value.closure(
+	core_operative = terms.strict_value.closure(
 		debug_param.name,
 		terms.typed_term.tuple_elim(
 			debug_elements:map(name_array, function(n)
@@ -2380,7 +2380,7 @@ do
 			2,
 			terms.typed_term.operative_cons(terms.typed_term.bound_variable(3, debug_ud))
 		),
-		flex_value.strict(empty_tuple),
+		empty_tuple,
 		var_debug("#core-operative-capture", format.anchor_here()),
 		debug_param
 	)
