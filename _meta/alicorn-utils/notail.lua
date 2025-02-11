@@ -6,9 +6,6 @@
 local U = {}
 
 ---Exists only to prevent tail call optimizations
-function U.notail() end
-
----Exists only to prevent tail call optimizations
 ---@generic T1
 ---@param a T1
 ---@return T1
