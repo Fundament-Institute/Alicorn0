@@ -455,9 +455,9 @@ function M.memoize(fn)
 			thismemo = nextmemo
 		end
 		if not thismemo[memo_end_tag] then
-			thismemo[memo_end_tag] = fn(...)
+			thismemo[memo_end_tag] = { fn(...) }
 		end
-		return thismemo[memo_end_tag]
+		return table.unpack(thismemo[memo_end_tag])
 	end
 	return wrapfn
 end
