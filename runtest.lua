@@ -187,7 +187,7 @@ local function load_alc_file(name, env, log)
 	log("Read code")
 	checkpointTime2 = checkpointTime
 	if print_src then
-		log(src)
+		io.stderr:write(src, "\n")
 	end
 
 	log("Parsing code")
@@ -204,9 +204,9 @@ local function load_alc_file(name, env, log)
 	log(("Parsed! in %.3f seconds"):format(checkpointTime - checkpointTime2))
 	checkpointTime2 = checkpointTime
 	if print_ast then
-		log("Printing raw AST")
-		log(format.lispy_print(code))
-		log("End printing raw AST")
+		io.stderr:write("Printing raw AST\n")
+		io.stderr:write(format.lispy_print(code), "\n")
+		io.stderr:write("End printing raw AST\n")
 	end
 
 	log("Expression -> terms")
@@ -245,8 +245,8 @@ local function execute_alc_file(bound_expr, log, env)
 	log(("Got a term! in %.3f seconds"):format(checkpointTime - checkpointTime2))
 	checkpointTime2 = checkpointTime
 	if print_inferrable then
-		log("bound_expr: (inferrable term follows)")
-		log(bound_expr:pretty_print(env.typechecking_context))
+		io.stderr:write("bound_expr: (inferrable term follows)\n")
+		io.stderr:write(bound_expr:pretty_print(env.typechecking_context), "\n")
 	end
 
 	log("Inferring")
@@ -279,11 +279,11 @@ local function execute_alc_file(bound_expr, log, env)
 	log(("Inferred! in %.3f seconds"):format(checkpointTime - checkpointTime2))
 	checkpointTime2 = checkpointTime
 	if print_typed then
-		log("type: (value term follows)")
-		log(type)
-		log("usages:", usages)
-		log("term: (typed term follows)")
-		log(term:pretty_print(env.typechecking_context.runtime_context))
+		io.stderr:write("type: (value term follows)\n")
+		io.stderr:write(tostring(type), "\n")
+		io.stderr:write("usages: ", tostring(usages), "\n")
+		io.stderr:write("term: (typed term follows)\n")
+		io.stderr:write(term:pretty_print(env.typechecking_context.runtime_context), "\n")
 	end
 
 	local gen = require "terms-generators"
@@ -326,8 +326,8 @@ local function execute_alc_file(bound_expr, log, env)
 	log(("Evaluated! in %.3f seconds"):format(checkpointTime - checkpointTime2))
 	checkpointTime2 = checkpointTime
 	if print_evaluated then
-		log("result: (value term follows)")
-		log(result)
+		io.stderr:write("result: (value term follows)\n")
+		io.stderr:write(tostring(result), "\n")
 	end
 
 	log("Executing")

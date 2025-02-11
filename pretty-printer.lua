@@ -9,24 +9,31 @@ local PrettyPrint_mt = { __index = PrettyPrint }
 
 local traits = require "traits"
 local U = require "alicorn-utils"
+local glsl_print = require "glsl-print"
 
 local kind_field = "kind"
 local hidden_fields = {
 	[kind_field] = true,
 }
 
----@alias PrettyPrintOpts {default_print: boolean?}
+---@alias PrettyPrintOpts {default_print: boolean?, glsl_print: boolean?}
 
 ---@return PrettyPrint
 ---@param opts PrettyPrintOpts?
 function PrettyPrint:new(opts)
 	opts = opts or {}
-	return setmetatable({ opts = { default_print = opts.default_print } }, PrettyPrint_mt)
+	return setmetatable(
+		{ opts = { default_print = opts.default_print or opts.glsl_print, glsl_print = opts.glsl_print } },
+		PrettyPrint_mt
+	)
 end
 
 ---@param unknown any
 ---@param ... any
 function PrettyPrint:any(unknown, ...)
+	if self.opts.glsl_print then
+		return glsl_print.glsl_print(self, unknown, ...)
+	end
 	local ty = type(unknown)
 	if ty == "string" then
 		self[#self + 1] = string.format("%q", unknown)
@@ -349,6 +356,12 @@ local function default_print(unknown, ...)
 	return tostring(pp)
 end
 
+local function glsl_print(unknown, ...)
+	local pp = PrettyPrint:new({ glsl_print = true })
+	pp:any(unknown, ...)
+	return tostring(pp)
+end
+
 ---@param ... any
 ---@return string
 local function s(...)
@@ -372,6 +385,7 @@ return {
 	pretty_preprint = pretty_preprint,
 	pretty_print = pretty_print,
 	default_print = default_print,
+	glsl_print = glsl_print,
 	s = s,
 	p = p,
 	hidden_fields = hidden_fields,

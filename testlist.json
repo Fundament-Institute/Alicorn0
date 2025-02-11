@@ -1,4 +1,6 @@
 {
+    "tests/test-glsl-vert.alc": "success",
+    "tests/test-glsl-frag.alc": "success",
     "tests/test-success.alc": "success",
     "tests/test-failure.alc": "termgen",
     "tests/arith.alc": "success",
