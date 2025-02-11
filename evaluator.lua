@@ -3934,6 +3934,7 @@ local function tuple_desc_elem(desc, elem, head_n, head_names, tail_n, tail_name
 		-- head_n for head
 		tail_args:append(typed.bound_variable(2 + head_n + i, names[1 + head_n + i]))
 	end
+	local capture_dbg = terms.var_debug("#capture", format.anchor_here())
 	local body = typed.tuple_elim(
 		names:map(name_array, function(n)
 			return n.name
@@ -3941,15 +3942,9 @@ local function tuple_desc_elem(desc, elem, head_n, head_names, tail_n, tail_name
 		names,
 		typed.bound_variable(2, arg_dbg),
 		head_n + tail_n,
-		typed.application(typed.literal(elem), typed.tuple_cons(tail_args))
+		typed.application(typed.bound_variable(1, capture_dbg), typed.tuple_cons(tail_args))
 	)
-	local elem_wrap = terms.flex_value.closure(
-		"#tuple-desc-concat",
-		body,
-		flex_value.strict(empty_tuple),
-		terms.var_debug("", format.anchor_here()),
-		arg_dbg
-	)
+	local elem_wrap = terms.flex_value.closure("#tuple-desc-concat", body, elem, capture_dbg, arg_dbg)
 	return U.notail(terms.cons(desc, elem_wrap))
 end
 
