@@ -1672,8 +1672,11 @@ local DescCons = --[[@enum DescCons]]
 	}
 
 local typed_term_array = array(typed_term)
+local inferrable_term_array = array(inferrable_term)
 local flex_value_array = array(flex_value)
 local strict_value_array = array(strict_value)
+local stuck_value_array = array(stuck_value)
+local var_debug_array = array(var_debug)
 
 ---@param ... flex_value
 ---@return flex_value
@@ -1762,17 +1765,22 @@ local lua_prog = effect_id(effect_registry:register("lua_prog", "running effectf
 
 local terms = {
 	metavariable_mt = metavariable_mt,
-	checkable_term = checkable_term, -- {}
-	inferrable_term = inferrable_term, -- {}
-	typed_term = typed_term, -- {}
+	checkable_term = checkable_term,
+	inferrable_term = inferrable_term,
+	inferrable_term_array = inferrable_term_array,
+	typed_term = typed_term,
+	typed_term_array = typed_term_array,
 	free = free,
 	visibility = visibility,
 	purity = purity,
 	block_purity = block_purity,
 	result_info = result_info,
 	flex_value = flex_value,
+	flex_value_array = flex_value_array,
 	strict_value = strict_value,
+	strict_value_array = strict_value_array,
 	stuck_value = stuck_value,
+	stuck_value_array = stuck_value_array,
 	binding = binding,
 	expression_goal = expression_goal,
 	host_syntax_type = host_syntax_type,
@@ -1786,6 +1794,7 @@ local terms = {
 	host_lua_error_type = host_lua_error_type,
 	unique_id = unique_id,
 	var_debug = var_debug,
+	var_debug_array = var_debug_array,
 
 	flex_runtime_context = flex_runtime_context,
 	strict_runtime_context = strict_runtime_context,

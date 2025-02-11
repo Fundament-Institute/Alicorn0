@@ -9,13 +9,14 @@ local terms = require "terms"
 local expression_goal = terms.expression_goal
 --local typechecking_context = terms.typechecking_context
 local checkable_term = terms.checkable_term
-local inferrable_term = terms.inferrable_term
-local typed_term = terms.typed_term
+local inferrable_term, inferrable_term_array = terms.inferrable_term, terms.inferrable_term_array
+local typed_term, typed_term_array = terms.typed_term, terms.typed_term_array
 local visibility = terms.visibility
 local purity = terms.purity
 local result_info = terms.result_info
 local flex_value = terms.flex_value
-local strict_value = terms.strict_value
+local strict_value, strict_value_array = terms.strict_value, terms.strict_value_array
+local var_debug, var_debug_array = terms.var_debug, terms.var_debug_array
 --local host_syntax_type = terms.host_syntax_type
 --local host_environment_type = terms.host_environment_type
 --local host_inferrable_term_type = terms.host_inferrable_term_type
@@ -23,18 +24,14 @@ local strict_value = terms.strict_value
 local gen = require "terms-generators"
 local array = gen.declare_array
 --local checkable_array = array(checkable_term)
-local inferrable_array = array(inferrable_term)
-local typed_array = array(typed_term)
 local usage_array = array(gen.builtin_number)
 local name_array = array(gen.builtin_string)
-local debug_array = array(terms.var_debug)
 
 local param_info_implicit = strict_value.param_info(strict_value.visibility(visibility.implicit))
 local param_info_explicit = strict_value.param_info(strict_value.visibility(visibility.explicit))
 local result_info_pure = strict_value.result_info(result_info(purity.pure))
 local result_info_effectful = strict_value.result_info(result_info(purity.effectful))
 
-local strict_value_array = gen.declare_array(strict_value)
 local empty_tuple = terms.strict_value.tuple_value(strict_value_array())
 
 local evaluator = require "evaluator"
@@ -568,7 +565,7 @@ local function call_operative(type_of_term, usage_count, term, sargs, goal, env)
 	end
 
 	-- operative input: env, syntax tree, goal type (if checked)
-	local tuple_args = array(strict_value)(
+	local tuple_args = strict_value_array(
 		strict_value.host_value(sargs),
 		strict_value.host_value(env),
 		strict_value.host_value(term),
@@ -825,7 +822,7 @@ local function call_host_func_type(type_of_term_input, usage_count, term, sargs,
 			usage_array(),
 			typed_term.program_invoke(
 				typed_term.literal(strict_value.effect_elem(terms.lua_prog)),
-				typed_term.tuple_cons(typed_array(term, tuple_term))
+				typed_term.tuple_cons(typed_term_array(term, tuple_term))
 			)
 		)
 		local bind = terms.binding.program_sequence(app, sargs.start_anchor)
@@ -1068,7 +1065,7 @@ local function expression_symbolhandler(args, name)
 				name_array(namearray.str),
 				inferrable_term.bound_variable(
 					env.typechecking_context:len() + 1,
-					terms.var_debug(namearray.str, namearray.start_anchor)
+					var_debug(namearray.str, namearray.start_anchor)
 				)
 			)
 		end
@@ -1243,16 +1240,15 @@ local function host_operative(fn, name)
 	-- (s : syntax, e : environment, u : wrapped_typed_term(userdata), g : goal) -> (goal_to_term(g), environment)
 	--   goal one of inferable, mechanism, checkable
 
-	local var_debug = terms.var_debug
 	local args_dbg = var_debug("#args", format.anchor_here())
-	local arg_unpack_dbg = debug_array(
+	local arg_unpack_dbg = var_debug_array(
 		var_debug("#syn", format.anchor_here()),
 		var_debug("#env", format.anchor_here()),
 		var_debug("#ud", format.anchor_here()),
 		var_debug("#goal", format.anchor_here())
 	)
 	local result_unpack_dbg =
-		debug_array(var_debug("#res-term", format.anchor_here()), var_debug("#res-env", format.anchor_here()))
+		var_debug_array(var_debug("#res-term", format.anchor_here()), var_debug("#res-env", format.anchor_here()))
 
 	-- 1: wrap fn as a typed host_value
 	-- this way it can take a host tuple and return a host tuple
@@ -1261,11 +1257,11 @@ local function host_operative(fn, name)
 	-- and a host tuple result to a normal tuple
 	-- this way it can take a normal tuple and return a normal tuple
 	local nparams = 4
-	local tuple_conv_elements = typed_array(
+	local tuple_conv_elements = typed_term_array(
 		typed_term.bound_variable(3, result_unpack_dbg[1]),
 		typed_term.bound_variable(4, result_unpack_dbg[2])
 	)
-	local host_tuple_conv_elements = typed_array()
+	local host_tuple_conv_elements = typed_term_array()
 	for i = 1, nparams do
 		-- + 2 because variable 2 is the argument tuple
 		-- all variables that follow are the destructured tuple
@@ -1301,7 +1297,7 @@ local function host_operative(fn, name)
 		inferrable_term.typed(
 			terms.typed_term.literal(strict_value.operative_type(value_fn, userdata_type)),
 			array(gen.builtin_number)(),
-			typed_term.operative_cons(typed_term.tuple_cons(typed_array()))
+			typed_term.operative_cons(typed_term.tuple_cons(typed_term_array()))
 		)
 	)
 end
@@ -1354,10 +1350,10 @@ collect_tuple = metalanguage.reducer(
 			collected_terms = array(checkable_term)()
 			goal_type = goal:unwrap_check()
 		else
-			collected_terms = inferrable_array()
+			collected_terms = inferrable_term_array()
 		end
 
-		local collected_info = debug_array()
+		local collected_info = var_debug_array()
 		local ok, continue, next_term = true, true, nil
 		local i = 0
 		while ok and continue do
@@ -1381,7 +1377,7 @@ collect_tuple = metalanguage.reducer(
 						env.typechecking_context.runtime_context,
 						env.typechecking_context
 					)
-					local info = terms.var_debug("#collect-tuple-param", syntax.start_anchor)
+					local info = var_debug("#collect-tuple-param", syntax.start_anchor)
 					desc = terms.cons(
 						desc,
 						evaluator.substitute_into_closure(
@@ -1462,13 +1458,13 @@ collect_host_tuple = metalanguage.reducer(
 		local goal, env = args:unwrap()
 		local goal_type, collected_terms
 		local desc = terms.empty
-		local collected_debug = debug_array()
+		local collected_debug = var_debug_array()
 
 		if goal:is_check() then
 			collected_terms = array(checkable_term)()
 			goal_type = goal:unwrap_check()
 		else
-			collected_terms = inferrable_array()
+			collected_terms = inferrable_term_array()
 		end
 
 		local ok, continue, next_term = true, true, nil
@@ -1484,7 +1480,7 @@ collect_host_tuple = metalanguage.reducer(
 				}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
 				if ok and continue then
 					collected_terms:append(next_term)
-					collected_debug:append(terms.var_debug("#collected_term", syntax.start_anchor))
+					collected_debug:append(var_debug("#collected_term", syntax.start_anchor))
 					local ok, typed_usages, next_typed =
 						evaluator.check(next_term, env.typechecking_context, next_elem_type)
 					if not ok then
@@ -1501,7 +1497,7 @@ collect_host_tuple = metalanguage.reducer(
 							flex_value.singleton(next_elem_type, next_val),
 							env.typechecking_context.runtime_context,
 							syntax.start_anchor,
-							terms.var_debug("#collect-host-tuple-param", syntax.start_anchor),
+							var_debug("#collect-host-tuple-param", syntax.start_anchor),
 							env.typechecking_context
 						)
 					)
@@ -1520,7 +1516,7 @@ collect_host_tuple = metalanguage.reducer(
 				}, metalanguage.failure_handler, ExpressionArgs.new(goal, env))
 				if ok and continue then
 					collected_terms:append(next_term)
-					collected_debug:append(terms.var_debug("#collected_term", syntax.start_anchor))
+					collected_debug:append(var_debug("#collected_term", syntax.start_anchor))
 				end
 			end
 		end
@@ -1584,7 +1580,7 @@ local block = metalanguage.reducer(
 		if not goal:is_infer() then
 			error("NYI non-infer cases for block")
 		end
-		local lastval = inferrable_term.tuple_cons(inferrable_array(), debug_array())
+		local lastval = inferrable_term.tuple_cons(inferrable_term_array(), var_debug_array())
 		local newval
 		local ok, continue = true, true
 		while ok and continue do
@@ -1650,7 +1646,7 @@ local top_level_block = metalanguage.reducer(
 		if not goal:is_infer() then
 			error("NYI non-infer cases for block")
 		end
-		local lastval = inferrable_term.tuple_cons(inferrable_array(), debug_array())
+		local lastval = inferrable_term.tuple_cons(inferrable_term_array(), var_debug_array())
 		local newval
 		local ok, continue = true, true
 
@@ -1737,7 +1733,7 @@ local function build_host_type_tuple(elems)
 	for _, v in ipairs(elems) do
 		result = strict_value.enum_value(
 			terms.DescCons.cons,
-			strict_value.tuple_value(array(strict_value)(result, const_combinator(v)))
+			strict_value.tuple_value(strict_value_array(result, const_combinator(v)))
 		)
 	end
 

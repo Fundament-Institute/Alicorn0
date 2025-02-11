@@ -3,8 +3,8 @@ local U = require "alicorn-utils"
 local terms = require "terms"
 local flex_runtime_context = terms.flex_runtime_context
 local typechecking_context = terms.typechecking_context
-local inferrable_term = terms.inferrable_term
-local typed_term = terms.typed_term
+local inferrable_term, inferrable_term_array = terms.inferrable_term, terms.inferrable_term_array
+local typed_term, typed_term_array = terms.typed_term, terms.typed_term_array
 local value = terms.value
 
 local gen = require "terms-generators"
@@ -12,8 +12,6 @@ local map = gen.declare_map
 local string_inferrable_map = map(gen.builtin_string, inferrable_term)
 local string_typed_map = map(gen.builtin_string, typed_term)
 local array = gen.declare_array
-local inferrable_array = array(inferrable_term)
-local typed_array = array(typed_term)
 local value_array = array(value)
 local usage_array = array(gen.builtin_number)
 local string_array = array(gen.builtin_string)
@@ -151,7 +149,7 @@ local function prim_lit(x)
 	return U.notail(lit(value.prim(x)))
 end
 local function prim_tup(...)
-	return U.notail(typed_term.prim_tuple_cons(typed_array(...)))
+	return U.notail(typed_term.prim_tuple_cons(typed_term_array(...)))
 end
 
 local p69 = prim_lit(69)

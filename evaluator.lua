@@ -11,14 +11,15 @@ local s = pretty_printer.s
 --local new_typechecking_context = terms.typechecking_context
 --local checkable_term = terms.checkable_term
 --local inferrable_term = terms.inferrable_term
-local typed_term = terms.typed_term
+local typed_term, typed_term_array = terms.typed_term, terms.typed_term_array
 local free = terms.free
 local visibility = terms.visibility
 local purity = terms.purity
 local result_info = terms.result_info
-local flex_value = terms.flex_value
-local strict_value = terms.strict_value
+local flex_value, flex_value_array = terms.flex_value, terms.flex_value_array
+local strict_value, strict_value_array = terms.strict_value, terms.strict_value_array
 local stuck_value = terms.stuck_value
+local var_debug, var_debug_array = terms.var_debug, terms.var_debug_array
 local host_syntax_type = terms.host_syntax_type
 local host_environment_type = terms.host_environment_type
 local host_typed_term_type = terms.host_typed_term_type
@@ -32,13 +33,10 @@ local map = gen.declare_map
 local string_typed_map = map(gen.builtin_string, typed_term)
 local string_value_map = map(gen.builtin_string, flex_value)
 local array = gen.declare_array
-local typed_array = array(typed_term)
-local flex_value_array = array(flex_value)
 local host_array = array(gen.any_lua_type)
 local usage_array = array(gen.builtin_number)
 local usage_map = map(gen.builtin_number, gen.builtin_number)
 local string_array = array(gen.builtin_string)
-local debug_array = array(terms.var_debug)
 
 local internals_interface = require "internals-interface"
 
@@ -52,7 +50,6 @@ local result_info_pure = flex_value.result_info(result_info(purity.pure))
 local OMEGA = 9
 local typechecker_state
 local name_array = string_array
-local typed = terms.typed_term
 
 ---@module "_meta/evaluator/apply_value"
 local apply_value
@@ -107,42 +104,41 @@ function ConstraintError.new(desc, left, l_ctx, op, right, r_ctx, cause)
 	}, constraint_error_mt)
 end
 
-local strict_value_array = gen.declare_array(strict_value)
-local empty_tuple = terms.strict_value.tuple_value(strict_value_array())
+local empty_tuple = strict_value.tuple_value(strict_value_array())
 
 ---@param luafunc function
 ---@return strict_value
 local function luatovalue(luafunc)
 	local luafunc_debug = debug.getinfo(luafunc, "u")
 	local parameters = name_array()
-	local params_dbg = debug_array()
+	local params_dbg = var_debug_array()
 	local len = luafunc_debug.nparams
-	local new_body = typed_array()
+	local new_body = typed_term_array()
 
-	local arg_dbg = terms.var_debug("#host-arg", format.anchor_here())
+	local arg_dbg = var_debug("#host-arg", format.anchor_here())
 	for i = 1, len do
 		local param_name = debug.getlocal(luafunc, i)
-		local param_dbg = terms.var_debug(param_name, format.anchor_here())
+		local param_dbg = var_debug(param_name, format.anchor_here())
 		parameters:append(param_name)
 		params_dbg:append(param_dbg)
-		new_body:append(typed.bound_variable(i + 2, param_dbg))
+		new_body:append(typed_term.bound_variable(i + 2, param_dbg))
 	end
 
 	return U.notail(
 		strict_value.closure(
 			"#luatovalue-args",
-			typed.application(
-				typed.literal(strict_value.host_value(luafunc)),
-				typed.tuple_elim(
+			typed_term.application(
+				typed_term.literal(strict_value.host_value(luafunc)),
+				typed_term.tuple_elim(
 					parameters,
 					params_dbg,
-					typed.bound_variable(2, arg_dbg),
+					typed_term.bound_variable(2, arg_dbg),
 					len,
-					typed.host_tuple_cons(new_body)
+					typed_term.host_tuple_cons(new_body)
 				)
 			),
 			empty_tuple,
-			terms.var_debug("#capture", format.anchor_here()),
+			var_debug("#capture", format.anchor_here()),
 			arg_dbg
 		)
 	)
@@ -554,8 +550,8 @@ end
 ---@param v strict_value
 ---@return strict_value
 local function const_combinator(v)
-	local arg_info = terms.var_debug("#CONST_PARAM", format.anchor_here())
-	local data_info = terms.var_debug("#CONST_CAPTURE", format.anchor_here())
+	local arg_info = var_debug("#CONST_PARAM", format.anchor_here())
+	local data_info = var_debug("#CONST_CAPTURE", format.anchor_here())
 	local name, _ = arg_info:unwrap_var_debug()
 	return U.notail(strict_value.closure(name, typed_term.bound_variable(1, data_info), v, data_info, arg_info))
 end
@@ -928,7 +924,7 @@ local substitute_inner
 ---@return typed term a typed term
 local function substitute_inner_impl(val, mappings, mappings_changed, context_len, ambient_typechecking_context)
 	-- If this is strict, simply return it inside a literal, since no substitution is necessary no matter what it is.
-	if terms.flex_value.value_check(val) ~= true then
+	if flex_value.value_check(val) ~= true then
 		error(
 			"substitute_inner_impl: expected a flex_value (did you forget to wrap a strict or stuck value?): "
 				.. tostring(val)
@@ -982,7 +978,7 @@ local function substitute_inner_impl(val, mappings, mappings_changed, context_le
 		return U.notail(typed_term.operative_type_cons(typed_handler, typed_userdata_type))
 	elseif val:is_tuple_value() then
 		local elems = val:unwrap_tuple_value()
-		local res = typed_array()
+		local res = typed_term_array()
 		for _, v in elems:ipairs() do
 			res:append(substitute_inner(v, mappings, mappings_changed, context_len, ambient_typechecking_context))
 		end
@@ -1169,7 +1165,7 @@ local function substitute_inner_impl(val, mappings, mappings_changed, context_le
 		)
 	elseif val:is_host_tuple() then
 		local leading, stuck, trailing = val:unwrap_host_tuple()
-		local elems = typed_array()
+		local elems = typed_term_array()
 		-- leading is an array of unwrapped host_values and must already be unwrapped host values
 		for _, elem in leading:ipairs() do
 			local elem_value = typed_term.literal(strict_value.host_value(elem))
@@ -1246,7 +1242,7 @@ local function substitute_inner_impl(val, mappings, mappings_changed, context_le
 		return U.notail(typed_term.host_wrapped_type(type))
 	elseif val:is_host_user_defined_type() then
 		local id, family_args = val:unwrap_host_user_defined_type()
-		local res = typed_array()
+		local res = typed_term_array()
 		for _, v in family_args:ipairs() do
 			res:append(substitute_inner(v, mappings, mappings_changed, context_len, ambient_typechecking_context))
 		end
@@ -1257,8 +1253,8 @@ local function substitute_inner_impl(val, mappings, mappings_changed, context_le
 		return U.notail(typed_term.host_tuple_type(desc))
 	elseif val:is_range() then
 		local lower_bounds, upper_bounds, relation = val:unwrap_range()
-		local sub_lower_bounds = typed_array()
-		local sub_upper_bounds = typed_array()
+		local sub_lower_bounds = typed_term_array()
+		local sub_upper_bounds = typed_term_array()
 		for _, v in lower_bounds:ipairs() do
 			local sub = substitute_inner(v, mappings, mappings_changed, context_len, ambient_typechecking_context)
 			sub_lower_bounds:append(sub)
@@ -1317,7 +1313,7 @@ local function substitute_inner_impl(val, mappings, mappings_changed, context_le
 			context_len,
 			ambient_typechecking_context
 		)
-		return U.notail(typed.host_intrinsic(source_term, start_anchor))
+		return U.notail(typed_term.host_intrinsic(source_term, start_anchor))
 	else
 		error("Unhandled value kind in substitute_inner: " .. val.kind)
 	end
@@ -1362,9 +1358,9 @@ local function substitute_type_variables(val, debuginfo, index, param_name, ctx,
 	}
 
 	local _, source = debuginfo:unwrap_var_debug()
-	local capture_info = terms.var_debug("#capture", source)
+	local capture_info = var_debug("#capture", source)
 
-	local elements = typed_array()
+	local elements = typed_term_array()
 	local body_usages = usage_map()
 	gather_usages(val, body_usages, 1, ambient_typechecking_context)
 
@@ -1372,7 +1368,7 @@ local function substitute_type_variables(val, debuginfo, index, param_name, ctx,
 		if i <= ambient_typechecking_context:len() and v > 0 then
 			local _, info = ambient_typechecking_context.runtime_context:get(i)
 			elements:append(typed_term.bound_variable(i, info))
-			mappings[i] = typed_term.tuple_element_access(typed.bound_variable(i, capture_info), #elements)
+			mappings[i] = typed_term.tuple_element_access(typed_term.bound_variable(i, capture_info), #elements)
 		end
 	end
 
@@ -1393,7 +1389,7 @@ local function substitute_placeholders_identity(val, typechecking_context, hidde
 	local size = typechecking_context.bindings:len()
 	for i = 1, size do
 		local _, info = typechecking_context.runtime_context:get(i)
-		mappings[i] = typed.bound_variable(i, info)
+		mappings[i] = typed_term.bound_variable(i, info)
 	end
 	return U.notail(substitute_inner(val, mappings, false, size + (hidden or 0), typechecking_context))
 end
@@ -1406,9 +1402,9 @@ end
 ---@param ambient_typechecking_context TypecheckingContext
 ---@return typed lambda_term `typed_term.lambda`
 local function substitute_usages_into_lambda(val, context, usages, anchor, param_dbg, ambient_typechecking_context)
-	local elements = typed_array()
+	local elements = typed_term_array()
 	local mappings = { [context.bindings:len() + 1] = typed_term.bound_variable(2, param_dbg) }
-	local capture_info = terms.var_debug("#capture", anchor)
+	local capture_info = var_debug("#capture", anchor)
 
 	local keys = {}
 	if getmetatable(usages) ~= nil and getmetatable(getmetatable(usages)) == gen.array_type_mt then
@@ -1688,15 +1684,15 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 		terms.DescCons.empty,
 		flex_value.tuple_type(flex_value.enum_value(terms.DescCons.empty, flex_value.tuple_value(flex_value_array())))
 	)
-	local arg_name = terms.var_debug("#arg" .. tostring(#r_ctx + 1), format.anchor_here())
-	local universe_dbg = terms.var_debug("#univ", format.anchor_here())
-	local prefix_desc_dbg = terms.var_debug("#prefix-desc", format.anchor_here())
+	local arg_name = var_debug("#arg" .. tostring(#r_ctx + 1), format.anchor_here())
+	local universe_dbg = var_debug("#univ", format.anchor_here())
+	local prefix_desc_dbg = var_debug("#prefix-desc", format.anchor_here())
 	-- The tuple descriptor's universe can depend on it's context.
 	local universe_lambda = substitute_into_lambda(
 		b,
 		r_ctx.runtime_context,
 		format.anchor_here(),
-		terms.var_debug("#prefix", format.anchor_here()),
+		var_debug("#prefix", format.anchor_here()),
 		r_ctx
 	)
 	-- The cons variant takes a prefix description and a next element, represented as a function from the prefix tuple to a type in the specified universe
@@ -1705,13 +1701,13 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 		"#prefix",
 		typed_term.tuple_elim(
 			string_array("prefix-desc"),
-			debug_array(prefix_desc_dbg),
+			var_debug_array(prefix_desc_dbg),
 			typed_term.bound_variable(2, arg_name),
 			1,
 			typed_term.pi(
 				typed_term.tuple_type(typed_term.bound_variable(3, prefix_desc_dbg)),
-				typed.literal(strict_value.param_info(strict_value.visibility(terms.visibility.explicit))),
-				typed.lambda(
+				typed_term.literal(strict_value.param_info(strict_value.visibility(terms.visibility.explicit))),
+				typed_term.lambda(
 					arg_name.name,
 					arg_name,
 					typed_term.bound_variable(1, universe_dbg),
@@ -1719,7 +1715,7 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 					universe_dbg,
 					format.anchor_here()
 				),
-				typed.literal(strict_value.result_info(terms.result_info(terms.purity.pure)))
+				typed_term.literal(strict_value.result_info(terms.result_info(terms.purity.pure)))
 			)
 		),
 		b_universe,
@@ -1791,7 +1787,7 @@ add_comparer("flex_value.tuple_desc_type", "flex_value.enum_type", function(l_ct
 										"#prefix",
 										typed_term.literal(a),
 										r_ctx.runtime_context,
-										terms.var_debug("", format.anchor_here())
+										var_debug("", format.anchor_here())
 									)
 								)
 							)
@@ -1800,27 +1796,27 @@ add_comparer("flex_value.tuple_desc_type", "flex_value.enum_type", function(l_ct
 							"#prefix",
 							typed_term.tuple_elim(
 								string_array("prefix-desc"),
-								debug_array(terms.var_debug("prefix-desc", format.anchor_here())),
-								typed_term.bound_variable(#r_ctx + 2, terms.var_debug("", format.anchor_here())),
+								var_debug_array(var_debug("prefix-desc", format.anchor_here())),
+								typed_term.bound_variable(#r_ctx + 2, var_debug("", format.anchor_here())),
 								1,
 								typed_term.pi(
 									typed_term.tuple_type(
-										typed_term.bound_variable(#r_ctx + 3, terms.var_debug("", format.anchor_here()))
+										typed_term.bound_variable(#r_ctx + 3, var_debug("", format.anchor_here()))
 									),
-									typed.literal(
+									typed_term.literal(
 										strict_value.param_info(strict_value.visibility(terms.visibility.explicit))
 									),
-									typed.lambda(
+									typed_term.lambda(
 										"#arg" .. tostring(#r_ctx + 1),
-										terms.var_debug("", format.anchor_here()),
-										typed_term.bound_variable(#r_ctx + 1, terms.var_debug("", format.anchor_here())),
+										var_debug("", format.anchor_here()),
+										typed_term.bound_variable(#r_ctx + 1, var_debug("", format.anchor_here())),
 										format.anchor_here()
 									),
-									typed.literal(strict_value.result_info(terms.result_info(terms.purity.pure)))
+									typed_term.literal(strict_value.result_info(terms.result_info(terms.purity.pure)))
 								)
 							),
-							r_ctx.runtime_context:append(a_univ, "a_univ", terms.var_debug("", format.anchor_here())),
-							terms.var_debug("", format.anchor_here())
+							r_ctx.runtime_context:append(a_univ, "a_univ", var_debug("", format.anchor_here())),
+							var_debug("", format.anchor_here())
 						)
 					)
 				)
@@ -1865,7 +1861,7 @@ add_comparer("flex_value.pi", "flex_value.pi", function(l_ctx, a, r_ctx, b, caus
 		a_param_type,
 		nestcause("pi function parameters", cause, b_param_type, a_param_type, r_ctx, l_ctx)
 	)
-	--local unique_placeholder = flex_value.stuck(terms.stuck_value.free(terms.free.unique({})))
+	--local unique_placeholder = flex_value.stuck(stuck_value.free(terms.free.unique({})))
 	--local a_res = apply_value(a_result_type, unique_placeholder, l_ctx)
 	--local b_res = apply_value(b_result_type, unique_placeholder, r_ctx)
 	--typechecker_state:queue_constrain(a_res, FunctionRelation(UniverseOmegaRelation), b_res, "pi function results")
@@ -1904,7 +1900,7 @@ add_comparer("flex_value.host_function_type", "flex_value.host_function_type", f
 		a_param_type,
 		nestcause("host function parameters", cause, b_param_type, a_param_type, r_ctx, l_ctx)
 	)
-	--local unique_placeholder = flex_value.stuck(terms.stuck_value.free(terms.free.unique({})))
+	--local unique_placeholder = flex_value.stuck(stuck_value.free(terms.free.unique({})))
 	--local a_res = apply_value(a_result_type, unique_placeholder, l_ctx)
 	--local b_res = apply_value(b_result_type, unique_placeholder, r_ctx)
 	--typechecker_state:queue_constrain(b_res, FunctionRelation(UniverseOmegaRelation), a_res, "host function parameters")
@@ -2392,7 +2388,7 @@ local function check(
 		end
 
 		local usages = usage_array()
-		local new_elements = typed_array()
+		local new_elements = typed_term_array()
 		local desc = terms.empty
 
 		for i, v in elements:ipairs() do
@@ -2686,9 +2682,9 @@ end
 ---@param make_prefix_b fun(i: integer): flex_value
 ---@param r_ctx TypecheckingContext
 ---@return boolean ok
----@return ArrayType|string tuple_types_a array(flex_value)
----@return ArrayType tuple_types_b array(flex_value)
----@return ArrayType tuple_vals array(flex_value)
+---@return (ArrayValue<flex_value> | string) tuple_types_a
+---@return ArrayValue<flex_value> tuple_types_b
+---@return ArrayValue<flex_value> tuple_vals
 ---@return integer n_elements
 local function make_inner_context2(desc_a, make_prefix_a, l_ctx, desc_b, make_prefix_b, r_ctx)
 	if not desc_a:is_enum_value() then
@@ -2817,7 +2813,7 @@ local function infer_impl(
 		end
 
 		local param_type = evaluate(param_term, typechecking_context:get_runtime_context(), typechecking_context)
-		local param_debug = terms.var_debug(param_name, start_anchor)
+		local param_debug = var_debug(param_name, start_anchor)
 		local inner_context = typechecking_context:append(param_name, param_type, nil, param_debug)
 		local ok, purity_usages, purity_term =
 			check(purity, typechecking_context, flex_value.strict(terms.host_purity_type))
@@ -3027,7 +3023,7 @@ local function infer_impl(
 		-- takes all previous values and produces the type of the next element
 		local type_data = terms.empty
 		local usages = usage_array()
-		local new_elements = typed_array()
+		local new_elements = typed_term_array()
 		for i, v in elements:ipairs() do
 			local ok, el_type, el_usages, el_term = infer(v, typechecking_context)
 			if not ok then
@@ -3073,7 +3069,7 @@ local function infer_impl(
 		-- TODO: it is a type error to put something that isn't a host_value into a host tuple
 		local type_data = terms.empty
 		local usages = usage_array()
-		local new_elements = typed_array()
+		local new_elements = typed_term_array()
 		for i, v in elements:ipairs() do
 			local ok, el_type, el_usages, el_term = infer(v, typechecking_context)
 			if not ok then
@@ -3203,7 +3199,7 @@ local function infer_impl(
 		return true,
 			U.notail(flex_value.union_type(flex_value.star(0, 0), univ_var)),
 			desc_usages,
-			U.notail(terms.typed_term.tuple_type(desc_term))
+			U.notail(typed_term.tuple_type(desc_term))
 	elseif inferrable_term:is_record_cons() then
 		local fields = inferrable_term:unwrap_record_cons()
 		-- type_data is either "empty", an empty tuple,
@@ -3222,7 +3218,7 @@ local function infer_impl(
 				strict_value.name(k),
 				substitute_type_variables(
 					field_type,
-					terms.var_debug("#record-cons-el", format.anchor_here()),
+					var_debug("#record-cons-el", format.anchor_here()),
 					typechecking_context:len() + 1,
 					"#record-cons-el",
 					typechecking_context:get_runtime_context(),
@@ -3298,7 +3294,7 @@ local function infer_impl(
 			if t == nil then
 				error("infer: trying to access a nonexistent record field")
 			end
-			inner_context = inner_context:append(v, t, nil, terms.var_debug(v, format.anchor_here()))
+			inner_context = inner_context:append(v, t, nil, var_debug(v, format.anchor_here()))
 		end
 
 		-- infer the type of the body, now knowing the type of the record
@@ -3377,7 +3373,7 @@ local function infer_impl(
 		for i = 2, #result_types do
 			result_type = flex_value.union_type(result_type, result_types[i])
 		end
-		local absurd_info = terms.var_debug("#absurd", format.anchor_here())
+		local absurd_info = var_debug("#absurd", format.anchor_here())
 		return true,
 			result_type,
 			usages,
@@ -3440,7 +3436,7 @@ local function infer_impl(
 		return true,
 			U.notail(flex_value.union_type(flex_value.star(0, 0), univ_var)),
 			desc_usages,
-			U.notail(terms.typed_term.enum_type(desc_term))
+			U.notail(typed_term.enum_type(desc_term))
 	elseif inferrable_term:is_object_cons() then
 		local methods = inferrable_term:unwrap_object_cons()
 		local type_data = terms.empty
@@ -3538,7 +3534,7 @@ local function infer_impl(
 			U.notail(typed_term.operative_type_cons(handler_term, userdata_type_term))
 	elseif inferrable_term:is_host_user_defined_type_cons() then
 		local id, family_args = inferrable_term:unwrap_host_user_defined_type_cons()
-		local new_family_args = typed_array()
+		local new_family_args = typed_term_array()
 		local result_usages = usage_array()
 		for _, v in family_args:ipairs() do
 			local ok, e_type, e_usages, e_term = infer(v, typechecking_context)
@@ -3669,7 +3665,7 @@ local function infer_impl(
 		-- NYI usages are fucky, should remove ones not used in body
 		add_arrays(result_usages, exprusages)
 		add_arrays(result_usages, bodyusages)
-		return true, bodytype, result_usages, U.notail(terms.typed_term.let(name, debuginfo, exprterm, bodyterm))
+		return true, bodytype, result_usages, U.notail(typed_term.let(name, debuginfo, exprterm, bodyterm))
 	elseif inferrable_term:is_host_intrinsic() then
 		local source, type, start_anchor = inferrable_term:unwrap_host_intrinsic()
 		local usages = usage_array()
@@ -3754,7 +3750,7 @@ local function infer_impl(
 		if not ok then
 			return false, err
 		end
-		return true, U.notail(flex_value.star(0, 0)), desc_usages, U.notail(terms.typed_term.host_tuple_type(desc_term))
+		return true, U.notail(flex_value.star(0, 0)), desc_usages, U.notail(typed_term.host_tuple_type(desc_term))
 	elseif inferrable_term:is_program_sequence() then
 		local first, start_anchor, continue = inferrable_term:unwrap_program_sequence()
 		local ok, first_type, first_usages, first_term = infer(first, typechecking_context)
@@ -3927,22 +3923,22 @@ local function gen_base_operator_aux(tuple_name, capture, debug_tuple_element_na
 		---@cast debug_tuple_element_name var_debug
 		return debug_tuple_element_name.name
 	end)
-	local debug_tuple_arg = terms.var_debug(tuple_arg_name, format.anchor_here())
+	local debug_tuple_arg = var_debug(tuple_arg_name, format.anchor_here())
 	local bound_tuple_element_variables = {}
 	for i, v in ipairs(debug_tuple_element_names) do
-		table.insert(bound_tuple_element_variables, terms.typed_term.bound_variable(2 + i, v))
+		table.insert(bound_tuple_element_variables, typed_term.bound_variable(2 + i, v))
 	end
 
-	local debug_capture = terms.var_debug("#capture", format.anchor_here())
-	local typed_capture = typed.bound_variable(1, debug_capture)
+	local debug_capture = var_debug("#capture", format.anchor_here())
+	local typed_capture = typed_term.bound_variable(1, debug_capture)
 	local body = fn_op(typed_capture, bound_tuple_element_variables)
 	return U.notail(
-		terms.flex_value.closure(
+		flex_value.closure(
 			tuple_arg_name,
-			terms.typed_term.tuple_elim(
+			typed_term.tuple_elim(
 				tuple_element_names,
 				debug_tuple_element_names,
-				terms.typed_term.bound_variable(2, debug_tuple_arg),
+				typed_term.bound_variable(2, debug_tuple_arg),
 				#tuple_element_names,
 				body
 			),
@@ -3957,7 +3953,7 @@ end
 ---@param fn_op (fun(...: typed): typed) returns `body`. must not use variadic arguments.
 ---@return strict_value closure_value `strict_value.closure`
 local function gen_base_operator(tuple_name, fn_op)
-	local debug_tuple_element_names = debug_array()
+	local debug_tuple_element_names = var_debug_array()
 	if type(fn_op) ~= "function" then
 		error(string.format("gen_base_operator: fn_op is not a function: %s", s(fn_op)))
 	end
@@ -3984,7 +3980,7 @@ local function gen_base_operator(tuple_name, fn_op)
 	for i = 1, debug_tuple_element_names_length do
 		local tuple_element_name = debug.getlocal(fn_op, i)
 		tuple_element_name = tuple_element_name:gsub("_", "-")
-		debug_tuple_element_names:append(terms.var_debug(tuple_element_name, format.anchor_here()))
+		debug_tuple_element_names:append(var_debug(tuple_element_name, format.anchor_here()))
 	end
 	return U.notail(
 		gen_base_operator_aux(
@@ -4019,13 +4015,13 @@ local function tuple_desc_elem(desc, elem, head_names, tail_names)
 			-- element of head, which is always lost (and sometimes not even asked for)
 			local head_names_length, tail_names_length = #head_names, #tail_names
 			-- convert to just tuple of tail
-			local tail_args = typed_array()
+			local tail_args = typed_term_array()
 			for i = 1, tail_names_length do
 				-- 2 for closure argument and capture (passed to tuple_elim)
 				-- head_n for head
 				tail_args:append(bound_tuple_element_variables[head_names_length + i])
 			end
-			return U.notail(typed.application(capture, typed.tuple_cons(tail_args)))
+			return U.notail(typed_term.application(capture, typed_term.tuple_cons(tail_args)))
 		end
 	)
 	return U.notail(terms.cons(desc, elem_wrap))
@@ -4034,31 +4030,31 @@ end
 local intrinsic_memo = setmetatable({}, { __mode = "v" })
 
 ---evaluate a typed term in a contextual
----@param typed_term typed
+---@param typed typed
 ---@param runtime_context FlexRuntimeContext
 ---@param ambient_typechecking_context TypecheckingContext
 ---@return flex_value
-local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_context)
+local function evaluate_impl(typed, runtime_context, ambient_typechecking_context)
 	-- -> an alicorn value
 	-- TODO: typecheck typed_term and runtime_context?
-	if terms.typed_term.value_check(typed_term) ~= true then
+	if typed_term.value_check(typed) ~= true then
 		error("evaluate, typed_term: expected a typed term")
 	end
 	if terms.flex_runtime_context_type.value_check(runtime_context) ~= true then
 		error("evaluate, runtime_context: expected a runtime context")
 	end
 
-	if typed_term:is_bound_variable() then
-		local idx, b_dbg = typed_term:unwrap_bound_variable()
+	if typed:is_bound_variable() then
+		local idx, b_dbg = typed:unwrap_bound_variable()
 		local rc_val, c_dbg = runtime_context:get(idx)
 		if rc_val == nil then
-			p(typed_term)
+			p(typed)
 			error("runtime_context:get() for bound_variable returned nil")
 		end
 		if b_dbg ~= c_dbg then
 			error(
 				"Debug information doesn't match! Contexts are mismatched! Variable #"
-					.. tostring(typed_term["{ID}"])
+					.. tostring(typed["{ID}"])
 					.. " thinks it is getting "
 					.. tostring(b_dbg)
 					.. " but context thinks it has "
@@ -4068,18 +4064,18 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			)
 		end
 		return rc_val
-	elseif typed_term:is_literal() then
-		return U.notail(flex_value.strict(typed_term:unwrap_literal()))
-	elseif typed_term:is_metavariable() then
-		return U.notail(flex_value.stuck(stuck_value.free(free.metavariable(typed_term:unwrap_metavariable()))))
-	elseif typed_term:is_unique() then
-		return U.notail(flex_value.stuck(stuck_value.free(free.unique(typed_term:unwrap_unique()))))
-	elseif typed_term:is_lambda() then
-		local param_name, param_debug, body, capture, capture_dbg, anchor = typed_term:unwrap_lambda()
+	elseif typed:is_literal() then
+		return U.notail(flex_value.strict(typed:unwrap_literal()))
+	elseif typed:is_metavariable() then
+		return U.notail(flex_value.stuck(stuck_value.free(free.metavariable(typed:unwrap_metavariable()))))
+	elseif typed:is_unique() then
+		return U.notail(flex_value.stuck(stuck_value.free(free.unique(typed:unwrap_unique()))))
+	elseif typed:is_lambda() then
+		local param_name, param_debug, body, capture, capture_dbg, anchor = typed:unwrap_lambda()
 		local capture_val = evaluate(capture, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.closure(param_name, body, capture_val, capture_dbg, param_debug))
-	elseif typed_term:is_pi() then
-		local param_type, param_info, result_type, result_info = typed_term:unwrap_pi()
+	elseif typed:is_pi() then
+		local param_type, param_info, result_type, result_info = typed:unwrap_pi()
 		local param_type_value = evaluate(param_type, runtime_context, ambient_typechecking_context)
 		local param_info_value = evaluate(param_info, runtime_context, ambient_typechecking_context)
 		local result_type_value = evaluate(result_type, runtime_context, ambient_typechecking_context)
@@ -4114,10 +4110,10 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			runtime_context
 		)]]
 		local res = flex_value.pi(param_type_value, param_info_value, result_type_value, result_info_value)
-		--res.original_name = typed_term.original_name
+		--res.original_name = typed.original_name
 		return res
-	elseif typed_term:is_application() then
-		local f, arg = typed_term:unwrap_application()
+	elseif typed:is_application() then
+		local f, arg = typed:unwrap_application()
 
 		local f_value = evaluate(f, runtime_context, ambient_typechecking_context)
 		--local f_value = U.tag("evaluate", { f = f:pretty_preprint(runtime_context) }, evaluate, f, runtime_context)
@@ -4130,16 +4126,16 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		--return U.notail(
 		--	U.tag("apply_value", { f_value = f_value, arg_value = arg_value }, apply_value, f_value, arg_value)
 		--)
-	elseif typed_term:is_tuple_cons() then
-		local elements = typed_term:unwrap_tuple_cons()
+	elseif typed:is_tuple_cons() then
+		local elements = typed:unwrap_tuple_cons()
 		local new_elements = flex_value_array()
 		for i, v in elements:ipairs() do
 			new_elements:append(evaluate(v, runtime_context, ambient_typechecking_context))
 			--new_elements:append(U.tag("evaluate", { ["element_" .. tostring(i)] = v }, evaluate, v, runtime_context))
 		end
 		return U.notail(flex_value.tuple_value(new_elements))
-	elseif typed_term:is_host_tuple_cons() then
-		local elements = typed_term:unwrap_host_tuple_cons()
+	elseif typed:is_host_tuple_cons() then
+		local elements = typed:unwrap_host_tuple_cons()
 		local new_elements = host_array()
 		local stuck = false
 		local stuck_element
@@ -4160,7 +4156,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 				stuck_element = element_value:unwrap_stuck()
 				trailing_values = flex_value_array()
 			else
-				print("term that fails", typed_term)
+				print("term that fails", typed)
 				print("which element", i)
 				print("element_value", element_value)
 				error("evaluate, is_host_tuple_cons, element_value: expected a host value")
@@ -4171,8 +4167,8 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		else
 			return U.notail(flex_value.host_tuple_value(new_elements))
 		end
-	elseif typed_term:is_tuple_elim() then
-		local names, infos, subject, length, body = typed_term:unwrap_tuple_elim()
+	elseif typed:is_tuple_elim() then
+		local names, infos, subject, length, body = typed:unwrap_tuple_elim()
 		if names:len() ~= length or infos:len() ~= length then
 			error("Invalid names or infos length!")
 		end
@@ -4231,8 +4227,8 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		end
 		return U.notail(evaluate(body, inner_context, ambient_typechecking_context))
 		--return U.tag("evaluate", { body = body:pretty_preprint(runtime_context) }, evaluate, body, inner_context)
-	elseif typed_term:is_tuple_element_access() then
-		local tuple_term, index = typed_term:unwrap_tuple_element_access()
+	elseif typed:is_tuple_element_access() then
+		local tuple_term, index = typed:unwrap_tuple_element_access()
 		local tuple = evaluate(tuple_term, runtime_context, ambient_typechecking_context)
 		--[[local tuple = U.tag(
 			"evaluate",
@@ -4242,8 +4238,8 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			runtime_context
 		)]]
 		return U.notail(index_tuple_value(tuple, index))
-	elseif typed_term:is_tuple_type() then
-		local desc_term = typed_term:unwrap_tuple_type()
+	elseif typed:is_tuple_type() then
+		local desc_term = typed:unwrap_tuple_type()
 		local desc = evaluate(desc_term, runtime_context, ambient_typechecking_context)
 		--[[local desc = U.tag(
 			"evaluate",
@@ -4253,12 +4249,12 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			runtime_context
 		)]]
 		return U.notail(flex_value.tuple_type(desc))
-	elseif typed_term:is_tuple_desc_type() then
-		local universe_term = typed_term:unwrap_tuple_desc_type()
+	elseif typed:is_tuple_desc_type() then
+		local universe_term = typed:unwrap_tuple_desc_type()
 		local universe = evaluate(universe_term, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.tuple_desc_type(universe))
-	elseif typed_term:is_tuple_desc_concat_indep() then
-		local head_tm, tail_tm = typed_term:unwrap_tuple_desc_concat_indep()
+	elseif typed:is_tuple_desc_concat_indep() then
+		local head_tm, tail_tm = typed:unwrap_tuple_desc_concat_indep()
 
 		local head = evaluate(head_tm, runtime_context, ambient_typechecking_context)
 		local tail = evaluate(tail_tm, runtime_context, ambient_typechecking_context)
@@ -4296,9 +4292,9 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		if head_code:is_tuple_elim() then
 			_, head_names, _, _, _ = head_code:unwrap_tuple_elim()
 		else
-			head_names = debug_array()
+			head_names = var_debug_array()
 			for i = 1, head_n do
-				head_names[i] = terms.var_debug("head_unk_" .. tostring(i), format.anchor_here())
+				head_names[i] = var_debug("head_unk_" .. tostring(i), format.anchor_here())
 			end
 		end
 		local desc = head
@@ -4311,24 +4307,24 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			if tail_code:is_tuple_elim() then
 				_, tail_names, _, _, _ = tail_code:unwrap_tuple_elim()
 			else
-				tail_names = debug_array()
+				tail_names = var_debug_array()
 				for i = 1, tail_n_now do
-					tail_names[i] = terms.var_debug("tail_unk_" .. tostring(i), format.anchor_here())
+					tail_names[i] = var_debug("tail_unk_" .. tostring(i), format.anchor_here())
 				end
 			end
 			desc = tuple_desc_elem(desc, elem, head_names, tail_names)
 		end
 		return desc
-	elseif typed_term:is_record_cons() then
-		local fields = typed_term:unwrap_record_cons()
+	elseif typed:is_record_cons() then
+		local fields = typed:unwrap_record_cons()
 		local new_fields = string_value_map()
 		for k, v in pairs(fields) do
 			new_fields[k] = evaluate(v, runtime_context, ambient_typechecking_context)
 			--new_fields[k] = U.tag("evaluate", { ["record_field_" .. tostring(k)] = v }, evaluate, v, runtime_context)
 		end
 		return U.notail(flex_value.record_value(new_fields))
-	elseif typed_term:is_record_elim() then
-		local subject, field_names, body = typed_term:unwrap_record_elim()
+	elseif typed:is_record_elim() then
+		local subject, field_names, body = typed:unwrap_record_elim()
 		local subject_value = evaluate(subject, runtime_context, ambient_typechecking_context)
 		--[[local subject_value = U.tag(
 			"evaluate",
@@ -4357,13 +4353,13 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		end
 		return U.notail(evaluate(body, inner_context, ambient_typechecking_context))
 		--return U.tag("evaluate", { body = body:pretty_preprint(runtime_context) }, evaluate, body, inner_context)
-	elseif typed_term:is_enum_cons() then
-		local constructor, arg = typed_term:unwrap_enum_cons()
+	elseif typed:is_enum_cons() then
+		local constructor, arg = typed:unwrap_enum_cons()
 		local arg_value = evaluate(arg, runtime_context, ambient_typechecking_context)
 		--local arg_value = U.tag("evaluate", { arg = arg:pretty_preprint(runtime_context) }, evaluate, arg, runtime_context)
 		return U.notail(flex_value.enum_value(constructor, arg_value))
-	elseif typed_term:is_enum_elim() then
-		local subject, mechanism = typed_term:unwrap_enum_elim()
+	elseif typed:is_enum_elim() then
+		local subject, mechanism = typed:unwrap_enum_elim()
 		local subject_value = evaluate(subject, runtime_context, ambient_typechecking_context)
 		local mechanism_value = evaluate(mechanism, runtime_context, ambient_typechecking_context)
 		--[[local subject_value = U.tag(
@@ -4388,7 +4384,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 					"#ENUM_PARAM",
 					methods[constructor],
 					capture,
-					terms.var_debug("", format.anchor_here())
+					var_debug("", format.anchor_here())
 				)
 				return U.notail(apply_value(this_method, arg, ambient_typechecking_context))
 			elseif mechanism_value:is_stuck() then
@@ -4404,8 +4400,8 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		else
 			error("evaluate, is_enum_elim, subject_value: expected an enum")
 		end
-	elseif typed_term:is_enum_desc_cons() then
-		local variants, rest = typed_term:unwrap_enum_desc_cons()
+	elseif typed:is_enum_desc_cons() then
+		local variants, rest = typed:unwrap_enum_desc_cons()
 		local result = string_value_map()
 		for k, v in variants:pairs() do
 			local v_res = evaluate(v, runtime_context, ambient_typechecking_context)
@@ -4420,16 +4416,16 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		else
 			error "non-concrete enum desc in rest slot, TODO"
 		end
-	elseif typed_term:is_enum_type() then
-		local desc = typed_term:unwrap_enum_type()
+	elseif typed:is_enum_type() then
+		local desc = typed:unwrap_enum_type()
 		local desc_val = evaluate(desc, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.enum_type(desc_val))
-	elseif typed_term:is_enum_desc_type() then
-		local universe_term = typed_term:unwrap_enum_desc_type()
+	elseif typed:is_enum_desc_type() then
+		local universe_term = typed:unwrap_enum_desc_type()
 		local universe = evaluate(universe_term, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.enum_desc_type(universe))
-	elseif typed_term:is_enum_case() then
-		local target, variants, variant_debug, default, default_debug = typed_term:unwrap_enum_case()
+	elseif typed:is_enum_case() then
+		local target, variants, variant_debug, default, default_debug = typed:unwrap_enum_case()
 		local target_val = evaluate(target, runtime_context, ambient_typechecking_context)
 		if target_val:is_enum_value() then
 			local variant, arg = target_val:unwrap_enum_value()
@@ -4453,11 +4449,11 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		else
 			error "enum case expression didn't evaluate to an enum_value"
 		end
-	elseif typed_term:is_enum_absurd() then
-		local target, debuginfo = typed_term:unwrap_enum_absurd()
+	elseif typed:is_enum_absurd() then
+		local target, debuginfo = typed:unwrap_enum_absurd()
 		error("ENUM ABSURD OCCURRED: " .. debuginfo)
-	elseif typed_term:is_variance_cons() then
-		local positive, srel = typed_term:unwrap_variance_cons()
+	elseif typed:is_variance_cons() then
+		local positive, srel = typed:unwrap_variance_cons()
 		local positive_value = evaluate(positive, runtime_context, ambient_typechecking_context)
 		--[[local positive_value = U.tag(
 			"evaluate",
@@ -4474,16 +4470,16 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			srel = srel_value:unwrap_host_value(),
 		}
 		return U.notail(flex_value.host_value(variance))
-	elseif typed_term:is_variance_type() then
+	elseif typed:is_variance_type() then
 		return U.notail(
 			flex_value.variance_type(
-				evaluate(typed_term:unwrap_variance_type(), runtime_context, ambient_typechecking_context)
+				evaluate(typed:unwrap_variance_type(), runtime_context, ambient_typechecking_context)
 			)
 		)
-	elseif typed_term:is_object_cons() then
-		return U.notail(flex_value.object_value(typed_term:unwrap_object_cons(), runtime_context))
-	elseif typed_term:is_object_elim() then
-		local subject, mechanism = typed_term:unwrap_object_elim()
+	elseif typed:is_object_cons() then
+		return U.notail(flex_value.object_value(typed:unwrap_object_cons(), runtime_context))
+	elseif typed:is_object_elim() then
+		local subject, mechanism = typed:unwrap_object_elim()
 		local subject_value = evaluate(subject, runtime_context, ambient_typechecking_context)
 		local mechanism_value = evaluate(mechanism, runtime_context, ambient_typechecking_context)
 		if subject_value:is_object_value() then
@@ -4494,7 +4490,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 					"#OBJECT_PARAM",
 					methods[constructor],
 					capture,
-					terms.var_debug("", format.anchor_here())
+					var_debug("", format.anchor_here())
 				)
 				return U.notail(apply_value(this_method, arg, ambient_typechecking_context))
 			elseif mechanism_value:is_stuck() then
@@ -4510,32 +4506,32 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		else
 			error("evaluate, is_object_elim, subject_value: expected an object")
 		end
-	elseif typed_term:is_operative_cons() then
-		local userdata = typed_term:unwrap_operative_cons()
+	elseif typed:is_operative_cons() then
+		local userdata = typed:unwrap_operative_cons()
 		local userdata_value = evaluate(userdata, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.operative_value(userdata_value))
-	elseif typed_term:is_operative_type_cons() then
-		local handler, userdata_type = typed_term:unwrap_operative_type_cons()
+	elseif typed:is_operative_type_cons() then
+		local handler, userdata_type = typed:unwrap_operative_type_cons()
 		local handler_value = evaluate(handler, runtime_context, ambient_typechecking_context)
 		local userdata_type_value = evaluate(userdata_type, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.operative_type(handler_value, userdata_type_value))
-	elseif typed_term:is_host_user_defined_type_cons() then
-		local id, family_args = typed_term:unwrap_host_user_defined_type_cons()
+	elseif typed:is_host_user_defined_type_cons() then
+		local id, family_args = typed:unwrap_host_user_defined_type_cons()
 		local new_family_args = flex_value_array()
 		for _, v in family_args:ipairs() do
 			new_family_args:append(evaluate(v, runtime_context, ambient_typechecking_context))
 		end
 		return U.notail(flex_value.host_user_defined_type(id, new_family_args))
-	elseif typed_term:is_host_wrapped_type() then
-		local type_term = typed_term:unwrap_host_wrapped_type()
+	elseif typed:is_host_wrapped_type() then
+		local type_term = typed:unwrap_host_wrapped_type()
 		local type_value = evaluate(type_term, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.host_wrapped_type(type_value))
-	elseif typed_term:is_host_unstrict_wrapped_type() then
-		local type_term = typed_term:unwrap_host_unstrict_wrapped_type()
+	elseif typed:is_host_unstrict_wrapped_type() then
+		local type_term = typed:unwrap_host_unstrict_wrapped_type()
 		local type_value = evaluate(type_term, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.host_wrapped_type(type_value))
-	elseif typed_term:is_host_wrap() then
-		local content = typed_term:unwrap_host_wrap()
+	elseif typed:is_host_wrap() then
+		local content = typed:unwrap_host_wrap()
 		local content_val = evaluate(content, runtime_context, ambient_typechecking_context)
 		if content_val:is_stuck() then
 			local nval = content_val:unwrap_stuck()
@@ -4546,12 +4542,12 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			return U.notail(flex_value.stuck(stuck_value.host_wrap(nval)))
 		end
 		return U.notail(flex_value.host_value(content_val:unwrap_strict()))
-	elseif typed_term:is_host_unstrict_wrap() then
-		local content = typed_term:unwrap_host_unstrict_wrap()
+	elseif typed:is_host_unstrict_wrap() then
+		local content = typed:unwrap_host_unstrict_wrap()
 		local content_val = evaluate(content, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.host_value(content_val))
-	elseif typed_term:is_host_unwrap() then
-		local unwrapped = typed_term:unwrap_host_unwrap()
+	elseif typed:is_host_unwrap() then
+		local unwrapped = typed:unwrap_host_unwrap()
 		local unwrap_val = evaluate(unwrapped, runtime_context, ambient_typechecking_context)
 		if not unwrap_val.as_host_value then
 			print("unwrapped", unwrapped, unwrap_val)
@@ -4572,8 +4568,8 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			print("unrecognized value in unbox", unwrap_val)
 			error "invalid value in unbox, must be host_value or neutral"
 		end
-	elseif typed_term:is_host_unstrict_unwrap() then
-		local unwrapped = typed_term:unwrap_host_unstrict_unwrap()
+	elseif typed:is_host_unstrict_unwrap() then
+		local unwrapped = typed:unwrap_host_unstrict_unwrap()
 		local unwrap_val = evaluate(unwrapped, runtime_context, ambient_typechecking_context)
 		if not unwrap_val.as_host_value then
 			print("unwrapped", unwrapped, unwrap_val)
@@ -4588,8 +4584,8 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			print("unrecognized value in unbox", unwrap_val)
 			error "invalid value in unbox, must be host_value or neutral"
 		end
-	elseif typed_term:is_host_int_fold() then
-		local num, fun, init = typed_term:unwrap_host_int_fold()
+	elseif typed:is_host_int_fold() then
+		local num, fun, init = typed:unwrap_host_int_fold()
 		local n_v = evaluate(num, runtime_context, ambient_typechecking_context)
 		local f = evaluate(fun, runtime_context, ambient_typechecking_context)
 		local acc = evaluate(init, runtime_context, ambient_typechecking_context)
@@ -4602,8 +4598,8 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			acc = apply_value(f, acc, ambient_typechecking_context)
 		end
 		return acc
-	elseif typed_term:is_host_if() then
-		local subject, consequent, alternate = typed_term:unwrap_host_if()
+	elseif typed:is_host_if() then
+		local subject, consequent, alternate = typed:unwrap_host_if()
 		local sval = evaluate(subject, runtime_context, ambient_typechecking_context)
 		if sval:is_host_value() then
 			local sbool = sval:unwrap_host_value()
@@ -4629,14 +4625,14 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		else
 			error("subject of host_if must be host_value or neutral")
 		end
-	elseif typed_term:is_let() then
-		local name, let_debug, expr, body = typed_term:unwrap_let()
+	elseif typed:is_let() then
+		local name, let_debug, expr, body = typed:unwrap_let()
 		local expr_value = evaluate(expr, runtime_context, ambient_typechecking_context)
 		return U.notail(
 			evaluate(body, runtime_context:append(expr_value, name, let_debug), ambient_typechecking_context)
 		)
-	elseif typed_term:is_host_intrinsic() then
-		local source, start_anchor = typed_term:unwrap_host_intrinsic()
+	elseif typed:is_host_intrinsic() then
+		local source, start_anchor = typed:unwrap_host_intrinsic()
 		local source_val = evaluate(source, runtime_context, ambient_typechecking_context)
 		if source_val:is_host_value() then
 			local source_str = source_val:unwrap_host_value()
@@ -4663,16 +4659,16 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		else
 			error "Tried to load an intrinsic with something that isn't a string"
 		end
-	elseif typed_term:is_host_function_type() then
-		local args, returns, res_info = typed_term:unwrap_host_function_type()
+	elseif typed:is_host_function_type() then
+		local args, returns, res_info = typed:unwrap_host_function_type()
 		local args_val = evaluate(args, runtime_context, ambient_typechecking_context)
 		local returns_val = evaluate(returns, runtime_context, ambient_typechecking_context)
 		local resinfo_val = evaluate(res_info, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.host_function_type(args_val, returns_val, resinfo_val))
-	elseif typed_term:is_level0() then
+	elseif typed:is_level0() then
 		return U.notail(flex_value.level(0))
-	elseif typed_term:is_level_suc() then
-		local previous_level = typed_term:unwrap_level_suc()
+	elseif typed:is_level_suc() then
+		local previous_level = typed:unwrap_level_suc()
 		local previous_level_value = evaluate(previous_level, runtime_context, ambient_typechecking_context)
 		local ok, level = previous_level_value:as_level()
 		if not ok then
@@ -4683,8 +4679,8 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			error("NYI: level too high for typed_level_suc" .. tostring(level))
 		end
 		return U.notail(flex_value.level(level + 1))
-	elseif typed_term:is_level_max() then
-		local level_a, level_b = typed_term:unwrap_level_max()
+	elseif typed:is_level_max() then
+		local level_a, level_b = typed:unwrap_level_max()
 		local level_a_value = evaluate(level_a, runtime_context, ambient_typechecking_context)
 		local level_b_value = evaluate(level_b, runtime_context, ambient_typechecking_context)
 		local oka, level_a_level = level_a_value:as_level()
@@ -4693,20 +4689,20 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			error "wrong type for level_a or level_b"
 		end
 		return U.notail(flex_value.level(math.max(level_a_level, level_b_level)))
-	elseif typed_term:is_level_type() then
+	elseif typed:is_level_type() then
 		return flex_value.level_type
-	elseif typed_term:is_star() then
-		local level, depth = typed_term:unwrap_star()
+	elseif typed:is_star() then
+		local level, depth = typed:unwrap_star()
 		return U.notail(flex_value.star(level, depth))
-	elseif typed_term:is_prop() then
-		local level = typed_term:unwrap_prop()
+	elseif typed:is_prop() then
+		local level = typed:unwrap_prop()
 		return U.notail(flex_value.prop(level))
-	elseif typed_term:is_host_tuple_type() then
-		local desc = typed_term:unwrap_host_tuple_type()
+	elseif typed:is_host_tuple_type() then
+		local desc = typed:unwrap_host_tuple_type()
 		local desc_val = evaluate(desc, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.host_tuple_type(desc_val))
-	elseif typed_term:is_range() then
-		local lower_bounds, upper_bounds, relation = typed_term:unwrap_range()
+	elseif typed:is_range() then
+		local lower_bounds, upper_bounds, relation = typed:unwrap_range()
 		local lower_acc, upper_acc = flex_value_array(), flex_value_array()
 
 		for _, v in lower_bounds:ipairs() do
@@ -4720,13 +4716,13 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		local reln = evaluate(relation, runtime_context, ambient_typechecking_context)
 
 		return U.notail(flex_value.range(lower_acc, upper_acc, reln))
-	elseif typed_term:is_singleton() then
-		local supertype, val = typed_term:unwrap_singleton()
+	elseif typed:is_singleton() then
+		local supertype, val = typed:unwrap_singleton()
 		local supertype_val = evaluate(supertype, runtime_context, ambient_typechecking_context)
 		local val_val = evaluate(val, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.singleton(supertype_val, val_val))
-	elseif typed_term:is_program_sequence() then
-		local first, rest = typed_term:unwrap_program_sequence()
+	elseif typed:is_program_sequence() then
+		local first, rest = typed:unwrap_program_sequence()
 		local startprog = evaluate(first, runtime_context, ambient_typechecking_context)
 		if startprog:is_program_end() then
 			local first_res = startprog:unwrap_program_end()
@@ -4750,12 +4746,12 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 				)
 			)
 		end
-	elseif typed_term:is_program_end() then
-		local result = typed_term:unwrap_program_end()
+	elseif typed:is_program_end() then
+		local result = typed:unwrap_program_end()
 
 		return U.notail(flex_value.program_end(evaluate(result, runtime_context, ambient_typechecking_context)))
-	elseif typed_term:is_program_invoke() then
-		local effect_term, arg_term = typed_term:unwrap_program_invoke()
+	elseif typed:is_program_invoke() then
+		local effect_term, arg_term = typed:unwrap_program_invoke()
 		local effect_val = evaluate(effect_term, runtime_context, ambient_typechecking_context)
 		local arg_val = evaluate(arg_term, runtime_context, ambient_typechecking_context)
 		if effect_val:is_effect_elem() then
@@ -4763,18 +4759,18 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			return U.notail(flex_value.program_cont(effect_id, arg_val, terms.continuation.empty))
 		end
 		error "NYI stuck program invoke"
-	elseif typed_term:is_program_type() then
-		local effect_type, result_type = typed_term:unwrap_program_type()
+	elseif typed:is_program_type() then
+		local effect_type, result_type = typed:unwrap_program_type()
 		local effect_type_val = evaluate(effect_type, runtime_context, ambient_typechecking_context)
 		local result_type_val = evaluate(result_type, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.program_type(effect_type_val, result_type_val))
-	elseif typed_term:is_srel_type() then
-		local target = typed_term:unwrap_srel_type()
+	elseif typed:is_srel_type() then
+		local target = typed:unwrap_srel_type()
 		return U.notail(flex_value.srel_type(evaluate(target, runtime_context, ambient_typechecking_context)))
-	elseif typed_term:is_constrained_type() then
+	elseif typed:is_constrained_type() then
 		local mv_ctx = ambient_typechecking_context
 		local ctx = ambient_typechecking_context
-		local constraints, ignored_mv_ctx = typed_term:unwrap_constrained_type()
+		local constraints, ignored_mv_ctx = typed:unwrap_constrained_type()
 		local mv = typechecker_state:metavariable(mv_ctx, false)
 		for i, constraint in constraints:ipairs() do
 			---@cast constraint constraintelem
@@ -4877,29 +4873,29 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			end
 		end
 		return U.notail(mv:as_flex())
-	elseif typed_term:is_union_type() then
-		local a, b = typed_term:unwrap_union_type()
+	elseif typed:is_union_type() then
+		local a, b = typed:unwrap_union_type()
 		return U.notail(
 			flex_value.union_type(
 				evaluate(a, runtime_context, ambient_typechecking_context),
 				evaluate(b, runtime_context, ambient_typechecking_context)
 			)
 		)
-	elseif typed_term:is_intersection_type() then
-		local a, b = typed_term:unwrap_intersection_type()
+	elseif typed:is_intersection_type() then
+		local a, b = typed:unwrap_intersection_type()
 		return U.notail(
 			flex_value.intersection_type(
 				evaluate(a, runtime_context, ambient_typechecking_context),
 				evaluate(b, runtime_context, ambient_typechecking_context)
 			)
 		)
-	elseif typed_term:is_effect_row_resolve() then
-		local ids, rest = typed_term:unwrap_effect_row_resolve()
+	elseif typed:is_effect_row_resolve() then
+		local ids, rest = typed:unwrap_effect_row_resolve()
 		return U.notail(
 			flex_value.effect_row_extend(ids, evaluate(rest, runtime_context, ambient_typechecking_context))
 		)
 	else
-		error("evaluate: unknown kind: " .. typed_term.kind)
+		error("evaluate: unknown kind: " .. typed.kind)
 	end
 
 	error("unreachable!?")
@@ -4908,19 +4904,19 @@ end
 local recurse_count = 0
 
 ---@module "_meta/evaluator/evaluate"
-function evaluate(typed_term, runtime_context, ambient_typechecking_context)
-	local tracked = false --typed_term.track ~= nil
+function evaluate(typed, runtime_context, ambient_typechecking_context)
+	local tracked = false --typed.track ~= nil
 	if tracked then
-		local input = typed_term:pretty_print(runtime_context)
+		local input = typed:pretty_print(runtime_context)
 		print(string.rep("·", recurse_count) .. "EVAL: " .. input)
 		--print(runtime_context:format_names())
 	end
 
-	terms.verify_placeholder_lite(typed_term, ambient_typechecking_context, false)
+	terms.verify_placeholder_lite(typed, ambient_typechecking_context, false)
 	recurse_count = recurse_count + 1
-	local r = evaluate_impl(typed_term, runtime_context, ambient_typechecking_context)
+	local r = evaluate_impl(typed, runtime_context, ambient_typechecking_context)
 	if not flex_value.value_check(r) then
-		error("evaluate didn't return a flex_value after processing: " .. tostring(typed_term))
+		error("evaluate didn't return a flex_value after processing: " .. tostring(typed))
 	end
 	recurse_count = recurse_count - 1
 	terms.verify_placeholder_lite(r, ambient_typechecking_context, false)
@@ -6528,7 +6524,7 @@ function TypeCheckerState:slice_constraints_for(
 				then
 					local mvo_inner = mvo:unwrap_stuck():unwrap_free():unwrap_metavariable()
 					if mvo_inner.block_level < self.block_level then
-						local sub = typed.metavariable(mvo_inner)
+						local sub = typed_term.metavariable(mvo_inner)
 						callback(true, edge, sub)
 					end
 				else
@@ -6610,7 +6606,7 @@ function TypeCheckerState:slice_constraints_for(
 		)
 	end)
 
-	return U.notail(typed.constrained_type(constraints, self.values[mv.usage][3]))
+	return U.notail(typed_term.constrained_type(constraints, self.values[mv.usage][3]))
 end
 
 local typechecker_state_mt = { __index = TypeCheckerState }
