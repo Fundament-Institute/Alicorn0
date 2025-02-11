@@ -1462,7 +1462,7 @@ collect_host_tuple = metalanguage.reducer(
 		local goal, env = args:unwrap()
 		local goal_type, collected_terms
 		local desc = terms.empty
-		collected_debug = debug_array()
+		local collected_debug = debug_array()
 
 		if goal:is_check() then
 			collected_terms = array(checkable_term)()

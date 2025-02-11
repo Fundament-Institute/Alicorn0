@@ -476,6 +476,9 @@ TupleDescRelation = setmetatable({
 				print "^^^ doesn't match vvv"
 				print(use)
 			end
+			if not use:is_enum_value() then
+				error("use must always be an enum_value inside TupleDescRelation! Found: " .. tostring(use))
+			end
 			-- FIXME: this is quick'n'dirty copypaste, slightly edited to jankily call existing code
 			-- this HAPPENS to work
 			-- this WILL need to be refactored
@@ -2688,6 +2691,12 @@ end
 ---@return ArrayType tuple_vals array(flex_value)
 ---@return integer n_elements
 local function make_inner_context2(desc_a, make_prefix_a, l_ctx, desc_b, make_prefix_b, r_ctx)
+	if not desc_a:is_enum_value() then
+		error("desc_a must be an enum value but instead found: " .. tostring(desc_a))
+	end
+	if not desc_b:is_enum_value() then
+		error("desc_b must be an enum value but instead found: " .. tostring(desc_a))
+	end
 	local constructor_a, arg_a = desc_a:unwrap_enum_value()
 	local constructor_b, arg_b = desc_b:unwrap_enum_value()
 	if constructor_a == terms.DescCons.empty and constructor_b == terms.DescCons.empty then
