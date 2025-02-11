@@ -692,7 +692,6 @@ local tuple_desc_wrap_ascribed_name = metalanguage.reducer(
 		local function build_type_term(args)
 			return U.notail(inferrable_term.tuple_type(args))
 		end
-		local inf_array = gen.declare_array(inferrable_term)
 		local names = var_debug_array()
 		local args = terms.inferrable_empty
 		local debug_args = var_debug("", format.anchor_here())
@@ -2008,25 +2007,23 @@ local function create()
 	return env
 end
 
+---@param desc flex_value
+---@param len? integer
+---@param elems? flex_value[]
+---@return integer len
+---@return flex_value[] elems
 local function traverse(desc, len, elems)
 	len = len or 0
+	---@type flex_value[]
 	elems = elems or {}
 	local constructor, arg = desc:unwrap_enum_value()
 	if constructor == terms.DescCons.empty then
+		terms.unempty(desc)
 		return len, elems
 	elseif constructor == terms.DescCons.cons then
-		local elements = arg:unwrap_tuple_value()
-		if elements:len() ~= 2 then
-			error(
-				string.format(
-					"enum_value with constructor DescCons.cons should have 2 args, but has %s",
-					tostring(elements:len())
-				)
-			)
-		end
-		local next_desc = elements[1]
-		len = len + 1
-		elems[len] = elements[2]
+		local len = len + 1
+		local next_desc
+		next_desc, elems[len] = terms.uncons(desc)
 		return traverse(next_desc, len, elems)
 	else
 		error("unknown tuple desc constructor")
@@ -2113,18 +2110,10 @@ end
 local function convert_desc(desc)
 	local constructor, arg = desc:unwrap_enum_value()
 	if constructor == terms.DescCons.empty then
+		terms.unempty(desc)
 		return desc
 	elseif constructor == terms.DescCons.cons then
-		local elements = arg:unwrap_tuple_value()
-		if elements:len() ~= 2 then
-			error(
-				string.format(
-					"enum_value with constructor DescCons.cons should have 2 args, but has %s",
-					tostring(elements:len())
-				)
-			)
-		end
-		local next_desc, type_fun = elements[1], elements[2]
+		local next_desc, type_fun = terms.uncons(desc)
 		local convert_next = convert_desc(next_desc)
 		local convert_type = flex_value
 			.variance_type(
@@ -2144,12 +2133,7 @@ local function convert_desc(desc)
 			var_debug("#tuple-prefix", format.anchor_here())
 		)
 		terms.verify_placeholder_lite(convert_type_fun, terms.typechecking_context(), false)
-		return U.notail(
-			strict_value.enum_value(
-				terms.DescCons.cons,
-				strict_value.tuple_value(strict_value_array(convert_next, convert_type_fun))
-			)
-		)
+		return U.notail(terms.strict_cons(convert_next, convert_type_fun))
 	else
 		error "unknown tuple desc constructor"
 	end
@@ -2168,20 +2152,12 @@ end
 
 local function desc_length(desc, len)
 	len = len or 0
-	local constructor, arg = desc:unwrap_enum_value()
+	local constructor = desc:unwrap_enum_value()
 	if constructor == terms.DescCons.empty then
+		terms.unempty(desc)
 		return len
 	elseif constructor == terms.DescCons.cons then
-		local elements = arg:unwrap_tuple_value()
-		if elements:len() ~= 2 then
-			error(
-				string.format(
-					"enum_value with constructor DescCons.cons should have 2 args, but has %s",
-					tostring(elements:len())
-				)
-			)
-		end
-		local next_desc = elements[1]
+		local next_desc, _ = terms.uncons(desc)
 		return desc_length(next_desc, len + 1)
 	else
 		error("unknown tuple desc constructor")

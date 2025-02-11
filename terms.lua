@@ -11,6 +11,8 @@
 --   for now fail fast, but design should vaguely support multiple failures
 
 local fibbuf = require "fibonacci-buffer"
+local pretty_printer = require "pretty-printer"
+local s = pretty_printer.s
 
 local gen = require "terms-generators"
 local derivers = require "derivers"
@@ -1698,6 +1700,31 @@ end
 
 local empty = flex_value.enum_value(DescCons.empty, tup_val())
 
+---@param desc flex_value `flex_value.enum_value(DescCons.cons, …))`
+---@return flex_value prefix
+---@return flex_value next_elem
+local function uncons(desc)
+	local constructor, arg = desc:unwrap_enum_value()
+	if constructor ~= DescCons.cons then
+		error(string.format("expected constructor DescCons.cons, got %s: %s", s(constructor), s(desc)))
+	end
+	local elements = arg:unwrap_tuple_value()
+	if elements:len() ~= 2 then
+		error(
+			string.format("enum_value with constructor DescCons.cons should have 2 args, but has %s", s(elements:len()))
+		)
+	end
+	return elements[1], elements[2]
+end
+
+---@param desc flex_value `flex_value.enum_value(DescCons.empty, …))`
+local function unempty(desc)
+	local constructor = desc:unwrap_enum_value()
+	if constructor ~= DescCons.empty then
+		error(string.format("expected constructor DescCons.empty, got %s: %s", s(constructor), s(desc)))
+	end
+end
+
 ---@param ... flex_value
 ---@return flex_value
 local function tuple_desc(...)
@@ -1880,6 +1907,8 @@ local terms = {
 	tup_val = tup_val,
 	cons = cons,
 	empty = empty,
+	uncons = uncons,
+	unempty = unempty,
 	tuple_desc = tuple_desc,
 	strict_tup_val = strict_tup_val,
 	strict_cons = strict_cons,

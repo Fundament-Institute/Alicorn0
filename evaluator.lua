@@ -1532,21 +1532,13 @@ end
 local function extract_desc_nth(ctx, subject, desc, idx)
 	local slices = {}
 	repeat
-		local variant, args = desc:unwrap_enum_value()
+		local variant, _ = desc:unwrap_enum_value()
 		local done = false
 		if variant == terms.DescCons.empty then
+			terms.unempty(desc)
 			done = true
 		elseif variant == terms.DescCons.cons then
-			local elements = args:unwrap_tuple_value()
-			if elements:len() ~= 2 then
-				error(
-					string.format(
-						"enum_value with constructor DescCons.cons should have 2 args, but has %s",
-						tostring(elements:len())
-					)
-				)
-			end
-			local pfx, elem = elements:unpack()
+			local pfx, elem = terms.uncons(desc)
 			slices[#slices + 1] = elem
 			desc = pfx
 		else
@@ -1680,10 +1672,7 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 	local b_universe = b:unwrap_tuple_desc_type()
 	local construction_variants = string_value_map()
 	-- The empty variant has no arguments
-	construction_variants:set(
-		terms.DescCons.empty,
-		flex_value.tuple_type(flex_value.enum_value(terms.DescCons.empty, flex_value.tuple_value(flex_value_array())))
-	)
+	construction_variants:set(terms.DescCons.empty, flex_value.tuple_type(terms.empty))
 	local arg_name = var_debug("#arg" .. tostring(#r_ctx + 1), format.anchor_here())
 	local universe_dbg = var_debug("#univ", format.anchor_here())
 	local prefix_desc_dbg = var_debug("#prefix-desc", format.anchor_here())
@@ -1722,31 +1711,7 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 		universe_dbg,
 		arg_name
 	)
-	construction_variants:set(
-		terms.DescCons.cons,
-		flex_value.tuple_type(
-			flex_value.enum_value(
-				terms.DescCons.cons,
-				flex_value.tuple_value(
-					flex_value_array(
-						flex_value.enum_value(
-							terms.DescCons.cons,
-							flex_value.tuple_value(
-								flex_value_array(
-									flex_value.enum_value(
-										terms.DescCons.empty,
-										flex_value.tuple_value(flex_value_array())
-									),
-									prefix_desc
-								)
-							)
-						),
-						next_element
-					)
-				)
-			)
-		)
-	)
+	construction_variants:set(terms.DescCons.cons, flex_value.tuple_type(terms.tuple_desc(prefix_desc, next_element)))
 	local enum_desc_val = flex_value.enum_desc_value(construction_variants)
 	typechecker_state:queue_constrain(
 		l_ctx,
@@ -1763,62 +1728,43 @@ add_comparer("flex_value.tuple_desc_type", "flex_value.enum_type", function(l_ct
 	local b_desc = b:unwrap_enum_type()
 	local construction_variants = string_value_map()
 	-- The empty variant has no arguments
-	construction_variants:set(
-		terms.DescCons.empty,
-		flex_value.tuple_type(flex_value.enum_value(terms.DescCons.empty, flex_value.tuple_value(flex_value_array())))
-	)
+	construction_variants:set(terms.DescCons.empty, flex_value.tuple_type(terms.empty))
 	-- The cons variant takes a prefix description and a next element, represented as a function from the prefix tuple to a type in the specified universe
 	construction_variants:set(
 		terms.DescCons.cons,
 		flex_value.tuple_type(
-			flex_value.enum_value(
-				terms.DescCons.cons,
-				flex_value.tuple_value(
-					flex_value_array(
-						flex_value.enum_value(
-							terms.DescCons.cons,
-							flex_value.tuple_value(
-								flex_value_array(
-									flex_value.enum_value(
-										terms.DescCons.empty,
-										flex_value.tuple_value(flex_value_array())
-									),
-									flex_value.closure(
-										"#prefix",
-										typed_term.literal(a),
-										r_ctx.runtime_context,
-										var_debug("", format.anchor_here())
-									)
-								)
-							)
-						),
-						flex_value.closure(
-							"#prefix",
-							typed_term.tuple_elim(
-								string_array("prefix-desc"),
-								var_debug_array(var_debug("prefix-desc", format.anchor_here())),
-								typed_term.bound_variable(#r_ctx + 2, var_debug("", format.anchor_here())),
-								1,
-								typed_term.pi(
-									typed_term.tuple_type(
-										typed_term.bound_variable(#r_ctx + 3, var_debug("", format.anchor_here()))
-									),
-									typed_term.literal(
-										strict_value.param_info(strict_value.visibility(terms.visibility.explicit))
-									),
-									typed_term.lambda(
-										"#arg" .. tostring(#r_ctx + 1),
-										var_debug("", format.anchor_here()),
-										typed_term.bound_variable(#r_ctx + 1, var_debug("", format.anchor_here())),
-										format.anchor_here()
-									),
-									typed_term.literal(strict_value.result_info(terms.result_info(terms.purity.pure)))
-								)
+			terms.tuple_desc(
+				flex_value.closure(
+					"#prefix",
+					typed_term.literal(a),
+					r_ctx.runtime_context,
+					var_debug("", format.anchor_here())
+				),
+				flex_value.closure(
+					"#prefix",
+					typed_term.tuple_elim(
+						string_array("prefix-desc"),
+						var_debug_array(var_debug("prefix-desc", format.anchor_here())),
+						typed_term.bound_variable(#r_ctx + 2, var_debug("", format.anchor_here())),
+						1,
+						typed_term.pi(
+							typed_term.tuple_type(
+								typed_term.bound_variable(#r_ctx + 3, var_debug("", format.anchor_here()))
 							),
-							r_ctx.runtime_context:append(a_univ, "a_univ", var_debug("", format.anchor_here())),
-							var_debug("", format.anchor_here())
+							typed_term.literal(
+								strict_value.param_info(strict_value.visibility(terms.visibility.explicit))
+							),
+							typed_term.lambda(
+								"#arg" .. tostring(#r_ctx + 1),
+								var_debug("", format.anchor_here()),
+								typed_term.bound_variable(#r_ctx + 1, var_debug("", format.anchor_here())),
+								format.anchor_here()
+							),
+							typed_term.literal(strict_value.result_info(terms.result_info(terms.purity.pure)))
 						)
-					)
+					),
+					r_ctx.runtime_context:append(a_univ, "a_univ", var_debug("", format.anchor_here())),
+					var_debug("", format.anchor_here())
 				)
 			)
 		)
@@ -2309,25 +2255,16 @@ local function extract_tuple_elem_type_closures(enum_val, closures)
 	local constructor, arg = enum_val:unwrap_enum_value()
 	local elements = arg:unwrap_tuple_value()
 	if constructor == terms.DescCons.empty then
-		if elements:len() ~= 0 then
-			error "enum_value with constructor DescCons.empty should have no args"
-		end
+		terms.unempty(enum_val)
 		return closures
 	end
 	if constructor == terms.DescCons.cons then
-		if elements:len() ~= 2 then
-			error(
-				string.format(
-					"enum_value with constructor DescCons.cons should have 2 args, but has %s",
-					tostring(elements:len())
-				)
-			)
-		end
-		extract_tuple_elem_type_closures(elements[1], closures)
-		if not elements[2]:is_closure() then
+		local prefix, closure = terms.uncons(enum_val)
+		extract_tuple_elem_type_closures(prefix, closures)
+		if not closure:is_closure() then
 			error "second elem in tuple_type enum_value should be closure"
 		end
-		closures:append(elements[2])
+		closures:append(closure)
 		return closures
 	end
 	error "unknown enum constructor for flex_value.tuple_type's enum_value, should not be reachable"
@@ -2634,19 +2571,11 @@ local function make_inner_context(ctx, desc, make_prefix)
 	-- evaluate the type of the tuple
 	local constructor, arg = desc:unwrap_enum_value()
 	if constructor == terms.DescCons.empty then
+		terms.unempty(desc)
 		return flex_value_array(), 0, flex_value_array()
 	elseif constructor == terms.DescCons.cons then
-		local details = arg:unwrap_tuple_value()
-		if details:len() ~= 2 then
-			error(
-				string.format(
-					"enum_value with constructor DescCons.cons should have 2 args, but has %s",
-					tostring(details:len())
-				)
-			)
-		end
-		local tuple_types, n_elements, tuple_vals = make_inner_context(ctx, details[1], make_prefix)
-		local f = details[2]
+		local prefix, f = terms.uncons(desc)
+		local tuple_types, n_elements, tuple_vals = make_inner_context(ctx, prefix, make_prefix)
 		local element_type
 		if tuple_types:len() == tuple_vals:len() then
 			local prefix = flex_value.tuple_value(tuple_vals)
@@ -2709,37 +2638,21 @@ local function make_inner_context2(desc_a, make_prefix_a, l_ctx, desc_b, make_pr
 	local constructor_a, arg_a = desc_a:unwrap_enum_value()
 	local constructor_b, arg_b = desc_b:unwrap_enum_value()
 	if constructor_a == terms.DescCons.empty and constructor_b == terms.DescCons.empty then
+		terms.unempty(desc_a)
+		terms.unempty(desc_b)
 		return true, flex_value_array(), flex_value_array(), flex_value_array(), 0
 	elseif constructor_a == terms.DescCons.empty or constructor_b == terms.DescCons.empty then
 		return false, "length-mismatch"
 	elseif constructor_a == terms.DescCons.cons and constructor_b == terms.DescCons.cons then
-		local details_a = arg_a:unwrap_tuple_value()
-		if details_a:len() ~= 2 then
-			error(
-				string.format(
-					"enum_value with constructor DescCons.cons should have 2 args, but has %s",
-					tostring(details_a:len())
-				)
-			)
-		end
-		local details_b = arg_b:unwrap_tuple_value()
-		if details_b:len() ~= 2 then
-			error(
-				string.format(
-					"enum_value with constructor DescCons.cons should have 2 args, but has %s",
-					tostring(details_b:len())
-				)
-			)
-		end
+		local prefix_a, f_a = terms.uncons(desc_a)
+		local prefix_b, f_b = terms.uncons(desc_b)
 		local ok, tuple_types_a, tuple_types_b, tuple_vals, n_elements =
-			make_inner_context2(details_a[1], make_prefix_a, l_ctx, details_b[1], make_prefix_b, r_ctx)
+			make_inner_context2(prefix_a, make_prefix_a, l_ctx, prefix_b, make_prefix_b, r_ctx)
 		if not ok then
 			---@cast tuple_types_a string
 			return ok, tuple_types_a
 		end
 		---@cast tuple_types_a -string
-		local f_a = details_a[2] --[[@as flex_value]]
-		local f_b = details_b[2] --[[@as flex_value]]
 		---@type flex_value
 		local element_type_a
 		---@type flex_value
@@ -3299,9 +3212,11 @@ local function infer_impl(
 		local function make_type(desc)
 			local constructor, arg = desc:unwrap_enum_value()
 			if constructor == terms.DescCons.empty then
+				terms.uncons(desc)
 				return true, string_array(), string_value_map()
 			elseif constructor == terms.DescCons.cons then
 				local details = arg:unwrap_tuple_value()
+				-- TODO: 3???
 				if details:len() ~= 3 then
 					error(
 						string.format(
@@ -4292,12 +4207,12 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 			elems = elems or {}
 			local constructor, arg = desc:unwrap_enum_value()
 			if constructor == terms.DescCons.empty then
+				terms.unempty(desc)
 				return len, elems
 			elseif constructor == terms.DescCons.cons then
-				local elements = arg:unwrap_tuple_value()
-				local next_desc = elements[1]
+				local next_desc, elem = terms.uncons(desc)
 				len = len + 1
-				elems[len] = elements[2]
+				elems[len] = elem
 				return traverse(next_desc, len, elems)
 			else
 				error("unknown tuple desc constructor")
