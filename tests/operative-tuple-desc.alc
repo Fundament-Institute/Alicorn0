@@ -1,5 +1,5 @@
 let my-tuple-desc = tuple-desc(x : host-number, y : host-number)
-let my-tuple-type = tuple-type-explicit(type_(0, 0), my-tuple-desc)
+let my-tuple-type = tuple-type(my-tuple-desc)
 
 the my-tuple-type tuple-of-implicit(3, 4)
 
