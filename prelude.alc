@@ -82,7 +82,18 @@ let variance = lambda_implicit (U : type-omega+1)
 
 let subtyping = intrinsic "return evaluator.UniverseOmegaRelation" : srel(type-omega)
 
-let tuple-desc-relation = intrinsic "return evaluator.TupleDescRelation" : srel(type-omega)
+let tuple-desc-type = lambda_implicit (U : universe)
+	unwrap
+		intrinsic
+			""""
+				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
+					local a_universe = bound_tuple_element_variables[1]
+					return U.notail(terms.typed_term.tuple_desc_type(a_universe))
+				end, "#tuple-desc-type", "a-universe"))
+			:
+			wrapped (forall ((a-universe : U)) -> (desc : U))
+
+let tuple-desc-relation = intrinsic "return evaluator.TupleDescRelation" : srel(tuple-desc-type(type-omega))
 
 let _|_ = lambda_implicit (U : type-omega+1)
 	unwrap
@@ -130,16 +141,6 @@ let contravariant = lambda_curry (U : universe, a : U)
 			:
 			wrapped (forall ((rel : srel(a))) -> (contravariant-rel : variance(a)))
 
-let tuple-desc-type = lambda_implicit (U : universe)
-	unwrap
-		intrinsic
-			""""
-				return U.notail(base_env.gen_base_operator(function(bound_tuple_element_variables)
-					local a_universe = bound_tuple_element_variables[1]
-					return U.notail(terms.typed_term.tuple_desc_type(a_universe))
-				end, "#tuple-desc-type", "a-universe"))
-			:
-			wrapped (forall ((a-universe : U)) -> (desc : U))
 
 let tuple-type = lambda_implicit (U : universe)
 	unwrap
@@ -831,7 +832,7 @@ let tuple-desc-elem-implicit = lambda_curry ((U : universe))
 let tuple-of = lambda (U : universe, desc : tuple-desc-type(U))
 	lambda_single (t : tuple-type(desc))
 		t
-let host-tuple-of = lambda (U : universe, desc : tuple-desc-type(U))
+let host-tuple-of = lambda (desc : tuple-desc-type(host-type))
 	intrinsic "return function(...) return ... end" :
 		host-func-type (t : host-tuple-type(desc)) -> (t : host-tuple-type(desc))
 let tuple-desc-singleton = lambda (U : universe, T : U)
@@ -1079,7 +1080,7 @@ let reducer-type = new-host-type-family new-host-unique-id("host-reducer")
 let reducible-handler-type = lambda (userdata : host-type, result2 : tuple-desc-type(host-type), result : tuple-desc-type(host-type))
 	# prepend userdata to result2
 	let userdata-desc = tuple-desc-singleton(host-type, userdata)
-	let params = tuple-desc-concat(host-type, userdata-desc, result2)
+	let params = tuple-desc-concat-indep(userdata-desc, result2)
 	host-func-type (p : host-tuple-type(params)) -> (r : host-tuple-type(result))
 let reducible-constructor-type = lambda (
 		userdata : host-type,
@@ -1089,7 +1090,7 @@ let reducible-constructor-type = lambda (
 	let accept-handler-type = reducible-handler-type(userdata, result2, result)
 	# prepend accept-handler-type to storage
 	let accept-handler-desc = tuple-desc-singleton(host-type, accept-handler-type)
-	let params = tuple-desc-concat(host-type, accept-handler-desc, storage)
+	let params = tuple-desc-concat-indep(accept-handler-desc, storage)
 	host-func-type (p : host-tuple-type(params)) -> ((m : host-matcher(userdata, result)))
 let get-reducible-constructor = lambda (
 		userdata : host-type,
@@ -1122,7 +1123,7 @@ let host-matcher-reducible =
 			# let red-param-desc = tuple-desc-concat(host-type, accept-handler-desc, storage)
 			# let red-result-desc = tuple-desc-singleton(host-type, host-matcher(userdata, result))
 
-			let accept-handler-tuple = host-tuple-of(host-type, accept-handler-desc)(accept-handler)
+			let accept-handler-tuple = host-tuple-of(accept-handler-desc)(accept-handler)
 			let red-param = host-tuple-concat(host-type, accept-handler-desc, storage, accept-handler-tuple, s)
 
 			# look ma, no intrinsics!
