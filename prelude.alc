@@ -858,61 +858,61 @@ let tuple-desc-concat-indep = lambda_implicit (U : universe)
 				end, "#tuple-desc-concat", "prefix", "suffix")
 			:
 			wrapped (forall (pfx : tuple-desc-type(U), sfx : tuple-desc-type(U)) -> (res : tuple-desc-type(U)))
-####let tuple-concat = lambda (
-			U    : universe,
-			head : tuple-desc-type(U),
-			tail : tuple-desc-type(U),
-			hd   : tuple-type(head),
-			tl   : tuple-type(tail))
-		let inner = intrinsic
-			""""
-				local value_array = terms_gen.declare_array(terms.strict_value)
-				local function tuple_concat(head, tail)
-					local head_elements = head:unwrap_tuple_value()
-					local tail_elements = tail:unwrap_tuple_value()
-					local new_elements = value_array()
-					for _, e in head_elements:ipairs() do
-						new_elements:append(e)
-					end
-					for _, e in tail_elements:ipairs() do
-						new_elements:append(e)
-					end
-					return U.notail(terms.strict_value.tuple_value(new_elements))
+let tuple-concat = lambda (
+		U    : universe,
+		head : tuple-desc-type(U),
+		tail : tuple-desc-type(U),
+		hd   : tuple-type(head),
+		tl   : tuple-type(tail))
+	let inner = intrinsic
+		""""
+			local value_array = terms_gen.declare_array(terms.strict_value)
+			local function tuple_concat(head, tail)
+				local head_elements = head:unwrap_tuple_value()
+				local tail_elements = tail:unwrap_tuple_value()
+				local new_elements = value_array()
+				for _, e in head_elements:ipairs() do
+					new_elements:append(e)
 				end
-				return tuple_concat
-			:
-			host-func-type (hd : wrapped(tuple-type(head)), tl : wrapped(tuple-type(tail))) -> ((cat : wrapped(tuple-type(tuple-desc-concat(head, lambda_single (arg : tuple-type(unwrap(head))) tail)))))
-		let (cat) = inner(wrap(hd), wrap(tl))
-		unwrap(cat)
-	let host-tuple-concat = lambda (
-			head : tuple-desc-type(host-type),
-			tail : tuple-desc-type(host-type),
-			hd   : host-tuple-type(head),
-			tl   : host-tuple-type(tail))
-		let inner = intrinsic
-			""""
-				local value_array = terms_gen.declare_array(terms_gen.any_lua_type)
-				local function host_tuple_concat(head, tail)
-					local head_elements = head:unwrap_host_tuple_value()
-					local tail_elements = tail:unwrap_host_tuple_value()
-					local new_elements = value_array()
-					for _, e in head_elements:ipairs() do
-						new_elements:append(e)
-					end
-					for _, e in tail_elements:ipairs() do
-						new_elements:append(e)
-					end
-					return U.notail(terms.strict_value.host_tuple_value(new_elements))
+				for _, e in tail_elements:ipairs() do
+					new_elements:append(e)
 				end
-				return host_tuple_concat
-			:
-			host-func-type (
-					hd : wrapped(host-tuple-type(head)),
-					tl : wrapped(host-tuple-type(tail)))
-				->
-				((cat : wrapped(host-tuple-type(tuple-desc-concat(host-type, head, tail)))))
-		let (cat) = inner(wrap(hd), wrap(tl))
-		unwrap(cat)
+				return U.notail(terms.strict_value.tuple_value(new_elements))
+			end
+			return tuple_concat
+		:
+		host-func-type (hd : wrapped(tuple-type(head)), tl : wrapped(tuple-type(tail))) -> ((cat : wrapped(tuple-type(tuple-desc-concat-indep(head, tail)))))
+	let (cat) = inner(wrap(hd), wrap(tl))
+	unwrap(cat)
+let host-tuple-concat = lambda (
+		head : tuple-desc-type(host-type),
+		tail : tuple-desc-type(host-type),
+		hd   : host-tuple-type(head),
+		tl   : host-tuple-type(tail))
+	let inner = intrinsic
+		""""
+			local value_array = terms_gen.declare_array(terms_gen.any_lua_type)
+			local function host_tuple_concat(head, tail)
+				local head_elements = head:unwrap_host_tuple_value()
+				local tail_elements = tail:unwrap_host_tuple_value()
+				local new_elements = value_array()
+				for _, e in head_elements:ipairs() do
+					new_elements:append(e)
+				end
+				for _, e in tail_elements:ipairs() do
+					new_elements:append(e)
+				end
+				return U.notail(terms.strict_value.host_tuple_value(new_elements))
+			end
+			return host_tuple_concat
+		:
+		host-func-type (
+				hd : wrapped(host-tuple-type(head)),
+				tl : wrapped(host-tuple-type(tail)))
+			->
+			((cat : wrapped(host-tuple-type(tuple-desc-concat-indep(head, tail)))))
+	let (cat) = inner(wrap(hd), wrap(tl))
+	unwrap(cat)
 
 # TODO rewrite for new flex_values
 ####let host-number-fold-indep = lambda_implicit (T : type-omega)
@@ -1108,7 +1108,7 @@ let host-matcher-reducible =
 			# let red-result-desc = tuple-desc-singleton(host-type, host-matcher(userdata, result))
 
 			let accept-handler-tuple = host-tuple-of(accept-handler-desc)(accept-handler)
-			let red-param = host-tuple-concat(host-type, accept-handler-desc, storage, accept-handler-tuple, s)
+			let red-param = host-tuple-concat(accept-handler-desc, storage, accept-handler-tuple, s)
 
 			# look ma, no intrinsics!
 			let (m) = apply(c, red-param)
@@ -1222,7 +1222,7 @@ let operative-handler-type = lambda (userdata : host-type)
 
 let operative-result-desc = lambda (goal : host-goal)
 	# read as: (term : host-term-of(goal), env : host-environment)
-	tuple-desc-concat host-type
+	tuple-desc-concat-indep
 		tuple-desc-singleton(host-type, host-term-of(goal))
 		tuple-desc-singleton(host-type, host-environment)
 

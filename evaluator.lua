@@ -3912,6 +3912,47 @@ function infer(inferrable_term, typechecking_context)
 	return ok, v, usages, term
 end
 
+-- desc is head + (gradually) parts of tail
+-- elem expects only parts of tail, need to wrap to handle head
+-- head_n and tail_n are the lengths of the head and tail component of desc
+local function tuple_desc_elem(desc, elem, head_n, head_names, tail_n, tail_names)
+	-- in theory the only placeholder name will be in reference to the last
+	-- element of head, which is always lost (and sometimes not even asked for)
+	local names = debug_array()
+	for _, name in head_names:ipairs() do
+		names:append(name)
+	end
+	names:append(terms.var_debug("#_", format.anchor_here()))
+	for _, name in tail_names:ipairs() do
+		names:append(name)
+	end
+	local arg_dbg = terms.var_debug("#tuple-desc-concat", format.anchor_here())
+	-- convert to just tuple of tail
+	local tail_args = typed_array()
+	for i = 1, tail_n do
+		-- 2 for closure argument and capture (passed to tuple_elim)
+		-- head_n for head
+		tail_args:append(typed.bound_variable(2 + head_n + i, names[1 + head_n + i]))
+	end
+	local body = typed.tuple_elim(
+		names:map(name_array, function(n)
+			return n.name
+		end),
+		names,
+		typed.bound_variable(2, arg_dbg),
+		head_n + tail_n,
+		typed.application(typed.literal(elem), typed.tuple_cons(tail_args))
+	)
+	local elem_wrap = terms.flex_value.closure(
+		"#tuple-desc-concat",
+		body,
+		flex_value.strict(empty_tuple),
+		terms.var_debug("", format.anchor_here()),
+		arg_dbg
+	)
+	return U.notail(terms.cons(desc, elem_wrap))
+end
+
 local intrinsic_memo = setmetatable({}, { __mode = "v" })
 
 ---evaluate a typed term in a contextual
@@ -4179,7 +4220,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 		else
 			head_names = debug_array()
 			for i = 1, head_n do
-				head_names[i] = var_debug("head_unk_" .. tostring(i), format.anchor_here())
+				head_names[i] = terms.var_debug("head_unk_" .. tostring(i), format.anchor_here())
 			end
 		end
 		local desc = head
@@ -4194,7 +4235,7 @@ local function evaluate_impl(typed_term, runtime_context, ambient_typechecking_c
 			else
 				tail_names = debug_array()
 				for i = 1, tail_n do
-					tail_names[i] = var_debug("tail_unk_" .. tostring(i), format.anchor_here())
+					tail_names[i] = terms.var_debug("tail_unk_" .. tostring(i), format.anchor_here())
 				end
 			end
 			desc = tuple_desc_elem(desc, elem, head_n, head_names, tail_n_now, tail_names)
