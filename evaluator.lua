@@ -429,7 +429,8 @@ local EnumDescRelation = setmetatable({
 local infer_tuple_type_unwrapped2
 
 ---@type SubtypeRelation
-local TupleDescRelation = setmetatable({
+local TupleDescRelation
+TupleDescRelation = setmetatable({
 	debug_name = "TupleDescRelation",
 	Rel = luatovalue(function(a, b)
 		error("nyi")
@@ -452,8 +453,28 @@ local TupleDescRelation = setmetatable({
 			if val:is_stuck() and val == use then
 				return true
 			end
+			-- HACK: this should be handled more centrally for all constraints as part of modular semantics equivalence rules, but here it goes for now.
+			if val:is_host_int_fold() then
+				local val_num, val_fun, val_acc = val:unwrap_host_int_fold()
+				local use_num, use_fun, use_acc = val:unwrap_host_int_fold()
+				if val_num == use_num and val_acc == use_acc then
+					typechecker_state:queue_constrain(
+						l_ctx,
+						val_fun,
+						FunctionRelation(TupleDescRelation),
+						r_ctx,
+						use_fun,
+						nestcause("tupledesc fold", cause, val_fun, use_fun, l_ctx, r_ctx)
+					)
+					return true
+				end
+				return false
+			end
 			if not val:is_enum_value() then
 				diff:get(flex_value).diff(val, use)
+				print(val)
+				print "^^^ doesn't match vvv"
+				print(use)
 			end
 			-- FIXME: this is quick'n'dirty copypaste, slightly edited to jankily call existing code
 			-- this HAPPENS to work
