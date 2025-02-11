@@ -437,6 +437,10 @@ let tuple-to-host-tuple =
 let only-accept-host-funcs-inner-host =
 	intrinsic
 		""""
+			---@param subject strict_value
+			---@param consequent strict_value
+			---@param alternate strict_value
+			---@return strict_value
 			local function check_host_func(subject, consequent, alternate)
 				if subject:is_host_function_type() then
 					local param, result, info = subject:unwrap_host_function_type()
@@ -444,7 +448,8 @@ let only-accept-host-funcs-inner-host =
 						error "stuck result info? broken function type?"
 					end
 					local info_inner = info:unwrap_result_info()
-					if info_inner.purity:is_pure() then
+					local purity = info_inner:unwrap_result_info()
+					if purity:is_pure() then
 						return consequent
 					else
 						return alternate
