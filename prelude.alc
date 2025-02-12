@@ -648,11 +648,11 @@ let func-to-host-func =
 					return function(afn)
 						return function(...)
 							local args = table.pack(...)
-							local conv_args = terms_gen.declare_array(terms.strict_value)()
+							local conv_args = terms_gen.declare_array(terms.flex_value)()
 							for i = 1, args.n do
-								conv_args:append(terms.strict_value.host_value(args[i]))
+								conv_args:append(terms.flex_value.host_value(args[i]))
 							end
-							local res = evaluator.apply_value(afn, terms.strict_value.tuple_value(conv_args), terms.typechecking_context())
+							local res = evaluator.apply_value(terms.flex_value.strict(afn), terms.flex_value.tuple_value(conv_args), terms.typechecking_context())
 							if not res:is_tuple_value() then
 								error "alicorn function converted to native function has failed to create a real value"
 							end
