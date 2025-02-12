@@ -36,7 +36,7 @@
 #     fragColor = (vec4(Fill.rgb, 1)*Fill.a*s) + (vec4(Outline.rgb, 1)*Outline.a*clamp(alpha - s, 0.0, 1.0));
 # }
 
-let frag-shader-type = forall (pos : glsl-vec2, PosDim : glsl-vec4, DimBorderBlur : glsl-vec4, Corners : glsl-vec4, Fill : glsl-vec4, Outline : glsl-vec4) -> (glfragcolor : glsl-vec4)
+let frag-shader-type = forall (pos : glsl-vec2, PosDim : glsl-vec4, DimBorderBlur : glsl-vec4, Corners : glsl-vec4, Fill : glsl-vec4, Outline : glsl-vec4) -> ((glfragcolor : glsl-vec4))
 
 let glsl-print-frag-shader = intrinsic
 	""""
@@ -92,7 +92,8 @@ let frag-shader = lambda (pos : glsl-vec2, PosDim : glsl-vec4, DimBorderBlur : g
 
 	let premultiply-fill = mk-vec4(Fill-r * Fill-a * s, Fill-g * Fill-a * s, Fill-b * Fill-a * s, 1)
 	let premultiply-outline = mk-vec4(Outline-r * Outline-a * c, Outline-g * Outline-a * c, Outline-b * Outline-a * c, 1)
-	(add-vec4(premultiply-fill, premultiply-outline))
+	let output = add-vec4(premultiply-fill, premultiply-outline)
+	tuple-of-implicit(output)
 
 let (frag-shader-string) = glsl-print-frag-shader(wrap(frag-shader))
 frag-shader-string
