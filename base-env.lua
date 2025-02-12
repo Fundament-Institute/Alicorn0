@@ -15,7 +15,9 @@ local format = require "format"
 local strict_value, strict_value_array = terms.strict_value, terms.strict_value_array
 local stuck_value = terms.stuck_value
 local flex_value, flex_value_array = terms.flex_value, terms.flex_value_array
-local inferrable_term, inferrable_term_array = terms.inferrable_term, terms.inferrable_term_array
+local anchored_inferrable_term, anchored_inferrable_term_array =
+	terms.anchored_inferrable_term, terms.anchored_inferrable_term_array
+local unanchored_inferrable_term = terms.unanchored_inferrable_term
 local typed_term, typed_term_array = terms.typed_term, terms.typed_term_array
 local var_debug, var_debug_array = terms.var_debug, terms.var_debug_array
 
@@ -26,21 +28,26 @@ local result_info_effectful = strict_value.result_info(terms.result_info(terms.p
 local usage_array = gen.declare_array(gen.builtin_number)
 local debug_array = gen.declare_array(var_debug)
 local name_array = gen.declare_array(gen.builtin_string)
-local empty_tuple = strict_value.tuple_value(strict_value_array())
+local empty_tuple = terms.strict_value.tuple_value(strict_value_array())
 
 local gen_base_operator = evaluator.gen_base_operator
 
 ---@param val strict_value
 ---@param typ strict_value
----@return inferrable
+---@return anchored_inferrable
 local function lit_term(val, typ)
-	return U.notail(inferrable_term.typed(typed_term.literal(typ), usage_array(), typed_term.literal(val)))
+	return U.notail(
+		anchored_inferrable_term(
+			format.anchor_here(2),
+			unanchored_inferrable_term.typed(typed_term.literal(typ), usage_array(), typed_term.literal(val))
+		)
+	)
 end
 
 --- lua_operative is dependently typed and should produce inferrable vs checkable depending on the goal, and an error as the second return if it failed
 --- | unknown in the second return insufficiently constrains the non-error cases to be inferrable or checkable terms
 --- this can be fixed in the future if we swap to returning a Result type that can express the success/error constraint separately
----@alias lua_operative fun(syntax : ConstructedSyntax, env : Environment, goal : expression_goal) : boolean, inferrable | checkable | string, Environment?
+---@alias lua_operative fun(syntax : ConstructedSyntax, env : Environment, goal : expression_goal) : boolean, anchored_inferrable | checkable | string, Environment?
 
 ---handle a let binding
 ---@type lua_operative
@@ -116,10 +123,13 @@ local function let_impl(syntax, env)
 
 	return true,
 		U.notail(
-			inferrable_term.typed(
-				typed_term.literal(terms.unit_type),
-				gen.declare_array(gen.builtin_number)(),
-				typed_term.literal(terms.unit_val)
+			anchored_inferrable_term(
+				syntax.start_anchor,
+				unanchored_inferrable_term.typed(
+					typed_term.literal(terms.unit_type),
+					gen.declare_array(gen.builtin_number)(),
+					typed_term.literal(terms.unit_val)
+				)
 			)
 		),
 		env
@@ -145,7 +155,9 @@ local function mk_impl(syntax, env)
 	if not ok then
 		return ok, tuple
 	end
-	return ok, U.notail(inferrable_term.enum_cons(name.str, tuple)), env
+	return ok,
+		U.notail(anchored_inferrable_term(syntax.start_anchor, unanchored_inferrable_term.enum_cons(name.str, tuple))),
+		env
 end
 
 ---@type Matcher
@@ -201,13 +213,19 @@ local switch_case = metalanguage.reducer(function(syntax, env)
 	})
 	local shadowed, term
 	shadowed, env = env:enter_block(terms.block_purity.inherit)
-	ok, env = env:bind_local(terms.binding.tuple_elim(
-		names,
-		names:map(var_debug_array, function(n)
-			return var_debug(n, format.anchor_here())
-		end),
-		inferrable_term.bound_variable(env.typechecking_context:len(), case_info)
-	))
+	ok, env = env:bind_local(
+		terms.binding.tuple_elim(
+			names,
+			names:map(var_debug_array, function(n)
+				return var_debug(n, format.anchor_here())
+			end),
+
+			anchored_inferrable_term(
+				syntax.start_anchor,
+				unanchored_inferrable_term.bound_variable(env.typechecking_context:len(), case_info)
+			)
+		)
+	)
 	if not ok then
 		return false, env
 	end
@@ -231,7 +249,7 @@ local function switch_impl(syntax, env)
 		return ok, subj
 	end
 	subj, env = table.unpack(subj)
-	local variants = gen.declare_map(gen.builtin_string, inferrable_term)()
+	local variants = gen.declare_map(gen.builtin_string, anchored_inferrable_term)()
 	local variant_debug = gen.declare_map(gen.builtin_string, var_debug)()
 	while not syntax:match({ metalanguage.isnil(metalanguage.accept_handler) }, metalanguage.failure_handler, nil) do
 		local tag, term
@@ -246,14 +264,21 @@ local function switch_impl(syntax, env)
 		variants:set(tag.str, term)
 		variant_debug:set(tag.str, var_debug(tag.str, tag.start_anchor))
 	end
-	return true, U.notail(inferrable_term.enum_case(subj, variants, variant_debug)), env
+	return true,
+		U.notail(
+			anchored_inferrable_term(
+				syntax.start_anchor,
+				unanchored_inferrable_term.enum_case(subj, variants, variant_debug)
+			)
+		),
+		env
 end
 
 ---@param _ any
 ---@param symbol SyntaxSymbol
----@param exprenv { val:inferrable, env:Environment }
+---@param exprenv { val:anchored_inferrable, env:Environment }
 ---@return boolean
----@return { name:string, expr:inferrable }
+---@return { name:string, expr:anchored_inferrable }
 ---@return Environment
 local function record_threaded_element_acceptor(_, symbol, exprenv)
 	local expr, env = utils.unpack_val_env(exprenv)
@@ -281,15 +306,19 @@ local function record_build(syntax, env)
 	if not ok then
 		return ok, defs
 	end
-	local map = gen.declare_map(gen.builtin_string, inferrable_term)()
+	local map = gen.declare_map(gen.builtin_string, anchored_inferrable_term)()
 	for _, v in ipairs(defs) do
 		map[v.name] = v.expr
 	end
-	return true, U.notail(inferrable_term.record_cons(map)), env
+	return true,
+		U.notail(anchored_inferrable_term(syntax.start_anchor, unanchored_inferrable_term.record_cons(map))),
+		env
 end
 
 ---@type lua_operative
 local function intrinsic_impl(syntax, env)
+	local start_anchor = syntax.start_anchor
+
 	local ok, str_env, syntax = syntax:match({
 		metalanguage.listtail(
 			metalanguage.accept_handler,
@@ -322,7 +351,14 @@ local function intrinsic_impl(syntax, env)
 	end
 	return true,
 		U.notail(
-			inferrable_term.host_intrinsic(str, type --[[terms.checkable_term.inferrable(type)]], syntax.start_anchor)
+			anchored_inferrable_term(
+				start_anchor,
+				unanchored_inferrable_term.host_intrinsic(
+					str,
+					type --[[terms.checkable_term.inferrable(type)]],
+					syntax.start_anchor
+				)
+			)
 		),
 		env
 end
@@ -333,10 +369,13 @@ end
 local function make_literal_purity(purity)
 	return U.notail(
 		terms.checkable_term.inferrable(
-			inferrable_term.typed(
-				typed_term.literal(terms.host_purity_type),
-				usage_array(),
-				typed_term.literal(strict_value.host_value(purity))
+			anchored_inferrable_term(
+				format.anchor_here(2),
+				unanchored_inferrable_term.typed(
+					typed_term.literal(terms.host_purity_type),
+					usage_array(),
+					typed_term.literal(strict_value.host_value(purity))
+				)
 			)
 		)
 	)
@@ -349,7 +388,7 @@ local pure_ascribed_name = metalanguage.reducer(
 	---@param env Environment
 	---@return boolean
 	---@return var_debug
-	---@return inferrable?
+	---@return anchored_inferrable?
 	---@return Environment?
 	function(syntax, env)
 		local ok, name, tail = syntax:match({
@@ -377,10 +416,14 @@ local pure_ascribed_name = metalanguage.reducer(
 			type, env = utils.unpack_val_env(type_env)
 		else
 			local type_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
-			type = inferrable_term.typed(
-				typed_term.literal(strict_value.star(evaluator.OMEGA, 1)),
-				usage_array(),
-				typed_term.metavariable(type_mv)
+			type = anchored_inferrable_term(
+				syntax.start_anchor,
+
+				unanchored_inferrable_term.typed(
+					typed_term.literal(strict_value.star(evaluator.OMEGA, 1)),
+					usage_array(),
+					typed_term.metavariable(type_mv)
+				)
 			)
 		end
 		return true, var_debug(name.str, name.start_anchor), type, env
@@ -391,11 +434,11 @@ local pure_ascribed_name = metalanguage.reducer(
 local ascribed_name = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
-	---@param prev inferrable
+	---@param prev anchored_inferrable
 	---@param names var_debug[]
 	---@return boolean
 	---@return var_debug
-	---@return inferrable?
+	---@return anchored_inferrable?
 	---@return Environment?
 	function(syntax, env, prev, names)
 		-- print("ascribed_name trying")
@@ -526,23 +569,25 @@ local tuple_desc_of_ascribed_names = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
-	---@return {names: var_debug[], args: inferrable, env: Environment}|string
+	---@return {names: var_debug[], args: anchored_inferrable, env: Environment}|string
 	function(syntax, env)
-		local function build_type_term(args)
-			return U.notail(inferrable_term.tuple_type(args))
+		local function build_type_term(start_anchor, args)
+			return U.notail(anchored_inferrable_term(start_anchor, unanchored_inferrable_term.tuple_type(args)))
 		end
+
 		local names = var_debug_array()
 
 		local ok, thread = syntax:match({
 			metalanguage.list_many_fold(function(_, vals, thread)
 				return true, thread
-			end, function(thread)
+			end, function(thread, start_anchor)
 				return ascribed_name(function(_, name, type_val, type_env)
 					local names = thread.names:copy()
 					names:append(name)
 					local newthread = {
 						names = names,
 						args = terms.inferrable_cons(
+							start_anchor,
 							thread.args,
 							var_debug("", format.anchor_here()),
 							type_val,
@@ -551,7 +596,7 @@ local tuple_desc_of_ascribed_names = metalanguage.reducer(
 						env = type_env,
 					}
 					return true, { name = name, type = type_val }, newthread
-				end, thread.env, build_type_term(thread.args), thread.names)
+				end, thread.env, build_type_term(start_anchor, thread.args), thread.names)
 			end, {
 				names = names,
 				args = terms.inferrable_empty,
@@ -568,7 +613,7 @@ local tuple_of_ascribed_names = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
-	---@return {names: string[], args: inferrable, env: Environment}|string
+	---@return {names: string[], args: anchored_inferrable, env: Environment}|string
 	function(syntax, env)
 		local ok, thread = syntax:match({
 			tuple_desc_of_ascribed_names(metalanguage.accept_handler, env),
@@ -576,7 +621,7 @@ local tuple_of_ascribed_names = metalanguage.reducer(
 		if not ok then
 			return ok, thread
 		end
-		thread.args = inferrable_term.tuple_type(thread.args)
+		thread.args = anchored_inferrable_term(syntax.start_anchor, unanchored_inferrable_term.tuple_type(thread.args))
 		return ok, thread
 	end,
 	"tuple_of_ascribed_names"
@@ -586,7 +631,7 @@ local host_tuple_of_ascribed_names = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
-	---@return {names: string[], args: inferrable, env: Environment}|string
+	---@return {names: string[], args: anchored_inferrable, env: Environment}|string
 	function(syntax, env)
 		local ok, thread = syntax:match({
 			tuple_desc_of_ascribed_names(metalanguage.accept_handler, env),
@@ -594,7 +639,8 @@ local host_tuple_of_ascribed_names = metalanguage.reducer(
 		if not ok then
 			return ok, thread
 		end
-		thread.args = inferrable_term.host_tuple_type(thread.args)
+		thread.args =
+			anchored_inferrable_term(syntax.start_anchor, unanchored_inferrable_term.host_tuple_type(thread.args))
 		return ok, thread
 	end,
 	"host_tuple_of_ascribed_names"
@@ -604,7 +650,7 @@ local ascribed_segment = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
-	---@return {single: boolean, names: string|string[], args: inferrable, env: Environment}|string
+	---@return {single: boolean, names: string|string[], args: anchored_inferrable, env: Environment}|string
 	function(syntax, env)
 		-- check whether syntax looks like a single annotated param
 		local single, _, _, _ = syntax:match({
@@ -645,7 +691,7 @@ local host_ascribed_segment = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
-	---@return {single: boolean, names: string|string[], args: inferrable, env: Environment}|string
+	---@return {single: boolean, names: string|string[], args: anchored_inferrable, env: Environment}|string
 	function(syntax, env)
 		-- check whether syntax looks like a single annotated param
 		local single, _, _, _ = syntax:match({
@@ -686,16 +732,17 @@ local tuple_desc_wrap_ascribed_name = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
-	---@return {names: string[], args: inferrable, env: Environment}|string
+	---@return {names: string[], args: anchored_inferrable, env: Environment}|string
 	function(syntax, env)
-		local function build_type_term(args)
-			return U.notail(inferrable_term.tuple_type(args))
+		local function build_type_term(start_anchor, args)
+			return U.notail(anchored_inferrable_term(start_anchor, unanchored_inferrable_term.tuple_type(args)))
 		end
+
 		local names = var_debug_array()
 		local args = terms.inferrable_empty
 		local debug_args = var_debug("", format.anchor_here())
 		local ok, name, type_val, type_env = syntax:match({
-			ascribed_name(metalanguage.accept_handler, env, build_type_term(args), names),
+			ascribed_name(metalanguage.accept_handler, env, build_type_term(syntax.start_anchor, args), names),
 		}, metalanguage.failure_handler, nil)
 		local debug_type_val = var_debug("", format.anchor_here())
 		if not ok then
@@ -704,7 +751,7 @@ local tuple_desc_wrap_ascribed_name = metalanguage.reducer(
 
 		names = names:copy()
 		names:append(name)
-		args = terms.inferrable_cons(args, debug_args, type_val, debug_type_val)
+		args = terms.inferrable_cons(syntax.start_anchor, args, debug_args, type_val, debug_type_val)
 		env = type_env
 		return ok, { names = names, args = args, env = env }
 	end,
@@ -715,7 +762,7 @@ local ascribed_segment_tuple_desc = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@return boolean
-	---@return {names: string[], args: inferrable, env: Environment}|string
+	---@return {names: string[], args: anchored_inferrable, env: Environment}|string
 	function(syntax, env)
 		-- check whether syntax looks like a single annotated param
 		local single, _, _, _ = syntax:match({
@@ -745,13 +792,14 @@ local ascribed_segment_tuple_desc = metalanguage.reducer(
 )
 
 local ascribed_segment_tuple = metalanguage.reducer(function(syntax, env)
+	-- todo: instead of returning string[] return SyntaxSymbols[] to better state where terms come from
 	local ok, thread = syntax:match({
 		ascribed_segment_tuple_desc(metalanguage.accept_handler, env),
 	}, metalanguage.failure_handler, nil)
 	if not ok then
 		return ok, thread
 	end
-	thread.args = inferrable_term.tuple_type(thread.args)
+	thread.args = anchored_inferrable_term(syntax.start_anchor, unanchored_inferrable_term.tuple_type(thread.args))
 	return ok, thread
 end, "ascribed_segment_tuple")
 
@@ -762,7 +810,7 @@ local host_ascribed_segment_tuple = metalanguage.reducer(function(syntax, env)
 	if not ok then
 		return ok, thread
 	end
-	thread.args = inferrable_term.host_tuple_type(thread.args)
+	thread.args = anchored_inferrable_term(syntax.start_anchor, unanchored_inferrable_term.host_tuple_type(thread.args))
 	return ok, thread
 end, "host_ascribed_segment_tuple")
 
@@ -795,11 +843,14 @@ local function make_host_func_syntax(effectful)
 		shadowed, env = env:enter_block(terms.block_purity.pure)
 		-- tail.start_anchor can be nil so we fall back to the start_anchor for this host func type if needed
 		-- TODO: use correct name in lambda parameter instead of adding an extra let
+
+		local start_anchor = (tail.start_anchor or syntax.start_anchor)
+
 		ok, env = env:bind_local(
 			terms.binding.annotated_lambda(
 				"#host-func-arguments",
 				params_args,
-				tail.start_anchor or syntax.start_anchor,
+				start_anchor,
 				terms.visibility.explicit,
 				literal_purity_pure
 			)
@@ -842,23 +893,36 @@ local function make_host_func_syntax(effectful)
 
 		if effectful then
 			local effect_description = strict_value.effect_row(gen.declare_set(terms.unique_id)(terms.lua_prog))
-			local effect_term = inferrable_term.typed(
-				typed_term.literal(strict_value.effect_row_type),
-				usage_array(),
-				typed_term.literal(effect_description)
+			local effect_term = anchored_inferrable_term(
+				start_anchor,
+				unanchored_inferrable_term.typed(
+					typed_term.literal(strict_value.effect_row_type),
+					usage_array(),
+					typed_term.literal(effect_description)
+				)
 			)
-			results_args = inferrable_term.program_type(effect_term, results_args)
+
+			results_args = anchored_inferrable_term(
+				start_anchor,
+				unanchored_inferrable_term.program_type(effect_term, results_args)
+			)
 		end
 
 		local env, fn_res_term, purity = env:exit_block(results_args, shadowed)
-		local fn_type_term = inferrable_term.host_function_type(
-			params_args,
-			fn_res_term,
-			terms.checkable_term.inferrable(
-				inferrable_term.typed(
-					typed_term.literal(strict_value.result_info_type),
-					usage_array(),
-					typed_term.literal(effectful and result_info_effectful or result_info_pure)
+		local fn_type_term = anchored_inferrable_term(
+			start_anchor,
+			unanchored_inferrable_term.host_function_type(
+				params_args,
+				fn_res_term,
+				terms.checkable_term.inferrable(
+					anchored_inferrable_term(
+						start_anchor,
+						unanchored_inferrable_term.typed(
+							typed_term.literal(strict_value.result_info_type),
+							usage_array(),
+							typed_term.literal(effectful and result_info_effectful or result_info_pure)
+						)
+					)
 				)
 			)
 		)
@@ -912,11 +976,13 @@ local function forall_impl(syntax, env)
 		inner_name = "forall(" .. table.concat(params_names, ", ") .. ")"
 	end
 
+	local start_anchor = tail.start_anchor or syntax.start_anchor
+
 	ok, env = env:bind_local(
 		terms.binding.annotated_lambda(
 			inner_name,
 			params_args,
-			tail.start_anchor or syntax.start_anchor,
+			start_anchor,
 			terms.visibility.explicit,
 			literal_purity_pure
 		)
@@ -951,21 +1017,30 @@ local function forall_impl(syntax, env)
 	local env, fn_res_term, purity = env:exit_block(results_args, shadowed)
 
 	local usage_array = gen.declare_array(gen.builtin_number)
-	local fn_type_term = inferrable_term.pi(
-		params_args,
-		terms.checkable_term.inferrable(
-			inferrable_term.typed(
-				typed_term.literal(strict_value.param_info_type),
-				usage_array(),
-				typed_term.literal(param_info_explicit)
-			)
-		),
-		fn_res_term,
-		terms.checkable_term.inferrable(
-			inferrable_term.typed(
-				typed_term.literal(strict_value.result_info_type),
-				usage_array(),
-				typed_term.literal(result_info_pure)
+	local fn_type_term = anchored_inferrable_term(
+		start_anchor,
+		unanchored_inferrable_term.pi(
+			params_args,
+			terms.checkable_term.inferrable(
+				anchored_inferrable_term(
+					start_anchor,
+					unanchored_inferrable_term.typed(
+						typed_term.literal(strict_value.param_info_type),
+						usage_array(),
+						typed_term.literal(param_info_explicit)
+					)
+				)
+			),
+			fn_res_term,
+			terms.checkable_term.inferrable(
+				anchored_inferrable_term(
+					start_anchor,
+					unanchored_inferrable_term.typed(
+						typed_term.literal(strict_value.result_info_type),
+						usage_array(),
+						typed_term.literal(result_info_pure)
+					)
+				)
 			)
 		)
 	)
@@ -1022,7 +1097,15 @@ local function the_operative_impl(syntax, env)
 		print("val", val)
 		error "the operative didn't get a checkable term"
 	end
-	return ok, U.notail(inferrable_term.annotated(val, type_inferrable_term)), env
+	return ok,
+		U.notail(
+
+			anchored_inferrable_term(
+				syntax.start_anchor,
+				unanchored_inferrable_term.annotated(val, type_inferrable_term)
+			),
+			env
+		)
 end
 
 ---apply(fn, args) calls fn with an existing args tuple
@@ -1091,13 +1174,20 @@ local function apply_operative_impl(syntax, env)
 		local inf_term, env = utils.unpack_val_env(args_inferrable_term)
 		return true,
 			U.notail(
-				inferrable_term.application(
-					inferrable_term.typed(
-						evaluator.substitute_placeholders_identity(spec_type, env.typechecking_context),
-						usages,
-						fn_typed_term
-					),
-					inf_term
+				anchored_inferrable_term(
+					syntax.start_anchor,
+					unanchored_inferrable_term.application(
+						anchored_inferrable_term(
+							syntax.start_anchor,
+							unanchored_inferrable_term.typed(
+								evaluator.substitute_placeholders_identity(spec_type, env.typechecking_context),
+								usages,
+								fn_typed_term
+							)
+						),
+
+						inf_term
+					)
 				)
 			),
 			env
@@ -1336,7 +1426,10 @@ local function lambda_annotated_impl(syntax, env)
 	if not ok then
 		return ok, expr
 	end
-	expr = inferrable_term.annotated(terms.checkable_term.inferrable(expr), ann_expr)
+	expr = anchored_inferrable_term(
+		syntax.start_anchor,
+		unanchored_inferrable_term.annotated(terms.checkable_term.inferrable(expr), ann_expr)
+	)
 	local resenv, term, purity = env:exit_block(expr, shadow)
 	return true, term, resenv
 end
@@ -1365,10 +1458,13 @@ local function startype_impl(syntax, env)
 	if depth_val.val % 1 ~= 0 then
 		return false, "literal must be an integer for type levels"
 	end
-	local term = inferrable_term.typed(
-		typed_term.literal(strict_value.star(level_val.val + 1, depth_val.val + 1)),
-		usage_array(),
-		typed_term.star(level_val.val, depth_val.val)
+	local term = anchored_inferrable_term(
+		syntax.start_anchor,
+		unanchored_inferrable_term.typed(
+			typed_term.literal(strict_value.star(level_val.val + 1, depth_val.val + 1)),
+			usage_array(),
+			typed_term.star(level_val.val, depth_val.val)
+		)
 	)
 
 	return true, term, env
@@ -1603,13 +1699,21 @@ local function into_operative_impl(syntax, env)
 	local op_type = flex_value.operative_type(handler, ud_type)
 	local op_val = flex_value.operative_value(ud)
 
-	return true, U.notail(inferrable_term.typed(op_type, usage_array(), typed_term.literal(op_val))), env
+	return true,
+		U.notail(
+
+			anchored_inferrable_term(
+				syntax.start_anchor,
+				unanchored_inferrable_term.typed(op_type, usage_array(), typed_term.literal(op_val))
+			)
+		),
+		env
 end
 
 -- eg typed.host_wrap, typed.host_wrapped_type
 ---@param body_fn fun(typed): typed
 ---@param type_fn fun(typed): typed
----@return inferrable
+---@return anchored_inferrable
 local function build_wrap(body_fn, type_fn)
 	local names = gen.declare_array(gen.builtin_string)
 	local names0 = names()
@@ -1691,7 +1795,7 @@ end
 -- eg typed.host_unwrap, typed.host_wrapped_type
 ---@param body_fn fun(typed): typed
 ---@param type_fn fun(typed): typed
----@return inferrable
+---@return anchored_inferrable
 local function build_unwrap(body_fn, type_fn)
 	local names = gen.declare_array(gen.builtin_string)
 	local names0 = names()
@@ -1772,7 +1876,7 @@ end
 
 -- eg typed.host_wrapped_type,
 ---@param body_fn fun(typed): typed
----@return inferrable
+---@return anchored_inferrable
 local function build_wrapped(body_fn)
 	local names = gen.declare_array(gen.builtin_string)
 	local names0 = names()
@@ -1853,12 +1957,15 @@ local enum_variant = metalanguage.reducer(function(syntax, env)
 		return false, "missing enum variant name"
 	end
 
-	return true, tag.name, U.notail(inferrable_term.tuple_type(tail.args)), env
+	return true,
+		tag.name,
+		U.notail(anchored_inferrable_term(syntax.start_anchor, unanchored_inferrable_term.tuple_type(tail.args))),
+		env
 end, "enum_variant")
 
 ---@type lua_operative
 local function enum_impl(syntax, env)
-	local variants = gen.declare_map(gen.builtin_string, inferrable_term)()
+	local variants = gen.declare_map(gen.builtin_string, anchored_inferrable_term)()
 	while not syntax:match({ metalanguage.isnil(metalanguage.accept_handler) }, metalanguage.failure_handler, nil) do
 		local tag, term
 
@@ -1875,14 +1982,26 @@ local function enum_impl(syntax, env)
 
 	return true,
 		U.notail(
-			inferrable_term.enum_type(
-				inferrable_term.enum_desc_cons(
-					variants,
-					inferrable_term.typed(
-						typed_term.literal(strict_value.enum_desc_type(strict_value.star(0, 0))),
-						usage_array(),
-						typed_term.literal(
-							strict_value.enum_desc_value(gen.declare_map(gen.builtin_string, flex_value)())
+			anchored_inferrable_term(
+				syntax.start_anchor,
+				unanchored_inferrable_term.enum_type(
+
+					anchored_inferrable_term(
+						syntax.start_anchor,
+						unanchored_inferrable_term.enum_desc_cons(
+							variants,
+							anchored_inferrable_term(
+								syntax.start_anchor,
+								unanchored_inferrable_term.typed(
+									typed_term.literal(strict_value.enum_desc_type(strict_value.star(0, 0))),
+									usage_array(),
+									typed_term.literal(
+										strict_value.enum_desc_value(
+											gen.declare_map(gen.builtin_string, terms.flex_value)()
+										)
+									)
+								)
+							)
 						)
 					)
 				)
@@ -1982,11 +2101,14 @@ local core_operations = {
 	--tuple = evaluator.host_operative(tuple_type_impl),
 	--["tuple-of"] = evaluator.host_operative(tuple_of_impl),
 	--number = { type = types.type, val = types.number }
-	--["into-operative"] = exprs.host_operative(into_operative_impl, "into_operative_impl"),
-	-- ["hackhack-host-term-of-inner"] = inferrable_term.typed(
-	-- 	host_term_of_inner_type,
-	-- 	usage_array(),
-	-- 	typed.literal(strict_value.host_value(host_term_of_inner))
+	-- ["into-operative"] = exprs.host_operative(into_operative_impl, "into_operative_impl"),
+	-- ["hackhack-host-term-of-inner"] = anchored_inferrable_term(
+	-- 	format.anchor_here(),
+	-- 	unanchored_inferrable_term.typed(
+	-- 		host_term_of_inner_type,
+	-- 		usage_array(),
+	-- 		typed_term.literal(value.host_value(host_term_of_inner))
+	-- 	)
 	-- ),
 }
 
