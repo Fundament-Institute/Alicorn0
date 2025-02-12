@@ -424,9 +424,9 @@ let host-ternary = intrinsic
 		glsl_registry[host_ternary] = function(pp, varnames, condition, consequent, alternate)
 			pp:unit("(")
 			pp:any(condition, varnames)
-			pp:unit("?")
+			pp:unit(" ? ")
 			pp:any(consequent, varnames)
-			pp:unit(":")
+			pp:unit(" : ")
 			pp:any(alternate, varnames)
 			pp:unit(")")
 		end
