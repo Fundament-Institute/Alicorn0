@@ -36,12 +36,19 @@
 #     fragColor = (vec4(Fill.rgb, 1)*Fill.a*s) + (vec4(Outline.rgb, 1)*Outline.a*clamp(alpha - s, 0.0, 1.0));
 # }
 
-let myfunc = lambda (power : glsl-float, direction : glsl-vec2, color : glsl-vec3)
-	let (dir-x, dir-y) = unwrap-vec2(direction)
-	let (col-r, col-g, col-b) = unwrap-vec3(color)
-	let dir-x-2 = dir-x * dir-x
-	let dir-y-2 = dir-y * dir-y
-	let 
-	let destination = power * direction
+let linearstep = lambda (low : glsl-float, high : glsl-float, x : glsl-float)
+	clamp((x - low) / (high - low), 0, 1)
 
-glsl-print myfunc
+let rectangle = lambda (samplePosition : glsl-vec2, halfSize : glsl-vec2, edges : glsl-vec4)
+	let (samplePosition-x, samplePosition-y) = split-vec2(samplePosition)
+	let (edges-x, edges-y, edges-z, edges-w) = split-vec4(edges)
+	let edge = ternary (samplePosition-x > 0)
+		ternary(samplePosition-y < 0, edges-y, edges-z)
+		ternary(samplePosition-y < 0, edges-x, edges-w)
+	let componentWiseEdgeDistance = add-vec2
+		sub-vec2(abs-vec2(samplePosition), halfSize)
+		mk-vec2(edge, edge)
+	componentWiseEdgeDistance
+
+let frag-shader = lambda (PosDim : glsl-vec4, DimBorderBlur : glsl-vec4, Corners : glsl-vec4, Fill : glsl-vec4, Outline : glsl-vec4, pos : glsl-vec2)
+	0

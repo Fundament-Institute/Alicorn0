@@ -10,8 +10,11 @@ let glsl-print-vert-shader = intrinsic
 			context = context:append(terms.strict_value.host_number_type, "#idk-context", terms.var_debug("#idk-context-dbg", format.anchor_here()))
 			context = context:append(terms.strict_value.host_number_type, param_name, terms.var_debug("#idk-closure-dbg", format.anchor_here()))
 			local elements = code:unwrap_tuple_cons()
-			--return U.litprint(elements[1]:default_print())
-			return U.litprint(elements[1]:glsl_print({{}, {"MVP", "PosDim", "vPos"}}))
+			local glpos = elements[1]:glsl_print({{}, {"MVP", "PosDim", "vPos"}})
+			local pos = elements[2]:glsl_print({{}, {"MVP", "PosDim", "vPos"}})
+			local boilerplate = "#version 450\nlayout(binding=0) uniform mat4 MVP;\nlayout(binding=1) uniform vec4 PosDim;\nin vec2 vPos;\nout vec2 pos;\n"
+			local vert_shader = boilerplate .. "void main() {\n  gl_Position = " .. glpos .. ";\n  pos = " .. pos .. ";\n}\n"
+			return U.litprint(vert_shader)
 		end
 	:
 	host-func-type ((vert-shader : wrapped(vert-shader-type))) -> ((str : host-string))
