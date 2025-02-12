@@ -961,9 +961,9 @@ local function expression_pairhandler(args, a, b)
 	--env.typechecking_context:dump_names()
 
 	--print(type_of_term:pretty_print(env.typechecking_context))
-	--print(res_term1)
-	--print(res_term2)
-	--print(res_term3)
+	print(res_term1)
+	print(res_term2)
+	print(res_term3)
 	-- try uncommenting one of the error prints above
 	-- you need to figure out which one is relevant for your problem
 	-- after you're finished, please comment it out so that, next time, the message below can be found again

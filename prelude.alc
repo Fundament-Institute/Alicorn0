@@ -268,6 +268,26 @@ let _*_ = lambda (left : glsl-float, right : glsl-float)
 	let (product) = host-mul-float(left, right)
 	product
 
+let host-mul-vec2 = intrinsic
+	""""
+		local host_mul_float2 = function(l, r) return setmetatable({
+				x = l.x * r.x,
+				y = l.y * r.y,
+			}, glsl_registry["vec2"]) end
+		glsl_registry[host_mul_float2] = function(pp, varnames, l, r)
+			pp:unit("(")
+			pp:any(l, varnames)
+			pp:unit(" * ")
+			pp:any(r, varnames)
+			pp:unit(")")
+		end
+		return host_mul_float2
+	:
+	host-func-type (left : glsl-vec2, right : glsl-vec2) -> ((product : glsl-vec2))
+let _*:2_ = lambda (left : glsl-vec2, right : glsl-vec2)
+	let (product) = host-mul-vec2(left, right)
+	product
+
 let host-div-float = intrinsic
 	""""
 		local host_div_float = function(l, r) return l / r end
@@ -346,6 +366,52 @@ let clamp = lambda (x : glsl-float, minVal : glsl-float, maxVal : glsl-float)
 	let (clamped) = host-clamp(x, minVal, maxVal)
 	clamped
 
+let host-max = intrinsic
+	""""
+		local host_max = function(x, minVal)
+			if x < minVal then
+				return minVal
+			else
+				return x
+			end
+		end
+		glsl_registry[host_max] = function(pp, varnames, x, minVal)
+			pp:unit("max(")
+			pp:any(x, varnames)
+			pp:unit(", ")
+			pp:any(minVal, varnames)
+			pp:unit(")")
+		end
+		return host_max
+	:
+	host-func-type (x : glsl-float, maxVal : glsl-float) -> ((maxed : glsl-float))
+let max = lambda (x : glsl-float, maxVal : glsl-float)
+	let (maxed) = host-max(x, maxVal)
+	maxed
+
+let host-min = intrinsic
+	""""
+		local host_min = function(x, minVal)
+			if x > minVal then
+				return minVal
+			else
+				return x
+			end
+		end
+		glsl_registry[host_min] = function(pp, varnames, x, minVal)
+			pp:unit("min(")
+			pp:any(x, varnames)
+			pp:unit(", ")
+			pp:any(minVal, varnames)
+			pp:unit(")")
+		end
+		return host_min
+	:
+	host-func-type (x : glsl-float, minVal : glsl-float) -> ((mined : glsl-float))
+let min = lambda (x : glsl-float, minVal : glsl-float)
+	let (mined) = host-min(x, minVal)
+	mined
+	
 let host-ternary = intrinsic
 	""""
 		local host_ternary = function(condition, consequent, alternate)
@@ -369,6 +435,38 @@ let host-ternary = intrinsic
 	host-func-type (condition : glsl-bool, consequent : glsl-float, alternate : glsl-float) -> ((result : glsl-float))
 let ternary = lambda (condition : glsl-bool, consequent : glsl-float, alternate : glsl-float)
 	let (result) = host-ternary(condition, consequent, alternate)
+	result
+
+let host-fwidth = intrinsic
+	""""
+		-- This returns the derivative of the values relative to the current surface dimensions, which is not possible to do here
+		local host_fwidth = function(v) return 1.0	end
+		glsl_registry[host_fwidth] = function(pp, varnames, v)
+			pp:unit("fwidth(")
+			pp:any(v, varnames)
+			pp:unit(")")
+		end
+		return host_fwidth
+	:
+	host-func-type ((v : glsl-float)) -> ((result : glsl-float))
+let fwidth = lambda (v : glsl-float)
+	let (result) = host-fwidth(v)
+	result
+
+let host-length = intrinsic
+	""""
+		-- This returns the derivative of the values relative to the current surface dimensions, which is not possible to do here
+		local host_length = function(v) return math.sqrt(v.x * v.x + v.y * v.y) end
+		glsl_registry[host_length] = function(pp, varnames, v)
+			pp:unit("length(")
+			pp:any(v, varnames)
+			pp:unit(")")
+		end
+		return host_length
+	:
+	host-func-type ((v : glsl-vec2)) -> ((result : glsl-float))
+let length = lambda (v : glsl-vec2)
+	let (result) = host-length(v)
 	result
 
 let host-mk-vec2 = intrinsic
@@ -438,6 +536,30 @@ let host-add-vec2 = intrinsic
 	host-func-type (left : glsl-vec2, right : glsl-vec2) -> ((sum : glsl-vec2))
 let add-vec2 = lambda (left : glsl-vec2, right : glsl-vec2)
 	let (sum) = host-add-vec2(left, right)
+	sum
+
+let host-add-vec4 = intrinsic
+	""""
+		local host_add_vec4 = function(l, r)
+			return setmetatable({
+				x = l.x + r.x,
+				y = l.y + r.y,
+				z = l.z + r.z,
+				w = l.w + r.w,
+			}, glsl_registry["vec4"])
+		end
+		glsl_registry[host_add_vec4] = function(pp, varnames, l, r)
+			pp:unit("(")
+			pp:any(l, varnames)
+			pp:unit(" + ")
+			pp:any(r, varnames)
+			pp:unit(")")
+		end
+		return host_add_vec4
+	:
+	host-func-type (left : glsl-vec4, right : glsl-vec4) -> ((sum : glsl-vec4))
+let add-vec4 = lambda (left : glsl-vec4, right : glsl-vec4)
+	let (sum) = host-add-vec4(left, right)
 	sum
 
 let host-sub-vec2 = intrinsic

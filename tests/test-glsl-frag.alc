@@ -36,6 +36,26 @@
 #     fragColor = (vec4(Fill.rgb, 1)*Fill.a*s) + (vec4(Outline.rgb, 1)*Outline.a*clamp(alpha - s, 0.0, 1.0));
 # }
 
+let frag-shader-type = forall (pos : glsl-vec2, PosDim : glsl-vec4, DimBorderBlur : glsl-vec4, Corners : glsl-vec4, Fill : glsl-vec4, Outline : glsl-vec4) -> (glfragcolor : glsl-vec4)
+
+let glsl-print-frag-shader = intrinsic
+	""""
+		local U = require "alicorn-utils"
+		local format = require "format"
+		return function(frag_shader)
+			local param_name, code, capture, _capture_dbg, _param_debug = frag_shader:unwrap_closure()
+			local context = terms.strict_runtime_context()
+			context = context:append(terms.strict_value.host_number_type, "#frag-context", terms.var_debug("#frag-context-dbg", format.anchor_here()))
+			context = context:append(terms.strict_value.host_number_type, param_name, terms.var_debug("#frag-closure-dbg", format.anchor_here()))
+			local elements = code:unwrap_tuple_cons()
+			local glfragcolor = elements[1]:glsl_print({{}, {"MVP", "PosDim", "vPos"}})
+			local boilerplate = "#version 450\nin vec2 pos;\nlayout(binding=1) uniform vec4 PosDim;\nlayout(binding=2) uniform vec4 DimBorderBlur;\nlayout(binding=3) uniform vec4 Corners;\nlayout(binding=4) uniform vec4 Fill;\nlayout(binding=5) uniform vec4 Outline;\nout vec4 fragColor;\n"
+			local frag_shader = boilerplate .. "void main() {\n  fragColor = " .. glfragcolor .. ";\n}\n"
+			return U.litprint(frag_shader)
+		end
+	:
+	host-func-type ((frag-shader : wrapped(frag-shader-type))) -> ((str : host-string))
+
 let linearstep = lambda (low : glsl-float, high : glsl-float, x : glsl-float)
 	clamp((x - low) / (high - low), 0, 1)
 
@@ -48,7 +68,31 @@ let rectangle = lambda (samplePosition : glsl-vec2, halfSize : glsl-vec2, edges 
 	let componentWiseEdgeDistance = add-vec2
 		sub-vec2(abs-vec2(samplePosition), halfSize)
 		mk-vec2(edge, edge)
-	componentWiseEdgeDistance
+	
+	let (componentWiseEdgeDistance-x, componentWiseEdgeDistance-y) = split-vec2(componentWiseEdgeDistance)
+	let outsideDistance = length(mk-vec2(max(componentWiseEdgeDistance-x, 0.0), max(componentWiseEdgeDistance-y, 0.0)))
+	let insideDistance = min(max(componentWiseEdgeDistance-x, componentWiseEdgeDistance-y), 0.0)
+	outsideDistance + insideDistance - edge
 
-let frag-shader = lambda (PosDim : glsl-vec4, DimBorderBlur : glsl-vec4, Corners : glsl-vec4, Fill : glsl-vec4, Outline : glsl-vec4, pos : glsl-vec2)
-	0
+let frag-shader = lambda (pos : glsl-vec2, PosDim : glsl-vec4, DimBorderBlur : glsl-vec4, Corners : glsl-vec4, Fill : glsl-vec4, Outline : glsl-vec4)
+	let (PosDim-x, PosDim-y, PosDim-z, PosDim-w) = split-vec4(PosDim)
+	let (DimBorderBlur-x, DimBorderBlur-y, DimBorderBlur-z, DimBorderBlur-w) = split-vec4(DimBorderBlur)
+	let (pos-x, pos-y) = split-vec2(pos)
+
+	let w = fwidth((PosDim-z * pos-x)) * 0.5 * (1.0 + DimBorderBlur-w);
+	let uv = mk-vec2((pos-x * PosDim-z) - (PosDim-z * 0.5), (pos-y * PosDim-w) - (PosDim-w * 0.5))
+
+	let dist = rectangle(uv, mk-vec2(PosDim-z * 0.5, PosDim-w * 0.5), Corners);
+	let alpha = linearstep(w, w * -1.0, dist)
+	let s = linearstep(w, w * -1.0, dist + DimBorderBlur-z)
+
+	let (Fill-r, Fill-g, Fill-b, Fill-a) = split-vec4(Fill)
+	let (Outline-r, Outline-g, Outline-b, Outline-a) = split-vec4(Outline)
+	let c = clamp(alpha - s, 0.0, 1.0)
+
+	let premultiply-fill = mk-vec4(Fill-r * Fill-a * s, Fill-g * Fill-a * s, Fill-b * Fill-a * s, 1)
+	let premultiply-outline = mk-vec4(Outline-r * Outline-a * c, Outline-g * Outline-a * c, Outline-b * Outline-a * c, 1)
+	(add-vec4(premultiply-fill, premultiply-outline))
+
+let (frag-shader-string) = glsl-print-frag-shader(wrap(frag-shader))
+frag-shader-string
