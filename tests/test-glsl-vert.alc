@@ -3,12 +3,8 @@ let vert-shader-type = forall (MVP : glsl-mat4, PosDim : glsl-vec4, vPos : glsl-
 let glsl-print-vert-shader = intrinsic
 	""""
 		local U = require "alicorn-utils"
-		local format = require "format"
 		return function(vert_shader)
 			local param_name, code, capture, _capture_dbg, _param_debug = vert_shader:unwrap_closure()
-			local context = terms.strict_runtime_context()
-			context = context:append(terms.strict_value.host_number_type, "#vert-context", terms.var_debug("#vert-context-dbg", format.anchor_here()))
-			context = context:append(terms.strict_value.host_number_type, param_name, terms.var_debug("#vert-closure-dbg", format.anchor_here()))
 			local elements = code:unwrap_tuple_cons()
 			local glpos = elements[1]:glsl_print({{}, {"MVP", "PosDim", "vPos"}})
 			local pos = elements[2]:glsl_print({{}, {"MVP", "PosDim", "vPos"}})

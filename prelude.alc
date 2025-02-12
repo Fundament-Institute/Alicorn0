@@ -455,7 +455,6 @@ let fwidth = lambda (v : glsl-float)
 
 let host-length = intrinsic
 	""""
-		-- This returns the derivative of the values relative to the current surface dimensions, which is not possible to do here
 		local host_length = function(v) return math.sqrt(v.x * v.x + v.y * v.y) end
 		glsl_registry[host_length] = function(pp, varnames, v)
 			pp:unit("length(")
