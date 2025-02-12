@@ -41,10 +41,13 @@ jit.opt.start("loopunroll=60")
 metalanguage = require "metalanguage"
 evaluator = require "evaluator"
 format = require "format-adapter"
+formatter = require "format"
 base_env = require "base-env"
 terms = require "terms"
 exprs = require "alicorn-expressions"
 profile = require "profile"
+util = require "alicorn-utils"
+env = base_env.create()
 
 function alc_parse_string(src)
   return format.read(src, "<string value>")
@@ -61,43 +64,54 @@ function alc_parse_file(filename)
   return s
 end
 
-function alc_process(code)          
-  local env = base_env.create()
+function alc_process(code)
+  local shadowed, inner_env = env:enter_block(terms.block_purity.effectful)
 
-  local shadowed, env = env:enter_block(terms.block_purity.effectful)
+	local ok, expr, inner_env = code:match({
+		exprs.top_level_block(
+			metalanguage.accept_handler,
+			{ exprargs = exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env), name = name }
+		),
+	}, metalanguage.failure_handler, nil)
 
-  local ok, expr, env = code:match(
-    { exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, env)) },
-    metalanguage.failure_handler,
-    nil
-  )
   if not ok then
     print(tostring(expr))
-    error("inference failed (error printed to stdout)")
+    error("processing failed (error printed to stdout)")
   end
 
-  local env, bound_expr, purity = env:exit_block(expr, shadowed)
+  local outer_env, bound_expr, purity = inner_env:exit_block(expr, shadowed)
+  env = outer_env
   return bound_expr
 end
 
 function alc_evaluate(bound_expr)
-  local type, usages, term = evaluator.infer(bound_expr, terms.typechecking_context())
+  local ok, type, usages, term = evaluator.infer(bound_expr, terms.typechecking_context())
 
+  if not ok then
+    print(tostring(type))
+    error("inference failed (error printed to stdout)")
+	end
+  
   local gen = require "terms-generators"
   local set = gen.declare_set
   local unique_id = gen.builtin_table
-  evaluator.typechecker_state:flow(
-    type,
-    nil,
-    terms.value.program_type(
-      terms.value.effect_row(set(unique_id)(terms.TCState), terms.value.effect_empty),
-      evaluator.typechecker_state:metavariable(terms.typechecking_context()):as_value()
-    ),
-    nil,
-    "final flow check"
-  )
+  local ok, err = evaluator.typechecker_state:flow(
+			type,
+			env.typechecking_context,
+			terms.flex_value.program_type(
+				terms.flex_value.effect_row(terms.unique_id_set(terms.TCState, terms.lua_prog)),
+				evaluator.typechecker_state:metavariable(env.typechecking_context):as_flex()
+			),
+			env.typechecking_context,
+			terms.constraintcause.primitive("final flow check", formatter.anchor_here())
+		)
+    
+  if not ok then
+    print(err)
+    error("evaluation failed (error printed to stdout)")
+  end
 
-  return evaluator.evaluate(term, terms.runtime_context())
+  return evaluator.evaluate(term, env.typechecking_context.runtime_context, env.typechecking_context)
 end
 
 function alc_execute(program)
@@ -157,7 +171,7 @@ fn test_runtest_file() {
 
     // Restore working dir so we can find testfile.alc
     std::env::set_current_dir(&old).unwrap();
-    let ast = alicorn.parse_file("testfile.alc").unwrap();
+    let ast = alicorn.parse_file("prelude.alc").unwrap();
     let terms = alicorn.process(ast).unwrap();
     let program = alicorn.evaluate(terms).unwrap();
     let result: LuaValue<'_> = alicorn.execute(program).unwrap();

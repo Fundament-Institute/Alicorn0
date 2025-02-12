@@ -20,8 +20,10 @@ const ALICORN_SOURCES: &[&str] = &[
     "./fibonacci-buffer.lua",
     "./format-adapter.lua",
     "./format.lua",
+    "./glsl-print.lua",
     "./internals-interface.lua",
     "./lazy-prefix-tree.lua",
+    "./lua-ext.lua",
     "./metalanguage.lua",
     "./modules.lua",
     "./operative-scratch.lua",
@@ -35,6 +37,7 @@ const ALICORN_SOURCES: &[&str] = &[
     "./terms.lua",
     "./traits.lua",
     "./typesystem.lua",
+    "./unformatter.lua",
 ];
 
 const DEST: &str = "alicorn.lua";
