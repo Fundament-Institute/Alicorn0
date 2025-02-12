@@ -189,13 +189,14 @@ local switch_case = metalanguage.reducer(function(syntax, env)
 	if ok then
 		tail = singleton_contents
 	end
+	local case_info = var_debug(tag.str, tag.start_anchor)
 	--TODO rewrite this to use an environment-splitting operation
 	env = environment.new_env(env, {
 		typechecking_context = env.typechecking_context:append(
-			"#switch-subj",
+			tag.str,
 			evaluator.typechecker_state:metavariable(env.typechecking_context):as_flex(),
 			nil,
-			var_debug("#switch-subj", syntax.start_anchor)
+			case_info
 		),
 	})
 	local shadowed, term
@@ -205,7 +206,7 @@ local switch_case = metalanguage.reducer(function(syntax, env)
 		names:map(var_debug_array, function(n)
 			return var_debug(n, format.anchor_here())
 		end),
-		inferrable_term.bound_variable(env.typechecking_context:len(), var_debug("", format.anchor_here()))
+		inferrable_term.bound_variable(env.typechecking_context:len(), case_info)
 	))
 	if not ok then
 		return false, env
@@ -217,8 +218,6 @@ local switch_case = metalanguage.reducer(function(syntax, env)
 		return ok, term
 	end
 	env, term = env:exit_block(term, shadowed)
-	term.start_anchor = syntax.start_anchor --TODO figure out where to store/retrieve the anchors correctly
-	term.end_anchor = syntax.end_anchor
 	return ok, tag, term, env
 end, "switch_case")
 

@@ -3313,7 +3313,7 @@ local function infer_impl(
 		for k, v in variants:pairs() do
 			--TODO figure out where to store/retrieve the anchors correctly
 			local ok, variant_type, variant_usages, variant_term =
-				infer(v, typechecking_context:append("#variant", constrain_variants:get(k), nil, v)) --TODO improve
+				infer(v, typechecking_context:append("#variant", constrain_variants:get(k), nil, variant_debug:get(k))) --TODO improve with anchored inferrables
 			if not ok then
 				return false, variant_type
 			end
