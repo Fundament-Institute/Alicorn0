@@ -4200,22 +4200,20 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		local universe = evaluate(universe_term, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.tuple_desc_type(universe))
 	elseif typed:is_tuple_desc_concat_indep() then
-		local prefix_term, tail_term = typed:unwrap_tuple_desc_concat_indep()
+		local prefix_term, suffix_term = typed:unwrap_tuple_desc_concat_indep()
 
 		local prefix = evaluate(prefix_term, runtime_context, ambient_typechecking_context)
-		local suffix = evaluate(tail_term, runtime_context, ambient_typechecking_context)
+		local suffix = evaluate(suffix_term, runtime_context, ambient_typechecking_context)
 
 		if not prefix:is_enum_value() or not suffix:is_enum_value() then
 			return U.notail(flex_value.tuple_desc_concat_indep(prefix, suffix))
 		end
 
 		---@param desc flex_value
-		---@param length integer?
-		---@param reverse_elems flex_value[]?
+		---@param length integer
+		---@param reverse_elems flex_value[]
 		---@return integer, flex_value[]
 		local function traverse(desc, length, reverse_elems)
-			length = length or 0
-			reverse_elems = reverse_elems or {}
 			local constructor, _ = desc:unwrap_enum_value()
 			if constructor == terms.DescCons.empty then
 				terms.unempty(desc)
@@ -4229,11 +4227,11 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 				error("unknown tuple desc constructor")
 			end
 		end
-		local prefix_length, prefix_reverse_elems = traverse(prefix)
+		local prefix_length, prefix_reverse_elems = traverse(prefix, 0, {})
 		if prefix_length == 0 then
 			return suffix
 		end
-		local suffix_length, suffix_reverse_elems = traverse(suffix)
+		local suffix_length, suffix_reverse_elems = traverse(suffix, 0, {})
 		if suffix_length == 0 then
 			return prefix
 		end
