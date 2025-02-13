@@ -2338,8 +2338,8 @@ local function get_host_func_res(subject, valid)
 	return U.notail(strict_value.closure("#TEST-1", tuple_build, result_type, result_dbg, arg_dbg))
 end
 
----@param val flex_value
----@return flex_value
+---@param val strict_value
+---@return strict_value
 local function tuple_to_host_tuple_inner(_type, _valid, val)
 	local elems = val:unwrap_tuple_value()
 	local leading = gen.declare_array(gen.any_lua_type)()
@@ -2359,8 +2359,9 @@ local function tuple_to_host_tuple_inner(_type, _valid, val)
 		end
 	end
 	if not stuck then
-		return U.notail(flex_value.host_tuple_value(leading))
+		return U.notail(strict_value.host_tuple_value(leading))
 	else
+		error("should be unreachable TODO refactor and remove")
 		return U.notail(flex_value.stuck(stuck_value.host_tuple(leading, stuck_elem, trailing)))
 	end
 end
