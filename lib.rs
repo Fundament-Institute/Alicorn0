@@ -18,7 +18,8 @@ impl Alicorn {
     pub fn new(unsafe_lua: Option<Lua>) -> Result<Self, mlua::Error> {
         let lua = unsafe_lua.unwrap_or_else(|| unsafe { Lua::unsafe_new() });
 
-        // Load C libraries we already linked
+        // Load C libraries we already linked into our rust binary using our build script. This works because we can
+        // declare the C functions directly and have the linker resolve them during the link step.
         unsafe {
             let _: mlua::Value =
                 lua.load_from_function("lpeg", lua.create_c_function(luaopen_lpeg)?)?;
@@ -35,7 +36,11 @@ jit.opt.start("loopunroll=60")
         "#,
         )
         .exec()?;
+
+        // Here, we load all the embedded alicorn source into the lua engine and execute it.
         lua.load(ALICORN).exec()?;
+
+        // Then we create helper functions for compiling an alicorn source file that we can bind to mlua.
         lua.load(
             r#" 
 metalanguage = require "metalanguage"
@@ -169,7 +174,7 @@ fn test_runtest_file() {
 
     let alicorn = Alicorn::new(None).unwrap();
 
-    // Restore working dir so we can find testfile.alc
+    // Restore working dir so we can find prelude.alc
     std::env::set_current_dir(&old).unwrap();
     let ast = alicorn.parse_file("prelude.alc").unwrap();
     let terms = alicorn.process(ast).unwrap();
