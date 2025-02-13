@@ -417,23 +417,6 @@ let host-tuple-to-tuple =
 			let (res) = inner(wrap(xs))
 			the tuple-type(desc) unwrap(res)
 
-let tuple-to-host-tuple-inner =
-	intrinsic
-		""""
-			return base_env.tuple_to_host_tuple_inner
-		:
-		host-func-type (
-				t     : wrapped(type),
-				valid : only-accept-host-tuples(t),
-				val   : wrapped(host-tuple-type-to-tuple-type(unwrap(t), valid)))
-			->
-			((res : wrapped(unwrap(t))))
-
-let tuple-to-host-tuple =
-	lambda (t : type, valid : only-accept-host-tuples(wrap(t)), val : host-tuple-type-to-tuple-type(t, valid))
-		let (res) = tuple-to-host-tuple-inner(wrap(t), valid, wrap(val))
-		unwrap(res)
-
 let tuple-to-host-tuple =
 	lambda_implicit (desc : tuple-desc-type(host-type))
 		lambda (xs : tuple-type(desc))
