@@ -4559,15 +4559,12 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		end
 		---@type integer
 		local n = n_v:unwrap_host_value()
-		print "FOLDING"
-		print("start", n, acc)
 		for i = n, 1, -1 do
 			acc = apply_value(
 				f,
 				flex_value.tuple_value(flex_value_array(flex_value.host_value(i), acc)),
 				ambient_typechecking_context
 			)
-			print("step", i, acc)
 		end
 		return acc
 	elseif typed:is_host_if() then
