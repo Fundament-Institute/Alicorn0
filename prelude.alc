@@ -434,6 +434,18 @@ let tuple-to-host-tuple =
 		let (res) = tuple-to-host-tuple-inner(wrap(t), valid, wrap(val))
 		unwrap(res)
 
+let tuple-to-host-tuple =
+	lambda_implicit (desc : tuple-desc-type(host-type))
+		lambda (xs : tuple-type(desc))
+			let inner =
+				intrinsic
+					""""
+						return function(val) return base_env.tuple_to_host_tuple_inner(nil, nil, val) end
+					:
+					host-func-type ((val : wrapped(tuple-type(desc)))) -> ((res : wrapped(host-tuple-type(desc))))
+			let (res) = inner(wrap(xs))
+			unwrap(res)
+
 let only-accept-host-funcs-inner-host =
 	intrinsic
 		""""
@@ -967,7 +979,9 @@ let host-array-from-tuple = lambda_implicit (T : host-type)
 
 let make-host-array = lambda_implicit (T : host-type)
 	lambda (size : host-number)
-		let input-type = host-tuple-type(duplicate-tuple-desc(size, T))
+		let input-desc = duplicate-tuple-desc(size, T)
+		let host-input-type = host-tuple-type(input-desc)
+		let input-type = tuple-type(input-desc)
 		let inner =
 			intrinsic
 				""""
@@ -976,10 +990,13 @@ let make-host-array = lambda_implicit (T : host-type)
 						return {elements:unpack()}
 					end
 				:
-				host-func-type ((tuple : wrapped(input-type))) -> ((res : host-array-type(T)))
+				host-func-type ((tuple : wrapped(host-input-type))) -> ((res : host-array-type(T)))
 		lambda_single (elems : input-type)
-			let (array) = inner(wrap(elems))
+			let host-elems = tuple-to-host-tuple(elems)
+			let (array) = inner(wrap(host-elems))
 			array
+
+let test-array = (make-host-array(4) 0.0 0.0 0.0 0.0)
 
 ## syntax matcher and operative stuff
 

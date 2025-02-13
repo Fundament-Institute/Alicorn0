@@ -4224,6 +4224,9 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 			end
 		end
 		local head_n, head_elems = traverse(head)
+		if head_n == 0 then
+			return tail
+		end
 		local tail_n, tail_elems = traverse(tail)
 		---@type flex_value
 		local head_last = head_elems[1]
@@ -4535,7 +4538,11 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		---@type integer
 		local n = n_v:unwrap_host_value()
 		for i = n, 1, -1 do
-			acc = apply_value(f, acc, ambient_typechecking_context)
+			acc = apply_value(
+				f,
+				flex_value.tuple_value(flex_value_array(flex_value.host_value(i), acc)),
+				ambient_typechecking_context
+			)
 		end
 		return acc
 	elseif typed:is_host_if() then
