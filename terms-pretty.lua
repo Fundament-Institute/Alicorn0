@@ -171,11 +171,13 @@ end
 
 ---@param pp PrettyPrint
 ---@param name string
+---@param debuginfo var_debug
 ---@param expr inferrable | typed
 ---@param context PrettyPrintingContext
 ---@return PrettyPrintingContext
-local function let_helper(pp, name, expr, context)
+local function let_helper(pp, name, debuginfo, expr, context)
 	pp:unit(name)
+	pp:any(debuginfo)
 
 	pp:unit(pp:set_color())
 	pp:unit(" = ")
@@ -192,10 +194,11 @@ end
 
 ---@param pp PrettyPrint
 ---@param names ArrayValue<string>
+---@param debuginfo var_debug,
 ---@param subject inferrable | typed
 ---@param context PrettyPrintingContext
 ---@return PrettyPrintingContext
-local function tuple_elim_helper(pp, names, subject, context)
+local function tuple_elim_helper(pp, names, debuginfo, subject, context)
 	local inner_context = context
 
 	pp:unit(pp:set_color())
@@ -215,7 +218,9 @@ local function tuple_elim_helper(pp, names, subject, context)
 	end
 
 	pp:unit(pp:set_color())
-	pp:unit(") = ")
+	pp:unit(")")
+	pp:any(debuginfo)
+	pp:unit(" = ")
 	pp:unit(pp:reset_color())
 
 	pp:any(subject, context)
@@ -309,16 +314,16 @@ local function inferrable_let_or_tuple_elim(pp, term, context)
 			pp:unit(pp:set_color())
 			pp:unit("inferrable.let ")
 			pp:unit(pp:reset_color())
-			context = let_helper(pp, name, expr, context)
+			context = let_helper(pp, name, debuginfo, expr, context)
 			pp:unit("\n")
 			pp:_prefix()
 		elseif term:is_tuple_elim() then
 			names, debuginfo, subject, term = term:unwrap_tuple_elim()
 
 			pp:unit(pp:set_color())
-			pp:unit("inferrable.let ")
+			pp:unit("inferrable.tuple_elim ")
 			pp:unit(pp:reset_color())
-			context = tuple_elim_helper(pp, names, subject, context)
+			context = tuple_elim_helper(pp, names, debuginfo, subject, context)
 			pp:unit("\n")
 			pp:_prefix()
 		else
@@ -346,16 +351,16 @@ local function typed_let_or_tuple_elim(pp, term, context)
 			pp:unit(pp:set_color())
 			pp:unit("typed.let ")
 			pp:unit(pp:reset_color())
-			context = let_helper(pp, name, expr, context)
+			context = let_helper(pp, name, debuginfo, expr, context)
 			pp:unit("\n")
 			pp:_prefix()
 		elseif term:is_tuple_elim() then
 			names, debuginfo, subject, _, term = term:unwrap_tuple_elim()
 
 			pp:unit(pp:set_color())
-			pp:unit("typed.let ")
+			pp:unit("typed.tuple_elim ")
 			pp:unit(pp:reset_color())
-			context = tuple_elim_helper(pp, names, subject, context)
+			context = tuple_elim_helper(pp, names, debuginfo, subject, context)
 			pp:unit("\n")
 			pp:_prefix()
 		else
@@ -705,7 +710,7 @@ function binding_override_pretty:let(pp, context)
 	pp:unit(pp:set_color())
 	pp:unit("binding.let ")
 	pp:unit(pp:reset_color())
-	let_helper(pp, name, expr, context)
+	let_helper(pp, name, debuginfo, expr, context)
 
 	pp:_exit()
 end
@@ -733,9 +738,9 @@ function binding_override_pretty:tuple_elim(pp, context)
 	pp:_enter()
 
 	pp:unit(pp:set_color())
-	pp:unit("binding.let ")
+	pp:unit("binding.tuple_elim ")
 	pp:unit(pp:reset_color())
-	tuple_elim_helper(pp, names, subject, context)
+	tuple_elim_helper(pp, names, debuginfo, subject, context)
 
 	pp:_exit()
 end
