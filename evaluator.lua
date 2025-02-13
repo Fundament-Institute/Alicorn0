@@ -4256,7 +4256,7 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 			end
 		end
 		local desc = prefix
-		for suffix_reverse_index = suffix_length - 1, 1, -1 do
+		for suffix_reverse_index = suffix_length, 1, -1 do
 			local suffix_forwards_index = suffix_length - suffix_reverse_index + 1
 			---@type flex_value
 			local suffix_elem = suffix_reverse_elems[suffix_reverse_index]
@@ -4268,14 +4268,11 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 				local suffix_elem_forwards_names, suffix_elem_forwards_debug, suffix_elem_subject, suffix_elem_length, suffix_elem_body =
 					suffix_elem_code:unwrap_tuple_elim()
 				-- `suffix_elem_forwards_names` only includes the names of elements extracted from `suffix_elem_subject`,
-				-- so not the last (outermost) name.
+				-- so not the last (outermost) name, because that element doesn't exist yet
 				suffix_forwards_names = suffix_elem_forwards_debug:copy()
-				suffix_forwards_names:append(
-					var_debug(("suffix_unk_%d"):format(suffix_forwards_index), format.anchor_here())
-				)
 			else
 				suffix_forwards_names = var_debug_array()
-				for suffix_forwards_index_2 = 1, suffix_forwards_index do
+				for suffix_forwards_index_2 = 1, suffix_forwards_index - 1 do
 					suffix_forwards_names[suffix_forwards_index_2] =
 						var_debug("suffix_unk_" .. tostring(suffix_forwards_index_2), format.anchor_here())
 				end
@@ -4562,12 +4559,15 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		end
 		---@type integer
 		local n = n_v:unwrap_host_value()
+		print "FOLDING"
+		print("start", n, acc)
 		for i = n, 1, -1 do
 			acc = apply_value(
 				f,
 				flex_value.tuple_value(flex_value_array(flex_value.host_value(i), acc)),
 				ambient_typechecking_context
 			)
+			print("step", i, acc)
 		end
 		return acc
 	elseif typed:is_host_if() then
