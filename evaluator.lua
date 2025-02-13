@@ -3816,11 +3816,10 @@ end
 ---@module "_meta/evaluator/infer"
 function infer(inferrable_term, typechecking_context)
 	local tracked = false --inferrable_term.track ~= nil
-	local _, unanchored_print = inferrable_term:unwrap_anchored_inferrable()
 
 	if tracked then
 		print(
-			"\n" .. string.rep("·", recurse_count) .. "INFER: " .. unanchored_print:pretty_print(typechecking_context)
+			"\n" .. string.rep("·", recurse_count) .. "INFER: " .. inferrable_term:pretty_print(typechecking_context)
 		)
 		--print(typechecking_context:format_names())
 	end

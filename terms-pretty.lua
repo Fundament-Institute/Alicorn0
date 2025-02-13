@@ -23,7 +23,7 @@ do local PrettyPrint end
 do local _ end
 ---@module "types.checkable"
 do local _ end
----@module "types.inferrable"
+---@module "types.unanchored_inferrable"
 do local _ end
 ---@module "types.typed"
 do local _ end
@@ -186,7 +186,7 @@ end
 ---@param pp PrettyPrint
 ---@param name string
 ---@param debuginfo var_debug
----@param expr inferrable | typed
+---@param expr unanchored_inferrable | typed
 ---@param context PrettyPrintingContext
 ---@return PrettyPrintingContext
 local function let_helper(pp, name, debuginfo, expr, context)
@@ -209,7 +209,7 @@ end
 ---@param pp PrettyPrint
 ---@param names ArrayValue<string>
 ---@param debuginfo var_debug,
----@param subject inferrable | typed
+---@param subject unanchored_inferrable | typed
 ---@param context PrettyPrintingContext
 ---@return PrettyPrintingContext
 local function tuple_elim_helper(pp, names, debuginfo, subject, context)
@@ -244,7 +244,7 @@ end
 
 ---@class (exact) TupleDescFlat
 ---@field [1] ArrayValue
----@field [2] inferrable | typed
+---@field [2] unanchored_inferrable | typed
 ---@field [3] PrettyPrintingContext
 
 ---@param pp PrettyPrint
@@ -292,12 +292,13 @@ local function tuple_type_helper(pp, members, names)
 	end
 end
 
+---@overload fun(term: unanchored_inferrable): boolean, anchored_inferrable
 ---@generic T
 ---@param term T
 ---@return boolean
 ---@return T?
 local function as_any_tuple_type(term)
-	---@cast term inferrable|flex_value|typed
+	---@cast term unanchored_inferrable|flex_value|typed
 	local ok, desc = term:as_tuple_type()
 	if ok then
 		return ok, desc
@@ -314,7 +315,7 @@ end
 -- unfortunately not generic helper functions
 
 ---@param pp PrettyPrint
----@param term inferrable
+---@param term unanchored_inferrable
 ---@param context PrettyPrintingContext
 local function inferrable_let_or_tuple_elim(pp, term, context)
 	pp:_enter()
@@ -323,6 +324,8 @@ local function inferrable_let_or_tuple_elim(pp, term, context)
 	while true do
 		if term:is_let() then
 			name, debuginfo, expr, term = term:unwrap_let()
+			_, term = term:unwrap_anchored_inferrable()
+			_, expr = expr:unwrap_anchored_inferrable()
 
 			-- rear-loading prefix to cheaply handle first loop not needing prefix
 			pp:unit(pp:set_color())
@@ -333,6 +336,8 @@ local function inferrable_let_or_tuple_elim(pp, term, context)
 			pp:_prefix()
 		elseif term:is_tuple_elim() then
 			names, debuginfo, subject, term = term:unwrap_tuple_elim()
+			_, subject = subject:unwrap_anchored_inferrable()
+			_, term = term:unwrap_anchored_inferrable()
 
 			pp:unit(pp:set_color())
 			pp:unit(enum_name(term, "tuple_elim "))
@@ -387,14 +392,16 @@ local function typed_let_or_tuple_elim(pp, term, context)
 	pp:_exit()
 end
 
----@param term inferrable
+---@param term anchored_inferrable
 ---@param context PrettyPrintingContext
 ---@return boolean
 ---@return boolean
 ---@return (string | ArrayValue)?
----@return inferrable
+---@return unanchored_inferrable
 ---@return PrettyPrintingContext
 local function inferrable_destructure_helper(term, context)
+	local _, term = term:unwrap_anchored_inferrable()
+
 	if term:is_let() then
 		-- destructuring with a let effectively just renames the parameter
 		-- thus it's usually superfluous to write code like this
@@ -403,6 +410,8 @@ local function inferrable_destructure_helper(term, context)
 		-- e.g. forall, lambda
 		-- so we pretty this anyway
 		local name, debuginfo, expr, body = term:unwrap_let()
+		local _, expr = expr:unwrap_anchored_inferrable()
+		local _, body = body:unwrap_anchored_inferrable()
 		local ok, index, info = expr:as_bound_variable()
 		local is_destructure = ok and index == context:len()
 		if is_destructure then
@@ -411,6 +420,8 @@ local function inferrable_destructure_helper(term, context)
 		end
 	elseif term:is_tuple_elim() then
 		local names, debuginfo, subject, body = term:unwrap_tuple_elim()
+		local _, subject = subject:unwrap_anchored_inferrable()
+		local _, body = body:unwrap_anchored_inferrable()
 		local ok, index, info = subject:as_bound_variable()
 		local is_destructure = ok and index == context:len()
 		if is_destructure then
@@ -460,12 +471,13 @@ local function typed_destructure_helper(term, context, capture)
 	return false, false, nil, term, context
 end
 
----@param desc inferrable
+---@param desc anchored_inferrable
 ---@param context PrettyPrintingContext
 ---@return boolean
 ---@return TupleDescFlat[]?
 ---@return integer?
 local function inferrable_tuple_type_flatten(desc, context)
+	local _, desc = desc:unwrap_anchored_inferrable()
 	local ok, constructor, arg = desc:as_enum_cons()
 	if not ok then
 		return false
@@ -473,12 +485,13 @@ local function inferrable_tuple_type_flatten(desc, context)
 	if constructor == DescCons.empty then
 		return true, {}, 0
 	elseif constructor == DescCons.cons then
+		local _, arg = arg:unwrap_anchored_inferrable()
 		local ok, elements, info = arg:as_tuple_cons()
 		if not ok or elements:len() ~= 2 then
 			return false
 		end
 		local desc = elements[1]
-		local f = elements[2]
+		local _, f = elements[2]:unwrap_anchored_inferrable()
 		local ok, param_name, _, body, _ = f:as_annotated_lambda()
 		if not ok then
 			return false
@@ -588,8 +601,8 @@ local checkable_term_override_pretty = {}
 ---@class FlexValueOverridePretty : flex_value
 local flex_value_override_pretty = {}
 
----@class InferrableTermOverride : inferrable
-local inferrable_term_override_pretty = {}
+---@class UnanchoredInferrableTermOverride : unanchored_inferrable
+local unanchored_inferrable_term_override_pretty = {}
 
 ---@class StuckValueOverridePretty : stuck_value
 local stuck_value_override_pretty = {}
@@ -622,7 +635,7 @@ end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function inferrable_term_override_pretty:typed(pp, context)
+function unanchored_inferrable_term_override_pretty:typed(pp, context)
 	local type, _, typed_term = self:unwrap_typed()
 	context = ensure_context(context)
 
@@ -668,7 +681,7 @@ end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function inferrable_term_override_pretty:bound_variable(pp, context)
+function unanchored_inferrable_term_override_pretty:bound_variable(pp, context)
 	local index, debuginfo = self:unwrap_bound_variable()
 	context = ensure_context(context)
 
@@ -748,7 +761,7 @@ end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function inferrable_term_override_pretty:let(pp, context)
+function unanchored_inferrable_term_override_pretty:let(pp, context)
 	context = ensure_context(context)
 	inferrable_let_or_tuple_elim(pp, self, context)
 end
@@ -778,8 +791,10 @@ end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function inferrable_term_override_pretty:tuple_elim(pp, context)
+function unanchored_inferrable_term_override_pretty:tuple_elim(pp, context)
 	context = ensure_context(context)
+	assert(not self:is_let())
+	assert(self:is_tuple_elim())
 	inferrable_let_or_tuple_elim(pp, self, context)
 end
 
@@ -824,10 +839,11 @@ end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function inferrable_term_override_pretty:annotated_lambda(pp, context)
+function unanchored_inferrable_term_override_pretty:annotated_lambda(pp, context)
 	local param_name, param_annotation, body, anchor, visible, pure = self:unwrap_annotated_lambda()
 	context = ensure_context(context)
 	local inner_context = context:append(param_name)
+	local _, param_annotation = param_annotation:unwrap_anchored_inferrable()
 	local is_tuple_type, desc = as_any_tuple_type(param_annotation)
 	local is_destructure, is_rename, names, body, inner_context = inferrable_destructure_helper(body, inner_context)
 	if is_rename then
@@ -1052,13 +1068,15 @@ end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function inferrable_term_override_pretty:pi(pp, context)
+function unanchored_inferrable_term_override_pretty:pi(pp, context)
 	-- extracting parameter names from the destructure of the result
 	-- so that we get the name of the last parameter
 	-- name of the last result is still lost
 	local param_type, param_info, result_type, result_info = self:unwrap_pi()
 	context = ensure_context(context)
 	local result_context = context
+	local _, param_type = param_type:unwrap_anchored_inferrable()
+	local _, result_type = result_type:unwrap_anchored_inferrable()
 	local param_is_tuple_type, param_desc = as_any_tuple_type(param_type)
 	local result_is_readable, param_name, _, result_body, anchor = result_type:as_annotated_lambda()
 	local result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_desc
@@ -1167,11 +1185,13 @@ end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function inferrable_term_override_pretty:host_function_type(pp, context)
+function unanchored_inferrable_term_override_pretty:host_function_type(pp, context)
 	local param_type, result_type, result_info = self:unwrap_host_function_type()
 	context = ensure_context(context)
 	local result_context = context
+	local _, param_type = param_type:unwrap_anchored_inferrable()
 	local param_is_tuple_type, param_desc = param_type:as_host_tuple_type()
+	local _, result_type = result_type:unwrap_anchored_inferrable()
 	local result_is_readable, param_name, _, result_body, anchor = result_type:as_annotated_lambda()
 	local result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_desc
 	if result_is_readable then
@@ -1610,7 +1630,7 @@ function flex_value_override_pretty:host_function_type(pp)
 		result_type:as_closure()
 	local result_context, result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_desc
 	if result_is_readable then
-		local result_context = PrettyprintingContext.new()
+		result_context = PrettyprintingContext.new()
 		result_context = result_context:append(result_capture_debug.name)
 		result_context = result_context:append(param_name)
 		result_is_destructure, result_is_rename, param_names, result_code, result_context =
@@ -1738,14 +1758,15 @@ end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function inferrable_term_override_pretty:application(pp, context)
+function unanchored_inferrable_term_override_pretty:application(pp, context)
 	local f, arg = self:unwrap_application()
 	context = ensure_context(context)
 
 	-- handle nested applications
-	---@param f inferrable
+	---@param f anchored_inferrable
 	---@param arg checkable
 	local function application_inner(f, arg)
+		local _, f = f:unwrap_anchored_inferrable()
 		local f_is_application, f_f, f_arg = f:as_application()
 		local f_is_typed, _, _, f_typed_term = f:as_typed()
 		local f_is_bound_variable, f_index = false, 0
@@ -1904,7 +1925,7 @@ end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function inferrable_term_override_pretty:tuple_type(pp, context)
+function unanchored_inferrable_term_override_pretty:tuple_type(pp, context)
 	local desc = self:unwrap_tuple_type()
 	context = ensure_context(context)
 	local ok, members = inferrable_tuple_type_flatten(desc, context)
@@ -1931,7 +1952,7 @@ end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function inferrable_term_override_pretty:host_tuple_type(pp, context)
+function unanchored_inferrable_term_override_pretty:host_tuple_type(pp, context)
 	local desc = self:unwrap_host_tuple_type()
 	context = ensure_context(context)
 	local ok, members = inferrable_tuple_type_flatten(desc, context)
@@ -2251,7 +2272,7 @@ return function(args)
 	DescCons = args.DescCons
 	return {
 		checkable_term_override_pretty = checkable_term_override_pretty,
-		inferrable_term_override_pretty = inferrable_term_override_pretty,
+		unanchored_inferrable_term_override_pretty = unanchored_inferrable_term_override_pretty,
 		typed_term_override_pretty = typed_term_override_pretty,
 		flex_value_override_pretty = flex_value_override_pretty,
 		stuck_value_override_pretty = stuck_value_override_pretty,

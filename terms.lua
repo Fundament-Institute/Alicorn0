@@ -1835,7 +1835,7 @@ local function inferrable_tuple_desc(start_anchor, ...)
 				error(("inferrable_tuple_desc: missing var_debug at argument %d"):format(i + 1))
 			end
 			a, debug_a =
-				anchored_inferrable_term(start_anchor, inferrable_cons(start_anchor, a, debug_a, e, debug_e)),
+				inferrable_cons(start_anchor, a, debug_a, e, debug_e),
 				var_debug(("terms.inferrable_tuple_desc.varargs[%d]"):format(i), anchor)
 		end
 	end
@@ -1966,7 +1966,7 @@ local terms = {
 
 local override_prettys = require "terms-pretty"(terms)
 local checkable_term_override_pretty = override_prettys.checkable_term_override_pretty
-local inferrable_term_override_pretty = override_prettys.inferrable_term_override_pretty
+local unanchored_inferrable_term_override_pretty = override_prettys.unanchored_inferrable_term_override_pretty
 local typed_term_override_pretty = override_prettys.typed_term_override_pretty
 local flex_value_override_pretty = override_prettys.flex_value_override_pretty
 local stuck_value_override_pretty = override_prettys.stuck_value_override_pretty
@@ -1975,7 +1975,7 @@ local var_debug_override_pretty = override_prettys.var_debug_override_pretty
 
 checkable_term:derive(derivers.pretty_print, checkable_term_override_pretty)
 anchored_inferrable_term:derive(derivers.pretty_print)
-unanchored_inferrable_term:derive(derivers.pretty_print, inferrable_term_override_pretty)
+unanchored_inferrable_term:derive(derivers.pretty_print, unanchored_inferrable_term_override_pretty)
 typed_term:derive(derivers.pretty_print, typed_term_override_pretty)
 visibility:derive(derivers.pretty_print)
 free:derive(derivers.pretty_print)
