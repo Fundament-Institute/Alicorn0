@@ -3937,34 +3937,34 @@ end
 -- desc is head + (gradually) parts of tail
 -- elem expects only parts of tail, need to wrap to handle head
 ---@param desc flex_value
----@param elem flex_value
----@param head_names ArrayValue<var_debug>
----@param tail_names ArrayValue<var_debug>
+---@param suffix_elem flex_value
+---@param prefix_forward_names ArrayValue<var_debug>
+---@param suffix_forward_names ArrayValue<var_debug>
 ---@return flex_value `terms.cons(desc, elem_wrap)`
-local function tuple_desc_elem(desc, elem, head_names, tail_names)
-	local debug_tuple_element_names = head_names:copy()
-	for _, tail_name in tail_names:ipairs() do
-		debug_tuple_element_names:append(tail_name)
+local function tuple_desc_elem(desc, suffix_elem, prefix_forward_names, suffix_forward_names)
+	local debug_tuple_element_names = prefix_forward_names:copy()
+	for _, suffix_name in suffix_forward_names:ipairs() do
+		debug_tuple_element_names:append(suffix_name)
 	end
-	local elem_wrap = gen_base_operator_aux(
+	local suffix_elem_wrap = gen_base_operator_aux(
 		"#tuple-desc-elem",
-		elem,
+		suffix_elem,
 		debug_tuple_element_names,
 		function(capture, bound_tuple_element_variables)
 			-- in theory the only placeholder name will be in reference to the last
 			-- element of head, which is always lost (and sometimes not even asked for)
-			local head_names_length, tail_names_length = #head_names, #tail_names
+			local prefix_names_length, suffix_names_length = #prefix_forward_names, #suffix_forward_names
 			-- convert to just tuple of tail
-			local tail_args = typed_term_array()
-			for i = 1, tail_names_length do
+			local suffix_args = typed_term_array()
+			for suffix_forwards_index = 1, suffix_names_length do
 				-- 2 for closure argument and capture (passed to tuple_elim)
 				-- head_n for head
-				tail_args:append(bound_tuple_element_variables[head_names_length + i])
+				suffix_args:append(bound_tuple_element_variables[prefix_names_length + suffix_forwards_index])
 			end
-			return U.notail(typed_term.application(capture, typed_term.tuple_cons(tail_args)))
+			return U.notail(typed_term.application(capture, typed_term.tuple_cons(suffix_args)))
 		end
 	)
-	return U.notail(terms.cons(desc, elem_wrap))
+	return U.notail(terms.cons(desc, suffix_elem_wrap))
 end
 
 local intrinsic_memo = setmetatable({}, { __mode = "v" })
@@ -4200,68 +4200,89 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		local universe = evaluate(universe_term, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.tuple_desc_type(universe))
 	elseif typed:is_tuple_desc_concat_indep() then
-		local head_tm, tail_tm = typed:unwrap_tuple_desc_concat_indep()
+		local prefix_term, tail_term = typed:unwrap_tuple_desc_concat_indep()
 
-		local head = evaluate(head_tm, runtime_context, ambient_typechecking_context)
-		local tail = evaluate(tail_tm, runtime_context, ambient_typechecking_context)
+		local prefix = evaluate(prefix_term, runtime_context, ambient_typechecking_context)
+		local suffix = evaluate(tail_term, runtime_context, ambient_typechecking_context)
 
-		if not head:is_enum_value() or not tail:is_enum_value() then
-			return U.notail(flex_value.tuple_desc_concat_indep(head, tail))
+		if not prefix:is_enum_value() or not suffix:is_enum_value() then
+			return U.notail(flex_value.tuple_desc_concat_indep(prefix, suffix))
 		end
 
 		---@param desc flex_value
-		---@param len integer?
-		---@param elems flex_value[]?
+		---@param length integer?
+		---@param reverse_elems flex_value[]?
 		---@return integer, flex_value[]
-		local function traverse(desc, len, elems)
-			len = len or 0
-			elems = elems or {}
-			local constructor, arg = desc:unwrap_enum_value()
+		local function traverse(desc, length, reverse_elems)
+			length = length or 0
+			reverse_elems = reverse_elems or {}
+			local constructor, _ = desc:unwrap_enum_value()
 			if constructor == terms.DescCons.empty then
 				terms.unempty(desc)
-				return len, elems
+				return length, reverse_elems
 			elseif constructor == terms.DescCons.cons then
 				local next_desc, elem = terms.uncons(desc)
-				len = len + 1
-				elems[len] = elem
-				return traverse(next_desc, len, elems)
+				length = length + 1
+				reverse_elems[length] = elem
+				return traverse(next_desc, length, reverse_elems)
 			else
 				error("unknown tuple desc constructor")
 			end
 		end
-		local head_n, head_elems = traverse(head)
-		if head_n == 0 then
-			return tail
+		local prefix_length, prefix_reverse_elems = traverse(prefix)
+		if prefix_length == 0 then
+			return suffix
 		end
-		local tail_n, tail_elems = traverse(tail)
+		local suffix_length, suffix_reverse_elems = traverse(suffix)
+		if suffix_length == 0 then
+			return prefix
+		end
 		---@type flex_value
-		local head_last = head_elems[1]
-		local _, head_code, _, _ = head_last:unwrap_closure()
-		local head_names
-		if head_code:is_tuple_elim() then
-			_, head_names, _, _, _ = head_code:unwrap_tuple_elim()
+		local prefix_last = prefix_reverse_elems[1]
+		local prefix_last_param_name, prefix_last_code, prefix_last_capture, prefix_last_capture_debug, prefix_last_param_debug =
+			prefix_last:unwrap_closure()
+		---@type ArrayValue<var_debug>
+		local prefix_forwards_names
+		if prefix_last_code:is_tuple_elim() then
+			local prefix_last_forwards_names, prefix_last_forwards_debug, prefix_last_subject, prefix_last_length, prefix_last_body =
+				prefix_last_code:unwrap_tuple_elim()
+			-- `prefix_last_forwards_names` only includes the names of elements extracted from `prefix_last_subject`,
+			-- so not the last (outermost) name.
+			prefix_forwards_names = prefix_last_forwards_debug:copy()
+			prefix_forwards_names:append(var_debug(("prefix_unk_%d"):format(prefix_length), format.anchor_here()))
 		else
-			head_names = var_debug_array()
-			for i = 1, head_n do
-				head_names[i] = var_debug("head_unk_" .. tostring(i), format.anchor_here())
+			prefix_forwards_names = var_debug_array()
+			for prefix_forwards_index = 1, prefix_length do
+				prefix_forwards_names[prefix_forwards_index] =
+					var_debug(("prefix_unk_%d"):format(prefix_forwards_index), format.anchor_here())
 			end
 		end
-		local desc = head
-		for i = tail_n, 1, -1 do
-			local tail_n_now = tail_n - i
+		local desc = prefix
+		for suffix_reverse_index = suffix_length - 1, 1, -1 do
+			local suffix_forwards_index = suffix_length - suffix_reverse_index + 1
 			---@type flex_value
-			local elem = tail_elems[i]
-			local _, tail_code, _, _ = elem:unwrap_closure()
-			local tail_names
-			if tail_code:is_tuple_elim() then
-				_, tail_names, _, _, _ = tail_code:unwrap_tuple_elim()
+			local suffix_elem = suffix_reverse_elems[suffix_reverse_index]
+			local suffix_elem_param_name, suffix_elem_code, suffix_elem_capture, suffix_elem_capture_debug, suffix_elem_param_debug =
+				suffix_elem:unwrap_closure()
+			---@type ArrayValue<var_debug>
+			local suffix_forwards_names
+			if suffix_elem_code:is_tuple_elim() then
+				local suffix_elem_forwards_names, suffix_elem_forwards_debug, suffix_elem_subject, suffix_elem_length, suffix_elem_body =
+					suffix_elem_code:unwrap_tuple_elim()
+				-- `suffix_elem_forwards_names` only includes the names of elements extracted from `suffix_elem_subject`,
+				-- so not the last (outermost) name.
+				suffix_forwards_names = suffix_elem_forwards_debug:copy()
+				suffix_forwards_names:append(
+					var_debug(("suffix_unk_%d"):format(suffix_forwards_index), format.anchor_here())
+				)
 			else
-				tail_names = var_debug_array()
-				for i = 1, tail_n_now do
-					tail_names[i] = var_debug("tail_unk_" .. tostring(i), format.anchor_here())
+				suffix_forwards_names = var_debug_array()
+				for suffix_forwards_index_2 = 1, suffix_forwards_index do
+					suffix_forwards_names[suffix_forwards_index_2] =
+						var_debug("suffix_unk_" .. tostring(suffix_forwards_index_2), format.anchor_here())
 				end
 			end
-			desc = tuple_desc_elem(desc, elem, head_names, tail_names)
+			desc = tuple_desc_elem(desc, suffix_elem, prefix_forwards_names, suffix_forwards_names)
 		end
 		return desc
 	elseif typed:is_record_cons() then
