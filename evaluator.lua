@@ -4123,10 +4123,16 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		local inner_context = runtime_context
 		if subject_value:is_tuple_value() then
 			local subject_elements = subject_value:unwrap_tuple_value()
-			if subject_elements:len() ~= length then
-				print("tuple has only", subject_elements:len(), "elements but expected", length)
-				print("tuple being eliminated", subject_value)
-				error("evaluate: mismatch in tuple length from typechecking and evaluation")
+			local subject_length = subject_elements:len()
+			if subject_length ~= length then
+				error(
+					("evaluate: tuple elim typed term with length %s evaluated to %s elements (typed term: %s; evaluated subject value: %s)"):format(
+						s(length),
+						s(subject_length),
+						s(typed),
+						s(subject_value)
+					)
+				)
 			end
 			for i = 1, length do
 				inner_context = inner_context:append(subject_elements[i], names[i], infos[i])
