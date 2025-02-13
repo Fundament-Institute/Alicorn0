@@ -631,7 +631,7 @@ end
 local list_many_fold_until = reducer(
 	---@generic T
 	---@param syntax ConstructedSyntax
-	---@param submatcher_fn fun(T): Matcher
+	---@param submatcher_fn fun(T, Anchor): Matcher
 	---@param init_thread T
 	---@param termination Matcher
 	---@return boolean
@@ -644,10 +644,17 @@ local list_many_fold_until = reducer(
 		local nextthread = init_thread
 		while ok and cont do
 			thread = nextthread
-			ok, cont, val, nextthread, tail = tail:match({
-				ispair(list_many_fold_pair_handler),
-				isnil(list_many_nil_handler),
-			}, failure_handler, { submatcher_fn(thread), termination })
+			ok, cont, val, nextthread, tail = tail:match(
+				{
+					ispair(list_many_fold_pair_handler),
+					isnil(list_many_nil_handler),
+				},
+				failure_handler,
+				{
+					submatcher_fn(thread, tail.start_anchor),
+					termination,
+				}
+			)
 			vals[#vals + 1] = val
 		end
 		if not ok then
@@ -661,7 +668,7 @@ local list_many_fold_until = reducer(
 local list_many_fold = reducer(
 	---@generic T
 	---@param syntax ConstructedSyntax
-	---@param submatcher_fn fun(T): Matcher
+	---@param submatcher_fn fun(T, Anchor): Matcher
 	---@param init_thread T
 	---@return boolean
 	---@return any[]|string

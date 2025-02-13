@@ -464,10 +464,12 @@ function typed:as_singleton() end
 function typed:is_program_sequence() end
 ---@return typed first
 ---@return typed continue
+---@return var_debug debug_info
 function typed:unwrap_program_sequence() end
 ---@return boolean
 ---@return typed first
 ---@return typed continue
+---@return var_debug debug_info
 function typed:as_program_sequence() end
 ---@return boolean
 function typed:is_program_end() end
@@ -626,7 +628,7 @@ function typed:as_constrained_type() end
 ---@field host_intrinsic fun(source: typed, start_anchor: Anchor): typed
 ---@field range fun(lower_bounds: ArrayValue<typed>, upper_bounds: ArrayValue<typed>, relation: typed): typed
 ---@field singleton fun(supertype: typed, value: typed): typed
----@field program_sequence fun(first: typed, continue: typed): typed
+---@field program_sequence fun(first: typed, continue: typed, debug_info: var_debug): typed
 ---@field program_end fun(result: typed): typed
 ---@field program_invoke fun(effect_tag: typed, effect_arg: typed): typed
 ---@field effect_type fun(components: ArrayValue<typed>, base: typed): typed

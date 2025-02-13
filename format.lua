@@ -218,6 +218,13 @@ local function anchor_here(offset)
 	return create_anchor(info.currentline, 0, "SYNTH:" .. info.source)
 end
 
+---@param debuglevel integer?
+---@return Anchor
+local function anchor_here(debuglevel)
+	local info = debug.getinfo((debuglevel or 1) + 1, "Sl")
+	return create_anchor(info.currentline, 0, "SYNTH:" .. info.source)
+end
+
 ---@class LinePosition
 ---@field line integer
 ---@field pos integer

@@ -10,7 +10,8 @@ local pretty_printer = require "pretty-printer"
 local s = pretty_printer.s
 --local new_typechecking_context = terms.typechecking_context
 --local checkable_term = terms.checkable_term
---local inferrable_term = terms.inferrable_term
+local unanchored_inferrable_term = terms.unanchored_inferrable_term
+local anchored_inferrable_term = terms.anchored_inferrable_term
 local typed_term, typed_term_array = terms.typed_term, terms.typed_term_array
 local free = terms.free
 local visibility = terms.visibility
@@ -1532,21 +1533,13 @@ end
 local function extract_desc_nth(ctx, subject, desc, idx)
 	local slices = {}
 	repeat
-		local variant, args = desc:unwrap_enum_value()
+		local variant, _ = desc:unwrap_enum_value()
 		local done = false
 		if variant == terms.DescCons.empty then
+			terms.unempty(desc)
 			done = true
 		elseif variant == terms.DescCons.cons then
-			local elements = args:unwrap_tuple_value()
-			if elements:len() ~= 2 then
-				error(
-					string.format(
-						"enum_value with constructor DescCons.cons should have 2 args, but has %s",
-						tostring(elements:len())
-					)
-				)
-			end
-			local pfx, elem = elements:unpack()
+			local pfx, elem = terms.uncons(desc)
 			slices[#slices + 1] = elem
 			desc = pfx
 		else
@@ -1680,10 +1673,7 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 	local b_universe = b:unwrap_tuple_desc_type()
 	local construction_variants = string_value_map()
 	-- The empty variant has no arguments
-	construction_variants:set(
-		terms.DescCons.empty,
-		flex_value.tuple_type(flex_value.enum_value(terms.DescCons.empty, flex_value.tuple_value(flex_value_array())))
-	)
+	construction_variants:set(terms.DescCons.empty, flex_value.tuple_type(terms.empty))
 	local arg_name = var_debug("#arg" .. tostring(#r_ctx + 1), format.anchor_here())
 	local universe_dbg = var_debug("#univ", format.anchor_here())
 	local prefix_desc_dbg = var_debug("#prefix-desc", format.anchor_here())
@@ -1722,31 +1712,7 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 		universe_dbg,
 		arg_name
 	)
-	construction_variants:set(
-		terms.DescCons.cons,
-		flex_value.tuple_type(
-			flex_value.enum_value(
-				terms.DescCons.cons,
-				flex_value.tuple_value(
-					flex_value_array(
-						flex_value.enum_value(
-							terms.DescCons.cons,
-							flex_value.tuple_value(
-								flex_value_array(
-									flex_value.enum_value(
-										terms.DescCons.empty,
-										flex_value.tuple_value(flex_value_array())
-									),
-									prefix_desc
-								)
-							)
-						),
-						next_element
-					)
-				)
-			)
-		)
-	)
+	construction_variants:set(terms.DescCons.cons, flex_value.tuple_type(terms.tuple_desc(prefix_desc, next_element)))
 	local enum_desc_val = flex_value.enum_desc_value(construction_variants)
 	typechecker_state:queue_constrain(
 		l_ctx,
@@ -1763,62 +1729,43 @@ add_comparer("flex_value.tuple_desc_type", "flex_value.enum_type", function(l_ct
 	local b_desc = b:unwrap_enum_type()
 	local construction_variants = string_value_map()
 	-- The empty variant has no arguments
-	construction_variants:set(
-		terms.DescCons.empty,
-		flex_value.tuple_type(flex_value.enum_value(terms.DescCons.empty, flex_value.tuple_value(flex_value_array())))
-	)
+	construction_variants:set(terms.DescCons.empty, flex_value.tuple_type(terms.empty))
 	-- The cons variant takes a prefix description and a next element, represented as a function from the prefix tuple to a type in the specified universe
 	construction_variants:set(
 		terms.DescCons.cons,
 		flex_value.tuple_type(
-			flex_value.enum_value(
-				terms.DescCons.cons,
-				flex_value.tuple_value(
-					flex_value_array(
-						flex_value.enum_value(
-							terms.DescCons.cons,
-							flex_value.tuple_value(
-								flex_value_array(
-									flex_value.enum_value(
-										terms.DescCons.empty,
-										flex_value.tuple_value(flex_value_array())
-									),
-									flex_value.closure(
-										"#prefix",
-										typed_term.literal(a),
-										r_ctx.runtime_context,
-										var_debug("", format.anchor_here())
-									)
-								)
-							)
-						),
-						flex_value.closure(
-							"#prefix",
-							typed_term.tuple_elim(
-								string_array("prefix-desc"),
-								var_debug_array(var_debug("prefix-desc", format.anchor_here())),
-								typed_term.bound_variable(#r_ctx + 2, var_debug("", format.anchor_here())),
-								1,
-								typed_term.pi(
-									typed_term.tuple_type(
-										typed_term.bound_variable(#r_ctx + 3, var_debug("", format.anchor_here()))
-									),
-									typed_term.literal(
-										strict_value.param_info(strict_value.visibility(terms.visibility.explicit))
-									),
-									typed_term.lambda(
-										"#arg" .. tostring(#r_ctx + 1),
-										var_debug("", format.anchor_here()),
-										typed_term.bound_variable(#r_ctx + 1, var_debug("", format.anchor_here())),
-										format.anchor_here()
-									),
-									typed_term.literal(strict_value.result_info(terms.result_info(terms.purity.pure)))
-								)
+			terms.tuple_desc(
+				flex_value.closure(
+					"#prefix",
+					typed_term.literal(a),
+					r_ctx.runtime_context,
+					var_debug("", format.anchor_here())
+				),
+				flex_value.closure(
+					"#prefix",
+					typed_term.tuple_elim(
+						string_array("prefix-desc"),
+						var_debug_array(var_debug("prefix-desc", format.anchor_here())),
+						typed_term.bound_variable(#r_ctx + 2, var_debug("", format.anchor_here())),
+						1,
+						typed_term.pi(
+							typed_term.tuple_type(
+								typed_term.bound_variable(#r_ctx + 3, var_debug("", format.anchor_here()))
 							),
-							r_ctx.runtime_context:append(a_univ, "a_univ", var_debug("", format.anchor_here())),
-							var_debug("", format.anchor_here())
+							typed_term.literal(
+								strict_value.param_info(strict_value.visibility(terms.visibility.explicit))
+							),
+							typed_term.lambda(
+								"#arg" .. tostring(#r_ctx + 1),
+								var_debug("", format.anchor_here()),
+								typed_term.bound_variable(#r_ctx + 1, var_debug("", format.anchor_here())),
+								format.anchor_here()
+							),
+							typed_term.literal(strict_value.result_info(terms.result_info(terms.purity.pure)))
 						)
-					)
+					),
+					r_ctx.runtime_context:append(a_univ, "a_univ", var_debug("", format.anchor_here())),
+					var_debug("", format.anchor_here())
 				)
 			)
 		)
@@ -2309,25 +2256,16 @@ local function extract_tuple_elem_type_closures(enum_val, closures)
 	local constructor, arg = enum_val:unwrap_enum_value()
 	local elements = arg:unwrap_tuple_value()
 	if constructor == terms.DescCons.empty then
-		if elements:len() ~= 0 then
-			error "enum_value with constructor DescCons.empty should have no args"
-		end
+		terms.unempty(enum_val)
 		return closures
 	end
 	if constructor == terms.DescCons.cons then
-		if elements:len() ~= 2 then
-			error(
-				string.format(
-					"enum_value with constructor DescCons.cons should have 2 args, but has %s",
-					tostring(elements:len())
-				)
-			)
-		end
-		extract_tuple_elem_type_closures(elements[1], closures)
-		if not elements[2]:is_closure() then
+		local prefix, closure = terms.uncons(enum_val)
+		extract_tuple_elem_type_closures(prefix, closures)
+		if not closure:is_closure() then
 			error "second elem in tuple_type enum_value should be closure"
 		end
-		closures:append(elements[2])
+		closures:append(closure)
 		return closures
 	end
 	error "unknown enum constructor for flex_value.tuple_type's enum_value, should not be reachable"
@@ -2634,19 +2572,11 @@ local function make_inner_context(ctx, desc, make_prefix)
 	-- evaluate the type of the tuple
 	local constructor, arg = desc:unwrap_enum_value()
 	if constructor == terms.DescCons.empty then
+		terms.unempty(desc)
 		return flex_value_array(), 0, flex_value_array()
 	elseif constructor == terms.DescCons.cons then
-		local details = arg:unwrap_tuple_value()
-		if details:len() ~= 2 then
-			error(
-				string.format(
-					"enum_value with constructor DescCons.cons should have 2 args, but has %s",
-					tostring(details:len())
-				)
-			)
-		end
-		local tuple_types, n_elements, tuple_vals = make_inner_context(ctx, details[1], make_prefix)
-		local f = details[2]
+		local prefix, f = terms.uncons(desc)
+		local tuple_types, n_elements, tuple_vals = make_inner_context(ctx, prefix, make_prefix)
 		local element_type
 		if tuple_types:len() == tuple_vals:len() then
 			local prefix = flex_value.tuple_value(tuple_vals)
@@ -2709,37 +2639,21 @@ local function make_inner_context2(desc_a, make_prefix_a, l_ctx, desc_b, make_pr
 	local constructor_a, arg_a = desc_a:unwrap_enum_value()
 	local constructor_b, arg_b = desc_b:unwrap_enum_value()
 	if constructor_a == terms.DescCons.empty and constructor_b == terms.DescCons.empty then
+		terms.unempty(desc_a)
+		terms.unempty(desc_b)
 		return true, flex_value_array(), flex_value_array(), flex_value_array(), 0
 	elseif constructor_a == terms.DescCons.empty or constructor_b == terms.DescCons.empty then
 		return false, "length-mismatch"
 	elseif constructor_a == terms.DescCons.cons and constructor_b == terms.DescCons.cons then
-		local details_a = arg_a:unwrap_tuple_value()
-		if details_a:len() ~= 2 then
-			error(
-				string.format(
-					"enum_value with constructor DescCons.cons should have 2 args, but has %s",
-					tostring(details_a:len())
-				)
-			)
-		end
-		local details_b = arg_b:unwrap_tuple_value()
-		if details_b:len() ~= 2 then
-			error(
-				string.format(
-					"enum_value with constructor DescCons.cons should have 2 args, but has %s",
-					tostring(details_b:len())
-				)
-			)
-		end
+		local prefix_a, f_a = terms.uncons(desc_a)
+		local prefix_b, f_b = terms.uncons(desc_b)
 		local ok, tuple_types_a, tuple_types_b, tuple_vals, n_elements =
-			make_inner_context2(details_a[1], make_prefix_a, l_ctx, details_b[1], make_prefix_b, r_ctx)
+			make_inner_context2(prefix_a, make_prefix_a, l_ctx, prefix_b, make_prefix_b, r_ctx)
 		if not ok then
 			---@cast tuple_types_a string
 			return ok, tuple_types_a
 		end
 		---@cast tuple_types_a -string
-		local f_a = details_a[2] --[[@as flex_value]]
-		local f_b = details_b[2] --[[@as flex_value]]
 		---@type flex_value
 		local element_type_a
 		---@type flex_value
@@ -2780,24 +2694,26 @@ function infer_tuple_type_unwrapped2(subject_type_a, l_ctx, subject_type_b, r_ct
 	return U.notail(make_inner_context2(desc_a, make_prefix_a, l_ctx, desc_b, make_prefix_b, r_ctx))
 end
 
----@overload fun(inferrable_term : inferrable, typechecking_context : TypecheckingContext) : boolean, string
----@param inferrable_term inferrable
+---@overload fun(inferrable_term : anchored_inferrable, typechecking_context : TypecheckingContext) : boolean, string
+---@param anchor_inferrable_term anchored_inferrable
 ---@param typechecking_context TypecheckingContext
 ---@return boolean ok
 ---@return flex_value type
 ---@return ArrayValue<integer> usages
 ---@return typed term
 local function infer_impl(
-	inferrable_term, -- constructed from inferrable
+	anchor_inferrable_term, -- constructed from inferrable
 	typechecking_context -- todo
 )
 	-- -> type of term, usage counts, a typed term,
-	if terms.inferrable_term.value_check(inferrable_term) ~= true then
+	if anchored_inferrable_term.value_check(anchor_inferrable_term) ~= true then
 		error("infer, inferrable_term: expected an inferrable term")
 	end
 	if terms.typechecking_context_type.value_check(typechecking_context) ~= true then
 		error("infer, typechecking_context: expected a typechecking context")
 	end
+
+	local anchor, inferrable_term = anchor_inferrable_term:unwrap_anchored_inferrable()
 
 	if inferrable_term:is_bound_variable() then
 		local index, debuginfo = inferrable_term:unwrap_bound_variable()
@@ -3299,9 +3215,11 @@ local function infer_impl(
 		local function make_type(desc)
 			local constructor, arg = desc:unwrap_enum_value()
 			if constructor == terms.DescCons.empty then
+				terms.uncons(desc)
 				return true, string_array(), string_value_map()
 			elseif constructor == terms.DescCons.cons then
 				local details = arg:unwrap_tuple_value()
+				-- TODO: 3???
 				if details:len() ~= 3 then
 					error(
 						string.format(
@@ -3398,7 +3316,7 @@ local function infer_impl(
 		for k, v in variants:pairs() do
 			--TODO figure out where to store/retrieve the anchors correctly
 			local ok, variant_type, variant_usages, variant_term =
-				infer(v, typechecking_context:append("#variant", constrain_variants:get(k), nil, v)) --TODO improve
+				infer(v, typechecking_context:append("#variant", constrain_variants:get(k), nil, variant_debug:get(k))) --TODO improve with anchored inferrables
 			if not ok then
 				return false, variant_type
 			end
@@ -3789,7 +3707,7 @@ local function infer_impl(
 		end
 		return true, U.notail(flex_value.star(0, 0)), desc_usages, U.notail(typed_term.host_tuple_type(desc_term))
 	elseif inferrable_term:is_program_sequence() then
-		local first, start_anchor, continue = inferrable_term:unwrap_program_sequence()
+		local first, start_anchor, continue, dbg = inferrable_term:unwrap_program_sequence()
 		local ok, first_type, first_usages, first_term = infer(first, typechecking_context)
 		if not ok then
 			return false, first_type
@@ -3809,12 +3727,7 @@ local function infer_impl(
 			return false, err
 		end
 
-		local inner_context = typechecking_context:append(
-			"#program-sequence",
-			first_base_type,
-			nil,
-			var_debug("#program-sequence", start_anchor)
-		)
+		local inner_context = typechecking_context:append("#program-sequence", first_base_type, nil, dbg)
 		local ok, continue_type, continue_usages, continue_term = infer(continue, inner_context)
 		if not ok then
 			return false, continue_type
@@ -3864,7 +3777,7 @@ local function infer_impl(
 		return true,
 			U.notail(flex_value.program_type(result_effect_sig, continue_base_type)),
 			result_usages,
-			U.notail(typed_term.program_sequence(first_term, continue_term))
+			U.notail(typed_term.program_sequence(first_term, continue_term, dbg))
 	elseif inferrable_term:is_program_end() then
 		local result = inferrable_term:unwrap_program_end()
 		local ok, program_type, program_usages, program_term = infer(result, typechecking_context)
@@ -3903,9 +3816,11 @@ end
 ---@module "_meta/evaluator/infer"
 function infer(inferrable_term, typechecking_context)
 	local tracked = false --inferrable_term.track ~= nil
+	local _, unanchored_print = inferrable_term:unwrap_anchored_inferrable()
+
 	if tracked then
 		print(
-			"\n" .. string.rep("·", recurse_count) .. "INFER: " .. inferrable_term:pretty_print(typechecking_context)
+			"\n" .. string.rep("·", recurse_count) .. "INFER: " .. unanchored_print:pretty_print(typechecking_context)
 		)
 		--print(typechecking_context:format_names())
 	end
@@ -4022,34 +3937,34 @@ end
 -- desc is head + (gradually) parts of tail
 -- elem expects only parts of tail, need to wrap to handle head
 ---@param desc flex_value
----@param elem flex_value
----@param head_names ArrayValue<var_debug>
----@param tail_names ArrayValue<var_debug>
+---@param suffix_elem flex_value
+---@param prefix_forward_names ArrayValue<var_debug>
+---@param suffix_forward_names ArrayValue<var_debug>
 ---@return flex_value `terms.cons(desc, elem_wrap)`
-local function tuple_desc_elem(desc, elem, head_names, tail_names)
-	local debug_tuple_element_names = head_names:copy()
-	for _, tail_name in tail_names:ipairs() do
-		debug_tuple_element_names:append(tail_name)
+local function tuple_desc_elem(desc, suffix_elem, prefix_forward_names, suffix_forward_names)
+	local debug_tuple_element_names = prefix_forward_names:copy()
+	for _, suffix_name in suffix_forward_names:ipairs() do
+		debug_tuple_element_names:append(suffix_name)
 	end
-	local elem_wrap = gen_base_operator_aux(
+	local suffix_elem_wrap = gen_base_operator_aux(
 		"#tuple-desc-elem",
-		elem,
+		suffix_elem,
 		debug_tuple_element_names,
 		function(capture, bound_tuple_element_variables)
 			-- in theory the only placeholder name will be in reference to the last
 			-- element of head, which is always lost (and sometimes not even asked for)
-			local head_names_length, tail_names_length = #head_names, #tail_names
+			local prefix_names_length, suffix_names_length = #prefix_forward_names, #suffix_forward_names
 			-- convert to just tuple of tail
-			local tail_args = typed_term_array()
-			for i = 1, tail_names_length do
+			local suffix_args = typed_term_array()
+			for suffix_forwards_index = 1, suffix_names_length do
 				-- 2 for closure argument and capture (passed to tuple_elim)
 				-- head_n for head
-				tail_args:append(bound_tuple_element_variables[head_names_length + i])
+				suffix_args:append(bound_tuple_element_variables[prefix_names_length + suffix_forwards_index])
 			end
-			return U.notail(typed_term.application(capture, typed_term.tuple_cons(tail_args)))
+			return U.notail(typed_term.application(capture, typed_term.tuple_cons(suffix_args)))
 		end
 	)
-	return U.notail(terms.cons(desc, elem_wrap))
+	return U.notail(terms.cons(desc, suffix_elem_wrap))
 end
 
 local intrinsic_memo = setmetatable({}, { __mode = "v" })
@@ -4208,10 +4123,16 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		local inner_context = runtime_context
 		if subject_value:is_tuple_value() then
 			local subject_elements = subject_value:unwrap_tuple_value()
-			if subject_elements:len() ~= length then
-				print("tuple has only", subject_elements:len(), "elements but expected", length)
-				print("tuple being eliminated", subject_value)
-				error("evaluate: mismatch in tuple length from typechecking and evaluation")
+			local subject_length = subject_elements:len()
+			if subject_length ~= length then
+				error(
+					("evaluate: tuple elim typed term with length %s evaluated to %s elements (typed term: %s; evaluated subject value: %s)"):format(
+						s(length),
+						s(subject_length),
+						s(typed),
+						s(subject_value)
+					)
+				)
 			end
 			for i = 1, length do
 				inner_context = inner_context:append(subject_elements[i], names[i], infos[i])
@@ -4279,65 +4200,84 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		local universe = evaluate(universe_term, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.tuple_desc_type(universe))
 	elseif typed:is_tuple_desc_concat_indep() then
-		local head_tm, tail_tm = typed:unwrap_tuple_desc_concat_indep()
+		local prefix_term, suffix_term = typed:unwrap_tuple_desc_concat_indep()
 
-		local head = evaluate(head_tm, runtime_context, ambient_typechecking_context)
-		local tail = evaluate(tail_tm, runtime_context, ambient_typechecking_context)
+		local prefix = evaluate(prefix_term, runtime_context, ambient_typechecking_context)
+		local suffix = evaluate(suffix_term, runtime_context, ambient_typechecking_context)
 
-		if not head:is_enum_value() or not tail:is_enum_value() then
-			return U.notail(flex_value.tuple_desc_concat_indep(head, tail))
+		if not prefix:is_enum_value() or not suffix:is_enum_value() then
+			return U.notail(flex_value.tuple_desc_concat_indep(prefix, suffix))
 		end
 
 		---@param desc flex_value
-		---@param len integer?
-		---@param elems flex_value[]?
+		---@param length integer
+		---@param reverse_elems flex_value[]
 		---@return integer, flex_value[]
-		local function traverse(desc, len, elems)
-			len = len or 0
-			elems = elems or {}
-			local constructor, arg = desc:unwrap_enum_value()
+		local function traverse(desc, length, reverse_elems)
+			local constructor, _ = desc:unwrap_enum_value()
 			if constructor == terms.DescCons.empty then
-				return len, elems
+				terms.unempty(desc)
+				return length, reverse_elems
 			elseif constructor == terms.DescCons.cons then
-				local elements = arg:unwrap_tuple_value()
-				local next_desc = elements[1]
-				len = len + 1
-				elems[len] = elements[2]
-				return traverse(next_desc, len, elems)
+				local next_desc, elem = terms.uncons(desc)
+				length = length + 1
+				reverse_elems[length] = elem
+				return traverse(next_desc, length, reverse_elems)
 			else
 				error("unknown tuple desc constructor")
 			end
 		end
-		local head_n, head_elems = traverse(head)
-		local tail_n, tail_elems = traverse(tail)
+		local prefix_length, prefix_reverse_elems = traverse(prefix, 0, {})
+		if prefix_length == 0 then
+			return suffix
+		end
+		local suffix_length, suffix_reverse_elems = traverse(suffix, 0, {})
+		if suffix_length == 0 then
+			return prefix
+		end
 		---@type flex_value
-		local head_last = head_elems[1]
-		local _, head_code, _, _ = head_last:unwrap_closure()
-		local head_names
-		if head_code:is_tuple_elim() then
-			_, head_names, _, _, _ = head_code:unwrap_tuple_elim()
+		local prefix_last = prefix_reverse_elems[1]
+		local prefix_last_param_name, prefix_last_code, prefix_last_capture, prefix_last_capture_debug, prefix_last_param_debug =
+			prefix_last:unwrap_closure()
+		---@type ArrayValue<var_debug>
+		local prefix_forwards_names
+		if prefix_last_code:is_tuple_elim() then
+			local prefix_last_forwards_names, prefix_last_forwards_debug, prefix_last_subject, prefix_last_length, prefix_last_body =
+				prefix_last_code:unwrap_tuple_elim()
+			-- `prefix_last_forwards_names` only includes the names of elements extracted from `prefix_last_subject`,
+			-- so not the last (outermost) name.
+			prefix_forwards_names = prefix_last_forwards_debug:copy()
+			prefix_forwards_names:append(var_debug(("prefix_unk_%d"):format(prefix_length), format.anchor_here()))
 		else
-			head_names = var_debug_array()
-			for i = 1, head_n do
-				head_names[i] = var_debug("head_unk_" .. tostring(i), format.anchor_here())
+			prefix_forwards_names = var_debug_array()
+			for prefix_forwards_index = 1, prefix_length do
+				prefix_forwards_names[prefix_forwards_index] =
+					var_debug(("prefix_unk_%d"):format(prefix_forwards_index), format.anchor_here())
 			end
 		end
-		local desc = head
-		for i = tail_n, 1, -1 do
-			local tail_n_now = tail_n - i
+		local desc = prefix
+		for suffix_reverse_index = suffix_length, 1, -1 do
+			local suffix_forwards_index = suffix_length - suffix_reverse_index + 1
 			---@type flex_value
-			local elem = tail_elems[i]
-			local _, tail_code, _, _ = elem:unwrap_closure()
-			local tail_names
-			if tail_code:is_tuple_elim() then
-				_, tail_names, _, _, _ = tail_code:unwrap_tuple_elim()
+			local suffix_elem = suffix_reverse_elems[suffix_reverse_index]
+			local suffix_elem_param_name, suffix_elem_code, suffix_elem_capture, suffix_elem_capture_debug, suffix_elem_param_debug =
+				suffix_elem:unwrap_closure()
+			---@type ArrayValue<var_debug>
+			local suffix_forwards_names
+			if suffix_elem_code:is_tuple_elim() then
+				local suffix_elem_forwards_names, suffix_elem_forwards_debug, suffix_elem_subject, suffix_elem_length, suffix_elem_body =
+					suffix_elem_code:unwrap_tuple_elim()
+				-- `suffix_elem_forwards_names` only includes the names of elements extracted from `suffix_elem_subject`,
+				-- so not the last (outermost) name, because that element doesn't exist yet
+				suffix_forwards_names = suffix_elem_forwards_debug:copy()
 			else
-				tail_names = var_debug_array()
-				for i = 1, tail_n_now do
-					tail_names[i] = var_debug("tail_unk_" .. tostring(i), format.anchor_here())
+				suffix_forwards_names = var_debug_array()
+				for suffix_forwards_index_2 = 1, suffix_forwards_index - 1 do
+					suffix_forwards_names[suffix_forwards_index_2] =
+						var_debug("suffix_unk_" .. tostring(suffix_forwards_index_2), format.anchor_here())
 				end
 			end
-			desc = tuple_desc_elem(desc, elem, head_names, tail_names)
+			desc = tuple_desc_elem(desc, suffix_elem, prefix_forwards_names, suffix_forwards_names)
 		end
 		return desc
 	elseif typed:is_record_cons() then
@@ -4620,7 +4560,11 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		---@type integer
 		local n = n_v:unwrap_host_value()
 		for i = n, 1, -1 do
-			acc = apply_value(f, acc, ambient_typechecking_context)
+			acc = apply_value(
+				f,
+				flex_value.tuple_value(flex_value_array(flex_value.host_value(i), acc)),
+				ambient_typechecking_context
+			)
 		end
 		return acc
 	elseif typed:is_host_if() then
@@ -4747,15 +4691,11 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		local val_val = evaluate(val, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.singleton(supertype_val, val_val))
 	elseif typed:is_program_sequence() then
-		local first, rest = typed:unwrap_program_sequence()
+		local first, rest, dbg = typed:unwrap_program_sequence()
 		local startprog = evaluate(first, runtime_context, ambient_typechecking_context)
 		if startprog:is_program_end() then
 			local first_res = startprog:unwrap_program_end()
-			return evaluate(
-				rest,
-				runtime_context:append(first_res, "program_end", var_debug("", format.anchor_here())),
-				ambient_typechecking_context
-			)
+			return evaluate(rest, runtime_context:append(first_res, "program_end", dbg), ambient_typechecking_context)
 		elseif startprog:is_program_cont() then
 			local effect_id, effect_arg, cont = startprog:unwrap_program_cont()
 			local restframe = terms.continuation.frame(runtime_context, rest)

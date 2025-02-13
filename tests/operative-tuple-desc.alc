@@ -1,5 +1,5 @@
 let my-tuple-desc = tuple-desc(x : host-number, y : host-number)
-let my-tuple-type = tuple-type-explicit(type_(0, 0), my-tuple-desc)
+let my-tuple-type = tuple-type(my-tuple-desc)
 
 the my-tuple-type tuple-of-implicit(3, 4)
 
@@ -8,5 +8,5 @@ let symbol-exact =
 		reducer-type(tuple-desc(s : host-string), tuple-desc())
 
 let inferrable-enum-cons =
-	intrinsic "return terms.inferrable_term.enum_cons" :
+	intrinsic "return terms.unanchored_inferrable_term.enum_cons" :
 		host-func-type (name : host-string, arg : host-inferrable-term) -> ((res : host-inferrable-term))
