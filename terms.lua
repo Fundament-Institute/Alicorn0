@@ -941,7 +941,7 @@ local unique_id = gen.builtin_table
 -- typed terms have been typechecked but do not store their type internally
 -- stylua: ignore
 typed_term:define_enum("typed", {
-	{ "bound_variable", { "index", gen.builtin_number, "debug", gen.any_lua_type  } }, --TODO: switch the debug type to use the new structured var_debug
+	{ "bound_variable", { "index", gen.builtin_number, "debug", var_debug } },
 	{ "literal", { "literal_value", strict_value } },
 	{ "metavariable", { "metavariable", metavariable_type } },
 	{ "unique", { "id", unique_id } },
@@ -1971,6 +1971,7 @@ local typed_term_override_pretty = override_prettys.typed_term_override_pretty
 local flex_value_override_pretty = override_prettys.flex_value_override_pretty
 local stuck_value_override_pretty = override_prettys.stuck_value_override_pretty
 local binding_override_pretty = override_prettys.binding_override_pretty
+local var_debug_override_pretty = override_prettys.var_debug_override_pretty
 
 checkable_term:derive(derivers.pretty_print, checkable_term_override_pretty)
 anchored_inferrable_term:derive(derivers.pretty_print)
@@ -1980,10 +1981,10 @@ visibility:derive(derivers.pretty_print)
 free:derive(derivers.pretty_print)
 flex_value:derive(derivers.pretty_print, flex_value_override_pretty)
 strict_value:derive(derivers.pretty_print, flex_value_override_pretty)
-stuck_value:derive(derivers.pretty_print, stuck_value_override_pretty)
+stuck_value:derive(derivers.pretty_print, flex_value_override_pretty)
 binding:derive(derivers.pretty_print, binding_override_pretty)
 expression_goal:derive(derivers.pretty_print)
-var_debug:derive(derivers.pretty_print)
+var_debug:derive(derivers.pretty_print, var_debug_override_pretty)
 purity:derive(derivers.pretty_print)
 result_info:derive(derivers.pretty_print)
 constraintcause:derive(derivers.pretty_print)

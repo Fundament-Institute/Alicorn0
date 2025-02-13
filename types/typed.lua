@@ -7,11 +7,11 @@ typed = {}
 ---@return boolean
 function typed:is_bound_variable() end
 ---@return number index
----@return any debug
+---@return var_debug debug
 function typed:unwrap_bound_variable() end
 ---@return boolean
 ---@return number index
----@return any debug
+---@return var_debug debug
 function typed:as_bound_variable() end
 ---@return boolean
 function typed:is_literal() end
@@ -576,7 +576,7 @@ function typed:as_constrained_type() end
 
 ---@class (exact) typedType: EnumType
 ---@field define_enum fun(self: typedType, name: string, variants: Variants): typedType
----@field bound_variable fun(index: number, debug: any): typed
+---@field bound_variable fun(index: number, debug: var_debug): typed
 ---@field literal fun(literal_value: strict_value): typed
 ---@field metavariable fun(metavariable: Metavariable): typed
 ---@field unique fun(id: table): typed

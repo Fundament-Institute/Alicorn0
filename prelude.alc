@@ -938,8 +938,8 @@ let host-tuple-concat = lambda (
 						f : (wrapped (forall (i : host-number, acc : T) -> (resacc : T)) ),
 						acc : wrapped(T))
 					->
-					((fold  : wrapped(T)))
-		lambda (n : host-number, f : (forall (i  : host-number, acc  : T) -> (resacc  : T)), acc  : T)
+					((fold : wrapped(T)))
+		lambda (n : host-number, f : (forall (i : host-number, acc : T) -> (resacc : T)), acc : T)
 			let  (fold) = inner(n, wrap(f), wrap(acc))
 			unwrap(fold)
 
@@ -951,7 +951,7 @@ let host-number-fold-indep = lambda_implicit (T : type-omega)
 					return U.notail(terms.typed_term.host_int_fold(num, func, acc))
 				end))
 			:
-			wrapped((forall (n : host-number, f : (forall (i  : host-number, acc  : T) -> (resacc  : T)), acc  : T) -> (res : T)))
+			wrapped((forall (n : host-number, f : (forall (i : host-number, acc : T) -> (resacc : T)), acc : T) -> (res : T)))
 
 let duplicate-tuple-desc = lambda_implicit (U : universe)
 	lambda (n : host-number, T : U)
