@@ -1,3 +1,6 @@
+;; SPDX-License-Identifier: Apache-2.0
+;; SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
+
 ;; Write queries here (see $VIMRUNTIME/queries/ for examples).
 ;; Move cursor to a capture ("@foo") to highlight matches in the source buffer.
 ;; Completion for grammar nodes is available (:help compl-omni)
