@@ -6,6 +6,7 @@
 local metalanguage = require "metalanguage"
 
 local format = require "format"
+local Anchor = format.create_anchor
 local terms = require "terms"
 local expression_goal = terms.expression_goal
 --local typechecking_context = terms.typechecking_context
@@ -44,12 +45,11 @@ local infer = evaluator.infer
 --local typechecker_state = evaluator.typechecker_state
 
 local U = require "alicorn-utils"
-local format = require "format"
 
 ---@class SemanticErrorData
 ---@field text string
 ---@field cause any
----@field anchors Anchor[]?
+---@field spans Span[]?
 ---@field terms { [string]: table }?
 ---@field env Environment?
 
@@ -58,11 +58,11 @@ local semantic_error_mt = {
 	---@return unknown
 	__tostring = function(self)
 		local message = { self.text }
-		if self.anchors then
-			message[#message + 1] = " at anchors"
-			for _, anchor in ipairs(self.anchors) do
+		if self.spans then
+			message[#message + 1] = " at spans"
+			for _, span in ipairs(self.spans) do
 				message[#message], message[#message + 1], message[#message + 2], message[#message + 3] =
-					" ", message[#message], " ", tostring(anchor)
+					" ", message[#message], " ", tostring(span)
 			end
 		end
 		if self.terms then
@@ -105,26 +105,26 @@ local semantic_error = {
 	-- 	}
 	-- end,
 	---@param cause any
-	---@param anchors Anchor[]
+	---@param spans Span[]
 	---@return SemanticErrorData
-	operative_apply_failed = function(cause, anchors)
+	operative_apply_failed = function(cause, spans)
 		return {
 			text = "operative apply failed",
 			cause = cause,
-			anchors = anchors,
+			spans = spans,
 		}
 	end,
 
 	---@param cause any
-	---@param anchors Anchor[]
+	---@param spans Span[]
 	---@param terms { [string]: table }
 	---@param env Environment
 	---@return SemanticErrorData
-	host_function_argument_collect_failed = function(cause, anchors, terms, env)
+	host_function_argument_collect_failed = function(cause, spans, terms, env)
 		return {
 			text = "host_function_argument_collect_failed",
 			cause = cause,
-			anchors = anchors,
+			spans = spans,
 			terms = terms,
 			env = env,
 		}
@@ -263,9 +263,8 @@ end
 
 ---@param yard { n: integer, [integer]: TaggedOperator }
 ---@param output { n: integer, [integer]: ConstructedSyntax }
----@param start_anchor Anchor
----@param end_anchor Anchor
-local function shunting_yard_pop(yard, output, start_anchor, end_anchor)
+---@param span Span
+local function shunting_yard_pop(yard, output, span)
 	local yard_height = yard.n
 	local output_length = output.n
 	local operator = yard[yard_height]
@@ -273,25 +272,14 @@ local function shunting_yard_pop(yard, output, start_anchor, end_anchor)
 	local operator_symbol = operator.symbol
 	if operator_type == OperatorType.Prefix then
 		local arg = output[output_length]
-		local tree = metalanguage.list(
-			start_anchor,
-			end_anchor,
-			metalanguage.symbol(start_anchor, end_anchor, operator_symbol),
-			arg
-		)
+		local tree = metalanguage.list(span, metalanguage.symbol(span, operator_symbol), arg)
 		yard[yard_height] = nil
 		yard.n = yard_height - 1
 		output[output_length] = tree
 	elseif operator_type == OperatorType.Infix then
 		local right = output[output_length]
 		local left = output[output_length - 1]
-		local tree = metalanguage.list(
-			start_anchor,
-			end_anchor,
-			left,
-			metalanguage.symbol(start_anchor, end_anchor, operator_symbol),
-			right
-		)
+		local tree = metalanguage.list(span, left, metalanguage.symbol(span, operator_symbol), right)
 		yard[yard_height] = nil
 		yard.n = yard_height - 1
 		output[output_length] = nil
@@ -349,11 +337,10 @@ end
 ---@param b ConstructedSyntax
 ---@param yard { n: integer, [integer]: TaggedOperator }
 ---@param output { n: integer, [integer]: ConstructedSyntax }
----@param start_anchor Anchor
----@param end_anchor Anchor
+---@param span Span
 ---@return boolean
 ---@return ConstructedSyntax|string
-local function shunting_yard(a, b, yard, output, start_anchor, end_anchor)
+local function shunting_yard(a, b, yard, output, span)
 	-- first, collect all prefix operators
 	local is_prefix, prefix_symbol =
 		a:match({ metalanguage.issymbol(shunting_yard_prefix_handler) }, metalanguage.failure_handler, nil)
@@ -372,7 +359,7 @@ local function shunting_yard(a, b, yard, output, start_anchor, end_anchor)
 			type = OperatorType.Prefix,
 			symbol = prefix_symbol,
 		}
-		return shunting_yard(next_a, next_b, yard, output, start_anchor, end_anchor)
+		return shunting_yard(next_a, next_b, yard, output, span)
 	end
 	-- no more prefix operators, now handle infix
 	output.n = output.n + 1
@@ -393,19 +380,19 @@ local function shunting_yard(a, b, yard, output, start_anchor, end_anchor)
 	end
 	if not more then
 		while yard.n > 0 do
-			shunting_yard_pop(yard, output, start_anchor, end_anchor)
+			shunting_yard_pop(yard, output, span)
 		end
 		return true, output[1]
 	end
 	while yard.n > 0 and shunting_yard_should_pop(infix_symbol, yard[yard.n]) do
-		shunting_yard_pop(yard, output, start_anchor, end_anchor)
+		shunting_yard_pop(yard, output, span)
 	end
 	yard.n = yard.n + 1
 	yard[yard.n] = {
 		type = OperatorType.Infix,
 		symbol = infix_symbol,
 	}
-	return shunting_yard(next_a, next_b, yard, output, start_anchor, end_anchor)
+	return shunting_yard(next_a, next_b, yard, output, span)
 end
 
 ---@param symbol SyntaxSymbol
@@ -724,7 +711,7 @@ local function call_pi(start_anchor, type_of_term, usage_count, term, sargs, goa
 	---@cast res anchored_inferrable
 
 	if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
-		local bind = terms.binding.program_sequence(res, sargs.start_anchor)
+		local bind = terms.binding.program_sequence(res, sargs.span.start)
 		ok, env = env:bind_local(bind)
 		if not ok then
 			return terms.tristate.failure, env
@@ -815,7 +802,7 @@ local function call_host_func_type(start_anchor, type_of_term_input, usage_count
 	if not ok then
 		-- TODO: semantic error here crashes
 		error(tuple)
-		error(semantic_error.host_function_argument_collect_failed(tuple, { sargs.start_anchor, sargs.end_anchor }, {
+		error(semantic_error.host_function_argument_collect_failed(tuple, { sargs.span }, {
 			host_function_type = type_of_term,
 			host_function_value = term,
 		}, env))
@@ -848,7 +835,7 @@ local function call_host_func_type(start_anchor, type_of_term_input, usage_count
 				)
 			)
 		)
-		local bind = terms.binding.program_sequence(app, sargs.start_anchor)
+		local bind = terms.binding.program_sequence(app, sargs.span.start)
 		ok, env = env:bind_local(bind)
 		if not ok then
 			return terms.tristate.failure, env
@@ -895,7 +882,7 @@ local function expression_pairhandler(args, a, b)
 	-- if the expression is a list containing prefix and infix expressions,
 	-- parse it into a tree of simple prefix/infix expressions with shunting yard
 	local ok, syntax
-	ok, syntax = shunting_yard(a, b, { n = 0 }, { n = 0 }, a.start_anchor, a.end_anchor)
+	ok, syntax = shunting_yard(a, b, { n = 0 }, { n = 0 }, a.span)
 	local is_operator = false
 	local operator_type
 	local left, operator, right
@@ -922,13 +909,13 @@ local function expression_pairhandler(args, a, b)
 		if not ok then
 			return false, combiner
 		end
-		sargs = metalanguage.list(a.start_anchor, a.end_anchor, left)
+		sargs = metalanguage.list(a.span, left)
 	elseif is_operator and operator_type == OperatorType.Infix then
 		ok, combiner = env:get("_" .. operator .. "_")
 		if not ok then
 			return false, combiner
 		end
-		sargs = metalanguage.list(a.start_anchor, a.end_anchor, left, right)
+		sargs = metalanguage.list(a.span, left, right)
 	else
 		ok, combiner, env = a:match(
 			{ expression(metalanguage.accept_handler, ExpressionArgs.new(expression_goal.infer, env)) },
@@ -957,7 +944,7 @@ local function expression_pairhandler(args, a, b)
 	local res_term1, res_term2, res_term3, res_env
 
 	local ok
-	ok, res_term1, res_env = call_operative(a.start_anchor, type_of_term, usage_count, term, sargs, goal, env)
+	ok, res_term1, res_env = call_operative(a.span.start, type_of_term, usage_count, term, sargs, goal, env)
 	if ok:is_success() then
 		return true, res_term1, res_env
 	elseif ok:is_failure() then
@@ -965,7 +952,7 @@ local function expression_pairhandler(args, a, b)
 		--error("call_operative failed!\n" .. tostring(res_term1) .. "\n" .. type_of_term:pretty_print())
 	end
 
-	ok, res_term2, res_env = call_pi(a.start_anchor, type_of_term, usage_count, term, sargs, goal, env)
+	ok, res_term2, res_env = call_pi(a.span.start, type_of_term, usage_count, term, sargs, goal, env)
 	if ok:is_success() then
 		return true, res_term2, res_env
 	elseif ok:is_failure() then
@@ -973,7 +960,7 @@ local function expression_pairhandler(args, a, b)
 		--error("call_pi failed!\n" .. tostring(res_term2) .. "\n" .. type_of_term:pretty_print())
 	end
 
-	ok, res_term3, res_env = call_host_func_type(a.start_anchor, type_of_term, usage_count, term, sargs, goal, env)
+	ok, res_term3, res_env = call_host_func_type(a.span.start, type_of_term, usage_count, term, sargs, goal, env)
 	if ok:is_success() then
 		return true, res_term3, res_env
 	elseif ok:is_failure() then
@@ -1010,25 +997,33 @@ local function split_dot_accessors(symbol)
 		if split_dot_pos then
 			local first, second = (symbol.str):match("([^.]+)%.(.+)")
 
-			local first_end_anchor = symbol.end_anchor
-			first_end_anchor.char = symbol.start_anchor.char + split_dot_pos
+			local first_stop_anchor = symbol.span.start
+			first_stop_anchor = Anchor(
+				first_stop_anchor.internal,
+				first_stop_anchor.id,
+				first_stop_anchor.line,
+				first_stop_anchor.char + split_dot_pos
+			)
 
 			local firstsymbol = {
 				kind = "symbol",
 				str = first,
-				start_anchor = symbol.start_anchor,
-				end_anchor = first_end_anchor,
+				span = symbol.span.start:span(first_stop_anchor),
 			}
 
 			-- we can assume it is on the same line.
-			local second_start_anchor = symbol.start_anchor
-			second_start_anchor.char = second_start_anchor.char + split_dot_pos
+			local second_start_anchor = symbol.span.start
+			second_start_anchor = Anchor(
+				second_start_anchor.internal,
+				second_start_anchor.id,
+				second_start_anchor.line,
+				second_start_anchor.char + split_dot_pos
+			)
 
 			local secondsymbol = {
 				kind = "symbol",
 				str = second,
-				start_anchor = second_start_anchor,
-				end_anchor = symbol.end_anchor,
+				span = second_start_anchor:span(symbol.span.stop),
 			}
 
 			return firstsymbol, secondsymbol
@@ -1076,6 +1071,7 @@ local function expression_symbolhandler(args, name)
 			name = rest
 			front, rest = split_dot_accessors(name)
 			assert(front.str)
+			---@diagnostic disable-next-line: no-unknown
 			local namearray
 			if front then
 				assert(front["kind"])
@@ -1090,15 +1086,15 @@ local function expression_symbolhandler(args, name)
 			end
 
 			part = anchored_inferrable_term(
-				name.start_anchor,
+				name.span.start,
 				unanchored_inferrable_term.record_elim(
 					part,
 					name_array(namearray.str),
 					anchored_inferrable_term(
-						name.start_anchor,
+						name.span.start,
 						unanchored_inferrable_term.bound_variable(
 							env.typechecking_context:len() + 1,
-							terms.spanned_name(namearray.str, namearray.start_anchor)
+							terms.spanned_name(namearray.str, namearray.span)
 						)
 					)
 				)
@@ -1138,7 +1134,7 @@ local function expression_valuehandler(args, val)
 		return true,
 			U.notail(
 				anchored_inferrable_term(
-					val.start_anchor,
+					val.span.start,
 					unanchored_inferrable_term.typed(
 						terms.typed_term.literal(strict_value.host_number_type),
 						usage_array(),
@@ -1152,7 +1148,7 @@ local function expression_valuehandler(args, val)
 		return true,
 			U.notail(
 				anchored_inferrable_term(
-					val.start_anchor,
+					val.span.start,
 					unanchored_inferrable_term.typed(
 						terms.typed_term.literal(strict_value.host_string_type),
 						usage_array(),
@@ -1203,7 +1199,7 @@ expression = metalanguage.reducer(
 
 ---@class OperativeError
 ---@field cause any
----@field start_anchor Anchor
+---@field span Span
 ---@field operative_name string
 local OperativeError = {}
 local external_error_mt = {
@@ -1211,7 +1207,7 @@ local external_error_mt = {
 		local message = "Lua error occurred inside host operative "
 			.. self.operative_name
 			.. " "
-			.. (self.start_anchor and tostring(self.start_anchor) or " at unknown position")
+			.. (self.span and tostring(self.span) or " at unknown position")
 			.. ":\n"
 			.. tostring(self.cause)
 		return message
@@ -1220,14 +1216,12 @@ local external_error_mt = {
 }
 
 ---@param cause any
----@param start_anchor Anchor
----@param end_anchor Anchor
+---@param span Span
 ---@param operative_name string
 ---@return OperativeError
-function OperativeError.new(cause, start_anchor, end_anchor, operative_name)
+function OperativeError.new(cause, span, operative_name)
 	return setmetatable({
-		start_anchor = start_anchor,
-		end_anchor = end_anchor,
+		span = span,
 		cause = cause,
 		operative_name = operative_name,
 	}, external_error_mt)
@@ -1250,7 +1244,7 @@ local function host_operative(fn, name)
 		-- userdata isn't passed in as it's always empty for host operatives
 		local ok, res, env = fn(syn, env, goal)
 		if not ok then
-			error(OperativeError.new(res, syn.start_anchor, syn.end_anchor, debugstring))
+			error(OperativeError.new(res, syn.span, debugstring))
 		end
 		if
 			(goal:is_infer() and anchored_inferrable_term.value_check(res))
@@ -1281,17 +1275,15 @@ local function host_operative(fn, name)
 	-- (s : syntax, e : environment, u : wrapped_typed_term(userdata), g : goal) -> (goal_to_term(g), environment)
 	--   goal one of inferable, mechanism, checkable
 
-	local args_dbg = spanned_name("#args", format.anchor_here())
+	local args_dbg = spanned_name("#args", format.span_here())
 	local arg_unpack_dbg = spanned_name_array(
-		spanned_name("#syn", format.anchor_here()),
-		spanned_name("#env", format.anchor_here()),
-		spanned_name("#ud", format.anchor_here()),
-		spanned_name("#goal", format.anchor_here())
+		spanned_name("#syn", format.span_here()),
+		spanned_name("#env", format.span_here()),
+		spanned_name("#ud", format.span_here()),
+		spanned_name("#goal", format.span_here())
 	)
-	local result_unpack_dbg = spanned_name_array(
-		spanned_name("#res-term", format.anchor_here()),
-		spanned_name("#res-env", format.anchor_here())
-	)
+	local result_unpack_dbg =
+		spanned_name_array(spanned_name("#res-term", format.span_here()), spanned_name("#res-env", format.span_here()))
 
 	-- 1: wrap fn as a typed host_value
 	-- this way it can take a host tuple and return a host tuple
@@ -1331,7 +1323,7 @@ local function host_operative(fn, name)
 		"#" .. name .. "_PARAM",
 		tuple_to_tuple_fn,
 		empty_tuple,
-		spanned_name("#capture", format.anchor_here()),
+		spanned_name("#capture", format.span_here()),
 		args_dbg
 	)
 
@@ -1393,7 +1385,7 @@ collect_tuple = metalanguage.reducer(
 		local goal_type, collected_terms
 		local desc = terms.empty
 
-		local start_anchor = syntax.start_anchor
+		local start_anchor = syntax.span.start
 
 		if goal:is_check() then
 			collected_terms = array(checkable_term)()
@@ -1426,13 +1418,13 @@ collect_tuple = metalanguage.reducer(
 						env.typechecking_context.runtime_context,
 						env.typechecking_context
 					)
-					local info = spanned_name("#collect-tuple-param", syntax.start_anchor)
+					local info = spanned_name("#collect-tuple-param", syntax.span)
 					desc = terms.cons(
 						desc,
 						evaluator.substitute_into_closure(
 							flex_value.singleton(next_elem_type, next_val),
 							env.typechecking_context.runtime_context,
-							syntax.start_anchor,
+							syntax.span,
 							info,
 							env.typechecking_context
 						)
@@ -1536,7 +1528,7 @@ collect_host_tuple = metalanguage.reducer(
 				}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
 				if ok and continue then
 					collected_terms:append(next_term)
-					collected_debug:append(spanned_name("#collected_term", syntax.start_anchor))
+					collected_debug:append(spanned_name("#collected_term", syntax.span))
 					local ok, typed_usages, next_typed =
 						evaluator.check(next_term, env.typechecking_context, next_elem_type)
 					if not ok then
@@ -1552,8 +1544,8 @@ collect_host_tuple = metalanguage.reducer(
 						evaluator.substitute_into_closure(
 							flex_value.singleton(next_elem_type, next_val),
 							env.typechecking_context.runtime_context,
-							syntax.start_anchor,
-							spanned_name("#collect-host-tuple-param", syntax.start_anchor),
+							syntax.span,
+							spanned_name("#collect-host-tuple-param", syntax.span),
 							env.typechecking_context
 						)
 					)
@@ -1572,7 +1564,7 @@ collect_host_tuple = metalanguage.reducer(
 				}, metalanguage.failure_handler, ExpressionArgs.new(goal, env))
 				if ok and continue then
 					collected_terms:append(next_term)
-					collected_debug:append(spanned_name("#collected_term", syntax.start_anchor))
+					collected_debug:append(spanned_name("#collected_term", syntax.span))
 				end
 			end
 		end
@@ -1584,7 +1576,7 @@ collect_host_tuple = metalanguage.reducer(
 			return true,
 				U.notail(
 					anchored_inferrable_term(
-						syntax.start_anchor,
+						syntax.span.start,
 						unanchored_inferrable_term.host_tuple_cons(collected_terms, collected_debug)
 					)
 				),
@@ -1645,7 +1637,7 @@ local block = metalanguage.reducer(
 		end
 
 		local lastval = anchored_inferrable_term(
-			syntax.start_anchor,
+			syntax.span.start,
 			unanchored_inferrable_term.tuple_cons(anchored_inferrable_term_array(), spanned_name_array())
 		)
 
@@ -1715,7 +1707,7 @@ local top_level_block = metalanguage.reducer(
 			error("NYI non-infer cases for block")
 		end
 		local lastval = anchored_inferrable_term(
-			syntax.start_anchor,
+			syntax.span.start,
 			unanchored_inferrable_term.tuple_cons(anchored_inferrable_term_array(), spanned_name_array())
 		)
 		local newval
@@ -1744,9 +1736,7 @@ local top_level_block = metalanguage.reducer(
 				.. " --- 0 / "
 				.. tostring(length)
 				.. " @ "
-				.. tostring(tail and tail.start_anchor or (syntax and syntax.start_anchor) or "")
-				.. " … "
-				.. tostring(tail and tail.end_anchor or (syntax and syntax.end_anchor) or "")
+				.. tostring(tail and tail.span or (syntax and syntax.span) or "")
 				.. ""
 		)
 		local progress = 0
@@ -1773,9 +1763,7 @@ local top_level_block = metalanguage.reducer(
 					.. " / "
 					.. tostring(length)
 					.. " @ "
-					.. tostring(aval and aval.start_anchor or (syntax and syntax.start_anchor) or "")
-					.. " … "
-					.. tostring(aval and aval.end_anchor or (syntax and syntax.end_anchor) or "")
+					.. tostring(aval and aval.span or (syntax and syntax.span) or "")
 					.. ""
 			)
 			io.flush()

@@ -5,10 +5,10 @@
 spanned_name = {}
 
 ---@return string
----@return Anchor
+---@return Span
 function spanned_name:unwrap_spanned_name() end
 
 ---@class (exact) spanned_nameType: RecordType
----@overload fun(name: string, source: Anchor): spanned_name
+---@overload fun(name: string, name_span: Span): spanned_name
 ---@field define_record fun(self: spanned_nameType, kind: string, params_with_types: ParamsWithTypes): spanned_nameType
 return {}

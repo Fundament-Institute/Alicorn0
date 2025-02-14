@@ -117,10 +117,10 @@ local function luatovalue(luafunc)
 	local len = luafunc_debug.nparams
 	local new_body = typed_term_array()
 
-	local arg_dbg = spanned_name("#host-arg", format.anchor_here())
+	local arg_dbg = spanned_name("#host-arg", format.span_here())
 	for i = 1, len do
 		local param_name = debug.getlocal(luafunc, i)
-		local param_dbg = spanned_name(param_name, format.anchor_here())
+		local param_dbg = spanned_name(param_name, format.span_here())
 		parameters:append(param_name)
 		params_dbg:append(param_dbg)
 		new_body:append(typed_term.bound_variable(i + 2, param_dbg))
@@ -140,7 +140,7 @@ local function luatovalue(luafunc)
 				)
 			),
 			empty_tuple,
-			spanned_name("#capture", format.anchor_here()),
+			spanned_name("#capture", format.span_here()),
 			arg_dbg
 		)
 	)
@@ -542,8 +542,8 @@ end
 ---@param v strict_value
 ---@return strict_value
 local function const_combinator(v)
-	local arg_info = spanned_name("#CONST_PARAM", format.anchor_here())
-	local data_info = spanned_name("#CONST_CAPTURE", format.anchor_here())
+	local arg_info = spanned_name("#CONST_PARAM", format.span_here())
+	local data_info = spanned_name("#CONST_CAPTURE", format.span_here())
 	local name, _ = arg_info:unwrap_spanned_name()
 	return U.notail(strict_value.closure(name, typed_term.bound_variable(1, data_info), v, data_info, arg_info))
 end
@@ -951,7 +951,7 @@ local function substitute_inner_impl(val, mappings, mappings_changed, context_le
 		local capture_sub =
 			substitute_inner(capture, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		local _, source = p_info:unwrap_spanned_name()
-		return U.notail(typed_term.lambda(param_name, p_info, code, capture_sub, capture_info, source))
+		return U.notail(typed_term.lambda(param_name, p_info, code, capture_sub, capture_info, source.start))
 	elseif val:is_operative_value() then
 		local userdata = val:unwrap_operative_value()
 		local userdata =
@@ -1385,14 +1385,14 @@ end
 ---@param val flex_value
 ---@param context FlexRuntimeContext
 ---@param usages MapValue<integer, integer>
----@param anchor Anchor
+---@param span Span
 ---@param param_dbg spanned_name
 ---@param ambient_typechecking_context TypecheckingContext
 ---@return typed lambda_term `typed_term.lambda`
-local function substitute_usages_into_lambda(val, context, usages, anchor, param_dbg, ambient_typechecking_context)
+local function substitute_usages_into_lambda(val, context, usages, span, param_dbg, ambient_typechecking_context)
 	local elements = typed_term_array()
 	local mappings = { [context.bindings:len() + 1] = typed_term.bound_variable(2, param_dbg) }
-	local capture_info = spanned_name("#capture", anchor)
+	local capture_info = spanned_name("#capture", span)
 
 	local keys = {}
 	if getmetatable(usages) ~= nil and getmetatable(getmetatable(usages)) == gen.array_type_mt then
@@ -1421,35 +1421,35 @@ local function substitute_usages_into_lambda(val, context, usages, anchor, param
 	local body_term_sub = substitute_inner(val, mappings, true, 2, ambient_typechecking_context)
 
 	local capture = typed_term.tuple_cons(elements)
-	return U.notail(typed_term.lambda(param_dbg.name, param_dbg, body_term_sub, capture, capture_info, anchor))
+	return U.notail(typed_term.lambda(param_dbg.name, param_dbg, body_term_sub, capture, capture_info, span.start))
 end
 
 ---@param body_val flex_value
 ---@param context FlexRuntimeContext
----@param anchor Anchor
+---@param span Span
 ---@param param_dbg spanned_name
 ---@param ambient_typechecking_context TypecheckingContext
 ---@return typed lambda_term `typed_term.lambda`
-local function substitute_into_lambda(body_val, context, anchor, param_dbg, ambient_typechecking_context)
+local function substitute_into_lambda(body_val, context, span, param_dbg, ambient_typechecking_context)
 	local usages = usage_map()
 	gather_usages(body_val, usages, context.bindings:len(), ambient_typechecking_context)
 	return U.notail(
-		substitute_usages_into_lambda(body_val, context, usages, anchor, param_dbg, ambient_typechecking_context)
+		substitute_usages_into_lambda(body_val, context, usages, span, param_dbg, ambient_typechecking_context)
 	)
 end
 
 ---@param body_val flex_value
 ---@param context FlexRuntimeContext
----@param anchor Anchor
+---@param span Span
 ---@param param_dbg spanned_name
 ---@param ambient_typechecking_context TypecheckingContext
 ---@return flex_value lambda_term `typed_term.lambda`
-local function substitute_into_closure(body_val, context, anchor, param_dbg, ambient_typechecking_context)
+local function substitute_into_closure(body_val, context, span, param_dbg, ambient_typechecking_context)
 	local usages = usage_map()
 	gather_usages(body_val, usages, context.bindings:len(), ambient_typechecking_context)
 	return U.notail(
 		evaluate(
-			substitute_usages_into_lambda(body_val, context, usages, anchor, param_dbg, ambient_typechecking_context),
+			substitute_usages_into_lambda(body_val, context, usages, span, param_dbg, ambient_typechecking_context),
 			context,
 			ambient_typechecking_context
 		)
@@ -1669,15 +1669,15 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 	local construction_variants = string_value_map()
 	-- The empty variant has no arguments
 	construction_variants:set(terms.DescCons.empty, flex_value.tuple_type(terms.empty))
-	local arg_name = spanned_name("#arg" .. tostring(#r_ctx + 1), format.anchor_here())
-	local universe_dbg = spanned_name("#univ", format.anchor_here())
-	local prefix_desc_dbg = spanned_name("#prefix-desc", format.anchor_here())
+	local arg_name = spanned_name("#arg" .. tostring(#r_ctx + 1), format.span_here())
+	local universe_dbg = spanned_name("#univ", format.span_here())
+	local prefix_desc_dbg = spanned_name("#prefix-desc", format.span_here())
 	-- The tuple descriptor's universe can depend on it's context.
 	local universe_lambda = substitute_into_lambda(
 		b,
 		r_ctx.runtime_context,
-		format.anchor_here(),
-		spanned_name("#prefix", format.anchor_here()),
+		format.span_here(),
+		spanned_name("#prefix", format.span_here()),
 		r_ctx
 	)
 	-- The cons variant takes a prefix description and a next element, represented as a function from the prefix tuple to a type in the specified universe
@@ -1734,33 +1734,33 @@ add_comparer("flex_value.tuple_desc_type", "flex_value.enum_type", function(l_ct
 					"#prefix",
 					typed_term.literal(a),
 					r_ctx.runtime_context,
-					spanned_name("", format.anchor_here())
+					spanned_name("", format.span_here())
 				),
 				flex_value.closure(
 					"#prefix",
 					typed_term.tuple_elim(
 						string_array("prefix-desc"),
-						spanned_name_array(spanned_name("prefix-desc", format.anchor_here())),
-						typed_term.bound_variable(#r_ctx + 2, spanned_name("", format.anchor_here())),
+						spanned_name_array(spanned_name("prefix-desc", format.span_here())),
+						typed_term.bound_variable(#r_ctx + 2, spanned_name("", format.span_here())),
 						1,
 						typed_term.pi(
 							typed_term.tuple_type(
-								typed_term.bound_variable(#r_ctx + 3, spanned_name("", format.anchor_here()))
+								typed_term.bound_variable(#r_ctx + 3, spanned_name("", format.span_here()))
 							),
 							typed_term.literal(
 								strict_value.param_info(strict_value.visibility(terms.visibility.explicit))
 							),
 							typed_term.lambda(
 								"#arg" .. tostring(#r_ctx + 1),
-								spanned_name("", format.anchor_here()),
-								typed_term.bound_variable(#r_ctx + 1, spanned_name("", format.anchor_here())),
+								spanned_name("", format.span_here()),
+								typed_term.bound_variable(#r_ctx + 1, spanned_name("", format.span_here())),
 								format.anchor_here()
 							),
 							typed_term.literal(strict_value.result_info(terms.result_info(terms.purity.pure)))
 						)
 					),
-					r_ctx.runtime_context:append(a_univ, "a_univ", spanned_name("", format.anchor_here())),
-					spanned_name("", format.anchor_here())
+					r_ctx.runtime_context:append(a_univ, "a_univ", spanned_name("", format.span_here())),
+					spanned_name("", format.span_here())
 				)
 			)
 		)
@@ -2347,7 +2347,7 @@ local function check(
 				substitute_into_closure(
 					flex_value.singleton(el_type, el_val),
 					typechecking_context.runtime_context,
-					format.anchor_here(),
+					format.span_here(),
 					info[i],
 					typechecking_context
 				)
@@ -2753,7 +2753,7 @@ local function infer_impl(
 		end
 
 		local param_type = evaluate(param_term, typechecking_context:get_runtime_context(), typechecking_context)
-		local param_debug = spanned_name(param_name, start_anchor)
+		local param_debug = spanned_name(param_name, start_anchor:span(start_anchor))
 		local inner_context = typechecking_context:append(param_name, param_type, nil, param_debug)
 		local ok, purity_usages, purity_term =
 			check(purity, typechecking_context, flex_value.strict(terms.host_purity_type))
@@ -2794,7 +2794,7 @@ local function infer_impl(
 		local lambda_term = substitute_into_lambda(
 			body_value,
 			typechecking_context.runtime_context,
-			start_anchor,
+			start_anchor:span(start_anchor),
 			param_debug,
 			inner_context
 		)
@@ -2802,7 +2802,7 @@ local function infer_impl(
 		-- 	body_value,
 		-- 	typechecking_context.runtime_context,
 		-- 	body_usages,
-		-- 	start_anchor,
+		-- 	start_anchor:span(start_anchor),
 		-- 	param_debug,
 		-- 	inner_context
 		-- )
@@ -3158,7 +3158,7 @@ local function infer_impl(
 				strict_value.name(k),
 				substitute_type_variables(
 					field_type,
-					spanned_name("#record-cons-el", format.anchor_here()),
+					spanned_name("#record-cons-el", format.span_here()),
 					typechecking_context:len() + 1,
 					"#record-cons-el",
 					typechecking_context:get_runtime_context(),
@@ -3234,7 +3234,7 @@ local function infer_impl(
 			if t == nil then
 				error("infer: trying to access a nonexistent record field")
 			end
-			inner_context = inner_context:append(v, t, nil, spanned_name(v, format.anchor_here()))
+			inner_context = inner_context:append(v, t, nil, spanned_name(v, format.span_here()))
 		end
 
 		-- infer the type of the body, now knowing the type of the record
@@ -3313,7 +3313,7 @@ local function infer_impl(
 		for i = 2, #result_types do
 			result_type = flex_value.union_type(result_type, result_types[i])
 		end
-		local absurd_info = spanned_name("#absurd", format.anchor_here())
+		local absurd_info = spanned_name("#absurd", format.span_here())
 		return true,
 			result_type,
 			usages,
@@ -3847,13 +3847,13 @@ local function gen_base_operator_aux(tuple_name, capture, debug_tuple_element_na
 		---@cast debug_tuple_element_name spanned_name
 		return debug_tuple_element_name.name
 	end)
-	local debug_tuple_arg = spanned_name(tuple_arg_name, format.anchor_here())
+	local debug_tuple_arg = spanned_name(tuple_arg_name, format.span_here())
 	local bound_tuple_element_variables = {}
 	for i, v in ipairs(debug_tuple_element_names) do
 		table.insert(bound_tuple_element_variables, typed_term.bound_variable(2 + i, v))
 	end
 
-	local debug_capture = spanned_name("#capture", format.anchor_here())
+	local debug_capture = spanned_name("#capture", format.span_here())
 	local typed_capture = typed_term.bound_variable(1, debug_capture)
 	local body = fn_op(typed_capture, bound_tuple_element_variables)
 	return U.notail(
@@ -3904,7 +3904,7 @@ local function gen_base_operator(tuple_name, fn_op)
 	for i = 1, debug_tuple_element_names_length do
 		local tuple_element_name = debug.getlocal(fn_op, i)
 		tuple_element_name = tuple_element_name:gsub("_", "-")
-		debug_tuple_element_names:append(spanned_name(tuple_element_name, format.anchor_here()))
+		debug_tuple_element_names:append(spanned_name(tuple_element_name, format.span_here()))
 	end
 	return U.notail(
 		gen_base_operator_aux(
@@ -4227,12 +4227,12 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 			-- `prefix_last_forwards_names` only includes the names of elements extracted from `prefix_last_subject`,
 			-- so not the last (outermost) name.
 			prefix_forwards_names = prefix_last_forwards_debug:copy()
-			prefix_forwards_names:append(spanned_name(("prefix_unk_%d"):format(prefix_length), format.anchor_here()))
+			prefix_forwards_names:append(spanned_name(("prefix_unk_%d"):format(prefix_length), format.span_here()))
 		else
 			prefix_forwards_names = spanned_name_array()
 			for prefix_forwards_index = 1, prefix_length do
 				prefix_forwards_names[prefix_forwards_index] =
-					spanned_name(("prefix_unk_%d"):format(prefix_forwards_index), format.anchor_here())
+					spanned_name(("prefix_unk_%d"):format(prefix_forwards_index), format.span_here())
 			end
 		end
 		local desc = prefix
@@ -4254,7 +4254,7 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 				suffix_forwards_names = spanned_name_array()
 				for suffix_forwards_index_2 = 1, suffix_forwards_index - 1 do
 					suffix_forwards_names[suffix_forwards_index_2] =
-						spanned_name("suffix_unk_" .. tostring(suffix_forwards_index_2), format.anchor_here())
+						spanned_name("suffix_unk_" .. tostring(suffix_forwards_index_2), format.span_here())
 				end
 			end
 			desc = tuple_desc_elem(desc, suffix_elem, prefix_forwards_names, suffix_forwards_names)
@@ -4282,7 +4282,7 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		if subject_value:is_record_value() then
 			local subject_fields = subject_value:unwrap_record_value()
 			for _, v in field_names:ipairs() do
-				inner_context = inner_context:append(subject_fields[v], v, spanned_name(v, format.anchor_here()))
+				inner_context = inner_context:append(subject_fields[v], v, spanned_name(v, format.span_here()))
 			end
 		elseif subject_value:is_stuck() then
 			local subject_stuck_value = subject_value:unwrap_stuck()
@@ -4290,7 +4290,7 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 				inner_context = inner_context:append(
 					flex_value.stuck(stuck_value.record_field_access(subject_stuck_value, v)),
 					v,
-					spanned_name(v, format.anchor_here())
+					spanned_name(v, format.span_here())
 				)
 			end
 		else
@@ -4329,7 +4329,7 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 					"#ENUM_PARAM",
 					methods[constructor],
 					capture,
-					spanned_name("", format.anchor_here())
+					spanned_name("", format.span_here())
 				)
 				return U.notail(apply_value(this_method, arg, ambient_typechecking_context))
 			elseif mechanism_value:is_stuck() then
@@ -4435,7 +4435,7 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 					"#OBJECT_PARAM",
 					methods[constructor],
 					capture,
-					spanned_name("", format.anchor_here())
+					spanned_name("", format.span_here())
 				)
 				return U.notail(apply_value(this_method, arg, ambient_typechecking_context))
 			elseif mechanism_value:is_stuck() then

@@ -110,6 +110,9 @@ local anchor_mt = {
 		)
 	end,
 	__index = Anchor,
+	__newindex = function(k, v)
+		error(("Anchor is immutable and can't set %s to %s"):format(tostring(k), tostring(v)))
+	end,
 }
 
 ---@param internal boolean
@@ -268,6 +271,9 @@ local span_mt = {
 		)
 	end,
 	__index = Span,
+	__newindex = function(k, v)
+		error(("Span is immutable and can't set %s to %s"):format(tostring(k), tostring(v)))
+	end,
 }
 
 ---@param start Anchor
@@ -278,10 +284,10 @@ local function create_span(start, stop)
 		error(("Span `internal` mismatch: %s, %s"):format(tostring(start), tostring(stop)))
 	elseif start.id ~= stop.id then
 		error(("Span `id` mismatch: %s, %s"):format(tostring(start), tostring(stop)))
-	elseif start.line <= stop.line then
-		if start.line < stop.line then
+	elseif start.line >= stop.line then
+		if start.line > stop.line then
 			error(("Span `line` mismatch: %s, %s"):format(tostring(start), tostring(stop)))
-		elseif start.char < stop.char then
+		elseif start.char > stop.char then
 			error(("Span `char` mismatch: %s, %s"):format(tostring(start), tostring(stop)))
 		end
 	end
@@ -297,8 +303,13 @@ end
 
 lpeg.locale(lpeg)
 
+local function create_element(capture)
+	capture.span, capture.start_anchor, capture.stop_anchor = capture.start_anchor:span(capture.stop_anchor), nil, nil
+	return capture
+end
+
 local function element(kind, pattern)
-	return Ct(Cg(V "anchor", "start_anchor") * Cg(Cc(kind), "kind") * pattern)
+	return Ct(Cg(V "anchor", "start_anchor") * Cg(Cc(kind), "kind") * pattern) / create_element
 end
 
 local function symbol(value)
@@ -349,8 +360,7 @@ end
 local function create_list(start_anchor, elements, stop_anchor)
 	return {
 		kind = "list",
-		start_anchor = start_anchor,
-		stop_anchor = stop_anchor,
+		span = start_anchor:span(stop_anchor),
 		elements = elements,
 	}
 end
@@ -414,9 +424,11 @@ local function clear_ffp()
 end
 
 local function create_literal(start_anchor, elements, stop_anchor)
+	if stop_anchor == nil then
+		U.debug_break()
+	end
 	local val = {
-		start_anchor = start_anchor,
-		stop_anchor = stop_anchor,
+		span = start_anchor:span(stop_anchor),
 		kind = "literal",
 		literaltype = "bytes",
 		val = {},
@@ -441,6 +453,16 @@ local function anchor_here(f)
 	end
 	local info = debug.getinfo(f, "Sl")
 	return create_anchor(true, "SYNTH:" .. info.source, info.currentline, 0)
+end
+
+---@param f? (integer | function)
+---@return Span
+local function span_here(f)
+	if type(f) ~= "function" then
+		f = (f or 1) + 1
+	end
+	local anchor = anchor_here(f)
+	return create_span(anchor, anchor)
 end
 
 ---@class LinePosition
@@ -656,6 +678,7 @@ local grammar = P {
 	) / function(list)
 		--assert(list.elements["braceacc"])
 
+		error("FIXME")
 		table.insert(list.elements, 1, {
 			kind = "symbol",
 			str = list.elements["braceacc"],
@@ -716,13 +739,13 @@ local grammar = P {
 			for _, v in ipairs(elements) do
 				if v["kind"] and (v["kind"] == "semicolon") then
 					if found_commas == true then
-						set_ffp_ctx("comma", ctx, v["start_anchor"])
+						set_ffp_ctx("comma", ctx, v.span.start)
 						return false
 					end
 					found_semicolons = true
 				elseif v["kind"] and (v["kind"] == "comma") then
 					if found_semicolons == true then
-						set_ffp_ctx("semicolon", ctx, v["start_anchor"])
+						set_ffp_ctx("semicolon", ctx, v.span.start)
 						return false
 					end
 					found_commas = true
@@ -737,7 +760,7 @@ local grammar = P {
 					if v["kind"] == "semicolon" then
 						table.insert(
 							semicolon_outer_acc,
-							create_list(semicolon_acc[1].start_anchor, semicolon_acc, v.stop_anchor)
+							create_list(semicolon_acc[1].span.start, semicolon_acc, v.span.stop)
 						)
 						semicolon_acc = {}
 					else
@@ -757,10 +780,7 @@ local grammar = P {
 				for _, v in ipairs(elements) do
 					if v["kind"] == "comma" then
 						if #comma_acc > 1 then
-							table.insert(
-								comma_outer_acc,
-								create_list(comma_acc[1].start_anchor, comma_acc, v.stop_anchor)
-							)
+							table.insert(comma_outer_acc, create_list(comma_acc[1].span.start, comma_acc, v.span.stop))
 						else
 							table.insert(comma_outer_acc, comma_acc[1])
 						end
@@ -771,7 +791,7 @@ local grammar = P {
 				end
 
 				if #comma_acc > 1 then
-					table.insert(comma_outer_acc, create_list(comma_acc[1].start_anchor, comma_acc, list_stop_anchor))
+					table.insert(comma_outer_acc, create_list(comma_acc[1].span.start, comma_acc, list_stop_anchor))
 				elseif #comma_acc == 1 then
 					table.insert(comma_outer_acc, comma_acc[1])
 				end
@@ -830,7 +850,10 @@ local grammar = P {
 
 	-- numbers are limited, they are not bignums, they are standard lua numbers. scopes shares the problem of files not having arbitrary precision
 	-- so it probably doesn't matter.
-	number = element("literal", Cg((V "float_special" + V "hex" + V "big_e") / tonumber, "val") * V "types"),
+	number = element(
+		"literal",
+		Cg((V "float_special" + V "hex" + V "big_e") / tonumber, "val") * V "types" * Cg(V "anchor", "stop_anchor")
+	),
 	types = Cg(
 		(P ":" * C((S "iu" * (P "8" + P "16" + P "32" + P "64")) + (P "f" * (P "32" + P "64")))) + P "" / "f64",
 		"literaltype"
@@ -925,4 +948,5 @@ return {
 	anchor_here = anchor_here,
 	span_mt = span_mt,
 	create_span = create_span,
+	span_here = span_here,
 }

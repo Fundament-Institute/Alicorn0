@@ -73,6 +73,7 @@ local metavariable_mt = { __index = Metavariable }
 local metavariable_type = gen.declare_foreign(gen.metatable_equality(metavariable_mt), "Metavariable")
 
 local anchor_type = gen.declare_foreign(gen.metatable_equality(format.anchor_mt), "Anchor")
+local span_type = gen.declare_foreign(gen.metatable_equality(format.span_mt), "Span")
 
 traits.diff:implement_on(metavariable_type, {
 	---@param left Metavariable
@@ -102,8 +103,8 @@ traits.diff:implement_on(metavariable_type, {
 local spanned_name = gen.declare_record("spanned_name", {
 	"name",
 	gen.builtin_string,
-	"source",
-	anchor_type,
+	"name_span",
+	span_type,
 })
 
 ---@class (exact) FlexRuntimeContext
@@ -593,9 +594,8 @@ function TypecheckingContext:append(name, type, val, debuginfo)
 	if val ~= nil and flex_value.value_check(val) ~= true then
 		error("TypecheckingContext:append parameter 'val' must be a flex_value (or nil if given start_anchor)")
 	end
-	local _, source = debuginfo:unwrap_spanned_name()
-	if source ~= nil and anchor_type.value_check(source) ~= true then
-		error("TypecheckingContext:append parameter 'start_anchor' must be an start_anchor (or nil if given val)")
+	if debuginfo ~= nil and spanned_name.value_check(debuginfo) ~= true then
+		error("TypecheckingContext:append parameter 'debuginfo' must be a spanned_name (or nil if given val)")
 	end
 	if not val and not debuginfo then
 		error("TypecheckingContext:append expected either val or debuginfo")
@@ -609,9 +609,6 @@ function TypecheckingContext:append(name, type, val, debuginfo)
 		bindings = self.bindings:append({ name = name, type = type }),
 		runtime_context = self.runtime_context:append(val, name, debuginfo),
 	}
-	if info then
-		info.ctx = copy.runtime_context
-	end
 	return setmetatable(copy, typechecking_context_mt)
 end
 
@@ -1713,6 +1710,7 @@ gen.define_multi_enum(
 for _, t in ipairs {
 	metavariable_type,
 	anchor_type,
+	span_type,
 	flex_runtime_context_type,
 	strict_runtime_context_type,
 	typechecking_context_type,
@@ -1880,7 +1878,7 @@ local inferrable_empty = anchored_inferrable_term(
 		)
 	)
 )
-local debug_inferrable_empty = spanned_name("terms.inferrable_empty", format.anchor_here())
+local debug_inferrable_empty = spanned_name("terms.inferrable_empty", format.span_here())
 
 ---@param start_anchor Anchor
 ---@param ... (anchored_inferrable | spanned_name) (`anchored_inferrable`, `spanned_name`)\*
@@ -1888,7 +1886,7 @@ local debug_inferrable_empty = spanned_name("terms.inferrable_empty", format.anc
 local function inferrable_tuple_desc(start_anchor, ...)
 	local a = inferrable_empty
 	local debug_a = debug_inferrable_empty
-	local anchor = format.anchor_here(2)
+	local span = format.span_here(2)
 	for i = 1, select("#", ...), 2 do
 		local e, debug_e = select(i, ...), select(i + 1, ...)
 		if e ~= nil then
@@ -1897,7 +1895,7 @@ local function inferrable_tuple_desc(start_anchor, ...)
 			end
 			a, debug_a =
 				inferrable_cons(start_anchor, a, debug_a, e, debug_e),
-				spanned_name(("terms.inferrable_tuple_desc.varargs[%d]"):format(i), anchor)
+				spanned_name(("terms.inferrable_tuple_desc.varargs[%d]"):format(i), span)
 		end
 	end
 	return a
