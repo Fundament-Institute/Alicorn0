@@ -21,19 +21,6 @@ precedence = "closest"
 SPDX-FileCopyrightText = "2025 Fundament Software SPC <https://fundament.software>"
 SPDX-License-Identifier = "Apache-2.0"
 
-# Config files that we don't want to comment in.
-[[annotations]]
-path = [
-	".editorconfig",
-	".envrc",
-	".gitignore",
-	".lua-format",
-	".styluaignore",
-]
-precedence = "aggregate"
-SPDX-FileCopyrightText = "2025 Fundament Software SPC <https://fundament.software>"
-SPDX-License-Identifier = "Apache-2.0"
-
 [[annotations]]
 path = "vendor/lpeg/**"
 precedence = "aggregate"
