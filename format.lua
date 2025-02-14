@@ -209,17 +209,13 @@ local function create_anchor(line, char, sourceid)
 end
 create_anchor = U.memoize(create_anchor, false)
 
----@param offset? integer
+---@param f? (integer | function)
 ---@return Anchor
-local function anchor_here(offset)
-	local info = debug.getinfo((offset or 1) + 1, "Sl")
-	return create_anchor(info.currentline, 0, "SYNTH:" .. info.source)
-end
-
----@param debuglevel integer?
----@return Anchor
-local function anchor_here(debuglevel)
-	local info = debug.getinfo((debuglevel or 1) + 1, "Sl")
+local function anchor_here(f)
+	if type(f) ~= "function" then
+		f = (f or 1) + 1
+	end
+	local info = debug.getinfo(f, "Sl")
 	return create_anchor(info.currentline, 0, "SYNTH:" .. info.source)
 end
 
