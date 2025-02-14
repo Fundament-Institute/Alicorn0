@@ -1887,7 +1887,10 @@ local function record_uncons(desc)
 	local elements = arg:unwrap_tuple_value()
 	if elements:len() ~= 3 then
 		error(
-			string.format("enum_value with constructor RecordDescCons.cons should have 3 args, but has %s", s(elements:len()))
+			string.format(
+				"enum_value with constructor RecordDescCons.cons should have 3 args, but has %s",
+				s(elements:len())
+			)
 		)
 	end
 	return elements[1], elements[2], elements[3]
