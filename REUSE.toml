@@ -1,3 +1,9 @@
+# SPDX-License-Identifier: CC0-1.0
+# SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
+
+# The SPDX specification requires this to be under CC0-1.0:
+# <https://spdx.github.io/spdx-spec/v2.3/document-creation-information/#62-data-license-field>
+
 version = 1
 SPDX-PackageName = "Feather-UI"
 SPDX-PackageSupplier = "Fundament Software <https://fundament.software>"
