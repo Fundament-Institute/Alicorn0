@@ -48,9 +48,19 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2025 Fundament Software SPC <https://fundament.software>"
 SPDX-License-Identifier = "Apache-2.0"
 
+# Source/data files that we can't comment in.
+[[annotations]]
+path = "testlist.json"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2025 Fundament Software SPC <https://fundament.software>"
+SPDX-License-Identifier = "Apache-2.0"
+
 # Source/data files that we don't want to comment in.
 [[annotations]]
-path = "**/*.alc"
+path = [
+	"**/*.alc",
+	"test*.lua",
+]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2025 Fundament Software SPC <https://fundament.software>"
 SPDX-License-Identifier = "Apache-2.0"
