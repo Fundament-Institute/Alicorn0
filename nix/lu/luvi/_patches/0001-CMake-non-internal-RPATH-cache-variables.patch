@@ -3,6 +3,8 @@ From: Dusk Banks <me@bb010g.com>
 Date: Sun, 2 Feb 2025 06:37:34 -0800
 Subject: [PATCH 1/2] CMake: non-internal RPATH cache variables
 
+SPDX-FileCopyrightText: Dusk Banks <me@bb010g.com>
+SPDX-License-Identifier: Apache-2.0 OR MIT
 ---
  CMakeLists.txt | 8 ++++----
  1 file changed, 4 insertions(+), 4 deletions(-)

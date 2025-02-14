@@ -40,12 +40,6 @@ SPDX-FileCopyrightText = "Copyright (C) 2005-2023 Mike Pall."
 SPDX-License-Identifier = "MIT"
 
 [[annotations]]
-path = "nix/**"
-precedence = "aggregate"
-SPDX-FileCopyrightText = "2025 Fundament Software SPC <https://fundament.software>"
-SPDX-License-Identifier = "Apache-2.0"
-
-[[annotations]]
 path = ".*"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2025 Fundament Software SPC <https://fundament.software>"
