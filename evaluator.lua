@@ -3213,23 +3213,13 @@ local function infer_impl(
 		-- evaluate the type of the record
 		local function make_type(desc)
 			local constructor, arg = desc:unwrap_enum_value()
-			if constructor == terms.DescCons.empty then
-				terms.uncons(desc)
+			if constructor == terms.RecordDescCons.empty then
+				terms.record_unempty(desc)
 				return true, string_array(), string_value_map()
-			elseif constructor == terms.DescCons.cons then
-				local details = arg:unwrap_tuple_value()
-				-- TODO: 3???
-				if details:len() ~= 3 then
-					error(
-						string.format(
-							"enum_value with constructor DescCons.cons should have 3 args, but has %s",
-							tostring(details:len())
-						)
-					)
-				end
-				local field_names, field_types = make_type(details[1])
-				local name = details[2]:unwrap_name()
-				local f = details[3]
+			elseif constructor == terms.RecordDescCons.cons then
+				local fields_desc, name_something, f = terms.record_uncons(desc)
+				local field_names, field_types = make_type(fields_desc)
+				local name = name_something:unwrap_name()
 				local prefix = make_prefix(field_names)
 				local field_type = apply_value(f, prefix, typechecking_context)
 				field_names:append(name)

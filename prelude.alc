@@ -1299,7 +1299,7 @@ let core-operative-type =
 	unwrap
 		intrinsic
 			""""
-				return U.notail(environment.gen_base_operator("#core-operative-type", function(userdata, handler)
+				return U.notail(evaluator.gen_base_operator("#core-operative-type", function(userdata, handler)
 					return U.notail(terms.typed_term.operative_type_cons(userdata, handler))
 				end))
 			:
@@ -1309,7 +1309,7 @@ let core-operative = lambda_implicit (userdata : host-type)
 	unwrap
 		intrinsic
 			""""
-				return U.notail(environment.gen_base_operator("#core-operative", function(userdata, handler)
+				return U.notail(evaluator.gen_base_operator("#core-operative", function(userdata, handler)
 					-- `handler` is intentionally discarded.
 					return U.notail(terms.typed_term.operative_cons(userdata))
 				end))

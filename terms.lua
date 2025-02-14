@@ -1868,6 +1868,39 @@ local function typed_tuple_desc(...)
 	return a
 end
 
+---@class RecordDescConsContainer
+local RecordDescCons = --[[@enum RecordDescCons]]
+	{
+		cons = "cons",
+		empty = "empty",
+	}
+
+---@param desc flex_value `flex_value.enum_value(RecordDescCons.cons, …))`
+---@return flex_value field_descs
+---@return flex_value name_something
+---@return flex_value f
+local function record_uncons(desc)
+	local constructor, arg = desc:unwrap_enum_value()
+	if constructor ~= RecordDescCons.cons then
+		error(string.format("expected constructor RecordDescCons.cons, got %s: %s", s(constructor), s(desc)))
+	end
+	local elements = arg:unwrap_tuple_value()
+	if elements:len() ~= 3 then
+		error(
+			string.format("enum_value with constructor RecordDescCons.cons should have 3 args, but has %s", s(elements:len()))
+		)
+	end
+	return elements[1], elements[2], elements[3]
+end
+
+---@param desc flex_value `flex_value.enum_value(RecordDescCons.empty, …))`
+local function record_unempty(desc)
+	local constructor = desc:unwrap_enum_value()
+	if constructor ~= DescCons.empty then
+		error(string.format("expected constructor RecordDescCons.empty, got %s: %s", s(constructor), s(desc)))
+	end
+end
+
 ---@module "types.tristate"
 local tristate = gen.declare_enum("tristate", {
 	{ "success" },
@@ -1948,6 +1981,9 @@ local terms = {
 	inferrable_cons = inferrable_cons,
 	inferrable_empty = inferrable_empty,
 	inferrable_tuple_desc = inferrable_tuple_desc,
+	RecordDescCons = RecordDescCons,
+	record_empty = record_empty,
+	record_uncons = record_uncons,
 	unit_type = unit_type,
 	unit_val = unit_val,
 	effect_id = effect_id,
