@@ -2284,6 +2284,7 @@ local function desc_length(desc, len)
 		error("unknown tuple desc constructor")
 	end
 end
+-- TODO: move to `evaluator.gen_base_operator_aux`?
 local function new_host_type_family(unique_id, sig, variance)
 	local param_type, _, _, _ = sig:unwrap_pi()
 	local param_desc = param_type:unwrap_tuple_type()
