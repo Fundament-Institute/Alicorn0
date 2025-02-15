@@ -28,6 +28,18 @@ SPDX-FileCopyrightText = "Copyright © 2010-2022 The LuaFileSystem authors. Copy
 SPDX-License-Identifier = "MIT"
 
 [[annotations]]
+path =[ "vendor/luajit2/src/lauxlib.h", "vendor/luajit2/src/lua.h" ]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Copyright (C) 1994-2008 Lua.org, PUC-Rio.  All rights reserved."
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path =[ "vendor/luajit2/src/luaconf.h", "vendor/luajit2/src/lualib.h" ]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Copyright (C) 2005-2023 Mike Pall."
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
 path = "nix/**"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2025 Fundament Software SPC <https://fundament.software>"

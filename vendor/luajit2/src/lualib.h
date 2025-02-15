@@ -1,6 +1,4 @@
-/* SPDX-License-Identifier: MIT
-** SPDX-FileCopyrightText: Copyright (C) 2005-2023 Mike Pall.
-**
+/*
 ** Standard library header.
 ** Copyright (C) 2005-2023 Mike Pall. See Copyright Notice in luajit.h
 */

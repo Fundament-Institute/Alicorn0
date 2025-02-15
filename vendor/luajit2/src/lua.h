@@ -1,6 +1,4 @@
-/* SPDX-License-Identifier: MIT
-** SPDX-FileCopyrightText: Copyright (C) 1994-2008 Lua.org, PUC-Rio.  All rights reserved.
-** 
+/*
 ** $Id: lua.h,v 1.218.1.5 2008/08/06 13:30:12 roberto Exp $
 ** Lua - An Extensible Extension Language
 ** Lua.org, PUC-Rio, Brazil (https://www.lua.org)
