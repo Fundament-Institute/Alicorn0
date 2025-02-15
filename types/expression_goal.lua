@@ -12,22 +12,22 @@ function expression_goal:unwrap_infer() end
 function expression_goal:as_infer() end
 ---@return boolean
 function expression_goal:is_check() end
----@return value goal_type
+---@return flex_value goal_type
 function expression_goal:unwrap_check() end
 ---@return boolean
----@return value goal_type
+---@return flex_value goal_type
 function expression_goal:as_check() end
 ---@return boolean
 function expression_goal:is_mechanism() end
----@return value TODO
+---@return flex_value TODO
 function expression_goal:unwrap_mechanism() end
 ---@return boolean
----@return value TODO
+---@return flex_value TODO
 function expression_goal:as_mechanism() end
 
 ---@class (exact) expression_goalType: EnumType
 ---@field define_enum fun(self: expression_goalType, name: string, variants: Variants): expression_goalType
 ---@field infer expression_goal
----@field check fun(goal_type: value): expression_goal
----@field mechanism fun(TODO: value): expression_goal
+---@field check fun(goal_type: flex_value): expression_goal
+---@field mechanism fun(TODO: flex_value): expression_goal
 return {}

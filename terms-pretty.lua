@@ -1,9 +1,71 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
 local fibbuf = require "fibonacci-buffer"
 local gen = require "terms-generators"
 local U = require "alicorn-utils"
+local pretty_printer = require "pretty-printer"
+local tostring = tostring
+---@module "terms".typechecking_context_type
 local typechecking_context_type
-local runtime_context_type
+---@module "terms".strict_runtime_context_type
+local strict_runtime_context_type
+---@module "terms".flex_runtime_context_type
+local flex_runtime_context_type
+---@module "terms".DescCons
 local DescCons
+
+-- stylua: ignore start
+
+---@module "pretty-printer".PrettyPrint
+do local PrettyPrint end
+
+---@module "types.binding"
+do local _ end
+---@module "types.checkable"
+do local _ end
+---@module "types.unanchored_inferrable"
+do local _ end
+---@module "types.typed"
+do local _ end
+---@module "types.strict_value"
+do local _ end
+---@module "types.flex_value"
+do local _ end
+---@module "types.stuck_value"
+do local _ end
+---@module "types.var_debug"
+do local _ end
+
+-- stylua: ignore end
+
+---@param self EnumValue
+---@param name string
+---@return string name
+local function enum_name(self, name)
+	return ("%s.%s"):format(getmetatable(self)._name, name)
+end
+
+pretty_printer.hidden_fields.capture = function(capture)
+	if capture._record == nil and capture.bindings and capture.bindings.len then
+		local prefix = ""
+		if strict_runtime_context_type.value_check(capture) then
+			prefix = "strict "
+		end
+		if flex_runtime_context_type.value_check(capture) then
+			prefix = "flex "
+		end
+		-- FIXME: we can't print all the bindings for a capture currently because we
+		-- capture everything in scope and that's way too verbose
+		-- if that gets fixed to only capture used bindings we can print more
+		-- local ret = {}
+		-- for i = 1, capture.bindings:len() do
+		-- 	ret[i] = capture.bindings:get(i)
+		-- end
+		-- return ret
+		return prefix .. "runtime context with len=" .. tostring(capture.bindings:len())
+	end
+	return capture
+end
 
 -- pretty printing context stuff
 
@@ -28,9 +90,17 @@ function PrettyprintingContext.from_typechecking_context(context)
 	return setmetatable(self, prettyprinting_context_mt)
 end
 
----@param context RuntimeContext
+---@param context StrictRuntimeContext
 ---@return PrettyPrintingContext
-function PrettyprintingContext.from_runtime_context(context)
+function PrettyprintingContext.from_strict_runtime_context(context)
+	local self = {}
+	self.bindings = context.bindings
+	return setmetatable(self, prettyprinting_context_mt)
+end
+
+---@param context FlexRuntimeContext
+---@return PrettyPrintingContext
+function PrettyprintingContext.from_flex_runtime_context(context)
 	local self = {}
 	self.bindings = context.bindings
 	return setmetatable(self, prettyprinting_context_mt)
@@ -63,7 +133,7 @@ prettyprinting_context_mt.__len = PrettyprintingContext.len
 local prettyprinting_context_type =
 	gen.declare_foreign(gen.metatable_equality(prettyprinting_context_mt), "PrettyPrintingContext")
 
----@alias AnyContext PrettyPrintingContext | TypecheckingContext | RuntimeContext
+---@alias AnyContext PrettyPrintingContext | TypecheckingContext | StrictRuntimeContext | FlexRuntimeContext
 
 ---@param context AnyContext
 ---@return PrettyPrintingContext
@@ -74,9 +144,36 @@ local function ensure_context(context)
 	elseif typechecking_context_type.value_check(context) == true then
 		---@cast context TypecheckingContext
 		return PrettyprintingContext.from_typechecking_context(context)
-	elseif runtime_context_type.value_check(context) == true then
-		---@cast context RuntimeContext
-		return PrettyprintingContext.from_runtime_context(context)
+	elseif strict_runtime_context_type.value_check(context) == true then
+		---@cast context StrictRuntimeContext
+		return PrettyprintingContext.from_strict_runtime_context(context)
+	elseif flex_runtime_context_type.value_check(context) == true then
+		---@cast context FlexRuntimeContext
+		return PrettyprintingContext.from_flex_runtime_context(context)
+	elseif
+		context ~= nil
+		and context._record == nil
+		and context.as_strict ~= nil
+		and strict_runtime_context_type.value_check(context:as_strict()) == true
+	then
+		context = context:as_strict()
+		return PrettyprintingContext.from_strict_runtime_context(context)
+	elseif
+		context ~= nil
+		and context._record == nil
+		and context.as_strict ~= nil
+		and flex_runtime_context_type.value_check(context:as_strict()) == true
+	then
+		context = context:as_strict()
+		return PrettyprintingContext.from_flex_runtime_context(context)
+	elseif
+		context ~= nil
+		and context._record == nil
+		and context.as_flex ~= nil
+		and flex_runtime_context_type.value_check(context:as_flex()) == true
+	then
+		context = context:as_flex()
+		return PrettyprintingContext.from_flex_runtime_context(context)
 	else
 		--print("!!!!!!!!!! MISSING PRETTYPRINTER CONTEXT !!!!!!!!!!!!!!")
 		--print("making something up")
@@ -88,15 +185,17 @@ end
 
 ---@param pp PrettyPrint
 ---@param name string
----@param expr inferrable | typed
+---@param debuginfo var_debug
+---@param expr unanchored_inferrable | typed
 ---@param context PrettyPrintingContext
 ---@return PrettyPrintingContext
-local function let_helper(pp, name, expr, context)
+local function let_helper(pp, name, debuginfo, expr, context)
 	pp:unit(name)
+	pp:any(debuginfo)
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(" = ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:_indent()
 	pp:any(expr, context)
@@ -108,32 +207,35 @@ local function let_helper(pp, name, expr, context)
 end
 
 ---@param pp PrettyPrint
----@param names ArrayValue
----@param subject inferrable | typed
+---@param names ArrayValue<string>
+---@param debuginfo var_debug,
+---@param subject unanchored_inferrable | typed
 ---@param context PrettyPrintingContext
 ---@return PrettyPrintingContext
-local function tuple_elim_helper(pp, names, subject, context)
+local function tuple_elim_helper(pp, names, debuginfo, subject, context)
 	local inner_context = context
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("(")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
-	for i, name in names:ipairs() do
+	for i, name in ipairs(names) do
 		inner_context = inner_context:append(name)
 
 		if i > 1 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit(", ")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		end
 
 		pp:unit(name)
 	end
 
-	pp:unit(pp:_color())
-	pp:unit(") = ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:set_color())
+	pp:unit(")")
+	pp:any(debuginfo)
+	pp:unit(" = ")
+	pp:unit(pp:reset_color())
 
 	pp:any(subject, context)
 
@@ -142,7 +244,7 @@ end
 
 ---@class (exact) TupleDescFlat
 ---@field [1] ArrayValue
----@field [2] inferrable | typed
+---@field [2] unanchored_inferrable | typed
 ---@field [3] PrettyPrintingContext
 
 ---@param pp PrettyPrint
@@ -168,9 +270,9 @@ local function tuple_type_helper(pp, members, names)
 			pp:unit(" ")
 		end
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit("(")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		if i > n then
 			pp:unit(string.format("#unk%d", i))
@@ -178,24 +280,25 @@ local function tuple_type_helper(pp, members, names)
 			pp:unit(names[i])
 		end
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(" : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(mem[2], mem[3])
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(")")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 	end
 end
 
+---@overload fun(term: unanchored_inferrable): boolean, anchored_inferrable
 ---@generic T
 ---@param term T
 ---@return boolean
 ---@return T?
 local function as_any_tuple_type(term)
-	---@cast term inferrable|value|typed
+	---@cast term unanchored_inferrable|flex_value|typed
 	local ok, desc = term:as_tuple_type()
 	if ok then
 		return ok, desc
@@ -212,30 +315,34 @@ end
 -- unfortunately not generic helper functions
 
 ---@param pp PrettyPrint
----@param term inferrable
+---@param term unanchored_inferrable
 ---@param context PrettyPrintingContext
 local function inferrable_let_or_tuple_elim(pp, term, context)
 	pp:_enter()
 
-	local name, expr, names, subject
+	local name, debuginfo, expr, names, subject
 	while true do
 		if term:is_let() then
-			name, expr, term = term:unwrap_let()
+			name, debuginfo, expr, term = term:unwrap_let()
+			_, term = term:unwrap_anchored_inferrable()
+			_, expr = expr:unwrap_anchored_inferrable()
 
 			-- rear-loading prefix to cheaply handle first loop not needing prefix
-			pp:unit(pp:_color())
-			pp:unit("inferrable.let ")
-			pp:unit(pp:_resetcolor())
-			context = let_helper(pp, name, expr, context)
+			pp:unit(pp:set_color())
+			pp:unit(enum_name(term, "let "))
+			pp:unit(pp:reset_color())
+			context = let_helper(pp, name, debuginfo, expr, context)
 			pp:unit("\n")
 			pp:_prefix()
 		elseif term:is_tuple_elim() then
-			names, subject, term = term:unwrap_tuple_elim()
+			names, debuginfo, subject, term = term:unwrap_tuple_elim()
+			_, subject = subject:unwrap_anchored_inferrable()
+			_, term = term:unwrap_anchored_inferrable()
 
-			pp:unit(pp:_color())
-			pp:unit("inferrable.let ")
-			pp:unit(pp:_resetcolor())
-			context = tuple_elim_helper(pp, names, subject, context)
+			pp:unit(pp:set_color())
+			pp:unit(enum_name(term, "tuple_elim "))
+			pp:unit(pp:reset_color())
+			context = tuple_elim_helper(pp, names, debuginfo, subject, context)
 			pp:unit("\n")
 			pp:_prefix()
 		else
@@ -257,22 +364,22 @@ local function typed_let_or_tuple_elim(pp, term, context)
 	local name, expr, names, subject
 	while true do
 		if term:is_let() then
-			name, expr, term = term:unwrap_let()
+			name, debuginfo, expr, term = term:unwrap_let()
 
 			-- rear-loading prefix to cheaply handle first loop not needing prefix
-			pp:unit(pp:_color())
-			pp:unit("typed.let ")
-			pp:unit(pp:_resetcolor())
-			context = let_helper(pp, name, expr, context)
+			pp:unit(pp:set_color())
+			pp:unit(enum_name(term, "let "))
+			pp:unit(pp:reset_color())
+			context = let_helper(pp, name, debuginfo, expr, context)
 			pp:unit("\n")
 			pp:_prefix()
 		elseif term:is_tuple_elim() then
-			names, subject, _, term = term:unwrap_tuple_elim()
+			names, debuginfo, subject, _, term = term:unwrap_tuple_elim()
 
-			pp:unit(pp:_color())
-			pp:unit("typed.let ")
-			pp:unit(pp:_resetcolor())
-			context = tuple_elim_helper(pp, names, subject, context)
+			pp:unit(pp:set_color())
+			pp:unit(enum_name(term, "tuple_elim "))
+			pp:unit(pp:reset_color())
+			context = tuple_elim_helper(pp, names, debuginfo, subject, context)
 			pp:unit("\n")
 			pp:_prefix()
 		else
@@ -285,14 +392,16 @@ local function typed_let_or_tuple_elim(pp, term, context)
 	pp:_exit()
 end
 
----@param term inferrable
+---@param term anchored_inferrable
 ---@param context PrettyPrintingContext
 ---@return boolean
 ---@return boolean
 ---@return (string | ArrayValue)?
----@return inferrable
+---@return unanchored_inferrable
 ---@return PrettyPrintingContext
 local function inferrable_destructure_helper(term, context)
+	local _, term = term:unwrap_anchored_inferrable()
+
 	if term:is_let() then
 		-- destructuring with a let effectively just renames the parameter
 		-- thus it's usually superfluous to write code like this
@@ -300,16 +409,20 @@ local function inferrable_destructure_helper(term, context)
 		-- but some operatives that are generic over lets and tuple-elims do this
 		-- e.g. forall, lambda
 		-- so we pretty this anyway
-		local name, expr, body = term:unwrap_let()
-		local ok, index = expr:as_bound_variable()
+		local name, debuginfo, expr, body = term:unwrap_let()
+		local _, expr = expr:unwrap_anchored_inferrable()
+		local _, body = body:unwrap_anchored_inferrable()
+		local ok, index, info = expr:as_bound_variable()
 		local is_destructure = ok and index == context:len()
 		if is_destructure then
 			context = context:append(name)
 			return true, true, name, body, context
 		end
 	elseif term:is_tuple_elim() then
-		local names, subject, body = term:unwrap_tuple_elim()
-		local ok, index = subject:as_bound_variable()
+		local names, debuginfo, subject, body = term:unwrap_tuple_elim()
+		local _, subject = subject:unwrap_anchored_inferrable()
+		local _, body = body:unwrap_anchored_inferrable()
+		local ok, index, info = subject:as_bound_variable()
 		local is_destructure = ok and index == context:len()
 		if is_destructure then
 			for _, name in names:ipairs() do
@@ -323,12 +436,13 @@ end
 
 ---@param term typed
 ---@param context PrettyPrintingContext
+---@param capture flex_value
 ---@return boolean
 ---@return boolean
 ---@return (string | ArrayValue)?
 ---@return typed
 ---@return PrettyPrintingContext
-local function typed_destructure_helper(term, context)
+local function typed_destructure_helper(term, context, capture)
 	if term:is_let() then
 		-- destructuring with a let effectively just renames the parameter
 		-- thus it's usually superfluous to write code like this
@@ -336,16 +450,16 @@ local function typed_destructure_helper(term, context)
 		-- but some operatives that are generic over lets and tuple-elims do this
 		-- e.g. forall, lambda
 		-- so we pretty this anyway
-		local name, expr, body = term:unwrap_let()
-		local ok, index = expr:as_bound_variable()
+		local name, debuginfo, expr, body = term:unwrap_let()
+		local ok, index, info = expr:as_bound_variable()
 		local is_destructure = ok and index == context:len()
 		if is_destructure then
 			context = context:append(name)
 			return is_destructure, true, name, body, context
 		end
 	elseif term:is_tuple_elim() then
-		local names, subject, _, body = term:unwrap_tuple_elim()
-		local ok, index = subject:as_bound_variable()
+		local names, debuginfo, subject, _, body = term:unwrap_tuple_elim()
+		local ok, index, info = subject:as_bound_variable()
 		local is_destructure = ok and index == context:len()
 		if is_destructure then
 			for _, name in names:ipairs() do
@@ -357,12 +471,13 @@ local function typed_destructure_helper(term, context)
 	return false, false, nil, term, context
 end
 
----@param desc inferrable
+---@param desc anchored_inferrable
 ---@param context PrettyPrintingContext
 ---@return boolean
 ---@return TupleDescFlat[]?
 ---@return integer?
 local function inferrable_tuple_type_flatten(desc, context)
+	local _, desc = desc:unwrap_anchored_inferrable()
 	local ok, constructor, arg = desc:as_enum_cons()
 	if not ok then
 		return false
@@ -370,12 +485,13 @@ local function inferrable_tuple_type_flatten(desc, context)
 	if constructor == DescCons.empty then
 		return true, {}, 0
 	elseif constructor == DescCons.cons then
-		local ok, elements = arg:as_tuple_cons()
+		local _, arg = arg:unwrap_anchored_inferrable()
+		local ok, elements, info = arg:as_tuple_cons()
 		if not ok or elements:len() ~= 2 then
 			return false
 		end
 		local desc = elements[1]
-		local f = elements[2]
+		local _, f = elements[2]:unwrap_anchored_inferrable()
 		local ok, param_name, _, body, _ = f:as_annotated_lambda()
 		if not ok then
 			return false
@@ -414,12 +530,12 @@ local function typed_tuple_type_flatten(desc, context)
 		end
 		local desc = elements[1]
 		local f = elements[2]
-		local ok, param_name, body = f:as_lambda()
+		local ok, param_name, param_debug, body, capture, capture_debug, start_anchor = f:as_lambda()
 		if not ok then
 			return false
 		end
 		local inner_context = context:append(param_name)
-		local _, _, names, body, inner_context = typed_destructure_helper(body, inner_context)
+		local _, _, names, body, inner_context = typed_destructure_helper(body, inner_context, capture)
 		---@cast names ArrayValue
 		local ok, prev, n = typed_tuple_type_flatten(desc, context)
 		if not ok then
@@ -433,7 +549,7 @@ local function typed_tuple_type_flatten(desc, context)
 	end
 end
 
----@param desc value
+---@param desc flex_value
 ---@return boolean
 ---@return TupleDescFlat[]?
 ---@return integer?
@@ -451,13 +567,14 @@ local function value_tuple_type_flatten(desc)
 		end
 		local desc = elements[1]
 		local f = elements[2]
-		local ok, param_name, code, capture = f:as_closure()
+		local ok, param_name, code, capture, capture_debug, param_debug = f:as_closure()
 		if not ok then
 			return false
 		end
-		local context = ensure_context(capture)
-		local inner_context = context:append(param_name)
-		local _, _, names, code, inner_context = typed_destructure_helper(code, inner_context)
+		local context = PrettyprintingContext.new()
+		context = context:append(capture_debug.name)
+		context = context:append(param_name)
+		local _, _, names, code, inner_context = typed_destructure_helper(code, context, capture)
 		---@cast names ArrayValue
 		local ok, prev, n = value_tuple_type_flatten(desc)
 		if not ok then
@@ -481,17 +598,32 @@ local binding_override_pretty = {}
 ---@class CheckableTermOverride : checkable
 local checkable_term_override_pretty = {}
 
----@class InferrableTermOverride : inferrable
-local inferrable_term_override_pretty = {}
+---@class FlexValueOverridePretty : flex_value
+local flex_value_override_pretty = {}
+
+---@class UnanchoredInferrableTermOverride : unanchored_inferrable
+local unanchored_inferrable_term_override_pretty = {}
+
+---@class StuckValueOverridePretty : stuck_value
+local stuck_value_override_pretty = {}
 
 ---@class TypedTermOverride : typed
 local typed_term_override_pretty = {}
 
----@class ValueOverridePretty : value
-local value_override_pretty = {}
+---@param self var_debug
+---@param pp PrettyPrint
+local function var_debug_override_pretty(self, pp)
+	local name, anchor = self:unwrap_var_debug()
+	pp:unit(name)
 
----@class NeutralValueOverridePretty : neutral_value
-local neutral_value_override_pretty = {}
+	pp:unit(pp:set_color())
+	pp:unit("🖉")
+
+	pp:_enter()
+	pp:any(anchor)
+	pp:_exit()
+	pp:unit(pp:reset_color())
+end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
@@ -503,27 +635,27 @@ end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function inferrable_term_override_pretty:typed(pp, context)
+function unanchored_inferrable_term_override_pretty:typed(pp, context)
 	local type, _, typed_term = self:unwrap_typed()
 	context = ensure_context(context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
-	pp:unit("inferrable.the (")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:set_color())
+	pp:unit(enum_name(self, "the ("))
+	pp:unit(pp:reset_color())
 
 	pp:any(type)
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(") (")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:any(typed_term, context)
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(")")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:_exit()
 end
@@ -531,13 +663,26 @@ end
 ---@param pp PrettyPrint
 function typed_term_override_pretty:literal(pp)
 	local literal_value = self:unwrap_literal()
+
+	pp:_enter()
+
+	pp:unit(pp:set_color())
+	pp:unit("‹")
+	pp:unit(pp:reset_color())
+
 	pp:any(literal_value)
+
+	pp:unit(pp:set_color())
+	pp:unit("›")
+	pp:unit(pp:reset_color())
+
+	pp:_exit()
 end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function inferrable_term_override_pretty:bound_variable(pp, context)
-	local index, debug = self:unwrap_bound_variable()
+function unanchored_inferrable_term_override_pretty:bound_variable(pp, context)
+	local index, debuginfo = self:unwrap_bound_variable()
 	context = ensure_context(context)
 
 	pp:_enter()
@@ -546,21 +691,21 @@ function inferrable_term_override_pretty:bound_variable(pp, context)
 		pp:unit(context:get_name(index))
 	else
 		-- TODO: warn on context too short?
-		pp:unit(pp:_color())
-		pp:unit("inferrable.bound_variable(")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:set_color())
+		pp:unit(enum_name(self, "bound_variable("))
+		pp:unit(pp:reset_color())
 
 		pp:unit(tostring(index))
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(", ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
-		pp:unit(debug)
+		pp:any(debuginfo)
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(")")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 	end
 
 	pp:_exit()
@@ -569,7 +714,7 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function typed_term_override_pretty:bound_variable(pp, context)
-	local index, debug = self:unwrap_bound_variable()
+	local index, debuginfo = self:unwrap_bound_variable()
 	context = ensure_context(context)
 
 	pp:_enter()
@@ -578,21 +723,21 @@ function typed_term_override_pretty:bound_variable(pp, context)
 		pp:unit(context:get_name(index))
 	else
 		-- TODO: warn on context too short?
-		pp:unit(pp:_color())
-		pp:unit("typed.bound_variable(")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:set_color())
+		pp:unit(enum_name(self, "bound_variable("))
+		pp:unit(pp:reset_color())
 
 		pp:unit(tostring(index))
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(", ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
-		pp:unit(debug)
+		pp:any(debuginfo)
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(")")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 	end
 
 	pp:_exit()
@@ -601,22 +746,22 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function binding_override_pretty:let(pp, context)
-	local name, expr = self:unwrap_let()
+	local name, debuginfo, expr = self:unwrap_let()
 	context = ensure_context(context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
-	pp:unit("binding.let ")
-	pp:unit(pp:_resetcolor())
-	let_helper(pp, name, expr, context)
+	pp:unit(pp:set_color())
+	pp:unit(enum_name(self, "let "))
+	pp:unit(pp:reset_color())
+	let_helper(pp, name, debuginfo, expr, context)
 
 	pp:_exit()
 end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function inferrable_term_override_pretty:let(pp, context)
+function unanchored_inferrable_term_override_pretty:let(pp, context)
 	context = ensure_context(context)
 	inferrable_let_or_tuple_elim(pp, self, context)
 end
@@ -631,23 +776,25 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function binding_override_pretty:tuple_elim(pp, context)
-	local names, subject = self:unwrap_tuple_elim()
+	local names, debuginfo, subject = self:unwrap_tuple_elim()
 	context = ensure_context(context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
-	pp:unit("binding.let ")
-	pp:unit(pp:_resetcolor())
-	tuple_elim_helper(pp, names, subject, context)
+	pp:unit(pp:set_color())
+	pp:unit(enum_name(self, "tuple_elim "))
+	pp:unit(pp:reset_color())
+	tuple_elim_helper(pp, names, debuginfo, subject, context)
 
 	pp:_exit()
 end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function inferrable_term_override_pretty:tuple_elim(pp, context)
+function unanchored_inferrable_term_override_pretty:tuple_elim(pp, context)
 	context = ensure_context(context)
+	assert(not self:is_let())
+	assert(self:is_tuple_elim())
 	inferrable_let_or_tuple_elim(pp, self, context)
 end
 
@@ -666,19 +813,24 @@ function binding_override_pretty:annotated_lambda(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
-	pp:unit("binding.λ [" .. tostring(anchor) .. "] <")
+	pp:unit(pp:set_color())
+	pp:unit(enum_name(self, "λ🖉"))
+	pp:_enter()
+	pp:any(anchor)
+	pp:_exit()
+	pp:unit(pp:set_color())
+	pp:unit("<")
 	pp:any(visible)
 	pp:unit(", ")
 	pp:any(pure)
 	pp:unit("> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:unit(param_name)
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(" : ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:any(param_annotation, context)
 
@@ -687,10 +839,11 @@ end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function inferrable_term_override_pretty:annotated_lambda(pp, context)
+function unanchored_inferrable_term_override_pretty:annotated_lambda(pp, context)
 	local param_name, param_annotation, body, anchor, visible, pure = self:unwrap_annotated_lambda()
 	context = ensure_context(context)
 	local inner_context = context:append(param_name)
+	local _, param_annotation = param_annotation:unwrap_anchored_inferrable()
 	local is_tuple_type, desc = as_any_tuple_type(param_annotation)
 	local is_destructure, is_rename, names, body, inner_context = inferrable_destructure_helper(body, inner_context)
 	if is_rename then
@@ -706,21 +859,26 @@ function inferrable_term_override_pretty:annotated_lambda(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
-	pp:unit("inferrable.λ [" .. tostring(anchor) .. "] <")
+	pp:unit(pp:set_color())
+	pp:unit(enum_name(self, "λ🖉"))
+	pp:_enter()
+	pp:any(anchor)
+	pp:_exit()
+	pp:unit(pp:set_color())
+	pp:unit("<")
 	pp:any(visible)
 	pp:unit(", ")
 	pp:any(pure)
 	pp:unit("> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if is_tuple_type and is_destructure then
 		---@cast names ArrayValue
 		---@cast members TupleDescFlat[]
 		if #members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, members, names)
 		end
@@ -728,9 +886,9 @@ function inferrable_term_override_pretty:annotated_lambda(pp, context)
 		---@cast names ArrayValue
 		-- tuple_elim on param but its type isn't a tuple type???
 		-- probably shouldn't happen, but here's a handler
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit("(")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		for i, name in names:ipairs() do
 			if i > 1 then
@@ -739,24 +897,24 @@ function inferrable_term_override_pretty:annotated_lambda(pp, context)
 			pp:unit(name)
 		end
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(") : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_annotation, context)
 	else
 		pp:unit(param_name)
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(" : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_annotation, context)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(" ->")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if body:is_let() or body:is_tuple_elim() then
 		pp:unit("\n")
@@ -775,10 +933,10 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function typed_term_override_pretty:lambda(pp, context)
-	local param_name, body, anchor = self:unwrap_lambda()
+	local param_name, param_debug, body, capture, capture_debug, anchor = self:unwrap_lambda()
 	context = ensure_context(context)
 	local inner_context = context:append(param_name)
-	local is_destructure, is_rename, names, body, inner_context = typed_destructure_helper(body, inner_context)
+	local is_destructure, is_rename, names, body, inner_context = typed_destructure_helper(body, inner_context, capture)
 	if is_rename then
 		---@cast names string
 		param_name = names
@@ -787,31 +945,35 @@ function typed_term_override_pretty:lambda(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
-	pp:unit("typed.λ [" .. tostring(anchor) .. "] ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:set_color())
+	pp:unit(enum_name(self, "λ🖉"))
+	pp:_enter()
+	pp:any(anchor)
+	pp:_exit()
+	pp:unit(pp:reset_color())
+	pp:unit(" ")
 
 	if is_destructure then
+		pp:unit(pp:set_color())
+		pp:unit("(")
 		---@cast names ArrayValue
-		if names:len() == 0 then
-			pp:unit(pp:_color())
-			pp:unit("()")
-			pp:unit(pp:_resetcolor())
-		end
-
 		for i, name in names:ipairs() do
+			pp:unit(pp:reset_color())
 			if i > 1 then
 				pp:unit(" ")
 			end
 			pp:unit(name)
 		end
+		pp:unit(pp:set_color())
+		pp:unit(")")
+		pp:unit(pp:reset_color())
 	else
 		pp:unit(param_name)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(" ->")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if body:is_let() or body:is_tuple_elim() then
 		pp:unit("\n")
@@ -828,11 +990,34 @@ function typed_term_override_pretty:lambda(pp, context)
 end
 
 ---@param pp PrettyPrint
-function value_override_pretty:closure(pp)
-	local param_name, code, capture = self:unwrap_closure()
-	local context = ensure_context(capture)
-	local inner_context = context:append(param_name)
-	local is_destructure, is_rename, names, code, inner_context = typed_destructure_helper(code, inner_context)
+---@param ... any
+function flex_value_override_pretty:strict(pp, ...)
+	local strict = self:unwrap_strict()
+	pp:unit(pp:set_color())
+	pp:unit("flex.")
+	pp:unit(pp:reset_color())
+	pp:any(strict, ...)
+end
+
+---@param pp PrettyPrint
+---@param ... any
+function flex_value_override_pretty:stuck(pp, ...)
+	local stuck = self:unwrap_stuck()
+	pp:_enter()
+	pp:unit(pp:set_color())
+	pp:unit("flex.")
+	pp:unit(pp:reset_color())
+	pp:_exit()
+	pp:any(stuck, ...)
+end
+
+---@param pp PrettyPrint
+function flex_value_override_pretty:closure(pp)
+	local param_name, code, capture, capture_debug, param_debug = self:unwrap_closure()
+	local context = PrettyprintingContext.new()
+	context = context:append(capture_debug.name)
+	context = context:append(param_name)
+	local is_destructure, is_rename, names, code, inner_context = typed_destructure_helper(code, context, capture)
 	if is_rename then
 		---@cast names string
 		param_name = names
@@ -841,31 +1026,31 @@ function value_override_pretty:closure(pp)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
-	pp:unit("value.closure ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:set_color())
+	pp:unit(enum_name(self, "closure "))
+	pp:unit(pp:reset_color())
 
 	if is_destructure then
+		pp:unit(pp:set_color())
+		pp:unit("(")
 		---@cast names ArrayValue
-		if names:len() == 0 then
-			pp:unit(pp:_color())
-			pp:unit("()")
-			pp:unit(pp:_resetcolor())
-		end
-
 		for i, name in names:ipairs() do
+			pp:unit(pp:reset_color())
 			if i > 1 then
 				pp:unit(" ")
 			end
 			pp:unit(name)
 		end
+		pp:unit(pp:set_color())
+		pp:unit(")")
+		pp:unit(pp:reset_color())
 	else
 		pp:unit(param_name)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(" ->")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if code:is_let() or code:is_tuple_elim() then
 		pp:unit("\n")
@@ -883,13 +1068,15 @@ end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function inferrable_term_override_pretty:pi(pp, context)
+function unanchored_inferrable_term_override_pretty:pi(pp, context)
 	-- extracting parameter names from the destructure of the result
 	-- so that we get the name of the last parameter
 	-- name of the last result is still lost
 	local param_type, param_info, result_type, result_info = self:unwrap_pi()
 	context = ensure_context(context)
 	local result_context = context
+	local _, param_type = param_type:unwrap_anchored_inferrable()
+	local _, result_type = result_type:unwrap_anchored_inferrable()
 	local param_is_tuple_type, param_desc = as_any_tuple_type(param_type)
 	local result_is_readable, param_name, _, result_body, anchor = result_type:as_annotated_lambda()
 	local result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_desc
@@ -917,17 +1104,20 @@ function inferrable_term_override_pretty:pi(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
-	pp:unit("inferrable.Π [" .. tostring(anchor) .. "] <")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:set_color())
+	pp:unit(enum_name(self, "Π🖉"))
+	pp:_enter()
+	pp:any(anchor)
+	pp:_exit()
+	pp:unit(pp:reset_color())
 	pp:any(param_info)
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(", ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 	pp:any(result_info)
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(param_type, context)
@@ -935,9 +1125,9 @@ function inferrable_term_override_pretty:pi(pp, context)
 		---@cast param_names ArrayValue
 		---@cast param_members TupleDescFlat[]
 		if #param_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, param_members, param_names)
 		end
@@ -945,9 +1135,9 @@ function inferrable_term_override_pretty:pi(pp, context)
 		---@cast param_names ArrayValue
 		-- tuple_elim on params but params aren't a tuple type???
 		-- probably shouldn't happen, but here's a handler
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit("(")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		for i, name in param_names:ipairs() do
 			if i > 1 then
@@ -956,33 +1146,33 @@ function inferrable_term_override_pretty:pi(pp, context)
 			pp:unit(name)
 		end
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(") : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type, context)
 	else
 		pp:unit(param_name)
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(" : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type, context)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(" -> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(result_type, context)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
 		if #result_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, result_members)
 		end
@@ -995,11 +1185,13 @@ end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function inferrable_term_override_pretty:host_function_type(pp, context)
+function unanchored_inferrable_term_override_pretty:host_function_type(pp, context)
 	local param_type, result_type, result_info = self:unwrap_host_function_type()
 	context = ensure_context(context)
 	local result_context = context
+	local _, param_type = param_type:unwrap_anchored_inferrable()
 	local param_is_tuple_type, param_desc = param_type:as_host_tuple_type()
+	local _, result_type = result_type:unwrap_anchored_inferrable()
 	local result_is_readable, param_name, _, result_body, anchor = result_type:as_annotated_lambda()
 	local result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_desc
 	if result_is_readable then
@@ -1026,13 +1218,18 @@ function inferrable_term_override_pretty:host_function_type(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
-	pp:unit("inferrable.host-Π [" .. tostring(anchor) .. "] <")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:set_color())
+	pp:unit(enum_name(self, "host-Π🖉"))
+	pp:_enter()
+	pp:any(anchor)
+	pp:_exit()
+	pp:unit(pp:set_color())
+	pp:unit("<")
+	pp:unit(pp:reset_color())
 	pp:any(result_info)
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(param_type, context)
@@ -1040,9 +1237,9 @@ function inferrable_term_override_pretty:host_function_type(pp, context)
 		---@cast param_names ArrayValue
 		---@cast param_members TupleDescFlat[]
 		if #param_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, param_members, param_names)
 		end
@@ -1050,9 +1247,9 @@ function inferrable_term_override_pretty:host_function_type(pp, context)
 		---@cast param_names ArrayValue
 		-- tuple_elim on params but params aren't a tuple type???
 		-- probably shouldn't happen, but here's a handler
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit("(")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		for i, name in param_names:ipairs() do
 			if i > 1 then
@@ -1061,33 +1258,33 @@ function inferrable_term_override_pretty:host_function_type(pp, context)
 			pp:unit(name)
 		end
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(") : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type, context)
 	else
 		pp:unit(param_name)
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(" : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type, context)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(" -> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(result_type, context)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
 		if #result_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, result_members)
 		end
@@ -1108,12 +1305,13 @@ function typed_term_override_pretty:pi(pp, context)
 	context = ensure_context(context)
 	local result_context = context
 	local param_is_tuple_type, param_desc = as_any_tuple_type(param_type)
-	local result_is_readable, param_name, result_body = result_type:as_lambda()
+	local result_is_readable, param_name, param_debug, result_body, result_capture, result_capture_debug, result_start_anchor =
+		result_type:as_lambda()
 	local result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_desc
 	if result_is_readable then
 		result_context = result_context:append(param_name)
 		result_is_destructure, result_is_rename, param_names, result_body, result_context =
-			typed_destructure_helper(result_body, result_context)
+			typed_destructure_helper(result_body, result_context, result_capture)
 		if result_is_rename then
 			---@cast param_names string
 			param_name = param_names
@@ -1134,17 +1332,17 @@ function typed_term_override_pretty:pi(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
-	pp:unit("typed.Π <")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:set_color())
+	pp:unit(enum_name(self, "Π <"))
+	pp:unit(pp:reset_color())
 	pp:any(param_info)
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(", ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 	pp:any(result_info)
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(param_type, context)
@@ -1152,9 +1350,9 @@ function typed_term_override_pretty:pi(pp, context)
 		---@cast param_names ArrayValue
 		---@cast param_members TupleDescFlat[]
 		if #param_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, param_members, param_names)
 		end
@@ -1162,9 +1360,9 @@ function typed_term_override_pretty:pi(pp, context)
 		---@cast param_names ArrayValue
 		-- tuple_elim on params but params aren't a tuple type???
 		-- probably shouldn't happen, but here's a handler
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit("(")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		for i, name in param_names:ipairs() do
 			if i > 1 then
@@ -1173,33 +1371,33 @@ function typed_term_override_pretty:pi(pp, context)
 			pp:unit(name)
 		end
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(") : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type, context)
 	else
 		pp:unit(param_name)
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(" : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type, context)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(" -> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(result_type, context)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
 		if #result_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, result_members)
 		end
@@ -1217,7 +1415,7 @@ function typed_term_override_pretty:host_function_type(pp, context)
 	context = ensure_context(context)
 	local result_context = context
 	local param_is_tuple_type, param_desc = param_type:as_host_tuple_type()
-	local result_is_readable, param_name, result_body = result_type:as_lambda()
+	local result_is_readable, param_name, param_debug, result_body = result_type:as_lambda()
 	local result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_desc
 	if result_is_readable then
 		result_context = result_context:append(param_name)
@@ -1243,13 +1441,13 @@ function typed_term_override_pretty:host_function_type(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
-	pp:unit("typed.host-Π <")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:set_color())
+	pp:unit(enum_name(self, "host-Π <"))
+	pp:unit(pp:reset_color())
 	pp:any(result_info)
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(param_type, context)
@@ -1257,9 +1455,9 @@ function typed_term_override_pretty:host_function_type(pp, context)
 		---@cast param_names ArrayValue
 		---@cast param_members TupleDescFlat[]
 		if #param_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, param_members, param_names)
 		end
@@ -1267,9 +1465,9 @@ function typed_term_override_pretty:host_function_type(pp, context)
 		---@cast param_names ArrayValue
 		-- tuple_elim on params but params aren't a tuple type???
 		-- probably shouldn't happen, but here's a handler
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit("(")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		for i, name in param_names:ipairs() do
 			if i > 1 then
@@ -1278,33 +1476,33 @@ function typed_term_override_pretty:host_function_type(pp, context)
 			pp:unit(name)
 		end
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(") : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type, context)
 	else
 		pp:unit(param_name)
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(" : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type, context)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(" -> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(result_type, context)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
 		if #result_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, result_members)
 		end
@@ -1316,16 +1514,18 @@ function typed_term_override_pretty:host_function_type(pp, context)
 end
 
 ---@param pp PrettyPrint
-function value_override_pretty:pi(pp)
+function flex_value_override_pretty:pi(pp)
 	local param_type, param_info, result_type, result_info = self:unwrap_pi()
 	local param_is_tuple_type, param_desc = as_any_tuple_type(param_type)
-	local result_is_readable, param_name, result_code, result_capture = result_type:as_closure()
+	local result_is_readable, param_name, result_code, result_capture, result_capture_debug, param_debug =
+		result_type:as_closure()
 	local result_context, result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_desc
 	if result_is_readable then
-		result_context = ensure_context(result_capture)
+		result_context = PrettyprintingContext.new()
+		result_context = result_context:append(result_capture_debug.name)
 		result_context = result_context:append(param_name)
 		result_is_destructure, result_is_rename, param_names, result_code, result_context =
-			typed_destructure_helper(result_code, result_context)
+			typed_destructure_helper(result_code, result_context, result_capture)
 		if result_is_rename then
 			---@cast param_names string
 			param_name = param_names
@@ -1346,17 +1546,17 @@ function value_override_pretty:pi(pp)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
-	pp:unit("value.Π <")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:set_color())
+	pp:unit(enum_name(self, "Π <"))
+	pp:unit(pp:reset_color())
 	pp:any(param_info)
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(", ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 	pp:any(result_info)
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(param_type)
@@ -1364,9 +1564,9 @@ function value_override_pretty:pi(pp)
 		---@cast param_names ArrayValue
 		---@cast param_members TupleDescFlat[]
 		if #param_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, param_members, param_names)
 		end
@@ -1374,9 +1574,9 @@ function value_override_pretty:pi(pp)
 		---@cast param_names ArrayValue
 		-- tuple_elim on params but params aren't a tuple type???
 		-- probably shouldn't happen, but here's a handler
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit("(")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		for i, name in param_names:ipairs() do
 			if i > 1 then
@@ -1385,33 +1585,33 @@ function value_override_pretty:pi(pp)
 			pp:unit(name)
 		end
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(") : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type)
 	else
 		pp:unit(param_name)
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(" : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(" -> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(result_type)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
 		if #result_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, result_members)
 		end
@@ -1423,16 +1623,18 @@ function value_override_pretty:pi(pp)
 end
 
 ---@param pp PrettyPrint
-function value_override_pretty:host_function_type(pp)
+function flex_value_override_pretty:host_function_type(pp)
 	local param_type, result_type, result_info = self:unwrap_host_function_type()
 	local param_is_tuple_type, param_desc = param_type:as_host_tuple_type()
-	local result_is_readable, param_name, result_code, result_capture = result_type:as_closure()
+	local result_is_readable, param_name, result_code, result_capture, result_capture_debug, param_debug =
+		result_type:as_closure()
 	local result_context, result_is_destructure, result_is_rename, param_names, result_is_tuple_type, result_desc
 	if result_is_readable then
-		result_context = ensure_context(result_capture)
+		result_context = PrettyprintingContext.new()
+		result_context = result_context:append(result_capture_debug.name)
 		result_context = result_context:append(param_name)
 		result_is_destructure, result_is_rename, param_names, result_code, result_context =
-			typed_destructure_helper(result_code, result_context)
+			typed_destructure_helper(result_code, result_context, result_capture)
 		if result_is_rename then
 			---@cast param_names string
 			param_name = param_names
@@ -1453,13 +1655,13 @@ function value_override_pretty:host_function_type(pp)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
-	pp:unit("value.host-Π <")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:set_color())
+	pp:unit(enum_name(self, "host-Π <"))
+	pp:unit(pp:reset_color())
 	pp:any(result_info)
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(param_type)
@@ -1467,9 +1669,9 @@ function value_override_pretty:host_function_type(pp)
 		---@cast param_names ArrayValue
 		---@cast param_members TupleDescFlat[]
 		if #param_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, param_members, param_names)
 		end
@@ -1477,9 +1679,9 @@ function value_override_pretty:host_function_type(pp)
 		---@cast param_names ArrayValue
 		-- tuple_elim on params but params aren't a tuple type???
 		-- probably shouldn't happen, but here's a handler
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit("(")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		for i, name in param_names:ipairs() do
 			if i > 1 then
@@ -1488,33 +1690,33 @@ function value_override_pretty:host_function_type(pp)
 			pp:unit(name)
 		end
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(") : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type)
 	else
 		pp:unit(param_name)
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(" : ")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(param_type)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit(" -> ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	if not result_is_readable then
 		pp:any(result_type)
 	elseif result_is_tuple_type then
 		---@cast result_members TupleDescFlat[]
 		if #result_members == 0 then
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("()")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			tuple_type_helper(pp, result_members)
 		end
@@ -1526,12 +1728,12 @@ function value_override_pretty:host_function_type(pp)
 end
 
 ---@param pp PrettyPrint
-function value_override_pretty:visibility(pp)
+function flex_value_override_pretty:visibility(pp)
 	local v = self:unwrap_visibility()
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	if v:is_implicit() then
 		pp:unit("implicit")
 	elseif v:is_explicit() then
@@ -1539,36 +1741,37 @@ function value_override_pretty:visibility(pp)
 	else
 		pp:any(v)
 	end
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:_exit()
 end
 
-function value_override_pretty:param_info(pp)
+function flex_value_override_pretty:param_info(pp)
 	local v = self:unwrap_param_info()
 	pp:any(v)
 end
 
-function value_override_pretty:result_info(pp)
+function flex_value_override_pretty:result_info(pp)
 	local purity = self:unwrap_result_info():unwrap_result_info()
 	pp:any(purity)
 end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function inferrable_term_override_pretty:application(pp, context)
+function unanchored_inferrable_term_override_pretty:application(pp, context)
 	local f, arg = self:unwrap_application()
 	context = ensure_context(context)
 
 	-- handle nested applications
-	---@param f inferrable
+	---@param f anchored_inferrable
 	---@param arg checkable
 	local function application_inner(f, arg)
+		local _, f = f:unwrap_anchored_inferrable()
 		local f_is_application, f_f, f_arg = f:as_application()
 		local f_is_typed, _, _, f_typed_term = f:as_typed()
 		local f_is_bound_variable, f_index = false, 0
 		if f_is_typed then
-			f_is_bound_variable, f_index = f_typed_term:as_bound_variable()
+			f_is_bound_variable, f_index, _ = f_typed_term:as_bound_variable()
 		end
 
 		pp:_enter()
@@ -1584,41 +1787,41 @@ function inferrable_term_override_pretty:application(pp, context)
 				pp:unit(context:get_name(f_index))
 			end
 
-			local ok, elements = arg:as_tuple_cons()
+			local ok, elements, _ = arg:as_tuple_cons()
 			elements = ok and elements or arg:unwrap_host_tuple_cons()
 
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("(")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 
 			for i, arg in elements:ipairs() do
 				if i > 1 then
-					pp:unit(pp:_color())
+					pp:unit(pp:set_color())
 					pp:unit(", ")
-					pp:unit(pp:_resetcolor())
+					pp:unit(pp:reset_color())
 				end
 
 				pp:any(arg, context)
 			end
 
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit(")")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			-- if we're here then the args are probably horrible
 			-- add some newlines
-			pp:unit(pp:_color())
-			pp:unit("inferrable.apply(")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:set_color())
+			pp:unit(enum_name(f, "apply("))
+			pp:unit(pp:reset_color())
 			pp:unit("\n")
 
 			pp:_indent()
 
 			pp:_prefix()
 			pp:any(f, context)
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit(",")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 			pp:unit("\n")
 
 			pp:_prefix()
@@ -1628,9 +1831,9 @@ function inferrable_term_override_pretty:application(pp, context)
 			pp:_dedent()
 
 			pp:_prefix()
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit(")")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		end
 
 		pp:_exit()
@@ -1650,7 +1853,7 @@ function typed_term_override_pretty:application(pp, context)
 	---@param arg typed
 	local function application_inner(f, arg)
 		local f_is_application, f_f, f_arg = f:as_application()
-		local f_is_bound_variable, f_index = f:as_bound_variable()
+		local f_is_bound_variable, f_index, _ = f:as_bound_variable()
 
 		pp:_enter()
 
@@ -1668,38 +1871,38 @@ function typed_term_override_pretty:application(pp, context)
 			local ok, elements = arg:as_tuple_cons()
 			elements = ok and elements or arg:unwrap_host_tuple_cons()
 
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit("(")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 
 			for i, arg in elements:ipairs() do
 				if i > 1 then
-					pp:unit(pp:_color())
+					pp:unit(pp:set_color())
 					pp:unit(", ")
-					pp:unit(pp:_resetcolor())
+					pp:unit(pp:reset_color())
 				end
 
 				pp:any(arg, context)
 			end
 
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit(")")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		else
 			-- if we're here then the args are probably horrible
 			-- add some newlines
-			pp:unit(pp:_color())
-			pp:unit("typed.apply(")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:set_color())
+			pp:unit(enum_name(f, "apply("))
+			pp:unit(pp:reset_color())
 			pp:unit("\n")
 
 			pp:_indent()
 
 			pp:_prefix()
 			pp:any(f, context)
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit(",")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 			pp:unit("\n")
 
 			pp:_prefix()
@@ -1709,9 +1912,9 @@ function typed_term_override_pretty:application(pp, context)
 			pp:_dedent()
 
 			pp:_prefix()
-			pp:unit(pp:_color())
+			pp:unit(pp:set_color())
 			pp:unit(")")
-			pp:unit(pp:_resetcolor())
+			pp:unit(pp:reset_color())
 		end
 
 		pp:_exit()
@@ -1722,16 +1925,16 @@ end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function inferrable_term_override_pretty:tuple_type(pp, context)
+function unanchored_inferrable_term_override_pretty:tuple_type(pp, context)
 	local desc = self:unwrap_tuple_type()
 	context = ensure_context(context)
 	local ok, members = inferrable_tuple_type_flatten(desc, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
-	pp:unit("inferrable.tuple_type[")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:set_color())
+	pp:unit(enum_name(self, "tuple_type["))
+	pp:unit(pp:reset_color())
 
 	if ok then
 		---@cast members TupleDescFlat[]
@@ -1740,25 +1943,25 @@ function inferrable_term_override_pretty:tuple_type(pp, context)
 		pp:any(desc)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("]")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:_exit()
 end
 
 ---@param pp PrettyPrint
 ---@param context AnyContext
-function inferrable_term_override_pretty:host_tuple_type(pp, context)
+function unanchored_inferrable_term_override_pretty:host_tuple_type(pp, context)
 	local desc = self:unwrap_host_tuple_type()
 	context = ensure_context(context)
 	local ok, members = inferrable_tuple_type_flatten(desc, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
-	pp:unit("inferrable.host_tuple_type[")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:set_color())
+	pp:unit(enum_name(self, "host_tuple_type["))
+	pp:unit(pp:reset_color())
 
 	if ok then
 		---@cast members TupleDescFlat[]
@@ -1767,9 +1970,9 @@ function inferrable_term_override_pretty:host_tuple_type(pp, context)
 		pp:any(desc)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("]")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:_exit()
 end
@@ -1783,9 +1986,9 @@ function typed_term_override_pretty:tuple_type(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
-	pp:unit("typed.tuple_type[")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:set_color())
+	pp:unit(enum_name(self, "tuple_type["))
+	pp:unit(pp:reset_color())
 
 	if ok then
 		---@cast members TupleDescFlat[]
@@ -1794,9 +1997,9 @@ function typed_term_override_pretty:tuple_type(pp, context)
 		pp:any(desc)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("]")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:_exit()
 end
@@ -1810,9 +2013,9 @@ function typed_term_override_pretty:host_tuple_type(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
-	pp:unit("typed.host_tuple_type[")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:set_color())
+	pp:unit(enum_name(self, "host_tuple_type["))
+	pp:unit(pp:reset_color())
 
 	if ok then
 		---@cast members TupleDescFlat[]
@@ -1821,23 +2024,23 @@ function typed_term_override_pretty:host_tuple_type(pp, context)
 		pp:any(desc)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("]")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:_exit()
 end
 
 ---@param pp PrettyPrint
-function value_override_pretty:tuple_type(pp)
+function flex_value_override_pretty:tuple_type(pp)
 	local desc = self:unwrap_tuple_type()
 	local ok, members = value_tuple_type_flatten(desc)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
-	pp:unit("value.tuple_type[")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:set_color())
+	pp:unit(enum_name(self, "tuple_type["))
+	pp:unit(pp:reset_color())
 
 	if ok then
 		---@cast members TupleDescFlat[]
@@ -1846,23 +2049,23 @@ function value_override_pretty:tuple_type(pp)
 		pp:any(desc)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("]")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:_exit()
 end
 
 ---@param pp PrettyPrint
-function value_override_pretty:host_tuple_type(pp)
+function flex_value_override_pretty:host_tuple_type(pp)
 	local desc = self:unwrap_host_tuple_type()
 	local ok, members = value_tuple_type_flatten(desc)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
-	pp:unit("value.host_tuple_type[")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:set_color())
+	pp:unit(enum_name(self, "host_tuple_type["))
+	pp:unit(pp:reset_color())
 
 	if ok then
 		---@cast members TupleDescFlat[]
@@ -1871,69 +2074,58 @@ function value_override_pretty:host_tuple_type(pp)
 		pp:any(desc)
 	end
 
-	pp:unit(pp:_color())
+	pp:unit(pp:set_color())
 	pp:unit("]")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:reset_color())
 
 	pp:_exit()
 end
 
 ---@param pp PrettyPrint
-function value_override_pretty:enum_value(pp)
+function flex_value_override_pretty:enum_value(pp)
 	local constructor, arg = self:unwrap_enum_value()
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
-	pp:unit("value.◬")
+	pp:unit(pp:set_color())
+	pp:unit(enum_name(self, "◬"))
 	pp:unit(constructor)
 
 	if arg:is_tuple_value() then
 		local elements = arg:unwrap_tuple_value()
 
 		pp:unit("(")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		for i, arg in elements:ipairs() do
 			if i > 1 then
-				pp:unit(pp:_color())
+				pp:unit(pp:set_color())
 				pp:unit(", ")
-				pp:unit(pp:_resetcolor())
+				pp:unit(pp:reset_color())
 			end
 
 			pp:any(arg)
 		end
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit(")")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 	else
 		pp:unit("[")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:any(arg)
 
-		pp:unit(pp:_color())
+		pp:unit(pp:set_color())
 		pp:unit("]")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 	end
 
 	pp:_exit()
 end
 
 ---@param pp PrettyPrint
-function value_override_pretty:neutral(pp)
-	local neutral = self:unwrap_neutral()
-
-	if neutral:is_free() and neutral:unwrap_free():is_metavariable() then
-		pp:any(neutral)
-	else
-		pp:record("value.neutral", { { "neutral", neutral } })
-	end
-end
-
----@param pp PrettyPrint
-function neutral_value_override_pretty:free(pp)
+function flex_value_override_pretty:free(pp)
 	local free = self:unwrap_free()
 
 	if free:is_metavariable() then
@@ -1941,13 +2133,19 @@ function neutral_value_override_pretty:free(pp)
 
 		pp:_enter()
 
-		pp:unit(pp:_color())
-		pp:unit("⩤ " .. mv.value .. ":" .. mv.usage .. "|" .. mv.block_level .. " ⩥")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:set_color())
+		pp:unit("⩤ ")
+		pp:unit(tostring(mv.value))
+		pp:unit(":")
+		pp:unit(tostring(mv.usage))
+		pp:unit("|")
+		pp:unit(tostring(mv.block_level))
+		pp:unit(" ⩥")
+		pp:unit(tostring(pp:reset_color()))
 
 		pp:_exit()
 	else
-		pp:record("neutral_value.free", { { "free", free } })
+		pp:record(enum_name(self, "free"), { { "free", free } })
 	end
 end
 
@@ -1956,22 +2154,51 @@ end
 function typed_term_override_pretty:tuple_element_access(pp, context)
 	local subject, index = self:unwrap_tuple_element_access()
 	context = ensure_context(context)
-	local subject_is_bound_variable, subject_index = subject:as_bound_variable()
+	local subject_is_bound_variable, subject_index, subject_debug = subject:as_bound_variable()
 
 	if subject_is_bound_variable and context:len() >= subject_index then
 		pp:_enter()
 
-		pp:unit(context:get_name(subject_index))
+		-- pp:unit(pp:set_color())
+		-- pp:unit(enum_name(self, "tuple_element_access→"))
+		-- pp:unit(pp:reset_color())
 
-		pp:unit(pp:_color())
+		local name = context:get_name(subject_index)
+		pp:unit(name)
+
+		pp:unit(pp:set_color())
 		pp:unit(".")
-		pp:unit(pp:_resetcolor())
+		pp:unit(pp:reset_color())
 
 		pp:unit(tostring(index))
 
+		local debug_name, debug_anchor = subject_debug:unwrap_var_debug()
+		if debug_name == name then
+			pp:unit(pp:set_color())
+			pp:unit("🖉")
+
+			pp:_enter()
+			pp:any(debug_anchor)
+			pp:_exit()
+			pp:unit(pp:reset_color())
+		else
+			pp:unit(pp:set_color())
+			pp:unit("<")
+			pp:unit(pp:reset_color())
+
+			pp:_enter()
+			pp:any(subject_debug)
+			pp:_exit()
+
+			pp:unit(pp:set_color())
+			pp:unit(">")
+			pp:unit(pp:reset_color())
+		end
+
 		pp:_exit()
 	else
-		pp:record("typed.tuple_element_access", { { "subject", subject }, { "index", index } }, context)
+		pp:set_color()
+		pp:record(enum_name(self, "tuple_element_access"), { { "subject", subject }, { "index", index } }, context)
 	end
 end
 
@@ -1982,9 +2209,9 @@ function typed_term_override_pretty:host_intrinsic(pp, context)
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
-	pp:unit("typed.host_intrinsic ")
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:set_color())
+	pp:unit(enum_name(self, "host_intrinsic "))
+	pp:unit(pp:reset_color())
 
 	local source_text
 	local ok, source_val = source:as_literal()
@@ -2012,28 +2239,44 @@ function typed_term_override_pretty:host_intrinsic(pp, context)
 end
 
 ---@param pp PrettyPrint
-function value_override_pretty:star(pp)
+function typed_term_override_pretty:constrained_type(pp)
+	pp:_enter()
+
+	pp:unit(pp:set_color())
+	pp:unit(enum_name(self, "constrained_type"))
+	pp:unit(pp:reset_color())
+
+	pp:_exit()
+end
+
+---@param pp PrettyPrint
+function flex_value_override_pretty:star(pp)
 	local level, depth = self:unwrap_star()
 
 	pp:_enter()
 
-	pp:unit(pp:_color())
-	pp:unit("✪ " .. level .. "|" .. depth)
-	pp:unit(pp:_resetcolor())
+	pp:unit(pp:set_color())
+	pp:unit("✪ ")
+	pp:unit(tostring(level))
+	pp:unit("|")
+	pp:unit(tostring(depth))
+	pp:unit(pp:reset_color())
 
 	pp:_exit()
 end
 
 return function(args)
 	typechecking_context_type = args.typechecking_context_type
-	runtime_context_type = args.runtime_context_type
+	strict_runtime_context_type = args.strict_runtime_context_type
+	flex_runtime_context_type = args.flex_runtime_context_type
 	DescCons = args.DescCons
 	return {
 		checkable_term_override_pretty = checkable_term_override_pretty,
-		inferrable_term_override_pretty = inferrable_term_override_pretty,
+		unanchored_inferrable_term_override_pretty = unanchored_inferrable_term_override_pretty,
 		typed_term_override_pretty = typed_term_override_pretty,
-		value_override_pretty = value_override_pretty,
-		neutral_value_override_pretty = neutral_value_override_pretty,
+		flex_value_override_pretty = flex_value_override_pretty,
+		stuck_value_override_pretty = stuck_value_override_pretty,
 		binding_override_pretty = binding_override_pretty,
+		var_debug_override_pretty = var_debug_override_pretty,
 	}
 end

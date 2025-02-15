@@ -1,3 +1,4 @@
+local U = require "alicorn-utils"
 local terms = require "terms"
 local exprs = require "alicorn-expressions"
 
@@ -21,36 +22,36 @@ local array = gen.declare_array
 local usage_array = array(gen.builtin_number)
 
 local function inf_typ(t, typ)
-	return terms.inferrable_term.typed(t, usage_array(), typ)
+	return U.notail(terms.unanchored_inferrable_term.typed(terms.typed_term.literal(t), usage_array(), typ))
 end
 
 local value_array = array(terms.value)
 local function tup_val(...)
-	return terms.value.tuple_value(value_array(...))
+	return U.notail(terms.value.tuple_value(value_array(...)))
 end
 local function cons(...)
-	return terms.value.enum_value("cons", tup_val(...))
+	return U.notail(terms.value.enum_value("cons", tup_val(...)))
 end
 p("tup_val!", tup_val())
 local empty = terms.value.enum_value("empty", tup_val())
 
-local t_host_num = terms.value.host_number_type
+local t_host_num = terms.strict_value.host_number_type
 local two_tuple_desc = terms.value.host_tuple_type(
 	cons(cons(empty, evaluator.const_combinator(t_host_num)), evaluator.const_combinator(t_host_num))
 )
 local tuple_desc = terms.value.host_tuple_type(cons(empty, evaluator.const_combinator(t_host_num)))
 
 local function host_f(f)
-	return lit(terms.value.host_value(f))
+	return U.notail(lit(terms.value.host_value(f)))
 end
 
 local add = host_f(function(left, right)
-	return left + right
+	return U.notail(left + right)
 end)
-local result_info_pure = terms.value.result_info(terms.result_info(terms.purity.pure))
+local result_info_pure = terms.strict_value.result_info(terms.result_info(terms.purity.pure))
 local inf_add = inf_typ(terms.value.host_function_type(two_tuple_desc, tuple_desc, result_info_pure), add)
 local inf_add_from_host_applicative = exprs.host_applicative(function(a, b)
-	return a + b
+	return U.notail(a + b)
 end, { t_host_num, t_host_num }, { t_host_num })
 
 print("hoof constructed add:")
@@ -88,6 +89,6 @@ p("infer", usage_counts)
 print(inferred_type:pretty_print())
 print(inferred_term:pretty_print())
 
-local evaled = evaluator.evaluate(inferred_term, env.runtime_context)
+local evaled = evaluator.evaluate(inferred_term, env.runtime_context, env.typechecking_context)
 p("eval")
 print(evaled:pretty_print())

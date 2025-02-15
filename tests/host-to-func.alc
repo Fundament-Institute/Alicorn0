@@ -3,17 +3,14 @@ let foo =
 
 foo
 
-let (oldargs oldargs-valid) = get-host-func-arg-inner(wrap(foo), host-nil)
-let (newargs) = host-tuple-type-to-tuple-type-inner(oldargs, oldargs-valid)
+let (oldargs, oldargs-valid) = get-host-func-arg(foo, host-nil)
+let newargs = host-tuple-type-to-tuple-type(oldargs, oldargs-valid)
 newargs
 
-let (orig-results) = get-host-func-res-inner(wrap(foo), host-nil)
-let orig-results = unwrap(orig-results)
+let orig-results = get-host-func-res(foo, host-nil)
 let new-results =
-	lambda (args : unwrap(newargs))
-		let ptuple = tuple-to-host-tuple(oldargs, oldargs-valid, args)
+	lambda (args : newargs)
+		let ptuple = tuple-to-host-tuple(args)
 		let orig-results-res = apply(orig-results, ptuple)
 		let (newres valid) = orig-results-res
 		newres
-
-host-func-type-to-func-type foo host-nil

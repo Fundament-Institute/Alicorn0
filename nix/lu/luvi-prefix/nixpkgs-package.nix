@@ -1,0 +1,3 @@
+{ ... }:
+{ writeLuviBin, ... }:
+writeLuviBin "luvi-prefix" ""

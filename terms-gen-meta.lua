@@ -1,7 +1,10 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
 local terms = require "terms"
 local derivers = require "derivers"
 local traits = require "traits"
 local acg = require "libs.abstract-codegen"
+local U = require "alicorn-utils"
 
 -- minimal example:
 -- ---@meta "purity.lua"
@@ -43,8 +46,8 @@ $typename = {}
 $(
 )methods
 
--- TODO: constructor annotation
 ---@class (exact) $moduletypename: RecordType
+---@overload fun($(, )params): $typename
 ---@field define_record fun(self: $moduletypename, kind: string, params_with_types: ParamsWithTypes): $moduletypename
 return {}]],
 
@@ -107,7 +110,7 @@ local function build_meta_file_for_record(info)
 		variant = kind,
 		parts = unwraptypes,
 	}
-	return meta_gen {
+	return U.notail(meta_gen({
 		kind = "file",
 		filename = "types." .. kind,
 		definition = {
@@ -116,8 +119,9 @@ local function build_meta_file_for_record(info)
 			moduletypename = kind .. "Type",
 			methods = methods,
 			constructor = constructor,
+			params = params_ascribed,
 		},
-	}
+	}))
 end
 
 ---@param info EnumDeriveInfo
@@ -179,7 +183,7 @@ local function build_meta_file_for_enum(info)
 			parts = astypes,
 		}
 	end
-	return meta_gen {
+	return U.notail(meta_gen({
 		kind = "file",
 		filename = "types." .. name,
 		definition = {
@@ -189,7 +193,7 @@ local function build_meta_file_for_enum(info)
 			methods = methods,
 			constructors = constructors,
 		},
-	}
+	}))
 end
 
 ---@type Deriver
@@ -210,8 +214,8 @@ local gen_type = {
 	end,
 }
 
-for k, v in pairs(terms) do
-	if k and type(v) == "table" and v.derive then
+for i, k, v in U.table_stable_pairs(terms) do
+	if k and type(v) == "table" and v._record == nil and v.derive then
 		---@cast v Type
 		v:derive(gen_type)
 		-- print(k)
@@ -226,7 +230,7 @@ end
 
 local aux = require "evaluator-types"
 
-for k, v in pairs(aux) do
+for i, k, v in U.table_stable_pairs(aux) do
 	if k and type(v) == "table" and v.derive then
 		---@cast v Type
 		v:derive(gen_type)

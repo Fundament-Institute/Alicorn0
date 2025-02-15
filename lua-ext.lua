@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
+
 -- string.chars
 -- intended usage: for i, c in mystring:chars() do ... end
 -- instead of:     for i = 1, #mystring do local c = mystring:sub(i, i) ... end

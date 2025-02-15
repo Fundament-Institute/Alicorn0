@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
 -- use the line number information of tokens to format
 -- put tokens on a new line if their line number is greater than the current line
 -- this is not  a format tool it's a lisp-ifier for the format

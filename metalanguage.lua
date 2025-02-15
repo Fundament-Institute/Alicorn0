@@ -1,3 +1,8 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
+
+local U = require "alicorn-utils"
+
 --[[
 Matcher(userdata : type, results : tuple-desc) : type
 Syntax : type
@@ -219,7 +224,7 @@ end
 ---@return boolean | any, ExternalError | any, ...
 local function augment_error(syntax, reducer_name, ok, err_msg, ...)
 	if not ok then
-		return false, ExternalError.new(err_msg, syntax.start_anchor, reducer_name)
+		return false, U.notail(ExternalError.new(err_msg, syntax.start_anchor, reducer_name))
 	end
 	-- err_msg is the first result arg otherwise
 	return err_msg, ...
@@ -229,62 +234,13 @@ local pdump = require "pretty-printer".s
 -- local function pdump(_)
 -- 	return ""
 -- end
-local U = require "alicorn-utils"
-
--- this function should be called as an xpcall error handler
----@param err table | string
----@return table | string
-local function custom_traceback(err)
-	if type(err) == "table" then
-		return err
-	end
-	local s = type(err) == "string" and err or ("must pass string or table to error handler, found: " .. tostring(err))
-	local i = 3
-	local info = debug.getinfo(i, "Sfln")
-	while info ~= nil do
-		if info.func == U.tag then
-			local _, name = debug.getlocal(i, 1)
-			local _, tag = debug.getlocal(i, 2)
-			local _, fn = debug.getlocal(i, 3)
-			--i = i + 1
-			--info = debug.getinfo(i, "Sfln")
-			local ok, err = pcall(function()
-				s = s .. string.format("\n%s [%s:%d] (%s)", name, info.short_src, info.currentline, pdump(tag))
-			end)
-			if not ok then
-				s = s .. string.format("\nTRACE FAIL: %s [%s:%d] (%s)", name, info.short_src, info.currentline, err)
-			end
-		else
-			local name = info.name or string.format("<%s:%d>", info.short_src, info.linedefined)
-			local args = {}
-			local j = 1
-			local arg, v = debug.getlocal(i, j)
-			while arg ~= nil do
-				table.insert(args, (type(v) == "table") and "<" .. arg .. ":table>" or string.sub(tostring(v), 1, 12))
-				j = j + 1
-				arg, v = debug.getlocal(i, j)
-			end
-
-			--s = s .. string.format("\n%s [%s:%d] (%s)", name, info.short_src, info.currentline, table.concat(args,","))
-			s = s .. string.format("\n%s [%s:%d]", name, info.short_src, info.currentline)
-		end
-		i = i + 1
-		info = debug.getinfo(i, "Sfln")
-	end
-
-	return s
-end
-
--- this function should be used when calling for a trace directly
----@param err table | string
----@return table | string
-local function stack_trace(err)
-	return U.notail(custom_traceback(err))
-end
 
 ---@class Reducer
 ---@field wrapper fun(syntax: ConstructedSyntax, matcher: Matcher) : ...
 ---@field create_reducible fun(handler: ReducibleFunc, ...) : Matcher
+
+--- This _should_ be `true`.
+local protect_reducer_func_calls = true
 
 --[[
 reducer : forall
@@ -303,7 +259,15 @@ local function reducer(func, name)
 	---@param matcher Matcher
 	---@return ...
 	local function funcwrapper(syntax, matcher)
-		return augment_error(syntax, name, xpcall(func, custom_traceback, syntax, table.unpack(matcher.reducible)))
+		if protect_reducer_func_calls then
+			return augment_error(
+				syntax,
+				name,
+				xpcall(func, U.custom_traceback, syntax, table.unpack(matcher.reducible))
+			)
+		else
+			return func(syntax, table.unpack(matcher.reducible))
+		end
 	end
 
 	local reducer = {
@@ -359,9 +323,9 @@ end
 ---@return boolean
 ---@return string?
 local function SymbolExact(syntax, name)
-	return syntax:match({
+	return U.notail(syntax:match({
 		issymbol(symbolexacthandler),
-	}, failure_handler, name)
+	}, failure_handler, name))
 end
 
 local symbol_exact = reducer(SymbolExact, "symbol exact")
@@ -423,17 +387,17 @@ end
 ---@field end_anchor Anchor
 local ConstructedSyntax = {}
 
---[[
-match : forall
-	self : Syntax
-	implicit userdata : type
-	implicit results : tuple-desc
-	matchers : List(Matcher(userdata, results))
-	unmatched : (forall (u : userdata) -> res : tuple-type(results))
-	extra : userdata
-	->
-	res : tuple-type(results)
-]]
+--- ```
+--- match : forall
+--- 	self : Syntax
+--- 	implicit userdata : type
+--- 	implicit results : tuple-desc
+--- 	matchers : List(Matcher(userdata, results))
+--- 	unmatched : (forall (u : userdata) -> res : tuple-type(results))
+--- 	extra : userdata
+--- 	->
+--- 	res : tuple-type(results)
+--- ```
 ---@generic U
 ---@param matchers Matcher[]
 ---@param unmatched fun(u : U, err: SyntaxError) : ...
@@ -457,7 +421,7 @@ function ConstructedSyntax:match(matchers, unmatched, extra)
 				if not matcher.handler then
 					print("missing handler for ", matcher.kind, debug.traceback())
 				end
-				return matcher.handler(extra, table.unpack(res, 2, res.n))
+				return U.notail(matcher.handler(extra, table.unpack(res, 2, res.n)))
 			end
 			--print("rejected syntax reduction")
 			lasterr = res[2] --[[@as any]]
@@ -465,7 +429,7 @@ function ConstructedSyntax:match(matchers, unmatched, extra)
 		-- local name = getmetatable(matcher.reducible)
 		-- print("rejected syntax kind", matcher.kind, name)
 	end
-	return unmatched(extra, syntax_error(matchers, self.start_anchor, self.end_anchor, lasterr))
+	return U.notail(unmatched(extra, syntax_error(matchers, self.start_anchor, self.end_anchor, lasterr)))
 end
 
 local constructed_syntax_mt = {
@@ -486,7 +450,7 @@ end
 
 local pair_accepters = {
 	Pair = function(self, matcher, extra)
-		return matcher.handler(extra, self[1], self[2])
+		return U.notail(matcher.handler(extra, self[1], self[2]))
 	end,
 }
 
@@ -496,12 +460,12 @@ local pair_accepters = {
 ---@param b ConstructedSyntax
 ---@return ConstructedSyntax
 local function pair(start_anchor, end_anchor, a, b)
-	return cons_syntax(pair_accepters, start_anchor, end_anchor, a, b)
+	return U.notail(cons_syntax(pair_accepters, start_anchor, end_anchor, a, b))
 end
 
 local symbol_accepters = {
 	Symbol = function(self, matcher, extra)
-		return matcher.handler(extra, self[1])
+		return U.notail(matcher.handler(extra, self[1]))
 	end,
 }
 
@@ -510,12 +474,12 @@ local symbol_accepters = {
 ---@param syntaxsymbol SyntaxSymbol
 ---@return ConstructedSyntax
 local function symbol(start_anchor, end_anchor, syntaxsymbol)
-	return cons_syntax(symbol_accepters, start_anchor, end_anchor, syntaxsymbol)
+	return U.notail(cons_syntax(symbol_accepters, start_anchor, end_anchor, syntaxsymbol))
 end
 
 local value_accepters = {
 	Value = function(self, matcher, extra)
-		return matcher.handler(extra, self[1])
+		return U.notail(matcher.handler(extra, self[1]))
 	end,
 }
 
@@ -530,12 +494,12 @@ local value_accepters = {
 ---@param val SyntaxValue
 ---@return ConstructedSyntax
 local function value(start_anchor, end_anchor, val)
-	return cons_syntax(value_accepters, start_anchor, end_anchor, val)
+	return U.notail(cons_syntax(value_accepters, start_anchor, end_anchor, val))
 end
 
 local nil_accepters = {
 	Nil = function(self, matcher, extra)
-		return matcher.handler(extra)
+		return U.notail(matcher.handler(extra))
 	end,
 }
 
@@ -543,9 +507,8 @@ local nil_accepters = {
 ---@param end_anchor Anchor
 ---@return ConstructedSyntax
 local function new_nilval(start_anchor, end_anchor)
-	return cons_syntax(nil_accepters, start_anchor, end_anchor)
+	return U.notail(cons_syntax(nil_accepters, start_anchor, end_anchor))
 end
-local nilval = new_nilval()
 
 ---@param start_anchor Anchor
 ---@param end_anchor Anchor
@@ -554,7 +517,7 @@ local nilval = new_nilval()
 ---@return ConstructedSyntax
 local function list(start_anchor, end_anchor, a, ...)
 	if a == nil then
-		return new_nilval(start_anchor, end_anchor)
+		return U.notail(new_nilval(start_anchor, end_anchor))
 	end
 	return pair(start_anchor, end_anchor, a, list(start_anchor, end_anchor, ...))
 end
@@ -668,7 +631,7 @@ end
 local list_many_fold_until = reducer(
 	---@generic T
 	---@param syntax ConstructedSyntax
-	---@param submatcher_fn fun(T): Matcher
+	---@param submatcher_fn fun(T, Anchor): Matcher
 	---@param init_thread T
 	---@param termination Matcher
 	---@return boolean
@@ -681,10 +644,17 @@ local list_many_fold_until = reducer(
 		local nextthread = init_thread
 		while ok and cont do
 			thread = nextthread
-			ok, cont, val, nextthread, tail = tail:match({
-				ispair(list_many_fold_pair_handler),
-				isnil(list_many_nil_handler),
-			}, failure_handler, { submatcher_fn(thread), termination })
+			ok, cont, val, nextthread, tail = tail:match(
+				{
+					ispair(list_many_fold_pair_handler),
+					isnil(list_many_nil_handler),
+				},
+				failure_handler,
+				{
+					submatcher_fn(thread, tail.start_anchor),
+					termination,
+				}
+			)
 			vals[#vals + 1] = val
 		end
 		if not ok then
@@ -698,7 +668,7 @@ local list_many_fold_until = reducer(
 local list_many_fold = reducer(
 	---@generic T
 	---@param syntax ConstructedSyntax
-	---@param submatcher_fn fun(T): Matcher
+	---@param submatcher_fn fun(T, Anchor): Matcher
 	---@param init_thread T
 	---@return boolean
 	---@return any[]|string
@@ -743,7 +713,7 @@ local oneof = reducer(
 	---@param ... Matcher
 	---@return ...
 	function(syntax, ...)
-		return syntax:match({ ... }, failure_handler, nil)
+		return U.notail(syntax:match({ ... }, failure_handler, nil))
 	end,
 	"oneof"
 )
@@ -797,7 +767,6 @@ local metalanguage = {
 	reducer = reducer,
 	isnil = isnil,
 	new_nilval = new_nilval,
-	nilval = nilval,
 	symbol_exact = symbol_exact,
 	pair = pair,
 	list = list,
@@ -805,8 +774,6 @@ local metalanguage = {
 	constructed_syntax_type = constructed_syntax_type,
 	reducer_type = reducer_type,
 	matcher_type = matcher_type,
-	custom_traceback = custom_traceback,
-	stack_trace = stack_trace,
 }
 local internals_interface = require "internals-interface"
 internals_interface.metalanguage = metalanguage

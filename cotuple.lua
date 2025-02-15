@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
+
 local types = require "typesystem"
 local modules = require "modules"
 local evaluator = require "alicorn-evaluator"

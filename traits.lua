@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
 ---@class LuaTrait
 ---@field declare_method fun(self: LuaTrait, methodname: string)
 ---@field implement_on fun(self: LuaTrait, ty: Type, methods: { [string]: function })

@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
 local U = require "alicorn-utils"
 
 local lpeg = require "lpeg"
@@ -199,18 +201,25 @@ end
 ---@param sourceid string
 ---@return Anchor
 local function create_anchor(line, char, sourceid)
-	local new_anchor = {
+	return setmetatable({
 		line = line,
 		char = char,
 		sourceid = sourceid,
-	}
-	setmetatable(new_anchor, anchor_mt)
-	return new_anchor
+	}, anchor_mt)
 end
-create_anchor = U.memoize(create_anchor)
+create_anchor = U.memoize(create_anchor, false)
 
+---@param offset? integer
+---@return Anchor
 local function anchor_here(offset)
 	local info = debug.getinfo((offset or 1) + 1, "Sl")
+	return create_anchor(info.currentline, 0, "SYNTH:" .. info.source)
+end
+
+---@param debuglevel integer?
+---@return Anchor
+local function anchor_here(debuglevel)
+	local info = debug.getinfo((debuglevel or 1) + 1, "Sl")
 	return create_anchor(info.currentline, 0, "SYNTH:" .. info.source)
 end
 

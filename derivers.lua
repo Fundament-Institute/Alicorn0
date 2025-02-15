@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
+
 local traits = require "traits"
 local pretty_printer = require "pretty-printer"
 
@@ -56,7 +59,7 @@ local eq = {
 
 		local checks = {}
 		for i, param in ipairs(params) do
-			checks[i] = string.format("left[%q] == right[%q]", param, param)
+			checks[i] = string.format("left._record[%q] == right._record[%q]", param, param)
 		end
 		local all_checks = table.concat(checks, " and ")
 
@@ -104,7 +107,7 @@ end]]
 				local vparams = vinfo.params
 				local checks = {}
 				for i, param in ipairs(vparams) do
-					checks[i] = string.format("left[%q] == right[%q]", param, param)
+					checks[i] = string.format("left._record[%q] == right._record[%q]", param, param)
 				end
 				all_checks = table.concat(checks, " and ")
 			elseif vtype == EnumDeriveInfoVariantKind.Unit then
@@ -156,8 +159,8 @@ local is = {
 		error("can't derive :is() for a record type")
 	end,
 	enum = function(t, info)
-		local idx = t.__index or {}
-		t.__index = idx
+		local idx = t.methods or {}
+		t.methods = idx
 		local name = info.name
 		local variants = info.variants
 
@@ -182,14 +185,14 @@ local is = {
 ---@type Deriver
 local unwrap = {
 	record = function(t, info)
-		local idx = t.__index or {}
-		t.__index = idx
+		local idx = t.methods or {}
+		t.methods = idx
 		local kind = info.kind
 		local params = info.params
 
 		local returns = {}
 		for i, param in ipairs(params) do
-			returns[i] = string.format("self[%q]", param)
+			returns[i] = string.format("self._record[%q]", param)
 		end
 		local all_returns = table.concat(returns, ", ")
 
@@ -207,8 +210,8 @@ local unwrap = {
 		idx["unwrap_" .. kind] = compiled()
 	end,
 	enum = function(t, info)
-		local idx = t.__index or {}
-		t.__index = idx
+		local idx = t.methods or {}
+		t.methods = idx
 		local name = info.name
 		local variants = info.variants
 
@@ -222,7 +225,7 @@ local unwrap = {
 				local vparams = vinfo.params
 				local returns = {}
 				for i, param in ipairs(vparams) do
-					returns[i] = string.format("self[%q]", param)
+					returns[i] = string.format("self._record[%q]", param)
 				end
 				all_returns = table.concat(returns, ", ")
 			elseif vtype == EnumDeriveInfoVariantKind.Unit then
@@ -261,8 +264,8 @@ local as = {
 		error("can't derive :as() for a record type")
 	end,
 	enum = function(t, info)
-		local idx = t.__index or {}
-		t.__index = idx
+		local idx = t.methods or {}
+		t.methods = idx
 		local name = info.name
 		local variants = info.variants
 
@@ -276,7 +279,7 @@ local as = {
 				local vparams = vinfo.params
 				local returns = { "true" }
 				for i, param in ipairs(vparams) do
-					returns[i + 1] = string.format("self[%q]", param)
+					returns[i + 1] = string.format("self._record[%q]", param)
 				end
 				all_returns = table.concat(returns, ", ")
 			elseif vtype == EnumDeriveInfoVariantKind.Unit then
@@ -315,19 +318,23 @@ local function record_pretty_printable_trait(info)
 	local kind = info.kind
 	local params = info.params
 
+	---@type string[]
 	local fields = {}
 	for i, param in ipairs(params) do
-		fields[i] = string.format("{ %q, self[%q] }", param, param)
+		fields[i] = string.format("{ %q, self._record[%q] }", param, param)
 	end
 	local all_fields = "		" .. table.concat(fields, ",\n		") .. "\n"
 
 	local chunk = [[
 return function(self, pp, ...)
-	pp:record(%q, {
+    local fields = {
 %s
-	}, ...)
+	}
+    -- fields[#fields + 1] = (self["{ID}"] ~= nil) and { "{ID}", self["{ID}"] } or nil
+    fields[#fields + 1] = (self["{TRACE}"] ~= nil) and { "{TRACE}", self["{TRACE}"] } or nil
+	pp:record(%q, fields, ...)
 end]]
-	chunk = chunk:format(kind, all_fields)
+	chunk = chunk:format(all_fields, kind)
 
 	derive_print("derive pretty_printable_trait chunk: " .. kind)
 	derive_print("###")
@@ -424,7 +431,7 @@ local diff = {
 			local diff_params = {}
 			local diff_params_types = {}
 			for i, param in ipairs(params) do
-				if left[param] ~= right[param] then
+				if left._record[param] ~= right._record[param] then
 					n = n + 1
 					diff_params[n] = param
 					diff_params_types[n] = param_types[i]
@@ -441,7 +448,7 @@ local diff = {
 				local diff_impl = traits.diff:get(dt)
 				if diff_impl then
 					-- tail call
-					return diff_impl.diff(left[d], right[d])
+					return diff_impl.diff(left._record[d], right._record[d])
 				else
 					print("stopping diff (missing diff impl)")
 					print("type:", dt)
@@ -463,12 +470,14 @@ local diff = {
 		local name = info.name
 		local variants = info.variants
 
+		---@type (fun(left, right))[]
 		local variants_checks = {}
 		for _, vname in ipairs(variants) do
 			local vkind = name .. "." .. vname
 			local vdata = variants[vname]
 			local vtype = vdata.type
 			local vinfo = vdata.info
+			---@type fun(left, right)
 			local vcheck
 			if vtype == EnumDeriveInfoVariantKind.Record then
 				---@cast vinfo RecordDeriveInfo
@@ -479,7 +488,7 @@ local diff = {
 					local diff_params = {}
 					local diff_params_types = {}
 					for i, param in ipairs(vparams) do
-						if left[param] ~= right[param] then
+						if left._record[param] ~= right._record[param] then
 							n = n + 1
 							diff_params[n] = param
 							diff_params_types[n] = vparams_types[i]
@@ -496,7 +505,7 @@ local diff = {
 						local diff_impl = traits.diff:get(dt)
 						if diff_impl then
 							-- tail call
-							return diff_impl.diff(left[d], right[d])
+							return diff_impl.diff(left._record[d], right._record[d])
 						else
 							print("stopping diff (missing diff impl)")
 							print("type:", dt)
@@ -512,7 +521,7 @@ local diff = {
 					end
 				end
 			elseif vtype == EnumDeriveInfoVariantKind.Unit then
-				function vcheck()
+				function vcheck(_left, _right)
 					print("no difference")
 					print("stopping diff")
 				end
@@ -624,7 +633,7 @@ end]]
 	}
 end
 
--- local typed = terms.inferrable_term.typed(terms.value.number_type, gen.declare_array(gen.builtin_number)(), terms.typed_term.literal(terms.value.number(1)))
+-- local typed = terms.inferrable_term.typed(terms.flex_value.number_type, gen.declare_array(gen.builtin_number)(), terms.typed_term.literal(terms.flex_value.number(1)))
 -- p(typed)
 -- p(getmetatable(typed))
 -- p(terms.inferrable_term == getmetatable(typed))

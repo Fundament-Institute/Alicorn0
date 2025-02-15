@@ -1,41 +1,19 @@
-let host-if-2-type = forall (
-		result     : host-type,
-		c2         : host-type,
-		a1         : host-type,
-		subject    : host-bool,
-		consequent : host-if(subject, result, c2),
-		alternate  : host-if(subject, a1, result))
-	->
-	(r : result)
-
-let host-if-2-wrap = intrinsic
-	""""
-		local typed = terms.typed_term
-		local string_array = terms_gen.declare_array(terms_gen.builtin_string)
-		return terms.value.closure(
-			"#host-if-param",
-			typed.tuple_elim(
-				string_array(
-					"#host-if-result",
-					"#host-if-c2",
-					"#host-if-a1",
-					"#host-if-subject",
-					"#host-if-consequent",
-					"#host-if-alternate"
-				),
-				typed.bound_variable(1),
-				6,
-				typed.host_if(
-					typed.bound_variable(5),
-					typed.bound_variable(6),
-					typed.bound_variable(7)
-				)
-			),
-			terms.runtime_context()
-		)
-	:
-	wrapped(host-if-2-type)
-let host-if-2 = explicit-unwrap(host-if-2-type, host-if-2-wrap)
+let host-if-2 = unwrap
+	intrinsic
+		""""
+			return U.notail(evaluator.gen_base_operator("#host-if-2", function(result, c2, a1, subject, consequent, alternate)
+				return U.notail(terms.typed_term.host_if(subject, consequent, alternate))
+			end))
+		:
+		wrapped(forall (
+				result     : host-type,
+				c2         : host-type,
+				a1         : host-type,
+				subject    : host-bool,
+				consequent : host-if(subject, result, c2),
+				alternate  : host-if(subject, a1, result))
+			->
+			(r : result))
 
 let host-true = intrinsic "return true" : host-bool
 let host-false = intrinsic "return false" : host-bool

@@ -1,3 +1,4 @@
+local U = require "alicorn-utils"
 local metalanguage = require "metalanguage"
 
 local eval
@@ -14,7 +15,7 @@ local eval
 ---@param environment Env
 ---@return ...
 local function Eval(syntax, matcher, environment)
-	return eval(syntax, environment)
+	return U.notail(eval(syntax, environment))
 end
 
 local evaluates = metalanguage.reducer(Eval, "evaluates")
@@ -48,9 +49,9 @@ end
 
 local function SymbolInEnvironment(syntax, environment)
 	--print("in symbol in environment reducer", matcher.kind, matcher[1], matcher)
-	return syntax:match({
+	return U.notail(syntax:match({
 		metalanguage.issymbol(symbolenvhandler),
-	}, metalanguage.failure_handler, environment)
+	}, metalanguage.failure_handler, environment))
 end
 
 local symbol_in_environment = metalanguage.reducer(SymbolInEnvironment, "symbol in env")
@@ -59,11 +60,11 @@ local symbol_in_environment = metalanguage.reducer(SymbolInEnvironment, "symbol 
 ---@param environment Env
 ---@return ...
 function eval(syntax, environment)
-	return syntax:match({
+	return U.notail(syntax:match({
 		symbol_in_environment(eval_passhandler, environment),
 		metalanguage.isvalue(eval_passhandler),
 		metalanguage.ispair(eval_pairhandler),
-	}, metalanguage.failure_handler, environment)
+	}, metalanguage.failure_handler, environment))
 end
 
 ---@generic T
@@ -127,7 +128,7 @@ local primitive_applicative_mt = {
 				evalargs(metalanguage.accept_handler, env),
 			}, metalanguage.failure_handler, nil)
 			local res = self.fn(table.unpack(args))
-			return true, metalanguage.value(nil, nil, res), env
+			return true, U.notail(metalanguage.value(nil, nil, res)), env
 		end,
 	},
 }
@@ -139,7 +140,7 @@ end
 local primitive_operative_mt = {
 	__index = {
 		apply = function(self, ops, env)
-			return self.fn(ops, env)
+			return U.notail(self.fn(ops, env))
 		end,
 	},
 }

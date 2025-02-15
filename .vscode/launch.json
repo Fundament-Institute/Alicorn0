@@ -24,6 +24,21 @@
             "args": [
                 "runtest.lua"
             ]
+        },
+        {
+            "type": "lua",
+            "request": "attach",
+            "name": "Luvit Attach (Windows)",
+            "processName": "luvit.exe"
+        },
+        {
+            "type": "lua",
+            "request": "launch",
+            "name": "Debug (LuaJIT): terms-gen-meta.lua",
+            "program": "terms-gen-meta.lua",
+            "luaVersion": "luajit",
+            "cpath": "${workspaceFolder}/libs/?.dll",
+            "path": "${workspaceFolder}/libs/?.lua"
         }
     ]
 }

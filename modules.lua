@@ -1,5 +1,8 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
+local U = require "alicorn-utils"
 local types = require "typesystem"
-local evaluator = require "alicorn-evaluator"
+local evaluator = require "evaluator"
 local environment = require "environment"
 local metalanguage = require "metalanguage"
 local trie = require "lazy-prefix-tree"
@@ -39,27 +42,27 @@ local function new_mod(values)
 end
 
 local function index_mod(mod, name)
-	return mod.values:get(name)
+	return U.notail(mod.values:get(name))
 end
 
 local function use_mod(mod, env)
 	-- print "in use_mod"
 	-- p(mod)
-	return environment.new_env {
+	return U.notail(environment.new_env({
 		locals = env.locals,
 		nonlocals = env.nonlocals:extend(mod.values),
 		carrier = env.carrier,
 		perms = env.perms,
-	}
+	}))
 end
 
 local function open_mod(mod, env)
-	return environment.new_env {
+	return U.notail(environment.new_env({
 		locals = env.locals:extend(mod.values),
 		nonlocals = env.nonlocals,
 		carrier = env.carrier,
 		perms = env.perms,
-	}
+	}))
 end
 
 local function use_mod_op_impl(syntax, env)
@@ -72,7 +75,7 @@ local function use_mod_op_impl(syntax, env)
 	if #modval ~= 1 or modval[1].type ~= module_type then
 		return false, "using syntax should take exactly one argument, a module"
 	end
-	return true, types.unit_val, use_mod(modval[1].val, env)
+	return true, types.unit_val, U.notail(use_mod(modval[1].val, env))
 end
 
 local function open_mod_op_impl(syntax, env)
@@ -85,7 +88,7 @@ local function open_mod_op_impl(syntax, env)
 	if #modval ~= 1 or modval[1].type ~= module_type then
 		return false, "open-mod syntax should take exactly one argument, a module"
 	end
-	return true, types.unit_val, open_mod(modval[1].val, env)
+	return true, types.unit_val, U.notail(open_mod(modval[1].val, env))
 end
 
 local function get_op_impl(syntax, env)
@@ -102,7 +105,7 @@ local function get_op_impl(syntax, env)
 	if not modval.type == module_type then
 		return false, "first argument of module get must be a module"
 	end
-	return true, index_mod(modval.val)
+	return true, U.notail(index_mod(modval.val))
 end
 
 local function mod_op_impl(syntax, env)

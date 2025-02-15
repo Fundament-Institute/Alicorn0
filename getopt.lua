@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
+
 local _ = require "lua-ext" -- has side-effect of loading string.chars
 
 local function default_unknown(c)
@@ -5,7 +8,7 @@ local function default_unknown(c)
 end
 
 ---@param argv string[]
----@param opttab {[string]: function(string, string?)}
+---@param opttab {[string]: fun(string, string?)}
 ---@return integer
 local function getopt(argv, opttab)
 	local handle_unknown = opttab["?"] or default_unknown

@@ -1,4 +1,9 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
+
 local M = {}
+
+local ipairs, select, setmetatable, table_pack, table_unpack = ipairs, select, setmetatable, table.pack, table.unpack
 
 ---@param ... any
 ---@return table
@@ -13,11 +18,49 @@ function M.concat(...)
 	return res
 end
 
----Exists only to prevent tail call optimizations
----@param ... any
----@return ...
+---@module "_meta/alicorn-utils/notail"
 function M.notail(...)
 	return ...
+end
+
+---@generic K, V
+---@param tbl table<K, V>
+---@return K[]
+function M.table_keys(tbl)
+	---@type K[]
+	local tbl_keys = {}
+	local tbl_keys_length = 0
+	local key = nil
+	while true do
+		key = next(tbl, key)
+		if key == nil then
+			break
+		end
+		tbl_keys_length = tbl_keys_length + 1
+		tbl_keys[tbl_keys_length] = key
+	end
+	return tbl_keys
+end
+
+---@generic T: table, K, V
+---@param tbl T
+---@param comp? fun(a: K, b: K):boolean
+---@return (fun(tbl: table<K, V>, i?: integer): integer, K, V) next
+---@return {tbl: T, tbl_keys: K[], tbl_keys_length: integer} state
+---@return integer i
+function M.table_stable_pairs(tbl, comp)
+	local function table_stable_next(state, i)
+		if i <= state.tbl_keys_length then
+			local key = state.tbl_keys[i]
+			return i + 1, key, state.tbl[key]
+		end
+	end
+
+	local tbl_keys = M.table_keys(tbl)
+	table.sort(tbl_keys, comp)
+	local state = { tbl = tbl, tbl_keys = tbl_keys, tbl_keys_length = #tbl_keys }
+	-- Return an iterator function, the state, starting point
+	return table_stable_next, state, 1
 end
 
 --- name and info aren't used here because they're inspected by the stacktrace using the debug API if an error occurs
@@ -185,7 +228,7 @@ function M.shadowtable(obj, userdata)
 		return iter, tbl, nil
 	end
 
-	return setmetatable({}, mt)
+	return M.notail(setmetatable({}, mt))
 end
 
 local function rawpairs(tbl)
@@ -241,7 +284,7 @@ function M.shadowarray(obj, userdata)
 		end, tbl, 0
 	end
 
-	return setmetatable({}, mt)
+	return M.notail(setmetatable({}, mt))
 end
 
 ---Given a shadowed table, flattens its values on to the shadowed table below and returns it
@@ -310,17 +353,17 @@ end
 ---@return string
 function M.dumptable(t, spaces)
 	spaces = spaces or 0
-	local s = tostring(t) .. ": "
+	local s = { tostring(t) .. ": " }
 	for k, v in pairs(t) do
-		s = s .. "\n" .. string.rep(" ", spaces) .. "  " .. tostring(k) .. ": " .. tostring(v)
+		s[#s + 1] = string.rep(" ", spaces) .. "  " .. tostring(k) .. ": " .. tostring(v)
 	end
 
 	local mt = getmetatable(t)
 	if mt and mt.__shadow then
-		s = s .. "\n" .. string.rep(" ", spaces) .. "  [shadows]: " .. tostring(M.dumptable(mt.__shadow, spaces + 2))
+		s[#s + 1] = string.rep(" ", spaces) .. "  [shadows]: " .. tostring(M.dumptable(mt.__shadow, spaces + 2))
 	end
 
-	return s
+	return M.notail(table.concat(s, "\n"))
 end
 
 ---@param t table
@@ -395,14 +438,41 @@ local memo_nil_tag = {}
 
 ---cache a function's outputs to ensure purity with respect to identity
 ---@param fn function
+---@param args_table boolean Whether the function takes a single arguments table
 ---@return function
-function M.memoize(fn)
+function M.memoize(fn, args_table)
 	local memotab = setmetatable({}, memo_mt)
+	if args_table then
+		local function wrapfn(args)
+			local thismemo = memotab
+			local n = args.n
+			if n == nil then
+				n = #args
+			end
+			for i = 1, n do
+				this_arg = args[i]
+				if this_arg == nil then
+					this_arg = memo_nil_tag
+				end
+				local nextmemo = thismemo[this_arg]
+				if not nextmemo then
+					nextmemo = setmetatable({}, memo_mt)
+					thismemo[this_arg] = nextmemo
+				end
+				thismemo = nextmemo
+			end
+			if not thismemo[memo_end_tag] then
+				thismemo[memo_end_tag] = table_pack(fn(args))
+			end
+			local values = thismemo[memo_end_tag]
+			return table_unpack(values, 1, values.n)
+		end
+		return wrapfn
+	end
 	local function wrapfn(...)
-		local args = table.pack(...)
 		local thismemo = memotab
-		for i = 1, args.n do
-			local this_arg = args[i]
+		for i = 1, select("#", ...) do
+			local this_arg = select(i, ...)
 			if this_arg == nil then
 				this_arg = memo_nil_tag
 			end
@@ -414,9 +484,10 @@ function M.memoize(fn)
 			thismemo = nextmemo
 		end
 		if not thismemo[memo_end_tag] then
-			thismemo[memo_end_tag] = fn(...)
+			thismemo[memo_end_tag] = table_pack(fn(...))
 		end
-		return thismemo[memo_end_tag]
+		local values = thismemo[memo_end_tag]
+		return table_unpack(values, 1, values.n)
 	end
 	return wrapfn
 end
@@ -680,7 +751,92 @@ local litprint_mt = {
 ---@param s string
 ---@return table
 function M.litprint(s)
-	return setmetatable({ contents = s }, litprint_mt)
+	return M.notail(setmetatable({ contents = s }, litprint_mt))
 end
 
+function M.debug_break()
+	local ok, debugger
+	do
+		ok, debugger = pcall(require, "lldebugger")
+		if ok then
+			return debugger.requestBreak()
+		end
+	end
+end
+
+DEBUG_ID = 0
+function M.debug_id()
+	DEBUG_ID = DEBUG_ID + 1
+
+	-- Use this to reliably breakpoint at the moment a term of interest is created
+	--if DEBUG_ID == 115726 then
+	--	M.debug_break()
+	--end
+
+	return DEBUG_ID
+end
+
+-- this function should be called as an xpcall error handler
+---@param err table | string
+---@param prefix string?
+---@param level integer?
+---@return table | string
+function M.custom_traceback(err, prefix, level)
+	if type(err) == "table" then
+		return err
+	end
+	if prefix == nil then
+		prefix = ""
+	end
+	---@type string[]
+	local s =
+		{ type(err) == "string" and err or ("must pass string or table to error handler, found: " .. tostring(err)) }
+	if level == nil then
+		level = 0
+	end
+	local i = 3 + level
+	local info = debug.getinfo(i, "Sfln")
+	while info ~= nil do
+		if info.func == M.tag then
+			local _, name = debug.getlocal(i, 1)
+			local _, tag = debug.getlocal(i, 2)
+			local _, fn = debug.getlocal(i, 3)
+			--i = i + 1
+			--info = debug.getinfo(i, "Sfln")
+			local ok, err = pcall(function()
+				s[#s + 1] = string.format("%s [%s:%d] (%s)", name, info.short_src, info.currentline, pdump(tag))
+			end)
+			if not ok then
+				s[#s + 1] = string.format("TRACE FAIL: %s [%s:%d] (%s)", name, info.short_src, info.currentline, err)
+			end
+		else
+			local name = info.name or string.format("<%s:%d>", info.short_src, info.linedefined)
+			local args = {}
+			local j = 1
+			local arg, v = debug.getlocal(i, j)
+			while arg ~= nil do
+				table.insert(args, (type(v) == "table") and "<" .. arg .. ":table>" or string.sub(tostring(v), 1, 12))
+				j = j + 1
+				arg, v = debug.getlocal(i, j)
+			end
+
+			--s[#s + 1] = string.format("%s [%s:%d] (%s)", name, info.short_src, info.currentline, table.concat(args,","))
+			s[#s + 1] = string.format("%s [%s:%d]", name, info.short_src, info.currentline)
+		end
+		i = i + 1
+		info = debug.getinfo(i, "Sfln")
+	end
+
+	return M.notail(table.concat(s, "\n" .. prefix))
+end
+
+-- this function should be used when calling for a trace directly
+---@param err table | string
+---@return table | string
+function M.stack_trace(err)
+	return M.notail(M.custom_traceback(err))
+end
+
+local internals_interface = require "internals-interface"
+internals_interface.U = M
 return M

@@ -1,9 +1,14 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
 local derivers = require "derivers"
 local pretty_printer = require "pretty-printer"
 local traits = require "traits"
 local U = require "alicorn-utils"
 
 local _ = require "lua-ext" -- has side-effect of loading fixed table.concat
+
+local math_floor, select, type = math.floor, select, type
+local s = pretty_printer.s
 
 -- record and enum are nominative types.
 -- this means that two record types, given the same arguments, are distinct.
@@ -39,7 +44,10 @@ end
 ---@return ValueCheckFn
 local function metatable_equality(mt)
 	if type(mt) ~= "table" then
-		error("trying to define metatable equality to something that isn't a metatable (possible typo?)")
+		error(
+			"trying to define metatable equality to something that isn't a metatable (possible typo?): "
+				.. debug.traceback(tostring(mt))
+		)
 	end
 	return function(val)
 		return getmetatable(val) == mt
@@ -84,11 +92,13 @@ local function validate_params_types(kind, params, params_types)
 		local param_type = params_types[i]
 		if type(param_type) ~= "table" or type(param_type.value_check) ~= "function" then
 			error(
-				"trying to set a parameter type to something that isn't a type, in constructor "
-					.. kind
-					.. ", parameter "
-					.. v
-					.. " (possible typo?)"
+				debug.traceback(
+					"trying to set a parameter type to something that isn't a type, in constructor "
+						.. kind
+						.. ", parameter "
+						.. v
+						.. " (possible typo?)"
+				)
 			)
 		end
 		if params_set[v] then
@@ -104,6 +114,7 @@ local function validate_params_types(kind, params, params_types)
 end
 
 ---@class RecordType: Type
+---@overload fun(...): RecordValue
 ---@field derive fun(self: RecordType, deriver: Deriver, ...)
 ---@field _kind string
 ---@field __eq fun(left: RecordValue, right: RecordValue): boolean
@@ -123,26 +134,42 @@ local function gen_record(self, cons, kind, params_with_types)
 	local params, params_types = parse_params_with_types(params_with_types)
 	validate_params_types(kind, params, params_types)
 	local function build_record(...)
-		local args = { ... }
+		local args = table.pack(...)
 		local val = {
 			kind = kind,
+			_record = {},
 		}
 		for i, v in ipairs(params) do
-			local argi = args[i]
+			local param = args[i]
+			local param_type = params_types[i]
 			-- type-check constructor arguments
-			if params_types[i].value_check(argi) ~= true then
-				print("value of parameter " .. v .. ": (follows)")
-				p(argi)
-				print("expected type of parameter " .. v .. " is :", params_types[i])
-				error("wrong argument type passed to constructor " .. kind .. ", parameter '" .. v .. "'")
+			if param_type.value_check(param) ~= true then
+				error(
+					debug.traceback(
+						string.format(
+							"wrong argument type passed to constructor %s, parameter %q\nexpected type of parameter %q is: %s\nvalue of parameter %q: (follows)\n%s",
+							kind,
+							v,
+							v,
+							param_type,
+							v,
+							s(param)
+						)
+					)
+				)
 			end
-			val[v] = argi
+			val._record[v] = param
 		end
-		val["{TRACE}"] = U.bound_here(2)
+		if false then
+			-- val["{TRACE}"] = U.bound_here(2)
+			val["{TRACE}"] = debug.traceback("", 2)
+			-- val["{TRACE}"] = U.custom_traceback("", "", -1)
+		end
+		val["{ID}"] = U.debug_id()
 		setmetatable(val, self)
 		return val
 	end
-	build_record = U.memoize(build_record)
+	build_record = U.memoize(build_record, false)
 	-- freeze args before entering memoized function
 	-- because freeze may produce a hash-consed instance of the given arg
 	-- which allows hash-consing to work with arrays etc
@@ -202,11 +229,32 @@ local function define_record(self, kind, params_with_types)
 		return deriver.record(self, derive_info, ...)
 	end
 	self._kind = kind
-	self.__index = {
+	self.__index = function(t, key)
+		local method = self.methods[key]
+		if method then
+			return method
+		end
+
+		if key == "{TRACE}" or key == "{ID}" then
+			return t._record[key]
+		end
+		if key ~= "name" then
+			error(debug.traceback("use unwrap instead for: " .. key))
+		end
+		if t._record[key] then
+			return t._record[key]
+		end
+
+		error("Tried to access nonexistent key: " .. key)
+	end
+	self.methods = {
 		pretty_preprint = pretty_printer.pretty_preprint,
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
 	}
+	self.__newindex = function()
+		error("records are immutable!")
+	end
 	traits.value_name:implement_on(self, {
 		value_name = function()
 			return kind
@@ -236,6 +284,7 @@ local function gen_unit(self, kind)
 end
 
 ---@class EnumType: Type
+---@overload fun(...): EnumValue
 ---@field derive fun(self: EnumType, deriver: Deriver, ...)
 ---@field _name string
 ---@field __eq fun(left: EnumValue, right: EnumValue): boolean
@@ -297,11 +346,30 @@ local function define_enum(self, name, variants)
 		return deriver.enum(self, derive_info, ...)
 	end
 	self._name = name
-	self.__index = {
+	self.__index = function(t, key)
+		local method = self.methods[key]
+		if method then
+			return method
+		end
+
+		if key == "{TRACE}" or key == "{ID}" then
+			return t._record[key]
+		end
+		error(debug.traceback("use unwrap instead for: " .. key))
+		if t._record[key] then
+			return t._record[key]
+		end
+
+		error("Tried to access nonexistent key: " .. key)
+	end
+	self.methods = {
 		pretty_preprint = pretty_printer.pretty_preprint,
 		pretty_print = pretty_printer.pretty_print,
 		default_print = pretty_printer.default_print,
 	}
+	self.__newindex = function()
+		error("enums are immutable!")
+	end
 	traits.value_name:implement_on(self, {
 		value_name = function()
 			return name
@@ -314,6 +382,195 @@ local function define_enum(self, name, variants)
 	self:derive(derivers.diff)
 	self:derive(derivers.freeze)
 	return self
+end
+
+---@param s string
+---@param delim string
+---@return string[]
+local function split_delim(s, delim)
+	local subs = {}
+	-- This might have an extra blank match at the end but we actually don't care in this case
+	for sub in s:gmatch("[^" .. delim .. "]+") do
+		table.insert(subs, sub)
+	end
+	return subs
+end
+
+---@param flex UndefinedType
+---@param flex_name string
+---@param fn_replace fun(tag: string, variant: Type) : Type
+---@param fn_specify fun(args: any[], types: Type[]) : string, any[]
+---@param fn_unify fun(args: any[]) : any[]
+---@param types { [string]: UndefinedType }
+---@param names { [string]: string }
+---@param variants Variants
+---@param fn_sub fun(types: Type[])?
+local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_unify, types, names, variants, fn_sub)
+	---@type {[string]: Variants }
+	local keyed_variants = {}
+	---@type Variants
+	local flex_variants = {}
+	for _, k, v in U.table_stable_pairs(types) do
+		keyed_variants[k] = {}
+		table.insert(flex_variants, { k, { k, v } })
+	end
+
+	---@type {[string]: string }
+	local flex_tags = {}
+
+	for _, v in ipairs(variants) do
+		local vname, vtag = table.unpack(split_delim(v[1], "$"))
+		local vparams_with_types = v[2]
+		if vtag == nil then
+			error("Missing tag on " .. vname)
+		end
+		table.insert(flex_variants, { vname, vparams_with_types })
+		flex_tags[vname] = vtag
+
+		if vtag == "flex" then
+			for _, k, _ in U.table_stable_pairs(types) do
+				local fix_variants = {}
+				for i, ty in ipairs(vparams_with_types) do
+					if (i % 2) == 0 and fn_replace then
+						table.insert(fix_variants, fn_replace(k, ty))
+					else
+						table.insert(fix_variants, ty)
+					end
+				end
+				table.insert(keyed_variants[k], { vname, fix_variants })
+			end
+		else
+			if keyed_variants[vtag] == nil then
+				error("Unknown tag: " .. vtag)
+			end
+			table.insert(keyed_variants[vtag], { vname, vparams_with_types })
+		end
+	end
+
+	for _, k, v in U.table_stable_pairs(types) do
+		v:define_enum(names[k], keyed_variants[k])
+	end
+
+	if fn_sub then
+		fn_sub(types)
+	end
+
+	flex:define_enum(flex_name, flex_variants)
+
+	local unify_passthrough = function(ok, ...)
+		return ok, table.unpack(fn_unify(table.pack(...)))
+	end
+
+	for i, pair in ipairs(flex_variants) do
+		local k = pair[1]
+		if flex_tags[k] == "flex" then
+			local vkind = flex_name .. "." .. k
+			local params, params_types = parse_params_with_types(pair[2])
+			validate_params_types(vkind, params, params_types)
+			flex[k] = function(...)
+				local args = table.pack(...)
+				for i, v in ipairs(params) do
+					local param = args[i]
+					local param_type = params_types[i]
+					if param_type.value_check(param) ~= true then
+						error(
+							debug.traceback(
+								string.format(
+									"wrong argument type passed to constructor %s, parameter %q\nexpected type of parameter %q is: %s\nvalue of parameter %q: (follows)\n%s",
+									param.kind,
+									v,
+									v,
+									param_type,
+									v,
+									s(param)
+								)
+							)
+						)
+					end
+				end
+				local tag, unified_args = fn_specify(args, params_types)
+				local subtype = types[tag]
+				local inner = subtype[k](table.unpack(unified_args))
+				return flex[tag](inner)
+			end
+		elseif flex_tags[k] ~= nil then
+			local tag = flex_tags[k]
+			local subtype = types[tag]
+			local inner = subtype[k]
+			if not pair[2] then
+				flex[k] = flex[tag](inner)
+			else
+				flex[k] = function(...)
+					return flex[tag](inner(...))
+				end
+			end
+		end
+
+		local derivers = { "is_", "unwrap_", "as_" }
+		for _, v in ipairs(derivers) do
+			local tag = flex_tags[k]
+			local key = v .. k
+
+			local unwrapper = {}
+			for _, k, v in U.table_stable_pairs(types) do
+				unwrapper[flex_name .. "." .. k] = flex.methods["unwrap_" .. k]
+			end
+
+			if tag == "flex" then
+				if v == "is_" then
+					flex.methods[key] = function(self, ...)
+						local inner = unwrapper[self.kind](self)
+						return inner[key](inner, ...)
+					end
+				elseif v == "unwrap_" then
+					flex.methods[key] = function(self, ...)
+						local inner = unwrapper[self.kind](self)
+						return table.unpack(fn_unify(table.pack(inner[key](inner, ...))))
+					end
+				elseif v == "as_" then
+					flex.methods[key] = function(self, ...)
+						local inner = unwrapper[self.kind](self)
+						return unify_passthrough(inner[key](inner, ...))
+					end
+				end
+			elseif tag ~= nil then
+				local base = flex.methods[key]
+				if not base then
+					error("Trying to override nonexistent function " .. key)
+				end
+				if v == "is_" or v == "as_" then
+					flex.methods[key] = function(self, ...)
+						local ok, inner = flex.methods["as_" .. tag](self)
+						if not ok then
+							return false
+						end
+						return inner[key](inner, ...)
+					end
+				elseif v == "unwrap_" then
+					flex.methods[key] = function(self, ...)
+						local inner = flex.methods[v .. tag](self)
+						return inner[key](inner, ...)
+					end
+				end
+			end
+		end
+	end
+
+	--[[local lookup = {}
+	for _, k, v in U.table_stable_pairs(types) do
+		lookup[flex_name .. "." .. k] = k
+	end
+
+	for _, k in ipairs(forward) do
+		local derivers = { "is_", "unwrap_", "as_" }
+
+		for _, v in ipairs(derives) do
+			flex[v .. k] = function(self, ...)
+				local child = self[ lookup[self.kind] ]
+				child[v .. k](child, ...)
+			end
+		end
+	end]]
 end
 
 ---@class ForeignType: Type
@@ -343,24 +600,25 @@ local function define_foreign(self, value_check, lsp_type)
 end
 
 ---@class MapType: Type
+---@overload fun(...): MapValue
 ---@field key_type Type
 ---@field value_type Type
 ---@field __index table
 ---@field __newindex function
----@field __pairs function(MapValue): function, MapValue, Value?
----@field __tostring function(MapValue): string
+---@field __pairs fun(self: MapValue): function, MapValue, Value?
+---@field __tostring fun(self: MapValue): string
 
----@class MapValue: Value
+---@class MapValue<K, V>: Value, { K: V }
 ---@field _map { [Value]: Value }
 ---@field is_frozen boolean
----@field set fun(MapValue, Value, Value)
----@field reset fun(MapValue, Value)
----@field get fun(MapValue, Value): Value?
----@field pairs fun(MapValue): function, MapValue, Value?
----@field copy fun(MapValue, MapValue?, function?): MapValue
----@field union fun(MapValue, MapValue, function): MapValue
----@field pretty_print fun(MapValue, ...)
----@field default_print fun(MapValue, ...)
+---@field set fun(self: MapValue, key: Value, value: Value)
+---@field reset fun(self: MapValue, key: Value)
+---@field get fun(self: MapValue, key: Value): Value?
+---@field pairs fun(self: MapValue): function, MapValue, Value?
+---@field copy fun(self: MapValue, onto: MapValue?, conflict: function?): MapValue
+---@field union fun(self: MapValue, right: MapValue, conflict: function): MapValue
+---@field pretty_print fun(self: MapValue, ...)
+---@field default_print fun(self: MapValue, ...)
 
 local map_type_mt = {
 	__call = function(self, ...)
@@ -497,7 +755,7 @@ local function map_freeze_helper_2(t, ...)
 	frozenval.is_frozen = true
 	return frozenval
 end
-map_freeze_helper_2 = U.memoize(map_freeze_helper_2)
+map_freeze_helper_2 = U.memoize(map_freeze_helper_2, false)
 
 local function map_freeze_helper(t, keys, map, ...)
 	if #keys > 0 then
@@ -557,34 +815,38 @@ local function define_map(self, key_type, value_type)
 	})
 	traits.value_name:implement_on(self, {
 		value_name = function()
-			-- TODO: augment this with generics
-			return "MapValue"
+			return "MapValue<"
+				.. traits.value_name:get(key_type).value_name()
+				.. ","
+				.. traits.value_name:get(value_type).value_name()
+				.. ">"
 		end,
 	})
 	traits.freeze:implement_on(self, { freeze = map_freeze })
 	return self
 end
-define_map = U.memoize(define_map)
+define_map = U.memoize(define_map, false)
 
 ---@class SetType: Type
+---@overload fun(...): SetValue
 ---@field key_type Type
 ---@field __index table
----@field __pairs function(SetValue): function, SetValue, Value?
----@field __tostring function(SetValue): string
+---@field __pairs fun(SetValue): function, SetValue, Value?
+---@field __tostring fun(SetValue): string
 
----@class SetValue: Value
+---@class SetValue<K>: Value, { K: boolean }
 ---@field _set { [Value]: boolean }
 ---@field is_frozen boolean
----@field put fun(SetValue, Value)
----@field remove fun(SetValue, Value)
----@field test fun(SetValue, Value): boolean?
----@field pairs function(SetValue): function, SetValue, Value?
----@field copy fun(SetValue, SetValue?): SetValue
----@field union fun(SetValue, SetValue): SetValue
----@field subtract fun(SetValue, SetValue): SetValue
----@field superset fun(SetValue, SetValue): boolean
----@field pretty_print fun(SetValue, ...)
----@field default_print fun(SetValue, ...)
+---@field put fun(self: SetValue, key: Value)
+---@field remove fun(self: SetValue, key: Value)
+---@field test fun(self: SetValue, key: Value): boolean?
+---@field pairs fun(self: SetValue): function, SetValue, Value?
+---@field copy fun(self: SetValue, onto: SetValue?): SetValue
+---@field union fun(self: SetValue, right: SetValue): SetValue
+---@field subtract fun(self: SetValue, right: SetValue): SetValue
+---@field superset fun(self: SetValue, right: SetValue): boolean
+---@field pretty_print fun(self: SetValue, ...)
+---@field default_print fun(self: SetValue, ...)
 
 local set_type_mt = {
 	__call = function(self, ...)
@@ -716,7 +978,7 @@ local function set_freeze_helper_2(t, ...)
 	frozenval.is_frozen = true
 	return frozenval
 end
-set_freeze_helper_2 = U.memoize(set_freeze_helper_2)
+set_freeze_helper_2 = U.memoize(set_freeze_helper_2, false)
 
 local function set_freeze_helper(t, keys, ...)
 	if #keys > 0 then
@@ -767,50 +1029,64 @@ local function define_set(self, key_type)
 	})
 	traits.value_name:implement_on(self, {
 		value_name = function()
-			-- TODO: augment this with generics
-			return "SetValue"
+			return "SetValue<" .. traits.value_name:get(key_type).value_name() .. ">"
 		end,
 	})
 	traits.freeze:implement_on(self, { freeze = set_freeze })
 	return self
 end
-define_set = U.memoize(define_set)
+define_set = U.memoize(define_set, false)
 
 ---@class ArrayType: Type
+---@overload fun(...): ArrayValue
 ---@field value_type Type
 ---@field methods { [string]: function }
 ---@field __eq fun(ArrayValue, ArrayValue): boolean
 ---@field __index fun(self: ArrayValue, key: integer | string) : Value | function
 ---@field __newindex fun(self: ArrayValue, key: integer, value: Value)
----@field __ipairs fun(ArrayValue): function, ArrayValue, integer
----@field __len fun(ArrayValue): integer
----@field __tostring fun(ArrayValue): string
+---@field __ipairs fun(self: ArrayValue): function, ArrayValue, integer
+---@field __len fun(self: ArrayValue): integer
+---@field __tostring fun(self: ArrayValue): string
 
----@class ArrayValue: Value
+---@class ArrayValue<T>: Value, { [integer]: T }
 ---@field n integer
 ---@field array Value[]
 ---@field is_frozen boolean
----@field ipairs fun(ArrayValue): function, ArrayValue, integer
----@field len fun(ArrayValue): integer
----@field append fun(ArrayValue, Value)
----@field copy fun(ArrayValue, integer?, integer?): ArrayValue
----@field unpack fun(ArrayValue): ...
----@field pretty_print fun(ArrayValue, ...)
----@field default_print fun(ArrayValue, ...)
+---@field ipairs fun(self: ArrayValue): function, ArrayValue, integer
+---@field len fun(self: ArrayValue): integer
+---@field append fun(self: ArrayValue, v: Value)
+---@field copy fun(self: ArrayValue, integer?, integer?): ArrayValue
+---@field map fun(self: ArrayValue, target: ArrayType, fn: fun(any) : any): ArrayValue
+---@field get fun(self: MapValue, key: Value): Value?
+---@field unpack fun(self: ArrayValue): ...
+---@field pretty_print fun(self: ArrayValue, ...)
+---@field default_print fun(self: ArrayValue, ...)
 
 local array_type_mt = {
 	__call = function(self, ...)
-		local val = {
-			n = 0,
-			array = {},
-			is_frozen = false,
-		}
-		setmetatable(val, self)
-		local args = table.pack(...)
-		for i = 1, args.n do
-			val:append(args[i])
+		local value_type = self.value_type
+		local array, n = {}, select("#", ...)
+		for i = 1, n do
+			local value = select(i, ...)
+			if value_type.value_check(value) ~= true then
+				error(
+					debug.traceback(
+						string.format(
+							"wrong value type passed to array creation: expected [%s] of type %s but got %s",
+							s(i),
+							s(value_type),
+							s(value)
+						)
+					)
+				)
+			end
+			array[i] = value
 		end
-		return val
+		return setmetatable({
+			array = array,
+			is_frozen = false,
+			n = n,
+		}, self)
 	end,
 	__eq = function(left, right)
 		return left.value_type == right.value_type
@@ -819,6 +1095,57 @@ local array_type_mt = {
 		return "terms-gen array val:<" .. tostring(self.value_type) .. ">"
 	end,
 }
+
+local function array_unchecked_new_fn(self, array, n)
+	local value_type = self.value_type
+	local new_array = {}
+	if n == nil then
+		n = array.n
+		if n == nil then
+			n = #array
+		end
+	end
+	for i = 1, n do
+		new_array[i] = array[i]
+	end
+	return setmetatable({
+		n = n,
+		array = new_array,
+		is_frozen = false,
+	}, self)
+end
+
+local function array_new_fn(self, array, n)
+	local value_type = self.value_type
+	local new_array = {}
+	if n == nil then
+		n = array.n
+		if n == nil then
+			n = #array
+		end
+	end
+	for i = 1, n do
+		local value = array[i]
+		if value_type.value_check(value) ~= true then
+			error(
+				debug.traceback(
+					string.format(
+						"wrong value type passed to array creation: expected [%s] of type %s but got %s",
+						s(i),
+						s(value_type),
+						s(value)
+					)
+				)
+			)
+		end
+		new_array[i] = value
+	end
+	return setmetatable({
+		n = n,
+		array = new_array,
+		is_frozen = false,
+	}, self)
+end
 
 ---@param state ArrayValue
 ---@param control integer
@@ -845,19 +1172,45 @@ local function gen_array_methods(self, value_type)
 			if val.is_frozen then
 				error("trying to modify a frozen array")
 			end
-			val[val.n + 1] = value
+			local n = val.n + 1
+			val.array[n], val.n = value, n
 		end,
 		copy = function(val, first, last)
 			first = first or 1
-			last = last or val:len()
-			local new = self()
+			last = last or val.n
+			local array, new_array = val.array, {}
 			for i = first, last do
-				new:append(val.array[i])
+				new_array[i] = array[i]
 			end
-			return new
+			return self:unchecked_new(new_array, n)
 		end,
 		unpack = function(val)
 			return table.unpack(val.array, 1, val.n)
+		end,
+		map = function(val, to, fn)
+			local value_type = to.value_type
+			local array, new_array, n = val.array, {}, val.n
+			for i = 1, n do
+				local value = fn(array[i])
+				if value_type.value_check(value) ~= true then
+					error(
+						debug.traceback(
+							string.format(
+								"wrong value type resulting from array mapping: expected [%s] of type %s but got %s",
+								s(i),
+								s(value_type),
+								s(value)
+							)
+						)
+					)
+				end
+				new_array[i] = value
+			end
+
+			return to:unchecked_new(new_array, n)
+		end,
+		get = function(val, key)
+			return val.array[key]
 		end,
 		pretty_preprint = pretty_printer.pretty_preprint,
 		pretty_print = pretty_printer.pretty_print,
@@ -902,7 +1255,7 @@ local function gen_array_index_fns(self, value_type)
 		-- check if integer
 		-- there are many nice ways to do this in lua >=5.3
 		-- unfortunately, this is not part of luajit/luvit
-		if math.floor(key) ~= key then
+		if math_floor(key) ~= key then
 			p(key)
 			error("key passed to array indexing is not an integer")
 		end
@@ -918,7 +1271,7 @@ local function gen_array_index_fns(self, value_type)
 			error(
 				"key passed to array indexing is out of bounds (read code comment above): "
 					.. tostring(key)
-					.. "is not within [1,"
+					.. " is not within [1,"
 					.. tostring(val.n)
 					.. "]"
 			)
@@ -930,26 +1283,35 @@ local function gen_array_index_fns(self, value_type)
 	---@param value Value
 	local function newindex(val, key, value)
 		if val.is_frozen then
-			error("trying to modify a frozen array")
+			error(string.format("trying to set %s on a frozen array to %s: %s", s(key), s(value), s(val)))
 		end
 		if type(key) ~= "number" then
-			p("array-index", value_type)
-			p(key)
-			error("wrong key type passed to array index-assignment")
+			error(
+				string.format(
+					"wrong key type passed to array index-assignment: expected %s but got %s",
+					s(value_type),
+					s(key)
+				)
+			)
 		end
-		if math.floor(key) ~= key then
-			p(key)
-			error("key passed to array index-assignment is not an integer")
+		if math_floor(key) ~= key then
+			error(string.format("key passed to array index-assignment is not an integer: %s", s(key)))
 		end
 		-- n+1 can be used to append
 		if key < 1 or key > val.n + 1 then
-			p(key, val.n)
-			error("key passed to array index-assignment is out of bounds")
+			error(string.format("key %s passed to array index-assignment is out of bounds: %s", s(key), s(val.n)))
 		end
 		if value_type.value_check(value) ~= true then
-			p("array-index-assign", value_type)
-			p(value)
-			error("wrong value type passed to array index-assignment")
+			error(
+				debug.traceback(
+					string.format(
+						"wrong value type passed to array index-assignment: expected [%s] of type %s but got %s",
+						s(key),
+						s(value_type),
+						s(value)
+					)
+				)
+			)
 		end
 		local freeze_impl_value = traits.freeze:get(value_type)
 		if freeze_impl_value then
@@ -1030,18 +1392,22 @@ local function gen_array_diff_fn(self, value_type)
 	return diff_fn
 end
 
-local function array_freeze_helper(t, ...)
-	local frozenval = t(...)
-	frozenval.is_frozen = true
-	return frozenval
+local function array_freeze_helper(t, n)
+	local function array_freeze_helper_aux(array)
+		local frozenval = t:new(array, n)
+		frozenval.is_frozen = true
+		return frozenval
+	end
+	array_freeze_helper_aux = U.memoize(array_freeze_helper_aux, true)
+	return array_freeze_helper_aux
 end
-array_freeze_helper = U.memoize(array_freeze_helper)
+array_freeze_helper = U.memoize(array_freeze_helper, false)
 
 local function array_freeze(t, val)
 	if val.is_frozen then
 		return val
 	end
-	local frozen = array_freeze_helper(t, val:unpack())
+	local frozen = array_freeze_helper(t, val.n)(val.array)
 	return frozen
 end
 
@@ -1050,11 +1416,16 @@ end
 ---@return ArrayType
 local function define_array(self, value_type)
 	if type(value_type) ~= "table" or type(value_type.value_check) ~= "function" then
-		error("trying to set the value type to something that isn't a type (possible typo?)")
+		error(
+			"trying to set the value type to something that isn't a type (possible typo?): "
+				.. debug.traceback(tostring(value_type))
+		)
 	end
 
 	setmetatable(self, array_type_mt)
 	---@cast self ArrayType
+	self.unchecked_new = array_unchecked_new_fn
+	self.new = array_new_fn
 	-- NOTE: this isn't primitive equality; this type has a __eq metamethod!
 	self.value_check = metatable_equality(self)
 	self.value_type = value_type
@@ -1073,14 +1444,13 @@ local function define_array(self, value_type)
 	})
 	traits.value_name:implement_on(self, {
 		value_name = function()
-			-- TODO: augment this with generics
-			return "ArrayValue"
+			return ("ArrayValue<%s>"):format(traits.value_name:get(value_type).value_name())
 		end,
 	})
 	traits.freeze:implement_on(self, { freeze = array_freeze })
 	return self
 end
-define_array = U.memoize(define_array)
+define_array = U.memoize(define_array, false)
 
 ---@class UndefinedType: Type
 ---@field define_record fun(self: table, kind: string, params_with_types: ParamsWithTypes): RecordType
@@ -1145,6 +1515,7 @@ local terms_gen = {
 	builtin_function = gen_builtin("function"),
 	builtin_table = gen_builtin("table"),
 	array_type_mt = array_type_mt,
+	define_multi_enum = define_multi_enum,
 	any_lua_type = define_foreign({}, function()
 		return true
 	end, "any"),
