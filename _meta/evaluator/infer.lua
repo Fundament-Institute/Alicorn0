@@ -3,8 +3,8 @@
 
 ---@meta
 
----@overload fun(inferrable_term : inferrable, typechecking_context : TypecheckingContext) : boolean, string
----@param inferrable_term inferrable
+---@overload fun(inferrable_term : anchored_inferrable, typechecking_context : TypecheckingContext) : boolean, string
+---@param inferrable_term anchored_inferrable
 ---@param typechecking_context TypecheckingContext
 ---@return boolean ok
 ---@return flex_value type

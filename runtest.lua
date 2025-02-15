@@ -482,7 +482,7 @@ local function perform_test(file, completion, env)
 			return false, log
 		end
 	else
-		---@cast test_expr inferrable
+		---@cast test_expr anchored_inferrable
 		---@cast test_env Environment
 		local test_env, test_expr, _ = test_env:exit_block(test_expr, shadowed)
 
@@ -512,7 +512,7 @@ if reload_mode then
 			local ok, test_expr, test_env = load_alc_file(test_name, test_env, print)
 
 			if ok then
-				---@cast test_expr inferrable
+				---@cast test_expr anchored_inferrable
 				---@cast test_env Environment
 				local test_env, test_expr, _ = test_env:exit_block(test_expr, shadowed)
 

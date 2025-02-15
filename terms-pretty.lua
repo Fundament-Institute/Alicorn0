@@ -16,24 +16,7 @@ local DescCons
 
 -- stylua: ignore start
 
----@module "pretty-printer".PrettyPrint
-do local PrettyPrint end
-
----@module "types.binding"
-do local _ end
----@module "types.checkable"
-do local _ end
----@module "types.unanchored_inferrable"
-do local _ end
----@module "types.typed"
-do local _ end
----@module "types.strict_value"
-do local _ end
----@module "types.flex_value"
-do local _ end
----@module "types.stuck_value"
-do local _ end
----@module "types.var_debug"
+---@module "terms"
 do local _ end
 
 -- stylua: ignore end
