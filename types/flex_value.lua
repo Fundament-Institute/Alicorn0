@@ -180,17 +180,17 @@ function flex_value:unwrap_enum_desc_type() end
 function flex_value:as_enum_desc_type() end
 ---@return boolean
 function flex_value:is_enum_desc_value() end
----@return MapValue<string,flex_value> variants
+---@return MapValue<string, flex_value> variants
 function flex_value:unwrap_enum_desc_value() end
 ---@return boolean
----@return MapValue<string,flex_value> variants
+---@return MapValue<string, flex_value> variants
 function flex_value:as_enum_desc_value() end
 ---@return boolean
 function flex_value:is_record_value() end
----@return MapValue<string,flex_value> fields
+---@return MapValue<string, flex_value> fields
 function flex_value:unwrap_record_value() end
 ---@return boolean
----@return MapValue<string,flex_value> fields
+---@return MapValue<string, flex_value> fields
 function flex_value:as_record_value() end
 ---@return boolean
 function flex_value:is_record_type() end
@@ -209,19 +209,19 @@ function flex_value:as_record_desc_type() end
 ---@return boolean
 function flex_value:is_record_extend() end
 ---@return stuck_value base
----@return MapValue<string,flex_value> extension
+---@return MapValue<string, flex_value> extension
 function flex_value:unwrap_record_extend() end
 ---@return boolean
 ---@return stuck_value base
----@return MapValue<string,flex_value> extension
+---@return MapValue<string, flex_value> extension
 function flex_value:as_record_extend() end
 ---@return boolean
 function flex_value:is_object_value() end
----@return MapValue<string,typed> methods
+---@return MapValue<string, typed> methods
 ---@return FlexRuntimeContext capture
 function flex_value:unwrap_object_value() end
 ---@return boolean
----@return MapValue<string,typed> methods
+---@return MapValue<string, typed> methods
 ---@return FlexRuntimeContext capture
 function flex_value:as_object_value() end
 ---@return boolean
@@ -559,12 +559,12 @@ function flex_value:as_host_unwrap() end
 ---@field enum_value fun(constructor: string, arg: flex_value): flex_value
 ---@field enum_type fun(desc: flex_value): flex_value
 ---@field enum_desc_type fun(universe: flex_value): flex_value
----@field enum_desc_value fun(variants: MapValue<string,flex_value>): flex_value
----@field record_value fun(fields: MapValue<string,flex_value>): flex_value
+---@field enum_desc_value fun(variants: MapValue<string, flex_value>): flex_value
+---@field record_value fun(fields: MapValue<string, flex_value>): flex_value
 ---@field record_type fun(desc: flex_value): flex_value
 ---@field record_desc_type fun(universe: flex_value): flex_value
----@field record_extend fun(base: stuck_value, extension: MapValue<string,flex_value>): flex_value
----@field object_value fun(methods: MapValue<string,typed>, capture: FlexRuntimeContext): flex_value
+---@field record_extend fun(base: stuck_value, extension: MapValue<string, flex_value>): flex_value
+---@field object_value fun(methods: MapValue<string, typed>, capture: FlexRuntimeContext): flex_value
 ---@field object_type fun(desc: flex_value): flex_value
 ---@field star fun(level: number, depth: number): flex_value
 ---@field prop fun(level: number): flex_value

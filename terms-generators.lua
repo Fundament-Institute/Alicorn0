@@ -815,11 +815,10 @@ local function define_map(self, key_type, value_type)
 	})
 	traits.value_name:implement_on(self, {
 		value_name = function()
-			return "MapValue<"
-				.. traits.value_name:get(key_type).value_name()
-				.. ","
-				.. traits.value_name:get(value_type).value_name()
-				.. ">"
+			return ("MapValue<%s, %s>"):format(
+				traits.value_name:get(key_type).value_name(),
+				traits.value_name:get(value_type).value_name()
+			)
 		end,
 	})
 	traits.freeze:implement_on(self, { freeze = map_freeze })
@@ -1029,7 +1028,7 @@ local function define_set(self, key_type)
 	})
 	traits.value_name:implement_on(self, {
 		value_name = function()
-			return "SetValue<" .. traits.value_name:get(key_type).value_name() .. ">"
+			return ("SetValue<%s>"):format(traits.value_name:get(key_type).value_name())
 		end,
 	})
 	traits.freeze:implement_on(self, { freeze = set_freeze })

@@ -94,10 +94,10 @@ function unanchored_inferrable:unwrap_tuple_type() end
 function unanchored_inferrable:as_tuple_type() end
 ---@return boolean
 function unanchored_inferrable:is_record_cons() end
----@return MapValue<string,anchored_inferrable> fields
+---@return MapValue<string, anchored_inferrable> fields
 function unanchored_inferrable:unwrap_record_cons() end
 ---@return boolean
----@return MapValue<string,anchored_inferrable> fields
+---@return MapValue<string, anchored_inferrable> fields
 function unanchored_inferrable:as_record_cons() end
 ---@return boolean
 function unanchored_inferrable:is_record_elim() end
@@ -121,11 +121,11 @@ function unanchored_inferrable:unwrap_enum_cons() end
 function unanchored_inferrable:as_enum_cons() end
 ---@return boolean
 function unanchored_inferrable:is_enum_desc_cons() end
----@return MapValue<string,anchored_inferrable> variants
+---@return MapValue<string, anchored_inferrable> variants
 ---@return anchored_inferrable rest
 function unanchored_inferrable:unwrap_enum_desc_cons() end
 ---@return boolean
----@return MapValue<string,anchored_inferrable> variants
+---@return MapValue<string, anchored_inferrable> variants
 ---@return anchored_inferrable rest
 function unanchored_inferrable:as_enum_desc_cons() end
 ---@return boolean
@@ -147,13 +147,13 @@ function unanchored_inferrable:as_enum_type() end
 ---@return boolean
 function unanchored_inferrable:is_enum_case() end
 ---@return anchored_inferrable target
----@return MapValue<string,anchored_inferrable> variants
----@return MapValue<string,var_debug> variant_debug
+---@return MapValue<string, anchored_inferrable> variants
+---@return MapValue<string, var_debug> variant_debug
 function unanchored_inferrable:unwrap_enum_case() end
 ---@return boolean
 ---@return anchored_inferrable target
----@return MapValue<string,anchored_inferrable> variants
----@return MapValue<string,var_debug> variant_debug
+---@return MapValue<string, anchored_inferrable> variants
+---@return MapValue<string, var_debug> variant_debug
 function unanchored_inferrable:as_enum_case() end
 ---@return boolean
 function unanchored_inferrable:is_enum_absurd() end
@@ -166,10 +166,10 @@ function unanchored_inferrable:unwrap_enum_absurd() end
 function unanchored_inferrable:as_enum_absurd() end
 ---@return boolean
 function unanchored_inferrable:is_object_cons() end
----@return MapValue<string,anchored_inferrable> methods
+---@return MapValue<string, anchored_inferrable> methods
 function unanchored_inferrable:unwrap_object_cons() end
 ---@return boolean
----@return MapValue<string,anchored_inferrable> methods
+---@return MapValue<string, anchored_inferrable> methods
 function unanchored_inferrable:as_object_cons() end
 ---@return boolean
 function unanchored_inferrable:is_object_elim() end
@@ -388,15 +388,15 @@ function unanchored_inferrable:as_program_type() end
 ---@field tuple_cons fun(elements: ArrayValue<anchored_inferrable>, debug: ArrayValue<var_debug>): unanchored_inferrable
 ---@field tuple_elim fun(names: ArrayValue<string>, debug: ArrayValue<var_debug>, subject: anchored_inferrable, body: anchored_inferrable): unanchored_inferrable
 ---@field tuple_type fun(desc: anchored_inferrable): unanchored_inferrable
----@field record_cons fun(fields: MapValue<string,anchored_inferrable>): unanchored_inferrable
+---@field record_cons fun(fields: MapValue<string, anchored_inferrable>): unanchored_inferrable
 ---@field record_elim fun(subject: anchored_inferrable, field_names: ArrayValue<string>, body: anchored_inferrable): unanchored_inferrable
 ---@field enum_cons fun(constructor: string, arg: anchored_inferrable): unanchored_inferrable
----@field enum_desc_cons fun(variants: MapValue<string,anchored_inferrable>, rest: anchored_inferrable): unanchored_inferrable
+---@field enum_desc_cons fun(variants: MapValue<string, anchored_inferrable>, rest: anchored_inferrable): unanchored_inferrable
 ---@field enum_elim fun(subject: anchored_inferrable, mechanism: anchored_inferrable): unanchored_inferrable
 ---@field enum_type fun(desc: anchored_inferrable): unanchored_inferrable
----@field enum_case fun(target: anchored_inferrable, variants: MapValue<string,anchored_inferrable>, variant_debug: MapValue<string,var_debug>): unanchored_inferrable
+---@field enum_case fun(target: anchored_inferrable, variants: MapValue<string, anchored_inferrable>, variant_debug: MapValue<string, var_debug>): unanchored_inferrable
 ---@field enum_absurd fun(target: anchored_inferrable, debug: string): unanchored_inferrable
----@field object_cons fun(methods: MapValue<string,anchored_inferrable>): unanchored_inferrable
+---@field object_cons fun(methods: MapValue<string, anchored_inferrable>): unanchored_inferrable
 ---@field object_elim fun(subject: anchored_inferrable, mechanism: anchored_inferrable): unanchored_inferrable
 ---@field let fun(name: string, debug: var_debug, expr: anchored_inferrable, body: anchored_inferrable): unanchored_inferrable
 ---@field operative_cons fun(operative_type: anchored_inferrable, userdata: anchored_inferrable): unanchored_inferrable
