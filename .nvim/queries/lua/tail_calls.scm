@@ -25,7 +25,7 @@
 					"setmetatable"
 					"tostring"
 					"unpack"
-					"var_debug"
+					"spanned_name"
 				)
 			)
 			(function_call

@@ -19,7 +19,7 @@ local purity = terms.purity
 local result_info = terms.result_info
 local flex_value = terms.flex_value
 local strict_value, strict_value_array = terms.strict_value, terms.strict_value_array
-local var_debug, var_debug_array = terms.var_debug, terms.var_debug_array
+local spanned_name, spanned_name_array = terms.spanned_name, terms.spanned_name_array
 --local host_syntax_type = terms.host_syntax_type
 --local host_environment_type = terms.host_environment_type
 --local host_inferrable_term_type = terms.host_inferrable_term_type
@@ -1098,7 +1098,7 @@ local function expression_symbolhandler(args, name)
 						name.start_anchor,
 						unanchored_inferrable_term.bound_variable(
 							env.typechecking_context:len() + 1,
-							terms.var_debug(namearray.str, namearray.start_anchor)
+							terms.spanned_name(namearray.str, namearray.start_anchor)
 						)
 					)
 				)
@@ -1281,15 +1281,17 @@ local function host_operative(fn, name)
 	-- (s : syntax, e : environment, u : wrapped_typed_term(userdata), g : goal) -> (goal_to_term(g), environment)
 	--   goal one of inferable, mechanism, checkable
 
-	local args_dbg = var_debug("#args", format.anchor_here())
-	local arg_unpack_dbg = var_debug_array(
-		var_debug("#syn", format.anchor_here()),
-		var_debug("#env", format.anchor_here()),
-		var_debug("#ud", format.anchor_here()),
-		var_debug("#goal", format.anchor_here())
+	local args_dbg = spanned_name("#args", format.anchor_here())
+	local arg_unpack_dbg = spanned_name_array(
+		spanned_name("#syn", format.anchor_here()),
+		spanned_name("#env", format.anchor_here()),
+		spanned_name("#ud", format.anchor_here()),
+		spanned_name("#goal", format.anchor_here())
 	)
-	local result_unpack_dbg =
-		var_debug_array(var_debug("#res-term", format.anchor_here()), var_debug("#res-env", format.anchor_here()))
+	local result_unpack_dbg = spanned_name_array(
+		spanned_name("#res-term", format.anchor_here()),
+		spanned_name("#res-env", format.anchor_here())
+	)
 
 	-- 1: wrap fn as a typed host_value
 	-- this way it can take a host tuple and return a host tuple
@@ -1329,7 +1331,7 @@ local function host_operative(fn, name)
 		"#" .. name .. "_PARAM",
 		tuple_to_tuple_fn,
 		empty_tuple,
-		var_debug("#capture", format.anchor_here()),
+		spanned_name("#capture", format.anchor_here()),
 		args_dbg
 	)
 
@@ -1400,7 +1402,7 @@ collect_tuple = metalanguage.reducer(
 			collected_terms = anchored_inferrable_term_array()
 		end
 
-		local collected_info = var_debug_array()
+		local collected_info = spanned_name_array()
 		local ok, continue, next_term = true, true, nil
 		local i = 0
 		while ok and continue do
@@ -1424,7 +1426,7 @@ collect_tuple = metalanguage.reducer(
 						env.typechecking_context.runtime_context,
 						env.typechecking_context
 					)
-					local info = var_debug("#collect-tuple-param", syntax.start_anchor)
+					local info = spanned_name("#collect-tuple-param", syntax.start_anchor)
 					desc = terms.cons(
 						desc,
 						evaluator.substitute_into_closure(
@@ -1512,7 +1514,7 @@ collect_host_tuple = metalanguage.reducer(
 		local goal, env = args:unwrap()
 		local goal_type, collected_terms
 		local desc = terms.empty
-		local collected_debug = var_debug_array()
+		local collected_debug = spanned_name_array()
 
 		if goal:is_check() then
 			collected_terms = array(checkable_term)()
@@ -1534,7 +1536,7 @@ collect_host_tuple = metalanguage.reducer(
 				}, metalanguage.failure_handler, ExpressionArgs.new(expression_goal.check(next_elem_type), env))
 				if ok and continue then
 					collected_terms:append(next_term)
-					collected_debug:append(var_debug("#collected_term", syntax.start_anchor))
+					collected_debug:append(spanned_name("#collected_term", syntax.start_anchor))
 					local ok, typed_usages, next_typed =
 						evaluator.check(next_term, env.typechecking_context, next_elem_type)
 					if not ok then
@@ -1551,7 +1553,7 @@ collect_host_tuple = metalanguage.reducer(
 							flex_value.singleton(next_elem_type, next_val),
 							env.typechecking_context.runtime_context,
 							syntax.start_anchor,
-							var_debug("#collect-host-tuple-param", syntax.start_anchor),
+							spanned_name("#collect-host-tuple-param", syntax.start_anchor),
 							env.typechecking_context
 						)
 					)
@@ -1570,7 +1572,7 @@ collect_host_tuple = metalanguage.reducer(
 				}, metalanguage.failure_handler, ExpressionArgs.new(goal, env))
 				if ok and continue then
 					collected_terms:append(next_term)
-					collected_debug:append(var_debug("#collected_term", syntax.start_anchor))
+					collected_debug:append(spanned_name("#collected_term", syntax.start_anchor))
 				end
 			end
 		end
@@ -1644,7 +1646,7 @@ local block = metalanguage.reducer(
 
 		local lastval = anchored_inferrable_term(
 			syntax.start_anchor,
-			unanchored_inferrable_term.tuple_cons(anchored_inferrable_term_array(), var_debug_array())
+			unanchored_inferrable_term.tuple_cons(anchored_inferrable_term_array(), spanned_name_array())
 		)
 
 		local newval
@@ -1714,7 +1716,7 @@ local top_level_block = metalanguage.reducer(
 		end
 		local lastval = anchored_inferrable_term(
 			syntax.start_anchor,
-			unanchored_inferrable_term.tuple_cons(anchored_inferrable_term_array(), var_debug_array())
+			unanchored_inferrable_term.tuple_cons(anchored_inferrable_term_array(), spanned_name_array())
 		)
 		local newval
 		local ok, continue = true, true

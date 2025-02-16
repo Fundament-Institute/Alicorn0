@@ -7,11 +7,11 @@ unanchored_inferrable = {}
 ---@return boolean
 function unanchored_inferrable:is_bound_variable() end
 ---@return number index
----@return var_debug debug
+---@return spanned_name debug
 function unanchored_inferrable:unwrap_bound_variable() end
 ---@return boolean
 ---@return number index
----@return var_debug debug
+---@return spanned_name debug
 function unanchored_inferrable:as_bound_variable() end
 ---@return boolean
 function unanchored_inferrable:is_typed() end
@@ -66,22 +66,22 @@ function unanchored_inferrable:as_application() end
 ---@return boolean
 function unanchored_inferrable:is_tuple_cons() end
 ---@return ArrayValue<anchored_inferrable> elements
----@return ArrayValue<var_debug> debug
+---@return ArrayValue<spanned_name> debug
 function unanchored_inferrable:unwrap_tuple_cons() end
 ---@return boolean
 ---@return ArrayValue<anchored_inferrable> elements
----@return ArrayValue<var_debug> debug
+---@return ArrayValue<spanned_name> debug
 function unanchored_inferrable:as_tuple_cons() end
 ---@return boolean
 function unanchored_inferrable:is_tuple_elim() end
 ---@return ArrayValue<string> names
----@return ArrayValue<var_debug> debug
+---@return ArrayValue<spanned_name> debug
 ---@return anchored_inferrable subject
 ---@return anchored_inferrable body
 function unanchored_inferrable:unwrap_tuple_elim() end
 ---@return boolean
 ---@return ArrayValue<string> names
----@return ArrayValue<var_debug> debug
+---@return ArrayValue<spanned_name> debug
 ---@return anchored_inferrable subject
 ---@return anchored_inferrable body
 function unanchored_inferrable:as_tuple_elim() end
@@ -148,12 +148,12 @@ function unanchored_inferrable:as_enum_type() end
 function unanchored_inferrable:is_enum_case() end
 ---@return anchored_inferrable target
 ---@return MapValue<string, anchored_inferrable> variants
----@return MapValue<string, var_debug> variant_debug
+---@return MapValue<string, spanned_name> variant_debug
 function unanchored_inferrable:unwrap_enum_case() end
 ---@return boolean
 ---@return anchored_inferrable target
 ---@return MapValue<string, anchored_inferrable> variants
----@return MapValue<string, var_debug> variant_debug
+---@return MapValue<string, spanned_name> variant_debug
 function unanchored_inferrable:as_enum_case() end
 ---@return boolean
 function unanchored_inferrable:is_enum_absurd() end
@@ -183,13 +183,13 @@ function unanchored_inferrable:as_object_elim() end
 ---@return boolean
 function unanchored_inferrable:is_let() end
 ---@return string name
----@return var_debug debug
+---@return spanned_name debug
 ---@return anchored_inferrable expr
 ---@return anchored_inferrable body
 function unanchored_inferrable:unwrap_let() end
 ---@return boolean
 ---@return string name
----@return var_debug debug
+---@return spanned_name debug
 ---@return anchored_inferrable expr
 ---@return anchored_inferrable body
 function unanchored_inferrable:as_let() end
@@ -251,11 +251,11 @@ function unanchored_inferrable:as_annotated() end
 ---@return boolean
 function unanchored_inferrable:is_host_tuple_cons() end
 ---@return ArrayValue<anchored_inferrable> elements
----@return ArrayValue<var_debug> debug
+---@return ArrayValue<spanned_name> debug
 function unanchored_inferrable:unwrap_host_tuple_cons() end
 ---@return boolean
 ---@return ArrayValue<anchored_inferrable> elements
----@return ArrayValue<var_debug> debug
+---@return ArrayValue<spanned_name> debug
 function unanchored_inferrable:as_host_tuple_cons() end
 ---@return boolean
 function unanchored_inferrable:is_host_user_defined_type_cons() end
@@ -353,13 +353,13 @@ function unanchored_inferrable:is_program_sequence() end
 ---@return anchored_inferrable first
 ---@return Anchor start_anchor
 ---@return anchored_inferrable continue
----@return var_debug debug_info
+---@return spanned_name debug_info
 function unanchored_inferrable:unwrap_program_sequence() end
 ---@return boolean
 ---@return anchored_inferrable first
 ---@return Anchor start_anchor
 ---@return anchored_inferrable continue
----@return var_debug debug_info
+---@return spanned_name debug_info
 function unanchored_inferrable:as_program_sequence() end
 ---@return boolean
 function unanchored_inferrable:is_program_end() end
@@ -380,13 +380,13 @@ function unanchored_inferrable:as_program_type() end
 
 ---@class (exact) unanchored_inferrableType: EnumType
 ---@field define_enum fun(self: unanchored_inferrableType, name: string, variants: Variants): unanchored_inferrableType
----@field bound_variable fun(index: number, debug: var_debug): unanchored_inferrable
+---@field bound_variable fun(index: number, debug: spanned_name): unanchored_inferrable
 ---@field typed fun(type: typed, usage_counts: ArrayValue<number>, typed_term: typed): unanchored_inferrable
 ---@field annotated_lambda fun(param_name: string, param_annotation: anchored_inferrable, body: anchored_inferrable, start_anchor: Anchor, visible: visibility, pure: checkable): unanchored_inferrable
 ---@field pi fun(param_type: anchored_inferrable, param_info: checkable, result_type: anchored_inferrable, result_info: checkable): unanchored_inferrable
 ---@field application fun(f: anchored_inferrable, arg: checkable): unanchored_inferrable
----@field tuple_cons fun(elements: ArrayValue<anchored_inferrable>, debug: ArrayValue<var_debug>): unanchored_inferrable
----@field tuple_elim fun(names: ArrayValue<string>, debug: ArrayValue<var_debug>, subject: anchored_inferrable, body: anchored_inferrable): unanchored_inferrable
+---@field tuple_cons fun(elements: ArrayValue<anchored_inferrable>, debug: ArrayValue<spanned_name>): unanchored_inferrable
+---@field tuple_elim fun(names: ArrayValue<string>, debug: ArrayValue<spanned_name>, subject: anchored_inferrable, body: anchored_inferrable): unanchored_inferrable
 ---@field tuple_type fun(desc: anchored_inferrable): unanchored_inferrable
 ---@field record_cons fun(fields: MapValue<string, anchored_inferrable>): unanchored_inferrable
 ---@field record_elim fun(subject: anchored_inferrable, field_names: ArrayValue<string>, body: anchored_inferrable): unanchored_inferrable
@@ -394,11 +394,11 @@ function unanchored_inferrable:as_program_type() end
 ---@field enum_desc_cons fun(variants: MapValue<string, anchored_inferrable>, rest: anchored_inferrable): unanchored_inferrable
 ---@field enum_elim fun(subject: anchored_inferrable, mechanism: anchored_inferrable): unanchored_inferrable
 ---@field enum_type fun(desc: anchored_inferrable): unanchored_inferrable
----@field enum_case fun(target: anchored_inferrable, variants: MapValue<string, anchored_inferrable>, variant_debug: MapValue<string, var_debug>): unanchored_inferrable
+---@field enum_case fun(target: anchored_inferrable, variants: MapValue<string, anchored_inferrable>, variant_debug: MapValue<string, spanned_name>): unanchored_inferrable
 ---@field enum_absurd fun(target: anchored_inferrable, debug: string): unanchored_inferrable
 ---@field object_cons fun(methods: MapValue<string, anchored_inferrable>): unanchored_inferrable
 ---@field object_elim fun(subject: anchored_inferrable, mechanism: anchored_inferrable): unanchored_inferrable
----@field let fun(name: string, debug: var_debug, expr: anchored_inferrable, body: anchored_inferrable): unanchored_inferrable
+---@field let fun(name: string, debug: spanned_name, expr: anchored_inferrable, body: anchored_inferrable): unanchored_inferrable
 ---@field operative_cons fun(operative_type: anchored_inferrable, userdata: anchored_inferrable): unanchored_inferrable
 ---@field operative_type_cons fun(userdata_type: anchored_inferrable, handler: checkable): unanchored_inferrable
 ---@field level_type unanchored_inferrable
@@ -406,7 +406,7 @@ function unanchored_inferrable:as_program_type() end
 ---@field level_suc fun(previous_level: anchored_inferrable): unanchored_inferrable
 ---@field level_max fun(level_a: anchored_inferrable, level_b: anchored_inferrable): unanchored_inferrable
 ---@field annotated fun(annotated_term: checkable, annotated_type: anchored_inferrable): unanchored_inferrable
----@field host_tuple_cons fun(elements: ArrayValue<anchored_inferrable>, debug: ArrayValue<var_debug>): unanchored_inferrable
+---@field host_tuple_cons fun(elements: ArrayValue<anchored_inferrable>, debug: ArrayValue<spanned_name>): unanchored_inferrable
 ---@field host_user_defined_type_cons fun(id: { name: string }, family_args: ArrayValue<anchored_inferrable>): unanchored_inferrable
 ---@field host_tuple_type fun(desc: anchored_inferrable): unanchored_inferrable
 ---@field host_function_type fun(param_type: anchored_inferrable, result_type: anchored_inferrable, result_info: checkable): unanchored_inferrable
@@ -418,7 +418,7 @@ function unanchored_inferrable:as_program_type() end
 ---@field host_unstrict_unwrap fun(container: anchored_inferrable): unanchored_inferrable
 ---@field host_if fun(subject: checkable, consequent: anchored_inferrable, alternate: anchored_inferrable): unanchored_inferrable
 ---@field host_intrinsic fun(source: checkable, type: anchored_inferrable, start_anchor: Anchor): unanchored_inferrable
----@field program_sequence fun(first: anchored_inferrable, start_anchor: Anchor, continue: anchored_inferrable, debug_info: var_debug): unanchored_inferrable
+---@field program_sequence fun(first: anchored_inferrable, start_anchor: Anchor, continue: anchored_inferrable, debug_info: spanned_name): unanchored_inferrable
 ---@field program_end fun(result: anchored_inferrable): unanchored_inferrable
 ---@field program_type fun(effect_type: anchored_inferrable, result_type: anchored_inferrable): unanchored_inferrable
 return {}

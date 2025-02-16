@@ -98,8 +98,8 @@ traits.diff:implement_on(metavariable_type, {
 	end,
 })
 
----@module "types.var_debug"
-local var_debug = gen.declare_record("var_debug", {
+---@module "types.spanned_name"
+local spanned_name = gen.declare_record("spanned_name", {
 	"name",
 	gen.builtin_string,
 	"source",
@@ -136,7 +136,7 @@ end
 
 ---@param index integer
 ---@return flex_value?
----@return var_debug?
+---@return spanned_name?
 function FlexRuntimeContext:get(index)
 	local binding = self.bindings:get(index)
 	if binding == nil then
@@ -156,8 +156,8 @@ function FlexRuntimeContext:get_name(index)
 end
 
 ---@param index integer
----@return var_debug?
-function FlexRuntimeContext:get_var_debug(index)
+---@return spanned_name?
+function FlexRuntimeContext:get_spanned_name(index)
 	local binding = self.bindings:get(index)
 	if binding == nil then
 		return nil
@@ -167,7 +167,7 @@ end
 
 ---@param v flex_value
 ---@param name string?
----@param debuginfo var_debug
+---@param debuginfo spanned_name
 ---@return FlexRuntimeContext
 function FlexRuntimeContext:append(v, name, debuginfo)
 	if debuginfo == nil then
@@ -222,7 +222,7 @@ local StrictRuntimeContext = U.shallow_copy(FlexRuntimeContext)
 
 ---@param index integer
 ---@return strict_value
----@return var_debug?
+---@return spanned_name?
 function StrictRuntimeContext:get(index)
 	return U.notail(FlexRuntimeContext.get(self, index):unwrap_strict())
 end
@@ -238,8 +238,8 @@ function StrictRuntimeContext:get_name(index)
 end
 
 ---@param index integer
----@return var_debug?
-function StrictRuntimeContext:get_var_debug(index)
+---@return spanned_name?
+function StrictRuntimeContext:get_spanned_name(index)
 	local binding = self:get(index)
 	if binding == nil then
 		return nil
@@ -249,7 +249,7 @@ end
 
 ---@param v strict_value
 ---@param name string?
----@param debuginfo var_debug
+---@param debuginfo spanned_name
 ---@return StrictRuntimeContext
 function StrictRuntimeContext:append(v, name, debuginfo)
 	if strict_value.value_check(v) ~= true then
@@ -513,8 +513,8 @@ end
 
 ---get the name of a binding in a TypecheckingContext
 ---@param index integer
----@return var_debug?
-function TypecheckingContext:get_var_debug(index)
+---@return spanned_name?
+function TypecheckingContext:get_spanned_name(index)
 	local binding = self.bindings:get(index)
 	if binding == nil then
 		return nil
@@ -572,7 +572,7 @@ end
 ---@param name string
 ---@param type flex_value
 ---@param val flex_value?
----@param debuginfo var_debug
+---@param debuginfo spanned_name
 ---@return TypecheckingContext
 function TypecheckingContext:append(name, type, val, debuginfo)
 	if gen.builtin_string.value_check(name) ~= true then
@@ -593,7 +593,7 @@ function TypecheckingContext:append(name, type, val, debuginfo)
 	if val ~= nil and flex_value.value_check(val) ~= true then
 		error("TypecheckingContext:append parameter 'val' must be a flex_value (or nil if given start_anchor)")
 	end
-	local _, source = debuginfo:unwrap_var_debug()
+	local _, source = debuginfo:unwrap_spanned_name()
 	if source ~= nil and anchor_type.value_check(source) ~= true then
 		error("TypecheckingContext:append parameter 'start_anchor' must be an start_anchor (or nil if given val)")
 	end
@@ -690,12 +690,12 @@ expression_goal:define_enum("expression_goal", {
 binding:define_enum("binding", {
 	{ "let", {
 		"name", gen.builtin_string,
-		"debug", var_debug,
+		"debug", spanned_name,
 		"expr", anchored_inferrable_term,
 	} },
 	{ "tuple_elim", {
 		"names",   array(gen.builtin_string),
-		"debug", array(var_debug),
+		"debug", array(spanned_name),
 		"subject", anchored_inferrable_term,
 	} },
 	{ "annotated_lambda", {
@@ -715,13 +715,13 @@ binding:define_enum("binding", {
 -- stylua: ignore
 checkable_term:define_enum("checkable", {
 	{ "inferrable", { "inferrable_term", anchored_inferrable_term } },
-	{ "tuple_cons", { 
-		"elements", array(checkable_term), 
-		"debug", array(var_debug) 
+	{ "tuple_cons", {
+		"elements", array(checkable_term),
+		"debug", array(spanned_name),
 	} },
-	{ "host_tuple_cons", { 
-		"elements", array(checkable_term), 
-		"debug", array(var_debug)  
+	{ "host_tuple_cons", {
+		"elements", array(checkable_term),
+		"debug", array(spanned_name),
 	} },
 	{ "lambda", {
 		"param_name", gen.builtin_string,
@@ -732,7 +732,7 @@ checkable_term:define_enum("checkable", {
 -- inferrable terms can have their type inferred / don't need a goal type
 -- stylua: ignore
 unanchored_inferrable_term:define_enum("unanchored_inferrable", {
-	{ "bound_variable", { "index", gen.builtin_number, "debug", var_debug } },
+	{ "bound_variable", { "index", gen.builtin_number, "debug", spanned_name } },
 	{ "typed", {
 		"type",         typed_term,
 		"usage_counts", array(gen.builtin_number),
@@ -758,11 +758,11 @@ unanchored_inferrable_term:define_enum("unanchored_inferrable", {
 	} },
 	{ "tuple_cons", {
 		"elements", array(anchored_inferrable_term),
-		"debug", array(var_debug),
+		"debug", array(spanned_name),
 	} },
 	{ "tuple_elim", {
 		"names",   array(gen.builtin_string),
-		"debug", array(var_debug),
+		"debug", array(spanned_name),
 		"subject", anchored_inferrable_term,
 		"body",    anchored_inferrable_term,
 	} },
@@ -789,14 +789,14 @@ unanchored_inferrable_term:define_enum("unanchored_inferrable", {
 	{ "enum_case", {
 		"target",   anchored_inferrable_term,
 		"variants", map(gen.builtin_string, anchored_inferrable_term),
-		"variant_debug", map(gen.builtin_string, var_debug), -- would be better to make this a single map with a pair value
+		"variant_debug", map(gen.builtin_string, spanned_name), -- would be better to make this a single map with a pair value
 		--"default",  inferrable_term,
 	} },
 	{ "enum_absurd", {
 		"target", anchored_inferrable_term,
 		"debug",  gen.builtin_string,
 	} },
-	
+
 	{ "object_cons", { "methods", map(gen.builtin_string, anchored_inferrable_term) } },
 	{ "object_elim", {
 		"subject",   anchored_inferrable_term,
@@ -804,7 +804,7 @@ unanchored_inferrable_term:define_enum("unanchored_inferrable", {
 	} },
 	{ "let", {
 		"name", gen.builtin_string,
-		"debug", var_debug,
+		"debug", spanned_name,
 		"expr", anchored_inferrable_term,
 		"body", anchored_inferrable_term,
 	} },
@@ -832,7 +832,7 @@ unanchored_inferrable_term:define_enum("unanchored_inferrable", {
 	} },
 	{ "host_tuple_cons", {
 		"elements", array(anchored_inferrable_term),
-		"debug", array(var_debug) 
+		"debug", array(spanned_name),
 	} }, -- host_value
 	{ "host_user_defined_type_cons", {
 		"id",          host_user_defined_id, -- host_user_defined_type
@@ -865,7 +865,7 @@ unanchored_inferrable_term:define_enum("unanchored_inferrable", {
 		"first",        anchored_inferrable_term,
 		"start_anchor", anchor_type,
 		"continue",     anchored_inferrable_term,
-		"debug_info",	var_debug,
+		"debug_info",	spanned_name,
 	} },
 	{ "program_end", { "result", anchored_inferrable_term } },
 	{ "program_type", {
@@ -1002,16 +1002,16 @@ local unique_id = gen.builtin_table
 -- typed terms have been typechecked but do not store their type internally
 -- stylua: ignore
 typed_term:define_enum("typed", {
-	{ "bound_variable", { "index", gen.builtin_number, "debug", var_debug } },
+	{ "bound_variable", { "index", gen.builtin_number, "debug", spanned_name } },
 	{ "literal", { "literal_value", strict_value } },
 	{ "metavariable", { "metavariable", metavariable_type } },
 	{ "unique", { "id", unique_id } },
 	{ "lambda", {
 		"param_name", gen.builtin_string,
-		"param_debug", var_debug,
+		"param_debug", spanned_name,
 		"body",       typed_term,
 		"capture",    typed_term,
-		"capture_dbg", var_debug,
+		"capture_dbg", spanned_name,
 		"start_anchor",     anchor_type,
 	} },
 	{ "pi", {
@@ -1026,7 +1026,7 @@ typed_term:define_enum("typed", {
 	} },
 	{ "let", {
 		"name", gen.builtin_string,
-		"debug", var_debug,
+		"debug", spanned_name,
 		"expr", typed_term,
 		"body", typed_term,
 	} },
@@ -1043,7 +1043,7 @@ typed_term:define_enum("typed", {
 	--{"tuple_extend", {"base", typed_term, "fields", array(typed_term)}}, -- maybe?
 	{ "tuple_elim", {
 		"names",   array(gen.builtin_string),
-		"debug", array(var_debug), -- can probably replace the names array entirely
+		"debug", array(spanned_name), -- can probably replace the names array entirely
 		"subject", typed_term,
 		"length",  gen.builtin_number,
 		"body",    typed_term,
@@ -1089,9 +1089,9 @@ typed_term:define_enum("typed", {
 	{ "enum_case", {
 		"target",   typed_term,
 		"variants", map(gen.builtin_string, typed_term),
-		"variant_debug", map(gen.builtin_string, var_debug), -- would be better to make this a single map with a pair value
+		"variant_debug", map(gen.builtin_string, spanned_name), -- would be better to make this a single map with a pair value
 		"default",  typed_term,
-		"default_debug", var_debug,
+		"default_debug", spanned_name,
 	} },
 	{ "enum_absurd", {
 		"target", typed_term,
@@ -1156,7 +1156,7 @@ typed_term:define_enum("typed", {
 	{ "program_sequence", {
 		"first",    typed_term,
 		"continue", typed_term,
-		"debug_info", var_debug,
+		"debug_info", spanned_name,
 	} },
 	{ "program_end", { "result", typed_term } },
 	{ "program_invoke", {
@@ -1193,11 +1193,11 @@ typed_term:define_enum("typed", {
 		"left",  typed_term,
 		"right", typed_term,
 	} },
-	{ "constrained_type", { 
+	{ "constrained_type", {
 		"constraints", array(constraintelem),
 		"ctx", typechecking_context_type,
 	} },
-}) 
+})
 
 ---@param v table
 ---@param ctx TypecheckingContext
@@ -1276,7 +1276,7 @@ free:define_enum("free", {
 	{ "metavariable", { "metavariable", metavariable_type } },
 	{ "placeholder", {
 		"index", gen.builtin_number,
-		"debug", var_debug,
+		"debug", spanned_name,
 	} },
 	{ "unique", { "id", unique_id } },
 	-- TODO: axiom
@@ -1501,8 +1501,8 @@ gen.define_multi_enum(
 			"param_name", gen.builtin_string,
 			"code",       typed_term,
 			"capture",    flex_value,
-			"capture_dbg", var_debug,
-			"param_debug",      var_debug,
+			"capture_dbg", spanned_name,
+			"param_debug",      spanned_name,
 		}, },
 		-- a list of upper and lower bounds, and a relation being bound with respect to
 		{ "range$flex", {
@@ -1671,7 +1671,7 @@ gen.define_multi_enum(
 			return U.notail(orig_host_value_constructor(val))
 		end
 		strict_value.host_value = host_value_constructor_check
-		
+
 		local orig_host_tuple_value_constructor = strict_value.host_tuple_value
 		local function host_tuple_value_constructor_check(val)
 			-- Absolutely do not ever put a flex_value or stuck_value into here
@@ -1680,7 +1680,7 @@ gen.define_multi_enum(
 					error("Tried to put flex or stuck value into strict_value.host_tuple_value!" .. tostring(v))
 				end
 			end
-		
+
 			return U.notail(orig_host_tuple_value_constructor(val))
 		end
 		strict_value.host_tuple_value = host_tuple_value_constructor_check
@@ -1751,7 +1751,7 @@ local unanchored_inferrable_term_array = array(unanchored_inferrable_term)
 local flex_value_array = array(flex_value)
 local strict_value_array = array(strict_value)
 local stuck_value_array = array(stuck_value)
-local var_debug_array = array(var_debug)
+local spanned_name_array = array(spanned_name)
 
 ---@param ... flex_value
 ---@return flex_value
@@ -1844,9 +1844,9 @@ end
 
 ---@param start_anchor Anchor
 ---@param prefix anchored_inferrable
----@param debug_prefix var_debug
+---@param debug_prefix spanned_name
 ---@param next_elem anchored_inferrable
----@param debug_next_elem var_debug
+---@param debug_next_elem spanned_name
 ---@return anchored_inferrable `anchored_inferrable_term(unanchored_inferrable_term.enum_cons(DescCons.cons, anchored_inferrable_term(unanchored_inferrable_term.tuple_cons(…))))`
 ---@diagnostic disable-next-line: incomplete-signature-doc
 local function inferrable_cons(start_anchor, prefix, debug_prefix, next_elem, debug_next_elem, ...)
@@ -1862,7 +1862,7 @@ local function inferrable_cons(start_anchor, prefix, debug_prefix, next_elem, de
 					start_anchor,
 					unanchored_inferrable_term.tuple_cons(
 						anchored_inferrable_term_array(prefix, next_elem),
-						var_debug_array(debug_prefix, debug_next_elem)
+						spanned_name_array(debug_prefix, debug_next_elem)
 					)
 				)
 			)
@@ -1876,14 +1876,14 @@ local inferrable_empty = anchored_inferrable_term(
 		DescCons.empty,
 		anchored_inferrable_term(
 			format.anchor_here(),
-			unanchored_inferrable_term.tuple_cons(anchored_inferrable_term_array(), var_debug_array())
+			unanchored_inferrable_term.tuple_cons(anchored_inferrable_term_array(), spanned_name_array())
 		)
 	)
 )
-local debug_inferrable_empty = var_debug("terms.inferrable_empty", format.anchor_here())
+local debug_inferrable_empty = spanned_name("terms.inferrable_empty", format.anchor_here())
 
 ---@param start_anchor Anchor
----@param ... (anchored_inferrable | var_debug) (`anchored_inferrable`, `var_debug`)\*
+---@param ... (anchored_inferrable | spanned_name) (`anchored_inferrable`, `spanned_name`)\*
 ---@return anchored_inferrable
 local function inferrable_tuple_desc(start_anchor, ...)
 	local a = inferrable_empty
@@ -1893,11 +1893,11 @@ local function inferrable_tuple_desc(start_anchor, ...)
 		local e, debug_e = select(i, ...), select(i + 1, ...)
 		if e ~= nil then
 			if debug_e == nil then
-				error(("inferrable_tuple_desc: missing var_debug at argument %d"):format(i + 1))
+				error(("inferrable_tuple_desc: missing spanned_name at argument %d"):format(i + 1))
 			end
 			a, debug_a =
 				inferrable_cons(start_anchor, a, debug_a, e, debug_e),
-				var_debug(("terms.inferrable_tuple_desc.varargs[%d]"):format(i), anchor)
+				spanned_name(("terms.inferrable_tuple_desc.varargs[%d]"):format(i), anchor)
 		end
 	end
 	return a
@@ -2013,8 +2013,8 @@ local terms = {
 	host_lua_error_type = host_lua_error_type,
 	unique_id = unique_id,
 	unique_id_set = unique_id_set,
-	var_debug = var_debug,
-	var_debug_array = var_debug_array,
+	spanned_name = spanned_name,
+	spanned_name_array = spanned_name_array,
 
 	flex_runtime_context = flex_runtime_context,
 	strict_runtime_context = strict_runtime_context,
@@ -2071,7 +2071,7 @@ local typed_term_override_pretty = override_prettys.typed_term_override_pretty
 local flex_value_override_pretty = override_prettys.flex_value_override_pretty
 local stuck_value_override_pretty = override_prettys.stuck_value_override_pretty
 local binding_override_pretty = override_prettys.binding_override_pretty
-local var_debug_override_pretty = override_prettys.var_debug_override_pretty
+local spanned_name_override_pretty = override_prettys.spanned_name_override_pretty
 
 checkable_term:derive(derivers.pretty_print, checkable_term_override_pretty)
 anchored_inferrable_term:derive(derivers.pretty_print)
@@ -2084,7 +2084,7 @@ strict_value:derive(derivers.pretty_print, flex_value_override_pretty)
 stuck_value:derive(derivers.pretty_print, flex_value_override_pretty)
 binding:derive(derivers.pretty_print, binding_override_pretty)
 expression_goal:derive(derivers.pretty_print)
-var_debug:derive(derivers.pretty_print, var_debug_override_pretty)
+spanned_name:derive(derivers.pretty_print, spanned_name_override_pretty)
 purity:derive(derivers.pretty_print)
 result_info:derive(derivers.pretty_print)
 constraintcause:derive(derivers.pretty_print)

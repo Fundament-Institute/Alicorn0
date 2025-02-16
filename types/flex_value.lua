@@ -75,15 +75,15 @@ function flex_value:is_closure() end
 ---@return string param_name
 ---@return typed code
 ---@return flex_value capture
----@return var_debug capture_dbg
----@return var_debug param_debug
+---@return spanned_name capture_dbg
+---@return spanned_name param_debug
 function flex_value:unwrap_closure() end
 ---@return boolean
 ---@return string param_name
 ---@return typed code
 ---@return flex_value capture
----@return var_debug capture_dbg
----@return var_debug param_debug
+---@return spanned_name capture_dbg
+---@return spanned_name param_debug
 function flex_value:as_closure() end
 ---@return boolean
 function flex_value:is_range() end
@@ -546,7 +546,7 @@ function flex_value:as_host_unwrap() end
 ---@field result_info_type flex_value
 ---@field result_info fun(result_info: result_info): flex_value
 ---@field pi fun(param_type: flex_value, param_info: flex_value, result_type: flex_value, result_info: flex_value): flex_value
----@field closure fun(param_name: string, code: typed, capture: flex_value, capture_dbg: var_debug, param_debug: var_debug): flex_value
+---@field closure fun(param_name: string, code: typed, capture: flex_value, capture_dbg: spanned_name, param_debug: spanned_name): flex_value
 ---@field range fun(lower_bounds: ArrayValue<flex_value>, upper_bounds: ArrayValue<flex_value>, relation: strict_value): flex_value
 ---@field name_type flex_value
 ---@field name fun(name: string): flex_value

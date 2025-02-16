@@ -116,8 +116,8 @@ function PrettyprintingContext:get_name(index)
 end
 
 ---@param index integer
----@return var_debug?
-function PrettyprintingContext:get_var_debug(index)
+---@return spanned_name?
+function PrettyprintingContext:get_spanned_name(index)
 	local binding = self.bindings:get(index)
 	if binding == nil then
 		return nil
@@ -228,7 +228,7 @@ end
 
 ---@param pp PrettyPrint
 ---@param name string
----@param debuginfo var_debug
+---@param debuginfo spanned_name
 ---@param expr unanchored_inferrable | typed
 ---@param context PrettyPrintingContext
 ---@return PrettyPrintingContext
@@ -251,7 +251,7 @@ end
 
 ---@param pp PrettyPrint
 ---@param names ArrayValue<string>
----@param debuginfo var_debug,
+---@param debuginfo spanned_name
 ---@param subject unanchored_inferrable | typed
 ---@param context PrettyPrintingContext
 ---@return PrettyPrintingContext
@@ -653,18 +653,18 @@ local stuck_value_override_pretty = {}
 ---@class TypedTermOverride : typed
 local typed_term_override_pretty = {}
 
----@param self var_debug
+---@param self spanned_name
 ---@param pp PrettyPrint
 ---@param context AnyContext
-local function var_debug_override_pretty(self, pp, context)
-	local name, anchor = self:unwrap_var_debug()
+local function spanned_name_override_pretty(self, pp)
+	local name, span = self:unwrap_spanned_name()
 	pp:unit(name)
 
 	pp:unit(pp:set_color())
 	pp:unit("🖉")
 
 	pp:_enter()
-	pp:any(anchor, context)
+	pp:any(span, context)
 	pp:_exit()
 	pp:unit(pp:reset_color())
 end
@@ -759,14 +759,14 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function typed_term_override_pretty:bound_variable(pp, context)
-	local index, var_dbg = self:unwrap_bound_variable()
+	local index, name = self:unwrap_bound_variable()
 	context = ensure_context(context)
 
 	pp:_enter()
 
 	print(tostring(context))
-	local context_var_dbg = context:get_var_debug(index)
-	if var_dbg ~= context_var_dbg then
+	local context_name = context:get_spanned_name(index)
+	if name ~= context_name then
 		pp:unit(pp:set_color())
 		pp:unit(enum_name(self, "bound_variable("))
 		pp:unit(pp:reset_color())
@@ -778,7 +778,7 @@ function typed_term_override_pretty:bound_variable(pp, context)
 		pp:unit(pp:reset_color())
 
 		pp:_enter()
-		pp:any(context_var_dbg, context)
+		pp:any(context_name, context)
 		pp:_exit()
 
 		pp:unit(pp:set_color())
@@ -793,7 +793,7 @@ function typed_term_override_pretty:bound_variable(pp, context)
 		pp:unit("), ")
 		pp:unit(pp:reset_color())
 
-		pp:any(var_dbg, context)
+		pp:any(name, context)
 
 		pp:unit(pp:set_color())
 		pp:unit(")")
@@ -812,7 +812,7 @@ function typed_term_override_pretty:bound_variable(pp, context)
 		pp:unit(", ")
 		pp:unit(pp:reset_color())
 
-		pp:any(var_dbg, context)
+		pp:any(name, context)
 
 		pp:unit(pp:set_color())
 		pp:unit(")")
@@ -2261,7 +2261,7 @@ function typed_term_override_pretty:tuple_element_access(pp, context)
 
 		pp:unit(tostring(index))
 
-		local debug_name, debug_anchor = subject_debug:unwrap_var_debug()
+		local debug_name, debug_anchor = subject_debug:unwrap_spanned_name()
 		if debug_name == name then
 			pp:unit(pp:set_color())
 			pp:unit("🖉")
@@ -2368,6 +2368,6 @@ return function(args)
 		flex_value_override_pretty = flex_value_override_pretty,
 		stuck_value_override_pretty = stuck_value_override_pretty,
 		binding_override_pretty = binding_override_pretty,
-		var_debug_override_pretty = var_debug_override_pretty,
+		spanned_name_override_pretty = spanned_name_override_pretty,
 	}
 end

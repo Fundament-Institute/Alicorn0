@@ -29,15 +29,15 @@ function stuck_value:is_closure() end
 ---@return string param_name
 ---@return typed code
 ---@return flex_value capture
----@return var_debug capture_dbg
----@return var_debug param_debug
+---@return spanned_name capture_dbg
+---@return spanned_name param_debug
 function stuck_value:unwrap_closure() end
 ---@return boolean
 ---@return string param_name
 ---@return typed code
 ---@return flex_value capture
----@return var_debug capture_dbg
----@return var_debug param_debug
+---@return spanned_name capture_dbg
+---@return spanned_name param_debug
 function stuck_value:as_closure() end
 ---@return boolean
 function stuck_value:is_range() end
@@ -394,7 +394,7 @@ function stuck_value:as_host_unwrap() end
 ---@field define_enum fun(self: stuck_valueType, name: string, variants: Variants): stuck_valueType
 ---@field param_info fun(visibility: flex_value): stuck_value
 ---@field pi fun(param_type: flex_value, param_info: flex_value, result_type: flex_value, result_info: flex_value): stuck_value
----@field closure fun(param_name: string, code: typed, capture: flex_value, capture_dbg: var_debug, param_debug: var_debug): stuck_value
+---@field closure fun(param_name: string, code: typed, capture: flex_value, capture_dbg: spanned_name, param_debug: spanned_name): stuck_value
 ---@field range fun(lower_bounds: ArrayValue<flex_value>, upper_bounds: ArrayValue<flex_value>, relation: strict_value): stuck_value
 ---@field operative_value fun(userdata: flex_value): stuck_value
 ---@field operative_type fun(handler: flex_value, userdata_type: flex_value): stuck_value
