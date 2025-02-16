@@ -145,6 +145,26 @@ function FlexRuntimeContext:get(index)
 	return binding.val, binding.debuginfo
 end
 
+---@param index integer
+---@return string?
+function FlexRuntimeContext:get_name(index)
+	local binding = self.bindings:get(index)
+	if binding == nil then
+		return nil
+	end
+	return binding.name
+end
+
+---@param index integer
+---@return var_debug?
+function FlexRuntimeContext:get_var_debug(index)
+	local binding = self.bindings:get(index)
+	if binding == nil then
+		return nil
+	end
+	return binding.debuginfo
+end
+
 ---@param v flex_value
 ---@param name string?
 ---@param debuginfo var_debug
@@ -205,6 +225,26 @@ local StrictRuntimeContext = U.shallow_copy(FlexRuntimeContext)
 ---@return var_debug?
 function StrictRuntimeContext:get(index)
 	return U.notail(FlexRuntimeContext.get(self, index):unwrap_strict())
+end
+
+---@param index integer
+---@return string?
+function StrictRuntimeContext:get_name(index)
+	local binding = self:get(index)
+	if binding == nil then
+		return nil
+	end
+	return binding.name
+end
+
+---@param index integer
+---@return var_debug?
+function StrictRuntimeContext:get_var_debug(index)
+	local binding = self:get(index)
+	if binding == nil then
+		return nil
+	end
+	return binding.debuginfo
 end
 
 ---@param v strict_value
@@ -464,31 +504,52 @@ end
 ---@param index integer
 ---@return string
 function TypecheckingContext:get_name(index)
-	return self.bindings:get(index).name
+	local binding = self.bindings:get(index)
+	if binding == nil then
+		return nil
+	end
+	return binding.name
+end
+
+---get the name of a binding in a TypecheckingContext
+---@param index integer
+---@return var_debug?
+function TypecheckingContext:get_var_debug(index)
+	local binding = self.bindings:get(index)
+	if binding == nil then
+		return nil
+	end
+	return binding.debuginfo
 end
 
 function TypecheckingContext:dump_names()
 	for i = 1, self:len() do
-		print(i, self:get_name(i))
+		print(i, tostring(self:get_name(i)))
 	end
 end
 
 ---@return string
 function TypecheckingContext:format_names()
-	local msg = ""
+	local msg = {}
 	for i = 1, self:len() do
-		msg = msg .. tostring(i) .. "\t" .. self:get_name(i) .. "\n"
+		msg[(i * 3) - 2] = tostring(i)
+		msg[(i * 3) - 1] = "\t"
+		msg[i * 3] = tostring(self:get_name(i))
 	end
-	return msg
+	return table.concat(msg, "\n")
 end
 
 ---@return string
 function TypecheckingContext:format_names_and_types()
 	local msg = ""
 	for i = 1, self:len() do
-		msg = msg .. tostring(i) .. "\t" .. self:get_name(i) .. "\t:\t" .. self:get_type(i):pretty_print(self) .. "\n"
+		msg[(i * 5) - 4] = tostring(i)
+		msg[(i * 5) - 3] = "\t"
+		msg[(i * 5) - 2] = tostring(self:get_name(i))
+		msg[(i * 5) - 1] = "\t:\t"
+		msg[i * 5] = self:get_type(i):pretty_print(self)
 	end
-	return msg
+	return table.concat(msg, "\n")
 end
 
 ---@param index integer
