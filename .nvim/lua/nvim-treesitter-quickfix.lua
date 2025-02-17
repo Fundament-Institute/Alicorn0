@@ -1,19 +1,38 @@
--- SPDX-License-Identifier: Unlicense
+-- SPDX-License-Identifier: 0BSD
 -- SPDX-FileCopyrightText: 2022 Dr. David A. Kunz <david.kunz@sap.com>
 -- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
 -- from <https://github.com/David-Kunz/ts-quickfix>
 
 local M = {}
 
+-- stylua: ignore start
+
+---@class treesitter-quickfix.Options.File
+---@field bufnr? integer
+---@field filename? string
+---@field parser? vim.treesitter.LanguageTree
+---@field str? string
+do local _ end
+
+---@class treesitter-quickfix.Options
+---@field files? treesitter-quickfix.Options.File[]
+---@field capture_filter? fun(opts: treesitter-quickfix.Options, file: treesitter-quickfix.Options.File, parser: vim.treesitter.LanguageTree, query: vim.treesitter.Query, id: integer, node: TSNode, metadata: vim.treesitter.query.TSMetadata, match: TSQueryMatch): (keep: boolean)
+---@field async? boolean
+do local _ end
+
+-- stylua: ignore end
+
 M.default_opts = {
 	capture_filter = function(opts, file, parser, query, id, node, metadata, match)
 		local capture_name = query.captures[id]
 		return capture_name:find("_", 1, true) ~= 1
 	end,
-}
+} --[[@as treesitter-quickfix.Options]]
 
----@param file {bufnr?: integer, filename?: string, parser?: vim.treesitter.LanguageTree, str?: string}
-local function quickfix_file(opts, qf_table, file)
+---@param opts treesitter-quickfix.Options
+---@param file treesitter-quickfix.Options.File
+---@param quickfix_list vim.quickfix.entry[]
+local function quickfix_file(opts, quickfix_list, file)
 	local loaded_buffer = false
 	local bufnr = file.bufnr
 	local parser = file.parser
@@ -72,7 +91,7 @@ local function quickfix_file(opts, qf_table, file)
 		if opts.capture_filter(opts, file, parser, query, id, node, metadata, match) then
 			local text = vim.treesitter.get_node_text(node, parser:source())
 			local start_row, start_col = node:range()
-			table.insert(qf_table, {
+			table.insert(quickfix_list, {
 				bufnr = bufnr,
 				filename = file.filename,
 				lnum = start_row + 1,
@@ -83,15 +102,26 @@ local function quickfix_file(opts, qf_table, file)
 	end
 end
 
+---@param opts treesitter-quickfix.Options
 function M.quickfix(opts)
-	local qf_table = {}
+	vim.validate("opts", opts, "table", true)
+	---@type treesitter-quickfix.Options
 	opts = vim.tbl_extend("force", M.default_opts, opts)
+	---@type vim.quickfix.entry[]
+	local quickfix_list = {}
+	--- |setqflist-action|
+	local quickfix_action = "u"
+	---@type vim.fn.setqflist.what
+	local quickfix_what = vim.empty_dict()
 	local files = opts.files
 	if files == nil then
 		files = { { bufnr = vim.api.nvim_get_current_buf() } }
 	end
+	---@type (fun())[]
 	local functions = vim.tbl_map(function(file)
-		return quickfix_file(opts, qf_table, file)
+		return function()
+			return quickfix_file(opts, quickfix_list, file)
+		end
 	end, files)
 	if opts.async then
 		require("nio").gather(functions)
@@ -100,10 +130,8 @@ function M.quickfix(opts)
 			func()
 		end
 	end
-	if next(qf_table) then
-		vim.fn.setqflist(qf_table)
-		vim.cmd.copen()
-	end
+	quickfix_what.items = quickfix_list
+	vim.fn.setqflist({}, quickfix_action, quickfix_what)
 end
 
 function M.query_name(name, files, opts)

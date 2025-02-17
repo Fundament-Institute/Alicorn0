@@ -7,11 +7,11 @@ typed = {}
 ---@return boolean
 function typed:is_bound_variable() end
 ---@return number index
----@return any debug
+---@return var_debug debug
 function typed:unwrap_bound_variable() end
 ---@return boolean
 ---@return number index
----@return any debug
+---@return var_debug debug
 function typed:as_bound_variable() end
 ---@return boolean
 function typed:is_literal() end
@@ -317,12 +317,12 @@ function typed:unwrap_operative_cons() end
 function typed:as_operative_cons() end
 ---@return boolean
 function typed:is_operative_type_cons() end
----@return typed handler
 ---@return typed userdata_type
+---@return typed handler
 function typed:unwrap_operative_type_cons() end
 ---@return boolean
----@return typed handler
 ---@return typed userdata_type
+---@return typed handler
 function typed:as_operative_type_cons() end
 ---@return boolean
 function typed:is_host_tuple_cons() end
@@ -576,7 +576,7 @@ function typed:as_constrained_type() end
 
 ---@class (exact) typedType: EnumType
 ---@field define_enum fun(self: typedType, name: string, variants: Variants): typedType
----@field bound_variable fun(index: number, debug: any): typed
+---@field bound_variable fun(index: number, debug: var_debug): typed
 ---@field literal fun(literal_value: strict_value): typed
 ---@field metavariable fun(metavariable: Metavariable): typed
 ---@field unique fun(id: table): typed
@@ -611,7 +611,7 @@ function typed:as_constrained_type() end
 ---@field object_corec_cons fun(methods: MapValue<string,typed>): typed
 ---@field object_elim fun(subject: typed, mechanism: typed): typed
 ---@field operative_cons fun(userdata: typed): typed
----@field operative_type_cons fun(handler: typed, userdata_type: typed): typed
+---@field operative_type_cons fun(userdata_type: typed, handler: typed): typed
 ---@field host_tuple_cons fun(elements: ArrayValue<typed>): typed
 ---@field host_user_defined_type_cons fun(id: { name: string }, family_args: ArrayValue<typed>): typed
 ---@field host_tuple_type fun(desc: typed): typed

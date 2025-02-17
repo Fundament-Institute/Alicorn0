@@ -2284,6 +2284,7 @@ local function desc_length(desc, len)
 		error("unknown tuple desc constructor")
 	end
 end
+-- TODO: move to `evaluator.gen_base_operator_aux`?
 local function new_host_type_family(unique_id, sig, variance)
 	local param_type, _, _, _ = sig:unwrap_pi()
 	local param_desc = param_type:unwrap_tuple_type()
@@ -2295,7 +2296,7 @@ local function new_host_type_family(unique_id, sig, variance)
 		variances[i] = v:unwrap_host_value()
 	end
 
-	local srel = evaluator.IndepTupleRelation(table.unpack(variances))
+	local srel = evaluator.IndepTupleRelation(variances)
 	evaluator.register_host_srel(unique_id, srel)
 
 	local params = typed_term_array()
@@ -2366,69 +2367,15 @@ local function tuple_to_host_tuple_inner(_type, _valid, val)
 	end
 end
 
----@diagnostic disable-next-line: no-unknown
-local core_operative_type
-do
-	local debug_param = var_debug("#core-operative-type-param", format.anchor_here())
-	local debug_userdata = var_debug("#core-operative-type-userdata", format.anchor_here())
-	local debug_handler = var_debug("#core-operative-type-handler", format.anchor_here())
-	local debug_elements = var_debug_array(debug_userdata, debug_handler)
-	core_operative_type = strict_value.closure(
-		debug_param.name,
-		typed_term.tuple_elim(
-			debug_elements:map(name_array, function(n)
-				return n.name
-			end),
-			debug_elements,
-			typed_term.bound_variable(2, debug_param),
-			2,
-			typed_term.operative_type_cons(
-				typed_term.bound_variable(4, debug_handler),
-				typed_term.bound_variable(3, debug_userdata) --TODO: fix the order on this
-			)
-		),
-		empty_tuple,
-		var_debug("#core-operative-type-capture", format.anchor_here()),
-		debug_param
-	)
-end
-
----@diagnostic disable-next-line: no-unknown
-local core_operative
-do
-	local debug_param = var_debug("#core-operative-param", format.anchor_here())
-	local debug_ud = var_debug("#core-operative-ud", format.anchor_here())
-	local debug_handler = var_debug("#core-operative-handler", format.anchor_here())
-	local debug_elements = var_debug_array(debug_ud, debug_handler)
-	core_operative = strict_value.closure(
-		debug_param.name,
-		typed_term.tuple_elim(
-			debug_elements:map(name_array, function(n)
-				return n.name
-			end),
-			debug_elements,
-			typed_term.bound_variable(2, debug_param),
-			2,
-			typed_term.operative_cons(typed_term.bound_variable(3, debug_ud))
-		),
-		empty_tuple,
-		var_debug("#core-operative-capture", format.anchor_here()),
-		debug_param
-	)
-end
-
 local base_env = {
 	ascribed_segment_tuple_desc = ascribed_segment_tuple_desc,
 	create = create,
-	host_if = host_if,
 	tuple_desc_concat = tuple_desc_concat,
 	convert_sig = convert_sig,
 	new_host_type_family = new_host_type_family,
 	tuple_to_host_tuple_inner = tuple_to_host_tuple_inner,
 	get_host_func_res = get_host_func_res,
 	gen_base_operator = gen_base_operator,
-	core_operative_type = core_operative_type,
-	core_operative = core_operative,
 }
 local internals_interface = require "internals-interface"
 internals_interface.base_env = base_env

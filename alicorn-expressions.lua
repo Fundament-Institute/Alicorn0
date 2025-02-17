@@ -844,7 +844,7 @@ local function call_host_func_type(start_anchor, type_of_term_input, usage_count
 				usage_array(),
 				typed_term.program_invoke(
 					typed_term.literal(strict_value.effect_elem(terms.lua_prog)),
-					typed_term.tuple_cons(typed_array(term, tuple_term))
+					typed_term.tuple_cons(typed_term_array(term, tuple_term))
 				)
 			)
 		)

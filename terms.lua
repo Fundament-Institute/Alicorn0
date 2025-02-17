@@ -752,8 +752,8 @@ unanchored_inferrable_term:define_enum("unanchored_inferrable", {
 		"userdata",       anchored_inferrable_term,
 	} },
 	{ "operative_type_cons", {
-		"handler",       checkable_term,
 		"userdata_type", anchored_inferrable_term,
+		"handler",       checkable_term,
 	} },
 	{ "level_type" },
 	{ "level0" },
@@ -941,7 +941,7 @@ local unique_id = gen.builtin_table
 -- typed terms have been typechecked but do not store their type internally
 -- stylua: ignore
 typed_term:define_enum("typed", {
-	{ "bound_variable", { "index", gen.builtin_number, "debug", gen.any_lua_type  } }, --TODO: switch the debug type to use the new structured var_debug
+	{ "bound_variable", { "index", gen.builtin_number, "debug", var_debug } },
 	{ "literal", { "literal_value", strict_value } },
 	{ "metavariable", { "metavariable", metavariable_type } },
 	{ "unique", { "id", unique_id } },
@@ -1044,8 +1044,8 @@ typed_term:define_enum("typed", {
 	} },
 	{ "operative_cons", { "userdata", typed_term } },
 	{ "operative_type_cons", {
-		"handler",       typed_term,
 		"userdata_type", typed_term,
+		"handler",       typed_term,
 	} },
 	{ "host_tuple_cons", { "elements", array(typed_term) } }, -- host_value
 	{ "host_user_defined_type_cons", {
@@ -1835,7 +1835,7 @@ local function inferrable_tuple_desc(start_anchor, ...)
 				error(("inferrable_tuple_desc: missing var_debug at argument %d"):format(i + 1))
 			end
 			a, debug_a =
-				anchored_inferrable_term(start_anchor, inferrable_cons(start_anchor, a, debug_a, e, debug_e)),
+				inferrable_cons(start_anchor, a, debug_a, e, debug_e),
 				var_debug(("terms.inferrable_tuple_desc.varargs[%d]"):format(i), anchor)
 		end
 	end
@@ -1866,6 +1866,42 @@ local function typed_tuple_desc(...)
 		end
 	end
 	return a
+end
+
+---@class RecordDescConsContainer
+local RecordDescCons = --[[@enum RecordDescCons]]
+	{
+		cons = "cons",
+		empty = "empty",
+	}
+
+---@param desc flex_value `flex_value.enum_value(RecordDescCons.cons, …))`
+---@return flex_value field_descs
+---@return flex_value name_something
+---@return flex_value f
+local function record_uncons(desc)
+	local constructor, arg = desc:unwrap_enum_value()
+	if constructor ~= RecordDescCons.cons then
+		error(string.format("expected constructor RecordDescCons.cons, got %s: %s", s(constructor), s(desc)))
+	end
+	local elements = arg:unwrap_tuple_value()
+	if elements:len() ~= 3 then
+		error(
+			string.format(
+				"enum_value with constructor RecordDescCons.cons should have 3 args, but has %s",
+				s(elements:len())
+			)
+		)
+	end
+	return elements[1], elements[2], elements[3]
+end
+
+---@param desc flex_value `flex_value.enum_value(RecordDescCons.empty, …))`
+local function record_unempty(desc)
+	local constructor = desc:unwrap_enum_value()
+	if constructor ~= DescCons.empty then
+		error(string.format("expected constructor RecordDescCons.empty, got %s: %s", s(constructor), s(desc)))
+	end
 end
 
 ---@module "types.tristate"
@@ -1948,6 +1984,9 @@ local terms = {
 	inferrable_cons = inferrable_cons,
 	inferrable_empty = inferrable_empty,
 	inferrable_tuple_desc = inferrable_tuple_desc,
+	RecordDescCons = RecordDescCons,
+	record_empty = record_empty,
+	record_uncons = record_uncons,
 	unit_type = unit_type,
 	unit_val = unit_val,
 	effect_id = effect_id,
@@ -1966,24 +2005,25 @@ local terms = {
 
 local override_prettys = require "terms-pretty"(terms)
 local checkable_term_override_pretty = override_prettys.checkable_term_override_pretty
-local inferrable_term_override_pretty = override_prettys.inferrable_term_override_pretty
+local unanchored_inferrable_term_override_pretty = override_prettys.unanchored_inferrable_term_override_pretty
 local typed_term_override_pretty = override_prettys.typed_term_override_pretty
 local flex_value_override_pretty = override_prettys.flex_value_override_pretty
 local stuck_value_override_pretty = override_prettys.stuck_value_override_pretty
 local binding_override_pretty = override_prettys.binding_override_pretty
+local var_debug_override_pretty = override_prettys.var_debug_override_pretty
 
 checkable_term:derive(derivers.pretty_print, checkable_term_override_pretty)
 anchored_inferrable_term:derive(derivers.pretty_print)
-unanchored_inferrable_term:derive(derivers.pretty_print, inferrable_term_override_pretty)
+unanchored_inferrable_term:derive(derivers.pretty_print, unanchored_inferrable_term_override_pretty)
 typed_term:derive(derivers.pretty_print, typed_term_override_pretty)
 visibility:derive(derivers.pretty_print)
 free:derive(derivers.pretty_print)
 flex_value:derive(derivers.pretty_print, flex_value_override_pretty)
 strict_value:derive(derivers.pretty_print, flex_value_override_pretty)
-stuck_value:derive(derivers.pretty_print, stuck_value_override_pretty)
+stuck_value:derive(derivers.pretty_print, flex_value_override_pretty)
 binding:derive(derivers.pretty_print, binding_override_pretty)
 expression_goal:derive(derivers.pretty_print)
-var_debug:derive(derivers.pretty_print)
+var_debug:derive(derivers.pretty_print, var_debug_override_pretty)
 purity:derive(derivers.pretty_print)
 result_info:derive(derivers.pretty_print)
 constraintcause:derive(derivers.pretty_print)

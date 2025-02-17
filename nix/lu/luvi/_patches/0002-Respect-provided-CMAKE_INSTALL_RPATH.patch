@@ -3,6 +3,8 @@ From: Dusk Banks <me@bb010g.com>
 Date: Sun, 2 Feb 2025 06:23:55 -0800
 Subject: [PATCH 2/2] Respect provided `CMAKE_INSTALL_RPATH`
 
+SPDX-FileCopyrightText: Dusk Banks <me@bb010g.com>
+SPDX-License-Identifier: Apache-2.0 OR MIT
 ---
  CMakeLists.txt | 5 -----
  1 file changed, 5 deletions(-)

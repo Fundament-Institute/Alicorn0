@@ -235,25 +235,24 @@ local function FunctionRelation(srel)
 		end),
 	}, subtype_relation_mt)
 end
-FunctionRelation = U.memoize(FunctionRelation)
+FunctionRelation = U.memoize(FunctionRelation, false)
 
 ---independent tuple relation.
 ---takes variances from a tuple of arguments to a type family.
 ---propagates agreement between those variances to the tuple of arguments as a whole.
 ---
 ---(in lieu of future `TupleRelation` that will be capable of handling dependent tuples.)
----@param ... Variance
+---@param variances Variance[]
 ---@return SubtypeRelation
-local function IndepTupleRelation(...)
-	local args = { ... }
+local function IndepTupleRelation(variances)
 	---@type string[]
 	local names = {}
-	for i, v in ipairs(args) do
+	for i, v in ipairs(variances) do
 		names[i] = (v.positive and "+" or "-") .. v.srel.debug_name
 	end
 	return setmetatable({
 		debug_name = "IndepTupleRelation(" .. table.concat(names, ", ") .. ")",
-		srels = args,
+		srels = variances,
 		Rel = luatovalue(function(a, b)
 			error("nyi")
 		end),
@@ -275,11 +274,11 @@ local function IndepTupleRelation(...)
 				local val_elems = val:unwrap_tuple_value()
 				local use_elems = use:unwrap_tuple_value()
 				for i = 1, val_elems:len() do
-					if args[i].positive then
+					if variances[i].positive then
 						typechecker_state:queue_constrain(
 							l_ctx,
 							val_elems[i],
-							args[i].srel,
+							variances[i].srel,
 							r_ctx,
 							use_elems[i],
 							nestcause(
@@ -295,7 +294,7 @@ local function IndepTupleRelation(...)
 						typechecker_state:queue_constrain(
 							r_ctx,
 							use_elems[i],
-							args[i].srel,
+							variances[i].srel,
 							l_ctx,
 							val_elems[i],
 							nestcause(
@@ -315,7 +314,7 @@ local function IndepTupleRelation(...)
 		),
 	}, subtype_relation_mt)
 end
-IndepTupleRelation = U.memoize(IndepTupleRelation)
+IndepTupleRelation = U.memoize(IndepTupleRelation, true)
 
 ---@type SubtypeRelation
 local EffectRowRelation = setmetatable({
@@ -968,7 +967,7 @@ local function substitute_inner_impl(val, mappings, mappings_changed, context_le
 			substitute_inner(handler, mappings, mappings_changed, context_len, ambient_typechecking_context)
 		local typed_userdata_type =
 			substitute_inner(userdata_type, mappings, mappings_changed, context_len, ambient_typechecking_context)
-		return U.notail(typed_term.operative_type_cons(typed_handler, typed_userdata_type))
+		return U.notail(typed_term.operative_type_cons(typed_userdata_type, typed_handler))
 	elseif val:is_tuple_value() then
 		local elems = val:unwrap_tuple_value()
 		local res = typed_term_array()
@@ -1919,7 +1918,7 @@ for i, host_type in ipairs {
 	terms.host_lua_error_type,
 } do
 	local id, family_args = host_type:unwrap_host_user_defined_type()
-	register_host_srel(id, IndepTupleRelation())
+	register_host_srel(id, IndepTupleRelation({}))
 end
 
 add_comparer("flex_value.srel_type", "flex_value.srel_type", function(l_ctx, a, r_ctx, b, cause)
@@ -3214,23 +3213,13 @@ local function infer_impl(
 		-- evaluate the type of the record
 		local function make_type(desc)
 			local constructor, arg = desc:unwrap_enum_value()
-			if constructor == terms.DescCons.empty then
-				terms.uncons(desc)
+			if constructor == terms.RecordDescCons.empty then
+				terms.record_unempty(desc)
 				return true, string_array(), string_value_map()
-			elseif constructor == terms.DescCons.cons then
-				local details = arg:unwrap_tuple_value()
-				-- TODO: 3???
-				if details:len() ~= 3 then
-					error(
-						string.format(
-							"enum_value with constructor DescCons.cons should have 3 args, but has %s",
-							tostring(details:len())
-						)
-					)
-				end
-				local field_names, field_types = make_type(details[1])
-				local name = details[2]:unwrap_name()
-				local f = details[3]
+			elseif constructor == terms.RecordDescCons.cons then
+				local fields_desc, name_something, f = terms.record_uncons(desc)
+				local field_names, field_types = make_type(fields_desc)
+				local name = name_something:unwrap_name()
 				local prefix = make_prefix(field_names)
 				local field_type = apply_value(f, prefix, typechecking_context)
 				field_names:append(name)
@@ -3444,7 +3433,7 @@ local function infer_impl(
 		add_arrays(operative_usages, userdata_usages)
 		return true, operative_type_value, operative_usages, U.notail(typed_term.operative_cons(userdata_term))
 	elseif inferrable_term:is_operative_type_cons() then
-		local handler, userdata_type = inferrable_term:unwrap_operative_type_cons()
+		local userdata_type, handler = inferrable_term:unwrap_operative_type_cons()
 		-- TODO: strict_value / flex_value mismatches
 		local goal_type = flex_value.pi(
 			flex_value.tuple_type(
@@ -3486,7 +3475,7 @@ local function infer_impl(
 		return true,
 			U.notail(flex_value.star(operative_type_level, 0)),
 			operative_type_usages,
-			U.notail(typed_term.operative_type_cons(handler_term, userdata_type_term))
+			U.notail(typed_term.operative_type_cons(userdata_type_term, handler_term))
 	elseif inferrable_term:is_host_user_defined_type_cons() then
 		local id, family_args = inferrable_term:unwrap_host_user_defined_type_cons()
 		local new_family_args = typed_term_array()
@@ -3816,11 +3805,10 @@ end
 ---@module "_meta/evaluator/infer"
 function infer(inferrable_term, typechecking_context)
 	local tracked = false --inferrable_term.track ~= nil
-	local _, unanchored_print = inferrable_term:unwrap_anchored_inferrable()
 
 	if tracked then
 		print(
-			"\n" .. string.rep("·", recurse_count) .. "INFER: " .. unanchored_print:pretty_print(typechecking_context)
+			"\n" .. string.rep("·", recurse_count) .. "INFER: " .. inferrable_term:pretty_print(typechecking_context)
 		)
 		--print(typechecking_context:format_names())
 	end
@@ -3850,7 +3838,7 @@ function infer(inferrable_term, typechecking_context)
 	end
 	return ok, v, usages, term
 end
-infer = U.memoize(infer)
+infer = U.memoize(infer, false)
 
 ---@param tuple_name string
 ---@param capture flex_value
@@ -4476,7 +4464,7 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		local userdata_value = evaluate(userdata, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.operative_value(userdata_value))
 	elseif typed:is_operative_type_cons() then
-		local handler, userdata_type = typed:unwrap_operative_type_cons()
+		local userdata_type, handler = typed:unwrap_operative_type_cons()
 		local handler_value = evaluate(handler, runtime_context, ambient_typechecking_context)
 		local userdata_type_value = evaluate(userdata_type, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.operative_type(handler_value, userdata_type_value))
@@ -4893,7 +4881,7 @@ function evaluate(typed, runtime_context, ambient_typechecking_context)
 	end
 	return r
 end
-evaluate = U.memoize(evaluate)
+evaluate = U.memoize(evaluate, false)
 
 -- evaluate = evaluate_impl
 
@@ -5301,8 +5289,9 @@ local function verify_tree(store, k1, k2)
 	return true
 end
 
-function TypeCheckerState:Snapshot()
+function TypeCheckerState:Snapshot(tag)
 	return {
+		tag = tag,
 		values = U.shallow_copy(self.values),
 		constrain_edges = U.shallow_copy(self.graph.constrain_edges:all()),
 		leftcall_edges = U.shallow_copy(self.graph.leftcall_edges:all()),
@@ -5310,7 +5299,7 @@ function TypeCheckerState:Snapshot()
 	}
 end
 
-function TypeCheckerState:Visualize(diff1, diff2, restrict)
+function TypeCheckerState:Visualize(f, diff1, diff2, restrict)
 	local prev, cur
 	if diff2 ~= nil then
 		prev = diff1
@@ -5318,6 +5307,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 	else
 		prev = diff1
 		cur = {
+			tag = "Current Graph State",
 			values = self.values,
 			constrain_edges = self.graph.constrain_edges:all(),
 			leftcall_edges = self.graph.leftcall_edges:all(),
@@ -5355,7 +5345,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 	end
 
 	local additions = {}
-	local g = "digraph State {"
+	f:write("digraph State {")
 
 	for i, v in ipairs(cur.values) do
 		local changed = true
@@ -5405,7 +5395,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 
 		if v[1]:is_enum_value() and v[1]:unwrap_enum_value() == "empty" then
 			line = line .. "shape=doubleoctagon]"
-			g = g .. line
+			f:write(line)
 			goto continue
 		elseif
 			v[1]:is_stuck()
@@ -5413,7 +5403,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 			and v[1]:unwrap_stuck():unwrap_free():is_metavariable()
 		then
 			line = line .. "shape=doublecircle]"
-			g = g .. line
+			f:write(line)
 			goto continue
 		elseif v[1]:is_star() then
 			line = line .. "shape=egg, "
@@ -5421,7 +5411,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 			line = line .. "shape=rect, "
 		end
 
-		g = g .. line .. 'label = "#' .. i .. " " .. label .. '"]'
+		f:write(line .. 'label = "#' .. i .. " " .. label .. '"]')
 		-- load-bearing no-op
 		if true then
 		end
@@ -5452,7 +5442,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 			line = line .. ', label="' .. name .. '"'
 		end
 
-		g = g .. line .. "]"
+		f:write(line .. "]")
 		-- load-bearing no-op
 		if true then
 		end
@@ -5473,7 +5463,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 			end
 			line = line .. ', color="#cccccc"'
 		end
-		g = g .. line .. "]"
+		f:write(line .. "]")
 		-- load-bearing no-op
 		if true then
 		end
@@ -5494,14 +5484,15 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 			end
 			line = line .. ', color="#cccccc"'
 		end
-		g = g .. line .. "]"
+		f:write(line .. "]")
 		-- load-bearing no-op
 		if true then
 		end
 		::continue4::
 	end
 
-	return g .. "\n}", additions
+	f:write('\nlabelloc="t";\nlabel="' .. cur.tag .. '";\n}')
+	return additions
 end
 
 function TypeCheckerState:DEBUG_VERIFY_TREE()
@@ -6030,6 +6021,13 @@ function TypeCheckerState:metavariable(context, trait)
 	return mv
 end
 
+function TypeCheckerState:TakeSnapshot(tag)
+	if self.snapshot_count ~= nil then
+		self.snapshot_index = ((self.snapshot_index or -1) + 1) % self.snapshot_count
+		self.snapshot_buffer[self.snapshot_index + 1] = self:Snapshot(tag)
+	end
+end
+
 ---@param val flex_value
 ---@param val_context TypecheckingContext
 ---@param use flex_value
@@ -6047,11 +6045,7 @@ function TypeCheckerState:flow(val, val_context, use, use_context, cause)
 	--terms.verify_placeholders(val, val_context, self.values)
 	--terms.verify_placeholders(use, use_context, self.values)
 	local r = { self:constrain(val, val_context, use, use_context, UniverseOmegaRelation, cause) }
-
-	if self.snapshot_count ~= nil then
-		self.snapshot_index = ((self.snapshot_index or -1) + 1) % self.snapshot_count
-		self.snapshot_buffer[self.snapshot_index + 1] = self:Snapshot()
-	end
+	self:TakeSnapshot("flow()")
 
 	return table.unpack(r)
 end
@@ -6355,6 +6349,7 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 	while #self.pending > 0 do
 		--assert(self:DEBUG_VERIFY(), "VERIFICATION FAILED")
 		local item = U.pop(self.pending)
+		self:TakeSnapshot("pending popped")
 
 		if item:is_Constrain() then
 			local left, rel, right, shallowest_block, item_cause = item:unwrap_Constrain()

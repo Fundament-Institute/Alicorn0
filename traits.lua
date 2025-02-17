@@ -5,6 +5,8 @@
 ---@field implement_on fun(self: LuaTrait, ty: Type, methods: { [string]: function })
 ---@field get fun(self: LuaTrait, ty: Type): { [string]: function }
 
+local count_impls = 0
+
 local trait_type_mt = {
 	__index = {
 		declare_method = function(self, methodname)
@@ -14,6 +16,8 @@ local trait_type_mt = {
 			self.methods[methodname] = true
 		end,
 		implement_on = function(self, ty, methods)
+			count_impls = count_impls + 1
+			--if count_impls == 10000 then error "too many impls" end
 			if type(ty) ~= "table" then
 				error("trying to implement on something that isn't a type")
 			end

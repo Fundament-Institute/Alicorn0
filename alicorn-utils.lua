@@ -3,6 +3,8 @@
 
 local M = {}
 
+local ipairs, select, setmetatable, table_pack, table_unpack = ipairs, select, setmetatable, table.pack, table.unpack
+
 ---@param ... any
 ---@return table
 function M.concat(...)
@@ -435,15 +437,43 @@ local memo_end_tag = {}
 local memo_nil_tag = {}
 
 ---cache a function's outputs to ensure purity with respect to identity
----@param fn function
----@return function
-function M.memoize(fn)
+---@generic F: function
+---@param fn F
+---@param args_table boolean Whether the function takes a single arguments table
+---@return F
+function M.memoize(fn, args_table)
 	local memotab = setmetatable({}, memo_mt)
+	if args_table then
+		local function wrapfn(args)
+			local thismemo = memotab
+			local n = args.n
+			if n == nil then
+				n = #args
+			end
+			for i = 1, n do
+				this_arg = args[i]
+				if this_arg == nil then
+					this_arg = memo_nil_tag
+				end
+				local nextmemo = thismemo[this_arg]
+				if not nextmemo then
+					nextmemo = setmetatable({}, memo_mt)
+					thismemo[this_arg] = nextmemo
+				end
+				thismemo = nextmemo
+			end
+			if not thismemo[memo_end_tag] then
+				thismemo[memo_end_tag] = table_pack(fn(args))
+			end
+			local values = thismemo[memo_end_tag]
+			return table_unpack(values, 1, values.n)
+		end
+		return wrapfn
+	end
 	local function wrapfn(...)
-		local args = table.pack(...)
 		local thismemo = memotab
-		for i = 1, args.n do
-			local this_arg = args[i]
+		for i = 1, select("#", ...) do
+			local this_arg = select(i, ...)
 			if this_arg == nil then
 				this_arg = memo_nil_tag
 			end
@@ -455,9 +485,10 @@ function M.memoize(fn)
 			thismemo = nextmemo
 		end
 		if not thismemo[memo_end_tag] then
-			thismemo[memo_end_tag] = { fn(...) }
+			thismemo[memo_end_tag] = table_pack(fn(...))
 		end
-		return table.unpack(thismemo[memo_end_tag])
+		local values = thismemo[memo_end_tag]
+		return table_unpack(values, 1, values.n)
 	end
 	return wrapfn
 end
@@ -723,50 +754,6 @@ local litprint_mt = {
 function M.litprint(s)
 	return M.notail(setmetatable({ contents = s }, litprint_mt))
 end
-
-local GasTank_mt = {}
-
----@class GasTank
----@field gas integer
----@field on_empty (fun(gas: GasTank))?
----@field _id integer
-GasTank_mt.__index = {}
-
-GasTank_mt._new_id = 1
-
----@return GasTank self
-function GasTank_mt.__index:decrement()
-	local gas = self.gas - 1
-	self.gas = gas
-	if gas == 0 and self.on_empty ~= nil then
-		return self, self:on_empty()
-	end
-	return self
-end
-
-function GasTank_mt.__index:empty()
-	return self.gas <= 0
-end
-
-function GasTank_mt:__tostring()
-	return string.format("GasTank<%d>(%s)", self._id, tostring(self.gas))
-end
-
-M.GasTank = setmetatable(GasTank_mt.__index, {
-	---@param cls GasTank
-	---@param default_gas integer
-	---@param on_empty (fun(gas: GasTank))?
-	---@return GasTank self
-	__call = function(cls, default_gas, on_empty)
-		local id = GasTank_mt._new_id
-		GasTank_mt._new_id = id + 1
-		return setmetatable({
-			gas = default_gas,
-			on_empty = on_empty,
-			_id = id,
-		}, GasTank_mt)
-	end,
-})
 
 function M.debug_break()
 	local ok, debugger
