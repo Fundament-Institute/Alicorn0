@@ -72,13 +72,14 @@
           '';
         };
         devShells.alicorn-generic = pkgs.callPackage
-          ({ deadnix, inferno, lua-language-server, mkShell, nixpkgs-fmt, statix, stylua, ... }:
+          ({ deadnix, inferno, lua-language-server, mkShell, nixpkgs-fmt, reuse, statix, stylua, ... }:
             mkShell {
               buildInputs = [
                 deadnix
                 inferno
                 lua-language-server
                 nixpkgs-fmt
+                reuse
                 statix
                 stylua
               ];

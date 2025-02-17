@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: Unlicense
+-- SPDX-License-Identifier: 0BSD
 -- SPDX-FileCopyrightText: 2022 Dr. David A. Kunz <david.kunz@sap.com>
 -- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
 -- from <https://github.com/David-Kunz/ts-quickfix>
