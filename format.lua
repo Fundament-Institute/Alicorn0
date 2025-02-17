@@ -820,7 +820,8 @@ local grammar = P {
 				+ (V "open_curly" * Cg(symbol(Cc("_{_}")), "brace"))
 			)
 				* V "paren_spacers"
-				* (V "comma_paren_body" + V "paren_tokens") ^ -1
+				* (V "comma_paren_body" + list(V "paren_tokens" ^ 2) + V "paren_tokens") ^ -1
+				* V "paren_spacers"
 				* V "close_brace"
 		) ^ 1
 	) / function(symbol, argcalls)
