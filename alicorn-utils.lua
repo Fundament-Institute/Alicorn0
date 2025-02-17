@@ -437,9 +437,10 @@ local memo_end_tag = {}
 local memo_nil_tag = {}
 
 ---cache a function's outputs to ensure purity with respect to identity
----@param fn function
+---@generic F: function
+---@param fn F
 ---@param args_table boolean Whether the function takes a single arguments table
----@return function
+---@return F
 function M.memoize(fn, args_table)
 	local memotab = setmetatable({}, memo_mt)
 	if args_table then

@@ -1413,7 +1413,7 @@ end
 
 ---@param self table
 ---@param value_type Type
----@return ArrayType
+---@return ArrayType self
 local function define_array(self, value_type)
 	if type(value_type) ~= "table" or type(value_type.value_check) ~= "function" then
 		error(
@@ -1494,20 +1494,20 @@ local function gen_builtin(typename)
 end
 
 local terms_gen = {
-	---@type fun(kind: string, params_with_types: ParamsWithTypes): RecordType
+	---@type fun(kind: string, params_with_types: ParamsWithTypes): (self: RecordType)
 	declare_record = new_self(define_record),
-	---@type fun(name: string, variants: Variants): EnumType
+	---@type fun(name: string, variants: Variants): (self: EnumType)
 	declare_enum = new_self(define_enum),
 	-- Make sure the function you pass to this returns true, not just a truthy value
-	---@type fun(value_check: ValueCheckFn, lsp_type: string): ForeignType
+	---@type fun(value_check: ValueCheckFn, lsp_type: string): (self: ForeignType)
 	declare_foreign = new_self(define_foreign),
-	---@type fun(key_type: Type, value_type: Type): MapType
-	declare_map = new_self(define_map),
-	---@type fun(key_type: Type): SetType
-	declare_set = new_self(define_set),
-	---@type fun(value_type: Type): ArrayType
-	declare_array = new_self(define_array),
-	---@type fun(): UndefinedType
+	---@type fun(key_type: Type, value_type: Type): (self: MapType)
+	declare_map = U.memoize(new_self(define_map), false),
+	---@type fun(key_type: Type): (self: SetType)
+	declare_set = U.memoize(new_self(define_set), false),
+	---@type fun(value_type: Type): (self: ArrayType)
+	declare_array = U.memoize(new_self(define_array), false),
+	---@type fun(): (self: UndefinedType)
 	declare_type = new_self(define_type),
 	metatable_equality = metatable_equality,
 	builtin_number = gen_builtin("number"),
