@@ -32,14 +32,6 @@ local s = pretty_printer.s
 ---@class Value
 ---@field kind string
 
--- TODO: are generic annotations powerful enough to describe this function?
--- worked around at the bottom of this file
-local function new_self(fn)
-	return function(...)
-		return fn({}, ...)
-	end
-end
-
 ---This attempts to create a traceback only if debug information is actually available
 ---@param s string
 ---@return string
@@ -278,6 +270,13 @@ local function define_record(self, kind, params_with_types)
 	return self
 end
 
+---@param kind string
+---@param params_with_types ParamsWithTypes
+---@return RecordType self
+local function declare_record(kind, params_with_types)
+	return define_record({}, kind, params_with_types)
+end
+
 ---@param self table
 ---@param kind string
 ---@return Value val
@@ -393,6 +392,13 @@ local function define_enum(self, name, variants)
 	self:derive(derivers.diff)
 	self:derive(derivers.freeze)
 	return self
+end
+
+---@param name string
+---@param variants Variants
+---@return EnumType self
+local function declare_enum(name, variants)
+	return define_enum({}, name, variants)
 end
 
 ---@param s string
@@ -608,6 +614,14 @@ local function define_foreign(self, value_check, lsp_type)
 		end,
 	})
 	return self
+end
+
+--- Make sure the function you pass to this returns true, not just a truthy value.
+---@param value_check ValueCheckFn
+---@param lsp_type string
+---@return ForeignType self
+local function declare_foreign(value_check, lsp_type)
+	return define_foreign({}, value_check, lsp_type)
 end
 
 ---@class MapType: Type
@@ -1517,6 +1531,11 @@ local function define_type(self)
 	return self
 end
 
+---@return UndefinedType self
+local function declare_type()
+	return define_type({})
+end
+
 ---@param self table
 ---@param typename string
 ---@return ForeignType
@@ -1533,18 +1552,13 @@ local function declare_builtin(typename)
 end
 
 local terms_gen = {
-	---@type fun(kind: string, params_with_types: ParamsWithTypes): (self: RecordType)
-	declare_record = new_self(define_record),
-	---@type fun(name: string, variants: Variants): (self: EnumType)
-	declare_enum = new_self(define_enum),
-	-- Make sure the function you pass to this returns true, not just a truthy value
-	---@type fun(value_check: ValueCheckFn, lsp_type: string): (self: ForeignType)
-	declare_foreign = new_self(define_foreign),
+	declare_record = declare_record,
+	declare_enum = declare_enum,
+	declare_foreign = declare_foreign,
 	declare_map = declare_map,
 	declare_set = declare_set,
 	declare_array = declare_array,
-	---@type fun(): (self: UndefinedType)
-	declare_type = new_self(define_type),
+	declare_type = declare_type,
 	metatable_equality = metatable_equality,
 	builtin_number = declare_builtin("number"),
 	builtin_string = declare_builtin("string"),
@@ -1552,7 +1566,7 @@ local terms_gen = {
 	builtin_table = declare_builtin("table"),
 	array_type_mt = array_type_mt,
 	define_multi_enum = define_multi_enum,
-	any_lua_type = define_foreign({}, function()
+	any_lua_type = declare_foreign(function(_val)
 		return true
 	end, "any"),
 }
