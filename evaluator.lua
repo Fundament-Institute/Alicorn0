@@ -5289,8 +5289,9 @@ local function verify_tree(store, k1, k2)
 	return true
 end
 
-function TypeCheckerState:Snapshot()
+function TypeCheckerState:Snapshot(tag)
 	return {
+		tag = tag,
 		values = U.shallow_copy(self.values),
 		constrain_edges = U.shallow_copy(self.graph.constrain_edges:all()),
 		leftcall_edges = U.shallow_copy(self.graph.leftcall_edges:all()),
@@ -5298,7 +5299,7 @@ function TypeCheckerState:Snapshot()
 	}
 end
 
-function TypeCheckerState:Visualize(diff1, diff2, restrict)
+function TypeCheckerState:Visualize(f, diff1, diff2, restrict)
 	local prev, cur
 	if diff2 ~= nil then
 		prev = diff1
@@ -5306,6 +5307,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 	else
 		prev = diff1
 		cur = {
+			tag = "Current Graph State",
 			values = self.values,
 			constrain_edges = self.graph.constrain_edges:all(),
 			leftcall_edges = self.graph.leftcall_edges:all(),
@@ -5343,7 +5345,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 	end
 
 	local additions = {}
-	local g = "digraph State {"
+	f:write("digraph State {")
 
 	for i, v in ipairs(cur.values) do
 		local changed = true
@@ -5393,7 +5395,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 
 		if v[1]:is_enum_value() and v[1]:unwrap_enum_value() == "empty" then
 			line = line .. "shape=doubleoctagon]"
-			g = g .. line
+			f:write(line)
 			goto continue
 		elseif
 			v[1]:is_stuck()
@@ -5401,7 +5403,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 			and v[1]:unwrap_stuck():unwrap_free():is_metavariable()
 		then
 			line = line .. "shape=doublecircle]"
-			g = g .. line
+			f:write(line)
 			goto continue
 		elseif v[1]:is_star() then
 			line = line .. "shape=egg, "
@@ -5409,7 +5411,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 			line = line .. "shape=rect, "
 		end
 
-		g = g .. line .. 'label = "#' .. i .. " " .. label .. '"]'
+		f:write(line .. 'label = "#' .. i .. " " .. label .. '"]')
 		-- load-bearing no-op
 		if true then
 		end
@@ -5440,7 +5442,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 			line = line .. ', label="' .. name .. '"'
 		end
 
-		g = g .. line .. "]"
+		f:write(line .. "]")
 		-- load-bearing no-op
 		if true then
 		end
@@ -5461,7 +5463,7 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 			end
 			line = line .. ', color="#cccccc"'
 		end
-		g = g .. line .. "]"
+		f:write(line .. "]")
 		-- load-bearing no-op
 		if true then
 		end
@@ -5482,14 +5484,15 @@ function TypeCheckerState:Visualize(diff1, diff2, restrict)
 			end
 			line = line .. ', color="#cccccc"'
 		end
-		g = g .. line .. "]"
+		f:write(line .. "]")
 		-- load-bearing no-op
 		if true then
 		end
 		::continue4::
 	end
 
-	return g .. "\n}", additions
+	f:write('\nlabelloc="t";\nlabel="' .. cur.tag .. '";\n}')
+	return additions
 end
 
 function TypeCheckerState:DEBUG_VERIFY_TREE()
@@ -6018,6 +6021,13 @@ function TypeCheckerState:metavariable(context, trait)
 	return mv
 end
 
+function TypeCheckerState:TakeSnapshot(tag)
+	if self.snapshot_count ~= nil then
+		self.snapshot_index = ((self.snapshot_index or -1) + 1) % self.snapshot_count
+		self.snapshot_buffer[self.snapshot_index + 1] = self:Snapshot(tag)
+	end
+end
+
 ---@param val flex_value
 ---@param val_context TypecheckingContext
 ---@param use flex_value
@@ -6035,11 +6045,7 @@ function TypeCheckerState:flow(val, val_context, use, use_context, cause)
 	--terms.verify_placeholders(val, val_context, self.values)
 	--terms.verify_placeholders(use, use_context, self.values)
 	local r = { self:constrain(val, val_context, use, use_context, UniverseOmegaRelation, cause) }
-
-	if self.snapshot_count ~= nil then
-		self.snapshot_index = ((self.snapshot_index or -1) + 1) % self.snapshot_count
-		self.snapshot_buffer[self.snapshot_index + 1] = self:Snapshot()
-	end
+	self:TakeSnapshot("flow()")
 
 	return table.unpack(r)
 end
@@ -6343,6 +6349,7 @@ function TypeCheckerState:constrain(val, val_context, use, use_context, rel, cau
 	while #self.pending > 0 do
 		--assert(self:DEBUG_VERIFY(), "VERIFICATION FAILED")
 		local item = U.pop(self.pending)
+		self:TakeSnapshot("pending popped")
 
 		if item:is_Constrain() then
 			local left, rel, right, shallowest_block, item_cause = item:unwrap_Constrain()

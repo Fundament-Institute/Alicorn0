@@ -359,7 +359,7 @@ local function execute_alc_file(bound_expr, log, env)
 	return failurepoint.success
 end
 
---local graph_backtrace = 5
+-- local graph_backtrace = 5
 local internal_state
 
 local function dump_edges(edge_list)
@@ -432,8 +432,7 @@ if not ok then
 		local slice = {}
 		for j = 2, graph_backtrace do
 			local f = io.open("GRAPH_STATE" .. j .. ".dot", "w")
-			local out, additions = internal_state:Visualize(snapshots[i + 1], snapshots[i + 2], slice)
-			f:write(out)
+			local additions = internal_state:Visualize(f, snapshots[i + 1], snapshots[i + 2], slice)
 			f:close()
 			i = (i + 1) % graph_backtrace
 			for i, v in ipairs(additions) do
@@ -442,12 +441,8 @@ if not ok then
 		end
 	end
 
-	--dump_edges({ { 55825, 47999 }, { 47954, 55825 } })
-	--serialize_graph("GRAPH_DUMP_FAIL.dat")
 	return
 end
-
---serialize_graph("GRAPH_DUMP_WORK.dat")
 
 ---@cast expr anchored_inferrable
 ---@cast env Environment
