@@ -9,7 +9,7 @@ local typed = terms.typed_term
 local fitsinto = evaluator.fitsinto
 
 local val_array = gen.declare_array(value)
-local var_debug_array = terms.var_debug_array
+local spanned_name_array = terms.spanned_name_array
 
 local function val_tup_cons(...)
 	return U.notail(value.tuple_value(val_array(...)))

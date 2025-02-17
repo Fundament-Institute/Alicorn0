@@ -7,23 +7,23 @@ binding = {}
 ---@return boolean
 function binding:is_let() end
 ---@return string name
----@return var_debug debug
+---@return spanned_name debug
 ---@return anchored_inferrable expr
 function binding:unwrap_let() end
 ---@return boolean
 ---@return string name
----@return var_debug debug
+---@return spanned_name debug
 ---@return anchored_inferrable expr
 function binding:as_let() end
 ---@return boolean
 function binding:is_tuple_elim() end
 ---@return ArrayValue<string> names
----@return ArrayValue<var_debug> debug
+---@return ArrayValue<spanned_name> debug
 ---@return anchored_inferrable subject
 function binding:unwrap_tuple_elim() end
 ---@return boolean
 ---@return ArrayValue<string> names
----@return ArrayValue<var_debug> debug
+---@return ArrayValue<spanned_name> debug
 ---@return anchored_inferrable subject
 function binding:as_tuple_elim() end
 ---@return boolean
@@ -53,8 +53,8 @@ function binding:as_program_sequence() end
 
 ---@class (exact) bindingType: EnumType
 ---@field define_enum fun(self: bindingType, name: string, variants: Variants): bindingType
----@field let fun(name: string, debug: var_debug, expr: anchored_inferrable): binding
----@field tuple_elim fun(names: ArrayValue<string>, debug: ArrayValue<var_debug>, subject: anchored_inferrable): binding
+---@field let fun(name: string, debug: spanned_name, expr: anchored_inferrable): binding
+---@field tuple_elim fun(names: ArrayValue<string>, debug: ArrayValue<spanned_name>, subject: anchored_inferrable): binding
 ---@field annotated_lambda fun(param_name: string, param_annotation: anchored_inferrable, start_anchor: Anchor, visible: visibility, pure: checkable): binding
 ---@field program_sequence fun(first: anchored_inferrable, start_anchor: Anchor): binding
 return {}

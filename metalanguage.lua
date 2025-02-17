@@ -2,6 +2,7 @@
 -- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
 
 local U = require "alicorn-utils"
+local gen = require "terms-generators"
 
 --[[
 Matcher(userdata : type, results : tuple-desc) : type
@@ -45,9 +46,8 @@ local MatcherKind = --[[@enum MatcherKind]]
 ---@field reducible Reducible?
 
 ---@class SyntaxSymbol
----@field start_anchor Anchor
----@field end_anchor Anchor
 ---@field str string
+---@field span Span
 
 --[[
 issymbol : forall
@@ -173,7 +173,7 @@ local reducer_mt = { __call = create_reducible }
 
 ---@class ExternalError
 ---@field cause any
----@field start_anchor Anchor
+---@field span Span
 ---@field reducer_name string
 local ExternalError = {}
 
@@ -184,7 +184,7 @@ local external_error_mt = {
 		local message = "Lua error raised inside reducer "
 			.. self.reducer_name
 			.. " "
-			.. (self.start_anchor and tostring(self.start_anchor) or "at unknown position")
+			.. (self.span and tostring(self.span) or "at unknown position")
 			.. ":\n"
 		local cause = tostring(self.cause)
 		if cause:find("table", 1, true) == 1 then
@@ -205,13 +205,13 @@ local external_error_mt = {
 }
 
 ---@param cause any
----@param start_anchor Anchor
+---@param span Span
 ---@param reducer_name string
 ---@return ExternalError
-function ExternalError.new(cause, start_anchor, reducer_name)
+function ExternalError.new(cause, span, reducer_name)
 	return setmetatable({
-		start_anchor = start_anchor,
 		cause = cause,
+		span = span,
 		reducer_name = reducer_name,
 	}, external_error_mt)
 end
@@ -224,7 +224,7 @@ end
 ---@return boolean | any, ExternalError | any, ...
 local function augment_error(syntax, reducer_name, ok, err_msg, ...)
 	if not ok then
-		return false, U.notail(ExternalError.new(err_msg, syntax.start_anchor, reducer_name))
+		return false, U.notail(ExternalError.new(err_msg, syntax.span, reducer_name))
 	end
 	-- err_msg is the first result arg otherwise
 	return err_msg, ...
@@ -332,13 +332,13 @@ local symbol_exact = reducer(SymbolExact, "symbol exact")
 
 ---@class SyntaxError
 ---@field matchers Matcher[]
----@field start_anchor Anchor
+---@field span Span
 ---@field cause any
 local SyntaxError = {}
 
 function SyntaxError:__tostring()
-	local message = "Syntax error at anchor "
-		.. (self.start_anchor and tostring(self.start_anchor) or "<unknown position>")
+	local message = "Syntax error at span "
+		.. (self.span and tostring(self.span) or "<unknown position>")
 		.. " must be acceptable for one of:\n"
 	---@type string[]
 	local options = {}
@@ -362,15 +362,13 @@ local syntax_error_mt = {
 }
 
 ---@param matchers Matcher[]
----@param start_anchor Anchor
----@param end_anchor Anchor
+---@param span Span
 ---@param cause any
 ---@return SyntaxError
-local function syntax_error(matchers, start_anchor, end_anchor, cause)
+local function syntax_error(matchers, span, cause)
 	return setmetatable({
 		matchers = matchers,
-		start_anchor = start_anchor,
-		end_anchor = end_anchor,
+		span = span,
 		cause = cause,
 	}, syntax_error_mt)
 end
@@ -383,8 +381,7 @@ end
 
 ---@class ConstructedSyntax
 ---@field accepters AccepterSet
----@field start_anchor Anchor
----@field end_anchor Anchor
+---@field span Span
 local ConstructedSyntax = {}
 
 --- ```
@@ -429,7 +426,7 @@ function ConstructedSyntax:match(matchers, unmatched, extra)
 		-- local name = getmetatable(matcher.reducible)
 		-- print("rejected syntax kind", matcher.kind, name)
 	end
-	return U.notail(unmatched(extra, syntax_error(matchers, self.start_anchor, self.end_anchor, lasterr)))
+	return U.notail(unmatched(extra, syntax_error(matchers, self.span, lasterr)))
 end
 
 local constructed_syntax_mt = {
@@ -437,15 +434,14 @@ local constructed_syntax_mt = {
 }
 
 ---@param accepters AccepterSet
----@param start_anchor Anchor
----@param end_anchor Anchor
+---@param span Span
 ---@param ... any
 ---@return ConstructedSyntax
-local function cons_syntax(accepters, start_anchor, end_anchor, ...)
-	return setmetatable(
-		{ accepters = accepters, start_anchor = start_anchor, end_anchor = end_anchor, ... },
-		constructed_syntax_mt
-	)
+local function cons_syntax(accepters, span, ...)
+	if getmetatable(span) ~= require("format").span_mt then
+		error(("metalanguage.cons_syntax called with non-span: %s"):format(span))
+	end
+	return setmetatable({ accepters = accepters, span = span, ... }, constructed_syntax_mt)
 end
 
 local pair_accepters = {
@@ -454,13 +450,12 @@ local pair_accepters = {
 	end,
 }
 
----@param start_anchor Anchor
----@param end_anchor Anchor
+---@param span Span
 ---@param a ConstructedSyntax
 ---@param b ConstructedSyntax
 ---@return ConstructedSyntax
-local function pair(start_anchor, end_anchor, a, b)
-	return U.notail(cons_syntax(pair_accepters, start_anchor, end_anchor, a, b))
+local function pair(span, a, b)
+	return U.notail(cons_syntax(pair_accepters, span, a, b))
 end
 
 local symbol_accepters = {
@@ -469,12 +464,11 @@ local symbol_accepters = {
 	end,
 }
 
----@param start_anchor Anchor
----@param end_anchor Anchor
----@param syntaxsymbol SyntaxSymbol
+---@param span Span
+---@param symbol SyntaxSymbol
 ---@return ConstructedSyntax
-local function symbol(start_anchor, end_anchor, syntaxsymbol)
-	return U.notail(cons_syntax(symbol_accepters, start_anchor, end_anchor, syntaxsymbol))
+local function symbol_syntax(span, symbol)
+	return U.notail(cons_syntax(symbol_accepters, span, symbol))
 end
 
 local value_accepters = {
@@ -486,15 +480,13 @@ local value_accepters = {
 ---@class SyntaxValue
 ---@field type string
 ---@field val any
----@field start_anchor Anchor
----@field end_anchor Anchor
+---@field span Span
 
----@param start_anchor Anchor
----@param end_anchor Anchor
+---@param span Span
 ---@param val SyntaxValue
 ---@return ConstructedSyntax
-local function value(start_anchor, end_anchor, val)
-	return U.notail(cons_syntax(value_accepters, start_anchor, end_anchor, val))
+local function value(span, val)
+	return U.notail(cons_syntax(value_accepters, span, val))
 end
 
 local nil_accepters = {
@@ -503,23 +495,21 @@ local nil_accepters = {
 	end,
 }
 
----@param start_anchor Anchor
----@param end_anchor Anchor
+---@param span Span
 ---@return ConstructedSyntax
-local function new_nilval(start_anchor, end_anchor)
-	return U.notail(cons_syntax(nil_accepters, start_anchor, end_anchor))
+local function new_nilval(span)
+	return U.notail(cons_syntax(nil_accepters, span))
 end
 
----@param start_anchor Anchor
----@param end_anchor Anchor
+---@param span Span
 ---@param a ConstructedSyntax
 ---@param ... ConstructedSyntax
 ---@return ConstructedSyntax
-local function list(start_anchor, end_anchor, a, ...)
+local function list(span, a, ...)
 	if a == nil then
-		return U.notail(new_nilval(start_anchor, end_anchor))
+		return U.notail(new_nilval(span))
 	end
-	return pair(start_anchor, end_anchor, a, list(start_anchor, end_anchor, ...))
+	return pair(span, a, list(span, ...))
 end
 
 local any = reducer(
@@ -631,7 +621,7 @@ end
 local list_many_fold_until = reducer(
 	---@generic T
 	---@param syntax ConstructedSyntax
-	---@param submatcher_fn fun(T, Anchor): Matcher
+	---@param submatcher_fn fun(T, Span): Matcher
 	---@param init_thread T
 	---@param termination Matcher
 	---@return boolean
@@ -651,7 +641,7 @@ local list_many_fold_until = reducer(
 				},
 				failure_handler,
 				{
-					submatcher_fn(thread, tail.start_anchor),
+					submatcher_fn(thread, tail.span),
 					termination,
 				}
 			)
@@ -668,7 +658,7 @@ local list_many_fold_until = reducer(
 local list_many_fold = reducer(
 	---@generic T
 	---@param syntax ConstructedSyntax
-	---@param submatcher_fn fun(T, Anchor): Matcher
+	---@param submatcher_fn fun(T, Span): Matcher
 	---@param init_thread T
 	---@return boolean
 	---@return any[]|string
@@ -742,7 +732,6 @@ local list_tail_ends = reducer(
 	"list_tail_ends"
 )
 
-local gen = require "terms-generators"
 local constructed_syntax_type = gen.declare_foreign(gen.metatable_equality(constructed_syntax_mt), "ConstructedSyntax")
 local reducer_type = gen.declare_foreign(gen.metatable_equality(reducer_mt), "Reducer")
 local matcher_type = gen.declare_foreign(function(val)
@@ -770,7 +759,7 @@ local metalanguage = {
 	symbol_exact = symbol_exact,
 	pair = pair,
 	list = list,
-	symbol = symbol,
+	symbol = symbol_syntax,
 	constructed_syntax_type = constructed_syntax_type,
 	reducer_type = reducer_type,
 	matcher_type = matcher_type,

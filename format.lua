@@ -1,6 +1,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 -- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
 local U = require "alicorn-utils"
+local string_format = string.format
 
 local lpeg = require "lpeg"
 local P, C, Cg, Cc, Cmt, Ct, Cb, Cp, Cf, Cs, S, V, R =
@@ -20,52 +21,299 @@ local function DebugPrint(s, patt)
 end
 
 ---@class Anchor
+---@field internal boolean
+---@field id string
 ---@field line integer
 ---@field char integer
----@field sourceid string
 local Anchor = {}
 
----comment
----@param stop Anchor?
----@return string
-function Anchor:display(stop)
-	if stop == nil then
-		return tostring(self)
-	end
-
-	return tostring(self.sourceid)
-		.. ":"
-		.. tostring(self.line)
-		.. ":"
-		.. tostring(self.char)
-		.. "-"
-		.. tostring(stop.char)
-end
-
 local anchor_mt = {
+	---@param fst Anchor
+	---@param snd Anchor
+	---@return boolean
 	__lt = function(fst, snd)
-		return snd.line > fst.line or (snd.line == fst.line and snd.char > fst.char)
+		-- __lt(false, false) = false
+		-- __lt(false, true) = true
+		-- __lt(true, false) = false
+		-- __lt(true, true) = false
+		local fst_internal, snd_internal = fst.internal, snd.internal
+		if not fst_internal and snd_internal then
+			return true
+		end
+		if fst_internal == snd_internal then
+			local fst_id, snd_id = fst.id, snd.id
+			if fst_id < snd_id then
+				return true
+			end
+			if fst_id == snd_id then
+				local fst_line, snd_line = fst.line, snd.line
+				if fst_line < snd_line then
+					return true
+				end
+				if fst_line == snd_line then
+					return fst.char < snd.char
+				end
+			end
+		end
+		return false
 	end,
+	---@param fst Anchor
+	---@param snd Anchor
+	---@return boolean
 	__le = function(fst, snd)
-		return fst < snd or fst == snd
+		-- __lt(false, false) = false
+		-- __lt(false, true) = true
+		-- __lt(true, false) = false
+		-- __lt(true, true) = false
+		local fst_internal, snd_internal = fst.internal, snd.internal
+		if not fst_internal or snd_internal then
+			return true
+		end
+		if fst_internal == snd_internal then
+			local fst_id, snd_id = fst.id, snd.id
+			if fst_id < snd_id then
+				return true
+			end
+			if fst_id == snd_id then
+				local fst_line, snd_line = fst.line, snd.line
+				if fst_line < snd_line then
+					return true
+				end
+				if fst_line == snd_line then
+					return fst.char <= snd.char
+				end
+			end
+		end
+		return false
 	end,
+	---@param fst Anchor
+	---@param snd Anchor
+	---@return boolean
 	__eq = function(fst, snd)
-		return (snd.line == fst.line and snd.char == fst.char)
+		return fst.internal == snd.internal and fst.id == snd.id and fst.line == snd.line and fst.char == snd.char
 	end,
+	---@param self Anchor
+	---@return string
 	__tostring = function(self)
-		return tostring(self.sourceid) .. ":" .. tostring(self.line) .. ":" .. tostring(self.char)
+		local start_line, start_char = self.line, self.char
+		local internal_prefix, internal_suffix = "", ""
+		if self.internal then
+			internal_prefix, internal_suffix = "⦃", "⦄"
+		end
+		return string_format(
+			"%s%s%s:%s:%s",
+			internal_prefix,
+			tostring(self.id),
+			internal_suffix,
+			tostring(start_line),
+			tostring(start_char)
+		)
 	end,
 	__index = Anchor,
+	__newindex = function(k, v)
+		error(("Anchor is immutable and can't set %s to %s"):format(tostring(k), tostring(v)))
+	end,
 }
+
+---@param internal boolean
+---@param id string
+---@param line integer
+---@param char integer
+---@return Anchor
+local function create_anchor(internal, id, line, char)
+	return setmetatable({
+		internal = internal,
+		id = id,
+		line = line,
+		char = char,
+	}, anchor_mt)
+end
+create_anchor = U.memoize(create_anchor, false)
+
+---@class Span
+---@field start Anchor
+---@field stop Anchor
+local Span = {}
+
+local span_mt = {
+	---@param fst Span
+	---@param snd Span
+	---@return boolean
+	__lt = function(fst, snd)
+		-- __lt(false, false) = false
+		-- __lt(false, true) = true
+		-- __lt(true, false) = false
+		-- __lt(true, true) = false
+		local fst_start, snd_start = fst.start, snd.start
+		local fst_internal, snd_internal = fst_start.internal, snd_start.internal
+		if not fst_internal and snd_internal then
+			return true
+		end
+		if fst_internal == snd_internal then
+			local fst_id, snd_id = fst_start.id, snd_start.id
+			if fst_id < snd_id then
+				return true
+			end
+			if fst_id == snd_id then
+				local fst_start_line, snd_start_line = fst_start.line, snd_start.line
+				if fst_start_line < snd_start_line then
+					return true
+				end
+				if fst_start_line == snd_start_line then
+					local fst_start_char, snd_start_char = fst_start.char, snd_start.char
+					if fst_start_char < snd_start_char then
+						return true
+					end
+					if fst_start_char == snd_start_char then
+						local fst_stop, snd_stop = fst.stop, snd.stop
+						local fst_stop_line, snd_stop_line = fst_stop.line, snd_stop.line
+						if fst_stop_line < snd_stop_line then
+							return true
+						end
+						if fst_stop_line == snd_stop_line then
+							return fst_stop.char < snd_stop.char
+						end
+					end
+				end
+			end
+		end
+		return false
+	end,
+	---@param fst Span
+	---@param snd Span
+	---@return boolean
+	__le = function(fst, snd)
+		-- __lt(false, false) = false
+		-- __lt(false, true) = true
+		-- __lt(true, false) = false
+		-- __lt(true, true) = false
+		local fst_start, snd_start = fst.start, snd.start
+		local fst_internal, snd_internal = fst_start.internal, snd_start.internal
+		if not fst_internal and snd_internal then
+			return true
+		end
+		if fst_internal == snd_internal then
+			local fst_id, snd_id = fst_start.id, snd_start.id
+			if fst_id < snd_id then
+				return true
+			end
+			if fst_id == snd_id then
+				local fst_start_line, snd_start_line = fst_start.line, snd_start.line
+				if fst_start_line < snd_start_line then
+					return true
+				end
+				if fst_start_line == snd_start_line then
+					local fst_start_char, snd_start_char = fst_start.char, snd_start.char
+					if fst_start_char < snd_start_char then
+						return true
+					end
+					if fst_start_char == snd_start_char then
+						local fst_stop, snd_stop = fst.stop, snd.stop
+						local fst_stop_line, snd_stop_line = fst_stop.line, snd_stop.line
+						if fst_stop_line < snd_stop_line then
+							return true
+						end
+						if fst_stop_line == snd_stop_line then
+							return fst_stop.char <= snd_stop.char
+						end
+					end
+				end
+			end
+		end
+		return false
+	end,
+	---@param fst Span
+	---@param snd Span
+	---@return boolean
+	__eq = function(fst, snd)
+		return fst.start == snd.start and fst.stop == snd.stop
+	end,
+	---@param self Span
+	---@return string
+	__tostring = function(self)
+		local start, stop = self.start, self.stop
+		local start_line, stop_line = start.line, stop.line
+		local internal_prefix, internal_suffix = "", ""
+		if start.internal then
+			internal_prefix, internal_suffix = "⦃", "⦄"
+		end
+		if start_line ~= stop_line then
+			return string_format(
+				"%s%s%s:%s:%s-%s:%s",
+				internal_prefix,
+				tostring(start.id),
+				internal_suffix,
+				tostring(start_line),
+				tostring(start.char),
+				tostring(stop_line),
+				tostring(stop.char)
+			)
+		end
+		local start_char, stop_char = start.char, stop.char
+		if start_char ~= stop_char then
+			return string_format(
+				"%s%s%s:%s:%s-%s",
+				internal_prefix,
+				tostring(start.id),
+				internal_suffix,
+				tostring(start_line),
+				tostring(start_char),
+				tostring(stop_char)
+			)
+		end
+		return string_format(
+			"%s%s%s:%s:%s",
+			internal_prefix,
+			tostring(start.id),
+			internal_suffix,
+			tostring(start_line),
+			tostring(start_char)
+		)
+	end,
+	__index = Span,
+	__newindex = function(k, v)
+		error(("Span is immutable and can't set %s to %s"):format(tostring(k), tostring(v)))
+	end,
+}
+
+---@param start Anchor
+---@param stop Anchor
+---@return Span
+local function create_span(start, stop)
+	if start.internal ~= stop.internal then
+		error(("Span `internal` mismatch: %s, %s"):format(tostring(start), tostring(stop)))
+	elseif start.id ~= stop.id then
+		error(("Span `id` mismatch: %s, %s"):format(tostring(start), tostring(stop)))
+	elseif start.line >= stop.line then
+		if start.line > stop.line then
+			error(("Span `line` mismatch: %s, %s"):format(tostring(start), tostring(stop)))
+		elseif start.char > stop.char then
+			error(("Span `char` mismatch: %s, %s"):format(tostring(start), tostring(stop)))
+		end
+	end
+	return setmetatable({ start = start, stop = stop }, span_mt)
+end
+create_span = U.memoize(create_span, false)
+
+---@param stop Anchor
+---@return Span
+function Anchor:span(stop)
+	return create_span(self, stop)
+end
 
 lpeg.locale(lpeg)
 
+local function create_element(capture)
+	capture.span, capture.start_anchor, capture.stop_anchor = capture.start_anchor:span(capture.stop_anchor), nil, nil
+	return capture
+end
+
 local function element(kind, pattern)
-	return Ct(Cg(V "anchor", "start_anchor") * Cg(Cc(kind), "kind") * pattern)
+	return Ct(Cg(V "anchor", "start_anchor") * Cg(Cc(kind), "kind") * pattern) / create_element
 end
 
 local function symbol(value)
-	return element("symbol", Cg(value, "str") * Cg(V "anchor", "end_anchor"))
+	return element("symbol", Cg(value, "str") * Cg(V "anchor", "stop_anchor"))
 end
 
 local function space_tokens(pattern)
@@ -109,11 +357,10 @@ local function IFRmt(pattern, numtimes)
 	return repetition
 end
 
-local function create_list(start_anchor, elements, end_anchor)
+local function create_list(start_anchor, elements, stop_anchor)
 	return {
 		kind = "list",
-		start_anchor = start_anchor,
-		end_anchor = end_anchor,
+		span = start_anchor:span(stop_anchor),
 		elements = elements,
 	}
 end
@@ -176,10 +423,12 @@ local function clear_ffp()
 		end
 end
 
-local function create_literal(start_anchor, elements, end_anchor)
+local function create_literal(start_anchor, elements, stop_anchor)
+	if stop_anchor == nil then
+		U.debug_break()
+	end
 	local val = {
-		start_anchor = start_anchor,
-		end_anchor = end_anchor,
+		span = start_anchor:span(stop_anchor),
 		kind = "literal",
 		literaltype = "bytes",
 		val = {},
@@ -196,31 +445,24 @@ local function erase(pattern)
 	return pattern / {}
 end
 
----@param line integer
----@param char integer
----@param sourceid string
+---@param f? (integer | function)
 ---@return Anchor
-local function create_anchor(line, char, sourceid)
-	return setmetatable({
-		line = line,
-		char = char,
-		sourceid = sourceid,
-	}, anchor_mt)
-end
-create_anchor = U.memoize(create_anchor, false)
-
----@param offset? integer
----@return Anchor
-local function anchor_here(offset)
-	local info = debug.getinfo((offset or 1) + 1, "Sl")
-	return create_anchor(info.currentline, 0, "SYNTH:" .. info.source)
+local function anchor_here(f)
+	if type(f) ~= "function" then
+		f = (f or 1) + 1
+	end
+	local info = debug.getinfo(f, "Sl")
+	return create_anchor(true, "SYNTH:" .. info.source, info.currentline, 0)
 end
 
----@param debuglevel integer?
----@return Anchor
-local function anchor_here(debuglevel)
-	local info = debug.getinfo((debuglevel or 1) + 1, "Sl")
-	return create_anchor(info.currentline, 0, "SYNTH:" .. info.source)
+---@param f? (integer | function)
+---@return Span
+local function span_here(f)
+	if type(f) ~= "function" then
+		f = (f or 1) + 1
+	end
+	local anchor = anchor_here(f)
+	return create_span(anchor, anchor)
 end
 
 ---@class LinePosition
@@ -273,9 +515,10 @@ local grammar = P {
 			line_index = line_index - 1
 		end
 		local simple_anchor = create_anchor(
+			false,
+			line_ctx.id,
 			line_ctx.positions[line_index].line,
-			position - line_ctx.positions[line_index].pos + 1,
-			line_ctx.sourceid
+			position - line_ctx.positions[line_index].pos + 1
 		)
 		return true, simple_anchor
 	end),
@@ -345,7 +588,7 @@ local grammar = P {
 		P '"'
 			* Cg(Ct((V "string_literal" + V "splice") ^ 0), "elements")
 			* update_ffp('"', P '"')
-			* Cg(V "anchor", "end_anchor")
+			* Cg(V "anchor", "stop_anchor")
 	),
 
 	longstring_literal = V "anchor" * Cs(
@@ -356,14 +599,14 @@ local grammar = P {
 		P '""""'
 			* V "indent"
 			* Cg(Ct((V "longstring_literal" + V "splice") ^ 0), "elements")
-			* Cg(V "anchor", "end_anchor")
+			* Cg(V "anchor", "stop_anchor")
 			* V "dedent"
 	),
 
 	comment_body = C((1 - V "newline") ^ 1),
 	comment = update_ffp(
 		"line comment",
-		element("comment", (P "#" * Cg(V "comment_body" ^ -1, "val") * Cg(V "anchor", "end_anchor")))
+		element("comment", (P "#" * Cg(V "comment_body" ^ -1, "val") * Cg(V "anchor", "stop_anchor")))
 	),
 	block_comment = update_ffp(
 		"block comment",
@@ -373,7 +616,7 @@ local grammar = P {
 				P "####"
 				* V "indent"
 				* Cg(Cs((V "subordinate_indent" + V "comment_body" + V "empty_line") ^ 0), "val")
-				* Cg(V "anchor", "end_anchor")
+				* Cg(V "anchor", "stop_anchor")
 				* V "dedent"
 			)
 		)
@@ -435,6 +678,7 @@ local grammar = P {
 	) / function(list)
 		--assert(list.elements["braceacc"])
 
+		error("FIXME")
 		table.insert(list.elements, 1, {
 			kind = "symbol",
 			str = list.elements["braceacc"],
@@ -473,8 +717,8 @@ local grammar = P {
 		end)
 	),
 
-	inner_comma = element("comma", P "," * V "paren_spacers" * Cg(V "anchor", "end_anchor")),
-	inner_semicolon = element("semicolon", P ";" * V "paren_spacers" * Cg(V "anchor", "end_anchor")),
+	inner_comma = element("comma", P "," * V "paren_spacers" * Cg(V "anchor", "stop_anchor")),
+	inner_semicolon = element("semicolon", P ";" * V "paren_spacers" * Cg(V "anchor", "stop_anchor")),
 
 	-- the original parenlist was more idiomatic but took quadratic time, so it has been bodged
 	paren_list = Cmt(
@@ -486,7 +730,7 @@ local grammar = P {
 			* Ct((V "paren_tokens" + V "inner_semicolon" + V "inner_comma") ^ 0)
 			* ((V "dedent" * V "blockline") ^ -1 * V "close_brace")
 			* V "anchor",
-		function(_, _, ctx, list_start_anchor, brace, elements, list_end_anchor)
+		function(_, _, ctx, list_start_anchor, brace, elements, list_stop_anchor)
 			local found_semicolons = false
 			local found_commas = false
 
@@ -495,13 +739,13 @@ local grammar = P {
 			for _, v in ipairs(elements) do
 				if v["kind"] and (v["kind"] == "semicolon") then
 					if found_commas == true then
-						set_ffp_ctx("comma", ctx, v["start_anchor"])
+						set_ffp_ctx("comma", ctx, v.span.start)
 						return false
 					end
 					found_semicolons = true
 				elseif v["kind"] and (v["kind"] == "comma") then
 					if found_semicolons == true then
-						set_ffp_ctx("semicolon", ctx, v["start_anchor"])
+						set_ffp_ctx("semicolon", ctx, v.span.start)
 						return false
 					end
 					found_commas = true
@@ -516,7 +760,7 @@ local grammar = P {
 					if v["kind"] == "semicolon" then
 						table.insert(
 							semicolon_outer_acc,
-							create_list(semicolon_acc[1].start_anchor, semicolon_acc, v.end_anchor)
+							create_list(semicolon_acc[1].span.start, semicolon_acc, v.span.stop)
 						)
 						semicolon_acc = {}
 					else
@@ -536,10 +780,7 @@ local grammar = P {
 				for _, v in ipairs(elements) do
 					if v["kind"] == "comma" then
 						if #comma_acc > 1 then
-							table.insert(
-								comma_outer_acc,
-								create_list(comma_acc[1].start_anchor, comma_acc, v.end_anchor)
-							)
+							table.insert(comma_outer_acc, create_list(comma_acc[1].span.start, comma_acc, v.span.stop))
 						else
 							table.insert(comma_outer_acc, comma_acc[1])
 						end
@@ -550,7 +791,7 @@ local grammar = P {
 				end
 
 				if #comma_acc > 1 then
-					table.insert(comma_outer_acc, create_list(comma_acc[1].start_anchor, comma_acc, list_end_anchor))
+					table.insert(comma_outer_acc, create_list(comma_acc[1].span.start, comma_acc, list_stop_anchor))
 				elseif #comma_acc == 1 then
 					table.insert(comma_outer_acc, comma_acc[1])
 				end
@@ -567,7 +808,7 @@ local grammar = P {
 				table.insert(acc, 1, brace)
 			end
 
-			return true, create_list(list_start_anchor, acc, list_end_anchor)
+			return true, create_list(list_start_anchor, acc, list_stop_anchor)
 		end
 	),
 
@@ -579,7 +820,8 @@ local grammar = P {
 				+ (V "open_curly" * Cg(symbol(Cc("_{_}")), "brace"))
 			)
 				* V "paren_spacers"
-				* (V "comma_paren_body" + V "paren_tokens") ^ -1
+				* (V "comma_paren_body" + list(V "paren_tokens" ^ 2) + V "paren_tokens") ^ -1
+				* V "paren_spacers"
 				* V "close_brace"
 		) ^ 1
 	) / function(symbol, argcalls)
@@ -609,7 +851,10 @@ local grammar = P {
 
 	-- numbers are limited, they are not bignums, they are standard lua numbers. scopes shares the problem of files not having arbitrary precision
 	-- so it probably doesn't matter.
-	number = element("literal", Cg((V "float_special" + V "hex" + V "big_e") / tonumber, "val") * V "types"),
+	number = element(
+		"literal",
+		Cg((V "float_special" + V "hex" + V "big_e") / tonumber, "val") * V "types" * Cg(V "anchor", "stop_anchor")
+	),
 	types = Cg(
 		(P ":" * C((S "iu" * (P "8" + P "16" + P "32" + P "64")) + (P "f" * (P "32" + P "64")))) + P "" / "f64",
 		"literaltype"
@@ -636,7 +881,7 @@ local function span_error(start_anchor, subject, msg)
 	local caret_wsp = ("\t"):rep(tabnum) .. (" "):rep(start_anchor.char - (1 + tabnum))
 	local linenum_wsp = (" "):rep(string.len(start_anchor.line))
 
-	local span = string.format(
+	local span = string_format(
 		[[
 error: %s
 --> %s:%i:%i
@@ -645,7 +890,7 @@ error: %s
 %s |%s^
 	]],
 		msg,
-		start_anchor.sourceid,
+		start_anchor.id,
 		start_anchor.line,
 		start_anchor.char,
 		linenum_wsp,
@@ -660,7 +905,7 @@ end
 
 ---@class FormatList
 ---@field start_anchor Anchor
----@field end_anchor Anchor
+---@field stop_anchor Anchor
 ---@field kind LiteralKind
 ---@field elements table[]
 
@@ -678,7 +923,7 @@ local function parse(input, filename)
 	end
 
 	local line_ctx = {
-		sourceid = filename,
+		id = filename,
 		positions = { create_line_position(1, 1) },
 	}
 	local furthest_forward_ctx = { start_anchor = nil }
@@ -697,4 +942,12 @@ local function parse(input, filename)
 	return ast
 end
 
-return { parse = parse, anchor_mt = anchor_mt, create_anchor = create_anchor, anchor_here = anchor_here }
+return {
+	parse = parse,
+	anchor_mt = anchor_mt,
+	create_anchor = create_anchor,
+	anchor_here = anchor_here,
+	span_mt = span_mt,
+	create_span = create_span,
+	span_here = span_here,
+}
