@@ -1517,12 +1517,19 @@ local function define_type(self)
 	return self
 end
 
+---@param self table
 ---@param typename string
 ---@return ForeignType
-local function gen_builtin(typename)
-	return define_foreign({}, function(val)
+local function define_builtin(self, typename)
+	return define_foreign(self, function(val)
 		return type(val) == typename
 	end, typename)
+end
+
+---@param typename string
+---@return ForeignType
+local function declare_builtin(typename)
+	return define_builtin({}, typename)
 end
 
 local terms_gen = {
@@ -1539,10 +1546,10 @@ local terms_gen = {
 	---@type fun(): (self: UndefinedType)
 	declare_type = new_self(define_type),
 	metatable_equality = metatable_equality,
-	builtin_number = gen_builtin("number"),
-	builtin_string = gen_builtin("string"),
-	builtin_function = gen_builtin("function"),
-	builtin_table = gen_builtin("table"),
+	builtin_number = declare_builtin("number"),
+	builtin_string = declare_builtin("string"),
+	builtin_function = declare_builtin("function"),
+	builtin_table = declare_builtin("table"),
 	array_type_mt = array_type_mt,
 	define_multi_enum = define_multi_enum,
 	any_lua_type = define_foreign({}, function()
