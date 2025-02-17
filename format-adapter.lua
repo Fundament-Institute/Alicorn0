@@ -6,30 +6,24 @@ local format = require "format"
 
 local function syntax_convert(tree)
 	if tree.kind == "list" then
-		local res = metalanguage.new_nilval(tree.start_anchor, tree.end_anchor)
+		local res = metalanguage.new_nilval(tree.span)
 		for i = #tree.elements, 1, -1 do
 			local elem = syntax_convert(tree.elements[i])
 			if elem then -- special handling for comments...
-				res = metalanguage.pair(tree.start_anchor, tree.end_anchor, elem, res)
+				res = metalanguage.pair(tree.span, elem, res)
 			end
 		end
 		return res
 	elseif tree.kind == "symbol" then
 		assert(tree["kind"])
-		return metalanguage.symbol(tree.start_anchor, tree.end_anchor, tree)
+		return metalanguage.symbol(tree.span, tree)
 	elseif tree.kind == "literal" then
-		return metalanguage.value(
-			tree.start_anchor,
-			tree.end_anchor,
-			{ type = tree.literaltype, val = tree.val, start_anchor = tree.start_anchor, end_anchor = tree.end_anchor }
-		)
+		local tree_span = tree.span
+		return metalanguage.value(tree_span, { type = tree.literaltype, val = tree.val, span = tree_span })
 	elseif tree.kind == "string" then
 		if type(tree.elements) == "string" then
-			return metalanguage.value(
-				tree.start_anchor,
-				tree.end_anchor,
-				{ type = "string", val = tree.elements, start_anchor = tree.start_anchor, end_anchor = tree.end_anchor }
-			)
+			local tree_span = tree.span
+			return metalanguage.value(tree_span, { type = "string", val = tree.elements, span = tree_span })
 		end
 		if #tree.elements ~= 1 or tree.elements[1].literaltype ~= "bytes" then
 			error "NYI: strings with splices / not exactly one literal"
@@ -42,11 +36,8 @@ local function syntax_convert(tree)
 			chars[i] = string.char(byte)
 		end
 		local val = table.concat(chars)
-		return metalanguage.value(
-			tree.start_anchor,
-			tree.end_anchor,
-			{ type = "string", val = val, start_anchor = tree.start_anchor, end_anchor = tree.end_anchor }
-		)
+		local tree_span = tree.span
+		return metalanguage.value(tree_span, { type = "string", val = val, span = tree_span })
 	elseif tree.kind == "comment" then
 		--do nothing
 	else
@@ -61,29 +52,20 @@ end
 
 local lispy_indent = "\t"
 local lispy_break = 100
+---@param code ConstructedSyntax
+---@param d integer?
+---@return string
 local function lispy_print(code, d)
 	if d == nil then
 		d = 0
 	end
 	local start_anchor_pfx = ""
-	if code.start_anchor ~= nil then
-		local start_anchor_pfx_components = {}
-		table.insert(start_anchor_pfx_components, code.start_anchor.sourceid)
-		table.insert(start_anchor_pfx_components, code.start_anchor.line)
-		table.insert(start_anchor_pfx_components, code.start_anchor.char)
-		if #start_anchor_pfx_components > 0 then
-			start_anchor_pfx = "#|" .. table.concat(start_anchor_pfx_components, ":") .. "…|# "
-		end
+	if code.span ~= nil then
+		start_anchor_pfx = "#|" .. tostring(code.span.start) .. "…|# "
 	end
-	local end_anchor_sfx = ""
-	if code.end_anchor ~= nil then
-		local end_anchor_sfx_components = {}
-		table.insert(end_anchor_sfx_components, code.end_anchor.sourceid)
-		table.insert(end_anchor_sfx_components, code.end_anchor.line)
-		table.insert(end_anchor_sfx_components, code.end_anchor.char)
-		if #end_anchor_sfx_components > 0 then
-			end_anchor_sfx = " #|…" .. table.concat(end_anchor_sfx_components, ":") .. "|#"
-		end
+	local stop_anchor_sfx = ""
+	if code.span.start ~= code.span.stop then
+		stop_anchor_sfx = " #|…" .. tostring(code.span.stop) .. "|#"
 	end
 	if code.accepters.Pair then
 		local hd = code[1]
@@ -115,25 +97,25 @@ local function lispy_print(code, d)
 				pfx1,
 				table.concat(a, "\n" .. pfx1),
 				pfx,
-				end_anchor_sfx
+				stop_anchor_sfx
 			)
 		else
-			return ("%s(%s)%s"):format(start_anchor_pfx, table.concat(a, " "), end_anchor_sfx)
+			return ("%s(%s)%s"):format(start_anchor_pfx, table.concat(a, " "), stop_anchor_sfx)
 		end
 	elseif code.accepters.Symbol then
 		local name = code[1]
-		return start_anchor_pfx .. name.str .. end_anchor_sfx
+		return start_anchor_pfx .. name.str .. stop_anchor_sfx
 	elseif code.accepters.Value then
 		local val = code[1]
 		local sval = string.gsub(tostring(val.val), "%c", "")
 		if #sval > 10 then
 			sval = string.sub(sval, 1, 10) .. "..."
 		end
-		return ("%sval[%s](%s)%s"):format(start_anchor_pfx, val.type, sval, end_anchor_sfx)
+		return ("%sval[%s](%s)%s"):format(start_anchor_pfx, val.type, sval, stop_anchor_sfx)
 	elseif code.accepters.Nil then
-		return start_anchor_pfx .. "()" .. end_anchor_sfx
+		return start_anchor_pfx .. "()" .. stop_anchor_sfx
 	else
-		error(start_anchor_pfx .. "awa" .. end_anchor_sfx)
+		error(start_anchor_pfx .. "awa" .. stop_anchor_sfx)
 	end
 end
 

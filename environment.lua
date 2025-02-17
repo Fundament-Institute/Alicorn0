@@ -7,6 +7,7 @@ local U = require "alicorn-utils"
 local format = require "format"
 
 local terms = require "terms"
+local spanned_name = terms.spanned_name
 local unanchored_inferrable_term = terms.unanchored_inferrable_term
 local anchored_inferrable_term = terms.anchored_inferrable_term
 local typechecking_context = terms.typechecking_context
@@ -242,7 +243,7 @@ function environment:bind_local(binding)
 		error("(binding) tuple elim speculation failed! debugging this is left as an exercise to the maintainer")
 	elseif binding:is_annotated_lambda() then
 		local param_name, param_annotation, start_anchor, visible = binding:unwrap_annotated_lambda()
-		if not start_anchor or not start_anchor.sourceid then
+		if not start_anchor or not start_anchor.id then
 			print("binding", binding)
 			error "missing start_anchor for annotated lambda binding"
 		end
@@ -256,7 +257,7 @@ function environment:bind_local(binding)
 		--print(annotation_term:pretty_print(typechecking_context))
 		local evaled = evaluator.evaluate(annotation_term, typechecking_context.runtime_context, typechecking_context)
 		local bindings = self.bindings:append(binding)
-		local info = terms.var_debug(param_name, start_anchor)
+		local info = spanned_name(param_name, start_anchor:span(start_anchor))
 		local locals = self.locals:put(
 			param_name,
 			anchored_inferrable_term(
@@ -297,7 +298,7 @@ function environment:bind_local(binding)
 
 		--print("FOUND EFFECTFUL BINDING", first_result_type, "produced by ", first_type)
 		local n = typechecking_context:len()
-		local debuginfo = terms.var_debug("#program_sequence", start_anchor)
+		local debuginfo = spanned_name("#program_sequence", start_anchor:span(start_anchor))
 		local term = anchored_inferrable_term(start_anchor, unanchored_inferrable_term.bound_variable(n + 1, debuginfo))
 		local locals = self.locals:put("#program-sequence", term)
 		typechecking_context = typechecking_context:append("#program-sequence", first_result_type, nil, debuginfo)
@@ -437,7 +438,7 @@ function environment:exit_block(term, shadowed)
 				first,
 				start_anchor,
 				wrapped,
-				terms.var_debug("#program-sequence", start_anchor)
+				spanned_name("#program-sequence", start_anchor:span(start_anchor))
 			)
 		else
 			error("exit_block: unknown kind: " .. binding.kind)
