@@ -827,6 +827,14 @@ local function define_map(self, key_type, value_type)
 end
 define_map = U.memoize(define_map, false)
 
+---@param key_type Type
+---@param value_type Type
+---@return MapType self
+local function declare_map(key_type, value_type)
+	return define_map({}, key_type, value_type)
+end
+declare_map = U.memoize(declare_map, false)
+
 ---@class SetType: Type
 ---@overload fun(...): SetValue
 ---@field key_type Type
@@ -1036,6 +1044,13 @@ local function define_set(self, key_type)
 	return self
 end
 define_set = U.memoize(define_set, false)
+
+---@param key_type Type
+---@return SetType self
+local function declare_set(key_type)
+	return define_set({}, key_type)
+end
+declare_set = U.memoize(declare_set, false)
 
 ---@class ArrayType: Type
 ---@overload fun(...): ArrayValue
@@ -1452,6 +1467,13 @@ local function define_array(self, value_type)
 end
 define_array = U.memoize(define_array, false)
 
+---@param value_type Type
+---@return ArrayType self
+local function declare_array(value_type)
+	return define_array({}, value_type)
+end
+declare_array = U.memoize(declare_array, false)
+
 ---@class UndefinedType: Type
 ---@field define_record fun(self: table, kind: string, params_with_types: ParamsWithTypes): RecordType
 ---@field define_enum fun(self: table, name: string, variants: Variants): EnumType
@@ -1501,12 +1523,9 @@ local terms_gen = {
 	-- Make sure the function you pass to this returns true, not just a truthy value
 	---@type fun(value_check: ValueCheckFn, lsp_type: string): (self: ForeignType)
 	declare_foreign = new_self(define_foreign),
-	---@type fun(key_type: Type, value_type: Type): (self: MapType)
-	declare_map = U.memoize(new_self(define_map), false),
-	---@type fun(key_type: Type): (self: SetType)
-	declare_set = U.memoize(new_self(define_set), false),
-	---@type fun(value_type: Type): (self: ArrayType)
-	declare_array = U.memoize(new_self(define_array), false),
+	declare_map = declare_map,
+	declare_set = declare_set,
+	declare_array = declare_array,
 	---@type fun(): (self: UndefinedType)
 	declare_type = new_self(define_type),
 	metatable_equality = metatable_equality,
