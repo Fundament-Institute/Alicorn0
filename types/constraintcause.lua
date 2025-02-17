@@ -17,13 +17,13 @@ function constraintcause:unwrap_primitive() end
 function constraintcause:as_primitive() end
 ---@return boolean
 function constraintcause:is_composition() end
----@return number left
----@return number right
+---@return integer left
+---@return integer right
 ---@return Anchor position
 function constraintcause:unwrap_composition() end
 ---@return boolean
----@return number left
----@return number right
+---@return integer left
+---@return integer right
 ---@return Anchor position
 function constraintcause:as_composition() end
 ---@return boolean
@@ -37,24 +37,24 @@ function constraintcause:unwrap_nested() end
 function constraintcause:as_nested() end
 ---@return boolean
 function constraintcause:is_leftcall_discharge() end
----@return number call
----@return number constraint
+---@return integer call
+---@return integer constraint
 ---@return Anchor position
 function constraintcause:unwrap_leftcall_discharge() end
 ---@return boolean
----@return number call
----@return number constraint
+---@return integer call
+---@return integer constraint
 ---@return Anchor position
 function constraintcause:as_leftcall_discharge() end
 ---@return boolean
 function constraintcause:is_rightcall_discharge() end
----@return number constraint
----@return number call
+---@return integer constraint
+---@return integer call
 ---@return Anchor position
 function constraintcause:unwrap_rightcall_discharge() end
 ---@return boolean
----@return number constraint
----@return number call
+---@return integer constraint
+---@return integer call
 ---@return Anchor position
 function constraintcause:as_rightcall_discharge() end
 ---@return boolean
@@ -72,9 +72,9 @@ function constraintcause:as_lost() end
 ---@class (exact) constraintcauseType: EnumType
 ---@field define_enum fun(self: constraintcauseType, name: string, variants: Variants): constraintcauseType
 ---@field primitive fun(description: string, position: Anchor, track: any): constraintcause
----@field composition fun(left: number, right: number, position: Anchor): constraintcause
+---@field composition fun(left: integer, right: integer, position: Anchor): constraintcause
 ---@field nested fun(description: string, inner: constraintcause): constraintcause
----@field leftcall_discharge fun(call: number, constraint: number, position: Anchor): constraintcause
----@field rightcall_discharge fun(constraint: number, call: number, position: Anchor): constraintcause
+---@field leftcall_discharge fun(call: integer, constraint: integer, position: Anchor): constraintcause
+---@field rightcall_discharge fun(constraint: integer, call: integer, position: Anchor): constraintcause
 ---@field lost fun(unique_string: string, stacktrace: string, auxiliary: any): constraintcause
 return {}

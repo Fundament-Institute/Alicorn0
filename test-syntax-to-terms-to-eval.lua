@@ -19,7 +19,7 @@ p("code", code)
 local lit = terms.typed_term.literal
 
 local array = gen.declare_array
-local usage_array = array(gen.builtin_number)
+local usage_array = array(gen.builtin_integer)
 
 local function inf_typ(t, typ)
 	return U.notail(terms.unanchored_inferrable_term.typed(terms.typed_term.literal(t), usage_array(), typ))

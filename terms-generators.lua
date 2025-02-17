@@ -10,6 +10,27 @@ local _ = require "lua-ext" -- has side-effect of loading fixed table.concat
 local math_floor, select, type = math.floor, select, type
 local s = pretty_printer.s
 
+---@diagnostic disable-next-line: no-unknown
+local builtin_integer_value_check
+do
+	local math_type = math.type
+	if math_type ~= nil then
+		---@param val any
+		---@return boolean is_integer
+		function builtin_integer_value_check(val)
+			local val_type = math_type(val)
+			return val_type == "integer"
+		end
+	else
+		---@param val any
+		---@return boolean is_integer
+		function builtin_integer_value_check(val)
+			local val_type = type(val)
+			return val_type == "number" and math_floor(val) == val
+		end
+	end
+end
+
 -- record and enum are nominative types.
 -- this means that two record types, given the same arguments, are distinct.
 -- values constructed from one type are of a different type compared to values
@@ -1305,15 +1326,7 @@ local function gen_array_index_fns(self, value_type)
 		if val.is_frozen then
 			error(("trying to set %s on a frozen array to %s: %s"):format(s(key), s(value), s(val)))
 		end
-		if type(key) ~= "number" then
-			error(
-				("wrong key type passed to array index-assignment: expected %s but got %s"):format(
-					s(value_type),
-					s(key)
-				)
-			)
-		end
-		if math_floor(key) ~= key then
+		if not builtin_integer_value_check(key) then
 			error(("key passed to array index-assignment is not an integer: %s"):format(s(key)))
 		end
 		-- n+1 can be used to append
@@ -1539,6 +1552,7 @@ local terms_gen = {
 	declare_type = declare_type,
 	metatable_equality = metatable_equality,
 	builtin_number = declare_builtin("number"),
+	builtin_integer = declare_foreign(builtin_integer_value_check, "integer"),
 	builtin_string = declare_builtin("string"),
 	builtin_function = declare_builtin("function"),
 	builtin_table = declare_builtin("table"),
@@ -1560,7 +1574,7 @@ end
 local function compare_trivial(left, right)
 	return left < right
 end
-for _, t in ipairs { terms_gen.builtin_number, terms_gen.builtin_string } do
+for _, t in ipairs { terms_gen.builtin_integer, terms_gen.builtin_string } do
 	traits.freeze:implement_on(t, { freeze = freeze_trivial })
 	traits.order:implement_on(t, { compare = compare_trivial })
 end

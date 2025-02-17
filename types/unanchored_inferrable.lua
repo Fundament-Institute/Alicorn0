@@ -6,22 +6,22 @@ unanchored_inferrable = {}
 
 ---@return boolean
 function unanchored_inferrable:is_bound_variable() end
----@return number index
+---@return integer index
 ---@return spanned_name debug
 function unanchored_inferrable:unwrap_bound_variable() end
 ---@return boolean
----@return number index
+---@return integer index
 ---@return spanned_name debug
 function unanchored_inferrable:as_bound_variable() end
 ---@return boolean
 function unanchored_inferrable:is_typed() end
 ---@return typed type
----@return ArrayValue<number> usage_counts
+---@return ArrayValue<integer> usage_counts
 ---@return typed typed_term
 function unanchored_inferrable:unwrap_typed() end
 ---@return boolean
 ---@return typed type
----@return ArrayValue<number> usage_counts
+---@return ArrayValue<integer> usage_counts
 ---@return typed typed_term
 function unanchored_inferrable:as_typed() end
 ---@return boolean
@@ -380,8 +380,8 @@ function unanchored_inferrable:as_program_type() end
 
 ---@class (exact) unanchored_inferrableType: EnumType
 ---@field define_enum fun(self: unanchored_inferrableType, name: string, variants: Variants): unanchored_inferrableType
----@field bound_variable fun(index: number, debug: spanned_name): unanchored_inferrable
----@field typed fun(type: typed, usage_counts: ArrayValue<number>, typed_term: typed): unanchored_inferrable
+---@field bound_variable fun(index: integer, debug: spanned_name): unanchored_inferrable
+---@field typed fun(type: typed, usage_counts: ArrayValue<integer>, typed_term: typed): unanchored_inferrable
 ---@field annotated_lambda fun(param_name: string, param_annotation: anchored_inferrable, body: anchored_inferrable, start_anchor: Anchor, visible: visibility, pure: checkable): unanchored_inferrable
 ---@field pi fun(param_type: anchored_inferrable, param_info: checkable, result_type: anchored_inferrable, result_info: checkable): unanchored_inferrable
 ---@field application fun(f: anchored_inferrable, arg: checkable): unanchored_inferrable

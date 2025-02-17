@@ -31,7 +31,7 @@ local mytype3butsimple = gen.declare_record("mytype3simple", {
 	"one",
 	gen.builtin_number,
 	"anotherone",
-	gen.builtin_number,
+	gen.builtin_integer,
 })
 
 for _, t in ipairs { mytype1, mytype2, mytype3, nest1, mytype3butsimple } do

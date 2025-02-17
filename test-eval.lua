@@ -15,7 +15,7 @@ local string_inferrable_map = map(gen.builtin_string, unanchored_inferrable_term
 local string_typed_map = map(gen.builtin_string, typed_term)
 local array = gen.declare_array
 local value_array = array(value)
-local usage_array = array(gen.builtin_number)
+local usage_array = array(gen.builtin_integer)
 local string_array = array(gen.builtin_string)
 
 local function tup_val(...)

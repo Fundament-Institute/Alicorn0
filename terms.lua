@@ -729,10 +729,10 @@ checkable_term:define_enum("checkable", {
 -- inferrable terms can have their type inferred / don't need a goal type
 -- stylua: ignore
 unanchored_inferrable_term:define_enum("unanchored_inferrable", {
-	{ "bound_variable", { "index", gen.builtin_number, "debug", spanned_name } },
+	{ "bound_variable", { "index", gen.builtin_integer, "debug", spanned_name } },
 	{ "typed", {
 		"type",         typed_term,
-		"usage_counts", array(gen.builtin_number),
+		"usage_counts", array(gen.builtin_integer),
 		"typed_term",   typed_term,
 	} },
 	{ "annotated_lambda", {
@@ -924,8 +924,8 @@ constraintcause:define_enum("constraintcause", {
 		"track", gen.any_lua_type,
 	} },
 	{ "composition", {
-		"left",     gen.builtin_number,
-		"right",    gen.builtin_number,
+		"left",     gen.builtin_integer,
+		"right",    gen.builtin_integer,
 		"position", anchor_type,
 	} },
 	{ "nested", {
@@ -933,13 +933,13 @@ constraintcause:define_enum("constraintcause", {
 		"inner",     constraintcause,
 	} },
 	{ "leftcall_discharge", {
-		"call",       gen.builtin_number,
-		"constraint", gen.builtin_number,
+		"call",       gen.builtin_integer,
+		"constraint", gen.builtin_integer,
 		"position",   anchor_type,
 	} },
 	{ "rightcall_discharge", {
-		"constraint", gen.builtin_number,
-		"call",       gen.builtin_number,
+		"constraint", gen.builtin_integer,
+		"call",       gen.builtin_integer,
 		"position",   anchor_type,
 	} },
 	{ "lost", { --Information has been lost, please generate any information you can to help someone debug the lost information in the future
@@ -999,7 +999,7 @@ local unique_id = gen.builtin_table
 -- typed terms have been typechecked but do not store their type internally
 -- stylua: ignore
 typed_term:define_enum("typed", {
-	{ "bound_variable", { "index", gen.builtin_number, "debug", spanned_name } },
+	{ "bound_variable", { "index", gen.builtin_integer, "debug", spanned_name } },
 	{ "literal", { "literal_value", strict_value } },
 	{ "metavariable", { "metavariable", metavariable_type } },
 	{ "unique", { "id", unique_id } },
@@ -1034,20 +1034,20 @@ typed_term:define_enum("typed", {
 		"level_a", typed_term,
 		"level_b", typed_term,
 	} },
-	{ "star", { "level", gen.builtin_number, "depth", gen.builtin_number } },
-	{ "prop", { "level", gen.builtin_number } },
+	{ "star", { "level", gen.builtin_integer, "depth", gen.builtin_integer } },
+	{ "prop", { "level", gen.builtin_integer } },
 	{ "tuple_cons", { "elements", array(typed_term) } },
 	--{"tuple_extend", {"base", typed_term, "fields", array(typed_term)}}, -- maybe?
 	{ "tuple_elim", {
 		"names",   array(gen.builtin_string),
 		"debug", array(spanned_name), -- can probably replace the names array entirely
 		"subject", typed_term,
-		"length",  gen.builtin_number,
+		"length",  gen.builtin_integer,
 		"body",    typed_term,
 	} },
 	{ "tuple_element_access", {
 		"subject", typed_term,
-		"index",   gen.builtin_number,
+		"index",   gen.builtin_integer,
 	} },
 	{ "tuple_type", { "desc", typed_term } },
 	{ "tuple_desc_type", { "universe", typed_term } },
@@ -1272,7 +1272,7 @@ typed_term.literal = literal_constructor_check
 free:define_enum("free", {
 	{ "metavariable", { "metavariable", metavariable_type } },
 	{ "placeholder", {
-		"index", gen.builtin_number,
+		"index", gen.builtin_integer,
 		"debug", spanned_name,
 	} },
 	{ "unique", { "id", unique_id } },
@@ -1540,8 +1540,8 @@ gen.define_multi_enum(
 		}, },
 		{ "object_type$flex", { "desc", flex_value } },
 
-		{ "star$strict", { "level", gen.builtin_number, "depth", gen.builtin_number } },
-		{ "prop$strict", { "level", gen.builtin_number } },
+		{ "star$strict", { "level", gen.builtin_integer, "depth", gen.builtin_integer } },
+		{ "prop$strict", { "level", gen.builtin_integer } },
 
 		{ "host_value$strict", { "host_value", gen.any_lua_type } },
 		-- foreign data
@@ -1631,7 +1631,7 @@ gen.define_multi_enum(
 		-- } },
 		{ "tuple_element_access$stuck", {
 			"subject", stuck_value,
-			"index",   gen.builtin_number,
+			"index",   gen.builtin_integer,
 		} },
 		{ "record_field_access$stuck", {
 			"subject",    stuck_value,

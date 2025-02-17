@@ -25,7 +25,7 @@ local param_info_explicit = strict_value.param_info(strict_value.visibility(term
 local result_info_pure = strict_value.result_info(terms.result_info(terms.purity.pure))
 local result_info_effectful = strict_value.result_info(terms.result_info(terms.purity.effectful))
 
-local usage_array = gen.declare_array(gen.builtin_number)
+local usage_array = gen.declare_array(gen.builtin_integer)
 local name_array = gen.declare_array(gen.builtin_string)
 local empty_tuple = terms.strict_value.tuple_value(strict_value_array())
 
@@ -126,7 +126,7 @@ local function let_impl(syntax, env)
 				syntax.span.start,
 				unanchored_inferrable_term.typed(
 					typed_term.literal(terms.unit_type),
-					gen.declare_array(gen.builtin_number)(),
+					usage_array(),
 					typed_term.literal(terms.unit_val)
 				)
 			)
@@ -1016,7 +1016,6 @@ local function forall_impl(syntax, env)
 
 	local env, fn_res_term, purity = env:exit_block(results_args, shadowed)
 
-	local usage_array = gen.declare_array(gen.builtin_number)
 	local fn_type_term = anchored_inferrable_term(
 		start_anchor,
 		unanchored_inferrable_term.pi(

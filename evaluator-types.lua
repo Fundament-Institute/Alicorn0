@@ -15,26 +15,26 @@ local SubtypeRelation = terms.SubtypeRelation
 -- stylua: ignore
 EdgeNotif:define_enum("edgenotif", {
 	{ "Constrain", {
-		"left",  gen.builtin_number,
+		"left",  gen.builtin_integer,
 		"rel",  SubtypeRelation,
-		"right", gen.builtin_number,
-		"shallowest_block", gen.builtin_number,
+		"right", gen.builtin_integer,
+		"shallowest_block", gen.builtin_integer,
 		"cause",  terms.constraintcause,
 	} },
 	{ "CallLeft", {
-		"left",  gen.builtin_number,
+		"left",  gen.builtin_integer,
 		"arg",  flex_value,
 		"rel",  SubtypeRelation,
-		"right", gen.builtin_number,
-		"shallowest_block", gen.builtin_number,
+		"right", gen.builtin_integer,
+		"shallowest_block", gen.builtin_integer,
 		"cause",  terms.constraintcause,
 	} },
 	{ "CallRight", {
-		"left",  gen.builtin_number,
+		"left",  gen.builtin_integer,
 		"rel",  SubtypeRelation,
-		"right", gen.builtin_number,
+		"right", gen.builtin_integer,
 		"arg",  flex_value,
-		"shallowest_block", gen.builtin_number,
+		"shallowest_block", gen.builtin_integer,
 		"cause",  terms.constraintcause,
 	} },
 }

@@ -633,7 +633,7 @@ end]]
 	}
 end
 
--- local typed = terms.inferrable_term.typed(terms.flex_value.number_type, gen.declare_array(gen.builtin_number)(), terms.typed_term.literal(terms.flex_value.number(1)))
+-- local typed = terms.inferrable_term.typed(terms.flex_value.number_type, gen.declare_array(gen.builtin_integer)(), terms.typed_term.literal(terms.flex_value.number(1)))
 -- p(typed)
 -- p(getmetatable(typed))
 -- p(terms.inferrable_term == getmetatable(typed))
