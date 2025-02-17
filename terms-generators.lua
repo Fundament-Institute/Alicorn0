@@ -827,6 +827,14 @@ local function define_map(self, key_type, value_type)
 end
 define_map = U.memoize(define_map, false)
 
+---@param key_type Type
+---@param value_type Type
+---@return MapType self
+local function declare_map(key_type, value_type)
+	return define_map({}, key_type, value_type)
+end
+declare_map = U.memoize(declare_map, false)
+
 ---@class SetType: Type
 ---@overload fun(...): SetValue
 ---@field key_type Type
@@ -1036,6 +1044,13 @@ local function define_set(self, key_type)
 	return self
 end
 define_set = U.memoize(define_set, false)
+
+---@param key_type Type
+---@return SetType self
+local function declare_set(key_type)
+	return define_set({}, key_type)
+end
+declare_set = U.memoize(declare_set, false)
 
 ---@class ArrayType: Type
 ---@overload fun(...): ArrayValue
@@ -1413,7 +1428,7 @@ end
 
 ---@param self table
 ---@param value_type Type
----@return ArrayType
+---@return ArrayType self
 local function define_array(self, value_type)
 	if type(value_type) ~= "table" or type(value_type.value_check) ~= "function" then
 		error(
@@ -1451,6 +1466,13 @@ local function define_array(self, value_type)
 	return self
 end
 define_array = U.memoize(define_array, false)
+
+---@param value_type Type
+---@return ArrayType self
+local function declare_array(value_type)
+	return define_array({}, value_type)
+end
+declare_array = U.memoize(declare_array, false)
 
 ---@class UndefinedType: Type
 ---@field define_record fun(self: table, kind: string, params_with_types: ParamsWithTypes): RecordType
@@ -1494,20 +1516,17 @@ local function gen_builtin(typename)
 end
 
 local terms_gen = {
-	---@type fun(kind: string, params_with_types: ParamsWithTypes): RecordType
+	---@type fun(kind: string, params_with_types: ParamsWithTypes): (self: RecordType)
 	declare_record = new_self(define_record),
-	---@type fun(name: string, variants: Variants): EnumType
+	---@type fun(name: string, variants: Variants): (self: EnumType)
 	declare_enum = new_self(define_enum),
 	-- Make sure the function you pass to this returns true, not just a truthy value
-	---@type fun(value_check: ValueCheckFn, lsp_type: string): ForeignType
+	---@type fun(value_check: ValueCheckFn, lsp_type: string): (self: ForeignType)
 	declare_foreign = new_self(define_foreign),
-	---@type fun(key_type: Type, value_type: Type): MapType
-	declare_map = new_self(define_map),
-	---@type fun(key_type: Type): SetType
-	declare_set = new_self(define_set),
-	---@type fun(value_type: Type): ArrayType
-	declare_array = new_self(define_array),
-	---@type fun(): UndefinedType
+	declare_map = declare_map,
+	declare_set = declare_set,
+	declare_array = declare_array,
+	---@type fun(): (self: UndefinedType)
 	declare_type = new_self(define_type),
 	metatable_equality = metatable_equality,
 	builtin_number = gen_builtin("number"),
