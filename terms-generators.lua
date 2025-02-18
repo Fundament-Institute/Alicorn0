@@ -140,6 +140,24 @@ local function gen_record(self, cons, kind, params_with_types)
 			_record = {},
 		}
 		for i, v in ipairs(params) do
+			val._record[v] = args[i]
+		end
+		if false then
+			-- val["{TRACE}"] = U.bound_here(2)
+			val["{TRACE}"] = debug.traceback("", 2)
+			-- val["{TRACE}"] = U.custom_traceback("", "", -1)
+		end
+		val["{ID}"] = U.debug_id()
+		setmetatable(val, self)
+		return val
+	end
+	build_record = U.memoize(build_record, false)
+	-- freeze args before entering memoized function
+	-- because freeze may produce a hash-consed instance of the given arg
+	-- which allows hash-consing to work with arrays etc
+	local function build_record_freeze_wrapper(...)
+		local args = { ... }
+		for i, v in ipairs(params) do
 			local param = args[i]
 			local param_type = params_types[i]
 			-- type-check constructor arguments
@@ -158,28 +176,9 @@ local function gen_record(self, cons, kind, params_with_types)
 					)
 				)
 			end
-			val._record[v] = param
-		end
-		if false then
-			-- val["{TRACE}"] = U.bound_here(2)
-			val["{TRACE}"] = debug.traceback("", 2)
-			-- val["{TRACE}"] = U.custom_traceback("", "", -1)
-		end
-		val["{ID}"] = U.debug_id()
-		setmetatable(val, self)
-		return val
-	end
-	build_record = U.memoize(build_record, false)
-	-- freeze args before entering memoized function
-	-- because freeze may produce a hash-consed instance of the given arg
-	-- which allows hash-consing to work with arrays etc
-	local function build_record_freeze_wrapper(...)
-		local args = { ... }
-		for i, v in ipairs(params) do
-			local argi = args[i]
-			local freeze_impl = traits.freeze:get(params_types[i])
+			local freeze_impl = traits.freeze:get(param_type)
 			if freeze_impl then
-				argi = freeze_impl.freeze(params_types[i], argi)
+				param = freeze_impl.freeze(param_type, param)
 			else
 				print(
 					"WARNING: while constructing "
@@ -187,12 +186,12 @@ local function gen_record(self, cons, kind, params_with_types)
 						.. ", can't freeze param "
 						.. v
 						.. " (type "
-						.. tostring(params_types[i])
+						.. tostring(param_type)
 						.. ")"
 				)
 				print("this may lead to suboptimal hash-consing")
 			end
-			args[i] = argi
+			args[i] = param
 		end
 		-- adjust args to correct number so memoize works even given too many args
 		-- (build_record won't error with too many args)
