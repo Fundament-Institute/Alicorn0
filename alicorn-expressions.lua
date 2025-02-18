@@ -1752,7 +1752,7 @@ local top_level_block = metalanguage.reducer(
 			progress = progress + 1
 			local line_setup_sequence = ""
 			if U.file_is_terminal() then
-				line_setup_sequence = "\x1bM"
+				line_setup_sequence = "\x1b[M"
 			end
 			io.write(
 				line_setup_sequence

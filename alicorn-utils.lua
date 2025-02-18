@@ -532,7 +532,7 @@ end
 
 function M.file_is_terminal(input_file)
 	-- TODO
-	return false
+	return true
 end
 
 -- TODO: check if output is terminal before adding color sequences
