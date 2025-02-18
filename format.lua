@@ -451,8 +451,12 @@ local function anchor_here(f)
 	if type(f) ~= "function" then
 		f = (f or 1) + 1
 	end
-	local info = debug.getinfo(f, "Sl")
-	return create_anchor(true, "SYNTH:" .. info.source, info.currentline, 0)
+	if debug then
+		local info = debug.getinfo(f, "Sl")
+		return create_anchor(true, "SYNTH:" .. info.source, info.currentline, 0)
+	end
+
+	return create_anchor(true, "SYNTH: <debug info disabled>", 0, 0)
 end
 
 ---@param f? (integer | function)

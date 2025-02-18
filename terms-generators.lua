@@ -40,13 +40,24 @@ local function new_self(fn)
 	end
 end
 
+---This attempts to create a traceback only if debug information is actually available
+---@param s string
+---@return string
+local function attempt_traceback(s)
+	if debug then
+		return debug.traceback(s)
+	else
+		return s
+	end
+end
+
 ---@param mt table
 ---@return ValueCheckFn
 local function metatable_equality(mt)
 	if type(mt) ~= "table" then
 		error(
 			"trying to define metatable equality to something that isn't a metatable (possible typo?): "
-				.. debug.traceback(tostring(mt))
+				.. attempt_traceback(tostring(mt))
 		)
 	end
 	return function(val)
@@ -92,7 +103,7 @@ local function validate_params_types(kind, params, params_types)
 		local param_type = params_types[i]
 		if type(param_type) ~= "table" or type(param_type.value_check) ~= "function" then
 			error(
-				debug.traceback(
+				attempt_traceback(
 					"trying to set a parameter type to something that isn't a type, in constructor "
 						.. kind
 						.. ", parameter "
@@ -145,7 +156,7 @@ local function gen_record(self, cons, kind, params_with_types)
 			-- type-check constructor arguments
 			if param_type.value_check(param) ~= true then
 				error(
-					debug.traceback(
+					attempt_traceback(
 						string.format(
 							"wrong argument type passed to constructor %s, parameter %q\nexpected type of parameter %q is: %s\nvalue of parameter %q: (follows)\n%s",
 							kind,
@@ -162,7 +173,7 @@ local function gen_record(self, cons, kind, params_with_types)
 		end
 		if false then
 			-- val["{TRACE}"] = U.bound_here(2)
-			val["{TRACE}"] = debug.traceback("", 2)
+			val["{TRACE}"] = attempt_traceback("", 2)
 			-- val["{TRACE}"] = U.custom_traceback("", "", -1)
 		end
 		val["{ID}"] = U.debug_id()
@@ -239,7 +250,7 @@ local function define_record(self, kind, params_with_types)
 			return t._record[key]
 		end
 		if key ~= "name" then
-			error(debug.traceback("use unwrap instead for: " .. key))
+			error(attempt_traceback("use unwrap instead for: " .. key))
 		end
 		if t._record[key] then
 			return t._record[key]
@@ -355,7 +366,7 @@ local function define_enum(self, name, variants)
 		if key == "{TRACE}" or key == "{ID}" then
 			return t._record[key]
 		end
-		error(debug.traceback("use unwrap instead for: " .. key))
+		error(attempt_traceback("use unwrap instead for: " .. key))
 		if t._record[key] then
 			return t._record[key]
 		end
@@ -474,7 +485,7 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 					local param_type = params_types[i]
 					if param_type.value_check(param) ~= true then
 						error(
-							debug.traceback(
+							attempt_traceback(
 								string.format(
 									"wrong argument type passed to constructor %s, parameter %q\nexpected type of parameter %q is: %s\nvalue of parameter %q: (follows)\n%s",
 									param.kind,
@@ -1084,7 +1095,7 @@ local array_type_mt = {
 			local value = select(i, ...)
 			if value_type.value_check(value) ~= true then
 				error(
-					debug.traceback(
+					attempt_traceback(
 						string.format(
 							"wrong value type passed to array creation: expected [%s] of type %s but got %s",
 							s(i),
@@ -1142,7 +1153,7 @@ local function array_new_fn(self, array, n)
 		local value = array[i]
 		if value_type.value_check(value) ~= true then
 			error(
-				debug.traceback(
+				attempt_traceback(
 					string.format(
 						"wrong value type passed to array creation: expected [%s] of type %s but got %s",
 						s(i),
@@ -1208,7 +1219,7 @@ local function gen_array_methods(self, value_type)
 				local value = fn(array[i])
 				if value_type.value_check(value) ~= true then
 					error(
-						debug.traceback(
+						attempt_traceback(
 							string.format(
 								"wrong value type resulting from array mapping: expected [%s] of type %s but got %s",
 								s(i),
@@ -1317,7 +1328,7 @@ local function gen_array_index_fns(self, value_type)
 		end
 		if value_type.value_check(value) ~= true then
 			error(
-				debug.traceback(
+				attempt_traceback(
 					string.format(
 						"wrong value type passed to array index-assignment: expected [%s] of type %s but got %s",
 						s(key),
@@ -1432,7 +1443,7 @@ local function define_array(self, value_type)
 	if type(value_type) ~= "table" or type(value_type.value_check) ~= "function" then
 		error(
 			"trying to set the value type to something that isn't a type (possible typo?): "
-				.. debug.traceback(tostring(value_type))
+				.. attempt_traceback(tostring(value_type))
 		)
 	end
 

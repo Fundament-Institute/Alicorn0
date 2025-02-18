@@ -64,7 +64,7 @@ let srel = lambda_implicit (U : type-omega+1)
 			""""
 				return U.notail(evaluator.gen_base_operator("#srel", function(target)
 					return U.notail(terms.typed_term.srel_type(target))
-				end))
+				end, "target"))
 			:
 			wrapped (forall ((target : U)) -> (rel : U))
 
@@ -74,7 +74,7 @@ let variance = lambda_implicit (U : type-omega+1)
 			""""
 				return U.notail(evaluator.gen_base_operator("#variance", function(target)
 					return U.notail(terms.typed_term.variance_type(target))
-				end))
+				end, "target"))
 			:
 			wrapped (forall ((target : U)) -> (res : U))
 
@@ -86,7 +86,7 @@ let tuple-desc-type = lambda_implicit (U : universe)
 			""""
 				return U.notail(evaluator.gen_base_operator("#tuple-desc-type", function(a_universe)
 					return U.notail(terms.typed_term.tuple_desc_type(a_universe))
-				end))
+				end, "a_universe"))
 			:
 			wrapped (forall ((a-universe : U)) -> (desc : U))
 
@@ -98,7 +98,7 @@ let _|_ = lambda_implicit (U : type-omega+1)
 			""""
 				return U.notail(evaluator.gen_base_operator("#union", function(left, right)
 					return U.notail(terms.typed_term.union_type(left, right))
-				end))
+				end, "left", "right"))
 			:
 			wrapped (forall (left : U, right : U) -> (union : U))
 
@@ -108,7 +108,7 @@ let _&_ = lambda_implicit (U : type-omega+1)
 			""""
 				return U.notail(evaluator.gen_base_operator("#intersection", function(left, right)
 					return U.notail(terms.typed_term.intersection_type(left, right))
-				end))
+				end, "left", "right"))
 			:
 			wrapped (forall (left : U, right : U) -> (intersection : U))
 
@@ -119,7 +119,7 @@ let covariant = lambda_curry (U : universe, a : U)
 				return U.notail(evaluator.gen_base_operator("#covariant", function(rel)
 					local positive = terms.typed_term.literal(terms.strict_value.host_value(true))
 					return U.notail(terms.typed_term.variance_cons(positive, rel))
-				end))
+				end, "rel"))
 			:
 			wrapped (forall ((rel : srel(a))) -> (covariant-rel : variance(a)))
 
@@ -781,7 +781,7 @@ let tuple-desc-elem-explicit = lambda (U : universe)
 			""""
 				return U.notail(evaluator.gen_base_operator("#tuple-desc-elem-explicit", function(desc, elem)
 					return U.notail(terms.typed_cons(desc, elem))
-				end))
+				end, "desc", "elem"))
 			:
 			wrapped(forall (desc : U-tuple-desc-type, elem : (forall (rest : tuple-type(desc)) -> (next : U))) -> (res : U-tuple-desc-type))
 

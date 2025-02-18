@@ -308,17 +308,22 @@ end
 
 ---@param f async fun(...):...
 function PrettyPrint:func(f)
-	local d = debug.getinfo(f, "Su")
-	---@type string[]
-	local params = {}
-	for i = 1, d.nparams do
-		params[#params + 1] = debug.getlocal(f, i)
+	if debug then
+		local d = debug.getinfo(f, "Su")
+		---@type string[]
+		local params = {}
+		for i = 1, d.nparams do
+			params[#params + 1] = debug.getlocal(f, i)
+		end
+		if d.isvararg then
+			params[#params + 1] = "..."
+		end
+
+		self[#self + 1] =
+			string.format("%s function(%s): %s:%d", d.what, table.concat(params, ", "), d.source, d.linedefined)
+	else
+		self[#self + 1] = "lua function(<unknown params>): <debug info disabled>"
 	end
-	if d.isvararg then
-		params[#params + 1] = "..."
-	end
-	self[#self + 1] =
-		string.format("%s function(%s): %s:%d", d.what, table.concat(params, ", "), d.source, d.linedefined)
 end
 
 function PrettyPrint_mt:__tostring()
