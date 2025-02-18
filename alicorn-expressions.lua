@@ -1779,10 +1779,10 @@ local top_level_block = metalanguage.reducer(
 	"block"
 )
 
--- example usage of primitive_applicative
+-- example usage of host_applicative
 -- add(a, b) = a + b ->
--- local prim_num = terms.strict_value.prim_number_type
--- primitive_applicative(function(a, b) return a + b end, {prim_num, prim_num}, {prim_num}),
+-- local host_num = terms.strict_value.host_number_type
+-- host_applicative(function(a, b) return a + b end, {host_num, host_num}, {host_num}),
 
 ---@param elems strict_value[]
 ---@return strict_value
@@ -1807,7 +1807,13 @@ local function host_applicative(fn, params, results)
 	local literal_host_fn = terms.typed_term.literal(terms.strict_value.host_value(fn))
 	local host_fn_type = terms.strict_value.host_function_type(
 		build_host_type_tuple(params),
-		build_host_type_tuple(results),
+		terms.strict_value.closure(
+			"#hostap-params",
+			terms.typed_term.literal(build_host_type_tuple(results)),
+			terms.strict_value.tuple_value(strict_value_array()),
+			spanned_name("", format.span_here()),
+			spanned_name("", format.span_here())
+		),
 		result_info_pure
 	)
 	return U.notail(
