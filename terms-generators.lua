@@ -1486,9 +1486,6 @@ local type_mt = {
 		define_record = define_record,
 		define_enum = define_enum,
 		define_foreign = define_foreign,
-		define_map = define_map,
-		define_set = define_set,
-		define_array = define_array,
 	},
 }
 
