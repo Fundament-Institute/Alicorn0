@@ -50,7 +50,7 @@ if arg then -- puc-rio lua, luajit
 	interpreter_argv = table.move(arg, n + 1, -1, 0, {})
 	argv = table.move(arg, 0, #arg, 0, {})
 elseif process.argv then -- luvit
-	local file_n = getopt(process.argv, { ["?"] = function() end })
+	local file_n = getopt(process.argv, { ["?"] = function() end }, {})
 	interpreter_argv = table.move(process.argv, 0, file_n - 1, 0, {})
 	argv = table.move(process.argv, file_n, #process.argv, 0, {})
 else
@@ -115,7 +115,8 @@ local short_opts = {
 		print_usage = true
 	end,
 }
-local first_operand = getopt(argv, short_opts)
+local long_opts = {}
+local first_operand = getopt(argv, short_opts, long_opts)
 
 if print_usage then
 	local usage = [=[Usage: %s [-Sfstv] [(-p|-P) <file>[,<what>]] [-T <test>]
