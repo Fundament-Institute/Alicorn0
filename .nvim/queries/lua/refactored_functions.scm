@@ -18,12 +18,12 @@
 		)
 	]
 	(#any-eq? @_function.name
-		"apply_value"
-		"infer_tuple_type"
-		"infer_tuple_type_unwrapped"
+		"substitute_inner" ; 4
+		"substitute_inner_impl" ; 4
+		"slice_constraints_for" ; 4
 	)
 	arguments: (arguments
-		. (_) . (_) .
+		. (_) . (_) . (_) . ; 3
 	)
 ) @function.call
 
@@ -40,10 +40,11 @@
 		)
 	]
 	(#any-eq? @_function.name
-		"extract_desc_nth"
-		"make_inner_context"
+		"substitute_inner" ; 4
+		"substitute_inner_impl" ; 4
+		"slice_constraints_for" ; 4
 	)
 	arguments: (arguments
-		. (_) . (_) . (_) .
+		. (_) . (_) . (_) . (_) . (_) . ; 5
 	)
 ) @function.call
