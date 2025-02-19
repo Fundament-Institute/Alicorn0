@@ -18,12 +18,15 @@ on:
 
 jobs:
   check:
+    # Avoid running twice for PRs from branches in fundament repo
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
       - uses: DeterminateSystems/nix-installer-action@main
       - run: nix flake check -L
   status:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
