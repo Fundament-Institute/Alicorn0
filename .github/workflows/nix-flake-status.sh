@@ -12,7 +12,7 @@ if [[ -z "${GITHUB_TOKEN}" ]]; then
     GITHUB_TOKEN="$(gh auth token)"
 fi
 
-GITHUB_REPO="${GITHUB_REPO:-Fundament-Software/Alicorn0}"
+GITHUB_REPO="${GITHUB_REPOSITORY:-Fundament-Software/Alicorn0}"
 COMMIT_SHA="${COMMIT_SHA:-$(git rev-parse HEAD)}"
 CHECK_SUITE_ID=""
 USE_CHECKS="${GITHUB_RUN_ID:+true}"  # should imply we can use check suites
