@@ -159,7 +159,10 @@ main() {
 
     # Only create check suite if we're using checks
     if [ "${USE_CHECKS}" = "true" ]; then
-        create_check_suite
+        if ! create_check_suite; then
+            USE_CHECKS=
+            echo "Falling back to commit statuses"
+        fi
     fi
 
     update_status "pending" "Evaluating Nix expressions" "eval"
