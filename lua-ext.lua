@@ -19,9 +19,15 @@ local function nextchar(state, control)
 end
 
 ---@param s string
+---@param start? integer
 ---@return function, string, integer
-function string.chars(s)
-	return nextchar, s, 0
+function string.chars(s, start)
+	if start == nil then
+		start = 0
+	else
+		start = start - 1
+	end
+	return nextchar, s, start
 end
 
 -- table.concat
