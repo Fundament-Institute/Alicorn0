@@ -7,7 +7,27 @@ local infer = evaluator.infer
 local evaluate = evaluator.evaluate
 local tc = terms.typechecking_context()
 local rc = tc.runtime_context
+local anchored_inferrable_term, anchored_inferrable_term_array =
+	terms.anchored_inferrable_term, terms.anchored_inferrable_term_array
+local spanned_name, spanned_name_array = terms.spanned_name, terms.spanned_name_array
 
+local function test_empty_tuple()
+	local tuple_term = anchored_inferrable_term(
+		format.anchor_here(),
+		unanchored_inferrable_term.tuple_cons(anchored_inferrable_term_array(), spanned_name_array())
+	)
+	local ok, inferred_type, usages, typed_term = infer(tuple_term, tc)
+	p("Empty tuple inferred type and typed term:", inferred_type, typed_term)
+	assert(inferred_type:is_tuple_type())
+	local result = evaluate(typed_term, rc)
+	p("Empty tuple evaluated to:", result)
+	assert(result:is_tuple_value())
+	assert(#result:unwrap_tuple_value() == 0)
+	print("test_empty_tuple success")
+end
+
+--[[
+-- Evaluator cases for levels use non-existent flex_value.level_type and flex_value.level
 function test_levels()
 	print(unanchored_inferrable_term.level0)
 	local suc_term = anchored_inferrable_term(
@@ -34,6 +54,7 @@ function test_levels()
 	assert(result.level == 1)
 end
 
+-- unanchored_inferrable_term.star doesn't exist
 function test_star()
 	local test_term = anchored_inferrable_term(format.anchor_here(), unanchored_inferrable_term.star)
 	local ok, inferred_type, inferred_term = infer(test_term, tc)
@@ -44,26 +65,6 @@ function test_star()
 	assert(result.kind == "value_star")
 	assert(result.level == 0)
 end
---[[
-function test_metavariable_bind_to_other_mv()
-	local tcs = terms.typechecker_state()
-	local mv_a = tcs:metavariable()
-	local mv_b = tcs:metavariable()
-	mv_a:bind_metavariable(mv_a) -- noop
-	mv_b:bind_metavariable(mv_a) -- mv_b binds to mv_a
-	local canonical_a = mv_a:get_canonical()
-	local canonical_b = mv_b:get_canonical()
-	p(mv_a, mv_b, canonical_a, canonical_b)
-	assert(mv_b:get_canonical().id == mv_a.id)
-	local mv_c = tcs:metavariable()
-	mv_c:bind_metavariable(mv_b)
-	assert(mv_c:get_canonical().id == mv_a.id)
-	-- check that bound ID was correctly collapsed
-	assert(tcs.mvs[mv_c.id].bound_mv_id == mv_a.id)
-end
 ]]
 
-test_levels()
--- FIXME: star isn't implemented as an inferrable term
--- test_star()
---test_metavariable_bind_to_other_mv()
+test_empty_tuple()
