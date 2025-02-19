@@ -1,0 +1,625 @@
+
+
+##### GLSL PRELUDE START HERE #####
+
+let glsl-bool = host-bool
+let glsl-float = host-number
+let glsl-vec2 = new-host-type(new-host-unique-id("glsl-vec2"))
+let glsl-vec3 = new-host-type(new-host-unique-id("glsl-vec3"))
+let glsl-vec4 = new-host-type(new-host-unique-id("glsl-vec4"))
+let glsl-mat4 = new-host-type(new-host-unique-id("glsl-mat4"))
+
+let host-add-float = intrinsic
+	""""
+		local host_add_float = function(l, r) return l + r end
+		glsl_registry[host_add_float] = function(pp, varnames, l, r)
+			pp:unit("(")
+			pp:any(l, varnames)
+			pp:unit(" + ")
+			pp:any(r, varnames)
+			pp:unit(")")
+		end
+		return host_add_float
+	:
+	host-func-type (left : glsl-float, right : glsl-float) -> ((sum : glsl-float))
+let _+_ = lambda (left : glsl-float, right : glsl-float)
+	let (sum) = host-add-float(left, right)
+	sum
+
+let host-sub-float = intrinsic
+	""""
+		local host_sub_float = function(l, r) return l - r end
+		glsl_registry[host_sub_float] = function(pp, varnames, l, r)
+			pp:unit("(")
+			pp:any(l, varnames)
+			pp:unit(" - ")
+			pp:any(r, varnames)
+			pp:unit(")")
+		end
+		return host_sub_float
+	:
+	host-func-type (left : glsl-float, right : glsl-float) -> ((difference : glsl-float))
+let _-_ = lambda (left : glsl-float, right : glsl-float)
+	let (difference) = host-sub-float(left, right)
+	difference
+
+let host-mul-float = intrinsic
+	""""
+		local host_mul_float = function(l, r) return l * r end
+		glsl_registry[host_mul_float] = function(pp, varnames, l, r)
+			pp:unit("(")
+			pp:any(l, varnames)
+			pp:unit(" * ")
+			pp:any(r, varnames)
+			pp:unit(")")
+		end
+		return host_mul_float
+	:
+	host-func-type (left : glsl-float, right : glsl-float) -> ((product : glsl-float))
+let _*_ = lambda (left : glsl-float, right : glsl-float)
+	let (product) = host-mul-float(left, right)
+	product
+
+let host-mul-vec2 = intrinsic
+	""""
+		local host_mul_float2 = function(l, r) return setmetatable({
+				x = l.x * r.x,
+				y = l.y * r.y,
+			}, glsl_registry["vec2"]) end
+		glsl_registry[host_mul_float2] = function(pp, varnames, l, r)
+			pp:unit("(")
+			pp:any(l, varnames)
+			pp:unit(" * ")
+			pp:any(r, varnames)
+			pp:unit(")")
+		end
+		return host_mul_float2
+	:
+	host-func-type (left : glsl-vec2, right : glsl-vec2) -> ((product : glsl-vec2))
+let _*:2_ = lambda (left : glsl-vec2, right : glsl-vec2)
+	let (product) = host-mul-vec2(left, right)
+	product
+
+let host-div-float = intrinsic
+	""""
+		local host_div_float = function(l, r) return l / r end
+		glsl_registry[host_div_float] = function(pp, varnames, l, r)
+			pp:unit("(")
+			pp:any(l, varnames)
+			pp:unit(" / ")
+			pp:any(r, varnames)
+			pp:unit(")")
+		end
+		return host_div_float
+	:
+	host-func-type (left : glsl-float, right : glsl-float) -> ((quotient : glsl-float))
+let _/_ = lambda (left : glsl-float, right : glsl-float)
+	let (quotient) = host-div-float(left, right)
+	quotient
+
+let host-lt-float = intrinsic
+	""""
+		local host_lt_float = function(l, r) return l < r end
+		glsl_registry[host_lt_float] = function(pp, varnames, l, r)
+			pp:unit("(")
+			pp:any(l, varnames)
+			pp:unit(" < ")
+			pp:any(r, varnames)
+			pp:unit(")")
+		end
+		return host_lt_float
+	:
+	host-func-type (left : glsl-float, right : glsl-float) -> ((result : glsl-bool))
+let _<_ = lambda (left : glsl-float, right : glsl-float)
+	let (result) = host-lt-float(left, right)
+	result
+
+let host-gt-float = intrinsic
+	""""
+		local host_gt_float = function(l, r) return l > r end
+		glsl_registry[host_gt_float] = function(pp, varnames, l, r)
+			pp:unit("(")
+			pp:any(l, varnames)
+			pp:unit(" > ")
+			pp:any(r, varnames)
+			pp:unit(")")
+		end
+		return host_gt_float
+	:
+	host-func-type (left : glsl-float, right : glsl-float) -> ((result : glsl-bool))
+let _>_ = lambda (left : glsl-float, right : glsl-float)
+	let (result) = host-gt-float(left, right)
+	result
+
+let host-clamp = intrinsic
+	""""
+		local host_clamp = function(x, minVal, maxVal)
+			if x < minVal then
+				return minVal
+			elseif x > maxVal then
+				return maxVal
+			else
+				return x
+			end
+		end
+		glsl_registry[host_clamp] = function(pp, varnames, x, minVal, maxVal)
+			pp:unit("clamp(")
+			pp:any(x, varnames)
+			pp:unit(", ")
+			pp:any(minVal, varnames)
+			pp:unit(", ")
+			pp:any(maxVal, varnames)
+			pp:unit(")")
+		end
+		return host_clamp
+	:
+	host-func-type (x : glsl-float, minVal : glsl-float, maxVal : glsl-float) -> ((clamped : glsl-float))
+let clamp = lambda (x : glsl-float, minVal : glsl-float, maxVal : glsl-float)
+	let (clamped) = host-clamp(x, minVal, maxVal)
+	clamped
+
+let host-max = intrinsic
+	""""
+		local host_max = function(x, minVal)
+			if x < minVal then
+				return minVal
+			else
+				return x
+			end
+		end
+		glsl_registry[host_max] = function(pp, varnames, x, minVal)
+			pp:unit("max(")
+			pp:any(x, varnames)
+			pp:unit(", ")
+			pp:any(minVal, varnames)
+			pp:unit(")")
+		end
+		return host_max
+	:
+	host-func-type (x : glsl-float, maxVal : glsl-float) -> ((maxed : glsl-float))
+let max = lambda (x : glsl-float, maxVal : glsl-float)
+	let (maxed) = host-max(x, maxVal)
+	maxed
+
+let host-min = intrinsic
+	""""
+		local host_min = function(x, minVal)
+			if x > minVal then
+				return minVal
+			else
+				return x
+			end
+		end
+		glsl_registry[host_min] = function(pp, varnames, x, minVal)
+			pp:unit("min(")
+			pp:any(x, varnames)
+			pp:unit(", ")
+			pp:any(minVal, varnames)
+			pp:unit(")")
+		end
+		return host_min
+	:
+	host-func-type (x : glsl-float, minVal : glsl-float) -> ((mined : glsl-float))
+let min = lambda (x : glsl-float, minVal : glsl-float)
+	let (mined) = host-min(x, minVal)
+	mined
+	
+let host-ternary = intrinsic
+	""""
+		local host_ternary = function(condition, consequent, alternate)
+			if condition then
+				return consequent
+			else
+				return alternate
+			end
+		end
+		glsl_registry[host_ternary] = function(pp, varnames, condition, consequent, alternate)
+			pp:unit("(")
+			pp:any(condition, varnames)
+			pp:unit(" ? ")
+			pp:any(consequent, varnames)
+			pp:unit(" : ")
+			pp:any(alternate, varnames)
+			pp:unit(")")
+		end
+		return host_ternary
+	:
+	host-func-type (condition : glsl-bool, consequent : glsl-float, alternate : glsl-float) -> ((result : glsl-float))
+let ternary = lambda (condition : glsl-bool, consequent : glsl-float, alternate : glsl-float)
+	let (result) = host-ternary(condition, consequent, alternate)
+	result
+
+let host-fwidth = intrinsic
+	""""
+		-- This returns the derivative of the values relative to the current surface dimensions, which is not possible to do here
+		local host_fwidth = function(v) return 1.0	end
+		glsl_registry[host_fwidth] = function(pp, varnames, v)
+			pp:unit("fwidth(")
+			pp:any(v, varnames)
+			pp:unit(")")
+		end
+		return host_fwidth
+	:
+	host-func-type ((v : glsl-float)) -> ((result : glsl-float))
+let fwidth = lambda (v : glsl-float)
+	let (result) = host-fwidth(v)
+	result
+
+let host-length = intrinsic
+	""""
+		local host_length = function(v) return math.sqrt(v.x * v.x + v.y * v.y) end
+		glsl_registry[host_length] = function(pp, varnames, v)
+			pp:unit("length(")
+			pp:any(v, varnames)
+			pp:unit(")")
+		end
+		return host_length
+	:
+	host-func-type ((v : glsl-vec2)) -> ((result : glsl-float))
+let length = lambda (v : glsl-vec2)
+	let (result) = host-length(v)
+	result
+
+let host-mk-vec2 = intrinsic
+	""""
+		local vec2_mt = {}
+		local host_mk_vec2 = function(x, y) return setmetatable({ x = x, y = y }, vec2_mt) end
+		glsl_registry[host_mk_vec2] = function(pp, varnames, x, y)
+			pp:unit("vec2(")
+			pp:any(x, varnames)
+			pp:unit(", ")
+			pp:any(y, varnames)
+			pp:unit(")")
+		end
+		glsl_registry[vec2_mt] = function(pp, vec, varnames)
+			return glsl_registry[host_mk_vec2](pp, varnames, vec.x, vec.y)
+		end
+		glsl_registry["vec2"] = vec2_mt
+		return host_mk_vec2
+	:
+	host-func-type (x : glsl-float, y : glsl-float) -> ((vec : glsl-vec2))
+let mk-vec2 = lambda (x : glsl-float, y : glsl-float)
+	let (vec) = host-mk-vec2(x, y)
+	vec
+
+let host-get-vec2-x = intrinsic
+	""""
+		local host_get_vec2_x = function(vec) return vec.x end
+		glsl_registry[host_get_vec2_x] = function(pp, varnames, vec)
+			pp:any(vec, varnames)
+			pp:unit(".x")
+		end
+		return host_get_vec2_x
+	:
+	host-func-type ((vec : glsl-vec2)) -> ((x : glsl-float))
+let host-get-vec2-y = intrinsic
+	""""
+		local host_get_vec2_y = function(vec) return vec.y end
+		glsl_registry[host_get_vec2_y] = function(pp, varnames, vec)
+			pp:any(vec, varnames)
+			pp:unit(".y")
+		end
+		return host_get_vec2_y
+	:
+	host-func-type ((vec : glsl-vec2)) -> ((y : glsl-float))
+let split-vec2 = lambda (vec : glsl-vec2)
+	let (x) = host-get-vec2-x(vec)
+	let (y) = host-get-vec2-y(vec)
+	tuple-of-implicit(x, y)
+
+let host-add-vec2 = intrinsic
+	""""
+		local host_add_vec2 = function(l, r)
+			return setmetatable({
+				x = l.x + r.x,
+				y = l.y + r.y,
+			}, glsl_registry["vec2"])
+		end
+		glsl_registry[host_add_vec2] = function(pp, varnames, l, r)
+			pp:unit("(")
+			pp:any(l, varnames)
+			pp:unit(" + ")
+			pp:any(r, varnames)
+			pp:unit(")")
+		end
+		return host_add_vec2
+	:
+	host-func-type (left : glsl-vec2, right : glsl-vec2) -> ((sum : glsl-vec2))
+let add-vec2 = lambda (left : glsl-vec2, right : glsl-vec2)
+	let (sum) = host-add-vec2(left, right)
+	sum
+
+let host-add-vec4 = intrinsic
+	""""
+		local host_add_vec4 = function(l, r)
+			return setmetatable({
+				x = l.x + r.x,
+				y = l.y + r.y,
+				z = l.z + r.z,
+				w = l.w + r.w,
+			}, glsl_registry["vec4"])
+		end
+		glsl_registry[host_add_vec4] = function(pp, varnames, l, r)
+			pp:unit("(")
+			pp:any(l, varnames)
+			pp:unit(" + ")
+			pp:any(r, varnames)
+			pp:unit(")")
+		end
+		return host_add_vec4
+	:
+	host-func-type (left : glsl-vec4, right : glsl-vec4) -> ((sum : glsl-vec4))
+let add-vec4 = lambda (left : glsl-vec4, right : glsl-vec4)
+	let (sum) = host-add-vec4(left, right)
+	sum
+
+let host-sub-vec2 = intrinsic
+	""""
+		local host_sub_vec2 = function(l, r)
+			return setmetatable({
+				x = l.x - r.x,
+				y = l.y - r.y,
+			}, glsl_registry["vec2"])
+		end
+		glsl_registry[host_sub_vec2] = function(pp, varnames, l, r)
+			pp:unit("(")
+			pp:any(l, varnames)
+			pp:unit(" - ")
+			pp:any(r, varnames)
+			pp:unit(")")
+		end
+		return host_sub_vec2
+	:
+	host-func-type (left : glsl-vec2, right : glsl-vec2) -> ((difference : glsl-vec2))
+let sub-vec2 = lambda (left : glsl-vec2, right : glsl-vec2)
+	let (difference) = host-sub-vec2(left, right)
+	difference
+
+let host-abs-vec2 = intrinsic
+	""""
+		local host_abs_vec2 = function(vec)
+			return setmetatable({
+				x = math.abs(vec.x),
+				y = math.abs(vec.y),
+			}, glsl_registry["vec2"])
+		end
+		glsl_registry[host_abs_vec2] = function(pp, varnames, vec)
+			pp:unit("abs(")
+			pp:any(vec, varnames)
+			pp:unit(")")
+		end
+		return host_abs_vec2
+	:
+	host-func-type ((vec : glsl-vec2)) -> ((result : glsl-vec2))
+let abs-vec2 = lambda (vec : glsl-vec2)
+	let (result) = host-abs-vec2(vec)
+	result
+
+let host-mk-vec3 = intrinsic
+	""""
+		local vec3_mt = {}
+		local host_mk_vec3 = function(x, y) return setmetatable({ x = x, y = y, z = z }, vec3_mt) end
+		glsl_registry[host_mk_vec3] = function(pp, varnames, x, y, z)
+			pp:unit("vec3(")
+			pp:any(x, varnames)
+			pp:unit(", ")
+			pp:any(y, varnames)
+			pp:unit(", ")
+			pp:any(z, varnames)
+			pp:unit(")")
+		end
+		glsl_registry[vec3_mt] = function(pp, vec, varnames)
+			return glsl_registry[host_mk_vec3](pp, varnames, vec.x, vec.y, vec.z)
+		end
+		glsl_registry["vec3"] = vec3_mt
+		return host_mk_vec3
+	:
+	host-func-type (x : glsl-float, y : glsl-float, z : glsl-float) -> ((vec : glsl-vec3))
+let mk-vec3 = lambda (x : glsl-float, y : glsl-float, z : glsl-float)
+	let (vec) = host-mk-vec3(x, y, z)
+	vec
+
+let host-get-vec3-x = intrinsic
+	""""
+		local host_get_vec3_x = function(vec) return vec.x end
+		glsl_registry[host_get_vec3_x] = function(pp, varnames, vec)
+			pp:any(vec, varnames)
+			pp:unit(".x")
+		end
+		return host_get_vec3_x
+	:
+	host-func-type ((vec : glsl-vec3)) -> ((x : glsl-float))
+let host-get-vec3-y = intrinsic
+	""""
+		local host_get_vec3_y = function(vec) return vec.y end
+		glsl_registry[host_get_vec3_y] = function(pp, varnames, vec)
+			pp:any(vec, varnames)
+			pp:unit(".y")
+		end
+		return host_get_vec3_y
+	:
+	host-func-type ((vec : glsl-vec3)) -> ((y : glsl-float))
+let host-get-vec3-z = intrinsic
+	""""
+		local host_get_vec3_z = function(vec) return vec.z end
+		glsl_registry[host_get_vec3_z] = function(pp, varnames, vec)
+			pp:any(vec, varnames)
+			pp:unit(".z")
+		end
+		return host_get_vec3_z
+	:
+	host-func-type ((vec : glsl-vec3)) -> ((z : glsl-float))
+let split-vec3 = lambda (vec : glsl-vec3)
+	let (x) = host-get-vec3-x(vec)
+	let (y) = host-get-vec3-y(vec)
+	let (z) = host-get-vec3-z(vec)
+	tuple-of-implicit(x, y, z)
+
+let host-mk-vec4 = intrinsic
+	""""
+		local vec4_mt = {}
+		local host_mk_vec4 = function(x, y, z, w) return setmetatable({ x = x, y = y, z = z, w = w }, vec4_mt) end
+		glsl_registry[host_mk_vec4] = function(pp, varnames, x, y, z, w)
+			pp:unit("vec4(")
+			pp:any(x, varnames)
+			pp:unit(", ")
+			pp:any(y, varnames)
+			pp:unit(", ")
+			pp:any(z, varnames)
+			pp:unit(", ")
+			pp:any(w, varnames)
+			pp:unit(")")
+		end
+		glsl_registry[vec4_mt] = function(pp, vec, varnames)
+			return glsl_registry[host_mk_vec4](pp, varnames, vec.x, vec.y, vec.z, vec.w)
+		end
+		glsl_registry["vec4"] = vec4_mt
+		return host_mk_vec4
+	:
+	host-func-type (x : glsl-float, y : glsl-float, z : glsl-float, w : glsl-float) -> ((vec : glsl-vec4))
+let mk-vec4 = lambda (x : glsl-float, y : glsl-float, z : glsl-float, w : glsl-float)
+	let (vec) = host-mk-vec4(x, y, z, w)
+	vec
+
+let host-get-vec4-x = intrinsic
+	""""
+		local host_get_vec4_x = function(vec) return vec.x end
+		glsl_registry[host_get_vec4_x] = function(pp, varnames, vec)
+			pp:any(vec, varnames)
+			pp:unit(".x")
+		end
+		return host_get_vec4_x
+	:
+	host-func-type ((vec : glsl-vec4)) -> ((x : glsl-float))
+let host-get-vec4-y = intrinsic
+	""""
+		local host_get_vec4_y = function(vec) return vec.y end
+		glsl_registry[host_get_vec4_y] = function(pp, varnames, vec)
+			pp:any(vec, varnames)
+			pp:unit(".y")
+		end
+		return host_get_vec4_y
+	:
+	host-func-type ((vec : glsl-vec4)) -> ((y : glsl-float))
+let host-get-vec4-z = intrinsic
+	""""
+		local host_get_vec4_z = function(vec) return vec.z end
+		glsl_registry[host_get_vec4_z] = function(pp, varnames, vec)
+			pp:any(vec, varnames)
+			pp:unit(".z")
+		end
+		return host_get_vec4_z
+	:
+	host-func-type ((vec : glsl-vec4)) -> ((z : glsl-float))
+let host-get-vec4-w = intrinsic
+	""""
+		local host_get_vec4_w = function(vec) return vec.w end
+		glsl_registry[host_get_vec4_w] = function(pp, varnames, vec)
+			pp:any(vec, varnames)
+			pp:unit(".w")
+		end
+		return host_get_vec4_w
+	:
+	host-func-type ((vec : glsl-vec4)) -> ((w : glsl-float))
+let split-vec4 = lambda (vec : glsl-vec4)
+	let (x) = host-get-vec4-x(vec)
+	let (y) = host-get-vec4-y(vec)
+	let (z) = host-get-vec4-z(vec)
+	let (w) = host-get-vec4-w(vec)
+	tuple-of-implicit(x, y, z, w)
+
+let host-mk-mat4 = intrinsic
+	""""
+		local mat4_mt = {}
+		local host_mk_mat4 = function(a, b, c, d)
+			return setmetatable({
+				ax = a.x, bx = b.x, cx = c.x, dx = d.x,
+				ay = a.y, by = b.y, cy = c.y, dy = d.y,
+				az = a.z, bz = b.z, cz = c.z, dz = d.z,
+				aw = a.w, bw = b.w, cw = c.w, dw = d.w,
+			}, mat4_mt)
+		end
+		glsl_registry[host_mk_mat4] = function(pp, varnames, a, b, c, d)
+			pp:unit("mat4(")
+			pp:any(a, varnames)
+			pp:unit(", ")
+			pp:any(b, varnames)
+			pp:unit(", ")
+			pp:any(c, varnames)
+			pp:unit(", ")
+			pp:any(d, varnames)
+			pp:unit(")")
+		end
+		glsl_registry[mat4_mt] = function(pp, mat, varnames)
+			pp:unit("/* NYI: repr a mat4! */")
+		end
+		glsl_registry["mat4"] = mat4_mt
+		return host_mk_mat4
+	:
+	host-func-type (a : glsl-vec4, b : glsl-vec4, c : glsl-vec4, d : glsl-vec4) -> ((mat : glsl-mat4))
+let mk-mat4 = lambda (a : glsl-vec4, b : glsl-vec4, c : glsl-vec4, d : glsl-vec4)
+	let (mat) = host-mk-mat4(a, b, c, d)
+	mat
+
+let host-mul-mat4-vec4 = intrinsic
+	""""
+		local host_mul_mat4_vec4 = function(left, right)
+			return setmetatable({
+				x = left.ax * right.x + left.bx * right.y + left.cx * right.z + left.dx * right.w,
+				y = left.ay * right.x + left.by * right.y + left.cy * right.z + left.dy * right.w,
+				z = left.az * right.x + left.bz * right.y + left.cz * right.z + left.dz * right.w,
+				w = left.aw * right.x + left.bw * right.y + left.cw * right.z + left.dw * right.w,
+			}, glsl_registry["vec4"])
+		end
+		glsl_registry[host_mul_mat4_vec4] = function(pp, varnames, left, right)
+			pp:unit("(")
+			pp:any(left, varnames)
+			pp:unit(" * ")
+			pp:any(right, varnames)
+			pp:unit(")")
+		end
+		return host_mul_mat4_vec4
+	:
+	host-func-type (left : glsl-mat4, right : glsl-vec4) -> ((product : glsl-vec4))
+let mul-mat4-vec4 = lambda (left : glsl-mat4, right : glsl-vec4)
+	let (product) = host-mul-mat4-vec4(left, right)
+	product
+
+let host-mul-mat4-mat4 = intrinsic
+	""""
+		local host_mul_mat4_mat4 = function(left, right)
+			return setmetatable({
+				ax = left.ax * right.ax + left.bx * right.ay + left.cx * right.az + left.dx * right.aw,
+				ay = left.ay * right.ax + left.by * right.ay + left.cy * right.az + left.dy * right.aw,
+				az = left.az * right.ax + left.bz * right.ay + left.cz * right.az + left.dz * right.aw,
+				aw = left.aw * right.ax + left.bw * right.ay + left.cw * right.az + left.dw * right.aw,
+
+				bx = left.ax * right.bx + left.bx * right.by + left.cx * right.bz + left.dx * right.bw,
+				by = left.ay * right.bx + left.by * right.by + left.cy * right.bz + left.dy * right.bw,
+				bz = left.az * right.bx + left.bz * right.by + left.cz * right.bz + left.dz * right.bw,
+				bw = left.aw * right.bx + left.bw * right.by + left.cw * right.bz + left.dw * right.bw,
+
+				cx = left.ax * right.cx + left.bx * right.cy + left.cx * right.cz + left.dx * right.cw,
+				cy = left.ay * right.cx + left.by * right.cy + left.cy * right.cz + left.dy * right.cw,
+				cz = left.az * right.cx + left.bz * right.cy + left.cz * right.cz + left.dz * right.cw,
+				cw = left.aw * right.cx + left.bw * right.cy + left.cw * right.cz + left.dw * right.cw,
+
+				dx = left.ax * right.dx + left.bx * right.dy + left.cx * right.dz + left.dx * right.dw,
+				dy = left.ay * right.dx + left.by * right.dy + left.cy * right.dz + left.dy * right.dw,
+				dz = left.az * right.dx + left.bz * right.dy + left.cz * right.dz + left.dz * right.dw,
+				dw = left.aw * right.dx + left.bw * right.dy + left.cw * right.dz + left.dw * right.dw,
+			}, glsl_registry["mat4"])
+		end
+		glsl_registry[host_mul_mat4_mat4] = function(pp, varnames, left, right)
+			pp:unit("(")
+			pp:any(left, varnames)
+			pp:unit(" * ")
+			pp:any(right, varnames)
+			pp:unit(")")
+		end
+		return host_mul_mat4_mat4
+	:
+	host-func-type (left : glsl-mat4, right : glsl-mat4) -> ((product : glsl-mat4))
+let mul-mat4-mat4 = lambda (left : glsl-mat4, right : glsl-mat4)
+	let (product) = host-mul-mat4-mat4(left, right)
+	product

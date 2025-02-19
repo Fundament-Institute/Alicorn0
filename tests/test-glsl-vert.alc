@@ -1,0 +1,67 @@
+let vert-shader-type = forall (MVP : glsl-mat4, PosDim : glsl-vec4, vPos : glsl-vec2) -> (glpos : glsl-vec4, pos : glsl-vec2)
+
+let glsl-print-vert-shader = intrinsic
+	""""
+		local U = require "alicorn-utils"
+		return function(vert_shader)
+			local param_name, code, capture, _capture_dbg, _param_debug = vert_shader:unwrap_closure()
+			local elements = code:unwrap_tuple_cons()
+			local glpos = elements[1]:glsl_print({{}, {"MVP", "PosDim", "vPos"}})
+			local pos = elements[2]:glsl_print({{}, {"MVP", "PosDim", "vPos"}})
+			local boilerplate = "#version 450\nlayout(binding=0) uniform mat4 MVP;\nlayout(binding=1) uniform vec4 PosDim;\nin vec2 vPos;\nout vec2 pos;\n"
+			local vert_shader = boilerplate .. "void main() {\n  gl_Position = " .. glpos .. ";\n  pos = " .. pos .. ";\n}\n"
+			return U.litprint(vert_shader)
+		end
+	:
+	host-func-type ((vert-shader : wrapped(vert-shader-type))) -> ((str : host-string))
+
+# #version 450
+# layout(binding=0) uniform mat4 MVP;
+# layout(binding=1) uniform vec4 PosDim;
+# in vec2 vPos;
+# out vec2 pos;
+#
+# void main()
+# {
+#   pos = vPos.xy;
+#   mat4 move;
+#   move[0] = vec4(PosDim.z, 0,0,0);
+#   move[1] = vec4(0, PosDim.w,0,0);
+#   move[2] = vec4(0, 0,1,0);
+#   move[3] = vec4(PosDim.x + PosDim.z*0.5, PosDim.y + PosDim.w*0.5,0,1);
+#   gl_Position = MVP * move * vec4(pos.x - 0.5, pos.y - 0.5, 1, 1);
+# }
+
+let vert-shader = lambda (MVP : glsl-mat4, PosDim : glsl-vec4, vPos : glsl-vec2)
+	let pos = vPos
+	let (pos-x, pos-y) = split-vec2(pos)
+	let (PosDim-x, PosDim-y, PosDim-z, PosDim-w) = split-vec4(PosDim)
+	let move = mk-mat4
+		mk-vec4(PosDim-z, 0, 0, 0)
+		mk-vec4(0, PosDim-w, 0, 0)
+		mk-vec4(0, 0, 1, 0)
+		mk-vec4
+			PosDim-x + PosDim-z * 0.5
+			PosDim-y + PosDim-w * 0.5
+			0
+			1
+	let glpos = mul-mat4-vec4
+		mul-mat4-mat4(MVP, move)
+		mk-vec4(pos-x - 0.5, pos-y - 0.5, 1, 1)
+	tuple-of-implicit(glpos, pos)
+
+let (vert-shader-string) = glsl-print-vert-shader(wrap(vert-shader))
+vert-shader-string
+
+
+
+
+
+#let MVP = mk-mat4
+#	mk-vec4(1, 0, 0, 0)
+#	mk-vec4(0, 1, 0, 0)
+#	mk-vec4(0, 0, 1, 0)
+#	mk-vec4(0, 0, 0, 1)
+#let PosDim = mk-vec4(0, 0, 1, 1)
+#let vPos = mk-vec2(0, 0)
+#vert-shader(MVP, PosDim, vPos)

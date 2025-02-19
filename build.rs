@@ -20,8 +20,10 @@ const ALICORN_SOURCES: &[&str] = &[
     "./fibonacci-buffer.lua",
     "./format-adapter.lua",
     "./format.lua",
+    "./glsl-print.lua",
     "./internals-interface.lua",
     "./lazy-prefix-tree.lua",
+    "./lua-ext.lua",
     "./metalanguage.lua",
     "./modules.lua",
     "./operative-scratch.lua",
@@ -35,6 +37,7 @@ const ALICORN_SOURCES: &[&str] = &[
     "./terms.lua",
     "./traits.lua",
     "./typesystem.lua",
+    "./unformatter.lua",
 ];
 
 const DEST: &str = "alicorn.lua";
@@ -68,6 +71,9 @@ fn main() -> LuaResult<()> {
         i += 1;
     }
 
+    // Here, we use a lua script to automate ingesting all of the alicorn lua and merging it into a single huge
+    // lua file inside OUT_DIR using the DEST constant variable name (which should be alicorn.lua). This is used
+    // in our lib.rs when we are building the rust crate.
     lua.globals().set("sources", sources)?;
     lua.globals().set(
         "dest",
@@ -106,6 +112,7 @@ file:close()
     .exec()
     .unwrap();
 
+    // Here we use rust's CC library to build lpeg and lfs lua libraries, then tell cargo to link the resulting libraries with our binary.
     {
         cc::Build::new()
             .opt_level(2)

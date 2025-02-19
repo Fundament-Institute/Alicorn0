@@ -69,6 +69,10 @@ freeze:declare_method("freeze")
 local order = declare_trait("order")
 order:declare_method("compare")
 
+local glsl_print = declare_trait("glsl_print")
+glsl_print:declare_method("glsl_print")
+glsl_print:declare_method("glsl_check")
+
 return {
 	declare_trait = declare_trait,
 	pretty_print = pretty_print,
@@ -76,4 +80,5 @@ return {
 	value_name = value_name,
 	freeze = freeze,
 	order = order,
+	glsl_print = glsl_print,
 }
