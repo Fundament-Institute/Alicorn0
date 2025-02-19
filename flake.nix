@@ -45,6 +45,10 @@
             mkdir $out
             ${pkgs.lib.getExe pkgs.stylua} . -c
           '';
+          reuse-lint = pkgs.runCommandNoCCLocal "reuse-lint" { } ''
+            cd ${./.}
+            ${lib.getExe pkgs.reuse} lint && mkdir $out
+          '';
           pre-commit-check = pre-commit-hooks-lib.run {
             src = ./.;
             hooks = {
