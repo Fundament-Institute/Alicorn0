@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
 local internals_interface = require "internals-interface"
 internals_interface.glsl_registry = {}
 internals_interface.glsl_print = glsl_print
