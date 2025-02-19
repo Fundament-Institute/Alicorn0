@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: DeterminateSystems/nix-installer-action@main
-      - run: nix flake check
+      - run: nix flake check -L
   status:
     runs-on: ubuntu-24.04
     steps:
