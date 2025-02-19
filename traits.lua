@@ -71,6 +71,7 @@ order:declare_method("compare")
 
 local glsl_print = declare_trait("glsl_print")
 glsl_print:declare_method("glsl_print")
+glsl_print:declare_method("glsl_check")
 
 return {
 	declare_trait = declare_trait,
