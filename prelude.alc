@@ -767,7 +767,7 @@ let host-if = lambda_implicit (T : type-omega)
 			""""
 				return U.notail(evaluator.gen_base_operator("#host-if", function(subject, consequent, alternate)
 					return U.notail(terms.typed_term.host_if(subject, consequent, alternate))
-				end))
+				end, "subject", "consequent", "alternate"))
 			:
 			wrapped(forall (subject : host-bool, consequent : T, alternate : T) -> (res : T))
 
@@ -844,7 +844,7 @@ let tuple-desc-concat-indep = lambda_implicit (U : universe)
 			""""
 				return U.notail(evaluator.gen_base_operator("#tuple-desc-concat", function(prefix, suffix)
 					return U.notail(terms.typed_term.tuple_desc_concat_indep(prefix, suffix))
-				end))
+				end, "prefix", "suffix"))
 			:
 			wrapped (forall (pfx : tuple-desc-type(U), sfx : tuple-desc-type(U)) -> (res : tuple-desc-type(U)))
 let tuple-concat = lambda (
@@ -932,7 +932,7 @@ let host-number-fold-indep = lambda_implicit (T : type-omega)
 			""""
 				return U.notail(evaluator.gen_base_operator("#int-fold", function(num, func, acc)
 					return U.notail(terms.typed_term.host_int_fold(num, func, acc))
-				end))
+				end, "num", "func", "acc"))
 			:
 			wrapped((forall (n : host-number, f : (forall (i : host-number, acc : T) -> (resacc : T)), acc : T) -> (res : T)))
 
@@ -1301,7 +1301,7 @@ let core-operative-type =
 			""""
 				return U.notail(evaluator.gen_base_operator("#core-operative-type", function(userdata, handler)
 					return U.notail(terms.typed_term.operative_type_cons(userdata, handler))
-				end))
+				end, "userdata", "handler"))
 			:
 			wrapped(forall (userdata : host-type, handler : operative-handler-type(userdata)) -> (res : host-type))
 
@@ -1312,7 +1312,7 @@ let core-operative = lambda_implicit (userdata : host-type)
 				return U.notail(evaluator.gen_base_operator("#core-operative", function(userdata, handler)
 					-- `handler` is intentionally discarded.
 					return U.notail(terms.typed_term.operative_cons(userdata))
-				end))
+				end, "userdata", "handler"))
 			:
 			wrapped(forall (ud : userdata, handler : operative-handler-type(userdata)) -> (res : core-operative-type(userdata, handler)))
 
