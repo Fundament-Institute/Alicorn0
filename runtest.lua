@@ -73,7 +73,7 @@ local reload_mode = false
 local test_single = false
 local test_name = ""
 local print_usage = false
-local opttab = {
+local short_opts = {
 	["S"] = function(_)
 		print_src = true
 	end,
@@ -123,11 +123,11 @@ local opttab = {
 		test_single = true
 		test_name = arg
 	end,
-	["?"] = function(c)
+	["?"] = function(_)
 		print_usage = true
 	end,
 }
-local first_operand = getopt(argv, opttab)
+local first_operand = getopt(argv, short_opts)
 
 if print_usage then
 	io.stderr:write(("Usage: %s [-Sfstv] [-p file[,what] | -P file[,what]] [-T test]\n"):format(argv[0]))
