@@ -3,7 +3,7 @@ let host-if-2 = unwrap
 		""""
 			return U.notail(evaluator.gen_base_operator("#host-if-2", function(result, c2, a1, subject, consequent, alternate)
 				return U.notail(terms.typed_term.host_if(subject, consequent, alternate))
-			end))
+			end, "result", "c2", "a1", "subject", "consequent", "alternate"))
 		:
 		wrapped(forall (
 				result     : host-type,

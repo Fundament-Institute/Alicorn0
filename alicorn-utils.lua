@@ -519,6 +519,9 @@ function M.strip_ansi(s)
 end
 
 function M.here(offset)
+	if debug == nil then
+		return "<no debug info>"
+	end
 	local info = debug.getinfo((offset or 1) + 1, "Sl")
 	return info.source .. ":" .. info.currentline
 end
@@ -796,36 +799,42 @@ function M.custom_traceback(err, prefix, level)
 		level = 0
 	end
 	local i = 3 + level
-	local info = debug.getinfo(i, "Sfln")
-	while info ~= nil do
-		if info.func == M.tag then
-			local _, name = debug.getlocal(i, 1)
-			local _, tag = debug.getlocal(i, 2)
-			local _, fn = debug.getlocal(i, 3)
-			--i = i + 1
-			--info = debug.getinfo(i, "Sfln")
-			local ok, err = pcall(function()
-				s[#s + 1] = string.format("%s [%s:%d] (%s)", name, info.short_src, info.currentline, pdump(tag))
-			end)
-			if not ok then
-				s[#s + 1] = string.format("TRACE FAIL: %s [%s:%d] (%s)", name, info.short_src, info.currentline, err)
-			end
-		else
-			local name = info.name or string.format("<%s:%d>", info.short_src, info.linedefined)
-			local args = {}
-			local j = 1
-			local arg, v = debug.getlocal(i, j)
-			while arg ~= nil do
-				table.insert(args, (type(v) == "table") and "<" .. arg .. ":table>" or string.sub(tostring(v), 1, 12))
-				j = j + 1
-				arg, v = debug.getlocal(i, j)
-			end
+	if debug then
+		local info = debug.getinfo(i, "Sfln")
+		while info ~= nil do
+			if info.func == M.tag then
+				local _, name = debug.getlocal(i, 1)
+				local _, tag = debug.getlocal(i, 2)
+				local _, fn = debug.getlocal(i, 3)
+				--i = i + 1
+				--info = debug.getinfo(i, "Sfln")
+				local ok, err = pcall(function()
+					s[#s + 1] = string.format("%s [%s:%d] (%s)", name, info.short_src, info.currentline, pdump(tag))
+				end)
+				if not ok then
+					s[#s + 1] =
+						string.format("TRACE FAIL: %s [%s:%d] (%s)", name, info.short_src, info.currentline, err)
+				end
+			else
+				local name = info.name or string.format("<%s:%d>", info.short_src, info.linedefined)
+				local args = {}
+				local j = 1
+				local arg, v = debug.getlocal(i, j)
+				while arg ~= nil do
+					table.insert(
+						args,
+						(type(v) == "table") and "<" .. arg .. ":table>" or string.sub(tostring(v), 1, 12)
+					)
+					j = j + 1
+					arg, v = debug.getlocal(i, j)
+				end
 
-			--s[#s + 1] = string.format("%s [%s:%d] (%s)", name, info.short_src, info.currentline, table.concat(args,","))
-			s[#s + 1] = string.format("%s [%s:%d]", name, info.short_src, info.currentline)
+				--s[#s + 1] = string.format("%s [%s:%d] (%s)", name, info.short_src, info.currentline, table.concat(args,","))
+				s[#s + 1] = string.format("%s [%s:%d]", name, info.short_src, info.currentline)
+			end
+			i = i + 1
+			info = debug.getinfo(i, "Sfln")
 		end
-		i = i + 1
-		info = debug.getinfo(i, "Sfln")
 	end
 
 	return M.notail(table.concat(s, "\n" .. prefix))

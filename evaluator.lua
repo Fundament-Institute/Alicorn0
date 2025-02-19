@@ -109,19 +109,38 @@ end
 local empty_tuple = strict_value.tuple_value(strict_value_array())
 
 ---@param luafunc function
+---@param ... string
 ---@return strict_value
-local function luatovalue(luafunc)
-	local luafunc_debug = debug.getinfo(luafunc, "u")
-	local parameters = name_array()
+local function luatovalue(luafunc, ...)
+	local parameters = name_array(...)
 	local params_dbg = spanned_name_array()
-	local len = luafunc_debug.nparams
+	local len = parameters:len()
 	local new_body = typed_term_array()
+	if debug then
+		local debugcount = debug.getinfo(luafunc, "u").nparams
+		if #parameters ~= debugcount then
+			error(
+				"luatovalue: Mismatch in number of passed in lua arguments and actual number of arguments: "
+					.. #parameters
+					.. " ~= "
+					.. debugcount
+			)
+		end
+	end
 
 	local arg_dbg = spanned_name("#host-arg", format.span_here())
 	for i = 1, len do
-		local param_name = debug.getlocal(luafunc, i)
-		local param_dbg = spanned_name(param_name, format.span_here())
-		parameters:append(param_name)
+		if debug then
+			if parameters[i] ~= debug.getlocal(luafunc, i) then
+				error(
+					"luatovalue: Mismatch between passed in lua argument name and the actual name! "
+						.. parameters[i]
+						.. " ~= "
+						.. debug.getlocal(luafunc, i)
+				)
+			end
+		end
+		local param_dbg = spanned_name(parameters[i], format.span_here())
 		params_dbg:append(param_dbg)
 		new_body:append(typed_term.bound_variable(i + 2, param_dbg))
 	end
@@ -189,13 +208,13 @@ local function FunctionRelation(srel)
 		srel = srel,
 		Rel = luatovalue(function(a, b)
 			error("nyi")
-		end),
+		end, "a", "b"),
 		refl = luatovalue(function(a)
 			error("nyi")
-		end),
+		end, "a"),
 		antisym = luatovalue(function(a, b, r1, r2)
 			error("nyi")
-		end),
+		end, "a", "b", "r1", "r2"),
 		constrain = strict_value.host_value(function(l_ctx, val, r_ctx, use, cause)
 			local inner_info = {
 				debug = "FunctionRelation(" .. srel.debug_name .. ").constrain " .. U.here(),
@@ -255,13 +274,13 @@ local function IndepTupleRelation(variances)
 		srels = variances,
 		Rel = luatovalue(function(a, b)
 			error("nyi")
-		end),
+		end, "a", "b"),
 		refl = luatovalue(function(a)
 			error("nyi")
-		end),
+		end, "a"),
 		antisym = luatovalue(function(a, b, r1, r2)
 			error("nyi")
-		end),
+		end, "a", "b", "r1", "r2"),
 		constrain = strict_value.host_value(
 			---constrain tuple elements
 			---@param l_ctx TypecheckingContext
@@ -321,13 +340,13 @@ local EffectRowRelation = setmetatable({
 	debug_name = "EffectRowRelation",
 	Rel = luatovalue(function(a, b)
 		error("nyi")
-	end),
+	end, "a", "b"),
 	refl = luatovalue(function(a)
 		error("nyi")
-	end),
+	end, "a"),
 	antisym = luatovalue(function(a, b, r1, r2)
 		error("nyi")
-	end),
+	end, "a", "b", "r1", "r2"),
 
 	constrain = strict_value.host_value(
 		---@param l_ctx TypecheckingContext
@@ -363,13 +382,13 @@ local EnumDescRelation = setmetatable({
 	debug_name = "EnumDescRelation",
 	Rel = luatovalue(function(a, b)
 		error("nyi")
-	end),
+	end, "a", "b"),
 	refl = luatovalue(function(a)
 		error("nyi")
-	end),
+	end, "a"),
 	antisym = luatovalue(function(a, b, r1, r2)
 		error("nyi")
-	end),
+	end, "a", "b", "r1", "r2"),
 
 	constrain = strict_value.host_value(
 		---@param l_ctx TypecheckingContext
@@ -422,13 +441,13 @@ TupleDescRelation = setmetatable({
 	debug_name = "TupleDescRelation",
 	Rel = luatovalue(function(a, b)
 		error("nyi")
-	end),
+	end, "a", "b"),
 	refl = luatovalue(function(a)
 		error("nyi")
-	end),
+	end, "a"),
 	antisym = luatovalue(function(a, b, r1, r2)
 		error("nyi")
-	end),
+	end, "a", "b", "r1", "r2"),
 	constrain = strict_value.host_value(
 		---@param l_ctx TypecheckingContext
 		---@param val flex_value
@@ -3774,37 +3793,74 @@ end
 
 ---@param tuple_name string
 ---@param fn_op (fun(...: typed): typed) returns `body`. must not use variadic arguments.
+---@param ... string
 ---@return strict_value closure_value `strict_value.closure`
-local function gen_base_operator(tuple_name, fn_op)
+local function gen_base_operator(tuple_name, fn_op, ...)
 	local debug_tuple_element_names = spanned_name_array()
 	if type(fn_op) ~= "function" then
 		error(string.format("gen_base_operator: fn_op is not a function: %s", s(fn_op)))
 	end
-	local fn_op_debug_info = debug.getinfo(fn_op, "uS")
-	if fn_op_debug_info.isvararg then
-		local fn_op_source = fn_op_debug_info.source
-		if fn_op_source:match("^@") then
-			error(
-				string.format(
-					"gen_base_operator: fn_op %s:%s-%s cannot be vararg",
-					s(fn_op),
-					s(fn_op_source),
-					s(fn_op_debug_info.linedefined),
-					s(fn_op_debug_info.lastlinedefined)
+	if debug then
+		local fn_op_debug_info = debug.getinfo(fn_op, "uS")
+		if fn_op_debug_info.isvararg then
+			local fn_op_source = fn_op_debug_info.source
+			if fn_op_source:match("^@") then
+				error(
+					string.format(
+						"gen_base_operator: fn_op %s:%s-%s cannot be vararg",
+						s(fn_op),
+						s(fn_op_source),
+						s(fn_op_debug_info.linedefined),
+						s(fn_op_debug_info.lastlinedefined)
+					)
 				)
+			elseif fn_op_source:match("^host_intrinsic<") then
+				error(string.format("gen_base_operator: fn_op %s cannot be vararg", s(fn_op)))
+			else
+				error(
+					string.format(
+						"gen_base_operator: fn_op %s cannot be vararg:\n%s",
+						s(fn_op),
+						fn_op_debug_info.source
+					)
+				)
+			end
+		end
+		local args = { ... }
+		local debug_tuple_element_names_length = fn_op_debug_info.nparams
+
+		if #args ~= debug_tuple_element_names_length then
+			error(
+				"gen_base_operator: Mismatch in number of passed in lua arguments and actual number of arguments: "
+					.. #args
+					.. " ~= "
+					.. debug_tuple_element_names_length
 			)
-		elseif fn_op_source:match("^host_intrinsic<") then
-			error(string.format("gen_base_operator: fn_op %s cannot be vararg", s(fn_op)))
-		else
-			error(string.format("gen_base_operator: fn_op %s cannot be vararg:\n%s", s(fn_op), fn_op_debug_info.source))
+		end
+
+		for i = 1, debug_tuple_element_names_length do
+			local tuple_element_name = debug.getlocal(fn_op, i)
+
+			if args[i] ~= tuple_element_name then
+				error(
+					"gen_base_operator: Mismatch between passed in lua argument name and the actual name! "
+						.. args[i]
+						.. " ~= "
+						.. tuple_element_name
+				)
+			end
+
+			tuple_element_name = tuple_element_name:gsub("_", "-")
+			debug_tuple_element_names:append(spanned_name(tuple_element_name, format.span_here()))
+		end
+	else
+		local args = { ... }
+		for _, v in ipairs(args) do
+			local tuple_element_name = v:gsub("_", "-")
+			debug_tuple_element_names:append(spanned_name(tuple_element_name, format.span_here()))
 		end
 	end
-	local debug_tuple_element_names_length = fn_op_debug_info.nparams
-	for i = 1, debug_tuple_element_names_length do
-		local tuple_element_name = debug.getlocal(fn_op, i)
-		tuple_element_name = tuple_element_name:gsub("_", "-")
-		debug_tuple_element_names:append(spanned_name(tuple_element_name, format.span_here()))
-	end
+
 	return U.notail(
 		gen_base_operator_aux(
 			tuple_name,
@@ -4852,13 +4908,13 @@ UniverseOmegaRelation = setmetatable({
 	debug_name = "UniverseOmegaRelation",
 	Rel = luatovalue(function(a, b)
 		error("nyi")
-	end),
+	end, "a", "b"),
 	refl = luatovalue(function(a)
 		error("nyi")
-	end),
+	end, "a"),
 	antisym = luatovalue(function(a, b, r1, r2)
 		error("nyi")
-	end),
+	end, "a", "b", "r1", "r2"),
 	constrain = strict_value.host_value(function(l_ctx, val, r_ctx, use, cause)
 		return U.notail(check_concrete(l_ctx, val, r_ctx, use, cause))
 	end),
@@ -5827,7 +5883,7 @@ function TypeCheckerState:check_value(v, tag, context)
 		error("Must pass a flex_value into check_value! (Did you pass a strict or stuck value?)")
 	end
 	if context == nil then
-		error("nil context passed into check_value! " .. debug.traceback())
+		error("nil context passed into check_value! ")
 	end
 	terms.verify_placeholder_lite(v, context, false)
 
@@ -5863,6 +5919,11 @@ function TypeCheckerState:check_value(v, tag, context)
 
 		local lower_bounds, upper_bounds, relation = v:unwrap_range()
 
+		local stacktrace = "<debug info disabled>"
+		if debug then
+			stacktrace = U.strip_ansi(debug.traceback())
+		end
+
 		for _, bound in ipairs(lower_bounds) do
 			print("LOST CONSTRAINT")
 			self:queue_constrain(
@@ -5871,7 +5932,7 @@ function TypeCheckerState:check_value(v, tag, context)
 				relation:unwrap_host_value(),
 				context,
 				v,
-				terms.constraintcause.lost("range unpacking", U.strip_ansi(debug.traceback()))
+				terms.constraintcause.lost("range unpacking", stacktrace)
 			)
 		end
 
@@ -5883,7 +5944,7 @@ function TypeCheckerState:check_value(v, tag, context)
 				relation:unwrap_host_value(),
 				context,
 				bound,
-				terms.constraintcause.lost("range_unpacking", U.strip_ansi(debug.traceback()))
+				terms.constraintcause.lost("range_unpacking", stacktrace)
 			)
 		end
 

@@ -172,7 +172,7 @@ end
 ---@return FlexRuntimeContext
 function FlexRuntimeContext:append(v, name, debuginfo)
 	if debuginfo == nil then
-		error(debug.traceback())
+		error("null debuginfo appended to FlexRuntimeContext")
 	end
 	name = name or debuginfo.name -- ("#r_ctx%d"):format(self.bindings:len() + 1) -- once switchover to debug is complete, no binding should ever enter the environment without debug info and so this name fallback can be removed
 	if name == nil then

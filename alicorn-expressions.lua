@@ -1231,12 +1231,14 @@ end
 ---@param name string
 ---@return anchored_inferrable
 local function host_operative(fn, name)
-	local debuginfo = debug.getinfo(fn)
-	local debugstring = (name or error("name not passed to host_operative"))
-		.. " "
-		.. debuginfo.short_src
-		.. ":"
-		.. debuginfo.linedefined
+	local short_src = "<no debug info>"
+	local linedef = 0
+	if debug then
+		local debuginfo = debug.getinfo(fn)
+		short_src = debuginfo.short_src
+		linedef = debuginfo.linedefined
+	end
+	local debugstring = (name or error("name not passed to host_operative")) .. " " .. short_src .. ":" .. linedef
 	local aborting_fn = function(syn, env, userdata, goal)
 		if not env or not env.exit_block then
 			error("env passed to host_operative " .. debugstring .. " isn't an env or is nil", env)
@@ -1263,8 +1265,8 @@ local function host_operative(fn, name)
 				"env returned from fn passed to alicorn-expressions.host_operative isn't an env or is nil",
 				env,
 				" in ",
-				debuginfo.short_src,
-				debuginfo.linedefined
+				short_src,
+				linedef
 			)
 			error("invalid env from host_operative fn " .. debugstring)
 		end
