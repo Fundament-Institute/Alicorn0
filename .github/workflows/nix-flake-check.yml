@@ -3,6 +3,15 @@
 
 name: nix flake check
 
+permissions:
+  contents: read
+  statuses: write
+  checks: write
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 on:
   push:
   pull_request:
@@ -14,3 +23,14 @@ jobs:
       - uses: actions/checkout@v3
       - uses: DeterminateSystems/nix-installer-action@main
       - run: nix flake check
+  status:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      # Workaround for spam about missing channel dir during eval
+      - run: mkdir -p ~/.nix-defexpr/channels
+      - run: nix shell nixpkgs#jq nixpkgs#bash -c ./.github/workflows/nix-flake-status.sh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
