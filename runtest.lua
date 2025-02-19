@@ -74,85 +74,75 @@ local test_single = false
 local test_name = ""
 local print_usage = false
 local short_opts = {
-	["S"] = function(_)
+	["S"] = function(_opt_repr)
 		print_src = true
 	end,
-	["f"] = function(_)
+	["f"] = function(_opt_repr)
 		print_ast = true
 	end,
-	["s"] = function(_)
+	["s"] = function(_opt_repr)
 		print_inferrable = true
 	end,
-	["t"] = function(_)
+	["t"] = function(_opt_repr)
 		print_typed = true
 	end,
-	["v"] = function(_)
+	["v"] = function(_opt_repr)
 		print_evaluated = true
 	end,
-	["r:"] = function(_, arg)
-		if not arg then
-			error("-r requires a file argument")
-		end
+	["r:"] = function(opt_repr, arg)
 		reload_mode = true
 		test_name = arg
 	end,
-	["p:"] = function(_, arg)
-		if not arg then
-			error("-p requires a file argument")
-		end
+	["p:"] = function(opt_repr, arg)
 		profile_run = true
 		profile_flame = false
 		local subargs = U.split_commas(arg)
 		profile_file = subargs[1]
 		profile_what = subargs[2] or "match"
 	end,
-	["P:"] = function(_, arg)
-		if not arg then
-			error("-P requires a file argument")
-		end
+	["P:"] = function(opt_repr, arg)
 		profile_run = true
 		profile_flame = true
 		local subargs = U.split_commas(arg)
 		profile_file = subargs[1]
 		profile_what = subargs[2] or "match"
 	end,
-	["T:"] = function(_, arg)
-		if not arg then
-			error("-T requires a test argument")
-		end
+	["T:"] = function(opt_repr, arg)
 		test_single = true
 		test_name = arg
 	end,
-	["?"] = function(_)
+	["?"] = function(_opt_repr)
 		print_usage = true
 	end,
 }
 local first_operand = getopt(argv, short_opts)
 
 if print_usage then
-	io.stderr:write(("Usage: %s [-Sfstv] [-p file[,what] | -P file[,what]] [-T test]\n"):format(argv[0]))
-	io.stderr:write("  -S  Print the Alicorn source code about to be tested.\n")
-	io.stderr:write("      (mnemonic: Source)\n")
-	io.stderr:write("  -f  Show the AST generated from the source code.\n")
-	io.stderr:write("      (mnemonic: format.read)\n")
-	io.stderr:write("  -s  Show the unchecked term. *\n")
-	io.stderr:write("      (mnemonic: syntax:match)\n")
-	io.stderr:write("  -t  Show the type-checked term. *\n")
-	io.stderr:write("      (mnemonic: typed)\n")
-	io.stderr:write("  -v  Show the evaluated term. *\n")
-	io.stderr:write("      (mnemonic: value)\n")
-	io.stderr:write("      * Some type-checking and evaluation may happen during the course of\n")
-	io.stderr:write("        producing a top-level term, due to the dependent nature of Alicorn.\n")
-	io.stderr:write("  -p  Run a profile over the test and output the trace to a file.\n")
-	io.stderr:write("      (mnemonic: profile)\n")
-	io.stderr:write("      what = match: Profile syntax:match.    [default]\n")
-	io.stderr:write("      what = infer: Profile evaluator.infer.\n")
-	io.stderr:write("      Works best in conjunction with -T.\n")
-	io.stderr:write("  -P  Like -p, but output a flamegraph-compatible trace.\n")
-	io.stderr:write("      (mnemonic: Phlame! :P)\n")
-	io.stderr:write("  -T  Choose a specific test to run.\n")
-	io.stderr:write("      (mnemonic: Test)\n")
-	io.stderr:write("      Without -T, all tests in testlist.json are run.\n")
+	local usage = [=[Usage: %s [-Sfstv] [(-p|-P) <file>[,<what>]] [-T <test>]
+  -S  Print the Alicorn source code about to be tested.
+      (mnemonic: Source)
+  -f  Show the AST generated from the source code.
+      (mnemonic: format.read)
+  -s  Show the unchecked term. *
+      (mnemonic: syntax:match)
+  -t  Show the type-checked term. *
+      (mnemonic: typed)
+  -v  Show the evaluated term. *
+      (mnemonic: value)
+      * Some type-checking and evaluation may happen during the course of
+        producing a top-level term, due to the dependent nature of Alicorn.
+  -p  Run a profile over the test and output the trace to a file.
+      (mnemonic: profile)
+      <what> = match: Profile syntax:match.    [default]
+      <what> = infer: Profile evaluator.infer.
+      Works best in conjunction with -T.
+  -P  Like -p, but output a flamegraph-compatible trace.
+      (mnemonic: Phlame! :P)
+  -T  Choose a specific test to run.
+      (mnemonic: Test)
+      Without -T, all tests in testlist.json are run.
+]=]
+	io.stderr:write(usage:format(argv[0]))
 	os.exit()
 end
 
