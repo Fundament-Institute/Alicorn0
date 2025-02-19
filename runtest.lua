@@ -95,7 +95,6 @@ local short_opts = {
 	end,
 	["p:"] = function(opt_repr, arg)
 		profile_run = true
-		profile_flame = false
 		local subargs = U.split_commas(arg)
 		profile_file = subargs[1]
 		profile_what = subargs[2] or "match"
@@ -115,33 +114,60 @@ local short_opts = {
 		print_usage = true
 	end,
 }
-local long_opts = {}
+local long_opts = {
+	["help"] = "?",
+	["print-src"] = "S",
+	["print-ast"] = "f",
+	["print-inferrable"] = "s",
+	["print-typed"] = "t",
+	["print-evaluated"] = "v",
+	["reload"] = "r",
+	["profile"] = "p",
+	["flamegraph"] = function(_opt_repr)
+		profile_flame = true
+	end,
+	["no-flamegraph"] = function(_opt_repr)
+		profile_flame = false
+	end,
+	["test"] = "T",
+}
 local first_operand = getopt(argv, short_opts, long_opts)
 
 if print_usage then
 	local usage = [=[Usage: %s [-Sfstv] [(-p|-P) <file>[,<what>]] [-T <test>]
-  -S  Print the Alicorn source code about to be tested.
-      (mnemonic: Source)
-  -f  Show the AST generated from the source code.
-      (mnemonic: format.read)
-  -s  Show the unchecked term. *
-      (mnemonic: syntax:match)
-  -t  Show the type-checked term. *
-      (mnemonic: typed)
-  -v  Show the evaluated term. *
-      (mnemonic: value)
-      * Some type-checking and evaluation may happen during the course of
-        producing a top-level term, due to the dependent nature of Alicorn.
-  -p  Run a profile over the test and output the trace to a file.
-      (mnemonic: profile)
-      <what> = match: Profile syntax:match.    [default]
-      <what> = infer: Profile evaluator.infer.
-      Works best in conjunction with -T.
-  -P  Like -p, but output a flamegraph-compatible trace.
-      (mnemonic: Phlame! :P)
-  -T  Choose a specific test to run.
-      (mnemonic: Test)
-      Without -T, all tests in testlist.json are run.
+  -S, --print-source
+          Print the Alicorn source code about to be tested.
+          (mnemonic: Source)
+  -f, --print-ast
+          Show the AST generated from the source code.
+          (mnemonic: format.read)
+  -s, --print-inferrable
+          Show the unchecked term. *
+          (mnemonic: syntax:match)
+  -t, --print-typed
+          Show the type-checked term. *
+          (mnemonic: typed)
+  -v, --print-evaluated
+          Show the evaluated term. *
+          (mnemonic: value)
+
+          * Some type-checking and evaluation may happen during the course of
+          producing a top-level term, due to the dependent nature of Alicorn.
+  -p, --profile <file>[,<what>]
+          Run a profile over the test and output the trace to a file.
+          (mnemonic: profile)
+          what = match: Profile syntax:match.    [default]
+          what = infer: Profile evaluator.infer.
+          Works best in conjunction with -T.
+      --[no-]flamegraph
+          Enable or disable outputting a flamegraph-compatible trace when profiling.
+  -P <file>[,<what>]
+          Like -p, but enable outputting a flamegraph-compatible trace.
+          (mnemonic: Phlame! :P)
+  -T, --test <file>
+          Choose a specific test to run.
+          (mnemonic: Test)
+          Without -T, all tests in testlist.json are run.
 ]=]
 	io.stderr:write(usage:format(argv[0]))
 	os.exit()
