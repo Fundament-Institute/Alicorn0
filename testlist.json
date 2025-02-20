@@ -14,5 +14,6 @@
     "tests/operative-tuple-desc.alc": "success",
     "tests/switch-fail.alc": "termgen",
     "tests/switch-test.alc": "success",
-    "tests/tuples.alc": "success"
+    "tests/tuples.alc": "success",
+    "tests/record-usage.alc": "success"
 }

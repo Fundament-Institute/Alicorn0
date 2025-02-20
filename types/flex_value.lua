@@ -207,6 +207,13 @@ function flex_value:unwrap_record_desc_type() end
 ---@return flex_value universe
 function flex_value:as_record_desc_type() end
 ---@return boolean
+function flex_value:is_record_desc_value() end
+---@return MapValue<string, flex_value> fields
+function flex_value:unwrap_record_desc_value() end
+---@return boolean
+---@return MapValue<string, flex_value> fields
+function flex_value:as_record_desc_value() end
+---@return boolean
 function flex_value:is_record_extend() end
 ---@return stuck_value base
 ---@return MapValue<string, flex_value> extension
@@ -563,6 +570,7 @@ function flex_value:as_host_unwrap() end
 ---@field record_value fun(fields: MapValue<string, flex_value>): flex_value
 ---@field record_type fun(desc: flex_value): flex_value
 ---@field record_desc_type fun(universe: flex_value): flex_value
+---@field record_desc_value fun(fields: MapValue<string, flex_value>): flex_value
 ---@field record_extend fun(base: stuck_value, extension: MapValue<string, flex_value>): flex_value
 ---@field object_value fun(methods: MapValue<string, typed>, capture: FlexRuntimeContext): flex_value
 ---@field object_type fun(desc: flex_value): flex_value

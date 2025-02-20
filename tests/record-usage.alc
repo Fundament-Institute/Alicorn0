@@ -1,0 +1,8 @@
+
+
+let foo =
+	record-of
+		x = 3
+		y = 5
+
+foo.x * foo.y

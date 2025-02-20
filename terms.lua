@@ -768,6 +768,7 @@ unanchored_inferrable_term:define_enum("unanchored_inferrable", {
 	{ "record_elim", {
 		"subject",     anchored_inferrable_term,
 		"field_names", array(gen.builtin_string),
+		"debug_ids",   array(spanned_name),
 		"body",        anchored_inferrable_term,
 	} },
 	{ "enum_cons", {
@@ -1053,6 +1054,8 @@ typed_term:define_enum("typed", {
 	{ "tuple_desc_type", { "universe", typed_term } },
 	{ "tuple_desc_concat_indep", { "prefix", typed_term, "suffix", typed_term }},
 	{ "record_cons", { "fields", map(gen.builtin_string, typed_term) } },
+	{ "record_type_cons", {"desc", typed_term }},
+	{ "record_desc_extend", {"name", typed_term, "type", typed_term}},
 	{ "record_extend", {
 		"base",   typed_term,
 		"fields", map(gen.builtin_string, typed_term),
@@ -1060,6 +1063,7 @@ typed_term:define_enum("typed", {
 	{ "record_elim", {
 		"subject",     typed_term,
 		"field_names", array(gen.builtin_string),
+		"debug_ids", array(spanned_name),
 		"body",        typed_term,
 	} },
 	--TODO record elim
@@ -1529,6 +1533,7 @@ gen.define_multi_enum(
 		{ "record_value$flex", { "fields", map(gen.builtin_string, flex_value) } },
 		{ "record_type$flex", { "desc", flex_value } },
 		{ "record_desc_type$flex", { "universe", flex_value } },
+		{ "record_desc_value$flex", { "fields", map(gen.builtin_string, flex_value)}},
 		{ "record_extend$stuck", {
 			"base",      stuck_value,
 			"extension", map(gen.builtin_string, flex_value),

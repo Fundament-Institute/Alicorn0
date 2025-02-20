@@ -1070,7 +1070,7 @@ local function expression_symbolhandler(args, name)
 		while front do
 			name = rest
 			front, rest = split_dot_accessors(name)
-			assert(front.str)
+			--assert(front.str)
 			---@diagnostic disable-next-line: no-unknown
 			local namearray
 			if front then
@@ -1085,17 +1085,17 @@ local function expression_symbolhandler(args, name)
 				namearray = name
 			end
 
+			local debug_id = terms.spanned_name(namearray.str, namearray.span)
+
 			part = anchored_inferrable_term(
 				name.span.start,
 				unanchored_inferrable_term.record_elim(
 					part,
 					name_array(namearray.str),
+					spanned_name_array(debug_id),
 					anchored_inferrable_term(
 						name.span.start,
-						unanchored_inferrable_term.bound_variable(
-							env.typechecking_context:len() + 1,
-							terms.spanned_name(namearray.str, namearray.span)
-						)
+						unanchored_inferrable_term.bound_variable(env.typechecking_context:len() + 1, debug_id)
 					)
 				)
 			)

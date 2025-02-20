@@ -310,7 +310,7 @@ local function record_build(syntax, env)
 	end
 	local map = gen.declare_map(gen.builtin_string, anchored_inferrable_term)()
 	for _, v in ipairs(defs) do
-		map[v.name] = v.expr
+		map:set(v.name, v.expr)
 	end
 	return true, U.notail(anchored_inferrable_term(syntax.span.start, unanchored_inferrable_term.record_cons(map))), env
 end
@@ -2093,6 +2093,7 @@ local core_operations = {
 	["unstrict-wrapped"] = build_wrapped(typed_term.host_unstrict_wrapped_type),
 	unwrap = build_unwrap(typed_term.host_unwrap, typed_term.host_wrapped_type),
 	["unstrict-unwrap"] = build_unwrap(typed_term.host_unstrict_unwrap, typed_term.host_unstrict_wrapped_type),
+	["record-of"] = exprs.host_operative(record_build, "record-of"),
 	--["dump-env"] = evaluator.host_operative(function(syntax, env) print(environment.dump_env(env)); return true, types.unit_val, env end),
 	--["basic-fn"] = evaluator.host_operative(basic_fn),
 	--tuple = evaluator.host_operative(tuple_type_impl),
