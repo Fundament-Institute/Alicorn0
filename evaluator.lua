@@ -1105,9 +1105,8 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		return U.notail(typed_term.record_cons(field_terms))
 	elseif val:is_record_type() then
 		local desc = val:unwrap_record_type()
-		return U.notail(
-			typed_term.record_type(substitute_inner(desc, mappings, context_len, ambient_typechecking_context))
-		)
+		local desc_sub = substitute_inner(desc, mappings, context_len, ambient_typechecking_context)
+		return U.notail(typed_term.record_type(desc_sub))
 	elseif val:is_record_desc_value() then
 		local fields_typefns = val:unwrap_record_desc_value()
 		local field_typefn_terms = string_typed_map()
@@ -3361,12 +3360,38 @@ local function infer_impl(
 			body_type,
 			result_usages,
 			U.notail(typed_term.record_elim(subject_term, field_names, field_var_debugs, body_term))
+	elseif inferrable_term:is_record_type() then
+		local desc = inferrable_term:unwrap_record_type()
+		local ok, desc_type, desc_usages, desc_term = infer(desc, typechecking_context)
+		if not ok then
+			return false, desc_type
+		end
+		---@cast desc_type -string
+		local univ_var = typechecker_state:metavariable(typechecking_context, false):as_flex()
+		local err
+		ok, err = typechecker_state:flow(
+			desc_type,
+			typechecking_context,
+			flex_value.record_desc_type(univ_var),
+			typechecking_context,
+			terms.constraintcause.primitive("record type construction", format.anchor_here())
+		)
+		if not ok then
+			---@cast err string
+			return false, err
+		end
+		return true,
+			U.notail(flex_value.union_type(flex_value.star(0, 0), univ_var)),
+			desc_usages,
+			U.notail(typed_term.record_type(desc_term))
 	elseif inferrable_term:is_enum_cons() then
 		local constructor, arg = inferrable_term:unwrap_enum_cons()
 		local ok, arg_type, arg_usages, arg_term = infer(arg, typechecking_context)
 		if not ok then
+			---@cast arg_type string
 			return false, arg_type
 		end
+		---@cast arg_type -string
 		local variants = string_value_map()
 		variants:set(constructor, arg_type)
 		local enum_type = flex_value.enum_type(flex_value.enum_desc_value(variants))
@@ -3474,10 +3499,13 @@ local function infer_impl(
 		local desc = inferrable_term:unwrap_enum_type()
 		local ok, desc_type, desc_usages, desc_term = infer(desc, typechecking_context)
 		if not ok then
+			---@cast desc_type string
 			return false, desc_type
 		end
+		---@cast desc_type -string
 		local univ_var = typechecker_state:metavariable(typechecking_context, false):as_flex()
-		local ok, err = typechecker_state:flow(
+		local err
+		ok, err = typechecker_state:flow(
 			desc_type,
 			typechecking_context,
 			flex_value.enum_desc_type(univ_var),
@@ -3485,6 +3513,7 @@ local function infer_impl(
 			terms.constraintcause.primitive("enum type construction", format.anchor_here())
 		)
 		if not ok then
+			---@cast err string
 			return false, err
 		end
 		return true,
