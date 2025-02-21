@@ -2514,7 +2514,7 @@ local function index_tuple_value(subject, index)
 end
 
 ---@param subject flex_value
----@param key name
+---@param key string
 ---@return flex_value
 local function index_record_value(subject, key)
 	if flex_value.value_check(subject) ~= true then
@@ -4145,7 +4145,7 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 	-- -> an alicorn value
 	-- TODO: typecheck typed_term and runtime_context?
 	if typed_term.value_check(typed) ~= true then
-		error("evaluate, typed_term: expected a typed term")
+		error(("evaluate, typed_term: expected a typed term: %s"):format(tostring(typed)))
 	end
 	if terms.flex_runtime_context_type.value_check(runtime_context) ~= true then
 		error("evaluate, runtime_context: expected a runtime context")
@@ -6995,6 +6995,7 @@ local evaluator = {
 	evaluate = evaluate,
 	apply_value = apply_value,
 	index_tuple_value = index_tuple_value,
+	index_record_value = index_record_value,
 	OMEGA = OMEGA,
 
 	gen_base_operator = gen_base_operator,
