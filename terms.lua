@@ -692,8 +692,16 @@ binding:define_enum("binding", {
 	} },
 	{ "tuple_elim", {
 		"names",   array(gen.builtin_string),
-		"debug", array(spanned_name),
+		"debug",   array(spanned_name),
 		"subject", anchored_inferrable_term,
+	} },
+	{ "record_elim", {
+		-- "subject",           anchored_inferrable_term,
+		"subject_anchor",    anchor_type,
+		"subject_value",     flex_value,
+		"field_names",       array(gen.builtin_string),
+		"field_var_debugs",  array(spanned_name),
+		"field_types",       array(flex_value),
 	} },
 	{ "annotated_lambda", {
 		"param_name",       gen.builtin_string,

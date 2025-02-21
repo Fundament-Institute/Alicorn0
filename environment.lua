@@ -7,6 +7,7 @@ local U = require "alicorn-utils"
 local format = require "format"
 
 local terms = require "terms"
+local terms_gen = require "terms-generators"
 local spanned_name = terms.spanned_name
 local unanchored_inferrable_term = terms.unanchored_inferrable_term
 local anchored_inferrable_term = terms.anchored_inferrable_term
@@ -146,7 +147,7 @@ function environment:bind_local(binding)
 		--local subject_qty, subject_type = subject_type:unwrap_qtype()
 		--DEBUG:
 		if subject_type:is_enum_value() then
-			print "bad subject infer"
+			print("bad tuple subject infer")
 			print(subject:pretty_print(typechecking_context))
 		end
 
@@ -225,7 +226,6 @@ function environment:bind_local(binding)
 					typechecking_context = typechecking_context,
 				}))
 		end
-		local unique = {}
 		local ok, res1, res2
 		ok, res1 = inner_tuple_elim(spec_type)
 		if ok then
@@ -241,6 +241,37 @@ function environment:bind_local(binding)
 		-- you need to figure out which one is relevant for your problem
 		-- after you're finished, please comment it out so that, next time, the message below can be found again
 		error("(binding) tuple elim speculation failed! debugging this is left as an exercise to the maintainer")
+	elseif binding:is_record_elim() then
+		-- local anchored_subject, field_names, field_var_debugs, field_types = binding:unwrap_record_elim()
+		-- local subject_anchor, _subject = anchored_subject:unwrap_anchored_inferrable()
+		-- local ok, subject_type, _subject_usages, subject_typed_value = infer(anchored_subject, typechecking_context)
+		-- if not ok then
+		-- 	---@cast subject_type string
+		-- 	return false, subject_type
+		-- end
+		-- ---@cast subject_type -string
+		-- --local subject_qty, subject_type = subject_type:unwrap_qtype()
+		-- local subject_value = evaluator.evaluate(subject_typed_value, typechecking_context.runtime_context, typechecking_context)
+		local subject_anchor, subject_value, field_names, field_var_debugs, field_types = binding:unwrap_record_elim()
+
+		local n = typechecking_context:len()
+		local locals = self.locals
+		for field_index, field_name in ipairs(field_names) do
+			local field_var_debug = field_var_debugs[field_index]
+			local field_term = anchored_inferrable_term(subject_anchor, unanchored_inferrable_term.bound_variable(n + field_index, field_var_debug))
+			locals = locals:put(field_name, field_term)
+
+			local field_type = field_types[field_index]
+			local field_value = evaluator.index_record_value(subject_value, field_name)
+			typechecking_context = typechecking_context:append(field_name, field_type, field_value, field_var_debug)
+		end
+		local bindings = self.bindings:append(binding)
+		return true,
+			U.notail(update_env(self, {
+				locals = locals,
+				bindings = bindings,
+				typechecking_context = typechecking_context,
+			}))
 	elseif binding:is_annotated_lambda() then
 		local param_name, param_annotation, start_anchor, visible = binding:unwrap_annotated_lambda()
 		if not start_anchor or not start_anchor.id then

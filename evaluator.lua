@@ -2514,7 +2514,7 @@ local function index_tuple_value(subject, index)
 end
 
 ---@param subject flex_value
----@param key name
+---@param key string
 ---@return flex_value
 local function index_record_value(subject, key)
 	if flex_value.value_check(subject) ~= true then
@@ -6941,6 +6941,7 @@ local evaluator = {
 	evaluate = evaluate,
 	apply_value = apply_value,
 	index_tuple_value = index_tuple_value,
+	index_record_value = index_record_value,
 	OMEGA = OMEGA,
 
 	gen_base_operator = gen_base_operator,
