@@ -562,22 +562,22 @@ local RecordDescRelation = setmetatable({
 		function(l_ctx, val, r_ctx, use, cause)
 			local l_field_typefns = val:unwrap_record_desc_value()
 			local r_field_typefns = use:unwrap_record_desc_value()
-			local base_unique = flex_value.free(free.unique({ debug = "Record desc relation" }))
+			local base_unique = stuck_value.free(free.unique({ debug = "Record desc relation" }))
 			local l_field_vals = string_value_map()
 			local r_field_vals = string_value_map()
 			local l_field_realized_types = string_value_map()
 			local r_field_realized_types = string_value_map()
 			for k, v in r_field_typefns:pairs() do
-				r_field_vals:set(k, flex_value.record_field_access(k, base_unique))
+				r_field_vals:set(k, flex_value.record_field_access(base_unique, k))
 			end
 			for k, v in l_field_typefns:pairs() do
-				local realized_type = apply_value(v, base_unique, l_ctx)
+				local realized_type = apply_value(v, flex_value.stuck(base_unique), l_ctx)
 				if realized_type:is_singleton() then
 					local supertype, val = realized_type:unwrap_singleton()
 					l_field_vals:set(k, val)
 					r_field_vals:set(k, val)
 				else
-					l_field_vals:set(k, flex_value.record_field_access(k, base_unique))
+					l_field_vals:set(k, flex_value.record_field_access(base_unique, k))
 				end
 			end
 			for k, v in l_field_typefns:pairs() do
@@ -601,6 +601,7 @@ local RecordDescRelation = setmetatable({
 					nestcause("record desc subtype for field " .. k, cause, lt, rt, l_ctx, r_ctx)
 				)
 			end
+			return true
 		end
 	),
 }, subtype_relation_mt)
@@ -3210,21 +3211,38 @@ local function infer_impl(
 		if not ok then
 			return false, subject_type
 		end
-		local ok, desc = subject_type:as_record_type()
-		if not ok then
-			error(
-				"infer, is_record_elim, subject_type: expected a term with a record type TODO use flow correctly here"
+		-- symbolically evaluating the subject is necessary for inferring the type of the body
+		local subject_value = evaluate(subject_term, typechecking_context:get_runtime_context(), typechecking_context)
+		local result_typefns = string_value_map()
+		for idx, name in field_names:ipairs() do
+			if result_typefns:get(name) then
+				return false, "duplicate name in record elimination: " .. name
+			end
+			result_typefns:set(
+				name,
+				apply_value(
+					typechecker_state:metavariable(typechecking_context, false):as_flex(),
+					subject_value,
+					typechecking_context
+				)
 			)
 		end
-		-- evaluating the subject is necessary for inferring the type of the body
-		local subject_value = evaluate(subject_term, typechecking_context:get_runtime_context(), typechecking_context)
-
-		local field_typefns = desc:unwrap_record_desc_value()
+		local use_type = flex_value.record_type(flex_value.record_desc_value(result_typefns))
+		local ok, err = typechecker_state:flow(
+			subject_type,
+			typechecking_context,
+			use_type,
+			typechecking_context,
+			terms.constraintcause.primitive("record elimination", anchor, nil)
+		)
+		if not ok then
+			return false, err
+		end
 
 		-- reorder the fields into the requested order
 		local inner_context = typechecking_context
 		for _, v in field_names:ipairs() do
-			local tf = field_typefns:get(v)
+			local tf = result_typefns:get(v)
 			if tf == nil then
 				return false, "infer: trying to access a nonexistent record field"
 			end
