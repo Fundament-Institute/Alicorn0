@@ -1072,6 +1072,7 @@ typed_term:define_enum("typed", {
 		"debug_ids", array(spanned_name),
 		"body",        typed_term,
 	} },
+	{ "record_field_access", {"subject", typed_term, "name", gen.builtin_string}},
 	--TODO record elim
 	{ "enum_cons", {
 		"constructor", gen.builtin_string,

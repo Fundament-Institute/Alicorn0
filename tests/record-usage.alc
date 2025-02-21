@@ -5,4 +5,13 @@ let foo =
 		x = 3
 		y = 5
 
-foo.x * foo.y
+let f = lambda (xs)
+	record-of
+		x = 
+			xs.x + xs.y
+		y = 
+			xs.x - xs.y
+
+let bar = f(foo)
+
+bar.x
