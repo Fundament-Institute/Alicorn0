@@ -980,6 +980,9 @@ function gather_usages(val, usages, context_len, ambient_typechecking_context)
 	elseif val:is_host_intrinsic() then
 		local source, anchor = val:unwrap_host_intrinsic()
 		gather_usages(flex_value.stuck(source), usages, context_len, ambient_typechecking_context)
+	elseif val:is_record_field_access() then
+		local subject, field = val:unwrap_record_field_access()
+		gather_usages(flex_value.stuck(subject), usages, context_len, ambient_typechecking_context)
 	else
 		error("Unhandled value kind in gather_usages: " .. val.kind)
 	end
@@ -1285,6 +1288,11 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		local source_term =
 			substitute_inner(flex_value.stuck(source), mappings, context_len, ambient_typechecking_context)
 		return U.notail(typed_term.host_intrinsic(source_term, start_anchor))
+	elseif val:is_record_field_access() then
+		local subject, field = val:unwrap_record_field_access()
+		local subject_term =
+			substitute_inner(flex_value.stuck(subject), mappings, context_len, ambient_typechecking_context)
+		return U.notail(typed_term.record_field_access(subject_term, field))
 	else
 		error("Unhandled value kind in substitute_inner: " .. val.kind)
 	end
@@ -2500,7 +2508,7 @@ local function index_record_value(subject, key)
 		end
 		return index_record_value(flex_value.stuck(base), key)
 	elseif subject:is_stuck() then
-		return flex_value.record_field_access(subject, key)
+		return flex_value.record_field_access(subject:unwrap_stuck(), key)
 	end
 	print(key, subject)
 	error("Should be unreachable???")
@@ -4344,7 +4352,7 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 			end
 		elseif subject_value:is_stuck() then
 			local subject_stuck_value = subject_value:unwrap_stuck()
-			for idx, v in field_names:ipairs() do
+			for idx, name in field_names:ipairs() do
 				inner_context = inner_context:append(
 					flex_value.stuck(stuck_value.record_field_access(subject_stuck_value, name)),
 					name,
@@ -4897,6 +4905,10 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		return U.notail(
 			flex_value.effect_row_extend(ids, evaluate(rest, runtime_context, ambient_typechecking_context))
 		)
+	elseif typed:is_record_field_access() then
+		local subject, field = typed:unwrap_record_field_access()
+		local subject_val = evaluate(subject, runtime_context, ambient_typechecking_context)
+		return U.notail(index_record_value(subject_val, field))
 	else
 		error("evaluate: unknown kind: " .. typed.kind)
 	end

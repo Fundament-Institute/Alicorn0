@@ -266,6 +266,15 @@ function typed:unwrap_record_elim() end
 ---@return typed body
 function typed:as_record_elim() end
 ---@return boolean
+function typed:is_record_field_access() end
+---@return typed subject
+---@return string name
+function typed:unwrap_record_field_access() end
+---@return boolean
+---@return typed subject
+---@return string name
+function typed:as_record_field_access() end
+---@return boolean
 function typed:is_enum_cons() end
 ---@return string constructor
 ---@return typed arg
@@ -659,6 +668,7 @@ function typed:as_constrained_type() end
 ---@field record_extend_single fun(base: typed, name: typed, val: typed): typed
 ---@field record_extend fun(base: typed, fields: MapValue<string, typed>): typed
 ---@field record_elim fun(subject: typed, field_names: ArrayValue<string>, debug_ids: ArrayValue<spanned_name>, body: typed): typed
+---@field record_field_access fun(subject: typed, name: string): typed
 ---@field enum_cons fun(constructor: string, arg: typed): typed
 ---@field enum_elim fun(subject: typed, mechanism: typed): typed
 ---@field enum_rec_elim fun(subject: typed, mechanism: typed): typed
