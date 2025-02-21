@@ -301,7 +301,7 @@ local function record_threaded_element(env)
 end
 
 ---@type lua_operative
-local function record_build(syntax, env)
+local function record_of_impl(syntax, env)
 	local ok, defs, env = syntax:match({
 		metalanguage.list_many_fold(metalanguage.accept_handler, record_threaded_element, env),
 	}, metalanguage.failure_handler, nil)
@@ -2078,7 +2078,6 @@ local core_operations = {
 	["dump-context"] = exprs.host_operative(dump_context_impl, "dump_context_impl"),
 	["graph-snapshot-start"] = exprs.host_operative(graph_snapshot_start_impl, "graph_snapshot_start_impl"),
 	["graph-snapshot-dump"] = exprs.host_operative(graph_snapshot_dump_impl, "graph_snapshot_dump_impl"),
-	--record = exprs.host_operative(record_build, "record_build"),
 	intrinsic = exprs.host_operative(intrinsic_impl, "intrinsic_impl"),
 	["host-number"] = lit_term(strict_value.host_number_type, strict_value.host_type_type),
 	["host-type"] = lit_term(strict_value.host_type_type, strict_value.star(1, 1)),
@@ -2101,7 +2100,7 @@ local core_operations = {
 	["unstrict-wrapped"] = build_wrapped(typed_term.host_unstrict_wrapped_type),
 	unwrap = build_unwrap(typed_term.host_unwrap, typed_term.host_wrapped_type),
 	["unstrict-unwrap"] = build_unwrap(typed_term.host_unstrict_unwrap, typed_term.host_unstrict_wrapped_type),
-	["record-of"] = exprs.host_operative(record_build, "record-of"),
+	["record-of"] = exprs.host_operative(record_of_impl, "record-of"),
 	--["dump-env"] = evaluator.host_operative(function(syntax, env) print(environment.dump_env(env)); return true, types.unit_val, env end),
 	--["basic-fn"] = evaluator.host_operative(basic_fn),
 	--tuple = evaluator.host_operative(tuple_type_impl),
