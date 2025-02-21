@@ -96,6 +96,26 @@ function strict_value:unwrap_name() end
 ---@return string name
 function strict_value:as_name() end
 ---@return boolean
+function strict_value:is_name_set() end
+---@return string names
+function strict_value:unwrap_name_set() end
+---@return boolean
+---@return string names
+function strict_value:as_name_set() end
+---@return boolean
+function strict_value:is_name_set_type() end
+---@return nil
+function strict_value:unwrap_name_set_type() end
+---@return boolean
+function strict_value:as_name_set_type() end
+---@return boolean
+function strict_value:is_noncolliding_name_type() end
+---@return strict_value set
+function strict_value:unwrap_noncolliding_name_type() end
+---@return boolean
+---@return strict_value set
+function strict_value:as_noncolliding_name_type() end
+---@return boolean
 function strict_value:is_operative_value() end
 ---@return strict_value userdata
 function strict_value:unwrap_operative_value() end
@@ -415,6 +435,9 @@ function strict_value:as_union_type() end
 ---@field range fun(lower_bounds: ArrayValue<strict_value>, upper_bounds: ArrayValue<strict_value>, relation: strict_value): strict_value
 ---@field name_type strict_value
 ---@field name fun(name: string): strict_value
+---@field name_set fun(names: string): strict_value
+---@field name_set_type strict_value
+---@field noncolliding_name_type fun(set: strict_value): strict_value
 ---@field operative_value fun(userdata: strict_value): strict_value
 ---@field operative_type fun(handler: strict_value, userdata_type: strict_value): strict_value
 ---@field tuple_value fun(elements: ArrayValue<strict_value>): strict_value

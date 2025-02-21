@@ -110,6 +110,33 @@ function flex_value:unwrap_name() end
 ---@return string name
 function flex_value:as_name() end
 ---@return boolean
+function flex_value:is_name_set() end
+---@return string names
+function flex_value:unwrap_name_set() end
+---@return boolean
+---@return string names
+function flex_value:as_name_set() end
+---@return boolean
+function flex_value:is_name_set_type() end
+---@return nil
+function flex_value:unwrap_name_set_type() end
+---@return boolean
+function flex_value:as_name_set_type() end
+---@return boolean
+function flex_value:is_name_set_of_record_desc() end
+---@return stuck_value desc
+function flex_value:unwrap_name_set_of_record_desc() end
+---@return boolean
+---@return stuck_value desc
+function flex_value:as_name_set_of_record_desc() end
+---@return boolean
+function flex_value:is_noncolliding_name_type() end
+---@return flex_value set
+function flex_value:unwrap_noncolliding_name_type() end
+---@return boolean
+---@return flex_value set
+function flex_value:as_noncolliding_name_type() end
+---@return boolean
 function flex_value:is_operative_value() end
 ---@return flex_value userdata
 function flex_value:unwrap_operative_value() end
@@ -213,6 +240,37 @@ function flex_value:unwrap_record_desc_value() end
 ---@return boolean
 ---@return MapValue<string, flex_value> fields
 function flex_value:as_record_desc_value() end
+---@return boolean
+function flex_value:is_record_desc_extend_single() end
+---@return flex_value base
+---@return stuck_value name
+---@return flex_value typefn
+function flex_value:unwrap_record_desc_extend_single() end
+---@return boolean
+---@return flex_value base
+---@return stuck_value name
+---@return flex_value typefn
+function flex_value:as_record_desc_extend_single() end
+---@return boolean
+function flex_value:is_record_desc_extend() end
+---@return flex_value base
+---@return MapValue<string, flex_value> extension
+function flex_value:unwrap_record_desc_extend() end
+---@return boolean
+---@return flex_value base
+---@return MapValue<string, flex_value> extension
+function flex_value:as_record_desc_extend() end
+---@return boolean
+function flex_value:is_record_extend_single() end
+---@return flex_value base
+---@return stuck_value name
+---@return flex_value val
+function flex_value:unwrap_record_extend_single() end
+---@return boolean
+---@return flex_value base
+---@return stuck_value name
+---@return flex_value val
+function flex_value:as_record_extend_single() end
 ---@return boolean
 function flex_value:is_record_extend() end
 ---@return stuck_value base
@@ -557,6 +615,10 @@ function flex_value:as_host_unwrap() end
 ---@field range fun(lower_bounds: ArrayValue<flex_value>, upper_bounds: ArrayValue<flex_value>, relation: strict_value): flex_value
 ---@field name_type flex_value
 ---@field name fun(name: string): flex_value
+---@field name_set fun(names: string): flex_value
+---@field name_set_type flex_value
+---@field name_set_of_record_desc fun(desc: stuck_value): flex_value
+---@field noncolliding_name_type fun(set: flex_value): flex_value
 ---@field operative_value fun(userdata: flex_value): flex_value
 ---@field operative_type fun(handler: flex_value, userdata_type: flex_value): flex_value
 ---@field tuple_value fun(elements: ArrayValue<flex_value>): flex_value
@@ -571,6 +633,9 @@ function flex_value:as_host_unwrap() end
 ---@field record_type fun(desc: flex_value): flex_value
 ---@field record_desc_type fun(universe: flex_value): flex_value
 ---@field record_desc_value fun(fields: MapValue<string, flex_value>): flex_value
+---@field record_desc_extend_single fun(base: flex_value, name: stuck_value, typefn: flex_value): flex_value
+---@field record_desc_extend fun(base: flex_value, extension: MapValue<string, flex_value>): flex_value
+---@field record_extend_single fun(base: flex_value, name: stuck_value, val: flex_value): flex_value
 ---@field record_extend fun(base: stuck_value, extension: MapValue<string, flex_value>): flex_value
 ---@field object_value fun(methods: MapValue<string, typed>, capture: FlexRuntimeContext): flex_value
 ---@field object_type fun(desc: flex_value): flex_value
