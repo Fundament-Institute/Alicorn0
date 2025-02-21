@@ -396,10 +396,10 @@ local ConstructedSyntax = {}
 --- 	res : tuple-type(results)
 --- ```
 ---@generic U
----@param matchers Matcher[]
----@param unmatched fun(u : U, err: SyntaxError) : ...
+---@param matchers Matcher[] returns `T...`
+---@param unmatched (fun(u : U, err: SyntaxError): ...) returns `T...`
 ---@param extra U
----@return ...
+---@return ... returns `T...`
 function ConstructedSyntax:match(matchers, unmatched, extra)
 	if matchers.kind ~= nil then
 		error("matchers must be a list of matchers (not a matcher itself)")
