@@ -764,8 +764,8 @@ unanchored_inferrable_term:define_enum("unanchored_inferrable", {
 		"body",    anchored_inferrable_term,
 	} },
 	{ "tuple_type", { "desc", anchored_inferrable_term } },
-	{ "record_desc_cons", {"fields", map(gen.builtin_string, anchored_inferrable_term)}},
-	{ "record_desc_extend_single", {"base", anchored_inferrable_term, "name", anchored_inferrable_term, "val", anchored_inferrable_term}},
+	{ "record_desc_cons", { "fields", map(gen.builtin_string, anchored_inferrable_term) } },
+	{ "record_desc_extend_single", { "base", anchored_inferrable_term, "name", anchored_inferrable_term, "val", anchored_inferrable_term } },
 	{ "record_cons", { "fields", map(gen.builtin_string, anchored_inferrable_term) } },
 	{ "record_elim", {
 		"subject",          anchored_inferrable_term,
@@ -773,6 +773,7 @@ unanchored_inferrable_term:define_enum("unanchored_inferrable", {
 		"field_var_debugs", array(spanned_name),
 		"body",             anchored_inferrable_term,
 	} },
+	{ "record_type", { "desc", anchored_inferrable_term } },
 	{ "enum_cons", {
 		"constructor", gen.builtin_string,
 		"arg",         anchored_inferrable_term,
