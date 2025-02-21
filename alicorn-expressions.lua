@@ -1251,14 +1251,14 @@ local function host_operative(fn, name)
 			error("mismatch in goal and returned term\ngoal: " .. tostring(goal) .. "\nres: " .. tostring(res))
 		end
 		if not env or not env.exit_block then
-			print(
-				"env returned from fn passed to alicorn-expressions.host_operative isn't an env or is nil",
-				env,
-				" in ",
-				short_src,
-				linedef
+			error(
+				("invalid env from host_operative fn %s\nenv returned from fn passed to alicorn-expressions.host_operative isn't an env or is nil: %s in %s %s"):format(
+					debugstring,
+					tostring(env),
+					tostring(short_src),
+					tostring(linedef)
+				)
 			)
-			error("invalid env from host_operative fn " .. debugstring)
 		end
 		return res, env
 	end
