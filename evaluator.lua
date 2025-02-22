@@ -515,7 +515,7 @@ TupleDescRelation = setmetatable({
 						)
 					)
 				else
-					error(tuple_types_val .. "\n" .. tostring(val) .. "\n" .. tostring(use))
+					error(tuple_types_val .. "\n" .. tostring(val) .. "\n" .. tostring(use) .. "\n" .. tostring(cause))
 				end
 			end
 
