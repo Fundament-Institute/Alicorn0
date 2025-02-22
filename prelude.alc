@@ -1622,3 +1622,14 @@ let _/_ = div
 let _%_ = mod
 let _+_ = add
 let _-_ = sub
+
+#### let host-predicate-binop = lambda (T : host-type, U : host-type)
+	host-func-type (a : T, b : U) -> ((c : host-bool))
+#### let host-lt = (intrinsic "return function(a, b) return U.notail(a < b) end" : host-predicate-binop(host-number, host-number))
+#### let host-eq = (intrinsic "return function(a, b) return U.notail(a == b) end" : host-predicate-binop(host-number, host-number))
+#### let lt = lambda (a : host-number, b : host-number)
+	let (c) = host-lt(a, b)
+	c
+#### let eq = lambda (a : host-number, b : host-number)
+	let (c) = host-eq(a, b)
+	c
