@@ -1,25 +1,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 -- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
-local jit_enabled = true
-local lldebugger_enabled = os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") == "1"
-if lldebugger_enabled then
-	jit_enabled = false
-end
 
-if jit then
-	if jit_enabled then
-		jit.opt.start("maxtrace=10000")
-		jit.opt.start("maxmcode=4096")
-		jit.opt.start("recunroll=5")
-		jit.opt.start("loopunroll=60")
-	else
-		jit.off()
-	end
-end
-
-if lldebugger_enabled then
-	require("lldebugger").start(true)
-end
+require("lua-init")
 
 --local endTime = os.time() + 3
 --while os.time() < endTime do end
