@@ -10,6 +10,27 @@ local _ = require "lua-ext" -- has side-effect of loading fixed table.concat
 local math_floor, select, type = math.floor, select, type
 local s = pretty_printer.s
 
+---@diagnostic disable-next-line: no-unknown
+local builtin_integer_value_check
+do
+	local math_type = math.type
+	if math_type ~= nil then
+		---@param val any
+		---@return boolean is_integer
+		function builtin_integer_value_check(val)
+			local val_type = math_type(val)
+			return val_type == "integer"
+		end
+	else
+		---@param val any
+		---@return boolean is_integer
+		function builtin_integer_value_check(val)
+			local val_type = type(val)
+			return val_type == "number" and math_floor(val) == val
+		end
+	end
+end
+
 -- record and enum are nominative types.
 -- this means that two record types, given the same arguments, are distinct.
 -- values constructed from one type are of a different type compared to values
@@ -32,14 +53,6 @@ local s = pretty_printer.s
 ---@class Value
 ---@field kind string
 
--- TODO: are generic annotations powerful enough to describe this function?
--- worked around at the bottom of this file
-local function new_self(fn)
-	return function(...)
-		return fn({}, ...)
-	end
-end
-
 ---This attempts to create a traceback only if debug information is actually available
 ---@param s string
 ---@return string
@@ -56,8 +69,9 @@ end
 local function metatable_equality(mt)
 	if type(mt) ~= "table" then
 		error(
-			"trying to define metatable equality to something that isn't a metatable (possible typo?): "
-				.. attempt_traceback(tostring(mt))
+			("trying to define metatable equality to something that isn't a metatable (possible typo?): %s"):format(
+				attempt_traceback(tostring(mt))
+			)
 		)
 	end
 	return function(val)
@@ -104,23 +118,20 @@ local function validate_params_types(kind, params, params_types)
 		if type(param_type) ~= "table" or type(param_type.value_check) ~= "function" then
 			error(
 				attempt_traceback(
-					"trying to set a parameter type to something that isn't a type, in constructor "
-						.. kind
-						.. ", parameter "
-						.. v
-						.. " (possible typo?)"
+					("trying to set a parameter type to something that isn't a type, in constructor %s, parameter %q (possible typo?)"):format(
+						kind,
+						v
+					)
 				)
 			)
 		end
 		if params_set[v] then
-			error(
-				"constructor " .. kind .. " must have unique parameter names ('" .. v .. "' was given more than once)"
-			)
+			error(("constructor %s must have unique parameter names (%q was given more than once)"):format(kind, v))
 		end
 		params_set[v] = true
 	end
 	if not at_least_one then
-		error("constructor " .. kind .. " must take at least one parameter, or be changed to a unit")
+		error(("constructor %s must take at least one parameter, or be changed to a unit"):format(kind))
 	end
 end
 
@@ -157,8 +168,7 @@ local function gen_record(self, cons, kind, params_with_types)
 			if param_type.value_check(param) ~= true then
 				error(
 					attempt_traceback(
-						string.format(
-							"wrong argument type passed to constructor %s, parameter %q\nexpected type of parameter %q is: %s\nvalue of parameter %q: (follows)\n%s",
+						("wrong argument type passed to constructor %s, parameter %q\nexpected type of parameter %q is: %s\nvalue of parameter %q: (follows)\n%s"):format(
 							kind,
 							v,
 							v,
@@ -193,13 +203,11 @@ local function gen_record(self, cons, kind, params_with_types)
 				argi = freeze_impl.freeze(params_types[i], argi)
 			else
 				print(
-					"WARNING: while constructing "
-						.. kind
-						.. ", can't freeze param "
-						.. v
-						.. " (type "
-						.. tostring(params_types[i])
-						.. ")"
+					("WARNING: while constructing %s, can't freeze param %s (type %s)"):format(
+						kind,
+						v,
+						tostring(params_types[i])
+					)
 				)
 				print("this may lead to suboptimal hash-consing")
 			end
@@ -224,7 +232,7 @@ local function gen_record(self, cons, kind, params_with_types)
 end
 
 local function record_tostring(self)
-	return "terms-gen record: " .. self._kind
+	return ("terms-gen record: %s"):format(self._kind)
 end
 
 ---@param self table
@@ -250,13 +258,13 @@ local function define_record(self, kind, params_with_types)
 			return t._record[key]
 		end
 		if key ~= "name" then
-			error(attempt_traceback("use unwrap instead for: " .. key))
+			error(attempt_traceback(("use unwrap instead for: %s"):format(key)))
 		end
 		if t._record[key] then
 			return t._record[key]
 		end
 
-		error("Tried to access nonexistent key: " .. key)
+		error(("Tried to access nonexistent key: %s"):format(key))
 	end
 	self.methods = {
 		pretty_preprint = pretty_printer.pretty_preprint,
@@ -276,6 +284,13 @@ local function define_record(self, kind, params_with_types)
 	self:derive(derivers.diff)
 	self:derive(derivers.freeze)
 	return self
+end
+
+---@param kind string
+---@param params_with_types ParamsWithTypes
+---@return RecordType self
+local function declare_record(kind, params_with_types)
+	return define_record({}, kind, params_with_types)
 end
 
 ---@param self table
@@ -308,7 +323,7 @@ end
 
 local enum_type_mt = {
 	__tostring = function(self)
-		return "terms-gen enum: " .. self._name
+		return ("terms-gen enum: %s"):format(self._name)
 	end,
 }
 
@@ -328,7 +343,7 @@ local function define_enum(self, name, variants)
 		local vparams_with_types = v[2]
 		local vkind = name .. "." .. vname
 		if self[vname] then
-			error("enum variant " .. vkind .. " is defined multiple times")
+			error(("enum variant %s is defined multiple times"):format(vkind))
 		end
 		derive_variants[i] = vname
 		if vparams_with_types then
@@ -366,12 +381,12 @@ local function define_enum(self, name, variants)
 		if key == "{TRACE}" or key == "{ID}" then
 			return t._record[key]
 		end
-		error(attempt_traceback("use unwrap instead for: " .. key))
+		error(attempt_traceback(("use unwrap instead for: %s"):format(key)))
 		if t._record[key] then
 			return t._record[key]
 		end
 
-		error("Tried to access nonexistent key: " .. key)
+		error(("Tried to access nonexistent key: %s"):format(key))
 	end
 	self.methods = {
 		pretty_preprint = pretty_printer.pretty_preprint,
@@ -395,13 +410,20 @@ local function define_enum(self, name, variants)
 	return self
 end
 
+---@param name string
+---@param variants Variants
+---@return EnumType self
+local function declare_enum(name, variants)
+	return define_enum({}, name, variants)
+end
+
 ---@param s string
 ---@param delim string
 ---@return string[]
 local function split_delim(s, delim)
 	local subs = {}
 	-- This might have an extra blank match at the end but we actually don't care in this case
-	for sub in s:gmatch("[^" .. delim .. "]+") do
+	for sub in s:gmatch(("[^%s]+"):format(delim)) do
 		table.insert(subs, sub)
 	end
 	return subs
@@ -433,7 +455,7 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 		local vname, vtag = table.unpack(split_delim(v[1], "$"))
 		local vparams_with_types = v[2]
 		if vtag == nil then
-			error("Missing tag on " .. vname)
+			error(("Missing tag on %s"):format(vname))
 		end
 		table.insert(flex_variants, { vname, vparams_with_types })
 		flex_tags[vname] = vtag
@@ -452,7 +474,7 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 			end
 		else
 			if keyed_variants[vtag] == nil then
-				error("Unknown tag: " .. vtag)
+				error(("Unknown tag: %s"):format(vtag))
 			end
 			table.insert(keyed_variants[vtag], { vname, vparams_with_types })
 		end
@@ -486,8 +508,7 @@ local function define_multi_enum(flex, flex_name, fn_replace, fn_specify, fn_uni
 					if param_type.value_check(param) ~= true then
 						error(
 							attempt_traceback(
-								string.format(
-									"wrong argument type passed to constructor %s, parameter %q\nexpected type of parameter %q is: %s\nvalue of parameter %q: (follows)\n%s",
+								("wrong argument type passed to constructor %s, parameter %q\nexpected type of parameter %q is: %s\nvalue of parameter %q: (follows)\n%s"):format(
 									param.kind,
 									v,
 									v,
@@ -589,7 +610,7 @@ end
 
 local foreign_type_mt = {
 	__tostring = function(self)
-		return "terms-gen foreign: " .. self.lsp_type
+		return ("terms-gen foreign: %s"):format(self.lsp_type)
 	end,
 }
 
@@ -608,6 +629,14 @@ local function define_foreign(self, value_check, lsp_type)
 		end,
 	})
 	return self
+end
+
+--- Make sure the function you pass to this returns true, not just a truthy value.
+---@param value_check ValueCheckFn
+---@param lsp_type string
+---@return ForeignType self
+local function declare_foreign(value_check, lsp_type)
+	return define_foreign({}, value_check, lsp_type)
 end
 
 ---@class MapType: Type
@@ -648,7 +677,7 @@ local map_type_mt = {
 		return left.key_type == right.key_type and left.value_type == right.value_type
 	end,
 	__tostring = function(self)
-		return "terms-gen map key:<" .. tostring(self.key_type) .. "> val:<" .. tostring(self.value_type) .. ">"
+		return ("terms-gen map key:<%s> val:<%s>"):format(tostring(self.key_type), tostring(self.value_type))
 	end,
 }
 
@@ -673,11 +702,7 @@ local function gen_map_methods(self, key_type, value_type)
 				key = freeze_impl_key.freeze(key_type, key)
 			else
 				print(
-					"WARNING: while setting "
-						.. tostring(self)
-						.. ", can't freeze key (type "
-						.. tostring(key_type)
-						.. ")"
+					("WARNING: while setting %s, can't freeze key (type %s)"):format(tostring(self), tostring(key_type))
 				)
 				print("this may lead to suboptimal hash-consing")
 			end
@@ -686,11 +711,10 @@ local function gen_map_methods(self, key_type, value_type)
 				value = freeze_impl_value.freeze(value_type, value)
 			else
 				print(
-					"WARNING: while setting "
-						.. tostring(self)
-						.. ", can't freeze value (type "
-						.. tostring(value_type)
-						.. ")"
+					("WARNING: while setting %s, can't freeze value (type %s)"):format(
+						tostring(self),
+						tostring(value_type)
+					)
 				)
 				print("this may lead to suboptimal hash-consing")
 			end
@@ -784,7 +808,7 @@ local function map_freeze(t, val)
 	end
 	local order_impl = traits.order:get(t.key_type)
 	if not order_impl then
-		print("WARNING: can't freeze " .. tostring(t))
+		print(("WARNING: can't freeze %s"):format(tostring(t)))
 		return val
 	end
 	local keys = {}
@@ -883,7 +907,7 @@ local set_type_mt = {
 		return left.key_type == right.key_type
 	end,
 	__tostring = function(self)
-		return "terms-gen set key:<" .. tostring(self.key_type) .. ">"
+		return ("terms-gen set key:<%s>"):format(tostring(self.key_type))
 	end,
 }
 
@@ -903,11 +927,7 @@ local function gen_set_methods(self, key_type)
 				key = freeze_impl_key.freeze(key_type, key)
 			else
 				print(
-					"WARNING: while putting "
-						.. tostring(self)
-						.. ", can't freeze key (type "
-						.. tostring(key_type)
-						.. ")"
+					("WARNING: while putting %s, can't freeze key (type %s)"):format(tostring(self), tostring(key_type))
 				)
 				print("this may lead to suboptimal hash-consing")
 			end
@@ -1013,7 +1033,7 @@ local function set_freeze(t, val)
 	end
 	local order_impl = traits.order:get(t.key_type)
 	if not order_impl then
-		print("WARNING: can't freeze " .. tostring(t))
+		print(("WARNING: can't freeze %s"):format(tostring(t)))
 		return val
 	end
 	local keys = {}
@@ -1096,8 +1116,7 @@ local array_type_mt = {
 			if value_type.value_check(value) ~= true then
 				error(
 					attempt_traceback(
-						string.format(
-							"wrong value type passed to array creation: expected [%s] of type %s but got %s",
+						("wrong value type passed to array creation: expected [%s] of type %s but got %s"):format(
 							s(i),
 							s(value_type),
 							s(value)
@@ -1117,7 +1136,7 @@ local array_type_mt = {
 		return left.value_type == right.value_type
 	end,
 	__tostring = function(self)
-		return "terms-gen array val:<" .. tostring(self.value_type) .. ">"
+		return ("terms-gen array val:<%s>"):format(tostring(self.value_type))
 	end,
 }
 
@@ -1154,8 +1173,7 @@ local function array_new_fn(self, array, n)
 		if value_type.value_check(value) ~= true then
 			error(
 				attempt_traceback(
-					string.format(
-						"wrong value type passed to array creation: expected [%s] of type %s but got %s",
+					("wrong value type passed to array creation: expected [%s] of type %s but got %s"):format(
 						s(i),
 						s(value_type),
 						s(value)
@@ -1220,8 +1238,7 @@ local function gen_array_methods(self, value_type)
 				if value_type.value_check(value) ~= true then
 					error(
 						attempt_traceback(
-							string.format(
-								"wrong value type resulting from array mapping: expected [%s] of type %s but got %s",
+							("wrong value type resulting from array mapping: expected [%s] of type %s but got %s"):format(
 								s(i),
 								s(value_type),
 								s(value)
@@ -1294,11 +1311,10 @@ local function gen_array_index_fns(self, value_type)
 		if key < 1 or key > val.n then
 			p(key, val.n)
 			error(
-				"key passed to array indexing is out of bounds (read code comment above): "
-					.. tostring(key)
-					.. " is not within [1,"
-					.. tostring(val.n)
-					.. "]"
+				("key passed to array indexing is out of bounds (read code comment above): %s is not within [1,%s]"):format(
+					tostring(key),
+					tostring(val.n)
+				)
 			)
 		end
 		return val.array[key]
@@ -1308,29 +1324,19 @@ local function gen_array_index_fns(self, value_type)
 	---@param value Value
 	local function newindex(val, key, value)
 		if val.is_frozen then
-			error(string.format("trying to set %s on a frozen array to %s: %s", s(key), s(value), s(val)))
+			error(("trying to set %s on a frozen array to %s: %s"):format(s(key), s(value), s(val)))
 		end
-		if type(key) ~= "number" then
-			error(
-				string.format(
-					"wrong key type passed to array index-assignment: expected %s but got %s",
-					s(value_type),
-					s(key)
-				)
-			)
-		end
-		if math_floor(key) ~= key then
-			error(string.format("key passed to array index-assignment is not an integer: %s", s(key)))
+		if not builtin_integer_value_check(key) then
+			error(("key passed to array index-assignment is not an integer: %s"):format(s(key)))
 		end
 		-- n+1 can be used to append
 		if key < 1 or key > val.n + 1 then
-			error(string.format("key %s passed to array index-assignment is out of bounds: %s", s(key), s(val.n)))
+			error(("key %s passed to array index-assignment is out of bounds: %s"):format(s(key), s(val.n)))
 		end
 		if value_type.value_check(value) ~= true then
 			error(
 				attempt_traceback(
-					string.format(
-						"wrong value type passed to array index-assignment: expected [%s] of type %s but got %s",
+					("wrong value type passed to array index-assignment: expected [%s] of type %s but got %s"):format(
 						s(key),
 						s(value_type),
 						s(value)
@@ -1343,13 +1349,11 @@ local function gen_array_index_fns(self, value_type)
 			value = freeze_impl_value.freeze(value_type, value)
 		else
 			print(
-				"WARNING: while setting "
-					.. tostring(self)
-					.. ", can't freeze value (type "
-					.. tostring(value_type)
-					.. ")"
+				("WARNING: while setting %s, can't freeze value (type %s)\nthis may lead to suboptimal hash-consing"):format(
+					tostring(self),
+					tostring(value_type)
+				)
 			)
-			print("this may lead to suboptimal hash-consing")
 		end
 		val.array[key] = value
 		if key > val.n then
@@ -1365,7 +1369,7 @@ end
 
 local function gen_array_diff_fn(self, value_type)
 	local function diff_fn(left, right)
-		print("diffing array with value_type: " .. tostring(value_type))
+		print(("diffing array with value_type: %s"):format(tostring(value_type)))
 		local rt = getmetatable(right)
 		if self ~= rt then
 			print("unequal types!")
@@ -1395,7 +1399,7 @@ local function gen_array_diff_fn(self, value_type)
 			return
 		elseif n == 1 then
 			local d = diff_elems[1]
-			print("difference in element: " .. tostring(d))
+			print(("difference in element: %s"):format(tostring(d)))
 			local diff_impl = traits.diff:get(value_type)
 			if diff_impl then
 				-- tail call
@@ -1442,8 +1446,9 @@ end
 local function define_array(self, value_type)
 	if type(value_type) ~= "table" or type(value_type.value_check) ~= "function" then
 		error(
-			"trying to set the value type to something that isn't a type (possible typo?): "
-				.. attempt_traceback(tostring(value_type))
+			("trying to set the value type to something that isn't a type (possible typo?): %s"):format(
+				attempt_traceback(tostring(value_type))
+			)
 		)
 	end
 
@@ -1517,35 +1522,43 @@ local function define_type(self)
 	return self
 end
 
+---@return UndefinedType self
+local function declare_type()
+	return define_type({})
+end
+
+---@param self table
 ---@param typename string
 ---@return ForeignType
-local function gen_builtin(typename)
-	return define_foreign({}, function(val)
+local function define_builtin(self, typename)
+	return define_foreign(self, function(val)
 		return type(val) == typename
 	end, typename)
 end
 
+---@param typename string
+---@return ForeignType
+local function declare_builtin(typename)
+	return define_builtin({}, typename)
+end
+
 local terms_gen = {
-	---@type fun(kind: string, params_with_types: ParamsWithTypes): (self: RecordType)
-	declare_record = new_self(define_record),
-	---@type fun(name: string, variants: Variants): (self: EnumType)
-	declare_enum = new_self(define_enum),
-	-- Make sure the function you pass to this returns true, not just a truthy value
-	---@type fun(value_check: ValueCheckFn, lsp_type: string): (self: ForeignType)
-	declare_foreign = new_self(define_foreign),
+	declare_record = declare_record,
+	declare_enum = declare_enum,
+	declare_foreign = declare_foreign,
 	declare_map = declare_map,
 	declare_set = declare_set,
 	declare_array = declare_array,
-	---@type fun(): (self: UndefinedType)
-	declare_type = new_self(define_type),
+	declare_type = declare_type,
 	metatable_equality = metatable_equality,
-	builtin_number = gen_builtin("number"),
-	builtin_string = gen_builtin("string"),
-	builtin_function = gen_builtin("function"),
-	builtin_table = gen_builtin("table"),
+	builtin_number = declare_builtin("number"),
+	builtin_integer = declare_foreign(builtin_integer_value_check, "integer"),
+	builtin_string = declare_builtin("string"),
+	builtin_function = declare_builtin("function"),
+	builtin_table = declare_builtin("table"),
 	array_type_mt = array_type_mt,
 	define_multi_enum = define_multi_enum,
-	any_lua_type = define_foreign({}, function()
+	any_lua_type = declare_foreign(function(_val)
 		return true
 	end, "any"),
 }
@@ -1561,7 +1574,7 @@ end
 local function compare_trivial(left, right)
 	return left < right
 end
-for _, t in ipairs { terms_gen.builtin_number, terms_gen.builtin_string } do
+for _, t in ipairs { terms_gen.builtin_integer, terms_gen.builtin_string } do
 	traits.freeze:implement_on(t, { freeze = freeze_trivial })
 	traits.order:implement_on(t, { compare = compare_trivial })
 end
@@ -1653,7 +1666,7 @@ local function any_lua_type_diff_fn(left, right)
 				return
 			elseif n == 1 then
 				local d = diff_elems[1]
-				print("difference in element: " .. tostring(d))
+				print(("difference in element: %s"):format(tostring(d)))
 				local mtl = getmetatable(left[d])
 				local mtr = getmetatable(right[d])
 				if mtl ~= mtr then

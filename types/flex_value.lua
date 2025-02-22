@@ -240,19 +240,19 @@ function flex_value:unwrap_object_type() end
 function flex_value:as_object_type() end
 ---@return boolean
 function flex_value:is_star() end
----@return number level
----@return number depth
+---@return integer level
+---@return integer depth
 function flex_value:unwrap_star() end
 ---@return boolean
----@return number level
----@return number depth
+---@return integer level
+---@return integer depth
 function flex_value:as_star() end
 ---@return boolean
 function flex_value:is_prop() end
----@return number level
+---@return integer level
 function flex_value:unwrap_prop() end
 ---@return boolean
----@return number level
+---@return integer level
 function flex_value:as_prop() end
 ---@return boolean
 function flex_value:is_host_value() end
@@ -472,11 +472,11 @@ function flex_value:as_application() end
 ---@return boolean
 function flex_value:is_tuple_element_access() end
 ---@return stuck_value subject
----@return number index
+---@return integer index
 function flex_value:unwrap_tuple_element_access() end
 ---@return boolean
 ---@return stuck_value subject
----@return number index
+---@return integer index
 function flex_value:as_tuple_element_access() end
 ---@return boolean
 function flex_value:is_record_field_access() end
@@ -574,8 +574,8 @@ function flex_value:as_host_unwrap() end
 ---@field record_extend fun(base: stuck_value, extension: MapValue<string, flex_value>): flex_value
 ---@field object_value fun(methods: MapValue<string, typed>, capture: FlexRuntimeContext): flex_value
 ---@field object_type fun(desc: flex_value): flex_value
----@field star fun(level: number, depth: number): flex_value
----@field prop fun(level: number): flex_value
+---@field star fun(level: integer, depth: integer): flex_value
+---@field prop fun(level: integer): flex_value
 ---@field host_value fun(host_value: any): flex_value
 ---@field host_type_type flex_value
 ---@field host_number_type flex_value
@@ -604,7 +604,7 @@ function flex_value:as_host_unwrap() end
 ---@field union_type fun(left: flex_value, right: flex_value): flex_value
 ---@field free fun(free: free): flex_value
 ---@field application fun(f: stuck_value, arg: flex_value): flex_value
----@field tuple_element_access fun(subject: stuck_value, index: number): flex_value
+---@field tuple_element_access fun(subject: stuck_value, index: integer): flex_value
 ---@field record_field_access fun(subject: stuck_value, field_name: string): flex_value
 ---@field host_application fun(function: any, arg: stuck_value): flex_value
 ---@field host_tuple fun(leading: ArrayValue<any>, stuck_element: stuck_value, trailing: ArrayValue<flex_value>): flex_value

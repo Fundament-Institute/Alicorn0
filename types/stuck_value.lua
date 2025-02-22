@@ -327,11 +327,11 @@ function stuck_value:as_application() end
 ---@return boolean
 function stuck_value:is_tuple_element_access() end
 ---@return stuck_value subject
----@return number index
+---@return integer index
 function stuck_value:unwrap_tuple_element_access() end
 ---@return boolean
 ---@return stuck_value subject
----@return number index
+---@return integer index
 function stuck_value:as_tuple_element_access() end
 ---@return boolean
 function stuck_value:is_record_field_access() end
@@ -437,7 +437,7 @@ function stuck_value:as_host_unwrap() end
 ---@field union_type fun(left: flex_value, right: flex_value): stuck_value
 ---@field free fun(free: free): stuck_value
 ---@field application fun(f: stuck_value, arg: flex_value): stuck_value
----@field tuple_element_access fun(subject: stuck_value, index: number): stuck_value
+---@field tuple_element_access fun(subject: stuck_value, index: integer): stuck_value
 ---@field record_field_access fun(subject: stuck_value, field_name: string): stuck_value
 ---@field host_application fun(function: any, arg: stuck_value): stuck_value
 ---@field host_tuple fun(leading: ArrayValue<any>, stuck_element: stuck_value, trailing: ArrayValue<flex_value>): stuck_value

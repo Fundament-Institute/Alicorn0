@@ -13,11 +13,11 @@ function free:unwrap_metavariable() end
 function free:as_metavariable() end
 ---@return boolean
 function free:is_placeholder() end
----@return number index
+---@return integer index
 ---@return spanned_name debug
 function free:unwrap_placeholder() end
 ---@return boolean
----@return number index
+---@return integer index
 ---@return spanned_name debug
 function free:as_placeholder() end
 ---@return boolean
@@ -31,6 +31,6 @@ function free:as_unique() end
 ---@class (exact) freeType: EnumType
 ---@field define_enum fun(self: freeType, name: string, variants: Variants): freeType
 ---@field metavariable fun(metavariable: Metavariable): free
----@field placeholder fun(index: number, debug: spanned_name): free
+---@field placeholder fun(index: integer, debug: spanned_name): free
 ---@field unique fun(id: table): free
 return {}

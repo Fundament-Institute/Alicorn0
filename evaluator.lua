@@ -36,8 +36,8 @@ local string_typed_map = map(gen.builtin_string, typed_term)
 local string_value_map = map(gen.builtin_string, flex_value)
 local array = gen.declare_array
 local host_array = array(gen.any_lua_type)
-local usage_array = array(gen.builtin_number)
-local usage_map = map(gen.builtin_number, gen.builtin_number)
+local usage_array = array(gen.builtin_integer)
+local usage_map = map(gen.builtin_integer, gen.builtin_integer)
 local string_array = array(gen.builtin_string)
 
 local internals_interface = require "internals-interface"
@@ -185,9 +185,9 @@ end
 
 ---builds a composite cause and propagates track
 ---@param kind string
----@param l_index number
+---@param l_index integer
 ---@param l ConstrainEdge
----@param r_index number
+---@param r_index integer
 ---@param r ConstrainEdge
 ---@param anchor Anchor
 ---@return constraintcause

@@ -6,11 +6,11 @@ typed = {}
 
 ---@return boolean
 function typed:is_bound_variable() end
----@return number index
+---@return integer index
 ---@return spanned_name debug
 function typed:unwrap_bound_variable() end
 ---@return boolean
----@return number index
+---@return integer index
 ---@return spanned_name debug
 function typed:as_bound_variable() end
 ---@return boolean
@@ -116,19 +116,19 @@ function typed:unwrap_level_max() end
 function typed:as_level_max() end
 ---@return boolean
 function typed:is_star() end
----@return number level
----@return number depth
+---@return integer level
+---@return integer depth
 function typed:unwrap_star() end
 ---@return boolean
----@return number level
----@return number depth
+---@return integer level
+---@return integer depth
 function typed:as_star() end
 ---@return boolean
 function typed:is_prop() end
----@return number level
+---@return integer level
 function typed:unwrap_prop() end
 ---@return boolean
----@return number level
+---@return integer level
 function typed:as_prop() end
 ---@return boolean
 function typed:is_tuple_cons() end
@@ -142,24 +142,24 @@ function typed:is_tuple_elim() end
 ---@return ArrayValue<string> names
 ---@return ArrayValue<spanned_name> debug
 ---@return typed subject
----@return number length
+---@return integer length
 ---@return typed body
 function typed:unwrap_tuple_elim() end
 ---@return boolean
 ---@return ArrayValue<string> names
 ---@return ArrayValue<spanned_name> debug
 ---@return typed subject
----@return number length
+---@return integer length
 ---@return typed body
 function typed:as_tuple_elim() end
 ---@return boolean
 function typed:is_tuple_element_access() end
 ---@return typed subject
----@return number index
+---@return integer index
 function typed:unwrap_tuple_element_access() end
 ---@return boolean
 ---@return typed subject
----@return number index
+---@return integer index
 function typed:as_tuple_element_access() end
 ---@return boolean
 function typed:is_tuple_type() end
@@ -576,7 +576,7 @@ function typed:as_constrained_type() end
 
 ---@class (exact) typedType: EnumType
 ---@field define_enum fun(self: typedType, name: string, variants: Variants): typedType
----@field bound_variable fun(index: number, debug: spanned_name): typed
+---@field bound_variable fun(index: integer, debug: spanned_name): typed
 ---@field literal fun(literal_value: strict_value): typed
 ---@field metavariable fun(metavariable: Metavariable): typed
 ---@field unique fun(id: table): typed
@@ -588,11 +588,11 @@ function typed:as_constrained_type() end
 ---@field level0 typed
 ---@field level_suc fun(previous_level: typed): typed
 ---@field level_max fun(level_a: typed, level_b: typed): typed
----@field star fun(level: number, depth: number): typed
----@field prop fun(level: number): typed
+---@field star fun(level: integer, depth: integer): typed
+---@field prop fun(level: integer): typed
 ---@field tuple_cons fun(elements: ArrayValue<typed>): typed
----@field tuple_elim fun(names: ArrayValue<string>, debug: ArrayValue<spanned_name>, subject: typed, length: number, body: typed): typed
----@field tuple_element_access fun(subject: typed, index: number): typed
+---@field tuple_elim fun(names: ArrayValue<string>, debug: ArrayValue<spanned_name>, subject: typed, length: integer, body: typed): typed
+---@field tuple_element_access fun(subject: typed, index: integer): typed
 ---@field tuple_type fun(desc: typed): typed
 ---@field tuple_desc_type fun(universe: typed): typed
 ---@field tuple_desc_concat_indep fun(prefix: typed, suffix: typed): typed

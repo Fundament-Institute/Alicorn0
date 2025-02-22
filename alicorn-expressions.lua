@@ -28,7 +28,7 @@ local spanned_name, spanned_name_array = terms.spanned_name, terms.spanned_name_
 local gen = require "terms-generators"
 local array = gen.declare_array
 --local checkable_array = array(checkable_term)
-local usage_array = array(gen.builtin_number)
+local usage_array = array(gen.builtin_integer)
 local name_array = array(gen.builtin_string)
 
 local param_info_implicit = strict_value.param_info(strict_value.visibility(visibility.implicit))
@@ -1336,7 +1336,7 @@ local function host_operative(fn, name)
 			unanchored_inferrable_term.typed(
 
 				terms.typed_term.literal(strict_value.operative_type(value_fn, userdata_type)),
-				array(gen.builtin_number)(),
+				array(gen.builtin_integer)(),
 				typed_term.operative_cons(typed_term.tuple_cons(typed_term_array()))
 			)
 		)

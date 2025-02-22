@@ -208,19 +208,19 @@ function strict_value:unwrap_object_type() end
 function strict_value:as_object_type() end
 ---@return boolean
 function strict_value:is_star() end
----@return number level
----@return number depth
+---@return integer level
+---@return integer depth
 function strict_value:unwrap_star() end
 ---@return boolean
----@return number level
----@return number depth
+---@return integer level
+---@return integer depth
 function strict_value:as_star() end
 ---@return boolean
 function strict_value:is_prop() end
----@return number level
+---@return integer level
 function strict_value:unwrap_prop() end
 ---@return boolean
----@return number level
+---@return integer level
 function strict_value:as_prop() end
 ---@return boolean
 function strict_value:is_host_value() end
@@ -430,8 +430,8 @@ function strict_value:as_union_type() end
 ---@field record_desc_value fun(fields: MapValue<string, flex_value>): strict_value
 ---@field object_value fun(methods: MapValue<string, typed>, capture: StrictRuntimeContext): strict_value
 ---@field object_type fun(desc: strict_value): strict_value
----@field star fun(level: number, depth: number): strict_value
----@field prop fun(level: number): strict_value
+---@field star fun(level: integer, depth: integer): strict_value
+---@field prop fun(level: integer): strict_value
 ---@field host_value fun(host_value: any): strict_value
 ---@field host_type_type strict_value
 ---@field host_number_type strict_value

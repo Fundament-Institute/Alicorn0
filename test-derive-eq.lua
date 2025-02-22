@@ -25,7 +25,7 @@ local mytype3butsimple = gen.declare_record("mytype3", {
 	"one",
 	gen.builtin_number,
 	"anotherone",
-	gen.builtin_number,
+	gen.builtin_integer,
 })
 
 p("simple")
