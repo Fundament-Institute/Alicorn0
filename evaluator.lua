@@ -867,12 +867,21 @@ function gather_usages(val, usages, context_len, ambient_typechecking_context)
 			gather_usages(v, usages, context_len, ambient_typechecking_context)
 		end
 	elseif val:is_record_value() then
-		-- TODO: How to deal with a map?
-		error("Records not yet implemented")
+		local fields = val:unwrap_record_value()
+		for k, v in fields:pairs() do
+			gather_usages(v, usages, context_len, ambient_typechecking_context)
+		end
 	elseif val:is_record_type() then
 		local desc = val:unwrap_record_type()
-		-- TODO: Handle desc properly, because it's a value.
-		error("Records not yet implemented")
+		gather_usages(desc, usages, context_len, ambient_typechecking_context)
+	elseif val:is_record_desc_value() then
+		local field_typefns = val:unwrap_record_desc_value()
+		for k, v in fields_typefns:pairs() do
+			gather_usages(v, usages, context_len, ambient_typechecking_context)
+		end
+	elseif val:is_record_desc_type() then
+		local univ = val:unwrap_record_desc_type()
+		gather_usages(univ, usages, context_len, ambient_typechecking_context)
 	elseif val:is_srel_type() then
 		local target = val:unwrap_srel_type()
 		local target_sub = gather_usages(target, usages, context_len, ambient_typechecking_context)
@@ -1094,6 +1103,22 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		local desc = val:unwrap_record_type()
 		-- TODO: Handle desc properly, because it's a value.
 		error("Records not yet implemented")
+	elseif val:is_record_value() then
+		local fields = val:unwrap_record_value()
+		for k, v in fields:pairs() do
+			substitute_inner(v, mappings, context_len, ambient_typechecking_context)
+		end
+	elseif val:is_record_type() then
+		local desc = val:unwrap_record_type()
+		substitute_inner(desc, mappings, context_len, ambient_typechecking_context)
+	elseif val:is_record_desc_value() then
+		local field_typefns = val:unwrap_record_desc_value()
+		for k, v in fields_typefns:pairs() do
+			substitute_inner(v, mappings, context_len, ambient_typechecking_context)
+		end
+	elseif val:is_record_desc_type() then
+		local univ = val:unwrap_record_desc_type()
+		substitute_inner(univ, mappings, context_len, ambient_typechecking_context)
 	elseif val:is_srel_type() then
 		local target = val:unwrap_srel_type()
 		local target_sub = substitute_inner(target, mappings, context_len, ambient_typechecking_context)
@@ -3184,6 +3209,7 @@ local function infer_impl(
 			desc_usages,
 			U.notail(typed_term.tuple_type(desc_term))
 	elseif inferrable_term:is_record_cons() then
+		U.debug_break()
 		local fields = inferrable_term:unwrap_record_cons()
 		-- type_data is either "empty", an empty tuple,
 		-- or "cons", a tuple with the previous type_data and a function that
