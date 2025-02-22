@@ -3214,7 +3214,7 @@ local function infer_impl(
 			usages,
 			U.notail(typed_term.record_cons(new_fields))
 	elseif inferrable_term:is_record_elim() then
-		local subject, field_names, debug_ids, body = inferrable_term:unwrap_record_elim()
+		local subject, field_names, field_var_debugs, body = inferrable_term:unwrap_record_elim()
 		local ok, subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
 		if not ok then
 			return false, subject_type
@@ -3275,7 +3275,7 @@ local function infer_impl(
 		return true,
 			body_type,
 			result_usages,
-			U.notail(typed_term.record_elim(subject_term, field_names, debug_ids, body_term))
+			U.notail(typed_term.record_elim(subject_term, field_names, field_var_debugs, body_term))
 	elseif inferrable_term:is_enum_cons() then
 		local constructor, arg = inferrable_term:unwrap_enum_cons()
 		local ok, arg_type, arg_usages, arg_term = infer(arg, typechecking_context)
@@ -4335,7 +4335,7 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		end
 		return U.notail(flex_value.record_value(new_fields))
 	elseif typed:is_record_elim() then
-		local subject, field_names, debug_ids, body = typed:unwrap_record_elim()
+		local subject, field_names, field_var_debugs, body = typed:unwrap_record_elim()
 		local subject_value = evaluate(subject, runtime_context, ambient_typechecking_context)
 		--[[local subject_value = U.tag(
 			"evaluate",
@@ -4348,7 +4348,7 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		if subject_value:is_record_value() then
 			local subject_fields = subject_value:unwrap_record_value()
 			for idx, name in field_names:ipairs() do
-				inner_context = inner_context:append(subject_fields:get(name), name, debug_ids[idx])
+				inner_context = inner_context:append(subject_fields:get(name), name, field_var_debugs[idx])
 			end
 		elseif subject_value:is_stuck() then
 			local subject_stuck_value = subject_value:unwrap_stuck()
@@ -4356,7 +4356,7 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 				inner_context = inner_context:append(
 					flex_value.stuck(stuck_value.record_field_access(subject_stuck_value, name)),
 					name,
-					debug_ids[idx]
+					field_var_debugs[idx]
 				)
 			end
 		else

@@ -768,10 +768,10 @@ unanchored_inferrable_term:define_enum("unanchored_inferrable", {
 	{ "record_desc_extend_single", {"base", anchored_inferrable_term, "name", anchored_inferrable_term, "val", anchored_inferrable_term}},
 	{ "record_cons", { "fields", map(gen.builtin_string, anchored_inferrable_term) } },
 	{ "record_elim", {
-		"subject",     anchored_inferrable_term,
-		"field_names", array(gen.builtin_string),
-		"debug_ids",   array(spanned_name),
-		"body",        anchored_inferrable_term,
+		"subject",          anchored_inferrable_term,
+		"field_names",      array(gen.builtin_string),
+		"field_var_debugs", array(spanned_name),
+		"body",             anchored_inferrable_term,
 	} },
 	{ "enum_cons", {
 		"constructor", gen.builtin_string,
@@ -1067,10 +1067,10 @@ typed_term:define_enum("typed", {
 		"fields", map(gen.builtin_string, typed_term),
 	} },
 	{ "record_elim", {
-		"subject",     typed_term,
-		"field_names", array(gen.builtin_string),
-		"debug_ids", array(spanned_name),
-		"body",        typed_term,
+		"subject",          typed_term,
+		"field_names",      array(gen.builtin_string),
+		"field_var_debugs", array(spanned_name),
+		"body",             typed_term,
 	} },
 	{ "record_field_access", {"subject", typed_term, "name", gen.builtin_string}},
 	--TODO record elim
