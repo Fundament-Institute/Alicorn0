@@ -1645,50 +1645,56 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 	return true
 end)
 add_comparer("flex_value.tuple_desc_type", "flex_value.enum_type", function(l_ctx, a, r_ctx, b, cause)
-	local a_univ = a:unwrap_tuple_desc_type()
+	local a_universe = a:unwrap_tuple_desc_type()
 	local b_desc = b:unwrap_enum_type()
 	local construction_variants = string_value_map()
 	-- The empty variant has no arguments
 	construction_variants:set(terms.DescCons.Empty, flex_value.tuple_type(terms.empty))
+	local arg_name = spanned_name("#arg" .. tostring(#r_ctx + 1), format.span_here())
+	local universe_dbg = spanned_name("#univ", format.span_here())
+	local prefix_desc_dbg = spanned_name("#prefix-desc", format.span_here())
+	local universe_lambda = substitute_into_lambda(
+		a,
+		l_ctx.runtime_context,
+		format.span_here(),
+		spanned_name("#prefix", format.span_here()),
+		l_ctx
+	)
+	-- The cons variant takes a prefix description and a next element, represented as a function from the prefix tuple to a type in the specified universe
+	local prefix_desc = evaluate(universe_lambda, l_ctx.runtime_context, l_ctx)
+	local next_element = flex_value.closure(
+		"#prefix",
+		typed_term.tuple_elim(
+			string_array("prefix-desc"),
+			spanned_name_array(prefix_desc_dbg),
+			typed_term.bound_variable(2, arg_name),
+			1,
+			typed_term.pi(
+				typed_term.tuple_type(typed_term.bound_variable(3, prefix_desc_dbg)),
+				typed_term.literal(strict_value.param_info(strict_value.visibility(terms.visibility.explicit))),
+				typed_term.lambda(
+					arg_name.name,
+					arg_name,
+					typed_term.bound_variable(1, universe_dbg),
+					typed_term.bound_variable(1, universe_dbg),
+					universe_dbg,
+					format.anchor_here()
+				),
+				typed_term.literal(strict_value.result_info(terms.result_info(terms.purity.pure)))
+			)
+		),
+		a_universe,
+		universe_dbg,
+		arg_name
+	)
 	-- The cons variant takes a prefix description and a next element, represented as a function from the prefix tuple to a type in the specified universe
 	construction_variants:set(
 		terms.DescCons.Element,
-		flex_value.tuple_type(
-			terms.tuple_desc(
-				flex_value.closure(
-					"#prefix",
-					typed_term.literal(a),
-					r_ctx.runtime_context,
-					spanned_name("", format.span_here())
-				),
-				flex_value.closure(
-					"#prefix",
-					typed_term.tuple_elim(
-						string_array("prefix-desc"),
-						spanned_name_array(spanned_name("prefix-desc", format.span_here())),
-						typed_term.bound_variable(#r_ctx + 2, spanned_name("", format.span_here())),
-						1,
-						typed_term.pi(
-							typed_term.tuple_type(
-								typed_term.bound_variable(#r_ctx + 3, spanned_name("", format.span_here()))
-							),
-							typed_term.literal(
-								strict_value.param_info(strict_value.visibility(terms.visibility.explicit))
-							),
-							typed_term.lambda(
-								"#arg" .. tostring(#r_ctx + 1),
-								spanned_name("", format.span_here()),
-								typed_term.bound_variable(#r_ctx + 1, spanned_name("", format.span_here())),
-								format.anchor_here()
-							),
-							typed_term.literal(strict_value.result_info(terms.result_info(terms.purity.pure)))
-						)
-					),
-					r_ctx.runtime_context:append(a_univ, "a_univ", spanned_name("", format.span_here())),
-					spanned_name("", format.span_here())
-				)
-			)
-		)
+		flex_value.tuple_type(terms.tuple_desc(prefix_desc, next_element))
+	)
+	construction_variants:set(
+		terms.DescCons.Implicit,
+		flex_value.tuple_type(terms.tuple_desc(prefix_desc, next_element))
 	)
 	local enum_desc_val = flex_value.enum_desc_value(construction_variants)
 	typechecker_state:queue_constrain(
