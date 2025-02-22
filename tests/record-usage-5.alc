@@ -1,5 +1,3 @@
-
-
 let foo =
 	record-of
 		x = 3
@@ -7,11 +5,11 @@ let foo =
 
 let f = lambda (xs)
 	record-of
-		x = 
+		x =
 			xs.x + xs.y
-		y = 
+		y =
 			xs.x - xs.y
 
 let bar = f(foo)
 
-bar.x
+bar
