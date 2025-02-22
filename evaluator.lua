@@ -4384,15 +4384,19 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		local inner_context = runtime_context
 		if subject_value:is_record_value() then
 			local subject_fields = subject_value:unwrap_record_value()
-			for idx, name in field_names:ipairs() do
-				inner_context = inner_context:append(subject_fields:get(name), name, field_var_debugs[idx])
+			for idx, field_name in field_names:ipairs() do
+				local field_var_debug = field_var_debugs[idx]
+				local field_var_name, _ = field_var_debug:unwrap_spanned_name()
+				inner_context = inner_context:append(subject_fields:get(field_name), field_var_name, field_var_debug)
 			end
 		elseif subject_value:is_stuck() then
 			local subject_stuck_value = subject_value:unwrap_stuck()
-			for idx, name in field_names:ipairs() do
+			for idx, field_name in field_names:ipairs() do
+				local field_var_debug = field_var_debugs[idx]
+				local field_var_name, _ = field_var_debug:unwrap_spanned_name()
 				inner_context = inner_context:append(
-					flex_value.stuck(stuck_value.record_field_access(subject_stuck_value, name)),
-					name,
+					flex_value.stuck(stuck_value.record_field_access(subject_stuck_value, field_name)),
+					field_var_name,
 					field_var_debugs[idx]
 				)
 			end
