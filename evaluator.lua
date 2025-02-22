@@ -515,7 +515,7 @@ TupleDescRelation = setmetatable({
 						)
 					)
 				else
-					error(tuple_types_val)
+					error(tuple_types_val .. "\n" .. tostring(val) .. "\n" .. tostring(use))
 				end
 			end
 
@@ -1687,7 +1687,6 @@ add_comparer("flex_value.tuple_desc_type", "flex_value.enum_type", function(l_ct
 		universe_dbg,
 		arg_name
 	)
-	-- The cons variant takes a prefix description and a next element, represented as a function from the prefix tuple to a type in the specified universe
 	construction_variants:set(
 		terms.DescCons.Element,
 		flex_value.tuple_type(terms.tuple_desc(prefix_desc, next_element))
@@ -2647,7 +2646,7 @@ local function make_inner_context2(desc_a, make_prefix_a, l_ctx, desc_b, make_pr
 		tuple_types_b:append(element_type_b)
 		return true, tuple_types_a, tuple_types_b, tuple_vals, n_elements + 1
 	else
-		return false, "infer: unknown tuple type data constructor"
+		return false, "infer: unknown tuple type data constructor: " .. constructor_a .. " " .. constructor_b
 	end
 end
 

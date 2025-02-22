@@ -1902,6 +1902,34 @@ local function inferrable_element(start_anchor, prefix, debug_prefix, next_elem,
 	)
 end
 
+---@param start_anchor Anchor
+---@param prefix anchored_inferrable
+---@param debug_prefix spanned_name
+---@param next_elem anchored_inferrable
+---@param debug_next_elem spanned_name
+---@return anchored_inferrable `anchored_inferrable_term(unanchored_inferrable_term.enum_cons(DescCons.Element, anchored_inferrable_term(unanchored_inferrable_term.tuple_cons(…))))`
+---@diagnostic disable-next-line: incomplete-signature-doc
+local function inferrable_implicit(start_anchor, prefix, debug_prefix, next_elem, debug_next_elem, ...)
+	if select("#", ...) > 0 then
+		error(("%d extra arguments passed to terms.inferrable_implicit"):format(select("#", ...)))
+	end
+	return U.notail(
+		anchored_inferrable_term(
+			start_anchor,
+			unanchored_inferrable_term.enum_cons(
+				DescCons.Implicit,
+				anchored_inferrable_term(
+					start_anchor,
+					unanchored_inferrable_term.tuple_cons(
+						anchored_inferrable_term_array(prefix, next_elem),
+						spanned_name_array(debug_prefix, debug_next_elem)
+					)
+				)
+			)
+		)
+	)
+end
+
 local inferrable_empty = anchored_inferrable_term(
 	format.anchor_here(),
 	unanchored_inferrable_term.enum_cons(
@@ -2076,6 +2104,7 @@ local terms = {
 	typed_empty = typed_empty,
 	typed_tuple_desc = typed_tuple_desc,
 	inferrable_element = inferrable_element,
+	inferrable_implicit = inferrable_implicit,
 	inferrable_empty = inferrable_empty,
 	inferrable_tuple_desc = inferrable_tuple_desc,
 	RecordDescCons = RecordDescCons,

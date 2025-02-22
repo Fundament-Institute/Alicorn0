@@ -5,6 +5,6 @@ let host-sub = (intrinsic "return function(a, b) return a - b end" : host-arith-
 #let foo = (record (bar = 5) (baz = 6))
 #let subbed = host-sub foo.bar y
 
-let sqr = lambda (x)
+let sqr = lambda_with_implicit (implicit t, x : t)
 	x * x
 sqr 6

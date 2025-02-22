@@ -814,6 +814,402 @@ local host_ascribed_segment_tuple = metalanguage.reducer(function(syntax, env)
 	return ok, thread
 end, "host_ascribed_segment_tuple")
 
+local function accept_handler_const(...)
+	-- lua won't let this outer vararg be visible in the inner function
+	local varargs = table.pack(...)
+	return function(data, ...)
+		return true, table.unpack(varargs, 1, varargs.n)
+	end
+end
+
+-- TODO: we might want parameters like _+_
+--       but we also might want to disallow x' "x prime"
+--       and we definitely want this to reject 'a tick implicits (matched below)
+--       so for now this reducer doesn't allow any interesting punctuation and we can all bikeshed it later
+-- TODO: we might want to apply this to all identifiers, not just function parameters
+local function match_ordinary_identifier(str)
+	return str:match("^[%a_][%w_]*$")
+end
+
+-- NOTE: these reducers may seem trivially inline-able, but beware:
+--       a reducer, that only runs a single matcher and immediately returns its
+--       result, may only be replaced by that same matcher when its associated
+--       accept handler always returns true in the first place. these may not
+local function symbol_is_ordinary_identifier(_, symbol)
+	local match = match_ordinary_identifier(symbol.str)
+	if not match then
+		return false, "didn't match an ordinary identifier"
+	end
+	return true, symbol
+end
+local ordinary_identifier = metalanguage.reducer(function(syntax)
+	return syntax:match({ metalanguage.issymbol(symbol_is_ordinary_identifier) }, metalanguage.failure_handler, nil)
+end, "ordinary_identifier")
+
+local function symbol_is_tick_implicit(_, symbol)
+	local tick, rest = symbol.str:sub(1, 1), symbol.str:sub(2)
+	local is_tick = tick == "'" and match_ordinary_identifier(rest)
+	if not is_tick then
+		return false, "didn't match a tick implicit"
+	end
+	-- hacky but /shrug
+	local new_symbol = {
+		kind = "symbol",
+		str = rest,
+		span = syntax.span,
+	}
+	return true, new_symbol
+end
+local parameter_variant_tick_implicit = metalanguage.reducer(function(syntax)
+	return syntax:match({ metalanguage.issymbol(symbol_is_tick_implicit) }, metalanguage.failure_handler, nil)
+end, "parameter_variant_tick_implicit")
+
+local implicit_name = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@return boolean
+	---@return spanned_name
+	---@return anchored_inferrable?
+	---@return Environment?
+	function(syntax, env)
+		local ok, name, tail = syntax:match({
+			-- ascribed tick implicit, like ('a : (expr...))
+			metalanguage.listtail(
+				metalanguage.accept_handler,
+				parameter_variant_tick_implicit(metalanguage.accept_handler),
+				metalanguage.symbol_exact(metalanguage.accept_handler, ":")
+			),
+			-- tick implicit with implicit type, like 'a
+			parameter_variant_tick_implicit(metalanguage.accept_handler),
+			-- ascribed keyed implicit, like (implicit a : (expr...))
+			metalanguage.listtail(
+				metalanguage.accept_handler,
+				metalanguage.symbol_exact(metalanguage.accept_handler, "implicit"),
+				ordinary_identifier(metalanguage.accept_handler),
+				metalanguage.symbol_exact(metalanguage.accept_handler, ":")
+			),
+			-- keyed implicit with implicit type, like (implicit a)
+			metalanguage.listmatch(
+				metalanguage.accept_handler,
+				metalanguage.symbol_exact(metalanguage.accept_handler, "implicit"),
+				ordinary_identifier(metalanguage.accept_handler)
+			),
+		}, metalanguage.failure_handler, nil)
+		if not ok then
+			return ok, name
+		end
+		local type
+		if tail then
+			local ok, type_env = tail:match({
+				metalanguage.listmatch(
+					metalanguage.accept_handler,
+					exprs.inferred_expression(utils.accept_with_env, env)
+				),
+			}, metalanguage.failure_handler, nil)
+			if not ok then
+				return ok, type_env
+			end
+			type, env = utils.unpack_val_env(type_env)
+		else
+			local type_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
+			type = anchored_inferrable_term(
+				syntax.span.start,
+
+				unanchored_inferrable_term.typed(
+					typed_term.literal(strict_value.star(evaluator.OMEGA, 1)),
+					usage_array(),
+					typed_term.metavariable(type_mv)
+				)
+			)
+		end
+		return true, spanned_name(name.str, name.span), type, env
+	end,
+	"implicit_name"
+)
+
+local implicit_name_element = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@param prev anchored_inferrable
+	---@param names spanned_name[]
+	---@return boolean
+	---@return spanned_name
+	---@return anchored_inferrable?
+	---@return Environment?
+	function(syntax, env, prev, names)
+		-- print("ascribed_name trying")
+		-- p(syntax)
+		-- print(prev:pretty_print())
+		-- print("is env an environment? (start of ascribed name)")
+		-- print(env.get)
+		-- print(env.enter_block)
+		local shadowed
+		shadowed, env = env:enter_block(terms.block_purity.pure)
+		local prev_name = "#prev - " .. tostring(syntax.span)
+		local ok
+		ok, env = env:bind_local(
+			terms.binding.annotated_lambda(
+				prev_name,
+				prev,
+				syntax.span.start,
+				terms.visibility.explicit,
+				literal_purity_pure
+			)
+		)
+		if not ok then
+			return false, env
+		end
+		local ok, prev_binding = env:get(prev_name)
+		if not ok then
+			error "#prev should always be bound, was just added"
+		end
+		---@cast prev_binding -string
+		ok, env = env:bind_local(terms.binding.tuple_elim(
+			names:map(name_array, function(n)
+				return n.name
+			end),
+			names,
+			prev_binding
+		))
+		if not ok then
+			return false, env
+		end
+		local ok, name, val, env =
+			syntax:match({ implicit_name(metalanguage.accept_handler, env) }, metalanguage.failure_handler, nil)
+		if not ok then
+			return ok, name
+		end
+		---@cast env Environment
+		local env, val, purity = env:exit_block(val, shadowed)
+		-- print("is env an environment? (end of ascribed name)")
+		-- print(env.get)
+		-- print(env.enter_block)
+		return true, name, val, env
+	end,
+	"implicit_name_element"
+)
+
+-- to be used for deciding how to parse/evaluate a member of a parameter list
+-- before committing to parsing as a particular variant
+-- TODO: replace magic numbers with a proper enum
+local parameter_variant = metalanguage.reducer(function(syntax)
+	return syntax:match({
+		-- ascribed parameter, like (x : (expr...))
+		metalanguage.listmatch(
+			accept_handler_const(1),
+			ordinary_identifier(metalanguage.accept_handler),
+			metalanguage.symbol_exact(metalanguage.accept_handler, ":"),
+			metalanguage.any(metalanguage.accept_handler)
+		),
+		-- parameter with implicit type, like x
+		ordinary_identifier(accept_handler_const(2)),
+		-- ascribed tick implicit, like ('a : (expr...))
+		metalanguage.listmatch(
+			accept_handler_const(3),
+			parameter_variant_tick_implicit(metalanguage.accept_handler),
+			metalanguage.symbol_exact(metalanguage.accept_handler, ":"),
+			metalanguage.any(metalanguage.accept_handler)
+		),
+		-- tick implicit with implicit type, like 'a
+		parameter_variant_tick_implicit(accept_handler_const(4)),
+		-- ascribed keyed implicit, like (implicit a : (expr...))
+		metalanguage.listmatch(
+			accept_handler_const(5),
+			metalanguage.symbol_exact(metalanguage.accept_handler, "implicit"),
+			ordinary_identifier(metalanguage.accept_handler),
+			metalanguage.symbol_exact(metalanguage.accept_handler, ":"),
+			metalanguage.any(metalanguage.accept_handler)
+		),
+		-- keyed implicit with implicit type, like (implicit a)
+		metalanguage.listmatch(
+			accept_handler_const(6),
+			metalanguage.symbol_exact(metalanguage.accept_handler, "implicit"),
+			ordinary_identifier(metalanguage.accept_handler)
+		),
+	}, metalanguage.failure_handler, nil)
+end, "parameter_variant")
+
+local each_parameter = metalanguage.reducer(function(syntax, env, prev, names, args)
+	local ok, variant =
+		syntax:match({ parameter_variant(metalanguage.accept_handler) }, metalanguage.failure_handler, nil)
+	if not ok then
+		return ok, variant
+	end
+
+	if variant == 1 or variant == 2 then
+		local function accept_ascribed_name(_, name, type_val, type_env)
+			return true,
+				name,
+				terms.inferrable_element(
+					syntax.span.start,
+					args,
+					spanned_name("", format.span_here()),
+					type_val,
+					spanned_name("", format.span_here())
+				),
+				type_env
+		end
+		return syntax:match(
+			{ ascribed_name(accept_ascribed_name, env, prev, names) },
+			metalanguage.failure_handler,
+			nil
+		)
+	elseif variant == 3 or variant == 4 or variant == 5 or variant == 6 then
+		local function accept_implicit_name_element(_, name, type_val, type_env)
+			return true,
+				name,
+				terms.inferrable_implicit(
+					syntax.span.start,
+					args,
+					spanned_name("", format.span_here()),
+					type_val,
+					spanned_name("", format.span_here())
+				),
+				type_env
+		end
+		return syntax:match(
+			{ implicit_name_element(accept_implicit_name_element, env, prev, names) },
+			metalanguage.failure_handler,
+			nil
+		)
+	else
+		error("unknown variant!")
+	end
+end, "each_parameter")
+
+local tuple_desc_of_parameters = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@return boolean
+	---@return {names: spanned_name[], args: anchored_inferrable, env: Environment}|string
+	function(syntax, env)
+		local function build_type_term(span, args)
+			return U.notail(anchored_inferrable_term(span.start, unanchored_inferrable_term.tuple_type(args)))
+		end
+
+		local names = spanned_name_array()
+		local args = terms.inferrable_empty
+
+		local init_thread = {
+			names = names,
+			args = args,
+			env = env,
+		}
+
+		local function fold_each_matcher(thread, span)
+			return each_parameter(function(_, name, args, type_env)
+				local names = thread.names:copy()
+				names:append(name)
+				local newthread = {
+					names = names,
+					args = args,
+					env = type_env,
+				}
+				-- vals get dropped in fold_accept_handler, we don't need to make them
+				return true, nil, newthread
+			end, thread.env, build_type_term(span, thread.args), thread.names, thread.args)
+		end
+
+		local function fold_accept_handler(_, vals, thread)
+			return true, thread
+		end
+
+		return syntax:match(
+			{ metalanguage.list_many_fold(fold_accept_handler, fold_each_matcher, init_thread) },
+			metalanguage.failure_handler,
+			nil
+		)
+	end,
+	"tuple_desc_of_parameters"
+)
+
+local tuple_desc_wrap_parameter = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@return boolean
+	---@return {names: string[], args: anchored_inferrable, env: Environment}|string
+	function(syntax, env)
+		local function build_type_term(span, args)
+			return U.notail(anchored_inferrable_term(span.start, unanchored_inferrable_term.tuple_type(args)))
+		end
+
+		local names = spanned_name_array()
+		local args = terms.inferrable_empty
+
+		local thread = {
+			names = names,
+			args = args,
+			env = env,
+		}
+		local span = syntax.span
+
+		local function single_accept_handler(_, name, args, type_env)
+			local names = thread.names:copy()
+			names:append(name)
+			local newthread = {
+				names = names,
+				args = args,
+				env = type_env,
+			}
+			return true, newthread
+		end
+
+		return syntax:match({
+			each_parameter(
+				single_accept_handler,
+				thread.env,
+				build_type_term(span, thread.args),
+				thread.names,
+				thread.args
+			),
+		}, metalanguage.failure_handler, nil)
+	end,
+	"tuple_desc_wrap_parameter"
+)
+
+local tuple_desc_of_parameter_segment = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@return boolean
+	---@return {names: string[], args: anchored_inferrable, env: Environment}|string
+	function(syntax, env)
+		-- check whether syntax looks like a single param
+		-- this technically allows a single parameter with implicit type without parens
+		-- e.g. lambda x (body...)
+		-- (same with a single tick implicit instead, or anything in parameter_variant that isn't a listmatch)
+		-- probably not a problem
+		local single, _ =
+			syntax:match({ parameter_variant(metalanguage.accept_handler) }, metalanguage.failure_handler, nil)
+
+		if single then
+			return syntax:match(
+				{ tuple_desc_wrap_parameter(metalanguage.accept_handler, env) },
+				metalanguage.failure_handler,
+				nil
+			)
+		else
+			return syntax:match(
+				{ tuple_desc_of_parameters(metalanguage.accept_handler, env) },
+				metalanguage.failure_handler,
+				nil
+			)
+		end
+	end,
+	"tuple_desc_of_parameter_segment"
+)
+
+local tuple_of_parameter_segment = metalanguage.reducer(function(syntax, env)
+	local function accept_into_tuple_type(_, thread)
+		thread.args = anchored_inferrable_term(syntax.span.start, unanchored_inferrable_term.tuple_type(thread.args))
+		return true, thread
+	end
+	return syntax:match(
+		{ tuple_desc_of_parameter_segment(accept_into_tuple_type, env) },
+		metalanguage.failure_handler,
+		nil
+	)
+end, "tuple_of_parameter_segment")
+
 -- TODO: abstract so can reuse for func type and host func type
 local function make_host_func_syntax(effectful)
 	---@type lua_operative
@@ -1427,6 +1823,53 @@ local function lambda_annotated_impl(syntax, env)
 		syntax.span.start,
 		unanchored_inferrable_term.annotated(terms.checkable_term.inferrable(expr), ann_expr)
 	)
+	local resenv, term, purity = env:exit_block(expr, shadow)
+	return true, term, resenv
+end
+
+---@type lua_operative
+local function lambda_with_implicit_impl(syntax, env)
+	local ok, thread, tail = syntax:match({
+		metalanguage.listtail(
+			metalanguage.accept_handler,
+			tuple_of_parameter_segment(metalanguage.accept_handler, env)
+		),
+	}, metalanguage.failure_handler, nil)
+	if not ok then
+		return ok, thread
+	end
+
+	local args, info, env = thread.args, thread.names, thread.env
+	local names = info:map(name_array, function(n)
+		return n.name
+	end)
+	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
+	local inner_name = "λ(" .. table.concat(names, ",") .. ")"
+	ok, inner_env = inner_env:bind_local(
+		terms.binding.annotated_lambda(
+			inner_name,
+			args,
+			syntax.span.start,
+			terms.visibility.explicit,
+			literal_purity_pure
+		)
+	)
+	if not ok then
+		return false, inner_env
+	end
+	local _, arg = inner_env:get(inner_name)
+	ok, inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, info, arg))
+	if not ok then
+		return false, inner_env
+	end
+	local ok, expr, env = tail:match(
+		{ exprs.block(metalanguage.accept_handler, exprs.ExpressionArgs.new(terms.expression_goal.infer, inner_env)) },
+		metalanguage.failure_handler,
+		nil
+	)
+	if not ok then
+		return ok, expr
+	end
 	local resenv, term, purity = env:exit_block(expr, shadow)
 	return true, term, resenv
 end
@@ -2085,6 +2528,7 @@ local core_operations = {
 	lambda_implicit = exprs.host_operative(lambda_implicit_impl, "lambda_implicit_impl"),
 	lambda_curry = exprs.host_operative(lambda_curry_impl, "lambda_curry_impl"),
 	lambda_annotated = exprs.host_operative(lambda_annotated_impl, "lambda_annotated_impl"),
+	lambda_with_implicit = exprs.host_operative(lambda_with_implicit_impl, "lambda_with_implicit_impl"),
 	the = exprs.host_operative(the_operative_impl, "the"),
 	apply = exprs.host_operative(apply_operative_impl, "apply"),
 	wrap = build_wrap(typed_term.host_wrap, typed_term.host_wrapped_type),
