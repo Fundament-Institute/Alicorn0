@@ -89,7 +89,7 @@ let frag-shader = lambda (pos : glsl-vec2, PosDim : glsl-vec4, DimBorderBlur : g
 	let premultiply-fill = mk-vec4(Fill-r * Fill-a * s, Fill-g * Fill-a * s, Fill-b * Fill-a * s, 1)
 	let premultiply-outline = mk-vec4(Outline-r * Outline-a * c, Outline-g * Outline-a * c, Outline-b * Outline-a * c, 1)
 	let output = add-vec4(premultiply-fill, premultiply-outline)
-	tuple-of-implicit(output)
+	tuple-of(output)
 
 let (frag-shader-string) = glsl-print-frag-shader(wrap(frag-shader))
 frag-shader-string

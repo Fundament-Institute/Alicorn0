@@ -48,7 +48,7 @@ let vert-shader = lambda (MVP : glsl-mat4, PosDim : glsl-vec4, vPos : glsl-vec2)
 	let glpos = mul-mat4-vec4
 		mul-mat4-mat4(MVP, move)
 		mk-vec4(pos-x - 0.5, pos-y - 0.5, 1, 1)
-	tuple-of-implicit(glpos, pos)
+	tuple-of(glpos, pos)
 
 let (vert-shader-string) = glsl-print-vert-shader(wrap(vert-shader))
 vert-shader-string
