@@ -1452,7 +1452,7 @@ local function extract_desc_nth(ctx, subject, desc, idx)
 			terms.unempty(desc)
 			done = true
 		elseif variant == terms.DescCons.Element then
-			local pfx, elem = terms.uncons(desc)
+			local pfx, elem = terms.unelement(desc)
 			slices[#slices + 1] = elem
 			desc = pfx
 		else
@@ -2186,7 +2186,7 @@ local function extract_tuple_elem_type_closures(enum_val, closures)
 		return closures
 	end
 	if constructor == terms.DescCons.Element then
-		local prefix, closure = terms.uncons(enum_val)
+		local prefix, closure = terms.unelement(enum_val)
 		extract_tuple_elem_type_closures(prefix, closures)
 		if not closure:is_closure() then
 			error "second elem in tuple_type enum_value should be closure"
@@ -2501,7 +2501,7 @@ local function make_inner_context(ctx, desc, make_prefix)
 		terms.unempty(desc)
 		return flex_value_array(), 0, flex_value_array()
 	elseif constructor == terms.DescCons.Element then
-		local prefix, f = terms.uncons(desc)
+		local prefix, f = terms.unelement(desc)
 		local tuple_types, n_elements, tuple_vals = make_inner_context(ctx, prefix, make_prefix)
 		local element_type
 		if tuple_types:len() == tuple_vals:len() then
@@ -2571,8 +2571,46 @@ local function make_inner_context2(desc_a, make_prefix_a, l_ctx, desc_b, make_pr
 	elseif constructor_a == terms.DescCons.Empty or constructor_b == terms.DescCons.Empty then
 		return false, "length-mismatch"
 	elseif constructor_a == terms.DescCons.Element and constructor_b == terms.DescCons.Element then
-		local prefix_a, f_a = terms.uncons(desc_a)
-		local prefix_b, f_b = terms.uncons(desc_b)
+		local prefix_a, f_a = terms.unelement(desc_a)
+		local prefix_b, f_b = terms.unelement(desc_b)
+		local ok, tuple_types_a, tuple_types_b, tuple_vals, n_elements =
+			make_inner_context2(prefix_a, make_prefix_a, l_ctx, prefix_b, make_prefix_b, r_ctx)
+		if not ok then
+			---@cast tuple_types_a string
+			return ok, tuple_types_a
+		end
+		---@cast tuple_types_a -string
+		---@type flex_value
+		local element_type_a
+		---@type flex_value
+		local element_type_b
+		if tuple_types_a:len() == tuple_vals:len() then
+			local prefix = flex_value.tuple_value(tuple_vals)
+			element_type_a = apply_value(f_a, prefix, l_ctx)
+			-- The prefix can pull in placeholders from the value-side context.
+			-- Any placeholders from the usage-side context must be discharged by this point.
+			element_type_b = apply_value(f_b, prefix, l_ctx)
+
+			if element_type_a:is_singleton() then
+				local _, val = element_type_a:unwrap_singleton()
+				tuple_vals:append(val)
+			elseif element_type_b:is_singleton() then
+				error("singleton found in tuple use, this doesn't make sense")
+				local _, val = element_type_b:unwrap_singleton()
+				tuple_vals:append(val)
+			end
+		else
+			local prefix_a = make_prefix_a(n_elements)
+			local prefix_b = make_prefix_b(n_elements)
+			element_type_a = apply_value(f_a, prefix_a, l_ctx)
+			element_type_b = apply_value(f_b, prefix_b, r_ctx)
+		end
+		tuple_types_a:append(element_type_a)
+		tuple_types_b:append(element_type_b)
+		return true, tuple_types_a, tuple_types_b, tuple_vals, n_elements + 1
+	elseif constructor_a == terms.DescCons.Implicit and constructor_b == terms.DescCons.Implicit then
+		local prefix_a, f_a = terms.unimplicit(desc_a)
+		local prefix_b, f_b = terms.unimplicit(desc_b)
 		local ok, tuple_types_a, tuple_types_b, tuple_vals, n_elements =
 			make_inner_context2(prefix_a, make_prefix_a, l_ctx, prefix_b, make_prefix_b, r_ctx)
 		if not ok then
@@ -4167,7 +4205,7 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 				terms.unempty(desc)
 				return length, reverse_elems
 			elseif constructor == terms.DescCons.Element then
-				local next_desc, elem = terms.uncons(desc)
+				local next_desc, elem = terms.unelement(desc)
 				length = length + 1
 				reverse_elems[length] = elem
 				return traverse(next_desc, length, reverse_elems)

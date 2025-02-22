@@ -1775,7 +1775,7 @@ local empty = flex_value.enum_value(DescCons.Empty, tup_val())
 ---@param desc flex_value `flex_value.enum_value(DescCons.Element, …))`
 ---@return flex_value prefix
 ---@return flex_value next_elem
-local function uncons(desc)
+local function unelement(desc)
 	local constructor, arg = desc:unwrap_enum_value()
 	if constructor ~= DescCons.Element then
 		error(string.format("expected constructor DescCons.Element, got %s: %s", s(constructor), s(desc)))
@@ -1792,11 +1792,40 @@ local function uncons(desc)
 	return elements[1], elements[2]
 end
 
+---@param desc flex_value `flex_value.enum_value(DescCons.Element, …))`
+---@return flex_value prefix
+---@return flex_value next_elem
+local function unimplicit(desc)
+	local constructor, arg = desc:unwrap_enum_value()
+	if constructor ~= DescCons.Implicit then
+		error(string.format("expected constructor DescCons.Implicit, got %s: %s", s(constructor), s(desc)))
+	end
+	local elements = arg:unwrap_tuple_value()
+	if elements:len() ~= 2 then
+		error(
+			string.format(
+				"enum_value with constructor DescCons.Implicit should have 2 args, but has %s",
+				s(elements:len())
+			)
+		)
+	end
+	return elements[1], elements[2]
+end
+
 ---@param desc flex_value `flex_value.enum_value(DescCons.Empty, …))`
 local function unempty(desc)
-	local constructor = desc:unwrap_enum_value()
+	local constructor, arg = desc:unwrap_enum_value()
 	if constructor ~= DescCons.Empty then
 		error(string.format("expected constructor DescCons.Empty, got %s: %s", s(constructor), s(desc)))
+	end
+	local elements = arg:unwrap_tuple_value()
+	if elements:len() ~= 0 then
+		error(
+			string.format(
+				"enum_value with constructor DescCons.Empty should have 0 args, but has %s",
+				s(elements:len())
+			)
+		)
 	end
 end
 
@@ -2035,7 +2064,8 @@ local terms = {
 	tup_val = tup_val,
 	cons = cons,
 	empty = empty,
-	uncons = uncons,
+	unelement = unelement,
+	unimplicit = unimplicit,
 	unempty = unempty,
 	tuple_desc = tuple_desc,
 	strict_tup_val = strict_tup_val,

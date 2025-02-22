@@ -2141,7 +2141,7 @@ local function traverse(desc, len, elems)
 	elseif constructor == terms.DescCons.Element then
 		local len = len + 1
 		local next_desc
-		next_desc, elems[len] = terms.uncons(desc)
+		next_desc, elems[len] = terms.unelement(desc)
 		return traverse(next_desc, len, elems)
 	else
 		error("unknown tuple desc constructor")
@@ -2231,7 +2231,7 @@ local function convert_desc(desc)
 		terms.unempty(desc)
 		return desc
 	elseif constructor == terms.DescCons.Element then
-		local next_desc, type_fun = terms.uncons(desc)
+		local next_desc, type_fun = terms.unelement(desc)
 		local convert_next = convert_desc(next_desc)
 		local convert_type = flex_value
 			.variance_type(
@@ -2275,7 +2275,7 @@ local function desc_length(desc, len)
 		terms.unempty(desc)
 		return len
 	elseif constructor == terms.DescCons.Element then
-		local next_desc, _ = terms.uncons(desc)
+		local next_desc, _ = terms.unelement(desc)
 		return desc_length(next_desc, len + 1)
 	else
 		error("unknown tuple desc constructor")
