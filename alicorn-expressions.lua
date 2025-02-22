@@ -987,50 +987,66 @@ local function expression_pairhandler(args, a, b)
 	return false, "unknown type for pairhandler " .. type_of_term.kind, env
 end
 
----@param symbol SyntaxSymbol
----@return SyntaxSymbol
----@return SyntaxSymbol?
-local function split_dot_accessors(symbol)
-	if symbol == nil then
-		error("split_dot_accessors: symbol must not be nil")
+---@param whole SyntaxSymbol
+---@param remaining SyntaxSymbol
+---@return SyntaxSymbol preceding_and_current
+---@return SyntaxSymbol current
+---@return SyntaxSymbol? remaining
+local function split_dot_accessor(whole, remaining)
+	if whole == nil then
+		error("split_dot_accessors: whole must not be nil")
 	end
-	local split_dot_pos = symbol.str:find(".", 1, true)
-	if not split_dot_pos then
-		return symbol
+	if remaining == nil then
+		error("split_dot_accessors: remaining must not be nil")
+	end
+	local remaining_str = remaining.str
+	local dot_start_pos, dot_stop_pos = remaining_str:find(".", 1, true)
+	if not dot_start_pos then
+		return whole, remaining, nil
 	end
 
-	local first, second = (symbol.str):match("([^.]+)%.(.+)")
+	local current_stop_pos, remaining_start_pos = dot_start_pos - 1, dot_stop_pos + 1
+	local current_str = remaining_str:sub(1, current_stop_pos)
+	local new_remaining_str = remaining_str:sub(remaining_start_pos)
 
-	local first_stop_anchor = symbol.span.start
-	first_stop_anchor = Anchor(
-		first_stop_anchor.internal,
-		first_stop_anchor.id,
-		first_stop_anchor.line,
-		first_stop_anchor.char + split_dot_pos
+	local current_start_anchor = remaining.span.start
+	local current_stop_anchor = Anchor(
+		current_start_anchor.internal,
+		current_start_anchor.id,
+		current_start_anchor.line,
+		current_start_anchor.char + current_stop_pos
 	)
 
-	local firstsymbol = {
+	local current = {
 		kind = "symbol",
-		str = first,
-		span = symbol.span.start:span(first_stop_anchor),
+		str = current_str,
+		span = current_start_anchor:span(current_stop_anchor),
+	}
+
+	local preceding_and_current_start_anchor = whole.span.start
+	local preceding_and_current_stop_anchor = current_stop_anchor
+	local preceding_and_current = {
+		kind = "symbol",
+		str = whole.str:sub(1, preceding_and_current_stop_anchor.char - preceding_and_current_start_anchor.char),
+		span = preceding_and_current_start_anchor:span(preceding_and_current_stop_anchor),
 	}
 
 	-- we can assume it is on the same line.
-	local second_start_anchor = symbol.span.start
-	second_start_anchor = Anchor(
-		second_start_anchor.internal,
-		second_start_anchor.id,
-		second_start_anchor.line,
-		second_start_anchor.char + split_dot_pos
+	local new_remaining_start_anchor = Anchor(
+		current_start_anchor.internal,
+		current_start_anchor.id,
+		current_start_anchor.line,
+		current_start_anchor.char + remaining_start_pos
 	)
+	local new_remaining_stop_anchor = remaining.span.stop
 
-	local secondsymbol = {
+	local new_remaining = {
 		kind = "symbol",
-		str = second,
-		span = second_start_anchor:span(symbol.span.stop),
+		str = new_remaining_str,
+		span = new_remaining_start_anchor:span(new_remaining_stop_anchor),
 	}
 
-	return firstsymbol, secondsymbol
+	return preceding_and_current, current, new_remaining
 end
 
 ---@param args ExpressionArgs
@@ -1042,11 +1058,11 @@ local function expression_symbolhandler(args, name)
 	local goal, env = args:unwrap()
 	--print("looking up symbol", name)
 	--p(env)
-	--print(name, split_dot_accessors(name))
+	--print(name, split_dot_accessor(name))
 	assert(name["kind"])
 
-	local field_names
-	name, field_names = split_dot_accessors(name)
+	local preceding_and_current_field_names, field_names
+	preceding_and_current_field_names, name, field_names = split_dot_accessor(name, name)
 
 	local ok, part = env:get(name.str)
 	if not ok then
@@ -1055,18 +1071,23 @@ local function expression_symbolhandler(args, name)
 	end
 	---@cast part -string
 	while field_names ~= nil do
-		local field_name, remaining_field_names = split_dot_accessors(field_names)
-		local spanned_field_name = terms.spanned_name(field_name.str, field_name.span)
+		local field_name, remaining_field_names
+		preceding_and_current_field_names, field_name, remaining_field_names = split_dot_accessor(name, field_names)
+		local spanned_preceding_and_current_field_names =
+			terms.spanned_name(preceding_and_current_field_names.str, preceding_and_current_field_names.span)
 
 		part = anchored_inferrable_term(
 			field_names.span.start,
 			unanchored_inferrable_term.record_elim(
 				part,
 				name_array(field_name.str),
-				spanned_name_array(spanned_field_name),
+				spanned_name_array(spanned_preceding_and_current_field_names),
 				anchored_inferrable_term(
-					field_names.span.start,
-					unanchored_inferrable_term.bound_variable(env.typechecking_context:len() + 1, spanned_field_name)
+					preceding_and_current_field_names.span.start,
+					unanchored_inferrable_term.bound_variable(
+						env.typechecking_context:len() + 1,
+						spanned_preceding_and_current_field_names
+					)
 				)
 			)
 		)
