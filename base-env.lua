@@ -2629,7 +2629,7 @@ local function tuple_desc_elem(desc, elem, head_n, head_names, tail_n, tail_name
 		spanned_name("", format.span_here()),
 		arg_dbg
 	)
-	return U.notail(terms.cons(desc, elem_wrap))
+	return U.notail(terms.element(desc, elem_wrap))
 end
 
 local function tuple_desc_concat(head, tail)

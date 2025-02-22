@@ -1763,7 +1763,7 @@ end
 ---@param next_elem flex_value
 ---@return flex_value
 ---@diagnostic disable-next-line: incomplete-signature-doc
-local function cons(prefix, next_elem, ...)
+local function element(prefix, next_elem, ...)
 	if select("#", ...) > 0 then
 		error(("%d extra arguments passed to terms.cons"):format(select("#", ...)))
 	end
@@ -1836,7 +1836,7 @@ local function tuple_desc(...)
 	for i = 1, select("#", ...) do
 		local e = select(i, ...)
 		if e ~= nil then
-			a = cons(a, e)
+			a = element(a, e)
 		end
 	end
 	return a
@@ -2090,7 +2090,7 @@ local terms = {
 
 	DescCons = DescCons,
 	tup_val = tup_val,
-	cons = cons,
+	element = element,
 	empty = empty,
 	unelement = unelement,
 	unimplicit = unimplicit,

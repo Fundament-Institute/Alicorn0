@@ -2272,7 +2272,7 @@ local function check(
 
 			local el_val = evaluate(el_term, typechecking_context.runtime_context, typechecking_context)
 
-			desc = terms.cons(
+			desc = terms.element(
 				desc,
 				substitute_into_closure(
 					flex_value.singleton(el_type, el_val),
@@ -2940,7 +2940,7 @@ local function infer_impl(
 			local el_val = evaluate(el_term, typechecking_context.runtime_context, typechecking_context)
 			local el_singleton = flex_value.singleton(el_type, el_val)
 			local _, source = info[i]:unwrap_spanned_name()
-			type_data = terms.cons(
+			type_data = terms.element(
 				type_data,
 				substitute_into_closure(
 					el_singleton,
@@ -2987,7 +2987,7 @@ local function infer_impl(
 			--print(el_type:pretty_print())
 			local el_val = evaluate(el_term, typechecking_context.runtime_context, typechecking_context)
 			local el_singleton = flex_value.singleton(el_type, el_val)
-			type_data = terms.cons(
+			type_data = terms.element(
 				type_data,
 				substitute_type_variables(el_singleton, info[i], typechecking_context:len() + 1),
 				"#host-tuple-cons-el",
@@ -3014,7 +3014,7 @@ local function infer_impl(
 		for _ in names:ipairs() do
 			local next_elem_type_mv = typechecker_state:metavariable(typechecking_context)
 			local next_elem_type = next_elem_type_mv:as_flex()
-			desc = terms.cons(desc, next_elem_type)
+			desc = terms.element(desc, next_elem_type)
 		end
 		local spec_type = flex_value.tuple_type(desc)
 		local host_spec_type = flex_value.host_tuple_type(desc)
@@ -3121,7 +3121,7 @@ local function infer_impl(
 			if not ok then
 				return false, field_type
 			end
-			type_data = terms.cons(
+			type_data = terms.element(
 				type_data,
 				strict_value.name(k),
 				substitute_type_variables(
@@ -3356,7 +3356,7 @@ local function infer_impl(
 				return false, method_type
 			end
 			add_arrays(usages, method_usages)
-			type_data = terms.cons(type_data, strict_value.name(k), method_type)
+			type_data = terms.element(type_data, strict_value.name(k), method_type)
 			new_methods[k] = method_term
 		end
 		return true, U.notail(flex_value.object_type(type_data)), usages, U.notail(typed_term.object_cons(new_methods))
@@ -3929,7 +3929,7 @@ end
 ---@param suffix_elem flex_value
 ---@param prefix_forward_names ArrayValue<spanned_name>
 ---@param suffix_forward_names ArrayValue<spanned_name>
----@return flex_value `terms.cons(desc, elem_wrap)`
+---@return flex_value `terms.element(desc, elem_wrap)`
 local function tuple_desc_elem(desc, suffix_elem, prefix_forward_names, suffix_forward_names)
 	local debug_tuple_element_names = prefix_forward_names:copy()
 	for _, suffix_name in suffix_forward_names:ipairs() do
@@ -3953,7 +3953,7 @@ local function tuple_desc_elem(desc, suffix_elem, prefix_forward_names, suffix_f
 			return U.notail(typed_term.application(capture, typed_term.tuple_cons(suffix_args)))
 		end
 	)
-	return U.notail(terms.cons(desc, suffix_elem_wrap))
+	return U.notail(terms.element(desc, suffix_elem_wrap))
 end
 
 local intrinsic_memo = setmetatable({}, { __mode = "v" })

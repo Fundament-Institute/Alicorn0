@@ -154,7 +154,7 @@ function environment:bind_local(binding)
 		for _ in ipairs(names) do
 			local next_elem_type_mv = evaluator.typechecker_state:metavariable(typechecking_context)
 			local next_elem_type = next_elem_type_mv:as_flex()
-			desc = terms.cons(desc, next_elem_type)
+			desc = terms.element(desc, next_elem_type)
 		end
 		local spec_type = terms.flex_value.tuple_type(desc)
 		local host_spec_type = terms.flex_value.host_tuple_type(desc)

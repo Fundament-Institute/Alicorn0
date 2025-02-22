@@ -1421,7 +1421,7 @@ collect_tuple = metalanguage.reducer(
 						env.typechecking_context
 					)
 					local info = spanned_name("#collect-tuple-param", syntax.span)
-					desc = terms.cons(
+					desc = terms.element(
 						desc,
 						evaluator.substitute_into_closure(
 							flex_value.singleton(next_elem_type, next_val),
@@ -1541,7 +1541,7 @@ collect_host_tuple = metalanguage.reducer(
 						env.typechecking_context.runtime_context,
 						env.typechecking_context
 					)
-					desc = terms.cons(
+					desc = terms.element(
 						desc,
 						evaluator.substitute_into_closure(
 							flex_value.singleton(next_elem_type, next_val),
