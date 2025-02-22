@@ -1793,7 +1793,7 @@ local function build_host_type_tuple(elems)
 
 	for _, v in ipairs(elems) do
 		result = strict_value.enum_value(
-			terms.DescCons.cons,
+			terms.DescCons.Element,
 			strict_value.tuple_value(strict_value_array(result, const_combinator(v)))
 		)
 	end

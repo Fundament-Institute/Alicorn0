@@ -780,7 +780,7 @@ let tuple-desc-elem-explicit = lambda (U : universe)
 		intrinsic
 			""""
 				return U.notail(evaluator.gen_base_operator("#tuple-desc-elem-explicit", function(desc, elem)
-					return U.notail(terms.typed_cons(desc, elem))
+					return U.notail(terms.typed_element(desc, elem))
 				end, "desc", "elem"))
 			:
 			wrapped(forall (desc : U-tuple-desc-type, elem : (forall (rest : tuple-type(desc)) -> (next : U))) -> (res : U-tuple-desc-type))

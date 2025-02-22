@@ -586,7 +586,7 @@ local tuple_desc_of_ascribed_names = metalanguage.reducer(
 					names:append(name)
 					local newthread = {
 						names = names,
-						args = terms.inferrable_cons(
+						args = terms.inferrable_element(
 							span.start,
 							thread.args,
 							spanned_name("", format.span_here()),
@@ -751,7 +751,7 @@ local tuple_desc_wrap_ascribed_name = metalanguage.reducer(
 
 		names = names:copy()
 		names:append(name)
-		args = terms.inferrable_cons(syntax.span.start, args, debug_args, type_val, debug_type_val)
+		args = terms.inferrable_element(syntax.span.start, args, debug_args, type_val, debug_type_val)
 		env = type_env
 		return ok, { names = names, args = args, env = env }
 	end,
@@ -2135,10 +2135,10 @@ local function traverse(desc, len, elems)
 	---@type flex_value[]
 	elems = elems or {}
 	local constructor, arg = desc:unwrap_enum_value()
-	if constructor == terms.DescCons.empty then
+	if constructor == terms.DescCons.Empty then
 		terms.unempty(desc)
 		return len, elems
-	elseif constructor == terms.DescCons.cons then
+	elseif constructor == terms.DescCons.Element then
 		local len = len + 1
 		local next_desc
 		next_desc, elems[len] = terms.uncons(desc)
@@ -2227,10 +2227,10 @@ end
 ---@return strict_value desc `strict_value.enum_value(terms.DescCons.…, …)`
 local function convert_desc(desc)
 	local constructor, arg = desc:unwrap_enum_value()
-	if constructor == terms.DescCons.empty then
+	if constructor == terms.DescCons.Empty then
 		terms.unempty(desc)
 		return desc
-	elseif constructor == terms.DescCons.cons then
+	elseif constructor == terms.DescCons.Element then
 		local next_desc, type_fun = terms.uncons(desc)
 		local convert_next = convert_desc(next_desc)
 		local convert_type = flex_value
@@ -2251,7 +2251,7 @@ local function convert_desc(desc)
 			spanned_name("#tuple-prefix", format.span_here())
 		)
 		terms.verify_placeholder_lite(convert_type_fun, terms.typechecking_context(), false)
-		return U.notail(terms.strict_cons(convert_next, convert_type_fun))
+		return U.notail(terms.strict_element(convert_next, convert_type_fun))
 	else
 		error "unknown tuple desc constructor"
 	end
@@ -2271,10 +2271,10 @@ end
 local function desc_length(desc, len)
 	len = len or 0
 	local constructor = desc:unwrap_enum_value()
-	if constructor == terms.DescCons.empty then
+	if constructor == terms.DescCons.Empty then
 		terms.unempty(desc)
 		return len
-	elseif constructor == terms.DescCons.cons then
+	elseif constructor == terms.DescCons.Element then
 		local next_desc, _ = terms.uncons(desc)
 		return desc_length(next_desc, len + 1)
 	else

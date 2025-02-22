@@ -525,9 +525,9 @@ local function inferrable_tuple_type_flatten(desc, context)
 	if not ok then
 		return false
 	end
-	if constructor == DescCons.empty then
+	if constructor == DescCons.Empty then
 		return true, {}, 0
-	elseif constructor == DescCons.cons then
+	elseif constructor == DescCons.Element then
 		local _, arg = arg:unwrap_anchored_inferrable()
 		local ok, elements, info = arg:as_tuple_cons()
 		if not ok or elements:len() ~= 2 then
@@ -564,9 +564,9 @@ local function typed_tuple_type_flatten(desc, context)
 	if not ok then
 		return false
 	end
-	if constructor == DescCons.empty then
+	if constructor == DescCons.Empty then
 		return true, {}, 0
-	elseif constructor == DescCons.cons then
+	elseif constructor == DescCons.Element then
 		local ok, elements = arg:as_tuple_cons()
 		if not ok or elements:len() ~= 2 then
 			return false
@@ -601,9 +601,9 @@ local function value_tuple_type_flatten(desc)
 	if not ok then
 		return false
 	end
-	if constructor == DescCons.empty then
+	if constructor == DescCons.Empty then
 		return true, {}, 0
-	elseif constructor == DescCons.cons then
+	elseif constructor == DescCons.Element then
 		local ok, elements = arg:as_tuple_value()
 		if not ok or elements:len() ~= 2 then
 			return false

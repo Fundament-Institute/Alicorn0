@@ -1739,8 +1739,10 @@ local host_lua_error_type = strict_value.host_user_defined_type({ name = "lua_er
 ---@class DescConsContainer
 local DescCons = --[[@enum DescCons]]
 	{
-		cons = "cons",
-		empty = "empty",
+		Empty = "Empty",
+		Element = "Element",
+		Implicit = "Implicit",
+		Trait = "Trait",
 	}
 
 local typed_term_array = array(typed_term)
@@ -1765,33 +1767,36 @@ local function cons(prefix, next_elem, ...)
 	if select("#", ...) > 0 then
 		error(("%d extra arguments passed to terms.cons"):format(select("#", ...)))
 	end
-	return U.notail(flex_value.enum_value(DescCons.cons, tup_val(prefix, next_elem)))
+	return U.notail(flex_value.enum_value(DescCons.Element, tup_val(prefix, next_elem)))
 end
 
-local empty = flex_value.enum_value(DescCons.empty, tup_val())
+local empty = flex_value.enum_value(DescCons.Empty, tup_val())
 
----@param desc flex_value `flex_value.enum_value(DescCons.cons, …))`
+---@param desc flex_value `flex_value.enum_value(DescCons.Element, …))`
 ---@return flex_value prefix
 ---@return flex_value next_elem
 local function uncons(desc)
 	local constructor, arg = desc:unwrap_enum_value()
-	if constructor ~= DescCons.cons then
-		error(string.format("expected constructor DescCons.cons, got %s: %s", s(constructor), s(desc)))
+	if constructor ~= DescCons.Element then
+		error(string.format("expected constructor DescCons.Element, got %s: %s", s(constructor), s(desc)))
 	end
 	local elements = arg:unwrap_tuple_value()
 	if elements:len() ~= 2 then
 		error(
-			string.format("enum_value with constructor DescCons.cons should have 2 args, but has %s", s(elements:len()))
+			string.format(
+				"enum_value with constructor DescCons.Element should have 2 args, but has %s",
+				s(elements:len())
+			)
 		)
 	end
 	return elements[1], elements[2]
 end
 
----@param desc flex_value `flex_value.enum_value(DescCons.empty, …))`
+---@param desc flex_value `flex_value.enum_value(DescCons.Empty, …))`
 local function unempty(desc)
 	local constructor = desc:unwrap_enum_value()
-	if constructor ~= DescCons.empty then
-		error(string.format("expected constructor DescCons.empty, got %s: %s", s(constructor), s(desc)))
+	if constructor ~= DescCons.Empty then
+		error(string.format("expected constructor DescCons.Empty, got %s: %s", s(constructor), s(desc)))
 	end
 end
 
@@ -1818,11 +1823,11 @@ end
 ---@param next_elem strict_value
 ---@return strict_value
 ---@diagnostic disable-next-line: incomplete-signature-doc
-local function strict_cons(prefix, next_elem, ...)
+local function strict_element(prefix, next_elem, ...)
 	if select("#", ...) > 0 then
-		error(("%d extra arguments passed to terms.strict_cons"):format(select("#", ...)))
+		error(("%d extra arguments passed to terms.strict_element"):format(select("#", ...)))
 	end
-	return U.notail(strict_value.enum_value(DescCons.cons, strict_tup_val(prefix, next_elem, ...)))
+	return U.notail(strict_value.enum_value(DescCons.Element, strict_tup_val(prefix, next_elem, ...)))
 end
 
 local strict_empty = empty:unwrap_strict()
@@ -1834,7 +1839,7 @@ local function strict_tuple_desc(...)
 	for i = 1, select("#", ...) do
 		local e = select(i, ...)
 		if e ~= nil then
-			a = strict_cons(a, e)
+			a = strict_element(a, e)
 		end
 	end
 	return a
@@ -1845,17 +1850,17 @@ end
 ---@param debug_prefix spanned_name
 ---@param next_elem anchored_inferrable
 ---@param debug_next_elem spanned_name
----@return anchored_inferrable `anchored_inferrable_term(unanchored_inferrable_term.enum_cons(DescCons.cons, anchored_inferrable_term(unanchored_inferrable_term.tuple_cons(…))))`
+---@return anchored_inferrable `anchored_inferrable_term(unanchored_inferrable_term.enum_cons(DescCons.Element, anchored_inferrable_term(unanchored_inferrable_term.tuple_cons(…))))`
 ---@diagnostic disable-next-line: incomplete-signature-doc
-local function inferrable_cons(start_anchor, prefix, debug_prefix, next_elem, debug_next_elem, ...)
+local function inferrable_element(start_anchor, prefix, debug_prefix, next_elem, debug_next_elem, ...)
 	if select("#", ...) > 0 then
-		error(("%d extra arguments passed to terms.inferrable_cons"):format(select("#", ...)))
+		error(("%d extra arguments passed to terms.inferrable_element"):format(select("#", ...)))
 	end
 	return U.notail(
 		anchored_inferrable_term(
 			start_anchor,
 			unanchored_inferrable_term.enum_cons(
-				DescCons.cons,
+				DescCons.Element,
 				anchored_inferrable_term(
 					start_anchor,
 					unanchored_inferrable_term.tuple_cons(
@@ -1871,7 +1876,7 @@ end
 local inferrable_empty = anchored_inferrable_term(
 	format.anchor_here(),
 	unanchored_inferrable_term.enum_cons(
-		DescCons.empty,
+		DescCons.Empty,
 		anchored_inferrable_term(
 			format.anchor_here(),
 			unanchored_inferrable_term.tuple_cons(anchored_inferrable_term_array(), spanned_name_array())
@@ -1894,7 +1899,7 @@ local function inferrable_tuple_desc(start_anchor, ...)
 				error(("inferrable_tuple_desc: missing spanned_name at argument %d"):format(i + 1))
 			end
 			a, debug_a =
-				inferrable_cons(start_anchor, a, debug_a, e, debug_e),
+				inferrable_element(start_anchor, a, debug_a, e, debug_e),
 				spanned_name(("terms.inferrable_tuple_desc.varargs[%d]"):format(i), span)
 		end
 	end
@@ -1903,16 +1908,16 @@ end
 
 ---@param prefix typed
 ---@param next_elem typed
----@return typed `typed_term.enum_cons(DescCons.cons, typed_term.tuple_cons(…))`
+---@return typed `typed_term.enum_cons(DescCons.Element, typed_term.tuple_cons(…))`
 ---@diagnostic disable-next-line: incomplete-signature-doc
-local function typed_cons(prefix, next_elem, ...)
+local function typed_element(prefix, next_elem, ...)
 	if select("#", ...) > 0 then
-		error(("%d extra arguments passed to terms.typed_cons"):format(select("#", ...)))
+		error(("%d extra arguments passed to terms.typed_element"):format(select("#", ...)))
 	end
-	return U.notail(typed_term.enum_cons(DescCons.cons, typed_term.tuple_cons(typed_term_array(prefix, next_elem))))
+	return U.notail(typed_term.enum_cons(DescCons.Element, typed_term.tuple_cons(typed_term_array(prefix, next_elem))))
 end
 
-local typed_empty = typed_term.enum_cons(DescCons.empty, typed_term.tuple_cons(typed_term_array()))
+local typed_empty = typed_term.enum_cons(DescCons.Empty, typed_term.tuple_cons(typed_term_array()))
 
 ---@param ... typed
 ---@return typed
@@ -1921,7 +1926,7 @@ local function typed_tuple_desc(...)
 	for i = 1, select("#", ...) do
 		local e = select(i, ...)
 		if e ~= nil then
-			a = typed_cons(a, e)
+			a = typed_element(a, e)
 		end
 	end
 	return a
@@ -1958,7 +1963,7 @@ end
 ---@param desc flex_value `flex_value.enum_value(RecordDescCons.empty, …))`
 local function record_unempty(desc)
 	local constructor = desc:unwrap_enum_value()
-	if constructor ~= DescCons.empty then
+	if constructor ~= RecordDescCons.empty then
 		error(string.format("expected constructor RecordDescCons.empty, got %s: %s", s(constructor), s(desc)))
 	end
 end
@@ -2034,13 +2039,13 @@ local terms = {
 	unempty = unempty,
 	tuple_desc = tuple_desc,
 	strict_tup_val = strict_tup_val,
-	strict_cons = strict_cons,
+	strict_element = strict_element,
 	strict_empty = strict_empty,
 	strict_tuple_desc = strict_tuple_desc,
-	typed_cons = typed_cons,
+	typed_element = typed_element,
 	typed_empty = typed_empty,
 	typed_tuple_desc = typed_tuple_desc,
-	inferrable_cons = inferrable_cons,
+	inferrable_element = inferrable_element,
 	inferrable_empty = inferrable_empty,
 	inferrable_tuple_desc = inferrable_tuple_desc,
 	RecordDescCons = RecordDescCons,

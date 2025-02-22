@@ -1448,10 +1448,10 @@ local function extract_desc_nth(ctx, subject, desc, idx)
 	repeat
 		local variant, _ = desc:unwrap_enum_value()
 		local done = false
-		if variant == terms.DescCons.empty then
+		if variant == terms.DescCons.Empty then
 			terms.unempty(desc)
 			done = true
-		elseif variant == terms.DescCons.cons then
+		elseif variant == terms.DescCons.Element then
 			local pfx, elem = terms.uncons(desc)
 			slices[#slices + 1] = elem
 			desc = pfx
@@ -1586,7 +1586,7 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 	local b_universe = b:unwrap_tuple_desc_type()
 	local construction_variants = string_value_map()
 	-- The empty variant has no arguments
-	construction_variants:set(terms.DescCons.empty, flex_value.tuple_type(terms.empty))
+	construction_variants:set(terms.DescCons.Empty, flex_value.tuple_type(terms.empty))
 	local arg_name = spanned_name("#arg" .. tostring(#r_ctx + 1), format.span_here())
 	local universe_dbg = spanned_name("#univ", format.span_here())
 	local prefix_desc_dbg = spanned_name("#prefix-desc", format.span_here())
@@ -1625,7 +1625,10 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 		universe_dbg,
 		arg_name
 	)
-	construction_variants:set(terms.DescCons.cons, flex_value.tuple_type(terms.tuple_desc(prefix_desc, next_element)))
+	construction_variants:set(
+		terms.DescCons.Element,
+		flex_value.tuple_type(terms.tuple_desc(prefix_desc, next_element))
+	)
 	local enum_desc_val = flex_value.enum_desc_value(construction_variants)
 	typechecker_state:queue_constrain(
 		l_ctx,
@@ -1642,10 +1645,10 @@ add_comparer("flex_value.tuple_desc_type", "flex_value.enum_type", function(l_ct
 	local b_desc = b:unwrap_enum_type()
 	local construction_variants = string_value_map()
 	-- The empty variant has no arguments
-	construction_variants:set(terms.DescCons.empty, flex_value.tuple_type(terms.empty))
+	construction_variants:set(terms.DescCons.Empty, flex_value.tuple_type(terms.empty))
 	-- The cons variant takes a prefix description and a next element, represented as a function from the prefix tuple to a type in the specified universe
 	construction_variants:set(
-		terms.DescCons.cons,
+		terms.DescCons.Element,
 		flex_value.tuple_type(
 			terms.tuple_desc(
 				flex_value.closure(
@@ -2168,11 +2171,11 @@ end
 local function extract_tuple_elem_type_closures(enum_val, closures)
 	local constructor, arg = enum_val:unwrap_enum_value()
 	local elements = arg:unwrap_tuple_value()
-	if constructor == terms.DescCons.empty then
+	if constructor == terms.DescCons.Empty then
 		terms.unempty(enum_val)
 		return closures
 	end
-	if constructor == terms.DescCons.cons then
+	if constructor == terms.DescCons.Element then
 		local prefix, closure = terms.uncons(enum_val)
 		extract_tuple_elem_type_closures(prefix, closures)
 		if not closure:is_closure() then
@@ -2484,10 +2487,10 @@ end
 local function make_inner_context(ctx, desc, make_prefix)
 	-- evaluate the type of the tuple
 	local constructor, arg = desc:unwrap_enum_value()
-	if constructor == terms.DescCons.empty then
+	if constructor == terms.DescCons.Empty then
 		terms.unempty(desc)
 		return flex_value_array(), 0, flex_value_array()
-	elseif constructor == terms.DescCons.cons then
+	elseif constructor == terms.DescCons.Element then
 		local prefix, f = terms.uncons(desc)
 		local tuple_types, n_elements, tuple_vals = make_inner_context(ctx, prefix, make_prefix)
 		local element_type
@@ -2551,13 +2554,13 @@ local function make_inner_context2(desc_a, make_prefix_a, l_ctx, desc_b, make_pr
 	end
 	local constructor_a, arg_a = desc_a:unwrap_enum_value()
 	local constructor_b, arg_b = desc_b:unwrap_enum_value()
-	if constructor_a == terms.DescCons.empty and constructor_b == terms.DescCons.empty then
+	if constructor_a == terms.DescCons.Empty and constructor_b == terms.DescCons.Empty then
 		terms.unempty(desc_a)
 		terms.unempty(desc_b)
 		return true, flex_value_array(), flex_value_array(), flex_value_array(), 0
-	elseif constructor_a == terms.DescCons.empty or constructor_b == terms.DescCons.empty then
+	elseif constructor_a == terms.DescCons.Empty or constructor_b == terms.DescCons.Empty then
 		return false, "length-mismatch"
-	elseif constructor_a == terms.DescCons.cons and constructor_b == terms.DescCons.cons then
+	elseif constructor_a == terms.DescCons.Element and constructor_b == terms.DescCons.Element then
 		local prefix_a, f_a = terms.uncons(desc_a)
 		local prefix_b, f_b = terms.uncons(desc_b)
 		local ok, tuple_types_a, tuple_types_b, tuple_vals, n_elements =
@@ -3127,10 +3130,10 @@ local function infer_impl(
 		-- evaluate the type of the record
 		local function make_type(desc)
 			local constructor, arg = desc:unwrap_enum_value()
-			if constructor == terms.RecordDescCons.empty then
+			if constructor == terms.RecordDescCons.Empty then
 				terms.record_unempty(desc)
 				return true, string_array(), string_value_map()
-			elseif constructor == terms.RecordDescCons.cons then
+			elseif constructor == terms.RecordDescCons.Element then
 				local fields_desc, name_something, f = terms.record_uncons(desc)
 				local field_names, field_types = make_type(fields_desc)
 				local name = name_something:unwrap_name()
@@ -4150,10 +4153,10 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		---@return integer, flex_value[]
 		local function traverse(desc, length, reverse_elems)
 			local constructor, _ = desc:unwrap_enum_value()
-			if constructor == terms.DescCons.empty then
+			if constructor == terms.DescCons.Empty then
 				terms.unempty(desc)
 				return length, reverse_elems
-			elseif constructor == terms.DescCons.cons then
+			elseif constructor == terms.DescCons.Element then
 				local next_desc, elem = terms.uncons(desc)
 				length = length + 1
 				reverse_elems[length] = elem
