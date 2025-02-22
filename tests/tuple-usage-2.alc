@@ -1,0 +1,11 @@
+let foo = tuple-of(3, 5)
+
+let f = lambda (xs)
+	let (x, y) = xs
+	tuple-of
+		x + y
+		x - y
+
+let bar = f(foo)
+
+bar
