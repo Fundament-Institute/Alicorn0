@@ -1,2 +1,2 @@
-#the tuple-type-explicit(host-type, duplicate-tuple-desc(1, host-number)) tuple-of-implicit(1)
+#the tuple-type-explicit(host-type, duplicate-tuple-desc(1, host-number)) tuple-of(1)
 #host-array-from-tuple(2, host-tuple-of(host-type, duplicate-tuple-desc(2, host-number))(1, 2))
