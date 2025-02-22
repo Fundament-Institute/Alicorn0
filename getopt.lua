@@ -36,9 +36,7 @@ local function getopt(argv, opttab)
 					i = i + 2
 					goto continue
 				else
-					handle_with_arg(c, a:sub(j + 1))
-					i = i + 1
-					goto continue
+					error(("Value not provided for option: '-%s'"):format(c))
 				end
 			elseif handle_no_arg then
 				handle_no_arg(c)
