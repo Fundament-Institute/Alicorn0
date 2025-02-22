@@ -2782,6 +2782,25 @@ local function infer_impl(
 	if inferrable_term:is_bound_variable() then
 		local index, debuginfo = inferrable_term:unwrap_bound_variable()
 		local typeof_bound = typechecking_context:get_type(index)
+		if typeof_bound == nil then
+			local err_pp = PrettyPrint:new()
+			err_pp:unit("infer")
+			err_pp:set_color()
+			err_pp:unit("(")
+			err_pp:any(anchor, typechecking_context)
+			err_pp:set_color()
+			err_pp:unit(")")
+			err_pp:reset_color()
+			err_pp:unit(": type of bound variable ")
+			err_pp:any(debuginfo, typechecking_context)
+			err_pp:unit(" at index ")
+			err_pp:any(index, typechecking_context)
+			err_pp:unit(" is ")
+			err_pp:any(typeof_bound, typechecking_context)
+			err_pp:unit(" in context ")
+			err_pp:any(typechecking_context, typechecking_context)
+			error(tostring(err_pp))
+		end
 		local usage_counts = usage_array()
 		local context_size = typechecking_context:len()
 		for _ = 1, context_size do
@@ -3875,7 +3894,10 @@ function infer(inferrable_term, typechecking_context)
 	recurse_count = recurse_count + 1
 	local ok, v, usages, term = infer_impl(inferrable_term, typechecking_context)
 	if ok and not flex_value.value_check(v) then
-		error("infer didn't return a flex_value!")
+		local err_pp = PrettyPrint:new()
+		err_pp:unit("infer didn't return a flex_value: ")
+		err_pp:any(v, typechecking_context)
+		error(tostring(err_pp))
 	end
 	recurse_count = recurse_count - 1
 

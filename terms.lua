@@ -554,9 +554,13 @@ function TypecheckingContext:format_names_and_types()
 end
 
 ---@param index integer
----@return flex_value
+---@return flex_value?
 function TypecheckingContext:get_type(index)
-	return self.bindings:get(index).type
+	local binding = self.bindings:get(index)
+	if binding == nil then
+		return nil
+	end
+	return binding.type
 end
 
 function TypecheckingContext:DEBUG_VERIFY_VALUES(state)
