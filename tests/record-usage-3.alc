@@ -1,0 +1,13 @@
+let foo = tuple-of(3, 5)
+
+let f = lambda (xs)
+	let (x, y) = xs
+	record-of
+		x =
+			x + y
+		y =
+			x - y
+
+let bar = f(foo)
+
+bar

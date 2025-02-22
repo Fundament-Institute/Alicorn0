@@ -1,0 +1,8 @@
+let foo = tuple-of(3, 5)
+
+let (x, y) = foo
+record-of
+	x =
+		x + y
+	y =
+		x - y
