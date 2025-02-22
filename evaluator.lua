@@ -2835,6 +2835,7 @@ local function infer_impl(
 		if not ok then
 			return false, body_type
 		end
+		---@cast body_type -string
 
 		local body_value = evaluate(body_term, inner_context.runtime_context, inner_context)
 		local _, source = param_debug:unwrap_spanned_name()
@@ -3038,6 +3039,7 @@ local function infer_impl(
 			if not ok then
 				return false, el_type
 			end
+			---@cast el_type -string
 			local el_val = evaluate(el_term, typechecking_context.runtime_context, typechecking_context)
 			local el_singleton = flex_value.singleton(el_type, el_val)
 			local _, source = info[i]:unwrap_spanned_name()
@@ -3222,6 +3224,7 @@ local function infer_impl(
 			if not ok then
 				return false, field_type
 			end
+			---@cast field_type -string
 			field_types:set(
 				k,
 				substitute_into_closure(
@@ -3243,17 +3246,19 @@ local function infer_impl(
 		local subject, field_names, field_var_debugs, body = inferrable_term:unwrap_record_elim()
 		local ok, subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
 		if not ok then
+			---@cast subject_type string
 			return false, subject_type
 		end
+		---@cast subject_type -string
 		-- symbolically evaluating the subject is necessary for inferring the type of the body
 		local subject_value = evaluate(subject_term, typechecking_context:get_runtime_context(), typechecking_context)
 		local result_typefns = string_value_map()
-		for idx, name in field_names:ipairs() do
-			if result_typefns:get(name) then
-				return false, "duplicate name in record elimination: " .. name
+		for idx, field_name in field_names:ipairs() do
+			if result_typefns:get(field_name) then
+				return false, "duplicate name in record elimination: " .. field_name
 			end
 			result_typefns:set(
-				name,
+				field_name,
 				apply_value(
 					typechecker_state:metavariable(typechecking_context, false):as_flex(),
 					subject_value,
@@ -3270,22 +3275,25 @@ local function infer_impl(
 			terms.constraintcause.primitive("record elimination", anchor, nil)
 		)
 		if not ok then
+			---@cast err -nil
 			return false, err
 		end
 
 		-- reorder the fields into the requested order
 		local inner_context = typechecking_context
-		for _, v in field_names:ipairs() do
-			local tf = result_typefns:get(v)
+		for field_index, field_name in field_names:ipairs() do
+			local tf = result_typefns:get(field_name) --[[@as flex_value?]]
 			if tf == nil then
 				return false, "infer: trying to access a nonexistent record field"
 			end
 
+			local field_var_debug = field_var_debugs[field_index]
+			local field_var_name, _ = field_var_debug:unwrap_spanned_name()
 			inner_context = inner_context:append(
-				v,
+				field_var_name,
 				apply_value(tf, subject_value, typechecking_context),
-				index_record_value(subject_value, v),
-				spanned_name(v, format.span_here())
+				index_record_value(subject_value, field_name),
+				field_var_debug
 			)
 		end
 
