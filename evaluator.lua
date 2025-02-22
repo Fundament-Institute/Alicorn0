@@ -1629,6 +1629,10 @@ add_comparer("flex_value.enum_type", "flex_value.tuple_desc_type", function(l_ct
 		terms.DescCons.Element,
 		flex_value.tuple_type(terms.tuple_desc(prefix_desc, next_element))
 	)
+	construction_variants:set(
+		terms.DescCons.Implicit,
+		flex_value.tuple_type(terms.tuple_desc(prefix_desc, next_element))
+	)
 	local enum_desc_val = flex_value.enum_desc_value(construction_variants)
 	typechecker_state:queue_constrain(
 		l_ctx,
