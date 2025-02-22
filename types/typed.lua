@@ -256,13 +256,13 @@ function typed:as_record_extend() end
 function typed:is_record_elim() end
 ---@return typed subject
 ---@return ArrayValue<string> field_names
----@return ArrayValue<spanned_name> debug_ids
+---@return ArrayValue<spanned_name> field_var_debugs
 ---@return typed body
 function typed:unwrap_record_elim() end
 ---@return boolean
 ---@return typed subject
 ---@return ArrayValue<string> field_names
----@return ArrayValue<spanned_name> debug_ids
+---@return ArrayValue<spanned_name> field_var_debugs
 ---@return typed body
 function typed:as_record_elim() end
 ---@return boolean
@@ -667,7 +667,7 @@ function typed:as_constrained_type() end
 ---@field noncolliding_name_type_cons fun(set: typed): typed
 ---@field record_extend_single fun(base: typed, name: typed, val: typed): typed
 ---@field record_extend fun(base: typed, fields: MapValue<string, typed>): typed
----@field record_elim fun(subject: typed, field_names: ArrayValue<string>, debug_ids: ArrayValue<spanned_name>, body: typed): typed
+---@field record_elim fun(subject: typed, field_names: ArrayValue<string>, field_var_debugs: ArrayValue<spanned_name>, body: typed): typed
 ---@field record_field_access fun(subject: typed, name: string): typed
 ---@field enum_cons fun(constructor: string, arg: typed): typed
 ---@field enum_elim fun(subject: typed, mechanism: typed): typed
