@@ -1592,8 +1592,44 @@ let listtail-reducer =
 #     a
 
 let host-arith-binop = (host-func-type (a : host-number, b : host-number) -> ((c : host-number)))
+let host-arith-urnop = (host-func-type ((a : host-number)) -> ((b : host-number)))
 let host-mul = (intrinsic "return function(a, b) return U.notail(a * b) end" : host-arith-binop)
+let host-div = (intrinsic "return function(a, b) return U.notail(a / b) end" : host-arith-binop)
+let host-mod = (intrinsic "return function(a, b) return U.notail(a % b) end" : host-arith-binop)
+let host-add = (intrinsic "return function(a, b) return U.notail(a + b) end" : host-arith-binop)
+let host-sub = (intrinsic "return function(a, b) return U.notail(a - b) end" : host-arith-binop)
+let host-neg = (intrinsic "return function(a) return U.notail(-a) end" : host-arith-urnop)
 let mul = lambda (a : host-number, b : host-number)
 	let (c) = host-mul(a, b)
 	c
+let div = lambda (a : host-number, b : host-number)
+	let (c) = host-div(a, b)
+	c
+let mod = lambda (a : host-number, b : host-number)
+	let (c) = host-mod(a, b)
+	c
+let add = lambda (a : host-number, b : host-number)
+	let (c) = host-add(a, b)
+	c
+let sub = lambda (a : host-number, b : host-number)
+	let (c) = host-sub(a, b)
+	c
+let neg = lambda (a : host-number)
+	let (b) = host-neg(a)
+	b
 let _*_ = mul
+let _/_ = div
+let _%_ = mod
+let _+_ = add
+let _-_ = sub
+
+#### let host-predicate-binop = lambda (T : host-type, U : host-type)
+	host-func-type (a : T, b : U) -> ((c : host-bool))
+#### let host-lt = (intrinsic "return function(a, b) return U.notail(a < b) end" : host-predicate-binop(host-number, host-number))
+#### let host-eq = (intrinsic "return function(a, b) return U.notail(a == b) end" : host-predicate-binop(host-number, host-number))
+#### let lt = lambda (a : host-number, b : host-number)
+	let (c) = host-lt(a, b)
+	c
+#### let eq = lambda (a : host-number, b : host-number)
+	let (c) = host-eq(a, b)
+	c

@@ -2036,32 +2036,6 @@ local function dump_context_impl(syntax, env)
 end
 
 local core_operations = {
-	["+"] = exprs.host_applicative(function(a, b)
-		return a + b
-	end, { strict_value.host_number_type, strict_value.host_number_type }, { strict_value.host_number_type }),
-	["-"] = exprs.host_applicative(function(a, b)
-		return a - b
-	end, { strict_value.host_number_type, strict_value.host_number_type }, { strict_value.host_number_type }),
-	["*"] = exprs.host_applicative(function(a, b)
-		return a * b
-	end, { strict_value.host_number_type, strict_value.host_number_type }, { strict_value.host_number_type }),
-	["/"] = exprs.host_applicative(function(a, b)
-		return a / b
-	end, { strict_value.host_number_type, strict_value.host_number_type }, { strict_value.host_number_type }),
-	["%"] = exprs.host_applicative(function(a, b)
-		return a % b
-	end, { strict_value.host_number_type, strict_value.host_number_type }, { strict_value.host_number_type }),
-	neg = exprs.host_applicative(function(a)
-		return -a
-	end, { strict_value.host_number_type }, { strict_value.host_number_type }),
-
-	--["<"] = evaluator.host_applicative(function(args)
-	--  return { variant = (args[1] < args[2]) and 1 or 0, arg = types.unit_val }
-	--end, types.tuple {types.number, types.number}, types.cotuple({types.unit, types.unit})),
-	--["=="] = evaluator.host_applicative(function(args)
-	--  return { variant = (args[1] == args[2]) and 1 or 0, arg = types.unit_val }
-	--end, types.tuple {types.number, types.number}, types.cotuple({types.unit, types.unit})),
-
 	--["do"] = evaluator.host_operative(do_block),
 	let = exprs.host_operative(let_impl, "let_impl"),
 	mk = exprs.host_operative(mk_impl, "mk_impl"),
