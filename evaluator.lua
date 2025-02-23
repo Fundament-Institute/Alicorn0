@@ -1097,13 +1097,6 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 			)
 		)
 	elseif val:is_record_value() then
-		-- TODO: How to deal with a map?
-		error("Records not yet implemented")
-	elseif val:is_record_type() then
-		local desc = val:unwrap_record_type()
-		-- TODO: Handle desc properly, because it's a value.
-		error("Records not yet implemented")
-	elseif val:is_record_value() then
 		local fields = val:unwrap_record_value()
 		for k, v in fields:pairs() do
 			substitute_inner(v, mappings, context_len, ambient_typechecking_context)
@@ -3209,7 +3202,6 @@ local function infer_impl(
 			desc_usages,
 			U.notail(typed_term.tuple_type(desc_term))
 	elseif inferrable_term:is_record_cons() then
-		U.debug_break()
 		local fields = inferrable_term:unwrap_record_cons()
 		-- type_data is either "empty", an empty tuple,
 		-- or "cons", a tuple with the previous type_data and a function that
