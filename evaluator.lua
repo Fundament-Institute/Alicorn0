@@ -1098,20 +1098,28 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		)
 	elseif val:is_record_value() then
 		local fields = val:unwrap_record_value()
+		local field_terms = string_typed_map()
 		for k, v in fields:pairs() do
-			substitute_inner(v, mappings, context_len, ambient_typechecking_context)
+			field_terms:set(k, substitute_inner(v, mappings, context_len, ambient_typechecking_context))
 		end
+		return U.notail(typed_term.record_cons(field_terms))
 	elseif val:is_record_type() then
 		local desc = val:unwrap_record_type()
-		substitute_inner(desc, mappings, context_len, ambient_typechecking_context)
+		return U.notail(
+			typed_term.record_type_cons(substitute_inner(desc, mappings, context_len, ambient_typechecking_context))
+		)
 	elseif val:is_record_desc_value() then
 		local field_typefns = val:unwrap_record_desc_value()
+		local field_typefn_terms = string_typed_map()
 		for k, v in fields_typefns:pairs() do
-			substitute_inner(v, mappings, context_len, ambient_typechecking_context)
+			field_typefn_terms:set(k, substitute_inner(v, mappings, context_len, ambient_typechecking_context))
 		end
+		return U.notail(typed_term.record_desc_cons(field_typefn_terms))
 	elseif val:is_record_desc_type() then
 		local univ = val:unwrap_record_desc_type()
-		substitute_inner(univ, mappings, context_len, ambient_typechecking_context)
+		return U.notail(
+			typed_term.record_desc_type(substitute_inner(univ, mappings, context_len, ambient_typechecking_context))
+		)
 	elseif val:is_srel_type() then
 		local target = val:unwrap_srel_type()
 		local target_sub = substitute_inner(target, mappings, context_len, ambient_typechecking_context)
@@ -4352,6 +4360,17 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 			--new_fields[k] = U.tag("evaluate", { ["record_field_" .. tostring(k)] = v }, evaluate, v, runtime_context)
 		end
 		return U.notail(flex_value.record_value(new_fields))
+	elseif typed:is_record_type_cons() then
+		local desc = typed:unwrap_record_type_cons()
+		local desc_val = evaluate(desc, runtime_context, ambient_typechecking_context)
+		return U.notail(flex_value.record_type(desc_val))
+	elseif typed:is_record_desc_cons() then
+		local field_typefns = typed:unwrap_record_desc_cons()
+		local field_typefn_vals = string_value_map()
+		for k, term in field_typefns:pairs() do
+			field_typefn_vals:set(k, evaluate(term, runtime_context, ambient_typechecking_context))
+		end
+		return U.notail(flex_value.record_desc(field_typefn_vals))
 	elseif typed:is_record_elim() then
 		local subject, field_names, field_var_debugs, body = typed:unwrap_record_elim()
 		local subject_value = evaluate(subject, runtime_context, ambient_typechecking_context)

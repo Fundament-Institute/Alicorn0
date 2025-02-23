@@ -199,6 +199,13 @@ function typed:unwrap_record_type_cons() end
 ---@return typed desc
 function typed:as_record_type_cons() end
 ---@return boolean
+function typed:is_record_desc_cons() end
+---@return MapValue<string, typed> field_typefns
+function typed:unwrap_record_desc_cons() end
+---@return boolean
+---@return MapValue<string, typed> field_typefns
+function typed:as_record_desc_cons() end
+---@return boolean
 function typed:is_record_desc_extend_single() end
 ---@return typed base
 ---@return typed name
@@ -661,6 +668,7 @@ function typed:as_constrained_type() end
 ---@field tuple_desc_concat_indep fun(prefix: typed, suffix: typed): typed
 ---@field record_cons fun(fields: MapValue<string, typed>): typed
 ---@field record_type_cons fun(desc: typed): typed
+---@field record_desc_cons fun(field_typefns: MapValue<string, typed>): typed
 ---@field record_desc_extend_single fun(base: typed, name: typed, type: typed): typed
 ---@field record_desc_extend fun(base: typed, extension: MapValue<string, typed>): typed
 ---@field name_set_of_record_desc fun(desc: typed): typed
