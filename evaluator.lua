@@ -5965,10 +5965,10 @@ function TypeCheckerState:check_value(v, tag, context)
 		error("nil passed into check_value!")
 	end
 	if not flex_value.value_check(v) then
-		error("Must pass a flex_value into check_value! (Did you pass a strict or stuck value?)")
+		error(("Must pass a flex_value into check_value! %s"):format(tostring(v)))
 	end
 	if context == nil then
-		error("nil context passed into check_value! ")
+		error("nil context passed into check_value!")
 	end
 	terms.verify_placeholder_lite(v, context, false)
 
