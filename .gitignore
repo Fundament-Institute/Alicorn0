@@ -11,3 +11,4 @@
 !/.vscode/launch.json
 /target/
 Cargo.lock
+.*.swp
