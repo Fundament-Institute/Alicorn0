@@ -104,6 +104,9 @@ local function let_impl(syntax, env)
 			debugs:map(name_array, function(d)
 				return d.name
 			end),
+			debugs:map(terms.tuple_element_variant_array, function(d)
+				return terms.tuple_element_variant.element
+			end),
 			debugs,
 			expr
 		))
@@ -220,8 +223,10 @@ local switch_case = metalanguage.reducer(function(syntax, env)
 				local name_string, _ = name:unwrap_spanned_name()
 				return name_string
 			end),
+			names:map(terms.tuple_element_variant_array, function(name)
+				return terms.tuple_element_variant.element
+			end),
 			names,
-
 			anchored_inferrable_term(
 				syntax.span.start,
 				unanchored_inferrable_term.bound_variable(env.typechecking_context:len(), case_info)
@@ -471,6 +476,9 @@ local ascribed_name = metalanguage.reducer(
 		ok, env = env:bind_local(terms.binding.tuple_elim(
 			names:map(name_array, function(n)
 				return n.name
+			end),
+			names:map(terms.tuple_element_variant_array, function(n)
+				return terms.tuple_element_variant.element
 			end),
 			names,
 			prev_binding
@@ -968,6 +976,9 @@ local implicit_name_element = metalanguage.reducer(
 			names:map(name_array, function(n)
 				return n.name
 			end),
+			names:map(terms.tuple_element_variant_array, function(n)
+				return terms.tuple_element_variant.element
+			end),
 			names,
 			prev_binding
 		))
@@ -1266,6 +1277,9 @@ local function make_host_func_syntax(effectful)
 				params_info:map(name_array, function(n)
 					return n.name
 				end),
+				params_info:map(terms.tuple_element_variant_array, function(n)
+					return terms.tuple_element_variant.element
+				end),
 				params_info,
 				arg
 			))
@@ -1353,7 +1367,7 @@ local function forall_impl(syntax, env)
 	local params_single = params_thread.single
 	local params_args = params_thread.args
 	local params_info = params_thread.names
-	local params_names
+	local params_names, params_variants
 	env = params_thread.env
 	---@cast env Environment
 	--print("moving on to return type")
@@ -1368,6 +1382,9 @@ local function forall_impl(syntax, env)
 	else
 		params_names = params_info:map(name_array, function(n)
 			return n.name
+		end)
+		params_variants = params_info:map(terms.tuple_element_variant_array, function(n)
+			return terms.tuple_element_variant.element
 		end)
 		inner_name = "forall(" .. table.concat(params_names, ", ") .. ")"
 	end
@@ -1394,7 +1411,7 @@ local function forall_impl(syntax, env)
 	if params_single then
 		ok, env = env:bind_local(terms.binding.let(params_names, params_info, arg))
 	else
-		ok, env = env:bind_local(terms.binding.tuple_elim(params_names, params_info, arg))
+		ok, env = env:bind_local(terms.binding.tuple_elim(params_names, params_variants, params_info, arg))
 	end
 	if not ok then
 		return false, env
@@ -1616,6 +1633,9 @@ local function lambda_impl(syntax, env)
 	local names = info:map(name_array, function(n)
 		return n.name
 	end)
+	local variants = info:map(terms.tuple_element_variant_array, function(n)
+		return terms.tuple_element_variant.element
+	end)
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
 	local inner_name = "λ(" .. table.concat(names, ",") .. ")"
 	ok, inner_env = inner_env:bind_local(
@@ -1631,7 +1651,7 @@ local function lambda_impl(syntax, env)
 		return false, inner_env
 	end
 	local _, arg = inner_env:get(inner_name)
-	ok, inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, info, arg))
+	ok, inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, variants, info, arg))
 	if not ok then
 		return false, inner_env
 	end
@@ -1660,6 +1680,9 @@ local function lambda_prog_impl(syntax, env)
 	local names = info:map(name_array, function(n)
 		return n.name
 	end)
+	local variants = info:map(terms.tuple_element_variant_array, function(n)
+		return terms.tuple_element_variant.element
+	end)
 	local inner_name = "λ-prog(" .. table.concat(names, ",") .. ")"
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.effectful)
@@ -1676,7 +1699,7 @@ local function lambda_prog_impl(syntax, env)
 		return false, inner_env
 	end
 	local _, arg = inner_env:get(inner_name)
-	ok, inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, info, arg))
+	ok, inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, variants, info, arg))
 	if not ok then
 		return false, inner_env
 	end
@@ -1779,6 +1802,9 @@ local function lambda_annotated_impl(syntax, env)
 	local names = info:map(name_array, function(n)
 		return n.name
 	end)
+	local variants = info:map(terms.tuple_element_variant_array, function(n)
+		return terms.tuple_element_variant.element
+	end)
 	local inner_name = "λ-named(" .. table.concat(names, ",") .. ")"
 
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
@@ -1795,7 +1821,7 @@ local function lambda_annotated_impl(syntax, env)
 		return false, inner_env
 	end
 	local _, arg = inner_env:get(inner_name)
-	ok, inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, info, arg))
+	ok, inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, variants, info, arg))
 	if not ok then
 		return false, inner_env
 	end
@@ -1843,6 +1869,9 @@ local function lambda_with_implicit_impl(syntax, env)
 	local names = info:map(name_array, function(n)
 		return n.name
 	end)
+	local variants = info:map(terms.tuple_element_variant_array, function(n)
+		return terms.tuple_element_variant.element
+	end)
 	local shadow, inner_env = env:enter_block(terms.block_purity.pure)
 	local inner_name = "λ(" .. table.concat(names, ",") .. ")"
 	ok, inner_env = inner_env:bind_local(
@@ -1858,7 +1887,7 @@ local function lambda_with_implicit_impl(syntax, env)
 		return false, inner_env
 	end
 	local _, arg = inner_env:get(inner_name)
-	ok, inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, info, arg))
+	ok, inner_env = inner_env:bind_local(terms.binding.tuple_elim(names, variants, info, arg))
 	if not ok then
 		return false, inner_env
 	end

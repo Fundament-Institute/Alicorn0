@@ -135,7 +135,7 @@ function environment:bind_local(binding)
 				typechecking_context = typechecking_context,
 			}))
 	elseif binding:is_tuple_elim() then
-		local names, infos, subject = binding:unwrap_tuple_elim()
+		local names, variants, infos, subject = binding:unwrap_tuple_elim()
 		local anchor, _ = subject:unwrap_anchored_inferrable()
 		local ok, subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
 		if not ok then
@@ -426,7 +426,7 @@ function environment:exit_block(term, shadowed)
 			local name, debuginfo, expr = binding:unwrap_let() -- TODO: propagate anchors
 			unanchored_wrapped = unanchored_inferrable_term.let(name, debuginfo, expr, wrapped)
 		elseif binding:is_tuple_elim() then
-			local names, debuginfo, subject = binding:unwrap_tuple_elim() -- TODO: propagate anchors
+			local names, variants, debuginfo, subject = binding:unwrap_tuple_elim() -- TODO: propagate anchors
 			unanchored_wrapped = unanchored_inferrable_term.tuple_elim(names, debuginfo, subject, wrapped)
 		elseif binding:is_annotated_lambda() then
 			local name, annotation, start_anchor, visible, purity = binding:unwrap_annotated_lambda()

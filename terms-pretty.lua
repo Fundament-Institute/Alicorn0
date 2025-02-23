@@ -855,7 +855,7 @@ end
 ---@param pp PrettyPrint
 ---@param context AnyContext
 function binding_override_pretty:tuple_elim(pp, context)
-	local names, debuginfo, subject = self:unwrap_tuple_elim()
+	local names, variants, debuginfo, subject = self:unwrap_tuple_elim()
 	context = ensure_context(context)
 
 	pp:_enter()

@@ -47,6 +47,8 @@ local flex_runtime_context_type = gen.declare_type()
 local binding = gen.declare_type()
 ---@module "types.expression_goal"
 local expression_goal = gen.declare_type()
+---@module "types.tuple_element_variant"
+local tuple_element_variant = gen.declare_type()
 
 ---@class Metavariable
 --- a unique key that denotes this metavariable in the graph
@@ -692,6 +694,7 @@ binding:define_enum("binding", {
 	} },
 	{ "tuple_elim", {
 		"names",   array(gen.builtin_string),
+		"variants", array(tuple_element_variant),
 		"debug", array(spanned_name),
 		"subject", anchored_inferrable_term,
 	} },
@@ -1745,6 +1748,12 @@ local DescCons = --[[@enum DescCons]]
 		Trait = "Trait",
 	}
 
+tuple_element_variant:define_enum("tuple_element_variant", {
+	{ "element" },
+	{ "implicit" },
+	{ "trait" },
+})
+
 local typed_term_array = array(typed_term)
 local anchored_inferrable_term_array = array(anchored_inferrable_term)
 local unanchored_inferrable_term_array = array(unanchored_inferrable_term)
@@ -1752,6 +1761,7 @@ local flex_value_array = array(flex_value)
 local strict_value_array = array(strict_value)
 local stuck_value_array = array(stuck_value)
 local spanned_name_array = array(spanned_name)
+local tuple_element_variant_array = array(tuple_element_variant)
 
 ---@param ... flex_value
 ---@return flex_value
@@ -2062,6 +2072,7 @@ local terms = {
 	stuck_value_array = stuck_value_array,
 	binding = binding,
 	expression_goal = expression_goal,
+	tuple_element_variant = tuple_element_variant,
 	host_syntax_type = host_syntax_type,
 	host_environment_type = host_environment_type,
 	host_typed_term_type = host_typed_term_type,
@@ -2075,6 +2086,7 @@ local terms = {
 	unique_id_set = unique_id_set,
 	spanned_name = spanned_name,
 	spanned_name_array = spanned_name_array,
+	tuple_element_variant_array = tuple_element_variant_array,
 
 	flex_runtime_context = flex_runtime_context,
 	strict_runtime_context = strict_runtime_context,
