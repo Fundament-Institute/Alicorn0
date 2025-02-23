@@ -875,7 +875,7 @@ function gather_usages(val, usages, context_len, ambient_typechecking_context)
 		local desc = val:unwrap_record_type()
 		gather_usages(desc, usages, context_len, ambient_typechecking_context)
 	elseif val:is_record_desc_value() then
-		local field_typefns = val:unwrap_record_desc_value()
+		local fields_typefns = val:unwrap_record_desc_value()
 		for k, v in fields_typefns:pairs() do
 			gather_usages(v, usages, context_len, ambient_typechecking_context)
 		end
@@ -1109,7 +1109,7 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 			typed_term.record_type_cons(substitute_inner(desc, mappings, context_len, ambient_typechecking_context))
 		)
 	elseif val:is_record_desc_value() then
-		local field_typefns = val:unwrap_record_desc_value()
+		local fields_typefns = val:unwrap_record_desc_value()
 		local field_typefn_terms = string_typed_map()
 		for k, v in fields_typefns:pairs() do
 			field_typefn_terms:set(k, substitute_inner(v, mappings, context_len, ambient_typechecking_context))
@@ -4370,7 +4370,7 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		for k, term in field_typefns:pairs() do
 			field_typefn_vals:set(k, evaluate(term, runtime_context, ambient_typechecking_context))
 		end
-		return U.notail(flex_value.record_desc(field_typefn_vals))
+		return U.notail(flex_value.record_desc_value(field_typefn_vals))
 	elseif typed:is_record_elim() then
 		local subject, field_names, field_var_debugs, body = typed:unwrap_record_elim()
 		local subject_value = evaluate(subject, runtime_context, ambient_typechecking_context)
