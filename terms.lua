@@ -542,7 +542,7 @@ end
 
 ---@return string
 function TypecheckingContext:format_names_and_types()
-	local msg = ""
+	local msg = {}
 	for i = 1, self:len() do
 		msg[(i * 5) - 4] = tostring(i)
 		msg[(i * 5) - 3] = "\t"
