@@ -5562,6 +5562,16 @@ function TypeCheckerState:Visualize(f, diff1, diff2, restrict)
 			end
 			line = line .. ', color="#cccccc"'
 		end
+
+		if e.rel.debug_name then
+			local name = e.rel.debug_name
+			if e.rel.debug_name == "UniverseOmegaRelation" then
+				name = "< Ω :"
+			end
+
+			line = line .. ', label="' .. name .. '"'
+		end
+
 		f:write(line .. "]")
 		-- load-bearing no-op
 		if true then
@@ -5583,6 +5593,16 @@ function TypeCheckerState:Visualize(f, diff1, diff2, restrict)
 			end
 			line = line .. ', color="#cccccc"'
 		end
+
+		if e.rel.debug_name then
+			local name = e.rel.debug_name
+			if e.rel.debug_name == "UniverseOmegaRelation" then
+				name = "< Ω :"
+			end
+
+			line = line .. ', label="' .. name .. '"'
+		end
+
 		f:write(line .. "]")
 		-- load-bearing no-op
 		if true then
