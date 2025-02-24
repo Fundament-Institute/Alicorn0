@@ -22,8 +22,8 @@ path = "lib.rs"
 doctest = false
 
 [dependencies]
-mlua = { version = "0.9.9", features = ["luajit52", "vendored"] }
+mlua = { version = "0.10", features = ["luajit52", "vendored"] }
 
 [build-dependencies]
-mlua = { version = "0.9.9", features = ["luajit52", "vendored"] }
+mlua = { version = "0.10", features = ["luajit52", "vendored"] }
 cc = "1.1"
