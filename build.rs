@@ -9,10 +9,7 @@ const ALICORN_SOURCES: &[&str] = &[
     "libs/abstract-codegen.lua",
     "./alicorn-expressions.lua",
     "./alicorn-utils.lua",
-    "./backend-builder.lua",
     "./base-env.lua",
-    "./core-operatives.lua",
-    "./cotuple.lua",
     "./derivers.lua",
     "./environment.lua",
     "./evaluator-types.lua",
@@ -25,8 +22,6 @@ const ALICORN_SOURCES: &[&str] = &[
     "./lazy-prefix-tree.lua",
     "./lua-ext.lua",
     "./metalanguage.lua",
-    "./modules.lua",
-    "./operative-scratch.lua",
     "./pretty-printer.lua",
     "./profile.lua",
     "./reducer-utils.lua",
@@ -36,7 +31,6 @@ const ALICORN_SOURCES: &[&str] = &[
     "./terms-pretty.lua",
     "./terms.lua",
     "./traits.lua",
-    "./typesystem.lua",
     "./unformatter.lua",
 ];
 
