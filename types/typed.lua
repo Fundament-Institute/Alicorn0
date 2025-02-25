@@ -192,6 +192,65 @@ function typed:unwrap_record_cons() end
 ---@return MapValue<string, typed> fields
 function typed:as_record_cons() end
 ---@return boolean
+function typed:is_record_type_cons() end
+---@return typed desc
+function typed:unwrap_record_type_cons() end
+---@return boolean
+---@return typed desc
+function typed:as_record_type_cons() end
+---@return boolean
+function typed:is_record_desc_cons() end
+---@return MapValue<string, typed> field_typefns
+function typed:unwrap_record_desc_cons() end
+---@return boolean
+---@return MapValue<string, typed> field_typefns
+function typed:as_record_desc_cons() end
+---@return boolean
+function typed:is_record_desc_extend_single() end
+---@return typed base
+---@return typed name
+---@return typed type
+function typed:unwrap_record_desc_extend_single() end
+---@return boolean
+---@return typed base
+---@return typed name
+---@return typed type
+function typed:as_record_desc_extend_single() end
+---@return boolean
+function typed:is_record_desc_extend() end
+---@return typed base
+---@return MapValue<string, typed> extension
+function typed:unwrap_record_desc_extend() end
+---@return boolean
+---@return typed base
+---@return MapValue<string, typed> extension
+function typed:as_record_desc_extend() end
+---@return boolean
+function typed:is_name_set_of_record_desc() end
+---@return typed desc
+function typed:unwrap_name_set_of_record_desc() end
+---@return boolean
+---@return typed desc
+function typed:as_name_set_of_record_desc() end
+---@return boolean
+function typed:is_noncolliding_name_type_cons() end
+---@return typed set
+function typed:unwrap_noncolliding_name_type_cons() end
+---@return boolean
+---@return typed set
+function typed:as_noncolliding_name_type_cons() end
+---@return boolean
+function typed:is_record_extend_single() end
+---@return typed base
+---@return typed name
+---@return typed val
+function typed:unwrap_record_extend_single() end
+---@return boolean
+---@return typed base
+---@return typed name
+---@return typed val
+function typed:as_record_extend_single() end
+---@return boolean
 function typed:is_record_extend() end
 ---@return typed base
 ---@return MapValue<string, typed> fields
@@ -204,13 +263,24 @@ function typed:as_record_extend() end
 function typed:is_record_elim() end
 ---@return typed subject
 ---@return ArrayValue<string> field_names
+---@return ArrayValue<spanned_name> field_var_debugs
 ---@return typed body
 function typed:unwrap_record_elim() end
 ---@return boolean
 ---@return typed subject
 ---@return ArrayValue<string> field_names
+---@return ArrayValue<spanned_name> field_var_debugs
 ---@return typed body
 function typed:as_record_elim() end
+---@return boolean
+function typed:is_record_field_access() end
+---@return typed subject
+---@return string name
+function typed:unwrap_record_field_access() end
+---@return boolean
+---@return typed subject
+---@return string name
+function typed:as_record_field_access() end
 ---@return boolean
 function typed:is_enum_cons() end
 ---@return string constructor
@@ -597,8 +667,16 @@ function typed:as_constrained_type() end
 ---@field tuple_desc_type fun(universe: typed): typed
 ---@field tuple_desc_concat_indep fun(prefix: typed, suffix: typed): typed
 ---@field record_cons fun(fields: MapValue<string, typed>): typed
+---@field record_type_cons fun(desc: typed): typed
+---@field record_desc_cons fun(field_typefns: MapValue<string, typed>): typed
+---@field record_desc_extend_single fun(base: typed, name: typed, type: typed): typed
+---@field record_desc_extend fun(base: typed, extension: MapValue<string, typed>): typed
+---@field name_set_of_record_desc fun(desc: typed): typed
+---@field noncolliding_name_type_cons fun(set: typed): typed
+---@field record_extend_single fun(base: typed, name: typed, val: typed): typed
 ---@field record_extend fun(base: typed, fields: MapValue<string, typed>): typed
----@field record_elim fun(subject: typed, field_names: ArrayValue<string>, body: typed): typed
+---@field record_elim fun(subject: typed, field_names: ArrayValue<string>, field_var_debugs: ArrayValue<spanned_name>, body: typed): typed
+---@field record_field_access fun(subject: typed, name: string): typed
 ---@field enum_cons fun(constructor: string, arg: typed): typed
 ---@field enum_elim fun(subject: typed, mechanism: typed): typed
 ---@field enum_rec_elim fun(subject: typed, mechanism: typed): typed

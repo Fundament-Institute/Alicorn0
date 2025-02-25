@@ -93,6 +93,24 @@ function unanchored_inferrable:unwrap_tuple_type() end
 ---@return anchored_inferrable desc
 function unanchored_inferrable:as_tuple_type() end
 ---@return boolean
+function unanchored_inferrable:is_record_desc_cons() end
+---@return MapValue<string, anchored_inferrable> fields
+function unanchored_inferrable:unwrap_record_desc_cons() end
+---@return boolean
+---@return MapValue<string, anchored_inferrable> fields
+function unanchored_inferrable:as_record_desc_cons() end
+---@return boolean
+function unanchored_inferrable:is_record_desc_extend_single() end
+---@return anchored_inferrable base
+---@return anchored_inferrable name
+---@return anchored_inferrable val
+function unanchored_inferrable:unwrap_record_desc_extend_single() end
+---@return boolean
+---@return anchored_inferrable base
+---@return anchored_inferrable name
+---@return anchored_inferrable val
+function unanchored_inferrable:as_record_desc_extend_single() end
+---@return boolean
 function unanchored_inferrable:is_record_cons() end
 ---@return MapValue<string, anchored_inferrable> fields
 function unanchored_inferrable:unwrap_record_cons() end
@@ -103,11 +121,13 @@ function unanchored_inferrable:as_record_cons() end
 function unanchored_inferrable:is_record_elim() end
 ---@return anchored_inferrable subject
 ---@return ArrayValue<string> field_names
+---@return ArrayValue<spanned_name> field_var_debugs
 ---@return anchored_inferrable body
 function unanchored_inferrable:unwrap_record_elim() end
 ---@return boolean
 ---@return anchored_inferrable subject
 ---@return ArrayValue<string> field_names
+---@return ArrayValue<spanned_name> field_var_debugs
 ---@return anchored_inferrable body
 function unanchored_inferrable:as_record_elim() end
 ---@return boolean
@@ -388,8 +408,10 @@ function unanchored_inferrable:as_program_type() end
 ---@field tuple_cons fun(elements: ArrayValue<anchored_inferrable>, debug: ArrayValue<spanned_name>): unanchored_inferrable
 ---@field tuple_elim fun(names: ArrayValue<string>, debug: ArrayValue<spanned_name>, subject: anchored_inferrable, body: anchored_inferrable): unanchored_inferrable
 ---@field tuple_type fun(desc: anchored_inferrable): unanchored_inferrable
+---@field record_desc_cons fun(fields: MapValue<string, anchored_inferrable>): unanchored_inferrable
+---@field record_desc_extend_single fun(base: anchored_inferrable, name: anchored_inferrable, val: anchored_inferrable): unanchored_inferrable
 ---@field record_cons fun(fields: MapValue<string, anchored_inferrable>): unanchored_inferrable
----@field record_elim fun(subject: anchored_inferrable, field_names: ArrayValue<string>, body: anchored_inferrable): unanchored_inferrable
+---@field record_elim fun(subject: anchored_inferrable, field_names: ArrayValue<string>, field_var_debugs: ArrayValue<spanned_name>, body: anchored_inferrable): unanchored_inferrable
 ---@field enum_cons fun(constructor: string, arg: anchored_inferrable): unanchored_inferrable
 ---@field enum_desc_cons fun(variants: MapValue<string, anchored_inferrable>, rest: anchored_inferrable): unanchored_inferrable
 ---@field enum_elim fun(subject: anchored_inferrable, mechanism: anchored_inferrable): unanchored_inferrable

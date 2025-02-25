@@ -12,10 +12,10 @@
     "tests/implicit.alc": "success",
     "tests/operative-do.alc": "success",
     "tests/operative-tuple-desc.alc": "success",
+    "tests/record-usage.alc": "success",
     "tests/switch-fail.alc": "termgen",
     "tests/switch-test.alc": "success",
     "tests/tuple-usage-1.alc": "success",
     "tests/tuple-usage-2.alc": "success",
-    "tests/tuples.alc": "success",
-    "tests/record-usage.alc": "success"
+    "tests/tuples.alc": "success"
 }

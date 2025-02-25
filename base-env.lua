@@ -2035,6 +2035,39 @@ local function dump_context_impl(syntax, env)
 	return ok, term, env
 end
 
+local last_snapshot
+---@type lua_operative
+local function graph_snapshot_start_impl(syntax, env)
+	last_snapshot = evaluator.typechecker_state:Snapshot("user request")
+	return true,
+		anchored_inferrable_term(
+			syntax.span.start,
+			unanchored_inferrable_term.tuple_cons(anchored_inferrable_term_array(), spanned_name_array())
+		),
+		env
+end
+---@type lua_operative
+local function graph_snapshot_dump_impl(syntax, env)
+	local ok, name = syntax:match({
+		metalanguage.listmatch(metalanguage.accept_handler, metalanguage.isvalue(metalanguage.accept_handler)),
+	}, metalanguage.failure_handler, nil)
+	if not ok then
+		return ok, name
+	end
+	if not name.type == "string" then
+		return false, "needs to provide string for graph file name"
+	end
+	local f = io.open(name.val .. ".dot", "w")
+	evaluator.typechecker_state:Visualize(f, last_snapshot)
+	f:close()
+	return true,
+		anchored_inferrable_term(
+			syntax.span.start,
+			unanchored_inferrable_term.tuple_cons(anchored_inferrable_term_array(), spanned_name_array())
+		),
+		env
+end
+
 local core_operations = {
 	--["do"] = evaluator.host_operative(do_block),
 	let = exprs.host_operative(let_impl, "let_impl"),
@@ -2043,6 +2076,8 @@ local core_operations = {
 	enum = exprs.host_operative(enum_impl, "enum_impl"),
 	["debug-trace"] = exprs.host_operative(debug_trace_impl, "debug_trace_impl"),
 	["dump-context"] = exprs.host_operative(dump_context_impl, "dump_context_impl"),
+	["graph-snapshot-start"] = exprs.host_operative(graph_snapshot_start_impl, "graph_snapshot_start_impl"),
+	["graph-snapshot-dump"] = exprs.host_operative(graph_snapshot_dump_impl, "graph_snapshot_dump_impl"),
 	--record = exprs.host_operative(record_build, "record_build"),
 	intrinsic = exprs.host_operative(intrinsic_impl, "intrinsic_impl"),
 	["host-number"] = lit_term(strict_value.host_number_type, strict_value.host_type_type),

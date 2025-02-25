@@ -991,44 +991,46 @@ end
 ---@return SyntaxSymbol
 ---@return SyntaxSymbol?
 local function split_dot_accessors(symbol)
-	if symbol then
-		local split_dot_pos = (symbol.str):find("%.")
-
-		if split_dot_pos then
-			local first, second = (symbol.str):match("([^.]+)%.(.+)")
-
-			local first_stop_anchor = symbol.span.start
-			first_stop_anchor = Anchor(
-				first_stop_anchor.internal,
-				first_stop_anchor.id,
-				first_stop_anchor.line,
-				first_stop_anchor.char + split_dot_pos
-			)
-
-			local firstsymbol = {
-				kind = "symbol",
-				str = first,
-				span = symbol.span.start:span(first_stop_anchor),
-			}
-
-			-- we can assume it is on the same line.
-			local second_start_anchor = symbol.span.start
-			second_start_anchor = Anchor(
-				second_start_anchor.internal,
-				second_start_anchor.id,
-				second_start_anchor.line,
-				second_start_anchor.char + split_dot_pos
-			)
-
-			local secondsymbol = {
-				kind = "symbol",
-				str = second,
-				span = second_start_anchor:span(symbol.span.stop),
-			}
-
-			return firstsymbol, secondsymbol
-		end
+	if symbol == nil then
+		error("split_dot_accessors: symbol must not be nil")
 	end
+	local split_dot_pos = symbol.str:find(".", 1, true)
+	if not split_dot_pos then
+		return symbol
+	end
+
+	local first, second = (symbol.str):match("([^.]+)%.(.+)")
+
+	local first_stop_anchor = symbol.span.start
+	first_stop_anchor = Anchor(
+		first_stop_anchor.internal,
+		first_stop_anchor.id,
+		first_stop_anchor.line,
+		first_stop_anchor.char + split_dot_pos
+	)
+
+	local firstsymbol = {
+		kind = "symbol",
+		str = first,
+		span = symbol.span.start:span(first_stop_anchor),
+	}
+
+	-- we can assume it is on the same line.
+	local second_start_anchor = symbol.span.start
+	second_start_anchor = Anchor(
+		second_start_anchor.internal,
+		second_start_anchor.id,
+		second_start_anchor.line,
+		second_start_anchor.char + split_dot_pos
+	)
+
+	local secondsymbol = {
+		kind = "symbol",
+		str = second,
+		span = second_start_anchor:span(symbol.span.stop),
+	}
+
+	return firstsymbol, secondsymbol
 end
 
 ---@param args ExpressionArgs
@@ -1041,70 +1043,40 @@ local function expression_symbolhandler(args, name)
 	--print("looking up symbol", name)
 	--p(env)
 	--print(name, split_dot_accessors(name))
-	local front, rest = split_dot_accessors(name)
-
 	assert(name["kind"])
 
-	if front then
-		assert(front["kind"])
+	local field_names
+	name, field_names = split_dot_accessors(name)
+
+	local ok, part = env:get(name.str)
+	if not ok then
+		---@cast part string
+		return false, part, env
 	end
+	---@cast part -string
+	while field_names ~= nil do
+		local field_name, remaining_field_names = split_dot_accessors(field_names)
+		local spanned_field_name = terms.spanned_name(field_name.str, field_name.span)
 
-	if not front then
-		local ok, val = env:get(name.str)
-		if not ok then
-			---@cast val string
-			return ok, val, env
-		end
-		---@cast val -string
-		if goal:is_check() then
-			return true, U.notail(checkable_term.inferrable(val)), env
-		end
-		return ok, val, env
-	else
-		local ok, part = env:get(front.str)
-		if not ok then
-			---@cast part string
-			return false, part, env
-		end
-		---@cast part -string
-		while front do
-			name = rest
-			front, rest = split_dot_accessors(name)
-			--assert(front.str)
-			---@diagnostic disable-next-line: no-unknown
-			local namearray
-			if front then
-				assert(front["kind"])
-			end
-
-			if front and front.str then
-				namearray = front
-			else
-				assert(name)
-				assert(name.str)
-				namearray = name
-			end
-
-			local debug_id = terms.spanned_name(namearray.str, namearray.span)
-
-			part = anchored_inferrable_term(
-				name.span.start,
-				unanchored_inferrable_term.record_elim(
-					part,
-					name_array(namearray.str),
-					spanned_name_array(debug_id),
-					anchored_inferrable_term(
-						name.span.start,
-						unanchored_inferrable_term.bound_variable(env.typechecking_context:len() + 1, debug_id)
-					)
+		part = anchored_inferrable_term(
+			field_names.span.start,
+			unanchored_inferrable_term.record_elim(
+				part,
+				name_array(field_name.str),
+				spanned_name_array(spanned_field_name),
+				anchored_inferrable_term(
+					field_names.span.start,
+					unanchored_inferrable_term.bound_variable(env.typechecking_context:len() + 1, spanned_field_name)
 				)
 			)
-		end
-		if goal:is_check() then
-			return true, U.notail(checkable_term.inferrable(part)), env
-		end
-		return ok, part, env
+		)
+
+		field_names = remaining_field_names
 	end
+	if goal:is_check() then
+		return true, U.notail(checkable_term.inferrable(part)), env
+	end
+	return ok, part, env
 end
 
 ---@param args ExpressionArgs
