@@ -431,67 +431,68 @@ local pure_ascribed_name = metalanguage.reducer(
 	"pure_ascribed_name"
 )
 
-local ascribed_name = metalanguage.reducer(
-	---@param syntax ConstructedSyntax
-	---@param env Environment
-	---@param prev anchored_inferrable
-	---@param names spanned_name[]
-	---@return boolean
-	---@return spanned_name
-	---@return anchored_inferrable?
-	---@return Environment?
-	function(syntax, env, prev, names)
-		-- print("ascribed_name trying")
-		-- p(syntax)
-		-- print(prev:pretty_print())
-		-- print("is env an environment? (start of ascribed name)")
-		-- print(env.get)
-		-- print(env.enter_block)
-		local shadowed
-		shadowed, env = env:enter_block(terms.block_purity.pure)
-		local prev_name = "#prev - " .. tostring(syntax.span)
-		local ok
-		ok, env = env:bind_local(
-			terms.binding.annotated_lambda(
-				prev_name,
-				prev,
-				syntax.span.start,
-				terms.visibility.explicit,
-				literal_purity_pure
+---@param build_names_binding (fun(names: spanned_name[], prev: anchored_inferrable): (names_binding: binding))
+---@return Reducer ascribed_name
+local function ascribed_name(build_names_binding)
+	return metalanguage.reducer(
+		---@param syntax ConstructedSyntax
+		---@param env Environment
+		---@param prev anchored_inferrable
+		---@param names spanned_name[]
+		---@return boolean
+		---@return spanned_name
+		---@return anchored_inferrable?
+		---@return Environment?
+		function(syntax, env, prev, names)
+			-- print("ascribed_name trying")
+			-- p(syntax)
+			-- print(prev:pretty_print())
+			-- print("is env an environment? (start of ascribed name)")
+			-- print(env.get)
+			-- print(env.enter_block)
+			local shadowed
+			shadowed, env = env:enter_block(terms.block_purity.pure)
+			local prev_name = "#prev - " .. tostring(syntax.span)
+			local ok
+			ok, env = env:bind_local(
+				terms.binding.annotated_lambda(
+					prev_name,
+					prev,
+					syntax.span.start,
+					terms.visibility.explicit,
+					literal_purity_pure
+				)
 			)
-		)
-		if not ok then
-			return false, env
-		end
-		local ok, prev_binding = env:get(prev_name)
-		if not ok then
-			error "#prev should always be bound, was just added"
-		end
-		---@cast prev_binding -string
-		ok, env = env:bind_local(terms.binding.tuple_elim(
-			names:map(name_array, function(n)
-				return n.name
-			end),
-			names,
-			prev_binding
-		))
-		if not ok then
-			return false, env
-		end
-		local ok, name, val, env =
-			syntax:match({ pure_ascribed_name(metalanguage.accept_handler, env) }, metalanguage.failure_handler, nil)
-		if not ok then
-			return ok, name
-		end
-		---@cast env Environment
-		local env, val, purity = env:exit_block(val, shadowed)
-		-- print("is env an environment? (end of ascribed name)")
-		-- print(env.get)
-		-- print(env.enter_block)
-		return true, name, val, env
-	end,
-	"ascribed_name"
-)
+			if not ok then
+				return false, env
+			end
+			local ok, prev_binding = env:get(prev_name)
+			if not ok then
+				error "#prev should always be bound, was just added"
+			end
+			---@cast prev_binding -string
+			ok, env = env:bind_local(build_names_binding(names, prev_binding))
+			if not ok then
+				return false, env
+			end
+			local ok, name, val, env = syntax:match(
+				{ pure_ascribed_name(metalanguage.accept_handler, env) },
+				metalanguage.failure_handler,
+				nil
+			)
+			if not ok then
+				return ok, name
+			end
+			---@cast env Environment
+			local env, val, purity = env:exit_block(val, shadowed)
+			-- print("is env an environment? (end of ascribed name)")
+			-- print(env.get)
+			-- print(env.enter_block)
+			return true, name, val, env
+		end,
+		"ascribed_name"
+	)
+end
 
 local curry_segment = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
@@ -565,6 +566,16 @@ local function lambda_curry_impl(syntax, env)
 	return true, term, resenv
 end
 
+local tuple_ascribed_name = ascribed_name(function(names, prev)
+	return terms.binding.tuple_elim(
+		names:map(name_array, function(n)
+			return n.name
+		end),
+		names,
+		prev
+	)
+end)
+
 local tuple_desc_of_ascribed_names = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
@@ -577,26 +588,27 @@ local tuple_desc_of_ascribed_names = metalanguage.reducer(
 
 		local names = spanned_name_array()
 
-		local ok, thread = syntax:match({
-			metalanguage.list_many_fold(function(_, vals, thread)
-				return true, thread
-			end, function(thread, span)
-				return ascribed_name(function(_, name, type_val, type_env)
-					local names = thread.names:copy()
+		local ok, acc = syntax:match({
+			metalanguage.list_many_fold(function(_, vals, acc)
+				return true, acc
+			end, function(acc, span)
+				local prev = build_type_term(span, acc.args)
+				return tuple_ascribed_name(function(_, name, type_val, type_env)
+					local names = acc.names:copy()
 					names:append(name)
-					local newthread = {
+					local new_acc = {
 						names = names,
 						args = terms.inferrable_cons(
 							span.start,
-							thread.args,
+							acc.args,
 							spanned_name("", format.span_here()),
 							type_val,
 							spanned_name("", format.span_here())
 						),
 						env = type_env,
 					}
-					return true, { name = name, type = type_val }, newthread
-				end, thread.env, build_type_term(span, thread.args), thread.names)
+					return true, { name = name, type = type_val }, new_acc
+				end, acc.env, prev, acc.names)
 			end, {
 				names = names,
 				args = terms.inferrable_empty,
@@ -604,7 +616,7 @@ local tuple_desc_of_ascribed_names = metalanguage.reducer(
 			}),
 		}, metalanguage.failure_handler, nil)
 
-		return ok, thread
+		return ok, acc
 	end,
 	"tuple_desc_of_ascribed_names"
 )
@@ -742,7 +754,7 @@ local tuple_desc_wrap_ascribed_name = metalanguage.reducer(
 		local args = terms.inferrable_empty
 		local debug_args = spanned_name("", format.span_here())
 		local ok, name, type_val, type_env = syntax:match({
-			ascribed_name(metalanguage.accept_handler, env, build_type_term(syntax.span.start, args), names),
+			tuple_ascribed_name(metalanguage.accept_handler, env, build_type_term(syntax.span.start, args), names),
 		}, metalanguage.failure_handler, nil)
 		local debug_type_val = spanned_name("", format.span_here())
 		if not ok then
