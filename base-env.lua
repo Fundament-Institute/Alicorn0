@@ -431,7 +431,7 @@ local pure_ascribed_name = metalanguage.reducer(
 	"pure_ascribed_name"
 )
 
-local ascribed_name = metalanguage.reducer(
+local tuple_ascribed_name = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@param prev anchored_inferrable
@@ -463,18 +463,19 @@ local ascribed_name = metalanguage.reducer(
 		if not ok then
 			return false, env
 		end
-		local ok, prev_binding = env:get(prev_name)
+		local ok, prev_expr = env:get(prev_name)
 		if not ok then
 			error "#prev should always be bound, was just added"
 		end
-		---@cast prev_binding -string
-		ok, env = env:bind_local(terms.binding.tuple_elim(
+		---@cast prev_expr -string
+		local prev_binding = terms.binding.tuple_elim(
 			names:map(name_array, function(n)
 				return n.name
 			end),
 			names,
-			prev_binding
-		))
+			prev_expr
+		)
+		ok, env = env:bind_local(prev_binding)
 		if not ok then
 			return false, env
 		end
@@ -490,7 +491,7 @@ local ascribed_name = metalanguage.reducer(
 		-- print(env.enter_block)
 		return true, name, val, env
 	end,
-	"ascribed_name"
+	"tuple_ascribed_name"
 )
 
 local curry_segment = metalanguage.reducer(
@@ -577,26 +578,27 @@ local tuple_desc_of_ascribed_names = metalanguage.reducer(
 
 		local names = spanned_name_array()
 
-		local ok, thread = syntax:match({
-			metalanguage.list_many_fold(function(_, vals, thread)
-				return true, thread
-			end, function(thread, span)
-				return ascribed_name(function(_, name, type_val, type_env)
-					local names = thread.names:copy()
+		local ok, acc = syntax:match({
+			metalanguage.list_many_fold(function(_, vals, acc)
+				return true, acc
+			end, function(acc, span)
+				local prev = build_type_term(span, acc.args)
+				return tuple_ascribed_name(function(_, name, type_val, type_env)
+					local names = acc.names:copy()
 					names:append(name)
-					local newthread = {
+					local new_acc = {
 						names = names,
 						args = terms.inferrable_cons(
 							span.start,
-							thread.args,
+							acc.args,
 							spanned_name("", format.span_here()),
 							type_val,
 							spanned_name("", format.span_here())
 						),
 						env = type_env,
 					}
-					return true, { name = name, type = type_val }, newthread
-				end, thread.env, build_type_term(span, thread.args), thread.names)
+					return true, { name = name, type = type_val }, new_acc
+				end, acc.env, prev, acc.names)
 			end, {
 				names = names,
 				args = terms.inferrable_empty,
@@ -604,7 +606,7 @@ local tuple_desc_of_ascribed_names = metalanguage.reducer(
 			}),
 		}, metalanguage.failure_handler, nil)
 
-		return ok, thread
+		return ok, acc
 	end,
 	"tuple_desc_of_ascribed_names"
 )
@@ -742,7 +744,7 @@ local tuple_desc_wrap_ascribed_name = metalanguage.reducer(
 		local args = terms.inferrable_empty
 		local debug_args = spanned_name("", format.span_here())
 		local ok, name, type_val, type_env = syntax:match({
-			ascribed_name(metalanguage.accept_handler, env, build_type_term(syntax.span.start, args), names),
+			tuple_ascribed_name(metalanguage.accept_handler, env, build_type_term(syntax.span.start, args), names),
 		}, metalanguage.failure_handler, nil)
 		local debug_type_val = spanned_name("", format.span_here())
 		if not ok then
