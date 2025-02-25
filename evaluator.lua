@@ -1106,7 +1106,7 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 	elseif val:is_record_type() then
 		local desc = val:unwrap_record_type()
 		return U.notail(
-			typed_term.record_type_cons(substitute_inner(desc, mappings, context_len, ambient_typechecking_context))
+			typed_term.record_type(substitute_inner(desc, mappings, context_len, ambient_typechecking_context))
 		)
 	elseif val:is_record_desc_value() then
 		local fields_typefns = val:unwrap_record_desc_value()
@@ -4368,8 +4368,8 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 			--new_fields[k] = U.tag("evaluate", { ["record_field_" .. tostring(k)] = v }, evaluate, v, runtime_context)
 		end
 		return U.notail(flex_value.record_value(new_fields))
-	elseif typed:is_record_type_cons() then
-		local desc = typed:unwrap_record_type_cons()
+	elseif typed:is_record_type() then
+		local desc = typed:unwrap_record_type()
 		local desc_val = evaluate(desc, runtime_context, ambient_typechecking_context)
 		return U.notail(flex_value.record_type(desc_val))
 	elseif typed:is_record_desc_cons() then
