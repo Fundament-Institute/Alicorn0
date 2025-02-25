@@ -1060,7 +1060,7 @@ typed_term:define_enum("typed", {
 	{ "tuple_desc_type", { "universe", typed_term } },
 	{ "tuple_desc_concat_indep", { "prefix", typed_term, "suffix", typed_term }},
 	{ "record_cons", { "fields", map(gen.builtin_string, typed_term) } },
-	{ "record_type_cons", {"desc", typed_term }},
+	{ "record_type", { "desc", typed_term } },
 	{ "record_desc_cons", {"field_typefns", map(gen.builtin_string, typed_term)}},
 	{ "record_desc_extend_single", {"base", typed_term, "name", typed_term, "type", typed_term}},
 	{ "record_desc_extend", {"base", typed_term, "extension", map(gen.builtin_string, typed_term)}},
