@@ -1150,6 +1150,18 @@ declare_set = U.memoize(declare_set, false)
 ---@field pretty_print fun(self: ArrayValue, ...)
 ---@field default_print fun(self: ArrayValue, ...)
 
+---@param self ArrayType
+---@param array Value[]
+---@param n? integer
+---@return ArrayValue val
+local function array_unchecked_new_fn(self, array, n)
+	return setmetatable({
+		n = n,
+		array = array,
+		is_frozen = false,
+	}, self)
+end
+
 local array_type_mt = {
 	__call = function(self, ...)
 		local value_type = self.value_type
@@ -1169,11 +1181,7 @@ local array_type_mt = {
 			end
 			array[i] = value
 		end
-		return setmetatable({
-			array = array,
-			is_frozen = false,
-			n = n,
-		}, self)
+		return array_unchecked_new_fn(self, array, n)
 	end,
 	__eq = function(left, right)
 		return left.value_type == right.value_type
@@ -1183,25 +1191,11 @@ local array_type_mt = {
 	end,
 }
 
-local function array_unchecked_new_fn(self, array, n)
-	local value_type = self.value_type
-	local new_array = {}
-	if n == nil then
-		n = array.n
-		if n == nil then
-			n = #array
-		end
-	end
-	for i = 1, n do
-		new_array[i] = array[i]
-	end
-	return setmetatable({
-		n = n,
-		array = new_array,
-		is_frozen = false,
-	}, self)
-end
-
+---@param self ArrayType
+---@param array Value[]
+---@param first? integer
+---@param last? integer
+---@return ArrayValue val
 local function array_new_fn(self, array, first, last)
 	local value_type = self.value_type
 	local new_array = {}
@@ -1231,11 +1225,7 @@ local function array_new_fn(self, array, first, last)
 		end
 		new_array[i] = value
 	end
-	return setmetatable({
-		n = i,
-		array = new_array,
-		is_frozen = false,
-	}, self)
+	return array_unchecked_new_fn(self, new_array, i)
 end
 
 ---@param state ArrayValue

@@ -1347,7 +1347,7 @@ local stuck_continuation = gen.declare_type()
 ---@return Type t
 local function replace_flex_type(tag, t)
 	if type(t) == "string" then
-		error(debug.traceback("wrong type passed to replace_flex_value"))
+		error(debug.traceback("wrong type passed to replace_flex_type"))
 	end
 	if t == flex_value then
 		if tag == "strict" then
@@ -1380,6 +1380,7 @@ local function replace_flex_type(tag, t)
 
 	return t
 end
+replace_flex_type = U.memoize(replace_flex_type, false)
 
 ---@param arg (Value | StrictRuntimeContext | FlexRuntimeContext)
 ---@param t Type
@@ -1457,6 +1458,13 @@ local function specify_flex_values(args, types)
 	return "strict", strict_args
 end
 
+---@generic T
+---@param key T
+---@return T key
+local function unify_already_flex(val)
+	return val
+end
+
 ---@param t Type
 ---@return Type t
 ---@return (fun(val: (Value | StrictRuntimeContext | FlexRuntimeContext)): (flex_val: (Value | FlexRuntimeContext)))? unify
@@ -1497,20 +1505,10 @@ local function unify_flex_type(t)
 			return t, nil
 		end
 		if unify_key == nil then
-			---@generic T
-			---@param key T
-			---@return T key
-			function unify_key(key)
-				return key
-			end
+			unify_key = unify_already_flex
 		end
 		if unify_value == nil then
-			---@generic T
-			---@param val T
-			---@return T val
-			function unify_value(val)
-				return val
-			end
+			unify_value = unify_already_flex
 		end
 		local flex_t = map(flex_key_t, flex_value_t)
 		---@param vals MapValue
@@ -1528,6 +1526,7 @@ local function unify_flex_type(t)
 	end
 	return t, nil
 end
+unify_flex_type = U.memoize(unify_flex_type, false)
 
 ---@param arg (Value | StrictRuntimeContext | FlexRuntimeContext)
 ---@return (Value | FlexRuntimeContext) arg

@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
 
-use std::io::Read;
-
 use mlua::prelude::*;
 
 const ALICORN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/alicorn.lua"));
@@ -191,8 +189,8 @@ end
         alc_include_file.call(path.as_ref().as_os_str().to_string_lossy())
     }
 
-    pub fn execute<'a, R: FromLuaMulti<'a>>(
-        &'a self,
+    pub fn execute<R: FromLuaMulti>(
+        &self,
         source: impl AsRef<str>,
         name: impl AsRef<str>,
     ) -> Result<R, mlua::Error> {
@@ -200,8 +198,8 @@ end
         execute_program.call((source.as_ref(), name.as_ref()))
     }
 
-    pub fn execute_file<'a, R: FromLuaMulti<'a>>(
-        &'a self,
+    pub fn execute_file<R: FromLuaMulti>(
+        &self,
         path: impl AsRef<std::path::Path>,
     ) -> Result<R, mlua::Error> {
         let execute_program: LuaFunction = self.lua.load("alc_execute_path").eval()?;
@@ -221,7 +219,7 @@ fn test_runtest_file() {
 
     // Restore working dir so we can find prelude.alc
     std::env::set_current_dir(&old).unwrap();
-    let result: LuaValue<'_> = alicorn
+    let result: LuaValue = alicorn
         .execute(
             "host-tuple-of(tuple-desc-singleton(host-type, host-number))(4)",
             format!("{}:{}", file!(), line!() - 1),
