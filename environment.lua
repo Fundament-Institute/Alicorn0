@@ -5,6 +5,7 @@ local trie = require "lazy-prefix-tree"
 local fibbuf = require "fibonacci-buffer"
 local U = require "alicorn-utils"
 local format = require "format"
+local PrettyPrint = require("pretty-printer").PrettyPrint
 
 local terms = require "terms"
 local terms_gen = require "terms-generators"
@@ -474,7 +475,12 @@ function environment:exit_block(term, shadowed)
 				spanned_name("#program-sequence", start_anchor:span(start_anchor))
 			)
 		else
-			error("exit_block: unknown kind: " .. binding.kind)
+			local err_pp = PrettyPrint:new()
+			err_pp:unit("exit_block: unknown kind of binding ")
+			err_pp:any(binding, env.typechecking_context)
+			err_pp:unit(" wrapping ")
+			err_pp:any(wrapped, env.typechecking_context)
+			error(tostring(err_pp))
 		end
 
 		wrapped = anchored_inferrable_term(anchor, unanchored_wrapped)
