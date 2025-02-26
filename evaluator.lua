@@ -3261,6 +3261,38 @@ local function infer_impl(
 			U.notail(flex_value.record_type(flex_value.record_desc_value(field_types))),
 			usages,
 			U.notail(typed_term.record_cons(new_fields))
+	elseif inferrable_term:is_record_desc_cons() then
+		local fields = inferrable_term:unwrap_record_desc_cons()
+		local usages = usage_array()
+		local univ = flex_value.star(0, 0)
+		local unique = flex_value.free(free.unique({ debug = "record desc cons universe union unique" }))
+		local field_terms = string_typed_map()
+		for k, typefn in fields:pairs() do
+			local ok, typefn_type, typefn_usages, typefn_term = infer(typefn, typechecking_context)
+			if not ok then
+				return ok, typefn_type
+			end
+			--TODO: use flow correctly for this
+			local ok, param_type, param_info, result_type, result_info = typefn_type:as_pi()
+			if not ok then
+				local err_pp = PrettyPrint:new()
+				err_pp:unit("typefn for record field must be a function returning a type, but wasn't a function: ")
+				err_pp:any(typefn_type, typechecking_context)
+				return false, tostring(err_pp)
+			end
+			ok = result_info:unwrap_result_info():unwrap_result_info():is_pure()
+			if not ok then
+				local err_pp = PrettyPrint:new()
+				err_pp:unit("typefn for record field must be a function returning a type, but wasn't pure: ")
+				err_pp:any(result_info, typechecking_context)
+				return false, tostring(err_pp)
+			end
+			local field_univ = apply_value(result_type, unique, typechecking_context)
+			univ = flex_value.union_type(univ, field_univ)
+			add_arrays(usages, typefn_usages)
+			field_terms:set(k, typefn_term)
+		end
+		return true, flex_value.record_desc_type(univ), usages, typed_term.record_desc_cons(field_terms)
 	elseif inferrable_term:is_record_elim() then
 		local subject, field_names, field_var_debugs, body = inferrable_term:unwrap_record_elim()
 		local ok, subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
