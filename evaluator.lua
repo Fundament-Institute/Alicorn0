@@ -3263,7 +3263,7 @@ local function infer_impl(
 			end
 			local field_univ = apply_value(result_type, unique, typechecking_context)
 			univ = flex_value.union_type(univ, field_univ)
-			add_arrays(usages, field_usages)
+			add_arrays(usages, typefn_usages)
 			field_terms:set(k, typefn_term)
 		end
 		return true, flex_value.record_desc_type(univ), usages, typed_term.record_desc_cons(field_terms)

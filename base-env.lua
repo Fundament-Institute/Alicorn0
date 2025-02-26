@@ -592,18 +592,28 @@ local record_desc_of_ascribed_names = metalanguage.reducer(
 				local acc_args = acc.args
 				local new_desc_cons = acc_args:unwrap_record_desc_cons():copy()
 
-				return record_ascribed_name(function(_userdata, name, type_val, type_env)
-					local names = acc.names:copy()
-					local str, _ = name:unwrap_spanned_name()
-					new_desc_cons:set(str, type_val)
-					names:append(name)
-					local new_acc = {
-						names = names,
-						args = terms.unanchored_inferrable_term.record_desc_cons(new_desc_cons),
-						env = type_env,
-					}
-					return true, { name = name, type = type_val }, new_acc
-				end, acc.env, anchored_inferrable_term(syntax.span.start, acc.args), acc.names)
+				return record_ascribed_name(
+					function(_userdata, name, type_val, type_env)
+						local names = acc.names:copy()
+						local str, _ = name:unwrap_spanned_name()
+						new_desc_cons:set(str, type_val)
+						names:append(name)
+						local new_acc = {
+							names = names,
+							args = terms.unanchored_inferrable_term.record_desc_cons(new_desc_cons),
+							env = type_env,
+						}
+						return true, { name = name, type = type_val }, new_acc
+					end,
+					acc.env,
+					anchored_inferrable_term(
+						syntax.span.start,
+						terms.unanchored_inferrable_term.record_type(
+							anchored_inferrable_term(syntax.span.start, acc.args)
+						)
+					),
+					acc.names
+				)
 			end, {
 				names = names,
 				args = terms.unanchored_inferrable_term.record_desc_cons(
