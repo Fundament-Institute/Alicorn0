@@ -390,30 +390,59 @@ local pure_ascribed_name = metalanguage.reducer(
 	---@return spanned_name
 	---@return anchored_inferrable?
 	---@return Environment?
-	function(syntax, env)
-		local ok, name, tail = syntax:match({
-			metalanguage.issymbol(metalanguage.accept_handler),
-			metalanguage.listtail(
-				metalanguage.accept_handler,
+	function(syntax, env, type_reducer)
+		---@diagnostic disable-next-line: no-unknown
+		local name, tail
+		do
+			local ok
+			---@type boolean, spanned_name, ConstructedSyntax?
+			ok, name, tail = syntax:match({
 				metalanguage.issymbol(metalanguage.accept_handler),
-				metalanguage.symbol_exact(metalanguage.accept_handler, ":")
-			),
-		}, metalanguage.failure_handler, nil)
-		if not ok then
-			return ok, name
-		end
-		local type
-		if tail then
-			local ok, type_env = tail:match({
-				metalanguage.listmatch(
+				metalanguage.listtail(
 					metalanguage.accept_handler,
-					exprs.inferred_expression(utils.accept_with_env, env)
+					metalanguage.issymbol(metalanguage.accept_handler),
+					metalanguage.symbol_exact(metalanguage.accept_handler, ":")
 				),
 			}, metalanguage.failure_handler, nil)
 			if not ok then
-				return ok, type_env
+				return ok, name
 			end
-			type, env = utils.unpack_val_env(type_env)
+		end
+		---@diagnostic disable-next-line: no-unknown
+		local type
+		if tail then
+			---@diagnostic disable-next-line: no-unknown
+			local type_syntax
+			do
+				local ok
+				---@type boolean, ConstructedSyntax
+				ok, type_syntax = tail:match({
+					metalanguage.listmatch(metalanguage.accept_handler, metalanguage.any(metalanguage.accept_handler)),
+				}, metalanguage.failure_handler, nil)
+				if not ok then
+					return ok, type_syntax
+				end
+			end
+			if type_reducer ~= nil then
+				local ok
+				---@type boolean, Environment
+				ok, env = type_syntax:match({
+					type_reducer(metalanguage.accept_handler, env),
+				}, metalanguage.failure_handler, nil)
+				if not ok then
+					return ok, env
+				end
+			end
+			do
+				local ok
+				---@type boolean, anchored_inferrable, Environment
+				ok, type, env = type_syntax:match({
+					exprs.inferred_expression(metalanguage.accept_handler, env),
+				}, metalanguage.failure_handler, nil)
+				if not ok then
+					return ok, type
+				end
+			end
 		else
 			local type_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			type = anchored_inferrable_term(
