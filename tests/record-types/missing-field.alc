@@ -1,0 +1,7 @@
+
+let footype = record
+	x : host-number
+	y : host-number
+
+let foo = the footype record-of(x = 9)
+
