@@ -1,0 +1,11 @@
+
+let point = record
+	x : host-number
+	y : host-number
+
+let mag = lambda (p : point)
+	p.x * p.x + p.y * p.y
+
+let pos = the point record-of(x = 1, y = 3)
+
+mag(pos)

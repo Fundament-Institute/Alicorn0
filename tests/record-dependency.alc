@@ -1,0 +1,14 @@
+
+let id =
+	lambda (T, x : T)
+		x
+
+let foo =
+	lambda (rec)
+		id(host-string, rec.x)
+	
+let bar = record-of
+	T = host-string
+	x = 4
+
+foo(bar)
