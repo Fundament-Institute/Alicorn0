@@ -28,18 +28,14 @@ function binding:unwrap_tuple_elim() end
 function binding:as_tuple_elim() end
 ---@return boolean
 function binding:is_record_elim() end
----@return Anchor subject_anchor
----@return flex_value subject_value
 ---@return ArrayValue<string> field_names
 ---@return ArrayValue<spanned_name> field_var_debugs
----@return ArrayValue<flex_value> field_types
+---@return anchored_inferrable subject
 function binding:unwrap_record_elim() end
 ---@return boolean
----@return Anchor subject_anchor
----@return flex_value subject_value
 ---@return ArrayValue<string> field_names
 ---@return ArrayValue<spanned_name> field_var_debugs
----@return ArrayValue<flex_value> field_types
+---@return anchored_inferrable subject
 function binding:as_record_elim() end
 ---@return boolean
 function binding:is_annotated_lambda() end
@@ -70,7 +66,7 @@ function binding:as_program_sequence() end
 ---@field define_enum fun(self: bindingType, name: string, variants: Variants): bindingType
 ---@field let fun(name: string, debug: spanned_name, expr: anchored_inferrable): binding
 ---@field tuple_elim fun(names: ArrayValue<string>, debug: ArrayValue<spanned_name>, subject: anchored_inferrable): binding
----@field record_elim fun(subject_anchor: Anchor, subject_value: flex_value, field_names: ArrayValue<string>, field_var_debugs: ArrayValue<spanned_name>, field_types: ArrayValue<flex_value>): binding
+---@field record_elim fun(field_names: ArrayValue<string>, field_var_debugs: ArrayValue<spanned_name>, subject: anchored_inferrable): binding
 ---@field annotated_lambda fun(param_name: string, param_annotation: anchored_inferrable, start_anchor: Anchor, visible: visibility, pure: checkable): binding
 ---@field program_sequence fun(first: anchored_inferrable, start_anchor: Anchor): binding
 return {}

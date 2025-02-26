@@ -258,7 +258,10 @@ function environment:bind_local(binding)
 		local locals = self.locals
 		for field_index, field_name in ipairs(field_names) do
 			local field_var_debug = field_var_debugs[field_index]
-			local field_term = anchored_inferrable_term(subject_anchor, unanchored_inferrable_term.bound_variable(n + field_index, field_var_debug))
+			local field_term = anchored_inferrable_term(
+				subject_anchor,
+				unanchored_inferrable_term.bound_variable(n + field_index, field_var_debug)
+			)
 			locals = locals:put(field_name, field_term)
 
 			local field_type = field_types[field_index]
@@ -459,6 +462,9 @@ function environment:exit_block(term, shadowed)
 		elseif binding:is_tuple_elim() then
 			local names, debuginfo, subject = binding:unwrap_tuple_elim() -- TODO: propagate anchors
 			unanchored_wrapped = unanchored_inferrable_term.tuple_elim(names, debuginfo, subject, wrapped)
+		elseif binding:is_record_elim() then
+			local names, debuginfo, subject = binding:unwrap_record_elim() -- TODO: propagate anchors
+			unanchored_wrapped = unanchored_inferrable_term.record_elim(subject, names, debuginfo, wrapped)
 		elseif binding:is_annotated_lambda() then
 			local name, annotation, start_anchor, visible, purity = binding:unwrap_annotated_lambda()
 			unanchored_wrapped =

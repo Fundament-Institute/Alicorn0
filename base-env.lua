@@ -566,6 +566,76 @@ local function lambda_curry_impl(syntax, env)
 	return true, term, resenv
 end
 
+local record_ascribed_name = ascribed_name(function(names, prev)
+	return terms.binding.record_elim(
+		names,
+		names:map(name_array, function(n)
+			return n.name
+		end),
+		prev
+	)
+end)
+
+local record_desc_of_ascribed_names = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@return boolean
+	---@return {names: spanned_name[], args: anchored_inferrable, env: Environment}|string
+	function(syntax, env)
+		local names = spanned_name_array()
+
+		local ok, acc = syntax:match({
+			metalanguage.list_many_fold(function(_userdata, vals, acc)
+				return true, acc
+			end, function(acc, span)
+				---@type unanchored_inferrable
+				local acc_args = acc.args
+				local new_desc_cons = acc_args:unwrap_record_desc_cons():copy()
+
+				return record_ascribed_name(function(_userdata, name, type_val, type_env)
+					local names = acc.names:copy()
+					local str, _ = name:unwrap_spanned_name()
+					new_desc_cons:set(str, type_val)
+					names:append(name)
+					local new_acc = {
+						names = names,
+						args = terms.unanchored_inferrable_term.record_desc_cons(new_desc_cons),
+						env = type_env,
+					}
+					return true, { name = name, type = type_val }, new_acc
+				end, acc.env, anchored_inferrable_term(syntax.span.start, acc.args), acc.names)
+			end, {
+				names = names,
+				args = terms.unanchored_inferrable_term.record_desc_cons(
+					gen.declare_map(gen.builtin_string, anchored_inferrable_term)()
+				),
+				env = env,
+			}),
+		}, metalanguage.failure_handler, nil)
+
+		return ok, acc
+	end,
+	"record_desc_of_ascribed_names"
+)
+
+local record_of_ascribed_names = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@return boolean
+	---@return {names: string[], args: anchored_inferrable, env: Environment}|string
+	function(syntax, env)
+		local ok, thread = syntax:match({
+			record_desc_of_ascribed_names(metalanguage.accept_handler, env),
+		}, metalanguage.failure_handler, nil)
+		if not ok then
+			return ok, thread
+		end
+		thread.args = anchored_inferrable_term(syntax.span.start, unanchored_inferrable_term.record_type(thread.args))
+		return ok, thread
+	end,
+	"record_of_ascribed_names"
+)
+
 local tuple_ascribed_name = ascribed_name(function(names, prev)
 	return terms.binding.tuple_elim(
 		names:map(name_array, function(n)
@@ -658,183 +728,9 @@ local host_tuple_of_ascribed_names = metalanguage.reducer(
 	"host_tuple_of_ascribed_names"
 )
 
-local record_ascribed_name = metalanguage.reducer(
-	---@param syntax ConstructedSyntax
-	---@param env Environment
-	---@param subject_anchor Anchor
-	---@param subject_value flex_value
-	---@return boolean ok
-	---@return Environment env
-	---@return spanned_name field_name
-	---@return spanned_name field_var_debug
-	---@return anchored_inferrable? field_type_typed `unanchored_inferrable.typed`
-	---@return flex_value? field_type
-	function(syntax, env, subject_anchor, subject_value)
-		-- print("ascribed_name trying")
-		-- p(syntax)
-		-- print(prev:pretty_print())
-		-- print("is env an environment? (start of ascribed name)")
-		-- print(env.get)
-		-- print(env.enter_block)
-		local shadowed
-		shadowed, env = env:enter_block(terms.block_purity.pure)
-		local ok, field_var_debug, field_type_anchored_typed
-		---@type boolean, spanned_name, anchored_inferrable?
-		ok,
-			field_var_debug,
-			field_type_anchored_typed, ---@type Environment?
-			---@diagnostic disable-next-line: cast-local-type
-			env =
-			syntax:match({ pure_ascribed_name(metalanguage.accept_handler, env) }, metalanguage.failure_handler, nil)
-		local field_name, _field_var_span = field_var_debug:unwrap_spanned_name()
-		if not ok then
-			return ok, field_name, field_var_debug
-		end
-		---@cast field_type_anchored_typed -nil
-		---@cast env -nil
-		env, field_type_anchored_typed, purity = env:exit_block(field_type_anchored_typed, shadowed)
-		local _field_type_anchor, field_type_typed = field_type_anchored_typed:unwrap_anchored_inferrable()
-		local _field_type_type, _field_type_usages, field_type_expr = field_type_typed:unwrap_typed()
-		local field_names = name_array(field_name)
-		local field_var_debugs = spanned_name_array(field_var_debug)
-		local field_type = evaluator.evaluate(
-			field_type_expr,
-			env.typechecking_context:get_runtime_context(),
-			env.typechecking_context
-		)
-		local field_types = flex_value_array(field_type)
-		ok, ---@diagnostic disable-next-line: cast-local-type
-			env = env:bind_local(
-			terms.binding.record_elim(subject_anchor, subject_value, field_names, field_var_debugs, field_types)
-		)
-		if not ok then
-			return ok, env, field_var_debug, field_var_debug
-		end
-		-- print("is env an environment? (end of ascribed name)")
-		-- print(env.get)
-		-- print(env.enter_block)
-		return true, env, field_var_debug, field_var_debug, field_type_anchored_typed, field_type
-	end,
-	"record_ascribed_name"
-)
-
-local record_desc_of_ascribed_names = metalanguage.reducer(
-	---@param syntax ConstructedSyntax
-	---@param env Environment
-	---@return boolean ok
-	---@return (anchored_inferrable | string) record_desc
-	function(syntax, env)
-		local shadowed
-		shadowed, env = env:enter_block(terms.block_purity.pure)
-		local record_fields_map = gen.declare_map(gen.builtin_string, flex_value)
-		local subject_name = "#subject - " .. tostring(syntax.span)
-		local subject_anchor = syntax.span.start
-		local subject_annotation =
-			anchored_inferrable_term(subject_anchor, unanchored_inferrable_term.record_desc_cons(record_fields_map()))
-		local ok
-		ok, env = env:bind_local(
-			terms.binding.annotated_lambda(
-				subject_name,
-				subject_annotation,
-				subject_anchor,
-				terms.visibility.explicit,
-				literal_purity_pure
-			)
-		)
-		local subject_value
-		ok, subject_value = env:get(subject_name)
-		if not ok then
-			error(
-				("subject value is missing from environment despite just being bound: %q not in %s"):format(
-					tostring(subject_name),
-					tostring(subject_name)
-				)
-			)
-		end
-		local record_desc
-		---@type boolean, anchored_inferrable
-		ok, record_desc = syntax:match({
-			---@param _userdata nil
-			---@param _vals nil[]
-			---@param acc { env: Environment, record_fields: MapValue<string, anchored_inferrable> }
-			---@return boolean ok
-			---@return { env: Environment, record_desc: anchored_inferrable } acc
-			metalanguage.list_many_fold(
-				function(_userdata, _vals, acc)
-					local new_acc = {
-						env = acc.env,
-						record_desc = anchored_inferrable_term(
-							subject_anchor,
-							unanchored_inferrable_term.record_desc_cons(acc.record_fields)
-						),
-					}
-					return true, new_acc
-				end,
-				---@param acc { env: Environment, record_fields: MapValue<string, flex_value> }
-				---@param span Span
-				---@return Matcher
-				function(acc, span)
-					return record_ascribed_name(
-						---@param ok true
-						---@param field_name spanned_name
-						---@param _field_var_debug spanned_name
-						---@param field_type_typed anchored_inferrable `unanchored_inferrable.typed`
-						---@param _field_type flex_value
-						---@param new_env Environment
-						---@return boolean ok
-						---@return nil val
-						---@return { env: Environment, record_fields: MapValue<string, anchored_inferrable> } acc
-						function(ok, field_name, _field_var_debug, field_type_typed, _field_type, new_env)
-							local field_name_str, _field_name_span = field_name:unwrap_spanned_name()
-							acc.record_fields:set(field_name_str, field_type_typed)
-							acc.env = new_env
-							return true, nil, acc
-						end,
-						acc.env,
-						subject_anchor,
-						subject_value
-					)
-				end,
-				{
-					record_fields = record_fields_map(),
-					env = env,
-				}
-			),
-		}, metalanguage.failure_handler, nil)
-
-		return ok, record_desc
-	end,
-	"record_desc_of_ascribed_names"
-)
-
-local record_of_ascribed_names = metalanguage.reducer(
-	---@param syntax ConstructedSyntax
-	---@param env Environment
-	---@return boolean
-	---@return ({ env: Environment, record_type: anchored_inferrable } | string)
-	function(syntax, env)
-		local ok, acc = syntax:match({
-			record_desc_of_ascribed_names(metalanguage.accept_handler, env),
-		}, metalanguage.failure_handler, nil)
-		if not ok then
-			return ok, acc
-		end
-		local new_acc = {
-			env = acc.env,
-			record_type = anchored_inferrable_term(
-				syntax.span.start,
-				unanchored_inferrable_term.record_type(acc.record_desc)
-			),
-		}
-		return ok, new_acc
-	end,
-	"record_of_ascribed_names"
-)
-
 ---@type lua_operative
 local function record_impl(syntax, env)
-	-- TODO(<me@bb010g.com>)
-	---@type boolean, ({ env: Environment, record_type: anchored_inferrable } | string)
+	---@type boolean, ({ env: Environment, args: anchored_inferrable } | string)
 	local ok, acc = syntax:match({
 		record_of_ascribed_names(metalanguage.accept_handler, env),
 	}, metalanguage.failure_handler, nil)
@@ -842,7 +738,7 @@ local function record_impl(syntax, env)
 		return ok, acc
 	end
 	---@cast acc -string
-	return true, acc.record_type
+	return true, acc.args
 end
 
 local ascribed_segment = metalanguage.reducer(
