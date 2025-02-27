@@ -8,6 +8,8 @@
 /deps/
 /luaunit.lua
 /.vscode/*
-!/.vscode/launch.json
+!/.vscode/extensions.json
+!/.vscode/*.shared.json
+/.vscode/*.local.json
 /target/
 Cargo.lock
