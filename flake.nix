@@ -6,11 +6,13 @@
     "An experimental language for high performance safe convenient metaprogramming";
 
   inputs = {
-    by-name.url = "github:bb010g/by-name.nix";
     by-name.inputs.nixpkgs-lib.follows = "nixpkgs";
+    by-name.url = "github:bb010g/by-name.nix";
     nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
-    pre-commit-hooks.url = "github:cachix/pre-commit-hooks.nix";
     pre-commit-hooks.inputs.nixpkgs.follows = "nixpkgs";
+    pre-commit-hooks.url = "github:cachix/pre-commit-hooks.nix";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+    rust-overlay.url = "github:oxalica/rust-overlay";
   };
 
   outputs = inputs:
@@ -76,7 +78,7 @@
           '';
         };
         devShells.alicorn-generic = pkgs.callPackage
-          ({ deadnix, inferno, lua-language-server, mkShell, nixpkgs-fmt, reuse, statix, stylua, ... }:
+          ({ deadnix, inferno, lua-language-server, mkShell, nixpkgs-fmt, reuse, rust-bin, statix, stylua, ... }:
             mkShell {
               buildInputs = [
                 deadnix
@@ -84,6 +86,7 @@
                 lua-language-server
                 nixpkgs-fmt
                 reuse
+                (rust-bin.fromRustupToolchainFile ./rust-toolchain.toml)
                 statix
                 stylua
               ];
@@ -124,7 +127,8 @@
           inherit system;
           overlays = [
             table.rows.luvit.nixpkgsOverlay
-            (pkgsFinal: pkgsPrev: {
+            inputs.rust-overlay.overlays.rust-overlay
+            (pkgsFinal: _pkgsPrev: {
               alicorn-check = pkgsFinal.callPackage
                 ({ lib, luvit, runCommandLocal, ... }: file: runCommandLocal "alicorn-check-${file}" { src = ./.; } ''
                   set -euo pipefail
