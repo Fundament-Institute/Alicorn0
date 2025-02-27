@@ -3,6 +3,10 @@
         "editor.defaultFormatter": "JohnnyMorganz.stylua"
     },
     "rust-analyzer.cargo.features": [
+        "bindgen",
+        "bindgen-tests",
+        "build",
+        "doc"
     ],
     "workspaceConfigPlus.arrayMerge": "combine"
 }

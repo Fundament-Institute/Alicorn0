@@ -1,0 +1,74 @@
+{#
+// Template to call into Rust. Used in several places.
+// Variable names in `arg_list_decl` should match up with arg lists
+// passed to Rust via `arg_list_lowered`
+#}
+
+{%- macro to_ffi_call(func) -%}
+	{%- if let(Some(e)) = func.throws_type() -%}
+		rustCallWithError({{ e|ffi_error_converter_name }}_lift) {
+	{%- else -%}
+		rustCall() {
+	{%- endif %}
+	{{ func.ffi_func().name() }}(
+		{%- if func.takes_self() %}self.uniffiClonePointer(),{% endif %}
+		{%- call arg_list_lowered(func) -%} $0
+	)
+}
+{%- endmacro -%}
+
+{%- macro func_decl(func_decl, callable, indent) %}
+{%- if callable.throws_type().is_some() || callable.is_async() %}
+# Sorry, the callable "{{ callable.name() }}" isn't supported.
+{%- else %}
+{%- call docstring(callable, indent) %}
+{{ func_decl }} {{ callable.name()|fn_name }}(
+	{%- call arg_list_decl(callable) -%})
+	{%- if callable.is_async() %}async {% endif %}
+	{%- if let Some(return_type) = callable.return_type() %} -> {{ return_type|type_name }} {%- endif %}  {
+	{%- if callable.is_async() %}
+		# Sorry, async calls aren't supported.
+	{%- else %}
+	{%- 	match callable.return_type() -%}
+	{%- 		when Some(return_type) %}
+	return {{ return_type|lift_fn }}({% call to_ffi_call(callable) %})
+	{%- 		when None %}
+	{%- 			call to_ffi_call(callable) %}
+	{%- 	endmatch %}
+	{%- endif %}
+}
+{%- endif %}
+{%- endmacro %}
+
+{%- macro arg_list_lowered(func) %}
+	{%- for arg in func.arguments() %}
+		{{ arg|lower_fn }}({{ arg.name()|var_name }}),
+	{%- endfor %}
+{%- endmacro -%}
+
+{#-
+// Arglist as used in Alicorn declarations of methods, functions and constructors.
+// Note the var_name and type_name filters.
+-#}
+
+{% macro arg_list_decl(func) %}
+	{%- for arg in func.arguments() -%}
+		{{ arg.name()|var_name }}: {{ arg|type_name -}}
+		{%- match arg.default_value() %}
+		{%- when Some with(literal) %} = {{ literal|literal_alicorn(arg) }}
+		{%- else %}
+		{%- endmatch %}
+		{%- if !loop.last %}, {% endif -%}
+	{%- endfor %}
+{%- endmacro %}
+
+{%- macro docstring_value(maybe_docstring, indent_tabs) %}
+{%- if let Some(docstring) = maybe_docstring %}
+{{ docstring|docstring(indent_tabs) }}
+{{ "" }}
+{%- endif %}
+{%- endmacro %}
+
+{%- macro docstring(defn, indent_tabs) %}
+{%- call docstring_value(defn.docstring(), indent_tabs) %}
+{%- endmacro %}

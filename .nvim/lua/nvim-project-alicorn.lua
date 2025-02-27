@@ -120,7 +120,6 @@ function M.get_rust_analyzer_config(vscode_settings)
 	for vscode_k, v in pairs(vscode_settings) do
 		if vscode_k:find("rust-analyzer.", 1, true) == 1 then
 			local config_path = vim.split(vscode_k:sub(15), ".", { plain = true })
-			print(config_path)
 			local c = rust_analyzer_config
 			local config_path_length = #config_path
 			for i, k in ipairs(config_path) do
