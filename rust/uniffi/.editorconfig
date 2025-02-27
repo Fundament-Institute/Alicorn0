@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
+
+root = false
+
+[*]
+end_of_line = lf
+insert_final_newline = true
+charset = utf-8
+
+[*.rs]
+indent_style = space
+indent_width = 4
+
+[*.toml]
+indent_style = space
+indent_width = 4

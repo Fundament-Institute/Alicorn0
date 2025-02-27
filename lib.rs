@@ -16,7 +16,7 @@ extern "C-unwind" {
 }
 
 pub struct Alicorn {
-    lua: Lua,
+    pub lua: Lua,
     runner: AlicornRunner,
 }
 

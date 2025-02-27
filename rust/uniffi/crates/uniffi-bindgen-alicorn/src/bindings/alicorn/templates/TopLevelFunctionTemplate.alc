@@ -1,0 +1,1 @@
+{%- call alicorn::func_decl("public func", func, 0) %}

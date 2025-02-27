@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
+
+[package]
+name = "uniffi-build-alicorn"
+version = "0.1.0"
+description = "An Alicorn bindings generator for Rust using UniFFI (build script helpers)"
+homepage.workspace = true
+repository.workspace = true
+license = "MPL-2.0"
+authors = [
+    "Dusk Banks <me@bb010g.com>",
+]
+edition.workspace = true
+rust-version.workspace = true
+keywords = ["ffi", "bindgen", "alicorn"]
+
+[dependencies]
+anyhow = "1"
+camino = "1.0.8"
+uniffi-bindgen-alicorn = { workspace = true, version = "=0.1.0" }
+
+[features]
+default = [
+]
+doc = []

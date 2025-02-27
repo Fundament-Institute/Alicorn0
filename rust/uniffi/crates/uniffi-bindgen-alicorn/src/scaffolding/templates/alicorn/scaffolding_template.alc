@@ -1,0 +1,41 @@
+record-of
+	uniffi-alicorn-{{ci.namespace()}}-host-enums = record-of
+		{%- for e in ci.enum_definitions() %}
+		uniffi-alicorn-{{ci.namespace()}}-host-enum-{{ e.name().to_kebab_case() }} = record-of
+			{%- for variant in e.variants() %}
+			uniffi-alicorn-{{ci.namespace()}}-host-enum-{{e.name().to_kebab_case()}}-variant-{{variant.name().to_kebab_case()}} = {{ loop.index }}
+			{%- endfor %}
+			new-host-type "uniffi-alicorn-{{ci.namespace()}}-host-enum-{{e.name().to_kebab_case()}}"
+		{%- endfor %}
+	uniffi-alicorn-{{ci.namespace()}}-host-objects = record-of
+		{%- for obj in ci.object_definitions() %}
+		uniffi-alicorn-{{ci.namespace()}}-host-object-{{ obj.name().to_kebab_case() }} = record-of
+			t = new-host-type "uniffi-alicorn-{{ci.namespace()}}-host-object-{{obj.name().to_kebab_case()}}"
+			{%- for meth in obj.methods() %}
+			uniffi-alicorn-{{ci.namespace()}}-host-method-{{ meth.name().to_kebab_case() }} =
+				intrinsic
+					"return require('uniffi-alicorn-host-{{ci.namespace()}}').methods['{{obj.name()}}']['{{meth.name()}}']"
+					:
+					host-func-type ((self : t){% for arg in meth.arguments() %} ({{arg.name()}} : {{ &arg.as_type()|type_alicorn(&ci) }}){% endfor %})
+						{%- match (meth.return_type(), meth.throws_type()) %}
+						{%- when (Some(return_type), None) %} -> (_ : {{ return_type|type_alicorn(&ci) }})
+						{%- when (Some(return_type), Some(error_type)) %} -> (_ : (result {{ return_type|type_alicorn(&ci) }} {{ error_type|type_alicorn(&ci) }}))
+						{%- when (None, Some(error_type)) %} -> (_ : (result () {{ error_type|type_alicorn(&ci) }}))
+						{%- when (None, None) %} -> ()
+						{%- endmatch %}
+			{%- endfor %}
+		{%- endfor %}
+	uniffi-alicorn-{{ci.namespace()}}-host-funcs = record-of
+		{%- for func in ci.function_definitions() %}
+		uniffi-alicorn-{{ci.namespace()}}-host-func-{{ func.name().to_kebab_case() }} =
+			intrinsic
+				"return require('uniffi-alicorn-host-{{ci.namespace()}}').funcs['{{func.name()}}']"
+				:
+				host-func-type ({% for arg in func.arguments() %}({{arg.name()}} : {{ &arg.as_type()|type_alicorn(&ci) }}){% endfor %})
+					{%- match (func.return_type(), func.throws_type()) %}
+					{%- when (Some(return_type), None) %} -> (_ : {{ return_type|type_alicorn(&ci) }})
+					{%- when (Some(return_type), Some(error_type)) %} -> (_ : (result {{ return_type|type_alicorn(&ci) }} {{ error_type|type_alicorn(&ci) }}))
+					{%- when (None, Some(error_type)) %} -> (_ : (result () {{ error_type|type_alicorn(&ci) }}))
+					{%- when (None, None) %} -> ()
+					{%- endmatch %}
+		{%- endfor %}

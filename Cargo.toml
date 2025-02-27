@@ -3,6 +3,8 @@
 
 [workspace]
 members = [
+	"rust/uniffi/crates/*",
+	"rust/uniffi/examples/*",
 ]
 resolver = "2"
 
@@ -16,6 +18,16 @@ repository = "https://github.com/Fundament-Software/Alicorn0"
 [workspace.dependencies]
 alicorn = { path = "." }
 mlua = { version = "0.10", features = ["luajit52", "vendored"] }
+uniffi = { version = "0.29.0" }
+uniffi_bindgen = { version = "=0.29.0" }
+uniffi_build = { version = "=0.29.0" }
+uniffi_meta = { version = "=0.29.0" }
+uniffi_testing = { version = "=0.29.0" }
+uniffi_udl = { version = "=0.29.0" }
+uniffi-alicorn = { path = "./rust/uniffi/crates/uniffi-alicorn" }
+uniffi-bindgen-alicorn = { path = "./rust/uniffi/crates/uniffi-bindgen-alicorn", default-features = false }
+uniffi-build-alicorn = { path = "./rust/uniffi/crates/uniffi-build-alicorn" }
+uniffi-macros-alicorn = { path = "./rust/uniffi/crates/uniffi-macros-alicorn" }
 
 [package]
 name = "alicorn"
