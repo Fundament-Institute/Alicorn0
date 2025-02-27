@@ -1,0 +1,18 @@
+
+let id =
+	lambda (T, x : T)
+		x
+
+let Any = record
+	T : type
+	x : T
+
+let foo =
+	lambda (rec : Any)
+		id(rec.T, rec.x)
+	
+let bar = record-of
+	T = host-number
+	x = 4
+
+foo(bar)

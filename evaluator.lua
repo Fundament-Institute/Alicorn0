@@ -3246,7 +3246,10 @@ local function infer_impl(
 			field_types:set(
 				k,
 				substitute_into_closure(
-					field_type,
+					flex_value.singleton(
+						field_type,
+						evaluate(field_term, typechecking_context.runtime_context, typechecking_context)
+					),
 					typechecking_context:get_runtime_context(),
 					format.span_here(),
 					spanned_name("#record-pfx", format.span_here()),
