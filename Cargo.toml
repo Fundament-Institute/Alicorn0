@@ -1,20 +1,35 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
 
+[workspace]
+members = []
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.77.0"
+license = "Apache-2.0"
+homepage = "https://github.com/Fundament-Software/Alicorn0"
+repository = "https://github.com/Fundament-Software/Alicorn0"
+
+[workspace.dependencies]
+alicorn = { path = "." }
+mlua = { version = "0.10", features = ["luajit52", "vendored"] }
+
 [package]
 name = "alicorn"
 version = "0.1.1"
-edition = "2021"
-rust-version = "1.77.0"
+edition.workspace = true
+rust-version.workspace = true
 authors = ["Erik McClure  "]
 description = """
 Rust embedding of the Alicorn compiler
 """
-homepage = "https://github.com/Fundament-Software/alicorn0"
-repository = "https://github.com/Fundament-Software/alicorn0"
+homepage.workspace = true
+repository.workspace = true
 readme = "README.md"
 keywords = ["compiler"]
-license = "Apache-2.0"
+license.workspace = true
 links = "alicorn"
 
 [lib]
@@ -22,8 +37,8 @@ path = "lib.rs"
 doctest = false
 
 [dependencies]
-mlua = { version = "0.10", features = ["luajit52", "vendored"] }
+mlua = { workspace = true }
 
 [build-dependencies]
-mlua = { version = "0.10", features = ["luajit52", "vendored"] }
+mlua = { workspace = true }
 cc = "1.1"
