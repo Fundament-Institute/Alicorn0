@@ -301,7 +301,7 @@ local function record_threaded_element(env)
 end
 
 ---@type lua_operative
-local function record_build(syntax, env)
+local function record_of_impl(syntax, env)
 	local ok, defs, env = syntax:match({
 		metalanguage.list_many_fold(metalanguage.accept_handler, record_threaded_element, env),
 	}, metalanguage.failure_handler, nil)
@@ -386,34 +386,64 @@ local literal_purity_effectful = make_literal_purity(terms.purity.effectful)
 local pure_ascribed_name = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
+	---@param type_reducer Reducer? `fun(syntax: ConstructedSyntax, env: Environment): (ok: boolean, env: Environment)`
 	---@return boolean
 	---@return spanned_name
 	---@return anchored_inferrable?
 	---@return Environment?
-	function(syntax, env)
-		local ok, name, tail = syntax:match({
-			metalanguage.issymbol(metalanguage.accept_handler),
-			metalanguage.listtail(
-				metalanguage.accept_handler,
+	function(syntax, env, type_reducer)
+		---@diagnostic disable-next-line: no-unknown
+		local name, tail
+		do
+			local ok
+			---@type boolean, spanned_name, ConstructedSyntax?
+			ok, name, tail = syntax:match({
 				metalanguage.issymbol(metalanguage.accept_handler),
-				metalanguage.symbol_exact(metalanguage.accept_handler, ":")
-			),
-		}, metalanguage.failure_handler, nil)
-		if not ok then
-			return ok, name
-		end
-		local type
-		if tail then
-			local ok, type_env = tail:match({
-				metalanguage.listmatch(
+				metalanguage.listtail(
 					metalanguage.accept_handler,
-					exprs.inferred_expression(utils.accept_with_env, env)
+					metalanguage.issymbol(metalanguage.accept_handler),
+					metalanguage.symbol_exact(metalanguage.accept_handler, ":")
 				),
 			}, metalanguage.failure_handler, nil)
 			if not ok then
-				return ok, type_env
+				return ok, name
 			end
-			type, env = utils.unpack_val_env(type_env)
+		end
+		---@diagnostic disable-next-line: no-unknown
+		local type
+		if tail then
+			---@diagnostic disable-next-line: no-unknown
+			local type_syntax
+			do
+				local ok
+				---@type boolean, ConstructedSyntax
+				ok, type_syntax = tail:match({
+					metalanguage.listmatch(metalanguage.accept_handler, metalanguage.any(metalanguage.accept_handler)),
+				}, metalanguage.failure_handler, nil)
+				if not ok then
+					return ok, type_syntax
+				end
+			end
+			if type_reducer ~= nil then
+				local ok
+				---@type boolean, Environment
+				ok, env = type_syntax:match({
+					type_reducer(metalanguage.accept_handler, env),
+				}, metalanguage.failure_handler, nil)
+				if not ok then
+					return ok, env
+				end
+			end
+			do
+				local ok
+				---@type boolean, anchored_inferrable, Environment
+				ok, type, env = type_syntax:match({
+					exprs.inferred_expression(metalanguage.accept_handler, env),
+				}, metalanguage.failure_handler, nil)
+				if not ok then
+					return ok, type
+				end
+			end
 		else
 			local type_mv = evaluator.typechecker_state:metavariable(env.typechecking_context)
 			type = anchored_inferrable_term(
@@ -431,7 +461,7 @@ local pure_ascribed_name = metalanguage.reducer(
 	"pure_ascribed_name"
 )
 
-local ascribed_name = metalanguage.reducer(
+local tuple_ascribed_name = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
 	---@param prev anchored_inferrable
@@ -463,18 +493,19 @@ local ascribed_name = metalanguage.reducer(
 		if not ok then
 			return false, env
 		end
-		local ok, prev_binding = env:get(prev_name)
+		local ok, prev_expr = env:get(prev_name)
 		if not ok then
 			error "#prev should always be bound, was just added"
 		end
-		---@cast prev_binding -string
-		ok, env = env:bind_local(terms.binding.tuple_elim(
+		---@cast prev_expr -string
+		local prev_binding = terms.binding.tuple_elim(
 			names:map(name_array, function(n)
 				return n.name
 			end),
 			names,
-			prev_binding
-		))
+			prev_expr
+		)
+		ok, env = env:bind_local(prev_binding)
 		if not ok then
 			return false, env
 		end
@@ -490,7 +521,7 @@ local ascribed_name = metalanguage.reducer(
 		-- print(env.enter_block)
 		return true, name, val, env
 	end,
-	"ascribed_name"
+	"tuple_ascribed_name"
 )
 
 local curry_segment = metalanguage.reducer(
@@ -577,26 +608,27 @@ local tuple_desc_of_ascribed_names = metalanguage.reducer(
 
 		local names = spanned_name_array()
 
-		local ok, thread = syntax:match({
-			metalanguage.list_many_fold(function(_, vals, thread)
-				return true, thread
-			end, function(thread, span)
-				return ascribed_name(function(_, name, type_val, type_env)
-					local names = thread.names:copy()
+		local ok, acc = syntax:match({
+			metalanguage.list_many_fold(function(_userdata, vals, acc)
+				return true, acc
+			end, function(acc, span)
+				local prev = build_type_term(span, acc.args)
+				return tuple_ascribed_name(function(_userdata, name, type_val, type_env)
+					local names = acc.names:copy()
 					names:append(name)
-					local newthread = {
+					local new_acc = {
 						names = names,
 						args = terms.inferrable_cons(
 							span.start,
-							thread.args,
+							acc.args,
 							spanned_name("", format.span_here()),
 							type_val,
 							spanned_name("", format.span_here())
 						),
 						env = type_env,
 					}
-					return true, { name = name, type = type_val }, newthread
-				end, thread.env, build_type_term(span, thread.args), thread.names)
+					return true, { name = name, type = type_val }, new_acc
+				end, acc.env, prev, acc.names)
 			end, {
 				names = names,
 				args = terms.inferrable_empty,
@@ -604,7 +636,7 @@ local tuple_desc_of_ascribed_names = metalanguage.reducer(
 			}),
 		}, metalanguage.failure_handler, nil)
 
-		return ok, thread
+		return ok, acc
 	end,
 	"tuple_desc_of_ascribed_names"
 )
@@ -645,6 +677,221 @@ local host_tuple_of_ascribed_names = metalanguage.reducer(
 	end,
 	"host_tuple_of_ascribed_names"
 )
+
+local record_ascribed_name = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@param subject anchored_inferrable
+	---@param field_names ArrayValue<string>
+	---@param field_var_debugs ArrayValue<spanned_name>
+	---@return boolean ok
+	---@return Environment env
+	---@return string field_name
+	---@return spanned_name field_var_debug
+	---@return anchored_inferrable field_type_expr
+	function(syntax, env, subject, field_names, field_var_debugs)
+		---@diagnostic disable-next-line: no-unknown
+		local shadowed, field_var_debug, field_type_expr
+		do
+			---@param _type_syntax ConstructedSyntax
+			---@param type_env Environment
+			---@return boolean ok
+			---@return Environment type_env
+			local function type_reducer_func(_type_syntax, type_env)
+				shadowed, type_env = type_env:enter_block(terms.block_purity.pure)
+				local fields_binding_anchor = syntax.span.start
+				local fields_binding =
+					terms.binding.record_elim(fields_binding_anchor, subject, field_names, field_var_debugs)
+				do
+					local ok, new_type_env = type_env:bind_local(fields_binding)
+					if not ok then
+						return false, new_type_env
+					end
+					---@cast new_type_env Environment
+					type_env = new_type_env
+				end
+				return true, type_env
+			end
+			local type_reducer = metalanguage.reducer(type_reducer_func, "record_ascribed_name.type_reducer")
+			local ok
+			---@type boolean, spanned_name, anchored_inferrable, Environment
+			ok, field_var_debug, field_type_expr, env = syntax:match(
+				{ pure_ascribed_name(metalanguage.accept_handler, env, type_reducer) },
+				metalanguage.failure_handler,
+				nil
+			)
+			if not ok then
+				---@cast field_var_debug Environment
+				return ok, field_var_debug
+			end
+		end
+		local _purity
+		env, field_type_expr, _purity = env:exit_block(field_type_expr, shadowed)
+		local field_name, _field_var_span = field_var_debug:unwrap_spanned_name()
+		return true, env, field_name, field_var_debug, field_type_expr
+	end,
+	"record_ascribed_name"
+)
+
+---@private
+---@class (exact) base-env.record_desc_of_ascribed_names.acc
+---@field env Environment
+---@field field_names ArrayValue<string>
+---@field field_var_debugs ArrayValue<spanned_name>
+---@field field_types MapValue<string, anchored_inferrable>
+
+local record_desc_of_ascribed_names_aux = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param acc base-env.record_desc_of_ascribed_names.acc
+	---@param _span Span
+	---@return boolean ok
+	---@return (string | nil) val
+	---@return base-env.record_desc_of_ascribed_names.acc? acc
+	function(syntax, acc, _span)
+		local shadowed, env = acc.env:enter_block(terms.block_purity.pure)
+		local subject_name = "#record-desc-subject - " .. tostring(syntax.span)
+		local subject_anchor = syntax.span.start
+		local subject_annotation_desc = anchored_inferrable_term(
+			subject_anchor,
+			unanchored_inferrable_term.record_desc_cons(acc.field_types:copy())
+		)
+		local subject_annotation =
+			anchored_inferrable_term(subject_anchor, unanchored_inferrable_term.record_type(subject_annotation_desc))
+		do
+			local ok, new_env = env:bind_local(
+				terms.binding.annotated_lambda(
+					subject_name,
+					subject_annotation,
+					subject_anchor,
+					terms.visibility.explicit,
+					literal_purity_pure
+				)
+			)
+			if not ok then
+				return ok, new_env
+			end
+			---@cast new_env Environment
+			env = new_env
+		end
+		---@diagnostic disable-next-line: no-unknown
+		local subject_expr
+		do
+			local ok
+			ok, subject_expr = env:get(subject_name)
+			if not ok then
+				error(
+					("subject expression is missing from environment despite just being bound: %q not in %s"):format(
+						tostring(subject_name),
+						tostring(env)
+					)
+				)
+			end
+			---@cast subject_expr -string
+		end
+		---@type Matcher
+		local submatcher = record_ascribed_name(
+			---@param _userdata unknown
+			---@param new_env Environment
+			---@param field_name string
+			---@param field_var_debug spanned_name
+			---@param field_type_expr anchored_inferrable
+			---@return boolean ok
+			---@return (string | nil) val
+			---@return base-env.record_desc_of_ascribed_names.acc? acc
+			---@diagnostic disable-next-line: no-unknown
+			function(_userdata, new_env, field_name, field_var_debug, field_type_expr)
+				acc.env, field_type_expr = new_env:exit_block(field_type_expr, shadowed)
+				acc.field_names:append(field_name)
+				acc.field_var_debugs:append(field_var_debug)
+				acc.field_types:set(field_name, field_type_expr)
+				return true, nil, acc
+			end,
+			env,
+			subject_expr,
+			acc.field_names:copy(),
+			acc.field_var_debugs:copy()
+		)
+		return syntax:match({ submatcher }, metalanguage.failure_handler, nil)
+	end,
+	"record_desc_of_ascribed_names_aux"
+)
+
+local record_desc_of_ascribed_names = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@return boolean ok
+	---@return (string | anchored_inferrable) record_desc `inferrable_term.record_cons`
+	---@return Environment? env
+	function(syntax, env)
+		local record_fields_map = gen.declare_map(gen.builtin_string, terms.anchored_inferrable_term)
+		---@type boolean, (string | base-env.record_desc_of_ascribed_names.acc)
+		local ok, acc = syntax:match({
+			metalanguage.list_many_fold(
+				---@param _userdata nil
+				---@param _vals nil[]
+				---@param acc base-env.record_desc_of_ascribed_names.acc
+				---@return boolean ok
+				---@return base-env.record_desc_of_ascribed_names.acc acc
+				function(_userdata, _vals, acc)
+					return true, acc
+				end,
+				function(acc, span)
+					return record_desc_of_ascribed_names_aux(metalanguage.accept_handler, acc, span)
+				end,
+				{
+					env = env,
+					field_names = name_array(),
+					field_var_debugs = name_array(),
+					field_types = record_fields_map(),
+				}
+			),
+		}, metalanguage.failure_handler, nil)
+		if not ok then
+			return ok, acc
+		end
+		---@cast acc -string
+		env = acc.env
+
+		local record_desc =
+			anchored_inferrable_term(syntax.span.start, unanchored_inferrable_term.record_desc_cons(acc.field_types))
+		return ok, record_desc, env
+	end,
+	"record_desc_of_ascribed_names"
+)
+
+local record_of_ascribed_names = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@return boolean ok
+	---@return (string | anchored_inferrable) record_type `inferrable_term.record_type`
+	---@return Environment? env
+	function(syntax, env)
+		return syntax:match({
+			---@param _userdata nil
+			---@param record_desc anchored_inferrable
+			---@param new_env Environment
+			---@return boolean ok
+			---@return (string | anchored_inferrable) record_type `inferrable_term.record_type`
+			---@return Environment? env
+			record_desc_of_ascribed_names(function(_userdata, record_desc, new_env)
+				local record_type =
+					anchored_inferrable_term(syntax.span.start, unanchored_inferrable_term.record_type(record_desc))
+				return true, record_type, new_env
+			end, env),
+		}, metalanguage.failure_handler, nil)
+	end,
+	"record_of_ascribed_names"
+)
+
+---@type lua_operative
+local function record_impl(syntax, env)
+	local ok, record_type
+	---@type boolean, (string | anchored_inferrable), Environment?
+	ok, record_type, env = syntax:match({
+		record_of_ascribed_names(metalanguage.accept_handler, env),
+	}, metalanguage.failure_handler, nil)
+	return ok, record_type, env
+end
 
 local ascribed_segment = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
@@ -742,7 +989,7 @@ local tuple_desc_wrap_ascribed_name = metalanguage.reducer(
 		local args = terms.inferrable_empty
 		local debug_args = spanned_name("", format.span_here())
 		local ok, name, type_val, type_env = syntax:match({
-			ascribed_name(metalanguage.accept_handler, env, build_type_term(syntax.span.start, args), names),
+			tuple_ascribed_name(metalanguage.accept_handler, env, build_type_term(syntax.span.start, args), names),
 		}, metalanguage.failure_handler, nil)
 		local debug_type_val = spanned_name("", format.span_here())
 		if not ok then
@@ -2035,6 +2282,77 @@ local function dump_context_impl(syntax, env)
 	return ok, term, env
 end
 
+local last_snapshot
+---@type lua_operative
+local function graph_snapshot_start_impl(syntax, env)
+	last_snapshot = evaluator.typechecker_state:Snapshot("user request")
+	return true,
+		anchored_inferrable_term(
+			syntax.span.start,
+			unanchored_inferrable_term.tuple_cons(anchored_inferrable_term_array(), spanned_name_array())
+		),
+		env
+end
+---@type lua_operative
+local function graph_snapshot_dump_impl(syntax, env)
+	local ok, name = syntax:match({
+		metalanguage.listmatch(metalanguage.accept_handler, metalanguage.isvalue(metalanguage.accept_handler)),
+	}, metalanguage.failure_handler, nil)
+	if not ok then
+		return ok, name
+	end
+	if not name.type == "string" then
+		return false, "needs to provide string for graph file name"
+	end
+	local f = io.open(name.val .. ".dot", "w")
+	evaluator.typechecker_state:Visualize(f, last_snapshot)
+	f:close()
+	return true,
+		anchored_inferrable_term(
+			syntax.span.start,
+			unanchored_inferrable_term.tuple_cons(anchored_inferrable_term_array(), spanned_name_array())
+		),
+		env
+end
+
+---extract a module (represented by a record) into the current scope, either including it or just making it available, and optionally specifying fields
+---@param anchor Anchor
+---@param env Environment
+---@param module_expr anchored_inferrable
+---@param is_local boolean
+---@param field_names {field : string, target : spanned_name}[]?
+---@return boolean, Environment|string
+local function use_module(anchor, env, module_expr, is_local, field_names)
+	local fields = name_array()
+	local vars = spanned_name_array()
+	if not field_names then
+		local ok, mod_type, mod_usages, mod_term = evaluator.infer(module_expr, env.typechecking_context)
+		if not ok then
+			---@cast mod_type -flex_value
+			return ok, mod_type
+		end
+		---@cast mod_type -string
+		---@cast mod_type flex_value
+		if not mod_type:is_record_type() then
+			return false, "module must be a direct type for now as a shortcut, TODO use more inference systems"
+		end
+		local desc = mod_type:unwrap_record_type():unwrap_record_desc_value()
+		field_names = {}
+		for name, _ in desc:pairs() do
+			table.insert(field_names, { field = name, target = spanned_name(name, anchor) })
+		end
+		table.sort(field_names, function(a, b)
+			return a.field < b.field
+		end)
+	end
+	for i, field in ipairs(field_names) do
+		fields:append(field.field)
+		vars:append(field.target)
+	end
+	local bind = terms.binding.record_elim(anchor, module_expr, fields, vars)
+	return env:bind(bind, is_local)
+end
+
 local core_operations = {
 	--["do"] = evaluator.host_operative(do_block),
 	let = exprs.host_operative(let_impl, "let_impl"),
@@ -2043,7 +2361,8 @@ local core_operations = {
 	enum = exprs.host_operative(enum_impl, "enum_impl"),
 	["debug-trace"] = exprs.host_operative(debug_trace_impl, "debug_trace_impl"),
 	["dump-context"] = exprs.host_operative(dump_context_impl, "dump_context_impl"),
-	--record = exprs.host_operative(record_build, "record_build"),
+	["graph-snapshot-start"] = exprs.host_operative(graph_snapshot_start_impl, "graph_snapshot_start_impl"),
+	["graph-snapshot-dump"] = exprs.host_operative(graph_snapshot_dump_impl, "graph_snapshot_dump_impl"),
 	intrinsic = exprs.host_operative(intrinsic_impl, "intrinsic_impl"),
 	["host-number"] = lit_term(strict_value.host_number_type, strict_value.host_type_type),
 	["host-type"] = lit_term(strict_value.host_type_type, strict_value.star(1, 1)),
@@ -2066,7 +2385,8 @@ local core_operations = {
 	["unstrict-wrapped"] = build_wrapped(typed_term.host_unstrict_wrapped_type),
 	unwrap = build_unwrap(typed_term.host_unwrap, typed_term.host_wrapped_type),
 	["unstrict-unwrap"] = build_unwrap(typed_term.host_unstrict_unwrap, typed_term.host_unstrict_wrapped_type),
-	["record-of"] = exprs.host_operative(record_build, "record-of"),
+	["record"] = exprs.host_operative(record_impl, "record"),
+	["record-of"] = exprs.host_operative(record_of_impl, "record-of"),
 	--["dump-env"] = evaluator.host_operative(function(syntax, env) print(environment.dump_env(env)); return true, types.unit_val, env end),
 	--["basic-fn"] = evaluator.host_operative(basic_fn),
 	--tuple = evaluator.host_operative(tuple_type_impl),
@@ -2347,6 +2667,7 @@ local base_env = {
 	tuple_to_host_tuple_inner = tuple_to_host_tuple_inner,
 	get_host_func_res = get_host_func_res,
 	gen_base_operator = gen_base_operator,
+	use_module = use_module,
 }
 local internals_interface = require "internals-interface"
 internals_interface.base_env = base_env

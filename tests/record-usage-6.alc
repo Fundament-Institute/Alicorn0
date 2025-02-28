@@ -1,0 +1,13 @@
+let foo =
+	record-of
+		w = (record-of (x = 3))
+		y = (record-of (z = 5))
+
+let f = lambda (xs)
+	record-of
+		w = (record-of (x = (xs.w.x + xs.y.z)))
+		y = (record-of (z = (xs.w.x - xs.y.z)))
+
+let bar = f(foo)
+
+bar

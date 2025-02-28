@@ -416,7 +416,7 @@ let host-get-vec2-y = intrinsic
 let split-vec2 = lambda (vec : wgpu-vec2)
 	let (x) = host-get-vec2-x(vec)
 	let (y) = host-get-vec2-y(vec)
-	tuple-of-implicit(x, y)
+	tuple-of(x, y)
 
 let host-add-vec2 = intrinsic
 	""""
@@ -616,7 +616,7 @@ let split-vec4 = lambda (vec : wgpu-vec4)
 	let (y) = host-get-vec4-y(vec)
 	let (z) = host-get-vec4-z(vec)
 	let (w) = host-get-vec4-w(vec)
-	tuple-of-implicit(x, y, z, w)
+	tuple-of(x, y, z, w)
 
 let host-mk-mat4 = intrinsic
 	""""

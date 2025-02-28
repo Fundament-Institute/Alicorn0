@@ -13,10 +13,12 @@ function strict_continuation:as_empty() end
 ---@return boolean
 function strict_continuation:is_frame() end
 ---@return StrictRuntimeContext context
+---@return spanned_name debuginfo
 ---@return typed code
 function strict_continuation:unwrap_frame() end
 ---@return boolean
 ---@return StrictRuntimeContext context
+---@return spanned_name debuginfo
 ---@return typed code
 function strict_continuation:as_frame() end
 ---@return boolean
@@ -32,6 +34,6 @@ function strict_continuation:as_sequence() end
 ---@class (exact) strict_continuationType: EnumType
 ---@field define_enum fun(self: strict_continuationType, name: string, variants: Variants): strict_continuationType
 ---@field empty strict_continuation
----@field frame fun(context: StrictRuntimeContext, code: typed): strict_continuation
+---@field frame fun(context: StrictRuntimeContext, debuginfo: spanned_name, code: typed): strict_continuation
 ---@field sequence fun(first: strict_continuation, second: strict_continuation): strict_continuation
 return {}

@@ -172,6 +172,7 @@ end
 ---@return FlexRuntimeContext
 function FlexRuntimeContext:append(v, name, debuginfo)
 	if debuginfo == nil then
+		U.debug_break()
 		error("null debuginfo appended to FlexRuntimeContext")
 	end
 	name = name or debuginfo.name -- ("#r_ctx%d"):format(self.bindings:len() + 1) -- once switchover to debug is complete, no binding should ever enter the environment without debug info and so this name fallback can be removed
@@ -542,7 +543,7 @@ end
 
 ---@return string
 function TypecheckingContext:format_names_and_types()
-	local msg = ""
+	local msg = {}
 	for i = 1, self:len() do
 		msg[(i * 5) - 4] = tostring(i)
 		msg[(i * 5) - 3] = "\t"
@@ -554,9 +555,13 @@ function TypecheckingContext:format_names_and_types()
 end
 
 ---@param index integer
----@return flex_value
+---@return flex_value?
 function TypecheckingContext:get_type(index)
-	return self.bindings:get(index).type
+	local binding = self.bindings:get(index)
+	if binding == nil then
+		return nil
+	end
+	return binding.type
 end
 
 function TypecheckingContext:DEBUG_VERIFY_VALUES(state)
@@ -692,8 +697,14 @@ binding:define_enum("binding", {
 	} },
 	{ "tuple_elim", {
 		"names",   array(gen.builtin_string),
-		"debug", array(spanned_name),
+		"debug",   array(spanned_name),
 		"subject", anchored_inferrable_term,
+	} },
+	{ "record_elim", {
+		"binding_anchor",   anchor_type,
+		"subject",          anchored_inferrable_term,
+		"field_names",      array(gen.builtin_string),
+		"field_var_debugs", array(spanned_name),
 	} },
 	{ "annotated_lambda", {
 		"param_name",       gen.builtin_string,
@@ -704,7 +715,7 @@ binding:define_enum("binding", {
 	} },
 	{ "program_sequence", {
 		"first",        anchored_inferrable_term,
-		"start_anchor", anchor_type,
+		"debug",		spanned_name,
 	} },
 })
 
@@ -764,13 +775,16 @@ unanchored_inferrable_term:define_enum("unanchored_inferrable", {
 		"body",    anchored_inferrable_term,
 	} },
 	{ "tuple_type", { "desc", anchored_inferrable_term } },
+	{ "record_desc_cons", { "fields", map(gen.builtin_string, anchored_inferrable_term) } },
+	{ "record_desc_extend_single", { "base", anchored_inferrable_term, "name", anchored_inferrable_term, "val", anchored_inferrable_term } },
 	{ "record_cons", { "fields", map(gen.builtin_string, anchored_inferrable_term) } },
 	{ "record_elim", {
-		"subject",     anchored_inferrable_term,
-		"field_names", array(gen.builtin_string),
-		"debug_ids",   array(spanned_name),
-		"body",        anchored_inferrable_term,
+		"subject",          anchored_inferrable_term,
+		"field_names",      array(gen.builtin_string),
+		"field_var_debugs", array(spanned_name),
+		"body",             anchored_inferrable_term,
 	} },
+	{ "record_type", { "desc", anchored_inferrable_term } },
 	{ "enum_cons", {
 		"constructor", gen.builtin_string,
 		"arg",         anchored_inferrable_term,
@@ -861,7 +875,6 @@ unanchored_inferrable_term:define_enum("unanchored_inferrable", {
 	} },
 	{ "program_sequence", {
 		"first",        anchored_inferrable_term,
-		"start_anchor", anchor_type,
 		"continue",     anchored_inferrable_term,
 		"debug_info",	spanned_name,
 	} },
@@ -1054,18 +1067,24 @@ typed_term:define_enum("typed", {
 	{ "tuple_desc_type", { "universe", typed_term } },
 	{ "tuple_desc_concat_indep", { "prefix", typed_term, "suffix", typed_term }},
 	{ "record_cons", { "fields", map(gen.builtin_string, typed_term) } },
-	{ "record_type_cons", {"desc", typed_term }},
-	{ "record_desc_extend", {"name", typed_term, "type", typed_term}},
+	{ "record_type", { "desc", typed_term } },
+	{ "record_desc_cons", {"field_typefns", map(gen.builtin_string, typed_term)}},
+	{ "record_desc_extend_single", {"base", typed_term, "name", typed_term, "type", typed_term}},
+	{ "record_desc_extend", {"base", typed_term, "extension", map(gen.builtin_string, typed_term)}},
+	{ "name_set_of_record_desc", {"desc", typed_term}},
+	{ "noncolliding_name_type_cons", {"set", typed_term}},
+	{ "record_extend_single", {"base", typed_term, "name", typed_term, "val", typed_term}},
 	{ "record_extend", {
 		"base",   typed_term,
 		"fields", map(gen.builtin_string, typed_term),
 	} },
 	{ "record_elim", {
-		"subject",     typed_term,
-		"field_names", array(gen.builtin_string),
-		"debug_ids", array(spanned_name),
-		"body",        typed_term,
+		"subject",          typed_term,
+		"field_names",      array(gen.builtin_string),
+		"field_var_debugs", array(spanned_name),
+		"body",             typed_term,
 	} },
+	{ "record_field_access", {"subject", typed_term, "name", gen.builtin_string}},
 	--TODO record elim
 	{ "enum_cons", {
 		"constructor", gen.builtin_string,
@@ -1550,6 +1569,7 @@ gen.define_multi_enum(flex_continuation, "flex_continuation", replace_flex_type,
 	{ "empty$strict" },
 	{ "frame$flex", {
 		"context", flex_runtime_context_type,
+		"debuginfo", spanned_name,
 		"code",    typed_term,
 	} },
 	{ "sequence$flex", {
@@ -1613,6 +1633,10 @@ gen.define_multi_enum(
 		}, },
 		{ "name_type$strict" },
 		{ "name$strict", { "name", gen.builtin_string } },
+		{ "name_set$strict", { "names", gen.builtin_string }},
+		{ "name_set_type$strict"},
+		{ "name_set_of_record_desc$stuck", { "desc", stuck_value}},
+		{ "noncolliding_name_type$flex", {"set", flex_value}},
 		{ "operative_value$flex", { "userdata", flex_value } },
 		{ "operative_type$flex", {
 			"handler",       flex_value,
@@ -1634,6 +1658,9 @@ gen.define_multi_enum(
 		{ "record_type$flex", { "desc", flex_value } },
 		{ "record_desc_type$flex", { "universe", flex_value } },
 		{ "record_desc_value$flex", { "fields", map(gen.builtin_string, flex_value)}},
+		{ "record_desc_extend_single$stuck", { "base", flex_value, "name", stuck_value, "typefn", flex_value}},
+		{ "record_desc_extend$stuck", {"base", flex_value, "extension", map(gen.builtin_string, flex_value)}},
+		{ "record_extend_single$stuck", {"base", flex_value, "name", stuck_value, "val", flex_value}},
 		{ "record_extend$stuck", {
 			"base",      stuck_value,
 			"extension", map(gen.builtin_string, flex_value),

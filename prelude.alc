@@ -30,7 +30,7 @@ let implicit-unwrap = lambda_implicit (T : type-omega+1)
 		lambda (x : unstrict-wrapped(T))
 			unstrict-unwrap T x
 
-let tuple-of-implicit = lambda_implicit (T : type-omega+1)
+let tuple-of = lambda_implicit (T : type-omega+1)
 	lambda_single (xs : T)
 		xs
 
@@ -199,12 +199,12 @@ let new-host-type-family = lambda (unique-id : host-unique-id, signature : type_
 let new-host-type = lambda (unique-id : host-unique-id)
 	let Tfam = new-host-type-family unique-id
 		forall () -> (T : host-type)
-		tuple-of-implicit()
+		tuple-of()
 	Tfam()
 
 let host-array-type = new-host-type-family new-host-unique-id("array")
 	forall ((T : host-type)) -> (T : host-type)
-	tuple-of-implicit covariant(subtyping)
+	tuple-of covariant(subtyping)
 
 let host-array-new = lambda (T : host-type)
 	let inner = intrinsic
@@ -356,7 +356,7 @@ let extract-prog-host-tuple-type-inner =
 let extract-prog-host-tuple-type =
 	lambda (t : type, valid : only-accept-prog-host-tuples(wrap(t)))
 		let (res valid) = extract-prog-host-tuple-type-inner(wrap(t), valid)
-		tuple-of-implicit(unwrap(res), valid)
+		tuple-of(unwrap(res), valid)
 
 let rebuild-prog-type-inner =
 	intrinsic
@@ -552,7 +552,7 @@ let get-host-func-arg =
 				:
 				host-func-type (subject_ : wrapped(type), valid : only-accept-host-funcs(subject_)) -> (result : wrapped(type), valid : only-accept-host-tuples(result))
 		let (res, resvalid) = inner(wrap(subject), valid)
-		tuple-of-implicit unwrap(res) resvalid
+		tuple-of unwrap(res) resvalid
 
 let get-host-funcprog-arg =
 	lambda (subject : type, valid : only-accept-host-funcprogs(wrap(subject)))
@@ -567,7 +567,7 @@ let get-host-funcprog-arg =
 				:
 				host-func-type (subject : wrapped(type), valid : only-accept-host-funcprogs(subject)) -> (result : wrapped(type), valid : only-accept-host-tuples(result))
 		let (res, resvalid) = inner(wrap(subject), valid)
-		tuple-of-implicit unwrap(res) resvalid
+		tuple-of unwrap(res) resvalid
 
 let just-args =
 	lambda (subject : type, valid : only-accept-host-funcs(wrap(subject)))
@@ -802,7 +802,7 @@ let tuple-desc-elem-implicit = lambda_implicit (U : universe)
 # 				wrap(desc)
 # 				wrap(elem)
 # 		unwrap(T)
-let tuple-of = lambda (U : universe, desc : tuple-desc-type(U))
+let tuple-of-explicit = lambda (U : universe, desc : tuple-desc-type(U))
 	lambda_single (t : tuple-type(desc))
 		t
 let host-tuple-of = lambda (desc : tuple-desc-type(host-type))
@@ -1017,7 +1017,7 @@ let exit-block = intrinsic
 
 let host-matcher = new-host-type-family new-host-unique-id("matcher")
 	forall (userdata : host-type, result : tuple-desc-type(host-type)) -> (T : host-type)
-	tuple-of-implicit contravariant(subtyping) covariant(tuple-desc-relation)
+	tuple-of contravariant(subtyping) covariant(tuple-desc-relation)
 
 let nil-handler-type = lambda (userdata : host-type, result : tuple-desc-type(host-type))
 	host-func-type ((ud : userdata)) -> (r : host-tuple-type(result))
@@ -1053,7 +1053,7 @@ let host-matcher-is-value = lambda (userdata : host-type, result : tuple-desc-ty
 
 let reducer-type = new-host-type-family new-host-unique-id("host-reducer")
 	forall (storage : tuple-desc-type(host-type), result2 : tuple-desc-type(host-type)) -> (T : host-type)
-	tuple-of-implicit contravariant(tuple-desc-relation) covariant(tuple-desc-relation)
+	tuple-of contravariant(tuple-desc-relation) covariant(tuple-desc-relation)
 
 let reducible-handler-type = lambda (userdata : host-type, result2 : tuple-desc-type(host-type), result : tuple-desc-type(host-type))
 	# prepend userdata to result2
@@ -1255,7 +1255,7 @@ let new-operative = lambda (userdata : host-type, ud : userdata, handler : opera
 					host-type
 			lambda (op-type : host-type)
 				op-type
-	tuple-of(type_(1, 0), result-desc)(op-type, op)
+	tuple-of-explicit(type_(1, 0), result-desc)(op-type, op)
 
 let new-operative-implicit = lambda_implicit (userdata : host-type)
 	lambda (ud : userdata, handler : operative-handler-type(userdata))
@@ -1293,7 +1293,7 @@ let new-operative-implicit = lambda_implicit (userdata : host-type)
 						host-type
 				lambda (op-type : host-type)
 					op-type
-		tuple-of(type_(1, 0), result-desc)(op-type, op)
+		tuple-of-explicit(type_(1, 0), result-desc)(op-type, op)
 
 let core-operative-type =
 	unwrap
@@ -1441,7 +1441,7 @@ let do-impl = lambda (syn : host-syntax, env : host-environment, ud : host-unit,
 
 	let (wrapped) = goalify-inferrable(goal, wrapped)
 
-	tuple-of(host-type, operative-result-desc(goal))(wrapped, env)
+	tuple-of-explicit(host-type, operative-result-desc(goal))(wrapped, env)
 
 #	let (do-type, do) = new-operative(host-unit, host-nil, do-impl)
 let do = core-operative(host-nil, do-impl)
@@ -1540,7 +1540,7 @@ let tuple-desc-impl = lambda (syn : host-syntax, env : host-environment, ud : ho
 
 	let (args) = goalify-inferrable(goal, args)
 
-	tuple-of(host-type, operative-result-desc(goal))(args, env)
+	tuple-of-explicit(host-type, operative-result-desc(goal))(args, env)
 
 #let (tuple-desc-op-type, tuple-desc) = new-operative(host-unit, host-nil, tuple-desc-impl)
 let tuple-desc = core-operative(host-nil, tuple-desc-impl)

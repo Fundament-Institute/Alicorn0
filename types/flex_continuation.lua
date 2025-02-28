@@ -27,10 +27,12 @@ function flex_continuation:as_empty() end
 ---@return boolean
 function flex_continuation:is_frame() end
 ---@return FlexRuntimeContext context
+---@return spanned_name debuginfo
 ---@return typed code
 function flex_continuation:unwrap_frame() end
 ---@return boolean
 ---@return FlexRuntimeContext context
+---@return spanned_name debuginfo
 ---@return typed code
 function flex_continuation:as_frame() end
 ---@return boolean
@@ -48,6 +50,6 @@ function flex_continuation:as_sequence() end
 ---@field strict fun(strict: strict_continuation): flex_continuation
 ---@field stuck fun(stuck: stuck_continuation): flex_continuation
 ---@field empty flex_continuation
----@field frame fun(context: FlexRuntimeContext, code: typed): flex_continuation
+---@field frame fun(context: FlexRuntimeContext, debuginfo: spanned_name, code: typed): flex_continuation
 ---@field sequence fun(first: flex_continuation, second: flex_continuation): flex_continuation
 return {}

@@ -27,6 +27,19 @@ function binding:unwrap_tuple_elim() end
 ---@return anchored_inferrable subject
 function binding:as_tuple_elim() end
 ---@return boolean
+function binding:is_record_elim() end
+---@return Anchor binding_anchor
+---@return anchored_inferrable subject
+---@return ArrayValue<string> field_names
+---@return ArrayValue<spanned_name> field_var_debugs
+function binding:unwrap_record_elim() end
+---@return boolean
+---@return Anchor binding_anchor
+---@return anchored_inferrable subject
+---@return ArrayValue<string> field_names
+---@return ArrayValue<spanned_name> field_var_debugs
+function binding:as_record_elim() end
+---@return boolean
 function binding:is_annotated_lambda() end
 ---@return string param_name
 ---@return anchored_inferrable param_annotation
@@ -44,17 +57,18 @@ function binding:as_annotated_lambda() end
 ---@return boolean
 function binding:is_program_sequence() end
 ---@return anchored_inferrable first
----@return Anchor start_anchor
+---@return spanned_name debug
 function binding:unwrap_program_sequence() end
 ---@return boolean
 ---@return anchored_inferrable first
----@return Anchor start_anchor
+---@return spanned_name debug
 function binding:as_program_sequence() end
 
 ---@class (exact) bindingType: EnumType
 ---@field define_enum fun(self: bindingType, name: string, variants: Variants): bindingType
 ---@field let fun(name: string, debug: spanned_name, expr: anchored_inferrable): binding
 ---@field tuple_elim fun(names: ArrayValue<string>, debug: ArrayValue<spanned_name>, subject: anchored_inferrable): binding
+---@field record_elim fun(binding_anchor: Anchor, subject: anchored_inferrable, field_names: ArrayValue<string>, field_var_debugs: ArrayValue<spanned_name>): binding
 ---@field annotated_lambda fun(param_name: string, param_annotation: anchored_inferrable, start_anchor: Anchor, visible: visibility, pure: checkable): binding
----@field program_sequence fun(first: anchored_inferrable, start_anchor: Anchor): binding
+---@field program_sequence fun(first: anchored_inferrable, debug: spanned_name): binding
 return {}

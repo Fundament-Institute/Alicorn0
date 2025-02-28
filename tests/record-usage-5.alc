@@ -1,0 +1,15 @@
+let foo =
+	record-of
+		x = 3
+		y = 5
+
+let f = lambda (xs)
+	record-of
+		x =
+			xs.x + xs.y
+		y =
+			xs.x - xs.y
+
+let bar = f(foo)
+
+bar

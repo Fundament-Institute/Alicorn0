@@ -10,7 +10,7 @@ let switchtest = lambda (x)
 			let c = sqr(a) * b
 			c * b
 
-tuple-of-implicit
+tuple-of
 	switchtest(mk none)
 	switchtest(mk inj1 5)
 	switchtest(mk inj2 3 5)

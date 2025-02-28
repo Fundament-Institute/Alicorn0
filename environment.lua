@@ -5,13 +5,17 @@ local trie = require "lazy-prefix-tree"
 local fibbuf = require "fibonacci-buffer"
 local U = require "alicorn-utils"
 local format = require "format"
+local PrettyPrint = require("pretty-printer").PrettyPrint
 
 local terms = require "terms"
-local spanned_name = terms.spanned_name
+local terms_gen = require "terms-generators"
+local spanned_name, spanned_name_array = terms.spanned_name, terms.spanned_name_array
 local unanchored_inferrable_term = terms.unanchored_inferrable_term
 local anchored_inferrable_term = terms.anchored_inferrable_term
 local typechecking_context = terms.typechecking_context
 local module_mt = {}
+
+local name_array = terms_gen.declare_array(terms_gen.builtin_string)
 
 local evaluator = require "evaluator"
 local infer = evaluator.infer
@@ -96,6 +100,14 @@ end
 ---@param binding binding
 ---@return boolean, Environment
 function environment:bind_local(binding)
+	return self:bind(binding, true)
+end
+
+---@overload fun(binding: binding, islocal: boolean) : boolean, string
+---@param binding binding
+---@param islocal boolean
+---@return boolean, Environment
+function environment:bind(binding, islocal)
 	--print("bind_local: (binding term follows)")
 	--print(binding:pretty_print(self.typechecking_context))
 	if not self.purity:is_pure() and not self.purity:is_effectful() then
@@ -117,7 +129,13 @@ function environment:bind_local(binding)
 		end
 		local n = typechecking_context:len()
 		local term = anchored_inferrable_term(anchor, unanchored_inferrable_term.bound_variable(n + 1, debuginfo))
-		local locals = self.locals:put(name, term)
+		---@type PrefixTree
+		local extended
+		if islocal then
+			extended = self.locals:put(name, term)
+		else
+			extended = self.nonlocals:put(name, term)
+		end
 		local evaled = evaluator.evaluate(expr_term, typechecking_context.runtime_context, typechecking_context)
 
 		if terms.strict_value.value_check(evaled) then
@@ -130,7 +148,8 @@ function environment:bind_local(binding)
 		local bindings = self.bindings:append(binding)
 		return true,
 			U.notail(update_env(self, {
-				locals = locals,
+				locals = islocal and extended or self.locals,
+				nonlocals = not islocal and extended or self.nonlocals,
 				bindings = bindings,
 				typechecking_context = typechecking_context,
 			}))
@@ -146,7 +165,7 @@ function environment:bind_local(binding)
 		--local subject_qty, subject_type = subject_type:unwrap_qtype()
 		--DEBUG:
 		if subject_type:is_enum_value() then
-			print "bad subject infer"
+			print("bad tuple subject infer")
 			print(subject:pretty_print(typechecking_context))
 		end
 
@@ -198,7 +217,13 @@ function environment:bind_local(binding)
 			]]
 
 			local n = typechecking_context:len()
-			local locals = self.locals
+			---@type PrefixTree
+			local extended
+			if islocal then
+				extended = self.locals
+			else
+				extended = self.nonlocals
+			end
 
 			if not (n_elements == names:len()) then
 				error("attempted to bind " .. n_elements .. " tuple elements to " .. names:len() .. " variables")
@@ -211,7 +236,7 @@ function environment:bind_local(binding)
 				-- end
 				local term =
 					anchored_inferrable_term(anchor, unanchored_inferrable_term.bound_variable(n + i, infos[i]))
-				locals = locals:put(v, term)
+				extended = extended:put(v, term)
 
 				local evaled = evaluator.index_tuple_value(subject_value, i)
 				--log_binding(v, tupletypes[i], evaled)
@@ -220,12 +245,12 @@ function environment:bind_local(binding)
 			local bindings = self.bindings:append(binding)
 			return true,
 				U.notail(update_env(self, {
-					locals = locals,
+					locals = islocal and extended or self.locals,
+					nonlocals = not islocal and extended or self.nonlocals,
 					bindings = bindings,
 					typechecking_context = typechecking_context,
 				}))
 		end
-		local unique = {}
 		local ok, res1, res2
 		ok, res1 = inner_tuple_elim(spec_type)
 		if ok then
@@ -241,6 +266,41 @@ function environment:bind_local(binding)
 		-- you need to figure out which one is relevant for your problem
 		-- after you're finished, please comment it out so that, next time, the message below can be found again
 		error("(binding) tuple elim speculation failed! debugging this is left as an exercise to the maintainer")
+	elseif binding:is_record_elim() then
+		local binding_anchor, subject, field_names, field_var_debugs = binding:unwrap_record_elim()
+		---@type PrefixTree
+		local extended
+		if islocal then
+			extended = self.locals
+		else
+			extended = self.nonlocals
+		end
+		local context_length = typechecking_context:len()
+		for field_index, field_name in ipairs(field_names) do
+			local field_var_debug = field_var_debugs[field_index]
+			local field_var_name, field_var_anchor = field_var_debug:unwrap_spanned_name()
+			local field_var_expr = anchored_inferrable_term(
+				binding_anchor,
+				unanchored_inferrable_term.record_elim(
+					subject,
+					name_array(field_name),
+					spanned_name_array(field_var_debug),
+					anchored_inferrable_term(
+						field_var_anchor.start,
+						unanchored_inferrable_term.bound_variable(context_length + 1, field_var_debug)
+					)
+				)
+			)
+			extended = extended:put(field_var_name, field_var_expr)
+		end
+		local bindings = self.bindings:append(binding)
+		return true,
+			U.notail(update_env(self, {
+				locals = islocal and extended or self.locals,
+				nonlocals = not islocal and extended or self.nonlocals,
+				bindings = bindings,
+				typechecking_context = typechecking_context,
+			}))
 	elseif binding:is_annotated_lambda() then
 		local param_name, param_annotation, start_anchor, visible = binding:unwrap_annotated_lambda()
 		if not start_anchor or not start_anchor.id then
@@ -258,7 +318,14 @@ function environment:bind_local(binding)
 		local evaled = evaluator.evaluate(annotation_term, typechecking_context.runtime_context, typechecking_context)
 		local bindings = self.bindings:append(binding)
 		local info = spanned_name(param_name, start_anchor:span(start_anchor))
-		local locals = self.locals:put(
+		---@type PrefixTree
+		local extended
+		if islocal then
+			extended = self.locals
+		else
+			extended = self.nonlocals
+		end
+		extended = extended:put(
 			param_name,
 			anchored_inferrable_term(
 				start_anchor,
@@ -268,7 +335,8 @@ function environment:bind_local(binding)
 		local typechecking_context = typechecking_context:append(param_name, evaled, nil, info)
 		return true,
 			U.notail(update_env(self, {
-				locals = locals,
+				locals = islocal and extended or self.locals,
+				nonlocals = not islocal and extended or self.nonlocals,
 				bindings = bindings,
 				typechecking_context = typechecking_context,
 			}))
@@ -277,7 +345,7 @@ function environment:bind_local(binding)
 		if self.purity:is_pure() then
 			error("binding.program_sequence is only allowed in effectful blocks")
 		end
-		local first, start_anchor = binding:unwrap_program_sequence()
+		local first, debuginfo = binding:unwrap_program_sequence()
 		local ok, first_type, first_usages, first_term = infer(first, typechecking_context)
 		if not ok then
 			return false, first_type
@@ -285,27 +353,36 @@ function environment:bind_local(binding)
 
 		local first_effect_type = evaluator.typechecker_state:metavariable(typechecking_context):as_flex()
 		local first_result_type = evaluator.typechecker_state:metavariable(typechecking_context):as_flex()
+		local name, span = debuginfo:unwrap_spanned_name()
 		local ok, err = evaluator.typechecker_state:flow(
 			first_type,
 			typechecking_context,
 			terms.flex_value.program_type(first_effect_type, first_result_type),
 			typechecking_context,
-			terms.constraintcause.primitive("Inferring on program type ", start_anchor)
+			terms.constraintcause.primitive("Inferring on program type ", span.start)
 		)
 		if not ok then
 			return false, err
 		end
 
+		local name, span = debuginfo:unwrap_spanned_name()
 		--print("FOUND EFFECTFUL BINDING", first_result_type, "produced by ", first_type)
 		local n = typechecking_context:len()
-		local debuginfo = spanned_name("#program_sequence", start_anchor:span(start_anchor))
-		local term = anchored_inferrable_term(start_anchor, unanchored_inferrable_term.bound_variable(n + 1, debuginfo))
-		local locals = self.locals:put("#program-sequence", term)
+		local term = anchored_inferrable_term(span.start, unanchored_inferrable_term.bound_variable(n + 1, debuginfo))
+		---@type PrefixTree
+		local extended
+		if islocal then
+			extended = self.locals
+		else
+			extended = self.nonlocals
+		end
+		extended = extended:put("#program-sequence", term)
 		typechecking_context = typechecking_context:append("#program-sequence", first_result_type, nil, debuginfo)
 		local bindings = self.bindings:append(binding)
 		return true,
 			U.notail(update_env(self, {
-				locals = locals,
+				locals = islocal and extended or self.locals,
+				nonlocals = not islocal and extended or self.nonlocals,
 				bindings = bindings,
 				typechecking_context = typechecking_context,
 			}))
@@ -428,20 +505,23 @@ function environment:exit_block(term, shadowed)
 		elseif binding:is_tuple_elim() then
 			local names, debuginfo, subject = binding:unwrap_tuple_elim() -- TODO: propagate anchors
 			unanchored_wrapped = unanchored_inferrable_term.tuple_elim(names, debuginfo, subject, wrapped)
+		elseif binding:is_record_elim() then
+			local _binding_anchor, subject, field_names, field_var_debugs = binding:unwrap_record_elim()
+			unanchored_wrapped = unanchored_inferrable_term.record_elim(subject, field_names, field_var_debugs, wrapped)
 		elseif binding:is_annotated_lambda() then
-			local name, annotation, start_anchor, visible, purity = binding:unwrap_annotated_lambda()
+			local name, annotation, start_anchor, visible, pure = binding:unwrap_annotated_lambda()
 			unanchored_wrapped =
-				unanchored_inferrable_term.annotated_lambda(name, annotation, wrapped, start_anchor, visible, purity)
+				unanchored_inferrable_term.annotated_lambda(name, annotation, wrapped, start_anchor, visible, pure)
 		elseif binding:is_program_sequence() then
-			local first, start_anchor = binding:unwrap_program_sequence()
-			unanchored_wrapped = unanchored_inferrable_term.program_sequence(
-				first,
-				start_anchor,
-				wrapped,
-				spanned_name("#program-sequence", start_anchor:span(start_anchor))
-			)
+			local first, debuginfo = binding:unwrap_program_sequence()
+			unanchored_wrapped = unanchored_inferrable_term.program_sequence(first, wrapped, debuginfo)
 		else
-			error("exit_block: unknown kind: " .. binding.kind)
+			local err_pp = PrettyPrint:new()
+			err_pp:unit("exit_block: unknown kind of binding ")
+			err_pp:any(binding, env.typechecking_context)
+			err_pp:unit(" wrapping ")
+			err_pp:any(wrapped, env.typechecking_context)
+			error(tostring(err_pp))
 		end
 
 		wrapped = anchored_inferrable_term(anchor, unanchored_wrapped)
