@@ -1,0 +1,6 @@
+{
+    "[lua]": {
+        "editor.defaultFormatter": "JohnnyMorganz.stylua"
+    },
+    "workspaceConfigPlus.arrayMerge": "combine"
+}
