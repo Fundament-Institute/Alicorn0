@@ -31,9 +31,7 @@ impl mlua::AsChunk<'static> for NamedChunk<'static> {
 }
 
 impl Alicorn {
-    pub fn new(lua: Option<Lua>, additional_interface: mlua::Table) -> Result<Self, mlua::Error> {
-        let lua = lua.unwrap_or_else(|| Lua::new());
-
+    pub fn new(lua: Lua, additional_interface: mlua::Table) -> Result<Self, mlua::Error> {
         // Load C libraries we already linked into our rust binary using our build script. This works because we can
         // declare the C functions directly and have the linker resolve them during the link step.
 
@@ -58,9 +56,6 @@ require = function(name) -- require stub for inside sandbox
   end
   return package.loaded[name]
 end
--- print "adding injected dependencies"
--- for k, v in pairs(injected_dep) do print("adding ", k, " to global env"); _G[k] = v end
--- print "done" 
 
 "#
         .into();
@@ -204,7 +199,8 @@ return M
         .exec()?;
 
         let load_in_sandbox: LuaFunction = lua.load("load_in_sandbox").eval()?;
-        let module: mlua::Value = load_in_sandbox.call((lua.create_string(buf)?, additional_interface))?;
+        let module: mlua::Value =
+            load_in_sandbox.call((lua.create_string(buf)?, additional_interface))?;
         let alicorn = Self { lua, module };
 
         let _ = alicorn.include(std::str::from_utf8(PRELUDE)?, "prelude.alc")?;
@@ -274,7 +270,9 @@ fn test_runtest_file() {
     let root = std::path::Path::new(&temp_dir);
     std::env::set_current_dir(&root).unwrap();
 
-    let alicorn = Alicorn::new(None).unwrap();
+    let lua = Lua::new();
+    let interface = lua.create_table().unwrap();
+    let alicorn = Alicorn::new(lua, interface).unwrap();
 
     // Restore working dir so we can find prelude.alc
     std::env::set_current_dir(&old).unwrap();
