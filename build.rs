@@ -91,9 +91,12 @@ for i, path in ipairs( sources ) do
   if content == nil then
     error(err)
   end
+  local codefile = io.open(path)
+  local source = codefile:read("*a")
+  codefile:close()
   local bc = string.dump( content, false )
   local name = string.match( path, ".+/(.+).lua" )
-  table.insert( data, ( "package.preload[%q], err = load( %q, %q, 'bt' )\n if err ~= nil then error(err) end \n" ) : format( name, bc, name ) )
+  table.insert( data, ( "package.preload[%q], err = load( %q, %q, 't' )\n if err ~= nil then error(err) end \n" ) : format( name, source, name ) )
 end
     
 local code = table.concat( data )

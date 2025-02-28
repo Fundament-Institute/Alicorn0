@@ -31,7 +31,7 @@ impl mlua::AsChunk<'static> for NamedChunk<'static> {
 }
 
 impl Alicorn {
-    pub fn new(lua: Option<Lua>) -> Result<Self, mlua::Error> {
+    pub fn new(lua: Option<Lua>, additional_interface: mlua::Table) -> Result<Self, mlua::Error> {
         let lua = lua.unwrap_or_else(|| Lua::new());
 
         // Load C libraries we already linked into our rust binary using our build script. This works because we can
@@ -47,12 +47,8 @@ impl Alicorn {
         let mut buf: Vec<u8> = r#"
 local injected_dep = ...
 
-package = {preload = {}, loaded = {}}
+package = {preload = {}, loaded = {lpeg = lpeg}}
 require = function(name) -- require stub for inside sandbox
-  if name == "lpeg" then 
-    --HACK!!!
-    package.loaded[name] = _G.lpeg
-  end
 
   if not package.loaded[name] then
     if not package.preload[name] then
@@ -62,6 +58,9 @@ require = function(name) -- require stub for inside sandbox
   end
   return package.loaded[name]
 end
+-- print "adding injected dependencies"
+-- for k, v in pairs(injected_dep) do print("adding ", k, " to global env"); _G[k] = v end
+-- print "done" 
 
 "#
         .into();
@@ -76,6 +75,7 @@ terms = require "terms"
 exprs = require "alicorn-expressions"
 profile = require "profile"
 util = require "alicorn-utils"
+glsl_print = require "glsl-print"
 
 env = base_env.create()
 original_env, env = env:enter_block(terms.block_purity.effectful)
@@ -191,8 +191,8 @@ return M
         
         local create_module = sandbox_impl(true)
         
-        function load_in_sandbox(bytes)
-          local r, err = create_module(bytes, "alicorn_lib", lpeg)
+        function load_in_sandbox(bytes, additional_interface)
+          local r, err = create_module(bytes, "alicorn_lib", additional_interface)
           if r == nil then
             error(err)
           end
@@ -204,7 +204,7 @@ return M
         .exec()?;
 
         let load_in_sandbox: LuaFunction = lua.load("load_in_sandbox").eval()?;
-        let module: mlua::Value = load_in_sandbox.call(lua.create_string(buf))?;
+        let module: mlua::Value = load_in_sandbox.call((lua.create_string(buf)?, additional_interface))?;
         let alicorn = Self { lua, module };
 
         let _ = alicorn.include(std::str::from_utf8(PRELUDE)?, "prelude.alc")?;
