@@ -35,6 +35,14 @@ jit.opt.start("maxtrace=10000")
 jit.opt.start("maxmcode=4096")
 jit.opt.start("recunroll=5")
 jit.opt.start("loopunroll=60")
+
+package = {preload = {}, loaded = {}}
+require = function(name) -- require stub for inside sandbox
+  if not package.loaded[name] then
+    package.loaded[name] = package.preload[name]()
+  end
+  return package.loaded[name]
+end
         "#,
         )
         .exec()?;
@@ -58,7 +66,9 @@ util = require "alicorn-utils"
 env = base_env.create()
 original_env, env = env:enter_block(terms.block_purity.effectful)
 
-function alc_process(code, cur_env)
+local M = {}
+
+function M.alc_process(code, cur_env)
 	local ok, expr, inner_env = code:match({
 		exprs.top_level_block(
 			metalanguage.accept_handler,
@@ -74,13 +84,13 @@ function alc_process(code, cur_env)
   return expr, inner_env
 end
 
-function alc_include_string(src, name)
+function M.alc_include_string(src, name)
   local bound_expr, inner_env = alc_process(format.read(src, name), env)
   env = inner_env
   return bound_expr
 end
 
-function alc_include_file(filename)
+function M.alc_include_file(filename)
   local f = io.open(filename)
   if not f then
     error("Couldn't find " .. filename)
@@ -93,7 +103,7 @@ function alc_include_file(filename)
   return bound_expr
 end
 
-function alc_evaluate(bound_expr, cur_env)
+function M.alc_evaluate(bound_expr, cur_env)
 	local ok, type, usages, term = evaluator.infer(bound_expr, cur_env.typechecking_context)
 
   if not ok then
@@ -126,7 +136,7 @@ function alc_evaluate(bound_expr, cur_env)
 	end)
 end
 
-function alc_execute(src, name)
+function M.alc_execute(src, name)
 	local shadowed, cur_env = env:enter_block(terms.block_purity.effectful)
 
   local bound_expr, cur_env = alc_process(format.read(src, name), cur_env)
@@ -144,7 +154,7 @@ function alc_execute(src, name)
   return result_exec:unwrap_host_tuple_value():unpack()
 end
 
-function alc_execute_file(filename)
+function M.alc_execute_file(filename)
   local f = io.open(filename)
   if not f then
     error("Couldn't find " .. filename)
@@ -154,6 +164,8 @@ function alc_execute_file(filename)
   f:close()
   return alc_execute(s, filename)
 end
+
+return M
         "#,
         )
         .exec()?;
