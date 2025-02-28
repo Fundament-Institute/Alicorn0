@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
 
-use mlua::prelude::*;
+use mlua::{
+    prelude::*,
+    Either::{self, Left, Right},
+};
 
 const ALICORN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/alicorn.lua"));
 const PRELUDE: &[u8] = include_bytes!("prelude.alc");
@@ -14,6 +17,357 @@ extern "C-unwind" {
 
 pub struct Alicorn {
     lua: Lua,
+    runner: AlicornRunner,
+}
+
+pub struct AlicornRunner {
+    runner: LuaTable,
+}
+
+#[repr(transparent)]
+struct LuaResult<T, E>(pub Result<T, E>);
+impl<T, E> From<LuaResult<T, E>> for Result<T, E> {
+    #[inline(always)]
+    fn from(value: LuaResult<T, E>) -> Self {
+        value.0
+    }
+}
+impl<T: FromLuaMulti, E: FromLuaMulti> FromLuaMulti for LuaResult<T, E> {
+    fn from_lua_multi(mut values: LuaMultiValue, lua: &Lua) -> mlua::Result<Self> {
+        let ok = values
+            .pop_front()
+            .map(|value| bool::from_lua(value, lua))
+            .unwrap_or(Ok(false))?;
+        if ok {
+            T::from_lua_multi(values, lua).map(|value| LuaResult(Ok(value)))
+        } else {
+            E::from_lua_multi(values, lua).map(|value| LuaResult(Err(value)))
+        }
+    }
+}
+
+macro_rules! trivial_lua_value {
+    ($t:path) => {
+        impl FromLua for $t {
+            fn from_lua(value: LuaValue, lua: &Lua) -> mlua::Result<Self> {
+                LuaValue::from_lua(value, lua).map(Self)
+            }
+        }
+        impl IntoLua for $t {
+            fn into_lua(self, lua: &Lua) -> mlua::Result<LuaValue> {
+                self.0.into_lua(lua)
+            }
+        }
+    };
+}
+
+#[repr(transparent)]
+pub struct ConstructedSyntax(pub mlua::Value);
+trivial_lua_value!(ConstructedSyntax);
+
+#[repr(transparent)]
+pub struct FlexValue(pub mlua::Value);
+trivial_lua_value!(FlexValue);
+
+#[repr(transparent)]
+pub struct TypedTerm(pub mlua::Value);
+trivial_lua_value!(TypedTerm);
+
+#[repr(transparent)]
+pub struct AnchoredInferrableTerm(pub mlua::Value);
+trivial_lua_value!(AnchoredInferrableTerm);
+
+/// `terms.purity`
+///
+/// TODO: proper Lua value conversion
+#[repr(transparent)]
+pub struct Purity(pub mlua::Value);
+trivial_lua_value!(Purity);
+
+/// `terms.block_purity`
+pub enum BlockPurity {
+    /// `terms.block_purity.effectful`
+    Effectful,
+    /// `terms.block_purity.pure`
+    Pure,
+    /// `terms.block_purity.dependent`
+    Dependent {
+        /// `flex_value`
+        val: FlexValue,
+    },
+    /// `terms.block_purity.inherit`
+    Inherit,
+}
+impl IntoLua for BlockPurity {
+    fn into_lua(self, lua: &Lua) -> mlua::Result<LuaValue> {
+        let block_purity = lua
+            .load(r#"require("terms").block_purity"#)
+            .eval::<LuaTable>()?;
+        match self {
+            Self::Effectful => block_purity.get("effectful"),
+            Self::Pure => block_purity.get("pure"),
+            Self::Dependent { val } => block_purity.get::<LuaFunction>("dependent")?.call(val),
+            Self::Inherit => block_purity.get("inherit"),
+        }
+    }
+}
+impl FromLua for BlockPurity {
+    fn from_lua(value: LuaValue, lua: &Lua) -> mlua::Result<Self> {
+        let block_purity = lua
+            .load(r#"require("terms").block_purity"#)
+            .eval::<LuaTable>()?;
+        if block_purity
+            .get::<LuaFunction>("value_check")?
+            .call(&value)?
+        {
+            let value = LuaTable::from_lua(value, lua)?;
+            if let Ok(()) = value
+                .get::<LuaFunction>("as_effectful")?
+                .call::<LuaResult<_, ()>>(&value)?
+                .into()
+            {
+                Ok(Self::Effectful)
+            } else if let Ok(()) = value
+                .get::<LuaFunction>("as_pure")?
+                .call::<LuaResult<_, ()>>(&value)?
+                .into()
+            {
+                Ok(Self::Pure)
+            } else if let Ok(val) = value
+                .get::<LuaFunction>("as_dependent")?
+                .call::<LuaResult<_, ()>>(&value)?
+                .into()
+            {
+                Ok(Self::Dependent { val })
+            } else if let Ok(()) = value
+                .get::<LuaFunction>("as_inherit")?
+                .call::<LuaResult<_, ()>>(value)?
+                .into()
+            {
+                Ok(Self::Inherit)
+            } else {
+                unreachable!()
+            }
+        } else {
+            Err(mlua::Error::FromLuaConversionError {
+                from: value.type_name(),
+                to: "terms.block_purity".to_owned(),
+                message: Some("expected terms.block_purity".to_owned()),
+            })
+        }
+    }
+}
+
+impl AlicornRunner {
+    pub fn enter_block(&self, purity: BlockPurity) -> Result<(), mlua::Error> {
+        self.runner
+            .get::<LuaFunction>("enter_block")?
+            .call((&self.runner, purity))
+    }
+    pub fn exit_block(
+        &self,
+        expr: AnchoredInferrableTerm,
+    ) -> Result<(AnchoredInferrableTerm, Purity), mlua::Error> {
+        self.runner
+            .get::<LuaFunction>("exit_block")?
+            .call((&self.runner, expr))
+    }
+    pub fn read_format(
+        &self,
+        format_text: mlua::String,
+        id: mlua::String,
+    ) -> Result<ConstructedSyntax, mlua::Error> {
+        self.runner
+            .get::<LuaFunction>("read_format")?
+            .call((&self.runner, format_text, id))
+    }
+    pub fn read_file(
+        &self,
+        format_file: Either<mlua::String, mlua::Value>,
+        id: Option<mlua::String>,
+    ) -> Result<ConstructedSyntax, mlua::Error> {
+        self.runner
+            .get::<LuaFunction>("read_file")?
+            .call((&self.runner, format_file, id))
+    }
+    pub fn try_parse_syntax(
+        &self,
+        syntax: mlua::Table,
+        id: mlua::String,
+    ) -> Result<Result<AnchoredInferrableTerm, mlua::String>, mlua::Error> {
+        Ok(self
+            .runner
+            .get::<LuaFunction>("try_parse_syntax")?
+            .call::<LuaResult<_, _>>((&self.runner, syntax, id))?
+            .into())
+    }
+    pub fn parse_syntax(
+        &self,
+        syntax: mlua::Table,
+        id: mlua::String,
+    ) -> Result<AnchoredInferrableTerm, mlua::Error> {
+        self.runner
+            .get::<LuaFunction>("parse_syntax")?
+            .call((&self.runner, syntax, id))
+    }
+    pub fn try_parse_format(
+        &self,
+        format_text: mlua::String,
+        id: mlua::String,
+    ) -> Result<Result<AnchoredInferrableTerm, mlua::String>, mlua::Error> {
+        Ok(self
+            .runner
+            .get::<LuaFunction>("try_parse_format")?
+            .call::<LuaResult<_, _>>((&self.runner, format_text, id))?
+            .into())
+    }
+    pub fn parse_format(
+        &self,
+        format_text: mlua::String,
+        id: mlua::String,
+    ) -> Result<AnchoredInferrableTerm, mlua::Error> {
+        self.runner
+            .get::<LuaFunction>("parse_format")?
+            .call((&self.runner, format_text, id))
+    }
+    pub fn try_parse_file(
+        &self,
+        format_file: Either<mlua::String, (mlua::Value, mlua::String)>,
+    ) -> Result<Result<AnchoredInferrableTerm, mlua::String>, mlua::Error> {
+        Ok(self
+            .runner
+            .get::<LuaFunction>("try_parse_file")?
+            .call::<LuaResult<_, _>>(match format_file {
+                Left(path) => (&self.runner, Left(path), None),
+                Right((file, id)) => (&self.runner, Right(file), Some(id)),
+            })?
+            .into())
+    }
+    pub fn parse_file(
+        &self,
+        format_file: Either<mlua::String, (mlua::Value, mlua::String)>,
+    ) -> Result<AnchoredInferrableTerm, mlua::Error> {
+        self.runner
+            .get::<LuaFunction>("parse_file")?
+            .call(match format_file {
+                Left(path) => (&self.runner, Left(path), None),
+                Right((file, id)) => (&self.runner, Right(file), Some(id)),
+            })
+    }
+    pub fn try_infer_expr(
+        &self,
+        expr: AnchoredInferrableTerm,
+    ) -> Result<Result<(FlexValue, mlua::Value, TypedTerm), mlua::String>, mlua::Error> {
+        Ok(self
+            .runner
+            .get::<LuaFunction>("try_infer_expr")?
+            .call::<LuaResult<_, _>>((&self.runner, expr))?
+            .into())
+    }
+    pub fn infer_expr(
+        &self,
+        expr: AnchoredInferrableTerm,
+    ) -> Result<(FlexValue, mlua::Value, TypedTerm), mlua::Error> {
+        self.runner
+            .get::<LuaFunction>("parse_file")?
+            .call((&self.runner, expr))
+    }
+    pub fn try_typecheck_program_type(
+        &self,
+        r#type: FlexValue,
+    ) -> Result<Result<(), mlua::String>, mlua::Error> {
+        Ok(self
+            .runner
+            .get::<LuaFunction>("try_typecheck_program_type")?
+            .call::<LuaResult<_, _>>((&self.runner, r#type))?
+            .into())
+    }
+    pub fn typecheck_program_type(&self, r#type: FlexValue) -> Result<(), mlua::Error> {
+        self.runner
+            .get::<LuaFunction>("typecheck_program_type")?
+            .call((&self.runner, r#type))
+    }
+    pub fn try_evaluate_term(
+        &self,
+        r#type: FlexValue,
+    ) -> Result<Result<(), mlua::String>, mlua::Error> {
+        Ok(self
+            .runner
+            .get::<LuaFunction>("try_evaluate_term")?
+            .call::<LuaResult<_, _>>((&self.runner, r#type))?
+            .into())
+    }
+    pub fn evaluate_term(&self, r#type: FlexValue) -> Result<(), mlua::Error> {
+        self.runner
+            .get::<LuaFunction>("evaluate_term")?
+            .call((&self.runner, r#type))
+    }
+    pub fn try_evaluate_program_expr(
+        &self,
+        program_expr: AnchoredInferrableTerm,
+    ) -> Result<Result<FlexValue, mlua::String>, mlua::Error> {
+        Ok(self
+            .runner
+            .get::<LuaFunction>("try_evaluate_program_expr")?
+            .call::<LuaResult<_, _>>((&self.runner, program_expr))?
+            .into())
+    }
+    pub fn evaluate_program_expr(
+        &self,
+        program_expr: AnchoredInferrableTerm,
+    ) -> Result<FlexValue, mlua::Error> {
+        self.runner
+            .get::<LuaFunction>("evaluate_program_expr")?
+            .call((&self.runner, program_expr))
+    }
+    pub fn evaluate_program_format(
+        &self,
+        program_format_text: mlua::String,
+        program_id: mlua::String,
+    ) -> Result<FlexValue, mlua::Error> {
+        self.runner
+            .get::<LuaFunction>("evaluate_program_format")?
+            .call((&self.runner, program_format_text, program_id))
+    }
+    pub fn evaluate_program_file(
+        &self,
+        program_format_file: Either<mlua::String, (mlua::Value, mlua::String)>,
+    ) -> Result<FlexValue, mlua::Error> {
+        self.runner
+            .get::<LuaFunction>("evaluate_program_file")?
+            .call(match program_format_file {
+                Left(path) => (&self.runner, Left(path), None),
+                Right((file, id)) => (&self.runner, Right(file), Some(id)),
+            })
+    }
+    pub fn execute_program_value(
+        &self,
+        program_value: FlexValue,
+    ) -> Result<LuaMultiValue, mlua::Error> {
+        self.runner
+            .get::<LuaFunction>("execute_program_value")?
+            .call((&self.runner, program_value))
+    }
+    pub fn execute_program_format(
+        &self,
+        program_format_text: mlua::String,
+        program_id: mlua::String,
+    ) -> Result<LuaMultiValue, mlua::Error> {
+        self.runner
+            .get::<LuaFunction>("execute_program_format")?
+            .call((&self.runner, program_format_text, program_id))
+    }
+    pub fn execute_program_file(
+        &self,
+        program_format_file: Either<mlua::String, (mlua::Value, mlua::String)>,
+    ) -> Result<LuaMultiValue, mlua::Error> {
+        self.runner
+            .get::<LuaFunction>("execute_program_file")?
+            .call(match program_format_file {
+                Left(path) => (&self.runner, Left(path), None),
+                Right((file, id)) => (&self.runner, Right(file), Some(id)),
+            })
+    }
 }
 
 impl Alicorn {
@@ -29,181 +383,77 @@ impl Alicorn {
                 lua.load_from_function("lfs", lua.create_c_function(luaopen_lfs)?)?;
         }
 
-        lua.load(
-            r#"
-jit.opt.start("maxtrace=10000")
-jit.opt.start("maxmcode=4096")
-jit.opt.start("recunroll=5")
-jit.opt.start("loopunroll=60")
-        "#,
-        )
-        .exec()?;
-
         // Here, we load all the embedded alicorn source into the lua engine and execute it.
         lua.load(ALICORN).exec()?;
 
         // Then we create helper functions for compiling an alicorn source file that we can bind to mlua.
-        lua.load(
-            r#" 
-metalanguage = require "metalanguage"
-evaluator = require "evaluator"
-format = require "format-adapter"
-formatter = require "format"
-base_env = require "base-env"
-terms = require "terms"
-exprs = require "alicorn-expressions"
-profile = require "profile"
-util = require "alicorn-utils"
+        let runner: LuaTable = lua
+            .load(r#"alicorn_runner = require("alicorn-runner").Runner(); return alicorn_runner"#)
+            .eval()?;
 
-env = base_env.create()
-original_env, env = env:enter_block(terms.block_purity.effectful)
+        let alicorn = Self {
+            lua,
+            runner: AlicornRunner { runner },
+        };
+        alicorn.runner.enter_block(BlockPurity::Effectful)?;
 
-function alc_process(code, cur_env)
-	local ok, expr, inner_env = code:match({
-		exprs.top_level_block(
-			metalanguage.accept_handler,
-			{ exprargs = exprs.ExpressionArgs.new(terms.expression_goal.infer, cur_env), name = name }
-		),
-	}, metalanguage.failure_handler, nil)
-
-  if not ok then
-    print(tostring(expr))
-    error("processing failed (error printed to stdout)")
-  end
-  
-  return expr, inner_env
-end
-
-function alc_include_string(src, name)
-  local bound_expr, inner_env = alc_process(format.read(src, name), env)
-  env = inner_env
-  return bound_expr
-end
-
-function alc_include_file(filename)
-  local f = io.open(filename)
-  if not f then
-    error("Couldn't find " .. filename)
-  end
-
-  local s = format.read(f:read("a"), filename)
-  f:close()
-  local bound_expr, inner_env = alc_process(s, env)
-  env = inner_env
-  return bound_expr
-end
-
-function alc_evaluate(bound_expr, cur_env)
-	local ok, type, usages, term = evaluator.infer(bound_expr, cur_env.typechecking_context)
-
-  if not ok then
-    print(tostring(type))
-    error("inference failed (error printed to stdout)")
-	end
-  
-  local gen = require "terms-generators"
-  local set = gen.declare_set
-  local unique_id = gen.builtin_table
-  
-  local ok, err = evaluator.typechecker_state:flow(
-    type,
-    cur_env.typechecking_context,
-    terms.flex_value.program_type(
-      terms.flex_value.effect_row(terms.unique_id_set(terms.TCState, terms.lua_prog)),
-      evaluator.typechecker_state:metavariable(cur_env.typechecking_context):as_flex()
-    ),
-    cur_env.typechecking_context,
-    terms.constraintcause.primitive("final flow check", formatter.anchor_here())
-  )
-    
-  if not ok then
-    print(err)
-    error("flow check failed (error printed to stdout)")
-  end
-
-  return pcall(function()
-		return evaluator.evaluate(term, cur_env.typechecking_context.runtime_context, cur_env.typechecking_context)
-	end)
-end
-
-function alc_execute(src, name)
-	local shadowed, cur_env = env:enter_block(terms.block_purity.effectful)
-
-  local bound_expr, cur_env = alc_process(format.read(src, name), cur_env)
-
-  local cur_env, block_expr, _ = cur_env:exit_block(bound_expr, shadowed)
-
-  local ok, result = alc_evaluate(block_expr, cur_env)
-
-  if not ok then
-    print(result)
-    error("evaluation failed (error printed to stdout)")
-  end
-
-  local result_exec = evaluator.execute_program(result)
-  return result_exec:unwrap_host_tuple_value():unpack()
-end
-
-function alc_execute_file(filename)
-  local f = io.open(filename)
-  if not f then
-    error("Couldn't find " .. filename)
-  end
-
-  local s = format.read(f:read("a"), filename)
-  f:close()
-  return alc_execute(s, filename)
-end
-        "#,
-        )
-        .exec()?;
-
-        let alicorn = Self { lua };
-
-        let _ = alicorn.include(std::str::from_utf8(PRELUDE)?, "prelude.alc")?;
+        _ = alicorn.include(PRELUDE, "prelude.alc")?;
 
         Ok(alicorn)
     }
 
     pub fn load_glsl_prelude(&self) -> Result<(), mlua::Error> {
-        let _ = self.include(std::str::from_utf8(GLSL_PRELUDE)?, "glsl-prelude.alc")?;
+        _ = self.include(GLSL_PRELUDE, "glsl-prelude.alc")?;
 
         Ok(())
     }
 
     pub fn include(
         &self,
-        source: impl AsRef<str>,
+        source: impl AsRef<[u8]>,
         name: impl AsRef<str>,
-    ) -> Result<mlua::Value, mlua::Error> {
-        let alc_include_string: LuaFunction = self.lua.load("alc_include_string").eval()?;
-
-        alc_include_string.call((source.as_ref(), name.as_ref()))
+    ) -> Result<AnchoredInferrableTerm, mlua::Error> {
+        self.runner.parse_format(
+            self.lua.create_string(source.as_ref())?,
+            self.lua.create_string(name.as_ref())?,
+        )
     }
+
     pub fn include_file(
         &self,
         path: impl AsRef<std::path::Path>,
-    ) -> Result<mlua::Value, mlua::Error> {
-        let alc_include_file: LuaFunction = self.lua.load("alc_include_file").eval()?;
-
-        alc_include_file.call(path.as_ref().as_os_str().to_string_lossy())
+    ) -> Result<AnchoredInferrableTerm, mlua::Error> {
+        self.runner
+            .parse_file(Either::Left(self.lua.create_string(
+                path.as_ref().as_os_str().to_string_lossy().as_bytes(),
+            )?))
     }
 
     pub fn execute<R: FromLuaMulti>(
         &self,
-        source: impl AsRef<str>,
+        source: impl AsRef<[u8]>,
         name: impl AsRef<str>,
     ) -> Result<R, mlua::Error> {
-        let execute_program: LuaFunction = self.lua.load("alc_execute").eval()?;
-        execute_program.call((source.as_ref(), name.as_ref()))
+        R::from_lua_multi(
+            self.runner.execute_program_format(
+                self.lua.create_string(source.as_ref())?,
+                self.lua.create_string(name.as_ref())?,
+            )?,
+            &self.lua,
+        )
     }
 
     pub fn execute_file<R: FromLuaMulti>(
         &self,
         path: impl AsRef<std::path::Path>,
     ) -> Result<R, mlua::Error> {
-        let execute_program: LuaFunction = self.lua.load("alc_execute_path").eval()?;
-        execute_program.call(path.as_ref().as_os_str().to_string_lossy())
+        R::from_lua_multi(
+            self.runner.execute_program_file(Either::Left(
+                self.lua
+                    .create_string(path.as_ref().as_os_str().to_string_lossy().as_bytes())?,
+            ))?,
+            &self.lua,
+        )
     }
 }
 

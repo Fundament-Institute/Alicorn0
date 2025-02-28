@@ -6,8 +6,10 @@ use std::str::FromStr;
 use mlua::prelude::*;
 
 const ALICORN_SOURCES: &[&str] = &[
+    "./lua-init.lua",
     "libs/abstract-codegen.lua",
     "./alicorn-expressions.lua",
+    "./alicorn-runner.lua",
     "./alicorn-utils.lua",
     "./base-env.lua",
     "./derivers.lua",
@@ -53,15 +55,6 @@ fn main() -> LuaResult<()> {
     while i < ALICORN_SOURCES.len() {
         sources.set(i + 1, ALICORN_SOURCES[i])?;
         println!("cargo:rerun-if-changed={}", ALICORN_SOURCES[i]);
-        i += 1;
-    }
-
-    let paths = std::fs::read_dir("./types").unwrap();
-
-    for path in paths {
-        let s = str::replace(&path.unwrap().path().to_string_lossy(), '\\', "/");
-        println!("cargo:rerun-if-changed={}", s);
-        sources.set(i + 1, s)?;
         i += 1;
     }
 
