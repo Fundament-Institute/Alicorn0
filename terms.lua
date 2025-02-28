@@ -172,6 +172,7 @@ end
 ---@return FlexRuntimeContext
 function FlexRuntimeContext:append(v, name, debuginfo)
 	if debuginfo == nil then
+		U.debug_break()
 		error("null debuginfo appended to FlexRuntimeContext")
 	end
 	name = name or debuginfo.name -- ("#r_ctx%d"):format(self.bindings:len() + 1) -- once switchover to debug is complete, no binding should ever enter the environment without debug info and so this name fallback can be removed
@@ -714,7 +715,7 @@ binding:define_enum("binding", {
 	} },
 	{ "program_sequence", {
 		"first",        anchored_inferrable_term,
-		"start_anchor", anchor_type,
+		"debug",		spanned_name,
 	} },
 })
 
@@ -874,7 +875,6 @@ unanchored_inferrable_term:define_enum("unanchored_inferrable", {
 	} },
 	{ "program_sequence", {
 		"first",        anchored_inferrable_term,
-		"start_anchor", anchor_type,
 		"continue",     anchored_inferrable_term,
 		"debug_info",	spanned_name,
 	} },
@@ -1569,6 +1569,7 @@ gen.define_multi_enum(flex_continuation, "flex_continuation", replace_flex_type,
 	{ "empty$strict" },
 	{ "frame$flex", {
 		"context", flex_runtime_context_type,
+		"debuginfo", spanned_name,
 		"code",    typed_term,
 	} },
 	{ "sequence$flex", {

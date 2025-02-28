@@ -711,7 +711,8 @@ local function call_pi(start_anchor, type_of_term, usage_count, term, sargs, goa
 	---@cast res anchored_inferrable
 
 	if result_info:unwrap_result_info():unwrap_result_info():is_effectful() then
-		local bind = terms.binding.program_sequence(res, sargs.span.start)
+		local debuginfo = spanned_name("#program_sequence", sargs.span)
+		local bind = terms.binding.program_sequence(res, debuginfo)
 		ok, env = env:bind_local(bind)
 		if not ok then
 			return terms.tristate.failure, env
@@ -835,7 +836,8 @@ local function call_host_func_type(start_anchor, type_of_term_input, usage_count
 				)
 			)
 		)
-		local bind = terms.binding.program_sequence(app, sargs.span.start)
+		local debuginfo = spanned_name("#program_sequence", sargs.span)
+		local bind = terms.binding.program_sequence(app, debuginfo)
 		ok, env = env:bind_local(bind)
 		if not ok then
 			return terms.tristate.failure, env

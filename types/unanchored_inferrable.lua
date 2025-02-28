@@ -378,13 +378,11 @@ function unanchored_inferrable:as_host_intrinsic() end
 ---@return boolean
 function unanchored_inferrable:is_program_sequence() end
 ---@return anchored_inferrable first
----@return Anchor start_anchor
 ---@return anchored_inferrable continue
 ---@return spanned_name debug_info
 function unanchored_inferrable:unwrap_program_sequence() end
 ---@return boolean
 ---@return anchored_inferrable first
----@return Anchor start_anchor
 ---@return anchored_inferrable continue
 ---@return spanned_name debug_info
 function unanchored_inferrable:as_program_sequence() end
@@ -448,7 +446,7 @@ function unanchored_inferrable:as_program_type() end
 ---@field host_unstrict_unwrap fun(container: anchored_inferrable): unanchored_inferrable
 ---@field host_if fun(subject: checkable, consequent: anchored_inferrable, alternate: anchored_inferrable): unanchored_inferrable
 ---@field host_intrinsic fun(source: checkable, type: anchored_inferrable, start_anchor: Anchor): unanchored_inferrable
----@field program_sequence fun(first: anchored_inferrable, start_anchor: Anchor, continue: anchored_inferrable, debug_info: spanned_name): unanchored_inferrable
+---@field program_sequence fun(first: anchored_inferrable, continue: anchored_inferrable, debug_info: spanned_name): unanchored_inferrable
 ---@field program_end fun(result: anchored_inferrable): unanchored_inferrable
 ---@field program_type fun(effect_type: anchored_inferrable, result_type: anchored_inferrable): unanchored_inferrable
 return {}

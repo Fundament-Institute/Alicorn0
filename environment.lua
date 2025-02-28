@@ -308,7 +308,7 @@ function environment:bind_local(binding)
 		if self.purity:is_pure() then
 			error("binding.program_sequence is only allowed in effectful blocks")
 		end
-		local first, start_anchor = binding:unwrap_program_sequence()
+		local first, debuginfo = binding:unwrap_program_sequence()
 		local ok, first_type, first_usages, first_term = infer(first, typechecking_context)
 		if not ok then
 			return false, first_type
@@ -316,21 +316,22 @@ function environment:bind_local(binding)
 
 		local first_effect_type = evaluator.typechecker_state:metavariable(typechecking_context):as_flex()
 		local first_result_type = evaluator.typechecker_state:metavariable(typechecking_context):as_flex()
+		local name, span = debuginfo:unwrap_spanned_name()
 		local ok, err = evaluator.typechecker_state:flow(
 			first_type,
 			typechecking_context,
 			terms.flex_value.program_type(first_effect_type, first_result_type),
 			typechecking_context,
-			terms.constraintcause.primitive("Inferring on program type ", start_anchor)
+			terms.constraintcause.primitive("Inferring on program type ", span.start)
 		)
 		if not ok then
 			return false, err
 		end
 
+		local name, span = debuginfo:unwrap_spanned_name()
 		--print("FOUND EFFECTFUL BINDING", first_result_type, "produced by ", first_type)
 		local n = typechecking_context:len()
-		local debuginfo = spanned_name("#program_sequence", start_anchor:span(start_anchor))
-		local term = anchored_inferrable_term(start_anchor, unanchored_inferrable_term.bound_variable(n + 1, debuginfo))
+		local term = anchored_inferrable_term(span.start, unanchored_inferrable_term.bound_variable(n + 1, debuginfo))
 		local locals = self.locals:put("#program-sequence", term)
 		typechecking_context = typechecking_context:append("#program-sequence", first_result_type, nil, debuginfo)
 		local bindings = self.bindings:append(binding)
@@ -467,13 +468,8 @@ function environment:exit_block(term, shadowed)
 			unanchored_wrapped =
 				unanchored_inferrable_term.annotated_lambda(name, annotation, wrapped, start_anchor, visible, pure)
 		elseif binding:is_program_sequence() then
-			local first, start_anchor = binding:unwrap_program_sequence()
-			unanchored_wrapped = unanchored_inferrable_term.program_sequence(
-				first,
-				start_anchor,
-				wrapped,
-				spanned_name("#program-sequence", start_anchor:span(start_anchor))
-			)
+			local first, debuginfo = binding:unwrap_program_sequence()
+			unanchored_wrapped = unanchored_inferrable_term.program_sequence(first, wrapped, debuginfo)
 		else
 			local err_pp = PrettyPrint:new()
 			err_pp:unit("exit_block: unknown kind of binding ")

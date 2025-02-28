@@ -7,10 +7,12 @@ stuck_continuation = {}
 ---@return boolean
 function stuck_continuation:is_frame() end
 ---@return FlexRuntimeContext context
+---@return spanned_name debuginfo
 ---@return typed code
 function stuck_continuation:unwrap_frame() end
 ---@return boolean
 ---@return FlexRuntimeContext context
+---@return spanned_name debuginfo
 ---@return typed code
 function stuck_continuation:as_frame() end
 ---@return boolean
@@ -25,6 +27,6 @@ function stuck_continuation:as_sequence() end
 
 ---@class (exact) stuck_continuationType: EnumType
 ---@field define_enum fun(self: stuck_continuationType, name: string, variants: Variants): stuck_continuationType
----@field frame fun(context: FlexRuntimeContext, code: typed): stuck_continuation
+---@field frame fun(context: FlexRuntimeContext, debuginfo: spanned_name, code: typed): stuck_continuation
 ---@field sequence fun(first: flex_continuation, second: flex_continuation): stuck_continuation
 return {}

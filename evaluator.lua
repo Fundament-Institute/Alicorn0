@@ -3838,7 +3838,7 @@ local function infer_impl(
 		end
 		return true, U.notail(flex_value.star(0, 0)), desc_usages, U.notail(typed_term.host_tuple_type(desc_term))
 	elseif inferrable_term:is_program_sequence() then
-		local first, start_anchor, continue, dbg = inferrable_term:unwrap_program_sequence()
+		local first, continue, dbg = inferrable_term:unwrap_program_sequence()
 		local ok, first_type, first_usages, first_term = infer(first, typechecking_context)
 		if not ok then
 			return false, first_type
@@ -3847,18 +3847,19 @@ local function infer_impl(
 		--local first_effect_sig, first_base_type = first_type:unwrap_program_type()
 		local first_effect_sig = typechecker_state:metavariable(typechecking_context):as_flex()
 		local first_base_type = typechecker_state:metavariable(typechecking_context):as_flex()
+		local name, span = dbg:unwrap_spanned_name()
 		local ok, err = typechecker_state:flow(
 			first_type,
 			typechecking_context,
 			flex_value.program_type(first_effect_sig, first_base_type),
 			typechecking_context,
-			terms.constraintcause.primitive("Inferring on program type ", start_anchor)
+			terms.constraintcause.primitive("Inferring on program type ", span.start)
 		)
 		if not ok then
 			return false, err
 		end
 
-		local inner_context = typechecking_context:append("#program-sequence", first_base_type, nil, dbg)
+		local inner_context = typechecking_context:append(name, first_base_type, nil, dbg)
 		local ok, continue_type, continue_usages, continue_term = infer(continue, inner_context)
 		if not ok then
 			return false, continue_type
@@ -4879,9 +4880,9 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 			return evaluate(rest, runtime_context:append(first_res, "program_end", dbg), ambient_typechecking_context)
 		elseif startprog:is_program_cont() then
 			local effect_id, effect_arg, cont = startprog:unwrap_program_cont()
-			local restframe = terms.continuation.frame(runtime_context, rest)
+			local restframe = terms.flex_continuation.frame(runtime_context, dbg, rest)
 			return U.notail(
-				flex_value.program_cont(effect_id, effect_arg, terms.continuation.sequence(cont, restframe))
+				flex_value.program_cont(effect_id, effect_arg, terms.flex_continuation.sequence(cont, restframe))
 			)
 		else
 			error(
@@ -4902,7 +4903,7 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		local arg_val = evaluate(arg_term, runtime_context, ambient_typechecking_context)
 		if effect_val:is_effect_elem() then
 			local effect_id = effect_val:unwrap_effect_elem()
-			return U.notail(flex_value.program_cont(effect_id, arg_val, terms.continuation.empty))
+			return U.notail(flex_value.program_cont(effect_id, arg_val, terms.flex_continuation.empty))
 		end
 		error "NYI stuck program invoke"
 	elseif typed:is_program_type() then
@@ -5109,14 +5110,22 @@ local function invoke_continuation(cont, arg)
 	if cont:is_empty() then
 		return arg
 	elseif cont:is_frame() then
-		local ctx, term = cont:unwrap_frame()
-		local frame_res = evaluate(term, ctx:append(arg))
+		local ctx, debuginfo, term = cont:unwrap_frame()
+		local name, span = debuginfo:unwrap_spanned_name()
+		---@type flex_runtime_context
+		ctx = ctx:as_flex()
+		if terms.strict_runtime_context_type:value_check(ctx) then --HACK
+			ctx = ctx:append(arg:unwrap_strict())
+		else
+			ctx = ctx:append(arg, name, debuginfo)
+		end
+		local frame_res = evaluate(term, ctx)
 		return U.notail(execute_program(frame_res))
 	elseif cont:is_sequence() then
 		local first, rest = cont:unwrap_sequence()
 		--TODO: refold continuations and make stack tracing alicorn nice
 		local firstres = invoke_continuation(first, arg)
-		return U.notail(invoke_continuation(rest, firstres))
+		return invoke_continuation(rest, firstres)
 	end
 end
 
@@ -6461,6 +6470,7 @@ function TypeCheckerState:constrain_leftcall_compose_2(edge, edge_id)
 	if mtag == TypeCheckerTag.METAVAR then
 		for i, l2 in ipairs(self.graph.constrain_edges:to(edge.left)) do
 			if l2.rel ~= FunctionRelation(edge.rel) then
+				U.debug_break()
 				error(
 					"Relations do not match! " .. tostring(l2.rel) .. " is not " .. tostring(FunctionRelation(edge.rel))
 				)

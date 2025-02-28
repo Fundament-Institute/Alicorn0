@@ -57,11 +57,11 @@ function binding:as_annotated_lambda() end
 ---@return boolean
 function binding:is_program_sequence() end
 ---@return anchored_inferrable first
----@return Anchor start_anchor
+---@return spanned_name debug
 function binding:unwrap_program_sequence() end
 ---@return boolean
 ---@return anchored_inferrable first
----@return Anchor start_anchor
+---@return spanned_name debug
 function binding:as_program_sequence() end
 
 ---@class (exact) bindingType: EnumType
@@ -70,5 +70,5 @@ function binding:as_program_sequence() end
 ---@field tuple_elim fun(names: ArrayValue<string>, debug: ArrayValue<spanned_name>, subject: anchored_inferrable): binding
 ---@field record_elim fun(binding_anchor: Anchor, subject: anchored_inferrable, field_names: ArrayValue<string>, field_var_debugs: ArrayValue<spanned_name>): binding
 ---@field annotated_lambda fun(param_name: string, param_annotation: anchored_inferrable, start_anchor: Anchor, visible: visibility, pure: checkable): binding
----@field program_sequence fun(first: anchored_inferrable, start_anchor: Anchor): binding
+---@field program_sequence fun(first: anchored_inferrable, debug: spanned_name): binding
 return {}
