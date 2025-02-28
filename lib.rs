@@ -36,6 +36,12 @@ jit.opt.start("maxmcode=4096")
 jit.opt.start("recunroll=5")
 jit.opt.start("loopunroll=60")
 
+local create_module = require("sandbox")(true)
+
+return create_module([[ 
+
+local injected_dep = ...
+
 package = {preload = {}, loaded = {}}
 require = function(name) -- require stub for inside sandbox
   if not package.loaded[name] then
@@ -165,7 +171,7 @@ function M.alc_execute_file(filename)
   return alc_execute(s, filename)
 end
 
-return M
+return M]], "alicorn_lib", external_injected_dep)
         "#,
         )
         .exec()?;
