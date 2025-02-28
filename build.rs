@@ -98,8 +98,8 @@ end
     
 local code = table.concat( data )
 local file = io.open( dest, "wb" )
-local bytecode = string.dump(load(code), false)
-file:write( bytecode )
+--local bytecode = string.dump(load(code), false)
+file:write( code )
 file:close()
     "#,
     )

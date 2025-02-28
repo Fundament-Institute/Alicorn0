@@ -6,6 +6,7 @@ use mlua::prelude::*;
 const ALICORN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/alicorn.lua"));
 const PRELUDE: &[u8] = include_bytes!("prelude.alc");
 const GLSL_PRELUDE: &[u8] = include_bytes!("glsl-prelude.alc");
+const SANDBOX: &[u8] = include_bytes!("libs/sandbox.lua");
 
 extern "C-unwind" {
     fn luaopen_lpeg(L: *mut mlua::lua_State) -> std::ffi::c_int;
@@ -14,11 +15,24 @@ extern "C-unwind" {
 
 pub struct Alicorn {
     lua: Lua,
+    module: mlua::Value,
+}
+
+struct NamedChunk<'a>(&'a [u8], &'a str);
+
+impl mlua::AsChunk<'static> for NamedChunk<'static> {
+    fn name(&self) -> Option<String> {
+        Some(self.1.into())
+    }
+
+    fn source(self) -> std::io::Result<std::borrow::Cow<'static, [u8]>> {
+        Ok(std::borrow::Cow::Borrowed(self.0))
+    }
 }
 
 impl Alicorn {
     pub fn new(lua: Option<Lua>) -> Result<Self, mlua::Error> {
-        let lua = lua.unwrap_or_else(|| Lua::new());
+        let lua = lua.unwrap_or_else(|| unsafe { Lua::unsafe_new() });
 
         // Load C libraries we already linked into our rust binary using our build script. This works because we can
         // declare the C functions directly and have the linker resolve them during the link step.
@@ -29,17 +43,9 @@ impl Alicorn {
                 lua.load_from_function("lfs", lua.create_c_function(luaopen_lfs)?)?;
         }
 
-        lua.load(
-            r#"
-jit.opt.start("maxtrace=10000")
-jit.opt.start("maxmcode=4096")
-jit.opt.start("recunroll=5")
-jit.opt.start("loopunroll=60")
+        lua.load(NamedChunk(SANDBOX, "sandbox")).exec()?;
 
-local create_module = require("sandbox")(true)
-
-return create_module([[ 
-
+        let mut buf: Vec<u8> = r#"
 local injected_dep = ...
 
 package = {preload = {}, loaded = {}}
@@ -49,16 +55,11 @@ require = function(name) -- require stub for inside sandbox
   end
   return package.loaded[name]
 end
-        "#,
-        )
-        .exec()?;
 
-        // Here, we load all the embedded alicorn source into the lua engine and execute it.
-        lua.load(ALICORN).exec()?;
-
-        // Then we create helper functions for compiling an alicorn source file that we can bind to mlua.
-        lua.load(
-            r#" 
+"#
+        .into();
+        buf.extend_from_slice(ALICORN);
+        buf.extend_from_slice(r#" 
 metalanguage = require "metalanguage"
 evaluator = require "evaluator"
 format = require "format-adapter"
@@ -171,12 +172,38 @@ function M.alc_execute_file(filename)
   return alc_execute(s, filename)
 end
 
-return M]], "alicorn_lib", external_injected_dep)
-        "#,
+return M
+        "#.as_bytes());
+
+        lua.load(
+            r#"
+        jit.opt.start("maxtrace=10000")
+        jit.opt.start("maxmcode=4096")
+        jit.opt.start("recunroll=5")
+        jit.opt.start("loopunroll=60")
+        
+        local create_module = sandbox_impl(true)
+        
+        function load_in_sandbox(bytes)
+          local r, err = create_module(bytes, "alicorn_lib", external_injected_dep)
+          if r == nil then
+            error(err)
+          end
+          
+          print("no error!")
+          print(r)
+		  print(debug.getinfo(r))
+          print(debuginfo.name)
+          print(debuginfo.linedefined)
+          return r
+        end
+                "#,
         )
         .exec()?;
 
-        let alicorn = Self { lua };
+        let load_in_sandbox: LuaFunction = lua.load("load_in_sandbox").eval()?;
+        let module: mlua::Value = load_in_sandbox.call(lua.create_string(buf))?;
+        let alicorn = Self { lua, module };
 
         let _ = alicorn.include(std::str::from_utf8(PRELUDE)?, "prelude.alc")?;
 
@@ -194,17 +221,23 @@ return M]], "alicorn_lib", external_injected_dep)
         source: impl AsRef<str>,
         name: impl AsRef<str>,
     ) -> Result<mlua::Value, mlua::Error> {
-        let alc_include_string: LuaFunction = self.lua.load("alc_include_string").eval()?;
+        let alc_include_string: LuaFunction = self
+            .lua
+            .load("function(m, ...) return m.alc_include_string(...) end")
+            .eval()?;
 
-        alc_include_string.call((source.as_ref(), name.as_ref()))
+        alc_include_string.call((&self.module, source.as_ref(), name.as_ref()))
     }
     pub fn include_file(
         &self,
         path: impl AsRef<std::path::Path>,
     ) -> Result<mlua::Value, mlua::Error> {
-        let alc_include_file: LuaFunction = self.lua.load("alc_include_file").eval()?;
+        let alc_include_file: LuaFunction = self
+            .lua
+            .load("function(m, ...) return m.alc_include_file(...) end")
+            .eval()?;
 
-        alc_include_file.call(path.as_ref().as_os_str().to_string_lossy())
+        alc_include_file.call((&self.module, path.as_ref().as_os_str().to_string_lossy()))
     }
 
     pub fn execute<R: FromLuaMulti>(
@@ -212,16 +245,22 @@ return M]], "alicorn_lib", external_injected_dep)
         source: impl AsRef<str>,
         name: impl AsRef<str>,
     ) -> Result<R, mlua::Error> {
-        let execute_program: LuaFunction = self.lua.load("alc_execute").eval()?;
-        execute_program.call((source.as_ref(), name.as_ref()))
+        let execute_program: LuaFunction = self
+            .lua
+            .load("function(m, ...) return m.alc_execute(...) end")
+            .eval()?;
+        execute_program.call((&self.module, source.as_ref(), name.as_ref()))
     }
 
     pub fn execute_file<R: FromLuaMulti>(
         &self,
         path: impl AsRef<std::path::Path>,
     ) -> Result<R, mlua::Error> {
-        let execute_program: LuaFunction = self.lua.load("alc_execute_path").eval()?;
-        execute_program.call(path.as_ref().as_os_str().to_string_lossy())
+        let execute_program: LuaFunction = self
+            .lua
+            .load("function(m, ...) return m.alc_execute_path(...) end")
+            .eval()?;
+        execute_program.call((&self.module, path.as_ref().as_os_str().to_string_lossy()))
     }
 }
 
