@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
+
 function sandbox_impl(use_weaktables)
   local proxy_origins, proxy_owners, proxy_refs, proxy_key
   if use_weaktables then
@@ -349,14 +352,14 @@ local function env_create(module)
     load = function(ld, source, mode, subenv)
       if not source then source = "=(load)" end
       if not subenv then subenv = env end
-      mode = "t"
+      mode = "bt" --HACK, should be just "t"
       return load(ld, source, mode, subenv)
     end,
     -- loadfile is forbidden because there is no default filesystem access
     next = sandboxed_next,
     pairs = sandboxed_pairs,
     pcall = sandboxed_pcall,
-    -- print needs to be implemented with some kind of logging system to make the module output available rather than just dumping to stdout
+    print = print,
     rawequal = rawequal,
     rawget = rawget,
     rawlen = rawlen,
@@ -368,6 +371,8 @@ local function env_create(module)
     type = type,
     _VERSION = _VERSION,
     xpcall = sandboxed_xpcall,
+    _G = {lpeg = lpeg}, --HACK
+    io = {write = io.write, flush = io.flush},
 
     coroutine = {
       create = coroutine.create,

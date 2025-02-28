@@ -93,13 +93,15 @@ for i, path in ipairs( sources ) do
   end
   local bc = string.dump( content, false )
   local name = string.match( path, ".+/(.+).lua" )
-  table.insert( data, ( "package.preload[%q] = load( %q, %q )\n" ) : format( name, bc, name ) )
+  table.insert( data, ( "package.preload[%q], err = load( %q, %q, 'bt' )\n if err ~= nil then error(err) end \n" ) : format( name, bc, name ) )
 end
     
 local code = table.concat( data )
 local file = io.open( dest, "wb" )
 --local bytecode = string.dump(load(code), false)
+--file:write( "print('inside alicorn')\n" )
 file:write( code )
+--file:write( "print('exited alicorn') \n print(package.preload['metalanguage'])" )
 file:close()
     "#,
     )

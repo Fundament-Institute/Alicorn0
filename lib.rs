@@ -32,16 +32,15 @@ impl mlua::AsChunk<'static> for NamedChunk<'static> {
 
 impl Alicorn {
     pub fn new(lua: Option<Lua>) -> Result<Self, mlua::Error> {
-        let lua = lua.unwrap_or_else(|| unsafe { Lua::unsafe_new() });
+        let lua = lua.unwrap_or_else(|| Lua::new());
 
         // Load C libraries we already linked into our rust binary using our build script. This works because we can
         // declare the C functions directly and have the linker resolve them during the link step.
-        unsafe {
-            let _: mlua::Value =
-                lua.load_from_function("lpeg", lua.create_c_function(luaopen_lpeg)?)?;
-            let _: mlua::Value =
-                lua.load_from_function("lfs", lua.create_c_function(luaopen_lfs)?)?;
-        }
+
+        let _lpeg: mlua::Value =
+            lua.load_from_function("lpeg", unsafe { lua.create_c_function(luaopen_lpeg)? })?;
+        let _: mlua::Value =
+            lua.load_from_function("lfs", unsafe { lua.create_c_function(luaopen_lfs)? })?;
 
         lua.load(NamedChunk(SANDBOX, "sandbox")).exec()?;
 
@@ -50,7 +49,15 @@ local injected_dep = ...
 
 package = {preload = {}, loaded = {}}
 require = function(name) -- require stub for inside sandbox
+  if name == "lpeg" then 
+    --HACK!!!
+    package.loaded[name] = _G.lpeg
+  end
+
   if not package.loaded[name] then
+    if not package.preload[name] then
+      error("Couldn't find package.preload for " .. name)
+    end
     package.loaded[name] = package.preload[name]()
   end
   return package.loaded[name]
@@ -92,7 +99,7 @@ function M.alc_process(code, cur_env)
 end
 
 function M.alc_include_string(src, name)
-  local bound_expr, inner_env = alc_process(format.read(src, name), env)
+  local bound_expr, inner_env = M.alc_process(format.read(src, name), env)
   env = inner_env
   return bound_expr
 end
@@ -105,7 +112,7 @@ function M.alc_include_file(filename)
 
   local s = format.read(f:read("a"), filename)
   f:close()
-  local bound_expr, inner_env = alc_process(s, env)
+  local bound_expr, inner_env = M.alc_process(s, env)
   env = inner_env
   return bound_expr
 end
@@ -146,11 +153,11 @@ end
 function M.alc_execute(src, name)
 	local shadowed, cur_env = env:enter_block(terms.block_purity.effectful)
 
-  local bound_expr, cur_env = alc_process(format.read(src, name), cur_env)
+  local bound_expr, cur_env = M.alc_process(format.read(src, name), cur_env)
 
   local cur_env, block_expr, _ = cur_env:exit_block(bound_expr, shadowed)
 
-  local ok, result = alc_evaluate(block_expr, cur_env)
+  local ok, result = M.alc_evaluate(block_expr, cur_env)
 
   if not ok then
     print(result)
@@ -169,7 +176,7 @@ function M.alc_execute_file(filename)
 
   local s = format.read(f:read("a"), filename)
   f:close()
-  return alc_execute(s, filename)
+  return M.alc_execute(s, filename)
 end
 
 return M
@@ -185,17 +192,12 @@ return M
         local create_module = sandbox_impl(true)
         
         function load_in_sandbox(bytes)
-          local r, err = create_module(bytes, "alicorn_lib", external_injected_dep)
+          local r, err = create_module(bytes, "alicorn_lib", lpeg)
           if r == nil then
             error(err)
           end
           
-          print("no error!")
-          print(r)
-		  print(debug.getinfo(r))
-          print(debuginfo.name)
-          print(debuginfo.linedefined)
-          return r
+          return r()
         end
                 "#,
         )
