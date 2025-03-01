@@ -461,6 +461,69 @@ local pure_ascribed_name = metalanguage.reducer(
 	"pure_ascribed_name"
 )
 
+local tuple_ascribed_name = metalanguage.reducer(
+	---@param syntax ConstructedSyntax
+	---@param env Environment
+	---@param prev anchored_inferrable
+	---@param names spanned_name[]
+	---@return boolean
+	---@return spanned_name
+	---@return anchored_inferrable?
+	---@return Environment?
+	function(syntax, env, prev, names)
+		-- print("ascribed_name trying")
+		-- p(syntax)
+		-- print(prev:pretty_print())
+		-- print("is env an environment? (start of ascribed name)")
+		-- print(env.get)
+		-- print(env.enter_block)
+		local shadowed
+		shadowed, env = env:enter_block(terms.block_purity.pure)
+		local prev_name = "#prev - " .. tostring(syntax.span)
+		local ok
+		ok, env = env:bind_local(
+			terms.binding.annotated_lambda(
+				prev_name,
+				prev,
+				syntax.span.start,
+				terms.visibility.explicit,
+				literal_purity_pure
+			)
+		)
+		if not ok then
+			return false, env
+		end
+		local ok, prev_expr = env:get(prev_name)
+		if not ok then
+			error "#prev should always be bound, was just added"
+		end
+		---@cast prev_expr -string
+		local prev_binding = terms.binding.tuple_elim(
+			names:map(name_array, function(n)
+				return n.name
+			end),
+			names,
+			prev_expr
+		)
+		ok, env = env:bind_local(prev_binding)
+		if not ok then
+			return false, env
+		end
+		local ok, name, val, env =
+			syntax:match({ pure_ascribed_name(metalanguage.accept_handler, env) }, metalanguage.failure_handler, nil)
+		if not ok then
+			return ok, name
+		end
+		---@cast env Environment
+		local env, val, purity = env:exit_block(val, shadowed)
+		-- print("is env an environment? (end of ascribed name)")
+		-- print(env.get)
+		-- print(env.enter_block)
+		return true, name, val, env
+	end,
+	"tuple_ascribed_name"
+)
+
 local ascribed_name = metalanguage.reducer(
 	---@param syntax ConstructedSyntax
 	---@param env Environment
@@ -615,7 +678,7 @@ local tuple_desc_of_ascribed_names = metalanguage.reducer(
 				return tuple_ascribed_name(function(_userdata, name, type_val, type_env)
 					local names = acc.names:copy()
 					names:append(name)
-					local newthread = {
+					local new_acc = {
 						names = names,
 						args = terms.inferrable_cons(
 							span.start,
@@ -626,8 +689,8 @@ local tuple_desc_of_ascribed_names = metalanguage.reducer(
 						),
 						env = type_env,
 					}
-					return true, { name = name, type = type_val }, newthread
-				end, acc.env, build_type_term(span, acc.args), acc.names)
+					return true, { name = name, type = type_val }, new_acc
+				end, acc.env, prev, acc.names)
 			end, {
 				names = names,
 				args = terms.inferrable_empty,
