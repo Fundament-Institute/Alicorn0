@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
 
 use anyhow::{anyhow, Result};
-use heck::{ToShoutySnakeCase, ToKebabCase};
+use heck::{ToKebabCase, ToShoutySnakeCase};
 use rinja::{Error, Template};
 use std::borrow::Borrow;
 use uniffi_bindgen::interface::{AsType, ComponentInterface, Type};
@@ -27,30 +27,34 @@ mod filters {
 
     pub fn type_alicorn(type_: &Type, ci: &ComponentInterface) -> Result<String, Error> {
         Ok(match type_ {
-            Type::Int8 => "host-number".into(),
-            Type::UInt8 => "host-number".into(),
-            Type::Int16 => "host-number".into(),
-            Type::UInt16 => "host-number".into(),
-            Type::Int32 => "host-number".into(),
-            Type::UInt32 => "host-number".into(),
-            Type::Int64 => "host-number".into(),
-            Type::UInt64 => "host-number".into(),
-            Type::Float32 => "host-number".into(),
-            Type::Float64 => "host-number".into(),
-            Type::Boolean => "host-bool".into(),
-            Type::String => "host-string".into(),
+            Type::Int8 => " host-number".into(),
+            Type::UInt8 => " host-number".into(),
+            Type::Int16 => " host-number".into(),
+            Type::UInt16 => " host-number".into(),
+            Type::Int32 => " host-number".into(),
+            Type::UInt32 => " host-number".into(),
+            Type::Int64 => " host-number".into(),
+            Type::UInt64 => " host-number".into(),
+            Type::Float32 => " host-number".into(),
+            Type::Float64 => " host-number".into(),
+            Type::Boolean => " host-bool".into(),
+            Type::String => " host-string".into(),
             Type::Bytes => return Err(Error::Custom(anyhow!("bytes unimplemented!").into())),
-            Type::Timestamp => return Err(Error::Custom(anyhow!("timestamp unimplemented!").into())),
+            Type::Timestamp => {
+                return Err(Error::Custom(anyhow!("timestamp unimplemented!").into()))
+            }
             Type::Duration => return Err(Error::Custom(anyhow!("duration unimplemented!").into())),
             Type::Enum { name, .. } | Type::Record { name, .. } => format!("r#{name}"),
             Type::Object { name, imp, .. } => {
-                format!("uniffi-alicorn-{}-host-objects.uniffi-alicorn-{}-host-object-{}.t", ci.namespace(), ci.namespace(), name.to_kebab_case())
+                format!(" {}-type", ci.namespace().to_kebab_case())
             }
             Type::CallbackInterface { name, .. } => format!("Box<dyn r#{name}>"),
             Type::Optional { inner_type } => {
                 format!("(option {})", type_alicorn(inner_type, ci)?)
             }
-            Type::Sequence { inner_type } => return Err(Error::Custom(anyhow!("sequence unimplemented!").into())),
+            Type::Sequence { inner_type } => {
+                return Err(Error::Custom(anyhow!("sequence unimplemented!").into()))
+            }
             Type::Map {
                 key_type,
                 value_type,

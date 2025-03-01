@@ -1,47 +1,40 @@
 {%- macro alicorn_enum_hack(arg) %}
 {%- match arg.as_type() %}
-{%- when Type::Enum  { .. } %} host-u64
+{%- when Type::Enum  { .. } %} host-number
 {%- else -%} {{ &arg.as_type()|type_alicorn(&ci) }}
 {%- endmatch -%}
 {%- endmacro -%}
-record-of
-	uniffi-alicorn-{{ci.namespace()}}-host-enums = record-of
-		{%- for e in ci.enum_definitions() %}
-		uniffi-alicorn-{{ci.namespace()}}-host-enum-{{ e.name().to_kebab_case() }} = record-of
-			{%- for variant in e.variants() %}
-			uniffi-alicorn-{{ci.namespace()}}-host-enum-{{e.name().to_kebab_case()}}-variant-{{variant.name().to_kebab_case()}} = {{ loop.index }}
-			{%- endfor %}
-			new-host-type(new-host-unique-id("uniffi-alicorn-{{ci.namespace()}}-host-enum-{{e.name().to_kebab_case()}}"))
-		{%- endfor %}
-	uniffi-alicorn-{{ci.namespace()}}-host-objects = record-of
-		{%- for obj in ci.object_definitions() %}
-		uniffi-alicorn-{{ci.namespace()}}-host-object-{{ obj.name().to_kebab_case() }} = record-of
-			t = new-host-type "uniffi-alicorn-{{ci.namespace()}}-host-object-{{obj.name().to_kebab_case()}}"
-			{%- for meth in obj.methods() %}
-			uniffi-alicorn-{{ci.namespace()}}-host-method-{{ meth.name().to_kebab_case() }} =
-				intrinsic
-					"return uniffi_alicorn_host_{{ci.namespace()}}.methods['{{obj.name()}}']['{{meth.name()}}']"
-					:
-					host-func-type ((self : t){% for arg in meth.arguments() %} ({{arg.name()}} : {%- call alicorn_enum_hack(&arg) %}){% endfor %})
-						{%- match (meth.return_type(), meth.throws_type()) %}
-						{%- when (Some(return_type), None) %} -> (_ : {{ return_type|type_alicorn(&ci) }})
-						{%- when (Some(return_type), Some(error_type)) %} -> (_ : (result {{ return_type|type_alicorn(&ci) }} {{ error_type|type_alicorn(&ci) }}))
-						{%- when (None, Some(error_type)) %} -> (_ : (result () {{ error_type|type_alicorn(&ci) }}))
-						{%- when (None, None) %} -> ()
-						{%- endmatch %}
-			{%- endfor %}
-		{%- endfor %}
-	uniffi-alicorn-{{ci.namespace()}}-host-funcs = record-of
-		{%- for func in ci.function_definitions() %}
-		uniffi-alicorn-{{ci.namespace()}}-host-func-{{ func.name().to_kebab_case() }} =
-			intrinsic
-				"return uniffi_alicorn_host_{{ci.namespace()}}.funcs['{{func.name()}}']"
-				:
-				host-func-type ({% for arg in func.arguments() %}({{arg.name()}} : {%- call alicorn_enum_hack(&arg) %}){% endfor %})
-					{%- match (func.return_type(), func.throws_type()) %}
-					{%- when (Some(return_type), None) %} -> (_ : {{ return_type|type_alicorn(&ci) }})
-					{%- when (Some(return_type), Some(error_type)) %} -> (_ : (result {{ return_type|type_alicorn(&ci) }} {{ error_type|type_alicorn(&ci) }}))
-					{%- when (None, Some(error_type)) %} -> (_ : (result () {{ error_type|type_alicorn(&ci) }}))
-					{%- when (None, None) %} -> ()
-					{%- endmatch %}
-		{%- endfor %}
+{%- for e in ci.enum_definitions() %}
+{%- for variant in e.variants() %}
+let uniffi-alicorn-{{ci.namespace()}}-host-enum-{{e.name().to_kebab_case()}}-variant-{{variant.name().to_kebab_case()}} = {{ loop.index - 1 }}
+{%- endfor %}
+{%- endfor %}
+{%- for obj in ci.object_definitions() %}
+let {{ci.namespace().to_kebab_case()}}-type = new-host-type(new-host-unique-id("uniffi-alicorn-{{ci.namespace()}}-host-object-{{obj.name().to_kebab_case()}}"))
+{%- for meth in obj.methods() %}
+let uniffi-alicorn-{{ci.namespace()}}-host-method-{{ meth.name().to_kebab_case() }} =
+	intrinsic
+		"return uniffi_alicorn_host_{{ci.namespace()}}.methods['{{obj.name()}}']['{{meth.name()}}']"
+		:
+		host-func-type ((self : {{ci.namespace().to_kebab_case()}}-type){% for arg in meth.arguments() %} ({{arg.name()}} : {%- call alicorn_enum_hack(&arg) %}){% endfor %})
+			{%- match (meth.return_type(), meth.throws_type()) %}
+			{%- when (Some(return_type), None) %} -> ((_ : {{ return_type|type_alicorn(&ci) }}))
+			{%- when (Some(return_type), Some(error_type)) %} -> ((_ : result {{ return_type|type_alicorn(&ci) }} {{ error_type|type_alicorn(&ci) }}))
+			{%- when (None, Some(error_type)) %} -> ((_ : (result () {{ error_type|type_alicorn(&ci) }})))
+			{%- when (None, None) %} -> ()
+			{%- endmatch %}
+{%- endfor %}
+{%- endfor %}
+{%- for func in ci.function_definitions() %}
+let uniffi-alicorn-{{ci.namespace()}}-host-func-{{ func.name().to_kebab_case() }} =
+	intrinsic
+		"return uniffi_alicorn_host_{{ci.namespace()}}.funcs['{{func.name()}}']"
+		:
+		host-func-type ({% for arg in func.arguments() %}({{arg.name()}} : {%- call alicorn_enum_hack(&arg) %}){% endfor %})
+			{%- match (func.return_type(), func.throws_type()) %}
+			{%- when (Some(return_type), None) %} -> ((_ : {{ return_type|type_alicorn(&ci) }}))
+			{%- when (Some(return_type), Some(error_type)) %} -> ((_ : (result {{ return_type|type_alicorn(&ci) }} {{ error_type|type_alicorn(&ci) }})))
+			{%- when (None, Some(error_type)) %} -> ((_ : (result () {{ error_type|type_alicorn(&ci) }})))
+			{%- when (None, None) %} -> ()
+			{%- endmatch %}
+{%- endfor %}
