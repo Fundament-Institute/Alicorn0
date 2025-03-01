@@ -100,6 +100,14 @@ end
 ---@param binding binding
 ---@return boolean, Environment
 function environment:bind_local(binding)
+	return self:bind(binding, true)
+end
+
+---@overload fun(binding: binding, islocal: boolean) : boolean, string
+---@param binding binding
+---@param islocal boolean
+---@return boolean, Environment
+function environment:bind(binding, islocal)
 	--print("bind_local: (binding term follows)")
 	--print(binding:pretty_print(self.typechecking_context))
 	if not self.purity:is_pure() and not self.purity:is_effectful() then
@@ -121,7 +129,13 @@ function environment:bind_local(binding)
 		end
 		local n = typechecking_context:len()
 		local term = anchored_inferrable_term(anchor, unanchored_inferrable_term.bound_variable(n + 1, debuginfo))
-		local locals = self.locals:put(name, term)
+		---@type PrefixTree
+		local extended
+		if islocal then
+			extended = self.locals:put(name, term)
+		else
+			extended = self.nonlocals:put(name, term)
+		end
 		local evaled = evaluator.evaluate(expr_term, typechecking_context.runtime_context, typechecking_context)
 
 		if terms.strict_value.value_check(evaled) then
@@ -134,7 +148,8 @@ function environment:bind_local(binding)
 		local bindings = self.bindings:append(binding)
 		return true,
 			U.notail(update_env(self, {
-				locals = locals,
+				locals = islocal and extended or self.locals,
+				nonlocals = not islocal and extended or self.nonlocals,
 				bindings = bindings,
 				typechecking_context = typechecking_context,
 			}))
@@ -202,7 +217,13 @@ function environment:bind_local(binding)
 			]]
 
 			local n = typechecking_context:len()
-			local locals = self.locals
+			---@type PrefixTree
+			local extended
+			if islocal then
+				extended = self.locals
+			else
+				extended = self.nonlocals
+			end
 
 			if not (n_elements == names:len()) then
 				error("attempted to bind " .. n_elements .. " tuple elements to " .. names:len() .. " variables")
@@ -215,7 +236,7 @@ function environment:bind_local(binding)
 				-- end
 				local term =
 					anchored_inferrable_term(anchor, unanchored_inferrable_term.bound_variable(n + i, infos[i]))
-				locals = locals:put(v, term)
+				extended = extended:put(v, term)
 
 				local evaled = evaluator.index_tuple_value(subject_value, i)
 				--log_binding(v, tupletypes[i], evaled)
@@ -224,7 +245,8 @@ function environment:bind_local(binding)
 			local bindings = self.bindings:append(binding)
 			return true,
 				U.notail(update_env(self, {
-					locals = locals,
+					locals = islocal and extended or self.locals,
+					nonlocals = not islocal and extended or self.nonlocals,
 					bindings = bindings,
 					typechecking_context = typechecking_context,
 				}))
@@ -246,7 +268,13 @@ function environment:bind_local(binding)
 		error("(binding) tuple elim speculation failed! debugging this is left as an exercise to the maintainer")
 	elseif binding:is_record_elim() then
 		local binding_anchor, subject, field_names, field_var_debugs = binding:unwrap_record_elim()
-		local locals = self.locals
+		---@type PrefixTree
+		local extended
+		if islocal then
+			extended = self.locals
+		else
+			extended = self.nonlocals
+		end
 		local context_length = typechecking_context:len()
 		for field_index, field_name in ipairs(field_names) do
 			local field_var_debug = field_var_debugs[field_index]
@@ -263,12 +291,13 @@ function environment:bind_local(binding)
 					)
 				)
 			)
-			locals = locals:put(field_var_name, field_var_expr)
+			extended = extended:put(field_var_name, field_var_expr)
 		end
 		local bindings = self.bindings:append(binding)
 		return true,
 			U.notail(update_env(self, {
-				locals = locals,
+				locals = islocal and extended or self.locals,
+				nonlocals = not islocal and extended or self.nonlocals,
 				bindings = bindings,
 				typechecking_context = typechecking_context,
 			}))
@@ -289,7 +318,14 @@ function environment:bind_local(binding)
 		local evaled = evaluator.evaluate(annotation_term, typechecking_context.runtime_context, typechecking_context)
 		local bindings = self.bindings:append(binding)
 		local info = spanned_name(param_name, start_anchor:span(start_anchor))
-		local locals = self.locals:put(
+		---@type PrefixTree
+		local extended
+		if islocal then
+			extended = self.locals
+		else
+			extended = self.nonlocals
+		end
+		extended = extended:put(
 			param_name,
 			anchored_inferrable_term(
 				start_anchor,
@@ -299,7 +335,8 @@ function environment:bind_local(binding)
 		local typechecking_context = typechecking_context:append(param_name, evaled, nil, info)
 		return true,
 			U.notail(update_env(self, {
-				locals = locals,
+				locals = islocal and extended or self.locals,
+				nonlocals = not islocal and extended or self.nonlocals,
 				bindings = bindings,
 				typechecking_context = typechecking_context,
 			}))
@@ -332,12 +369,20 @@ function environment:bind_local(binding)
 		--print("FOUND EFFECTFUL BINDING", first_result_type, "produced by ", first_type)
 		local n = typechecking_context:len()
 		local term = anchored_inferrable_term(span.start, unanchored_inferrable_term.bound_variable(n + 1, debuginfo))
-		local locals = self.locals:put("#program-sequence", term)
+		---@type PrefixTree
+		local extended
+		if islocal then
+			extended = self.locals
+		else
+			extended = self.nonlocals
+		end
+		extended = extended:put("#program-sequence", term)
 		typechecking_context = typechecking_context:append("#program-sequence", first_result_type, nil, debuginfo)
 		local bindings = self.bindings:append(binding)
 		return true,
 			U.notail(update_env(self, {
-				locals = locals,
+				locals = islocal and extended or self.locals,
+				nonlocals = not islocal and extended or self.nonlocals,
 				bindings = bindings,
 				typechecking_context = typechecking_context,
 			}))

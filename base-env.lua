@@ -2315,6 +2315,44 @@ local function graph_snapshot_dump_impl(syntax, env)
 		env
 end
 
+---extract a module (represented by a record) into the current scope, either including it or just making it available, and optionally specifying fields
+---@param anchor Anchor
+---@param env Environment
+---@param module_expr anchored_inferrable
+---@param is_local boolean
+---@param field_names {field : string, target : spanned_name}[]?
+---@return boolean, Environment|string
+local function use_module(anchor, env, module_expr, is_local, field_names)
+	local fields = name_array()
+	local vars = spanned_name_array()
+	if not field_names then
+		local ok, mod_type, mod_usages, mod_term = evaluator.infer(module_expr, env.typechecking_context)
+		if not ok then
+			---@cast mod_type -flex_value
+			return ok, mod_type
+		end
+		---@cast mod_type -string
+		---@cast mod_type flex_value
+		if not mod_type:is_record_type() then
+			return false, "module must be a direct type for now as a shortcut, TODO use more inference systems"
+		end
+		local desc = mod_type:unwrap_record_type():unwrap_record_desc_value()
+		field_names = {}
+		for name, _ in desc:pairs() do
+			table.insert(field_names, { field = name, target = spanned_name(name, anchor) })
+		end
+		table.sort(field_names, function(a, b)
+			return a.field < b.field
+		end)
+	end
+	for i, field in ipairs(field_names) do
+		fields:append(field.field)
+		vars:append(field.target)
+	end
+	local bind = terms.binding.record_elim(anchor, module_expr, fields, vars)
+	return env:bind(bind, is_local)
+end
+
 local core_operations = {
 	--["do"] = evaluator.host_operative(do_block),
 	let = exprs.host_operative(let_impl, "let_impl"),
@@ -2629,6 +2667,7 @@ local base_env = {
 	tuple_to_host_tuple_inner = tuple_to_host_tuple_inner,
 	get_host_func_res = get_host_func_res,
 	gen_base_operator = gen_base_operator,
+	use_module = use_module,
 }
 local internals_interface = require "internals-interface"
 internals_interface.base_env = base_env
