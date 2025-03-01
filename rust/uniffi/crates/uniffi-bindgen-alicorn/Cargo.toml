@@ -3,23 +3,19 @@
 
 [package]
 name = "uniffi-bindgen-alicorn"
-version = "0.1.0"
+version = "0.1.2"
 description = "An Alicorn bindings generator for Rust using UniFFI (codegen and CLI tooling)"
 homepage.workspace = true
 repository.workspace = true
 license = "MPL-2.0"
-authors = [
-    "Dusk Banks <me@bb010g.com>",
-]
+authors = ["Dusk Banks <me@bb010g.com>"]
 edition.workspace = true
 rust-version.workspace = true
 keywords = ["ffi", "bindgen", "alicorn"]
 readme = "README.md"
 
 [features]
-default = [
-    "cargo-metadata",
-]
+default = ["cargo-metadata"]
 doc = []
 
 bindgen-tests = ["cargo-metadata", "dep:uniffi_testing"]
@@ -51,6 +47,4 @@ textwrap = { version = "0.16", features = ["smawk"], default-features = false }
 
 [lints.rust]
 unexpected_cfgs.level = "warn"
-unexpected_cfgs.check-cfg = [
-    'cfg(rust_analyzer)',
-]
+unexpected_cfgs.check-cfg = ['cfg(rust_analyzer)']

@@ -3,14 +3,12 @@
 
 [package]
 name = "uniffi-build-alicorn"
-version = "0.1.0"
+version = "0.1.2"
 description = "An Alicorn bindings generator for Rust using UniFFI (build script helpers)"
 homepage.workspace = true
 repository.workspace = true
 license = "MPL-2.0"
-authors = [
-    "Dusk Banks <me@bb010g.com>",
-]
+authors = ["Dusk Banks <me@bb010g.com>"]
 edition.workspace = true
 rust-version.workspace = true
 keywords = ["ffi", "bindgen", "alicorn"]
@@ -21,6 +19,5 @@ camino = "1.0.8"
 uniffi-bindgen-alicorn = { workspace = true, version = "=0.1.0" }
 
 [features]
-default = [
-]
+default = []
 doc = []

@@ -3,7 +3,7 @@
 
 [package]
 name = "uniffi-macros-alicorn"
-version = "0.1.0"
+version = "0.1.2"
 description = "An Alicorn bindings generator for Rust (convenience macros)"
 homepage.workspace = true
 repository.workspace = true

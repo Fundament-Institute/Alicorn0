@@ -3,6 +3,7 @@
 
 [workspace]
 members = ["rust/uniffi/crates/*", "rust/uniffi/examples/*"]
+default-members = ["rust/uniffi/crates/uniffi-alicorn"]
 resolver = "2"
 
 [workspace.package]
@@ -22,9 +23,9 @@ uniffi_meta = { version = "=0.29.0" }
 uniffi_testing = { version = "=0.29.0" }
 uniffi_udl = { version = "=0.29.0" }
 uniffi-alicorn = { path = "./rust/uniffi/crates/uniffi-alicorn" }
-uniffi-bindgen-alicorn = { path = "./rust/uniffi/crates/uniffi-bindgen-alicorn", default-features = false }
-uniffi-build-alicorn = { path = "./rust/uniffi/crates/uniffi-build-alicorn" }
-uniffi-macros-alicorn = { path = "./rust/uniffi/crates/uniffi-macros-alicorn" }
+uniffi-bindgen-alicorn = { version = "0.1.2", path = "./rust/uniffi/crates/uniffi-bindgen-alicorn", default-features = false }
+uniffi-build-alicorn = { version = "0.1.2", path = "./rust/uniffi/crates/uniffi-build-alicorn" }
+uniffi-macros-alicorn = { version = "0.1.2", path = "./rust/uniffi/crates/uniffi-macros-alicorn" }
 
 [package]
 name = "alicorn"
