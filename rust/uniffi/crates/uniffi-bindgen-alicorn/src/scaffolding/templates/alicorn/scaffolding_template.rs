@@ -2,6 +2,42 @@
 // Trust me, you don't want to mess with it!
 {% import "macros.rs" as rs %}
 
+{%- macro lua_wrap_return(ty) %}
+{%- match ty %}
+{%- when Type::Object  { .. } %}LuaWrap<{{ty|type_rs}}>
+{%- when Type::Record { .. } %}LuaWrap<{{ty|type_rs}}>
+{%- when Type::Optional { .. } %}LuaWrap<{{ty|type_rs}}>
+{%- when Type::Sequence { .. } %}LuaWrap<{{ty|type_rs}}>
+{%- when Type::Map { .. } %}LuaWrap<{{ty|type_rs}}>
+{%- when Type::Enum  { .. } %}u64
+{%- else -%}{{ty|type_rs}}
+{%- endmatch -%}
+{%- endmacro -%}
+
+{%- macro lua_wrap_arg(arg) %}
+{%- match arg.as_type() %}
+{%- when Type::Object  { .. } %}LuaWrap<{{arg.as_type().borrow()|type_rs}}>
+{%- when Type::Record { .. } %}LuaWrap<{{arg.as_type().borrow()|type_rs}}>
+{%- when Type::Optional { .. } %}LuaWrap<{{arg.as_type().borrow()|type_rs}}>
+{%- when Type::Sequence { .. } %}LuaWrap<{{arg.as_type().borrow()|type_rs}}>
+{%- when Type::Map { .. } %}LuaWrap<{{arg.as_type().borrow()|type_rs}}>
+{%- when Type::Enum  { .. } %}u64
+{%- else -%}{{arg.as_type().borrow()|type_rs}}
+{%- endmatch -%}
+{%- endmacro -%}
+
+{%- macro lua_unwrap_arg(arg) %}
+{%- match arg.as_type() %}
+{%- when Type::Object  { .. } %}.0
+{%- when Type::Record { .. } %}.0
+{%- when Type::Optional { .. } %}.0
+{%- when Type::Sequence { .. } %}.0
+{%- when Type::Map { .. } %}.0
+{%- when Type::Enum  { .. } %}.into()
+{%- else -%}
+{%- endmatch -%}
+{%- endmacro -%}
+
 ::uniffi_alicorn::setup_alicorn_scaffolding!("{{ ci.namespace() }}");
 
 #[derive(Clone)]
@@ -28,30 +64,9 @@ impl<T: Clone + 'static> mlua::FromLua for LuaWrap<T> {
 }
 impl<T: Clone + 'static> ::mlua::UserData for LuaWrap<T> {}
 
-{% for obj in ci.object_definitions() %}
-/*struct NewType{{obj.name()}}({{&obj.as_type()|type_rs}});
-
-impl mlua::FromLua for NewType{{obj.name()}} {
-    #[inline]
-    fn from_lua(value: ::mlua::Value, _: &::mlua::Lua) -> ::mlua::Result<Self> {
-        match value {
-            ::mlua::Value::UserData(ud) => Ok(ud.borrow::<Self>()?.clone()),
-            _ => Err(::mlua::Error::FromLuaConversionError {
-                from: value.type_name(),
-                to: "{{obj.name()}}".to_string(),
-                message: None,
-            }),
-        }
-    }
-}
-impl ::mlua::UserData for NewType{{obj.name()}} {}*/
-{% endfor %}
-
-fn uniffi_alicorn_{{ci.namespace()}}_setup<'a>(uniffi_alicorn_{{ci.namespace()}}_alicorn: &'a ::alicorn::Alicorn) -> ::mlua::Result<&'static str> {
-    let uniffi_alicorn_{{ci.namespace()}}_lua = &uniffi_alicorn_{{ci.namespace()}}_alicorn.lua;
-    let uniffi_alicorn_{{ci.namespace()}}_package_loaded = uniffi_alicorn_{{ci.namespace()}}_lua.globals().get::<::mlua::Table>("package")?.get::<::mlua::Table>("loaded")?;
+fn uniffi_alicorn_{{ci.namespace()}}_setup<'a>(uniffi_alicorn_{{ci.namespace()}}_lua: &'a ::mlua::Lua, target_interface: &::mlua::Table) -> ::mlua::Result<&'static str> {
     let uniffi_alicorn_{{ci.namespace()}}_host_data = uniffi_alicorn_{{ci.namespace()}}_lua.create_table()?;
-    uniffi_alicorn_{{ci.namespace()}}_package_loaded.set("uniffi-alicorn-host-{{ci.namespace()}}", &uniffi_alicorn_{{ci.namespace()}}_host_data)?;
+    target_interface.set("uniffi_alicorn_host_{{ci.namespace()}}", &uniffi_alicorn_{{ci.namespace()}}_host_data)?;
 
     {% for e in ci.enum_definitions() %}
     {% if ci.is_name_used_as_error(e.name()) %}
@@ -73,15 +88,15 @@ fn uniffi_alicorn_{{ci.namespace()}}_setup<'a>(uniffi_alicorn_{{ci.namespace()}}
     uniffi_alicorn_{{ci.namespace()}}_host_data.set("funcs", &uniffi_alicorn_{{ci.namespace()}}_host_funcs)?;
     {%- for func in ci.function_definitions() %}
     uniffi_alicorn_{{ci.namespace()}}_host_funcs.set("{{ func.name() }}", &uniffi_alicorn_{{ci.namespace()}}_lua.create_function(
-            |uniffi_alicorn_{{ci.namespace()}}_lua, ({% for arg in func.arguments() %}r#{{ arg.name() }}, {%- endfor %}): ({%- for arg in func.arguments() %}{% if arg.by_ref() %}&{% endif %}LuaWrap<{{ arg.as_type().borrow()|type_rs }}>, {% endfor %})|
+            |uniffi_alicorn_{{ci.namespace()}}_lua, ({% for arg in func.arguments() %}r#{{ arg.name() }}, {%- endfor %}): ({%- for arg in func.arguments() %}{% if arg.by_ref() %}&{% endif %}{%- call lua_wrap_arg(arg) %}, {% endfor %})|
                 {%- match (func.return_type(), func.throws_type()) %}
-                {%- when (Some(return_type), None) %} -> ::mlua::Result<LuaWrap<{{ return_type|type_rs }}>>
-                {%- when (Some(return_type), Some(error_type)) %} -> ::mlua::Result<::std::result::Result::<LuaWrap<{{ return_type|type_rs }}>, {{ error_type|type_rs }}>>
+                {%- when (Some(return_type), None) %} -> ::mlua::Result<{%- call lua_wrap_return(return_type) %}>
+                {%- when (Some(return_type), Some(error_type)) %} -> ::mlua::Result<::std::result::Result::<{%- call lua_wrap_return(return_type) %}, {{ error_type|type_rs }}>>
                 {%- when (None, Some(error_type)) %} -> ::mlua::Result<::std::result::Result::<(), {{ error_type|type_rs }}>>
                 {%- when (None, None) %} -> ::mlua::Result<()>
                 {%- endmatch %}
-            { ::core::result::Result::Ok(LuaWrap({{ func.name() }}({%- for arg in func.arguments() %}r#{{ arg.name() }}.0,{% endfor %}))) }
-    )?);
+            { ::core::result::Result::Ok({{ func.name() }}({%- for arg in func.arguments() %}r#{{ arg.name() }}{%- call lua_unwrap_arg(arg) %},{% endfor %}).into()) }
+    )?)?;
     {% endfor -%}
 
     // Object definitions, corresponding to UDL `interface` definitions.
@@ -91,16 +106,16 @@ fn uniffi_alicorn_{{ci.namespace()}}_setup<'a>(uniffi_alicorn_{{ci.namespace()}}
     let uniffi_alicorn_{{ci.namespace()}}_host_obj_methods = uniffi_alicorn_{{ci.namespace()}}_lua.create_table()?;
     uniffi_alicorn_{{ci.namespace()}}_host_methods.set("{{obj.name()}}", &uniffi_alicorn_{{ci.namespace()}}_host_obj_methods)?;
     {%- for meth in obj.methods() %}
-    uniffi_alicorn_{{ci.namespace()}}_host_methods.set("{{ meth.name() }}", &uniffi_alicorn_{{ci.namespace()}}_lua.create_function(
-            |uniffi_alicorn_{{ci.namespace()}}_lua, (uniffi_alicorn_self,{% for arg in meth.arguments() %} r#{{ arg.name() }}, {%- endfor %}): ({% if meth.takes_self_by_arc()%}{{&obj.as_type()|type_rs}}{% else %}LuaWrap<&dyn {{obj.name()}}>{% endif %}, {% for arg in meth.arguments() %}{% if arg.by_ref() %}&{% endif %}LuaWrap<{{ arg.as_type().borrow()|type_rs }}>, {% endfor %})|
+    uniffi_alicorn_{{ci.namespace()}}_host_obj_methods.set("{{ meth.name() }}", &uniffi_alicorn_{{ci.namespace()}}_lua.create_function(
+            |uniffi_alicorn_{{ci.namespace()}}_lua, (uniffi_alicorn_self,{% for arg in meth.arguments() %} r#{{ arg.name() }}, {%- endfor %}): ({% if meth.takes_self_by_arc()%}{{&obj.as_type()|type_rs}}{% else %}LuaWrap<::std::sync::Arc<dyn {{obj.name()}}>>{% endif %}, {% for arg in meth.arguments() %}{% if arg.by_ref() %}&{% endif %}{%- call lua_wrap_arg(arg) %}, {% endfor %})|
                 {%- match (meth.return_type(), meth.throws_type()) %}
-                {%- when (Some(return_type), None) %} -> ::mlua::Result<LuaWrap<{{ return_type|type_rs }}>>
-                {%- when (Some(return_type), Some(error_type)) %} -> ::mlua::Result<::std::result::Result::<LuaWrap<{{ return_type|type_rs }}>, {{ error_type|type_rs }}>>
+                {%- when (Some(return_type), None) %} -> ::mlua::Result<{%- call lua_wrap_return(return_type) %}>
+                {%- when (Some(return_type), Some(error_type)) %} -> ::mlua::Result<::std::result::Result::<{%- call lua_wrap_return(return_type) %}, {{ error_type|type_rs }}>>
                 {%- when (None, Some(error_type)) %} -> ::mlua::Result<::std::result::Result::<(), {{ error_type|type_rs }}>>
                 {%- when (None, None) %} -> ::mlua::Result<()>
                 {%- endmatch %}
-            { ::core::result::Result::Ok({{ obj.name() }}::{{ meth.name() }}(uniffi_alicorn_self.0,{% for arg in meth.arguments() %} r#{{ arg.name() }}.0, {%- endfor %}).into()) }
-    )?);
+            { ::core::result::Result::Ok({{ obj.name() }}::{{ meth.name() }}(uniffi_alicorn_self.0.as_ref(),{% for arg in meth.arguments() %} r#{{ arg.name() }}{%- call lua_unwrap_arg(arg) %}, {%- endfor %}).into()) }
+    )?)?;
     {% endfor -%}
     {% endfor %}
 

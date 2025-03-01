@@ -53,6 +53,7 @@ impl dyn Calculator {
 
 // Doesn't include instant actions that take no argument, like clear, backspace, pi, square, root, etc.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
+#[repr(u64)]
 pub enum CalcOp {
     #[default]
     None,
@@ -69,6 +70,24 @@ pub enum CalcOp {
     Clear,
 }
 
+impl From<u64> for CalcOp {
+    fn from(i: u64) -> Self {
+        match i {
+            1 => CalcOp::Add,
+            2 => CalcOp::Sub,
+            3 => CalcOp::Mul,
+            4 => CalcOp::Div,
+            5 => CalcOp::Pow,
+            6 => CalcOp::Square,
+            7 => CalcOp::Sqrt,
+            8 => CalcOp::Inv,
+            9 => CalcOp::Negate,
+            10 => CalcOp::Clear,
+            _ => CalcOp::None,
+        }
+    }
+}
+
 static CALCULATOR: OnceLock<Arc<dyn Calculator>> = OnceLock::new();
 
 pub fn register(calc: Arc<dyn Calculator>) -> bool {
@@ -76,8 +95,9 @@ pub fn register(calc: Arc<dyn Calculator>) -> bool {
         return false;
     }
     let mlua = mlua::Lua::new();
-    let alicorn = alicorn::Alicorn::new(Some(mlua)).expect("no alicorn :(");
-    let format_text = uniffi_alicorn_calc_setup(&alicorn);
+    let interface = mlua.create_table().unwrap();
+    let format_text = uniffi_alicorn_calc_setup(&mlua, &interface);
+    let alicorn = alicorn::Alicorn::new(mlua, &interface).expect("no alicorn :(");
     alicorn.include(format_text.expect("no format :("), "uniffi-alicorn-calc").expect("no include :(");
     println!("Hello world!");
     true
