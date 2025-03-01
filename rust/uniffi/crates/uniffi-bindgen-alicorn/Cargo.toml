@@ -12,7 +12,7 @@ authors = ["Dusk Banks <me@bb010g.com>"]
 edition.workspace = true
 rust-version.workspace = true
 keywords = ["ffi", "bindgen", "alicorn"]
-readme = "README.md"
+readme = "../../../../README.md"
 
 [features]
 default = ["cargo-metadata"]

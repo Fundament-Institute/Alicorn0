@@ -3,7 +3,12 @@
 
 [workspace]
 members = ["rust/uniffi/crates/*", "rust/uniffi/examples/*"]
-default-members = ["rust/uniffi/crates/uniffi-alicorn"]
+default-members = [
+  "rust/uniffi/crates/uniffi-alicorn",
+  "rust/uniffi/crates/uniffi-bindgen-alicorn",
+  "rust/uniffi/crates/uniffi-macros-alicorn",
+  "rust/uniffi/crates/uniffi-build-alicorn",
+]
 resolver = "2"
 
 [workspace.package]
