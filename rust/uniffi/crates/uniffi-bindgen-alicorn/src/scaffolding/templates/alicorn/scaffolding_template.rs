@@ -4,11 +4,54 @@
 
 ::uniffi_alicorn::setup_alicorn_scaffolding!("{{ ci.namespace() }}");
 
+#[derive(Clone)]
+struct LuaWrap<T: Clone + 'static>(T);
+
+impl<T: Clone + 'static> From<T> for LuaWrap<T> {
+    fn from(value: T) -> Self {
+        LuaWrap(value)
+    }
+}
+
+impl<T: Clone + 'static> mlua::FromLua for LuaWrap<T> {
+    #[inline]
+    fn from_lua(value: ::mlua::Value, _: &::mlua::Lua) -> ::mlua::Result<Self> {
+        match value {
+            ::mlua::Value::UserData(ud) => Ok(ud.borrow::<Self>()?.clone()),
+            _ => Err(::mlua::Error::FromLuaConversionError {
+                from: value.type_name(),
+                to: "LuaWrap".to_string(),
+                message: None,
+            }),
+        }
+    }
+}
+impl<T: Clone + 'static> ::mlua::UserData for LuaWrap<T> {}
+
+{% for obj in ci.object_definitions() %}
+/*struct NewType{{obj.name()}}({{&obj.as_type()|type_rs}});
+
+impl mlua::FromLua for NewType{{obj.name()}} {
+    #[inline]
+    fn from_lua(value: ::mlua::Value, _: &::mlua::Lua) -> ::mlua::Result<Self> {
+        match value {
+            ::mlua::Value::UserData(ud) => Ok(ud.borrow::<Self>()?.clone()),
+            _ => Err(::mlua::Error::FromLuaConversionError {
+                from: value.type_name(),
+                to: "{{obj.name()}}".to_string(),
+                message: None,
+            }),
+        }
+    }
+}
+impl ::mlua::UserData for NewType{{obj.name()}} {}*/
+{% endfor %}
+
 fn uniffi_alicorn_{{ci.namespace()}}_setup<'a>(uniffi_alicorn_{{ci.namespace()}}_alicorn: &'a ::alicorn::Alicorn) -> ::mlua::Result<&'static str> {
     let uniffi_alicorn_{{ci.namespace()}}_lua = &uniffi_alicorn_{{ci.namespace()}}_alicorn.lua;
     let uniffi_alicorn_{{ci.namespace()}}_package_loaded = uniffi_alicorn_{{ci.namespace()}}_lua.globals().get::<::mlua::Table>("package")?.get::<::mlua::Table>("loaded")?;
     let uniffi_alicorn_{{ci.namespace()}}_host_data = uniffi_alicorn_{{ci.namespace()}}_lua.create_table()?;
-    uniffi_alicorn_{{ci.namespace()}}_package_loaded.set("uniffi-alicorn-host-{{ci.namespace()}}", uniffi_alicorn_{{ci.namespace()}}_host_data)?;
+    uniffi_alicorn_{{ci.namespace()}}_package_loaded.set("uniffi-alicorn-host-{{ci.namespace()}}", &uniffi_alicorn_{{ci.namespace()}}_host_data)?;
 
     {% for e in ci.enum_definitions() %}
     {% if ci.is_name_used_as_error(e.name()) %}
@@ -27,36 +70,36 @@ fn uniffi_alicorn_{{ci.namespace()}}_setup<'a>(uniffi_alicorn_{{ci.namespace()}}
 
     // Top level functions, corresponding to UDL `namespace` functions.
     let uniffi_alicorn_{{ci.namespace()}}_host_funcs = uniffi_alicorn_{{ci.namespace()}}_lua.create_table()?;
-    uniffi_alicorn_{{ci.namespace()}}_host_data.set("funcs", uniffi_alicorn_{{ci.namespace()}}_host_funcs)?;
+    uniffi_alicorn_{{ci.namespace()}}_host_data.set("funcs", &uniffi_alicorn_{{ci.namespace()}}_host_funcs)?;
     {%- for func in ci.function_definitions() %}
-    uniffi_alicorn_{{ci.namespace()}}_host_funcs.set("{{ func.name() }}", uniffi_alicorn_{{ci.namespace()}}_lua.create_function(
-            |uniffi_alicorn_{{ci.namespace()}}_lua, ({% for arg in func.arguments() %}r#{{ arg.name() }}, {%- endfor %}): ({%- for arg in func.arguments() %}{% if arg.by_ref() %}&{% endif %}{{ arg.as_type().borrow()|type_rs }}, {% endfor %})|
+    uniffi_alicorn_{{ci.namespace()}}_host_funcs.set("{{ func.name() }}", &uniffi_alicorn_{{ci.namespace()}}_lua.create_function(
+            |uniffi_alicorn_{{ci.namespace()}}_lua, ({% for arg in func.arguments() %}r#{{ arg.name() }}, {%- endfor %}): ({%- for arg in func.arguments() %}{% if arg.by_ref() %}&{% endif %}LuaWrap<{{ arg.as_type().borrow()|type_rs }}>, {% endfor %})|
                 {%- match (func.return_type(), func.throws_type()) %}
-                {%- when (Some(return_type), None) %} -> ::mlua::Result<{{ return_type|type_rs }}>
-                {%- when (Some(return_type), Some(error_type)) %} -> ::mlua::Result<::std::result::Result::<{{ return_type|type_rs }}, {{ error_type|type_rs }}>>
+                {%- when (Some(return_type), None) %} -> ::mlua::Result<LuaWrap<{{ return_type|type_rs }}>>
+                {%- when (Some(return_type), Some(error_type)) %} -> ::mlua::Result<::std::result::Result::<LuaWrap<{{ return_type|type_rs }}>, {{ error_type|type_rs }}>>
                 {%- when (None, Some(error_type)) %} -> ::mlua::Result<::std::result::Result::<(), {{ error_type|type_rs }}>>
                 {%- when (None, None) %} -> ::mlua::Result<()>
                 {%- endmatch %}
-            { ::core::result::Result::Ok({{ func.name() }}({%- for arg in func.arguments() %}r#{{ arg.name() }},{% endfor %})) }
+            { ::core::result::Result::Ok(LuaWrap({{ func.name() }}({%- for arg in func.arguments() %}r#{{ arg.name() }}.0,{% endfor %}))) }
     )?);
     {% endfor -%}
 
     // Object definitions, corresponding to UDL `interface` definitions.
     let uniffi_alicorn_{{ci.namespace()}}_host_methods = uniffi_alicorn_{{ci.namespace()}}_lua.create_table()?;
-    uniffi_alicorn_{{ci.namespace()}}_host_data.set("methods", uniffi_alicorn_{{ci.namespace()}}_host_methods)?;
+    uniffi_alicorn_{{ci.namespace()}}_host_data.set("methods", &uniffi_alicorn_{{ci.namespace()}}_host_methods)?;
     {% for obj in ci.object_definitions() %}
     let uniffi_alicorn_{{ci.namespace()}}_host_obj_methods = uniffi_alicorn_{{ci.namespace()}}_lua.create_table()?;
-    uniffi_alicorn_{{ci.namespace()}}_host_methods.set("{{obj.name()}}", uniffi_alicorn_{{ci.namespace()}}_host_obj_methods)?;
+    uniffi_alicorn_{{ci.namespace()}}_host_methods.set("{{obj.name()}}", &uniffi_alicorn_{{ci.namespace()}}_host_obj_methods)?;
     {%- for meth in obj.methods() %}
-    uniffi_alicorn_{{ci.namespace()}}_host_methods.set("{{ meth.name() }}", uniffi_alicorn_{{ci.namespace()}}_lua.create_function(
-            |uniffi_alicorn_{{ci.namespace()}}_lua, (uniffi_alicorn_self,{% for arg in meth.arguments() %} r#{{ arg.name() }}, {%- endfor %}): ({% if meth.takes_self_by_arc()%}{{&obj.as_type()|type_rs}}{% else %}&dyn {{obj.name()}}{% endif %}, {% for arg in meth.arguments() %}{% if arg.by_ref() %}&{% endif %}{{ arg.as_type().borrow()|type_rs }}, {% endfor %})|
+    uniffi_alicorn_{{ci.namespace()}}_host_methods.set("{{ meth.name() }}", &uniffi_alicorn_{{ci.namespace()}}_lua.create_function(
+            |uniffi_alicorn_{{ci.namespace()}}_lua, (uniffi_alicorn_self,{% for arg in meth.arguments() %} r#{{ arg.name() }}, {%- endfor %}): ({% if meth.takes_self_by_arc()%}{{&obj.as_type()|type_rs}}{% else %}LuaWrap<&dyn {{obj.name()}}>{% endif %}, {% for arg in meth.arguments() %}{% if arg.by_ref() %}&{% endif %}LuaWrap<{{ arg.as_type().borrow()|type_rs }}>, {% endfor %})|
                 {%- match (meth.return_type(), meth.throws_type()) %}
-                {%- when (Some(return_type), None) %} -> ::mlua::Result<{{ return_type|type_rs }}>
-                {%- when (Some(return_type), Some(error_type)) %} -> ::mlua::Result<::std::result::Result::<{{ return_type|type_rs }}, {{ error_type|type_rs }}>>
+                {%- when (Some(return_type), None) %} -> ::mlua::Result<LuaWrap<{{ return_type|type_rs }}>>
+                {%- when (Some(return_type), Some(error_type)) %} -> ::mlua::Result<::std::result::Result::<LuaWrap<{{ return_type|type_rs }}>, {{ error_type|type_rs }}>>
                 {%- when (None, Some(error_type)) %} -> ::mlua::Result<::std::result::Result::<(), {{ error_type|type_rs }}>>
                 {%- when (None, None) %} -> ::mlua::Result<()>
                 {%- endmatch %}
-            { ::core::result::Result::Ok({{ obj.name() }}::{{ meth.name() }}(uniffi_alicorn_self,{% for arg in meth.arguments() %} r#{{ arg.name() }}, {%- endfor %})) }
+            { ::core::result::Result::Ok({{ obj.name() }}::{{ meth.name() }}(uniffi_alicorn_self.0,{% for arg in meth.arguments() %} r#{{ arg.name() }}.0, {%- endfor %}).into()) }
     )?);
     {% endfor -%}
     {% endfor %}
