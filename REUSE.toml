@@ -18,11 +18,7 @@ SPDX-License-Identifier = "Apache-2.0"
 
 # Config files that we can't comment in.
 [[annotations]]
-path = [
-	".git-blame-ignore-revs",
-	".luarc.json",
-	".vscode/**/*.json",
-]
+path = [".git-blame-ignore-revs", ".luarc.json", ".vscode/**/*.json"]
 precedence = "closest"
 SPDX-FileCopyrightText = "2025 Fundament Software SPC <https://fundament.software>"
 SPDX-License-Identifier = "Apache-2.0"
@@ -60,10 +56,7 @@ SPDX-License-Identifier = "Apache-2.0"
 
 # Source/data files that we don't want to comment in.
 [[annotations]]
-path = [
-	"**/*.alc",
-	"test*.lua",
-]
+path = ["**/*.alc", "test*.lua"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2025 Fundament Software SPC <https://fundament.software>"
 SPDX-License-Identifier = "Apache-2.0"
@@ -74,3 +67,13 @@ path = "*.lock"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2025 Fundament Software SPC <https://fundament.software>"
 SPDX-License-Identifier = "Apache-2.0"
+
+
+[[annotations]]
+path = [
+	"rust/uniffi/crates/uniffi-bindgen-alicorn/src/scaffolding/templates/alicorn/**",
+	"rust/uniffi/crates/uniffi-bindgen-alicorn/src/scaffolding/templates/macros.rs",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2025 Fundament Software SPC <https://fundament.software>"
+SPDX-License-Identifier = "MPL-2.0"

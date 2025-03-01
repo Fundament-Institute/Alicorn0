@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
+
 require("lua-init")
 
 local metalanguage = require "metalanguage"
@@ -47,7 +50,7 @@ function Runner:enter_block(purity, ...)
 		if block_purity_constructor == nil then
 			error(("`Runner:enter_block()`: `terms.block_purity.%s` is nil"):format(tostring(purity)))
 		end
-		if select('#', ...) > 0 then
+		if select("#", ...) > 0 then
 			purity = block_purity_constructor(...) --[[@as block_purity]]
 		else
 			purity = block_purity_constructor --[[@as block_purity]]
@@ -122,7 +125,7 @@ end
 ---@return boolean ok
 ---@return (string | anchored_inferrable) expr
 function Runner:try_parse_syntax(syntax, id, ...)
-	if select('#', ...) > 0 then
+	if select("#", ...) > 0 then
 		self:enter_block(...)
 	end
 	---@type boolean, (string | anchored_inferrable), Environment?
@@ -139,7 +142,7 @@ function Runner:try_parse_syntax(syntax, id, ...)
 	---@cast expr anchored_inferrable
 	---@cast env Environment
 	self.env = env
-	if select('#', ...) > 0 then
+	if select("#", ...) > 0 then
 		local _purity
 		expr, _purity = self:exit_block(expr)
 	end
@@ -256,7 +259,8 @@ end
 ---@return boolean ok
 ---@return (string | flex_value) value
 function Runner:try_evaluate_term(term)
-	local ok, value = pcall(evaluator.evaluate, term, self.env.typechecking_context.runtime_context, self.env.typechecking_context)
+	local ok, value =
+		pcall(evaluator.evaluate, term, self.env.typechecking_context.runtime_context, self.env.typechecking_context)
 	return ok, value
 end
 
