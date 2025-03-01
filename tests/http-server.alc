@@ -221,7 +221,7 @@ let runloop =
 	response-set-header res "Content-Type" "text/plain"
 	response-set-header res "Content-Length" num-to-str(strlen(body))
 	response-send-body res body
-	tuple-of-implicit()
+	tuple-of()
 
 ####let main = lambda-prog ()
 	let server = create-http-server(my-request-handler)

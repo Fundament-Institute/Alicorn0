@@ -1,3 +1,4 @@
+require "lua-init"
 local luaunit = require "luaunit"
 local format = require "format"
 

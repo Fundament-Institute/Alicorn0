@@ -562,22 +562,22 @@ local RecordDescRelation = setmetatable({
 		function(l_ctx, val, r_ctx, use, cause)
 			local l_field_typefns = val:unwrap_record_desc_value()
 			local r_field_typefns = use:unwrap_record_desc_value()
-			local base_unique = flex_value.free(free.unique({ debug = "Record desc relation" }))
+			local base_unique = stuck_value.free(free.unique({ debug = "Record desc relation" }))
 			local l_field_vals = string_value_map()
 			local r_field_vals = string_value_map()
 			local l_field_realized_types = string_value_map()
 			local r_field_realized_types = string_value_map()
 			for k, v in r_field_typefns:pairs() do
-				r_field_vals:set(k, flex_value.record_field_access(k, base_unique))
+				r_field_vals:set(k, flex_value.record_field_access(base_unique, k))
 			end
 			for k, v in l_field_typefns:pairs() do
-				local realized_type = apply_value(v, base_unique, l_ctx)
+				local realized_type = apply_value(v, flex_value.stuck(base_unique), l_ctx)
 				if realized_type:is_singleton() then
 					local supertype, val = realized_type:unwrap_singleton()
 					l_field_vals:set(k, val)
 					r_field_vals:set(k, val)
 				else
-					l_field_vals:set(k, flex_value.record_field_access(k, base_unique))
+					l_field_vals:set(k, flex_value.record_field_access(base_unique, k))
 				end
 			end
 			for k, v in l_field_typefns:pairs() do
@@ -601,6 +601,7 @@ local RecordDescRelation = setmetatable({
 					nestcause("record desc subtype for field " .. k, cause, lt, rt, l_ctx, r_ctx)
 				)
 			end
+			return true
 		end
 	),
 }, subtype_relation_mt)
@@ -866,12 +867,21 @@ function gather_usages(val, usages, context_len, ambient_typechecking_context)
 			gather_usages(v, usages, context_len, ambient_typechecking_context)
 		end
 	elseif val:is_record_value() then
-		-- TODO: How to deal with a map?
-		error("Records not yet implemented")
+		local fields = val:unwrap_record_value()
+		for k, v in fields:pairs() do
+			gather_usages(v, usages, context_len, ambient_typechecking_context)
+		end
 	elseif val:is_record_type() then
 		local desc = val:unwrap_record_type()
-		-- TODO: Handle desc properly, because it's a value.
-		error("Records not yet implemented")
+		gather_usages(desc, usages, context_len, ambient_typechecking_context)
+	elseif val:is_record_desc_value() then
+		local fields_typefns = val:unwrap_record_desc_value()
+		for k, v in fields_typefns:pairs() do
+			gather_usages(v, usages, context_len, ambient_typechecking_context)
+		end
+	elseif val:is_record_desc_type() then
+		local univ = val:unwrap_record_desc_type()
+		gather_usages(univ, usages, context_len, ambient_typechecking_context)
 	elseif val:is_srel_type() then
 		local target = val:unwrap_srel_type()
 		local target_sub = gather_usages(target, usages, context_len, ambient_typechecking_context)
@@ -979,6 +989,9 @@ function gather_usages(val, usages, context_len, ambient_typechecking_context)
 	elseif val:is_host_intrinsic() then
 		local source, anchor = val:unwrap_host_intrinsic()
 		gather_usages(flex_value.stuck(source), usages, context_len, ambient_typechecking_context)
+	elseif val:is_record_field_access() then
+		local subject, field = val:unwrap_record_field_access()
+		gather_usages(flex_value.stuck(subject), usages, context_len, ambient_typechecking_context)
 	else
 		error("Unhandled value kind in gather_usages: " .. val.kind)
 	end
@@ -1084,12 +1097,28 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 			)
 		)
 	elseif val:is_record_value() then
-		-- TODO: How to deal with a map?
-		error("Records not yet implemented")
+		local fields = val:unwrap_record_value()
+		local field_terms = string_typed_map()
+		for k, v in fields:pairs() do
+			field_terms:set(k, substitute_inner(v, mappings, context_len, ambient_typechecking_context))
+		end
+		return U.notail(typed_term.record_cons(field_terms))
 	elseif val:is_record_type() then
 		local desc = val:unwrap_record_type()
-		-- TODO: Handle desc properly, because it's a value.
-		error("Records not yet implemented")
+		local desc_sub = substitute_inner(desc, mappings, context_len, ambient_typechecking_context)
+		return U.notail(typed_term.record_type(desc_sub))
+	elseif val:is_record_desc_value() then
+		local fields_typefns = val:unwrap_record_desc_value()
+		local field_typefn_terms = string_typed_map()
+		for k, v in fields_typefns:pairs() do
+			field_typefn_terms:set(k, substitute_inner(v, mappings, context_len, ambient_typechecking_context))
+		end
+		return U.notail(typed_term.record_desc_cons(field_typefn_terms))
+	elseif val:is_record_desc_type() then
+		local univ = val:unwrap_record_desc_type()
+		return U.notail(
+			typed_term.record_desc_type(substitute_inner(univ, mappings, context_len, ambient_typechecking_context))
+		)
 	elseif val:is_srel_type() then
 		local target = val:unwrap_srel_type()
 		local target_sub = substitute_inner(target, mappings, context_len, ambient_typechecking_context)
@@ -1284,6 +1313,11 @@ local function substitute_inner_impl(val, mappings, context_len, ambient_typeche
 		local source_term =
 			substitute_inner(flex_value.stuck(source), mappings, context_len, ambient_typechecking_context)
 		return U.notail(typed_term.host_intrinsic(source_term, start_anchor))
+	elseif val:is_record_field_access() then
+		local subject, field = val:unwrap_record_field_access()
+		local subject_term =
+			substitute_inner(flex_value.stuck(subject), mappings, context_len, ambient_typechecking_context)
+		return U.notail(typed_term.record_field_access(subject_term, field))
 	else
 		error("Unhandled value kind in substitute_inner: " .. val.kind)
 	end
@@ -2480,7 +2514,7 @@ local function index_tuple_value(subject, index)
 end
 
 ---@param subject flex_value
----@param key name
+---@param key string
 ---@return flex_value
 local function index_record_value(subject, key)
 	if flex_value.value_check(subject) ~= true then
@@ -2499,7 +2533,7 @@ local function index_record_value(subject, key)
 		end
 		return index_record_value(flex_value.stuck(base), key)
 	elseif subject:is_stuck() then
-		return flex_value.record_field_access(subject, key)
+		return flex_value.record_field_access(subject:unwrap_stuck(), key)
 	end
 	print(key, subject)
 	error("Should be unreachable???")
@@ -2747,6 +2781,25 @@ local function infer_impl(
 	if inferrable_term:is_bound_variable() then
 		local index, debuginfo = inferrable_term:unwrap_bound_variable()
 		local typeof_bound = typechecking_context:get_type(index)
+		if typeof_bound == nil then
+			local err_pp = PrettyPrint:new()
+			err_pp:unit("infer")
+			err_pp:set_color()
+			err_pp:unit("(")
+			err_pp:any(anchor, typechecking_context)
+			err_pp:set_color()
+			err_pp:unit(")")
+			err_pp:reset_color()
+			err_pp:unit(": type of bound variable ")
+			err_pp:any(debuginfo, typechecking_context)
+			err_pp:unit(" at index ")
+			err_pp:any(index, typechecking_context)
+			err_pp:unit(" is ")
+			err_pp:any(typeof_bound, typechecking_context)
+			err_pp:unit(" in context ")
+			err_pp:any(typechecking_context, typechecking_context)
+			error(tostring(err_pp))
+		end
 		local usage_counts = usage_array()
 		local context_size = typechecking_context:len()
 		for _ = 1, context_size do
@@ -2800,6 +2853,7 @@ local function infer_impl(
 		if not ok then
 			return false, body_type
 		end
+		---@cast body_type -string
 
 		local body_value = evaluate(body_term, inner_context.runtime_context, inner_context)
 		local _, source = param_debug:unwrap_spanned_name()
@@ -3003,6 +3057,7 @@ local function infer_impl(
 			if not ok then
 				return false, el_type
 			end
+			---@cast el_type -string
 			local el_val = evaluate(el_term, typechecking_context.runtime_context, typechecking_context)
 			local el_singleton = flex_value.singleton(el_type, el_val)
 			local _, source = info[i]:unwrap_spanned_name()
@@ -3187,6 +3242,7 @@ local function infer_impl(
 			if not ok then
 				return false, field_type
 			end
+			---@cast field_type -string
 			field_types:set(
 				k,
 				substitute_into_closure(
@@ -3204,36 +3260,90 @@ local function infer_impl(
 			U.notail(flex_value.record_type(flex_value.record_desc_value(field_types))),
 			usages,
 			U.notail(typed_term.record_cons(new_fields))
+	elseif inferrable_term:is_record_desc_cons() then
+		local fields = inferrable_term:unwrap_record_desc_cons()
+		local usages = usage_array()
+		local univ = flex_value.star(0, 0)
+		local unique = flex_value.free(free.unique({ debug = "record desc cons universe union unique" }))
+		local field_terms = string_typed_map()
+		for k, typefn in fields:pairs() do
+			local ok, typefn_type, typefn_usages, typefn_term = infer(typefn, typechecking_context)
+			if not ok then
+				return ok, typefn_type
+			end
+			--TODO: use flow correctly for this
+			local ok, param_type, param_info, result_type, result_info = typefn_type:as_pi()
+			if not ok then
+				local err_pp = PrettyPrint:new()
+				err_pp:unit("typefn for record field must be a function returning a type, but wasn't a function: ")
+				err_pp:any(typefn_type, typechecking_context)
+				return false, tostring(err_pp)
+			end
+			ok = result_info:unwrap_result_info():unwrap_result_info():is_pure()
+			if not ok then
+				local err_pp = PrettyPrint:new()
+				err_pp:unit("typefn for record field must be a function returning a type, but wasn't pure: ")
+				err_pp:any(result_info, typechecking_context)
+				return false, tostring(err_pp)
+			end
+			local field_univ = apply_value(result_type, unique, typechecking_context)
+			univ = flex_value.union_type(univ, field_univ)
+			add_arrays(usages, typefn_usages)
+			field_terms:set(k, typefn_term)
+		end
+		return true, flex_value.record_desc_type(univ), usages, typed_term.record_desc_cons(field_terms)
 	elseif inferrable_term:is_record_elim() then
-		local subject, field_names, debug_ids, body = inferrable_term:unwrap_record_elim()
+		local subject, field_names, field_var_debugs, body = inferrable_term:unwrap_record_elim()
 		local ok, subject_type, subject_usages, subject_term = infer(subject, typechecking_context)
 		if not ok then
+			---@cast subject_type string
 			return false, subject_type
 		end
-		local ok, desc = subject_type:as_record_type()
-		if not ok then
-			error(
-				"infer, is_record_elim, subject_type: expected a term with a record type TODO use flow correctly here"
+		---@cast subject_type -string
+		-- symbolically evaluating the subject is necessary for inferring the type of the body
+		local subject_value = evaluate(subject_term, typechecking_context:get_runtime_context(), typechecking_context)
+		local result_typefns = string_value_map()
+		for idx, field_name in field_names:ipairs() do
+			if result_typefns:get(field_name) then
+				return false, "duplicate name in record elimination: " .. field_name
+			end
+			result_typefns:set(
+				field_name,
+				apply_value(
+					typechecker_state:metavariable(typechecking_context, false):as_flex(),
+					subject_value,
+					typechecking_context
+				)
 			)
 		end
-		-- evaluating the subject is necessary for inferring the type of the body
-		local subject_value = evaluate(subject_term, typechecking_context:get_runtime_context(), typechecking_context)
-
-		local field_typefns = desc:unwrap_record_desc_value()
+		local use_type = flex_value.record_type(flex_value.record_desc_value(result_typefns))
+		local ok, err = typechecker_state:flow(
+			subject_type,
+			typechecking_context,
+			use_type,
+			typechecking_context,
+			terms.constraintcause.primitive("record elimination", anchor, nil)
+		)
+		if not ok then
+			---@cast err -nil
+			return false, err
+		end
 
 		-- reorder the fields into the requested order
 		local inner_context = typechecking_context
-		for _, v in field_names:ipairs() do
-			local tf = field_typefns:get(v)
+		for field_index, field_name in field_names:ipairs() do
+			local tf = result_typefns:get(field_name) --[[@as flex_value?]]
 			if tf == nil then
 				return false, "infer: trying to access a nonexistent record field"
 			end
 
+			local field_var_debug = field_var_debugs[field_index]
+			local field_var_name, _ = field_var_debug:unwrap_spanned_name()
 			inner_context = inner_context:append(
-				v,
+				field_var_name,
 				apply_value(tf, subject_value, typechecking_context),
-				index_record_value(subject_value, v),
-				spanned_name(v, format.span_here())
+				index_record_value(subject_value, field_name),
+				field_var_debug
 			)
 		end
 
@@ -3249,13 +3359,39 @@ local function infer_impl(
 		return true,
 			body_type,
 			result_usages,
-			U.notail(typed_term.record_elim(subject_term, field_names, debug_ids, body_term))
+			U.notail(typed_term.record_elim(subject_term, field_names, field_var_debugs, body_term))
+	elseif inferrable_term:is_record_type() then
+		local desc = inferrable_term:unwrap_record_type()
+		local ok, desc_type, desc_usages, desc_term = infer(desc, typechecking_context)
+		if not ok then
+			return false, desc_type
+		end
+		---@cast desc_type -string
+		local univ_var = typechecker_state:metavariable(typechecking_context, false):as_flex()
+		local err
+		ok, err = typechecker_state:flow(
+			desc_type,
+			typechecking_context,
+			flex_value.record_desc_type(univ_var),
+			typechecking_context,
+			terms.constraintcause.primitive("record type construction", format.anchor_here())
+		)
+		if not ok then
+			---@cast err string
+			return false, err
+		end
+		return true,
+			U.notail(flex_value.union_type(flex_value.star(0, 0), univ_var)),
+			desc_usages,
+			U.notail(typed_term.record_type(desc_term))
 	elseif inferrable_term:is_enum_cons() then
 		local constructor, arg = inferrable_term:unwrap_enum_cons()
 		local ok, arg_type, arg_usages, arg_term = infer(arg, typechecking_context)
 		if not ok then
+			---@cast arg_type string
 			return false, arg_type
 		end
+		---@cast arg_type -string
 		local variants = string_value_map()
 		variants:set(constructor, arg_type)
 		local enum_type = flex_value.enum_type(flex_value.enum_desc_value(variants))
@@ -3363,10 +3499,13 @@ local function infer_impl(
 		local desc = inferrable_term:unwrap_enum_type()
 		local ok, desc_type, desc_usages, desc_term = infer(desc, typechecking_context)
 		if not ok then
+			---@cast desc_type string
 			return false, desc_type
 		end
+		---@cast desc_type -string
 		local univ_var = typechecker_state:metavariable(typechecking_context, false):as_flex()
-		local ok, err = typechecker_state:flow(
+		local err
+		ok, err = typechecker_state:flow(
 			desc_type,
 			typechecking_context,
 			flex_value.enum_desc_type(univ_var),
@@ -3374,6 +3513,7 @@ local function infer_impl(
 			terms.constraintcause.primitive("enum type construction", format.anchor_here())
 		)
 		if not ok then
+			---@cast err string
 			return false, err
 		end
 		return true,
@@ -3815,7 +3955,10 @@ function infer(inferrable_term, typechecking_context)
 	recurse_count = recurse_count + 1
 	local ok, v, usages, term = infer_impl(inferrable_term, typechecking_context)
 	if ok and not flex_value.value_check(v) then
-		error("infer didn't return a flex_value!")
+		local err_pp = PrettyPrint:new()
+		err_pp:unit("infer didn't return a flex_value: ")
+		err_pp:any(v, typechecking_context)
+		error(tostring(err_pp))
 	end
 	recurse_count = recurse_count - 1
 
@@ -4002,7 +4145,7 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 	-- -> an alicorn value
 	-- TODO: typecheck typed_term and runtime_context?
 	if typed_term.value_check(typed) ~= true then
-		error("evaluate, typed_term: expected a typed term")
+		error(("evaluate, typed_term: expected a typed term: %s"):format(tostring(typed)))
 	end
 	if terms.flex_runtime_context_type.value_check(runtime_context) ~= true then
 		error("evaluate, runtime_context: expected a runtime context")
@@ -4308,8 +4451,19 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 			--new_fields[k] = U.tag("evaluate", { ["record_field_" .. tostring(k)] = v }, evaluate, v, runtime_context)
 		end
 		return U.notail(flex_value.record_value(new_fields))
+	elseif typed:is_record_type() then
+		local desc = typed:unwrap_record_type()
+		local desc_val = evaluate(desc, runtime_context, ambient_typechecking_context)
+		return U.notail(flex_value.record_type(desc_val))
+	elseif typed:is_record_desc_cons() then
+		local field_typefns = typed:unwrap_record_desc_cons()
+		local field_typefn_vals = string_value_map()
+		for k, term in field_typefns:pairs() do
+			field_typefn_vals:set(k, evaluate(term, runtime_context, ambient_typechecking_context))
+		end
+		return U.notail(flex_value.record_desc_value(field_typefn_vals))
 	elseif typed:is_record_elim() then
-		local subject, field_names, debug_ids, body = typed:unwrap_record_elim()
+		local subject, field_names, field_var_debugs, body = typed:unwrap_record_elim()
 		local subject_value = evaluate(subject, runtime_context, ambient_typechecking_context)
 		--[[local subject_value = U.tag(
 			"evaluate",
@@ -4321,16 +4475,20 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		local inner_context = runtime_context
 		if subject_value:is_record_value() then
 			local subject_fields = subject_value:unwrap_record_value()
-			for idx, name in field_names:ipairs() do
-				inner_context = inner_context:append(subject_fields:get(name), name, debug_ids[idx])
+			for idx, field_name in field_names:ipairs() do
+				local field_var_debug = field_var_debugs[idx]
+				local field_var_name, _ = field_var_debug:unwrap_spanned_name()
+				inner_context = inner_context:append(subject_fields:get(field_name), field_var_name, field_var_debug)
 			end
 		elseif subject_value:is_stuck() then
 			local subject_stuck_value = subject_value:unwrap_stuck()
-			for idx, v in field_names:ipairs() do
+			for idx, field_name in field_names:ipairs() do
+				local field_var_debug = field_var_debugs[idx]
+				local field_var_name, _ = field_var_debug:unwrap_spanned_name()
 				inner_context = inner_context:append(
-					flex_value.stuck(stuck_value.record_field_access(subject_stuck_value, name)),
-					name,
-					debug_ids[idx]
+					flex_value.stuck(stuck_value.record_field_access(subject_stuck_value, field_name)),
+					field_var_name,
+					field_var_debugs[idx]
 				)
 			end
 		else
@@ -4879,6 +5037,10 @@ local function evaluate_impl(typed, runtime_context, ambient_typechecking_contex
 		return U.notail(
 			flex_value.effect_row_extend(ids, evaluate(rest, runtime_context, ambient_typechecking_context))
 		)
+	elseif typed:is_record_field_access() then
+		local subject, field = typed:unwrap_record_field_access()
+		local subject_val = evaluate(subject, runtime_context, ambient_typechecking_context)
+		return U.notail(index_record_value(subject_val, field))
 	else
 		error("evaluate: unknown kind: " .. typed.kind)
 	end
@@ -5495,6 +5657,16 @@ function TypeCheckerState:Visualize(f, diff1, diff2, restrict)
 			end
 			line = line .. ', color="#cccccc"'
 		end
+
+		if e.rel.debug_name then
+			local name = e.rel.debug_name
+			if e.rel.debug_name == "UniverseOmegaRelation" then
+				name = "< Ω :"
+			end
+
+			line = line .. ', label="' .. name .. '"'
+		end
+
 		f:write(line .. "]")
 		-- load-bearing no-op
 		if true then
@@ -5516,6 +5688,16 @@ function TypeCheckerState:Visualize(f, diff1, diff2, restrict)
 			end
 			line = line .. ', color="#cccccc"'
 		end
+
+		if e.rel.debug_name then
+			local name = e.rel.debug_name
+			if e.rel.debug_name == "UniverseOmegaRelation" then
+				name = "< Ω :"
+			end
+
+			line = line .. ', label="' .. name .. '"'
+		end
+
 		f:write(line .. "]")
 		-- load-bearing no-op
 		if true then
@@ -6813,6 +6995,7 @@ local evaluator = {
 	evaluate = evaluate,
 	apply_value = apply_value,
 	index_tuple_value = index_tuple_value,
+	index_record_value = index_record_value,
 	OMEGA = OMEGA,
 
 	gen_base_operator = gen_base_operator,

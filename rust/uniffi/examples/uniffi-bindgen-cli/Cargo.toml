@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
+
+[package]
+name = "uniffi-bindgen-cli-alicorn"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "uniffi-bindgen"
+
+[dependencies]
+uniffi-alicorn = { workspace = true, features = ["cli"] }
+
+[features]
+ffi-trace = ["uniffi-alicorn/ffi-trace"]

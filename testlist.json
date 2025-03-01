@@ -12,8 +12,17 @@
     "tests/implicit.alc": "success",
     "tests/operative-do.alc": "success",
     "tests/operative-tuple-desc.alc": "success",
+    "tests/record-ascription.alc": "success",
+    "tests/record-types/missing-field.alc": "termgen",
+    "tests/record-usage-1.alc": "success",
+    "tests/record-usage-2.alc": "success",
+    "tests/record-usage-3.alc": "success",
+    "tests/record-usage-4.alc": "success",
+    "tests/record-usage-5.alc": "success",
+    "tests/record-usage-6.alc": "success",
     "tests/switch-fail.alc": "termgen",
     "tests/switch-test.alc": "success",
-    "tests/tuples.alc": "success",
-    "tests/record-usage.alc": "success"
+    "tests/tuple-usage-1.alc": "success",
+    "tests/tuple-usage-2.alc": "success",
+    "tests/tuples.alc": "success"
 }

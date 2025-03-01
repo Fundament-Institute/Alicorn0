@@ -5,13 +5,17 @@ local trie = require "lazy-prefix-tree"
 local fibbuf = require "fibonacci-buffer"
 local U = require "alicorn-utils"
 local format = require "format"
+local PrettyPrint = require("pretty-printer").PrettyPrint
 
 local terms = require "terms"
-local spanned_name = terms.spanned_name
+local terms_gen = require "terms-generators"
+local spanned_name, spanned_name_array = terms.spanned_name, terms.spanned_name_array
 local unanchored_inferrable_term = terms.unanchored_inferrable_term
 local anchored_inferrable_term = terms.anchored_inferrable_term
 local typechecking_context = terms.typechecking_context
 local module_mt = {}
+
+local name_array = terms_gen.declare_array(terms_gen.builtin_string)
 
 local evaluator = require "evaluator"
 local infer = evaluator.infer
@@ -146,7 +150,7 @@ function environment:bind_local(binding)
 		--local subject_qty, subject_type = subject_type:unwrap_qtype()
 		--DEBUG:
 		if subject_type:is_enum_value() then
-			print "bad subject infer"
+			print("bad tuple subject infer")
 			print(subject:pretty_print(typechecking_context))
 		end
 
@@ -225,7 +229,6 @@ function environment:bind_local(binding)
 					typechecking_context = typechecking_context,
 				}))
 		end
-		local unique = {}
 		local ok, res1, res2
 		ok, res1 = inner_tuple_elim(spec_type)
 		if ok then
@@ -241,6 +244,34 @@ function environment:bind_local(binding)
 		-- you need to figure out which one is relevant for your problem
 		-- after you're finished, please comment it out so that, next time, the message below can be found again
 		error("(binding) tuple elim speculation failed! debugging this is left as an exercise to the maintainer")
+	elseif binding:is_record_elim() then
+		local binding_anchor, subject, field_names, field_var_debugs = binding:unwrap_record_elim()
+		local locals = self.locals
+		local context_length = typechecking_context:len()
+		for field_index, field_name in ipairs(field_names) do
+			local field_var_debug = field_var_debugs[field_index]
+			local field_var_name, field_var_anchor = field_var_debug:unwrap_spanned_name()
+			local field_var_expr = anchored_inferrable_term(
+				binding_anchor,
+				unanchored_inferrable_term.record_elim(
+					subject,
+					name_array(field_name),
+					spanned_name_array(field_var_debug),
+					anchored_inferrable_term(
+						field_var_anchor.start,
+						unanchored_inferrable_term.bound_variable(context_length + 1, field_var_debug)
+					)
+				)
+			)
+			locals = locals:put(field_var_name, field_var_expr)
+		end
+		local bindings = self.bindings:append(binding)
+		return true,
+			U.notail(update_env(self, {
+				locals = locals,
+				bindings = bindings,
+				typechecking_context = typechecking_context,
+			}))
 	elseif binding:is_annotated_lambda() then
 		local param_name, param_annotation, start_anchor, visible = binding:unwrap_annotated_lambda()
 		if not start_anchor or not start_anchor.id then
@@ -428,10 +459,13 @@ function environment:exit_block(term, shadowed)
 		elseif binding:is_tuple_elim() then
 			local names, debuginfo, subject = binding:unwrap_tuple_elim() -- TODO: propagate anchors
 			unanchored_wrapped = unanchored_inferrable_term.tuple_elim(names, debuginfo, subject, wrapped)
+		elseif binding:is_record_elim() then
+			local _binding_anchor, subject, field_names, field_var_debugs = binding:unwrap_record_elim()
+			unanchored_wrapped = unanchored_inferrable_term.record_elim(subject, field_names, field_var_debugs, wrapped)
 		elseif binding:is_annotated_lambda() then
-			local name, annotation, start_anchor, visible, purity = binding:unwrap_annotated_lambda()
+			local name, annotation, start_anchor, visible, pure = binding:unwrap_annotated_lambda()
 			unanchored_wrapped =
-				unanchored_inferrable_term.annotated_lambda(name, annotation, wrapped, start_anchor, visible, purity)
+				unanchored_inferrable_term.annotated_lambda(name, annotation, wrapped, start_anchor, visible, pure)
 		elseif binding:is_program_sequence() then
 			local first, start_anchor = binding:unwrap_program_sequence()
 			unanchored_wrapped = unanchored_inferrable_term.program_sequence(
@@ -441,7 +475,12 @@ function environment:exit_block(term, shadowed)
 				spanned_name("#program-sequence", start_anchor:span(start_anchor))
 			)
 		else
-			error("exit_block: unknown kind: " .. binding.kind)
+			local err_pp = PrettyPrint:new()
+			err_pp:unit("exit_block: unknown kind of binding ")
+			err_pp:any(binding, env.typechecking_context)
+			err_pp:unit(" wrapping ")
+			err_pp:any(wrapped, env.typechecking_context)
+			error(tostring(err_pp))
 		end
 
 		wrapped = anchored_inferrable_term(anchor, unanchored_wrapped)

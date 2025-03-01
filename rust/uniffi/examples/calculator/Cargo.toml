@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
+
+[package]
+name = "uniffi-alicorn-example-calculator"
+edition = "2021"
+version = "0.22.0"
+license = "MPL-2.0"
+publish = false
+
+[lib]
+crate-type = ["lib", "cdylib"]
+name = "calculatorish"
+
+[dependencies]
+alicorn = { workspace = true }
+mlua = { workspace = true }
+uniffi = { workspace = true, features = ["scaffolding-ffi-buffer-fns"] }
+uniffi-alicorn = { workspace = true, features = ["scaffolding-ffi-buffer-fns"] }
+thiserror = "1.0"
+
+[build-dependencies]
+# Add the "scaffolding-ffi-buffer-fns" feature to make sure things can build correctly
+uniffi = { workspace = true, features = ["build", "scaffolding-ffi-buffer-fns"] }
+uniffi-alicorn = { workspace = true, features = ["build", "scaffolding-ffi-buffer-fns"] }
+
+[dev-dependencies]
+uniffi-alicorn = { workspace = true, features = ["bindgen-tests"] }
+
+[features]
+ffi-trace = ["uniffi/ffi-trace", "uniffi-alicorn/ffi-trace"]

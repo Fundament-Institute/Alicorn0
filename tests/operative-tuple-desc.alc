@@ -1,7 +1,7 @@
 let my-tuple-desc = tuple-desc(x : host-number, y : host-number)
 let my-tuple-type = tuple-type(my-tuple-desc)
 
-the my-tuple-type tuple-of-implicit(3, 4)
+the my-tuple-type tuple-of(3, 4)
 
 let symbol-exact =
 	intrinsic "return metalanguage.symbol_exact" :

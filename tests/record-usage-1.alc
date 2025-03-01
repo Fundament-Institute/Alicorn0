@@ -1,0 +1,11 @@
+let foo =
+	record-of
+		x = 3
+		y = 5
+
+let f = lambda (xs)
+	xs.x + xs.y
+
+let bar = f(foo)
+
+bar

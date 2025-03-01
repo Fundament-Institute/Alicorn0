@@ -987,48 +987,66 @@ local function expression_pairhandler(args, a, b)
 	return false, "unknown type for pairhandler " .. type_of_term.kind, env
 end
 
----@param symbol SyntaxSymbol
----@return SyntaxSymbol
----@return SyntaxSymbol?
-local function split_dot_accessors(symbol)
-	if symbol then
-		local split_dot_pos = (symbol.str):find("%.")
-
-		if split_dot_pos then
-			local first, second = (symbol.str):match("([^.]+)%.(.+)")
-
-			local first_stop_anchor = symbol.span.start
-			first_stop_anchor = Anchor(
-				first_stop_anchor.internal,
-				first_stop_anchor.id,
-				first_stop_anchor.line,
-				first_stop_anchor.char + split_dot_pos
-			)
-
-			local firstsymbol = {
-				kind = "symbol",
-				str = first,
-				span = symbol.span.start:span(first_stop_anchor),
-			}
-
-			-- we can assume it is on the same line.
-			local second_start_anchor = symbol.span.start
-			second_start_anchor = Anchor(
-				second_start_anchor.internal,
-				second_start_anchor.id,
-				second_start_anchor.line,
-				second_start_anchor.char + split_dot_pos
-			)
-
-			local secondsymbol = {
-				kind = "symbol",
-				str = second,
-				span = second_start_anchor:span(symbol.span.stop),
-			}
-
-			return firstsymbol, secondsymbol
-		end
+---@param whole SyntaxSymbol
+---@param remaining SyntaxSymbol
+---@return SyntaxSymbol preceding_and_current
+---@return SyntaxSymbol current
+---@return SyntaxSymbol? remaining
+local function split_dot_accessor(whole, remaining)
+	if whole == nil then
+		error("split_dot_accessor: whole must not be nil")
 	end
+	if remaining == nil then
+		error("split_dot_accessor: remaining must not be nil")
+	end
+	local remaining_str = remaining.str
+	local dot_start_pos, dot_stop_pos = remaining_str:find(".", 1, true)
+	if not dot_start_pos then
+		return whole, remaining, nil
+	end
+
+	local current_stop_pos, remaining_start_pos = dot_start_pos - 1, dot_stop_pos + 1
+	local current_str = remaining_str:sub(1, current_stop_pos)
+	local new_remaining_str = remaining_str:sub(remaining_start_pos)
+
+	local current_start_anchor = remaining.span.start
+	local current_stop_anchor = Anchor(
+		current_start_anchor.internal,
+		current_start_anchor.id,
+		current_start_anchor.line,
+		current_start_anchor.char + current_stop_pos
+	)
+
+	local current = {
+		kind = "symbol",
+		str = current_str,
+		span = current_start_anchor:span(current_stop_anchor),
+	}
+
+	local preceding_and_current_start_anchor = whole.span.start
+	local preceding_and_current_stop_anchor = current_stop_anchor
+	local preceding_and_current = {
+		kind = "symbol",
+		str = whole.str:sub(1, preceding_and_current_stop_anchor.char - preceding_and_current_start_anchor.char),
+		span = preceding_and_current_start_anchor:span(preceding_and_current_stop_anchor),
+	}
+
+	-- we can assume it is on the same line.
+	local new_remaining_start_anchor = Anchor(
+		current_start_anchor.internal,
+		current_start_anchor.id,
+		current_start_anchor.line,
+		current_start_anchor.char + (remaining_start_pos - 1)
+	)
+	local new_remaining_stop_anchor = remaining.span.stop
+
+	local new_remaining = {
+		kind = "symbol",
+		str = new_remaining_str,
+		span = new_remaining_start_anchor:span(new_remaining_stop_anchor),
+	}
+
+	return preceding_and_current, current, new_remaining
 end
 
 ---@param args ExpressionArgs
@@ -1040,71 +1058,43 @@ local function expression_symbolhandler(args, name)
 	local goal, env = args:unwrap()
 	--print("looking up symbol", name)
 	--p(env)
-	--print(name, split_dot_accessors(name))
-	local front, rest = split_dot_accessors(name)
-
+	--print(name, split_dot_accessor(name))
 	assert(name["kind"])
 
-	if front then
-		assert(front["kind"])
+	local preceding_and_current_names, current_name, remaining_names = split_dot_accessor(name, name)
+
+	local ok, part = env:get(current_name.str)
+	if not ok then
+		---@cast part string
+		return false, part, env
 	end
+	---@cast part -string
+	local context_len = env.typechecking_context:len()
+	while remaining_names ~= nil do
+		local new_current_name, new_remaining_names
+		preceding_and_current_names, new_current_name, new_remaining_names = split_dot_accessor(name, remaining_names)
+		local spanned_preceding_and_current_names =
+			terms.spanned_name(preceding_and_current_names.str, preceding_and_current_names.span)
 
-	if not front then
-		local ok, val = env:get(name.str)
-		if not ok then
-			---@cast val string
-			return ok, val, env
-		end
-		---@cast val -string
-		if goal:is_check() then
-			return true, U.notail(checkable_term.inferrable(val)), env
-		end
-		return ok, val, env
-	else
-		local ok, part = env:get(front.str)
-		if not ok then
-			---@cast part string
-			return false, part, env
-		end
-		---@cast part -string
-		while front do
-			name = rest
-			front, rest = split_dot_accessors(name)
-			--assert(front.str)
-			---@diagnostic disable-next-line: no-unknown
-			local namearray
-			if front then
-				assert(front["kind"])
-			end
-
-			if front and front.str then
-				namearray = front
-			else
-				assert(name)
-				assert(name.str)
-				namearray = name
-			end
-
-			local debug_id = terms.spanned_name(namearray.str, namearray.span)
-
-			part = anchored_inferrable_term(
-				name.span.start,
-				unanchored_inferrable_term.record_elim(
-					part,
-					name_array(namearray.str),
-					spanned_name_array(debug_id),
-					anchored_inferrable_term(
-						name.span.start,
-						unanchored_inferrable_term.bound_variable(env.typechecking_context:len() + 1, debug_id)
-					)
+		part = anchored_inferrable_term(
+			preceding_and_current_names.span.start,
+			unanchored_inferrable_term.record_elim(
+				part,
+				name_array(new_current_name.str),
+				spanned_name_array(spanned_preceding_and_current_names),
+				anchored_inferrable_term(
+					preceding_and_current_names.span.start,
+					unanchored_inferrable_term.bound_variable(context_len + 1, spanned_preceding_and_current_names)
 				)
 			)
-		end
-		if goal:is_check() then
-			return true, U.notail(checkable_term.inferrable(part)), env
-		end
-		return ok, part, env
+		)
+
+		remaining_names = new_remaining_names
 	end
+	if goal:is_check() then
+		return true, U.notail(checkable_term.inferrable(part)), env
+	end
+	return ok, part, env
 end
 
 ---@param args ExpressionArgs
@@ -1261,14 +1251,14 @@ local function host_operative(fn, name)
 			error("mismatch in goal and returned term\ngoal: " .. tostring(goal) .. "\nres: " .. tostring(res))
 		end
 		if not env or not env.exit_block then
-			print(
-				"env returned from fn passed to alicorn-expressions.host_operative isn't an env or is nil",
-				env,
-				" in ",
-				short_src,
-				linedef
+			error(
+				("invalid env from host_operative fn %s\nenv returned from fn passed to alicorn-expressions.host_operative isn't an env or is nil: %s in %s %s"):format(
+					debugstring,
+					tostring(env),
+					tostring(short_src),
+					tostring(linedef)
+				)
 			)
-			error("invalid env from host_operative fn " .. debugstring)
 		end
 		return res, env
 	end

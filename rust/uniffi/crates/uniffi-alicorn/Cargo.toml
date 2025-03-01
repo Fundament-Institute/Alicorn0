@@ -1,0 +1,106 @@
+# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2025 Fundament Software SPC <https://fundament.software>
+
+[package]
+name = "uniffi-alicorn"
+# Incrementing the minor version here means a breaking change to consumers.
+#   * See `docs/uniffi-versioning.md` for guidance on when to increment this
+#   * Make sure to also update `uniffi_bindgen::UNIFFI_CONTRACT_VERSION"
+version = "0.1.0"
+description = "An Alicorn bindings generator for Rust using UniFFI"
+homepage.workspace = true
+repository.workspace = true
+license = "MPL-2.0"
+authors = [
+    "Dusk Banks <me@bb010g.com>",
+]
+edition.workspace = true
+rust-version.workspace = true
+keywords = ["ffi", "bindgen", "alicorn"]
+readme = "README.md"
+
+[dependencies]
+uniffi = { workspace = true }
+uniffi_bindgen = { workspace = true, optional = true }
+
+uniffi-bindgen-alicorn = { workspace = true, version = "=0.1.0", optional = true, features = ["default"] }
+uniffi-build-alicorn = { workspace = true, version = "=0.1.0", optional = true }
+# uniffi-core-alicorn = { workspace = true, version = "=0.1.0" }
+uniffi-macros-alicorn = { workspace = true, version = "=0.1.0" }
+
+anyhow = "1"
+camino = { version = "1.0.8", optional = true }
+cargo_metadata = { version = "0.15", optional = true }
+# avoid 'clap/color' due to dependency hell.
+clap = { version = "4", default-features = false, features = [ "cargo", "derive", "error-context", "help", "suggestions", "std", "usage" ], optional = true }
+
+[dev-dependencies]
+trybuild = "1"
+
+[features]
+default = [
+    "uniffi/default",
+    "cargo-metadata",
+]
+doc = ["cli"]
+
+# Printout tracing information on FFI calls.  Useful for debugging issues with the bindings code.
+ffi-trace = [
+    "uniffi/ffi-trace",
+    # "uniffi-core-alicorn?/ffi-trace",
+    "uniffi-bindgen-alicorn?/ffi-trace",
+]
+# Support for features needed by the `build.rs` script. Enable this in your
+# `build-dependencies`.
+build = [
+    "uniffi/build",
+    "dep:uniffi-build-alicorn",
+]
+# Support for `uniffi_bindgen::generate_bindings`.
+# Enable this feature for your `uniffi-bindgen` binaries if you don't need the full CLI.
+bindgen = [
+    "uniffi/bindgen",
+    "dep:uniffi_bindgen",
+    "dep:uniffi-bindgen-alicorn",
+]
+cargo-metadata = [
+    "uniffi/cargo-metadata",
+    "dep:cargo_metadata",
+    "uniffi-bindgen-alicorn?/cargo-metadata",
+]
+
+# Support for `uniffi_bindgen_main()`. Enable this feature for your
+# `uniffi-bindgen` binaries.
+cli = [
+    "uniffi/cli",
+    "bindgen",
+    "dep:clap",
+    "dep:camino",
+]
+# Support for running example/fixture tests for `uniffi-bindgen`.  You probably
+# don't need to enable this.
+bindgen-tests = [
+    "uniffi/bindgen-tests",
+    "dep:uniffi-bindgen-alicorn",
+    "uniffi_bindgen?/bindgen-tests",
+    "uniffi-bindgen-alicorn?/bindgen-tests",
+]
+# Enable support for Tokio's futures.
+# This must still be opted into on a per-function basis using `#[uniffi::export(async_runtime = "tokio")]`.
+tokio = [
+    "uniffi/tokio",
+    # "uniffi-core-alicorn/tokio",
+]
+# Generate extra scaffolding functions that use FfiBuffer to pass arguments and return values
+# This is needed for the gecko-js bindings.
+scaffolding-ffi-buffer-fns = [
+    "uniffi/scaffolding-ffi-buffer-fns",
+    # "uniffi-core-alicorn/scaffolding-ffi-buffer-fns",
+    "uniffi-macros-alicorn/scaffolding-ffi-buffer-fns",
+]
+
+[lints.rust]
+unexpected_cfgs.level = "warn"
+unexpected_cfgs.check-cfg = [
+    'cfg(rust_analyzer)',
+]

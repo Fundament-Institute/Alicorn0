@@ -759,13 +759,7 @@ function M.litprint(s)
 end
 
 function M.debug_break()
-	local ok, debugger
-	do
-		ok, debugger = pcall(require, "lldebugger")
-		if ok then
-			return debugger.requestBreak()
-		end
-	end
+	return require("lua-init").debug_break()
 end
 
 DEBUG_ID = 0

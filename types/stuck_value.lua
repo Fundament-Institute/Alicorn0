@@ -51,6 +51,20 @@ function stuck_value:unwrap_range() end
 ---@return strict_value relation
 function stuck_value:as_range() end
 ---@return boolean
+function stuck_value:is_name_set_of_record_desc() end
+---@return stuck_value desc
+function stuck_value:unwrap_name_set_of_record_desc() end
+---@return boolean
+---@return stuck_value desc
+function stuck_value:as_name_set_of_record_desc() end
+---@return boolean
+function stuck_value:is_noncolliding_name_type() end
+---@return flex_value set
+function stuck_value:unwrap_noncolliding_name_type() end
+---@return boolean
+---@return flex_value set
+function stuck_value:as_noncolliding_name_type() end
+---@return boolean
 function stuck_value:is_operative_value() end
 ---@return flex_value userdata
 function stuck_value:unwrap_operative_value() end
@@ -154,6 +168,37 @@ function stuck_value:unwrap_record_desc_value() end
 ---@return boolean
 ---@return MapValue<string, flex_value> fields
 function stuck_value:as_record_desc_value() end
+---@return boolean
+function stuck_value:is_record_desc_extend_single() end
+---@return flex_value base
+---@return stuck_value name
+---@return flex_value typefn
+function stuck_value:unwrap_record_desc_extend_single() end
+---@return boolean
+---@return flex_value base
+---@return stuck_value name
+---@return flex_value typefn
+function stuck_value:as_record_desc_extend_single() end
+---@return boolean
+function stuck_value:is_record_desc_extend() end
+---@return flex_value base
+---@return MapValue<string, flex_value> extension
+function stuck_value:unwrap_record_desc_extend() end
+---@return boolean
+---@return flex_value base
+---@return MapValue<string, flex_value> extension
+function stuck_value:as_record_desc_extend() end
+---@return boolean
+function stuck_value:is_record_extend_single() end
+---@return flex_value base
+---@return stuck_value name
+---@return flex_value val
+function stuck_value:unwrap_record_extend_single() end
+---@return boolean
+---@return flex_value base
+---@return stuck_value name
+---@return flex_value val
+function stuck_value:as_record_extend_single() end
 ---@return boolean
 function stuck_value:is_record_extend() end
 ---@return stuck_value base
@@ -403,6 +448,8 @@ function stuck_value:as_host_unwrap() end
 ---@field pi fun(param_type: flex_value, param_info: flex_value, result_type: flex_value, result_info: flex_value): stuck_value
 ---@field closure fun(param_name: string, code: typed, capture: flex_value, capture_dbg: spanned_name, param_debug: spanned_name): stuck_value
 ---@field range fun(lower_bounds: ArrayValue<flex_value>, upper_bounds: ArrayValue<flex_value>, relation: strict_value): stuck_value
+---@field name_set_of_record_desc fun(desc: stuck_value): stuck_value
+---@field noncolliding_name_type fun(set: flex_value): stuck_value
 ---@field operative_value fun(userdata: flex_value): stuck_value
 ---@field operative_type fun(handler: flex_value, userdata_type: flex_value): stuck_value
 ---@field tuple_value fun(elements: ArrayValue<flex_value>): stuck_value
@@ -417,6 +464,9 @@ function stuck_value:as_host_unwrap() end
 ---@field record_type fun(desc: flex_value): stuck_value
 ---@field record_desc_type fun(universe: flex_value): stuck_value
 ---@field record_desc_value fun(fields: MapValue<string, flex_value>): stuck_value
+---@field record_desc_extend_single fun(base: flex_value, name: stuck_value, typefn: flex_value): stuck_value
+---@field record_desc_extend fun(base: flex_value, extension: MapValue<string, flex_value>): stuck_value
+---@field record_extend_single fun(base: flex_value, name: stuck_value, val: flex_value): stuck_value
 ---@field record_extend fun(base: stuck_value, extension: MapValue<string, flex_value>): stuck_value
 ---@field object_value fun(methods: MapValue<string, typed>, capture: FlexRuntimeContext): stuck_value
 ---@field object_type fun(desc: flex_value): stuck_value

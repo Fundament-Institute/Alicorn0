@@ -31,7 +31,7 @@ impl mlua::AsChunk<'static> for NamedChunk<'static> {
 }
 
 impl Alicorn {
-    pub fn new(lua: Lua, additional_interface: mlua::Table) -> Result<Self, mlua::Error> {
+    pub fn new(lua: Lua, additional_interface: &mlua::Table) -> Result<Self, mlua::Error> {
         // Load C libraries we already linked into our rust binary using our build script. This works because we can
         // declare the C functions directly and have the linker resolve them during the link step.
 
@@ -272,7 +272,7 @@ fn test_runtest_file() {
 
     let lua = Lua::new();
     let interface = lua.create_table().unwrap();
-    let alicorn = Alicorn::new(lua, interface).unwrap();
+    let alicorn = Alicorn::new(lua, &interface).unwrap();
 
     // Restore working dir so we can find prelude.alc
     std::env::set_current_dir(&old).unwrap();
