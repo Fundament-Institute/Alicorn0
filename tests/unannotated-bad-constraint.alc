@@ -1,0 +1,12 @@
+
+
+let foo = lambda (x : host-number)
+	x
+
+let id = lambda (x)
+	x
+
+let bar = lambda (x)
+	foo(id(id(x)))
+
+let baz = the host-number bar("x")

@@ -26,5 +26,9 @@
     "tests/switch-test.alc": "success",
     "tests/tuple-usage-1.alc": "success",
     "tests/tuple-usage-2.alc": "success",
-    "tests/tuples.alc": "success"
+    "tests/tuples.alc": "success",
+    "tests/exponential-infer.alc": "success",
+    "tests/unannotated-bad-constraint.alc": "termgen",
+    "tests/multi-implicit.alc": "success",
+    "tests/multi-implicit-bad.alc": "termgen"
 }

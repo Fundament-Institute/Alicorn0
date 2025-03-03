@@ -1,0 +1,7 @@
+
+
+let id = lambda_implicit (T : type)
+	lambda (x : T)
+		x
+
+id(id(id(id(id(id(id(id(id(id(4))))))))))

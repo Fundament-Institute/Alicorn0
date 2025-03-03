@@ -1,0 +1,11 @@
+
+let K = lambda_curry (T1 : type, T2 : type)
+	lambda (x : T1)
+		lambda (y : T2)
+			x
+
+let k7 = K(7)
+
+let example = k7("hello world")
+
+the host-string example
