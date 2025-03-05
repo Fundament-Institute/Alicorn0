@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 # SPDX-FileCopyrightText: 2020 Alex Iverson <alexjiverson@gmail.com>
 # SPDX-FileCopyrightText: 2025 Dusk Banks <me@bb010g.com>
-{ ... }:
 { lib, luvi, luvi-prefix, luvit-lit, stdenv, fetchLitDeps, ... }:
 let
   inherit (lib.trivial) isFunction;
@@ -49,7 +48,7 @@ let
 
       ln -st ./deps "$deps/deps"
 
-      lit make . "./$mainProgram" "$(command -v luvi-prefix)" || printf '%s\n' "work around bug" >&2
+      lit make . "./$mainProgram" "${luvi-prefix}" || printf '%s\n' "work around bug" >&2
 
       runHook postBuild
     '';

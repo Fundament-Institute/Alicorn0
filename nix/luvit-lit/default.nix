@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 # SPDX-FileCopyrightText: 2020 Alex Iverson <alexjiverson@gmail.com>
 # SPDX-FileCopyrightText: 2025 Dusk Banks <me@bb010g.com>
-{ rows, ... }:
 { fetchFromGitHub, lib, luvi, luvi-prefix, stdenv, ... }:
 stdenv.mkDerivation (finalAttrs: {
   pname = "lit";
@@ -15,11 +14,7 @@ stdenv.mkDerivation (finalAttrs: {
     fetchSubmodules = true;
   };
 
-  env = {
-    inherit (finalAttrs.meta) mainProgram;
-  };
-
-  nativeBuildInputs = [ luvi luvi-prefix ];
+  nativeBuildInputs = [ luvi ];
 
   buildPhase = ''
     runHook preBuild
@@ -28,7 +23,7 @@ stdenv.mkDerivation (finalAttrs: {
     export LIT_CONFIG
     printf '%s\n' "database: $PWD/.litdb.git" >> "$LIT_CONFIG"
 
-    luvi . -- make . "./$mainProgram" "$(command -v luvi-prefix)" || printf '%s\n' "work around bug" >&2
+    luvi . -- make . "./lit" ${luvi-prefix} || printf '%s\n' "work around bug" >&2
 
     runHook postBuild
   '';
@@ -36,7 +31,7 @@ stdenv.mkDerivation (finalAttrs: {
   installPhase = ''
     runHook preInstall
 
-    install -Dt "$out/bin" -m 755 -- "./$mainProgram"
+    install -Dt "$out/bin" -m 755 -- "./lit"
 
     runHook postInstall
   '';
