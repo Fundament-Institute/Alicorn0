@@ -54,6 +54,46 @@
         "type": "github"
       }
     },
+    "luvit": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1737069002,
+        "narHash": "sha256-XBOLveJTBl0YpWSEHPxw5ChuVdcqpY2WnquHXiP1K8I=",
+        "owner": "luvit",
+        "repo": "luvit",
+        "rev": "c15b46a2ec9dd7c7e4c958c96c792d7028e4e95e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "luvit",
+        "repo": "luvit",
+        "type": "github"
+      }
+    },
+    "luvit-nix": {
+      "inputs": {
+        "flake-utils": [
+          "flake-utils"
+        ],
+        "luvit": "luvit",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1741146590,
+        "narHash": "sha256-eBCoiYoH29W/Z1+HRAqE/WomPyPXy0uSmRqxQeSQgY8=",
+        "owner": "lunnova",
+        "repo": "luvit-nix",
+        "rev": "d6489d5b5e0d4f0924f8bec640717bcc1cb96976",
+        "type": "github"
+      },
+      "original": {
+        "owner": "aiverson",
+        "repo": "luvit-nix",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1739357830,
@@ -95,6 +135,7 @@
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
+        "luvit-nix": "luvit-nix",
         "nixpkgs": "nixpkgs",
         "pre-commit-hooks": "pre-commit-hooks",
         "rust-overlay": "rust-overlay"
