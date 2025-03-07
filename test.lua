@@ -166,7 +166,9 @@ local function compare_list_anchors(actual, expected)
 	end
 end
 
-function testOldOpensCase()
+TestAlicorn = {}
+
+function TestAlicorn:testOldOpensCase()
 	local example = [[
 do
 	let m =
@@ -207,7 +209,7 @@ do
 	luaunit.assertEquals(simplified, expected)
 end
 
-function testOpensCase()
+function TestAlicorn:testOpensCase()
 	local example = [[
 let m =
 	module
@@ -244,7 +246,7 @@ add x y
 	luaunit.assertEquals(simplified, expected)
 end
 
-function testsinglelist()
+function TestAlicorn:testsinglelist()
 	local example = {
 		[[
 lambda
@@ -353,7 +355,7 @@ print a; print b;
 	end
 end
 
-function testSymbols()
+function TestAlicorn:testSymbols()
 	local example = {
 		"some_identifier",
 		"_some_identifier",
@@ -396,7 +398,7 @@ function testSymbols()
 	end
 end
 
-function testNumbers()
+function TestAlicorn:testNumbers()
 	local example = {
 		"0",
 		"23",
@@ -449,7 +451,7 @@ function testNumbers()
 	end
 end
 
-function testnakedlist()
+function TestAlicorn:testnakedlist()
 	local example = {
 		[[
 print
@@ -512,7 +514,7 @@ bar
 	end
 end
 
-function testempty()
+function TestAlicorn:testempty()
 	local example = [[
 
     ]]
@@ -524,7 +526,7 @@ function testempty()
 	luaunit.assertTrue(samelength_testfile_list(example, parsed))
 end
 
-function testnakedlist2()
+function TestAlicorn:testnakedlist2()
 	local example = {
 		"hello hi greetings",
 		[[
@@ -551,7 +553,7 @@ toplevel
 	end
 end
 
-function testbracedlist()
+function TestAlicorn:testbracedlist()
 	local example = {
 		"(hello hi greetings)",
 		"(hello (hi (another)) greetings)",
@@ -578,7 +580,7 @@ function testbracedlist()
 	end
 end
 
-function testcomments()
+function TestAlicorn:testcomments()
 	local example = {
 		"1\n# list of one\n1",
 		"#### i am a normal comment created by a normal human\n\tand this comment is intended to be useful\n\t\tsee?\n\n\tall of this is on one line ",
@@ -675,7 +677,7 @@ let new-results =
 	end
 end
 
-function testfailedparse()
+function TestAlicorn:testfailedparse()
 	local example = {
 		"\ttoken\ntoken",
 		"\ttoken # comment\ntoken",
@@ -711,7 +713,7 @@ function testfailedparse()
 	end
 end
 
-function testcomma()
+function TestAlicorn:testcomma()
 	local example = {
 		"f(a, b, c)",
 		"f (a)",
@@ -779,7 +781,7 @@ let(
 	end
 end
 
-function testanchors()
+function TestAlicorn:testanchors()
 	local example = {
 		"hello hi greetings",
 		[[
@@ -874,7 +876,7 @@ hello
 	end
 end
 
-function testlongstring()
+function TestAlicorn:testlongstring()
 	local example = {
 		[[
 let array-type =
@@ -952,7 +954,7 @@ return mktype]],
 	end
 end
 
-function test_unformatter()
+function TestAlicorn:test_unformatter()
 	local filename = "prelude.alc"
 	local unformat = require "./unformatter"
 
