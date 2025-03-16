@@ -20,10 +20,12 @@ jobs:
   check:
     # Avoid running twice for PRs from branches in fundament repo
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@main
+      # io_uring causes hangs in the ubuntu 22/24 LTS kernel during lit build
+      - run: sudo sysctl -w kernel.io_uring_disabled=1
       - run: nix flake check -L
   status:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
@@ -33,6 +35,7 @@ jobs:
       - uses: DeterminateSystems/nix-installer-action@main
       # Workaround for spam about missing channel dir during eval
       - run: mkdir -p ~/.nix-defexpr/channels
+      - run: sudo sysctl -w kernel.io_uring_disabled=1
       - run: nix shell nixpkgs#jq nixpkgs#bash -c ./.github/workflows/nix-flake-status.sh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

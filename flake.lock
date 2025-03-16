@@ -1,25 +1,5 @@
 {
   "nodes": {
-    "by-name": {
-      "inputs": {
-        "nixpkgs-lib": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1735780273,
-        "narHash": "sha256-3jKBWVsnGvxyHXKNzFUr8YdpgllQxsk/2KlGYqr+D4M=",
-        "owner": "bb010g",
-        "repo": "by-name.nix",
-        "rev": "3a9af2b7987365f291a9b2cc9fdef34d0e78d5ea",
-        "type": "github"
-      },
-      "original": {
-        "owner": "bb010g",
-        "repo": "by-name.nix",
-        "type": "github"
-      }
-    },
     "flake-compat": {
       "flake": false,
       "locked": {
@@ -34,6 +14,23 @@
         "owner": "edolstra",
         "repo": "flake-compat",
         "type": "github"
+      }
+    },
+    "flake-utils": {
+      "inputs": {
+        "systems": "systems"
+      },
+      "locked": {
+        "lastModified": 1731533236,
+        "narHash": "sha256-l0KFg5HjrsfsO/JpG+r7fRrqm12kzFHyUHqHCVpMMbI=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "11707dc2f618dd54ca8739b309ec4fc024de578b",
+        "type": "github"
+      },
+      "original": {
+        "id": "flake-utils",
+        "type": "indirect"
       }
     },
     "gitignore": {
@@ -54,6 +51,29 @@
       "original": {
         "owner": "hercules-ci",
         "repo": "gitignore.nix",
+        "type": "github"
+      }
+    },
+    "luvit-nix": {
+      "inputs": {
+        "flake-utils": [
+          "flake-utils"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1742075690,
+        "narHash": "sha256-vG02EHPEkxRYxiDhsRoIg1dRahhUyJKCZyBrnBsnytw=",
+        "owner": "aiverson",
+        "repo": "luvit-nix",
+        "rev": "4c9663a72c6a5cd1d944b34e20470dfb3b24fb94",
+        "type": "github"
+      },
+      "original": {
+        "owner": "aiverson",
+        "repo": "luvit-nix",
         "type": "github"
       }
     },
@@ -97,7 +117,8 @@
     },
     "root": {
       "inputs": {
-        "by-name": "by-name",
+        "flake-utils": "flake-utils",
+        "luvit-nix": "luvit-nix",
         "nixpkgs": "nixpkgs",
         "pre-commit-hooks": "pre-commit-hooks",
         "rust-overlay": "rust-overlay"
@@ -120,6 +141,21 @@
       "original": {
         "owner": "oxalica",
         "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
+    "systems": {
+      "locked": {
+        "lastModified": 1681028828,
+        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-systems",
+        "repo": "default",
         "type": "github"
       }
     }
