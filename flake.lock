@@ -54,38 +54,21 @@
         "type": "github"
       }
     },
-    "luvit": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1737069002,
-        "narHash": "sha256-XBOLveJTBl0YpWSEHPxw5ChuVdcqpY2WnquHXiP1K8I=",
-        "owner": "luvit",
-        "repo": "luvit",
-        "rev": "c15b46a2ec9dd7c7e4c958c96c792d7028e4e95e",
-        "type": "github"
-      },
-      "original": {
-        "owner": "luvit",
-        "repo": "luvit",
-        "type": "github"
-      }
-    },
     "luvit-nix": {
       "inputs": {
         "flake-utils": [
           "flake-utils"
         ],
-        "luvit": "luvit",
         "nixpkgs": [
           "nixpkgs"
         ]
       },
       "locked": {
-        "lastModified": 1741146590,
-        "narHash": "sha256-eBCoiYoH29W/Z1+HRAqE/WomPyPXy0uSmRqxQeSQgY8=",
-        "owner": "lunnova",
+        "lastModified": 1742075690,
+        "narHash": "sha256-vG02EHPEkxRYxiDhsRoIg1dRahhUyJKCZyBrnBsnytw=",
+        "owner": "aiverson",
         "repo": "luvit-nix",
-        "rev": "d6489d5b5e0d4f0924f8bec640717bcc1cb96976",
+        "rev": "4c9663a72c6a5cd1d944b34e20470dfb3b24fb94",
         "type": "github"
       },
       "original": {
