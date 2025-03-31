@@ -1,0 +1,38 @@
+define a container of values of a specific type to which things may be added later and adding things is an effect and when you add something you get back an id to something in the registry
+
+possible to use the container to produce types that operate across all of its entries without needing to know in advance how many there are total
+to interact with those types you can use the ids that are produced when adding things
+
+
+make a registry (it's an open set)
+ - ('U, T : U) -> [effectRegistry] (R : Registry(T))
+register a type, get id
+ - ('T, R : Registry(T), val : T) -> [effectRegistry] (rn : Registration(R, val))
+
+get enum of values (indexable by id)
+ # val may not be a type, extractor takes val and turns it into a type proper
+ # val may contain enough information for different extractors to produce different enums
+ - ('T, 'sU, 'val, 'R : Registry(T), 'extractor : ((val : T) -> (sT : sU)), rn : Registration(R, val), arg : extractor(val)) -> (s : RegisteredSum(R, extractor))
+   return RegisteredSum(R, extractor)(rn, arg)
+
+get tuple of maybe of values (indexable by id)
+ - ('T, 'pU, R : Registry(T), extractor : ((val : T) -> (pT : pU))) -> (p : RegisteredProduct(R, extractor))
+update member of tuple
+ - ('T, 'pU, 'val, 'R : Registry(T), 'extractor : ((val : T) -> (pT : pU)), p : RegisteredProduct(R, extractor), rn : Registration(R, val), arg : extractor(val)) -> (pNew : RegisteredProduct(R, extractor))
+retrieve member of tuple
+ - ('T, 'pU, 'val, 'R : Registry(T), 'extractor : ((val : T) -> (pT : pU)), p : RegisteredProduct(R, extractor), rn : Registration(R, val)) -> (arg : Maybe(extractor(val)))
+   
+
+make a closed set from the registry
+ # make an empty set
+ - ('T, 'R : Registry(T)) -> (emptySet : RegistrationSet(R))
+ # add a member to the set
+ - ('R, 'val, rnSet : RegistrationSet(R), rn : Registration(R, val)) -> (rnSetNew : RegistrationSet(R))
+
+enum and tuple of the closed set
+variants of all above that handle recursive dependencies
+
+thread local storage
+event dispatch
+modular semantics dependencies
+effects
