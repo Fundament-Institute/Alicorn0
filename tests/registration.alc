@@ -1,0 +1,27 @@
+let registry-type = lambda_implicit (U : universe)
+	lambda (T : U)
+		let inner = intrinsic "return terms.strict_value.registry_type" :
+			host-func-type ((T-wrap : wrapped(U))) -> ((registry-type-wrap : wrapped(type)))
+		unwrap(inner(wrap(T)))
+
+let registration-type = lambda_curry (U : universe, T : U)
+	lambda (R : registry-type(T), val : T)
+		let inner = intrinsic "return terms.strict_value.registration_type" :
+			host-func-type (R-wrap : wrapped(registry-type(T)), val-wrap : wrapped(T)) -> ((registration-type-wrap : wrapped(type)))
+		unwrap(inner(wrap(R), wrap(val)))
+
+let mk-registry = lambda_implicit (U : universe)
+	lambda (T : U)
+		let inner = intrinsic
+			""""
+			:
+			host-prog-type ((T-wrap : wrapped(U))) -> ((R-wrap : wrapped(registry-type(T))))
+		unwrap(inner(wrap(T)))
+
+let register = lambda_curry (U : universe, T : U)
+	lambda (R : registry-type(T), val : T)
+		let inner = intrinsic
+			""""
+			:
+			host-prog-type (R-wrap : wrapped(registry-type(T)), val-wrap : wrapped(T)) -> ((rn-wrap : registration-type(R, val)))
+		unwrap(inner(wrap(R), wrap(val)))
