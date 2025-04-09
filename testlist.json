@@ -22,6 +22,7 @@
     "tests/record-usage-4.alc": "success",
     "tests/record-usage-5.alc": "success",
     "tests/record-usage-6.alc": "success",
+    "tests/registration.alc": "success",
     "tests/switch-fail.alc": "termgen",
     "tests/switch-test.alc": "success",
     "tests/tuple-usage-1.alc": "success",

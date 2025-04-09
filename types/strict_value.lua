@@ -421,6 +421,47 @@ function strict_value:unwrap_union_type() end
 ---@return strict_value left
 ---@return strict_value right
 function strict_value:as_union_type() end
+---@return boolean
+function strict_value:is_registry_type() end
+---@return strict_value element_type
+function strict_value:unwrap_registry_type() end
+---@return boolean
+---@return strict_value element_type
+function strict_value:as_registry_type() end
+---@return boolean
+function strict_value:is_registration_type() end
+---@return strict_value registry
+---@return strict_value element
+function strict_value:unwrap_registration_type() end
+---@return boolean
+---@return strict_value registry
+---@return strict_value element
+function strict_value:as_registration_type() end
+---@return boolean
+function strict_value:is_registered_sum_type() end
+---@return strict_value registry
+---@return strict_value extractor
+function strict_value:unwrap_registered_sum_type() end
+---@return boolean
+---@return strict_value registry
+---@return strict_value extractor
+function strict_value:as_registered_sum_type() end
+---@return boolean
+function strict_value:is_registered_product_type() end
+---@return strict_value registry
+---@return strict_value extractor
+function strict_value:unwrap_registered_product_type() end
+---@return boolean
+---@return strict_value registry
+---@return strict_value extractor
+function strict_value:as_registered_product_type() end
+---@return boolean
+function strict_value:is_registration_set_type() end
+---@return strict_value registry
+function strict_value:unwrap_registration_set_type() end
+---@return boolean
+---@return strict_value registry
+function strict_value:as_registration_set_type() end
 
 ---@class (exact) strict_valueType: EnumType
 ---@field define_enum fun(self: strict_valueType, name: string, variants: Variants): strict_valueType
@@ -479,4 +520,9 @@ function strict_value:as_union_type() end
 ---@field variance_type fun(target_type: strict_value): strict_value
 ---@field intersection_type fun(left: strict_value, right: strict_value): strict_value
 ---@field union_type fun(left: strict_value, right: strict_value): strict_value
+---@field registry_type fun(element_type: strict_value): strict_value
+---@field registration_type fun(registry: strict_value, element: strict_value): strict_value
+---@field registered_sum_type fun(registry: strict_value, extractor: strict_value): strict_value
+---@field registered_product_type fun(registry: strict_value, extractor: strict_value): strict_value
+---@field registration_set_type fun(registry: strict_value): strict_value
 return {}

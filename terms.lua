@@ -1789,6 +1789,20 @@ gen.define_multi_enum(
 		} },
 		{ "host_wrap$stuck", { "content", stuck_value } },
 		{ "host_unwrap$stuck", { "container", stuck_value } },
+		{ "registry_type$flex", { "element_type", flex_value } },
+		{ "registration_type$flex", {
+			"registry", flex_value,
+			"element",  flex_value,
+		} },
+		{ "registered_sum_type$flex", {
+			"registry",  flex_value,
+			"extractor", flex_value,
+		} },
+		{ "registered_product_type$flex", {
+			"registry",  flex_value,
+			"extractor", flex_value,
+		} },
+		{ "registration_set_type$flex", { "registry", flex_value } },
 	},
 	function(_)
 		local orig_host_value_constructor = strict_value.host_value
