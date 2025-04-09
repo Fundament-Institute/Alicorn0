@@ -43,3 +43,10 @@ don't want to save by seq num or ptr because ptr can't be recreated and seq num 
 state which picks which saving domain it will go into
 create an id that is unique within that domain
 we can say create a saving domain for the preload, load the preload, ... module, save off all that data, later we can load in the prelude, ... different module, save off, then we can diamond inherit and have all registrations end up having unique ids that work after all that
+
+
+implementation
+keys = registration
+values = value
+needs to know what it's already allocated and be able to create a new unique key
+e.g. making a new table, or sequential integer keys and keeping count

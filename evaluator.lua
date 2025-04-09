@@ -983,6 +983,9 @@ function gather_usages(val, usages, context_len, ambient_typechecking_context)
 		local effect, res = val:unwrap_program_type()
 		gather_usages(effect, usages, context_len, ambient_typechecking_context)
 		gather_usages(res, usages, context_len, ambient_typechecking_context)
+	elseif val:is_program_cont() then
+		local action, argument, continuation = val:unwrap_program_cont()
+		gather_usages(argument, usages, context_len, ambient_typechecking_context)
 	elseif val:is_effect_row_extend() then
 		local row, rest = val:unwrap_effect_row_extend()
 		gather_usages(rest, usages, context_len, ambient_typechecking_context)

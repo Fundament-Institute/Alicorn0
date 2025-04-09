@@ -599,6 +599,47 @@ function flex_value:unwrap_host_unwrap() end
 ---@return boolean
 ---@return stuck_value container
 function flex_value:as_host_unwrap() end
+---@return boolean
+function flex_value:is_registry_type() end
+---@return flex_value element_type
+function flex_value:unwrap_registry_type() end
+---@return boolean
+---@return flex_value element_type
+function flex_value:as_registry_type() end
+---@return boolean
+function flex_value:is_registration_type() end
+---@return flex_value registry
+---@return flex_value element
+function flex_value:unwrap_registration_type() end
+---@return boolean
+---@return flex_value registry
+---@return flex_value element
+function flex_value:as_registration_type() end
+---@return boolean
+function flex_value:is_registered_sum_type() end
+---@return flex_value registry
+---@return flex_value extractor
+function flex_value:unwrap_registered_sum_type() end
+---@return boolean
+---@return flex_value registry
+---@return flex_value extractor
+function flex_value:as_registered_sum_type() end
+---@return boolean
+function flex_value:is_registered_product_type() end
+---@return flex_value registry
+---@return flex_value extractor
+function flex_value:unwrap_registered_product_type() end
+---@return boolean
+---@return flex_value registry
+---@return flex_value extractor
+function flex_value:as_registered_product_type() end
+---@return boolean
+function flex_value:is_registration_set_type() end
+---@return flex_value registry
+function flex_value:unwrap_registration_set_type() end
+---@return boolean
+---@return flex_value registry
+function flex_value:as_registration_set_type() end
 
 ---@class (exact) flex_valueType: EnumType
 ---@field define_enum fun(self: flex_valueType, name: string, variants: Variants): flex_valueType
@@ -677,4 +718,9 @@ function flex_value:as_host_unwrap() end
 ---@field host_intrinsic fun(source: stuck_value, start_anchor: Anchor): flex_value
 ---@field host_wrap fun(content: stuck_value): flex_value
 ---@field host_unwrap fun(container: stuck_value): flex_value
+---@field registry_type fun(element_type: flex_value): flex_value
+---@field registration_type fun(registry: flex_value, element: flex_value): flex_value
+---@field registered_sum_type fun(registry: flex_value, extractor: flex_value): flex_value
+---@field registered_product_type fun(registry: flex_value, extractor: flex_value): flex_value
+---@field registration_set_type fun(registry: flex_value): flex_value
 return {}
