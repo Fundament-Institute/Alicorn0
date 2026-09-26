@@ -13,8 +13,7 @@ M.vscode_local_settings = {}
 ---@generic T
 ---@param state nvim-project-alicorn.watched_file<T>
 ---@param on_event fun(state: nvim-project-alicorn.watched_file<T>, err?: string, filename: string, events: uv.aliases.fs_event_start_callback_events)
-function M.watch_file(state, on_event)
-end
+function M.watch_file(state, on_event) end
 
 ---@param state nvim-project-alicorn.watched_file<table, string>
 ---@param path string
@@ -86,7 +85,8 @@ function M.get_vscode_settings()
 	local vscode_shared_settings = M.vscode_shared_settings.data or {}
 	---@type table<any, any>
 	local vscode_local_settings = M.vscode_local_settings.data or {}
-	local array_merge = vscode_local_settings["workspaceConfigPlus.arrayMerge"] or vscode_shared_settings["workspaceConfigPlus.arrayMerge"]
+	local array_merge = vscode_local_settings["workspaceConfigPlus.arrayMerge"]
+		or vscode_shared_settings["workspaceConfigPlus.arrayMerge"]
 	if array_merge then
 		local islist, list_extend = vim.islist, vim.list_extend
 		---@type table<any, any>
@@ -108,7 +108,7 @@ function M.get_vscode_settings()
 		end
 		return vscode_settings
 	else
-		return vim.tbl_extend('force', vscode_shared_settings, vscode_local_settings)
+		return vim.tbl_extend("force", vscode_shared_settings, vscode_local_settings)
 	end
 end
 
